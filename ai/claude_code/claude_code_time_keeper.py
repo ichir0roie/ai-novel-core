@@ -55,26 +55,26 @@ def claude_place_event_main(place_id: int, time: Stamp | str, key: str) -> int |
 
 
 def episode(
-    story_id: int, key: str, time: Stamp | str, character_ids: list[int],
+    story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint: str | None = None,
+    viewpoint: str | None = None, episode_id: int | None = None,
 ) -> int | None:
     try:
         return _main.episode(
             ai_client, story_id, key, time, character_ids, previous_episode_ids,
-            place_id=place_id, viewpoint=viewpoint,
+            place_id=place_id, viewpoint=viewpoint, episode_id=episode_id,
             writer_options={"model": story_writer.EPISODE_MODEL, "effort": story_writer.EPISODE_EFFORT})
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
 
 def claude_episode_main(
-    story_id: int, key: str, time: Stamp | str, character_ids: list[int],
+    story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint: str | None = None,
+    viewpoint: str | None = None, episode_id: int | None = None,
 ) -> int | None:
     return episode(story_id, key, time, character_ids, previous_episode_ids,
-                   place_id=place_id, viewpoint=viewpoint)
+                   place_id=place_id, viewpoint=viewpoint, episode_id=episode_id)
 
 
 if __name__ == "__main__":

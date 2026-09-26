@@ -134,22 +134,40 @@ def _cast(session: Session, characters: list[Character], time: Stamp, ai: AIClie
     return rows
 
 
+def _slot(session: Session, story_id: int, episode_id: int | None) -> Episode | None:
+    """本文の入る前の話(題・時刻だけ決めた枠)。本文のある話は書き換えない。"""
+    if episode_id is None:
+        return None
+    slot = session.get(Episode, episode_id)
+    if slot is None:
+        raise ValueError(f"話 id={episode_id} が見つからない")
+    if slot.story_id != story_id:
+        raise ValueError(f"話 id={episode_id} は作品 id={story_id} の話ではない")
+    if (slot.text or "").strip():
+        raise ValueError(f"話 id={episode_id} には本文が入っている")
+    return slot
+
+
 def generate(
-    session: Session, ai: AIClient, story_id: int, key: str, time: Stamp | str,
+    session: Session, ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None,
     character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
     place_id: int | None = None, viewpoint: str | None = None, writer_options: dict | None = None,
+    episode_id: int | None = None,
 ) -> Episode | None:
     """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
 
     `place_id` を省くと作品の立つ場所を材料に使い、話の `place` は空のまま残す。
-    本文が得られなければ話を足さずに None を返す。
+    `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・題・場所は、省けば枠のものを使う。
+    本文が得られなければ話を足さず(枠も変えず)に None を返す。
     """
-    key = (key or "").strip()
+    slot = _slot(session, story_id, episode_id)
+    key = (key or (slot.key if slot else "") or "").strip()
     if not key:
         raise ValueError("key(話の種)が空")
-    time = Stamp.parse(time)
+    time = Stamp.parse(time) if time else (slot.start if slot else None)
     if time is None:
         raise ValueError("time(話が立つ時刻)が空")
+    viewpoint = viewpoint or (slot.viewpoint if slot else None)
     if not character_ids:
         raise ValueError("character_ids(登場人物)が空")
     story = common_query.get_story(session, story_id)
@@ -160,7 +178,8 @@ def generate(
     context_place_id = place.id if place is not None else story.place_id
     context_place = place or (session.get(Location, story.place_id) if story.place_id else None)
 
-    previous = _previous_episodes(session, story.id, time, previous_episode_ids)
+    previous = [e for e in _previous_episodes(session, story.id, time, previous_episode_ids)
+                if slot is None or e.id != slot.id]
     print(f"[time_keepr/episode] {story.name}(id={story.id}) {format_time(time)} の話: "
           f"登場人物 {', '.join(c.name or '?' for c in characters)} / "
           f"前の話 {[e.id for e in previous] or '(無し)'}")
@@ -200,12 +219,18 @@ def generate(
         print(f"[time_keepr/episode] {story.name}: 本文が得られなかったので話を足さない")
         return None
 
-    record = Episode(
-        story_id=story.id, key=key, start=time, title=(decided.get("title") or "").strip(),
-        text=text, letters=len(text), synced=True,
-        viewpoint=viewpoint or (decided.get("viewpoint") or "").strip() or None,
-        place=place.name if place is not None else None)
-    session.add(record)
+    title = (decided.get("title") or "").strip()
+    viewpoint = viewpoint or (decided.get("viewpoint") or "").strip() or None
+    if slot is None:
+        record = Episode(story_id=story.id, title=title, place=place.name if place is not None else None)
+        session.add(record)
+    else:
+        record = slot
+        record.title = (record.title or "").strip() or title
+        if place is not None:
+            record.place = place.name
+    record.key, record.start, record.text, record.letters = key, time, text, len(text)
+    record.synced, record.viewpoint = True, viewpoint
     session.flush()
     idea_context.link(session, record, context.linked)
     session.commit()

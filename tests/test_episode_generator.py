@@ -271,3 +271,83 @@ def test_claude_writes_only_the_text_with_the_episode_model(session, story, monk
     assert _writing_call(ai)["options"] == {
         "model": story_writer.EPISODE_MODEL, "effort": story_writer.EPISODE_EFFORT}
     assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)
+
+
+def _slot(session, story, *, title="枠の題", start=WHEN, key="", viewpoint="甲(十四歳)", place=None) -> Episode:
+    record = Episode(story_id=story.id, title=title, start=start, key=key, text="", letters=0,
+                     synced=False, viewpoint=viewpoint, place=place)
+    session.add(record)
+    session.commit()
+    return record
+
+
+def test_given_slot_is_filled_instead_of_adding_an_episode(session, story):
+    first = _character(session, "甲")
+    slot = _slot(session, story, place="波止場")
+    ai = _Writer(seed=1)
+
+    record = episode_generator.generate(session, ai, story.id, KEY, None, [first.id], episode_id=slot.id)
+
+    assert record.id == slot.id and session.query(Episode).count() == 1
+    assert record.title == "枠の題" and record.start == WHEN and record.key == KEY
+    assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
+    assert record.synced is True
+    assert record.viewpoint == "甲(十四歳)" and record.place == "波止場"
+    assert "視点: 甲(十四歳)" in _writing_call(ai)["prompt"]
+
+
+def test_slot_key_is_used_when_no_key_is_given_and_ai_title_fills_an_empty_one(session, story):
+    first = _character(session, "甲")
+    slot = _slot(session, story, title="", key=KEY)
+
+    record = episode_generator.generate(session, _Writer(seed=1), story.id, None, None, [first.id],
+                                        episode_id=slot.id)
+
+    assert record.key == KEY and record.title == "地図の市"
+
+
+def test_slot_is_not_given_as_its_own_previous_episode(session, story):
+    first = _character(session, "甲")
+    before = _episode(session, story, 1)
+    slot = _slot(session, story, title="枠の題")
+    ai = _Writer(seed=1)
+
+    episode_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], [before.id, slot.id],
+                               episode_id=slot.id)
+
+    prompt = _writing_call(ai)["prompt"]
+    assert '"title": "第1話"' in prompt and '"title": "枠の題"' not in prompt
+
+
+def test_slot_is_left_untouched_without_a_text(session, story):
+    first = _character(session, "甲")
+    slot = _slot(session, story)
+
+    assert episode_generator.generate(session, _NoText(seed=1), story.id, KEY, None, [first.id],
+                                      episode_id=slot.id) is None
+    session.refresh(slot)
+    assert slot.text == "" and slot.key == "" and slot.synced is False
+
+
+def test_bad_slots_are_refused(session, story):
+    first = _character(session, "甲")
+    other = Story(name="別の話", text="", narration="三人称", state="執筆中")
+    session.add(other)
+    session.commit()
+    written = _episode(session, story, 1)
+    elsewhere = _slot(session, other)
+    ai = _Writer(seed=1)
+
+    for episode_id in (12345, written.id, elsewhere.id):
+        with pytest.raises(ValueError):
+            episode_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], episode_id=episode_id)
+    assert session.get(Episode, written.id).text == "1話の本文"
+
+
+def test_claude_episode_main_fills_the_slot(session, story, monkeypatch):
+    first = _character(session, "甲")
+    slot = _slot(session, story)
+    monkeypatch.setattr(claude_code_time_keeper, "ai_client", _Writer(seed=1))
+
+    assert claude_code_time_keeper.claude_episode_main(
+        story.id, KEY, None, [first.id], episode_id=slot.id) == slot.id

@@ -67,7 +67,7 @@ db の触り方(入口越し・読み取り・md との同期)は CLAUDE.md の�
 | 「世界を進めて」「ループを回して」   | 入口ではなく常駐ループ。「常駐ループ」を見る                                  |
 | 「毎日のルーチン」「サブキャラの次の出来事を起こして」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `daily_event`。主役を決めるなら `character_id` を渡す。「〇〇の17歳の出来事」のように歳を決めるなら `age` も渡す(直前の出来事の後ではなく、その歳のうちに差し込む) |
 | 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `place_event`。場所 id・時刻・`key`(ジャンルや場面を一言で)を渡す。当事者はその時刻にそこにいるサブキャラクターから選ぶ |
-| 「この種で話を書いて」「〇〇と△△が出る話を 11579/03/02 で」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `episode`。作品 id・`key`(話の種)・時刻・登場人物の id のリストを渡す。前の話を名指しするなら `previous_episode_ids`(省けば作品の中でその時刻より前の三話)。場所・視点を決めるなら `place_id` / `viewpoint` |
+| 「この種で話を書いて」「〇〇と△△が出る話を 11579/03/02 で」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `episode`。作品 id・`key`(話の種)・時刻・登場人物の id のリストを渡す。前の話を名指しするなら `previous_episode_ids`(省けば作品の中でその時刻より前の三話)。場所・視点を決めるなら `place_id` / `viewpoint`。題・時刻だけ決めた本文の無い話(枠)へ書くなら `episode_id`(種・時刻・視点・題は省けば枠のもの) |
 
 **まだ入口が無いもの**(頼まれたら作ってから行う): 人物の削除。
 
@@ -188,7 +188,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 | ある作品の開始から指定年数ぶん進める         | `local_ai_time_keeper.loop_time_for_story()` | `claude_code_time_keeper.claude_story_years_main()`               |
 | サブキャラ一人の次の出来事を一件起こす(毎日のルーチン) | `local_ai_time_keeper.daily_event()`       | `claude_code_time_keeper.claude_daily_event_main()`                |
 | ある場所・時刻に、居合わせるサブキャラで出来事を一件起こす(場面を指定) | `local_ai_time_keeper.place_event(place_id, time, key)` | `claude_code_time_keeper.claude_place_event_main(place_id, time, key)` |
-| 種・時刻・登場人物を決めて、作品に話を一話足す | `local_ai_time_keeper.episode(story_id, key, time, character_ids, previous_episode_ids=None)` | `claude_code_time_keeper.claude_episode_main(story_id, key, time, character_ids, previous_episode_ids=None)` |
+| 種・時刻・登場人物を決めて、作品に話を一話足す(`episode_id` で既存の枠へ書く) | `local_ai_time_keeper.episode(story_id, key, time, character_ids, previous_episode_ids=None, episode_id=None)` | `claude_code_time_keeper.claude_episode_main(story_id, key, time, character_ids, previous_episode_ids=None, episode_id=None)` |
 
 (`ai.local_ai.` / `ai.claude_code.` を頭に付ける)
 
@@ -222,7 +222,9 @@ AI に棚卸し済みの種と見比べさせ、同じ出来事の言い換え�
 種から中間段でアイデアを引いて「関係する設定」として渡し、話に結ぶ(`episode_idea`)。
 足した話は `key` / `start` / `title` / `text` / `viewpoint`(渡さなければ AI が選んだ視点人物)/ `place`(`place_id` を渡したときだけその名前)を持ち、
 自動生成なので `synced` を立てる。Claude では本文だけ `story_writer` と同じモデルで書く。
-本文が得られなければ話を足さずに None を返す(`ai/time_keeper/episode_generator.py`)。
+`episode_id` を渡すと、話を足さずにその枠(同じ作品の、本文の無い話)へ書く。`key` / `time` / `viewpoint` は省けば枠のものを使い、
+題は枠に題があればそれを残す。枠は前の話から外す。本文のある話・別の作品の話は書き換えずに止まる。
+本文が得られなければ話を足さず(枠も変えず)に None を返す(`ai/time_keeper/episode_generator.py`)。
 
 上の表の「作る」「確定する」入口を使えば、Claude も対話の中で人物・場所・出来事の
 内容を決めて確定してよい。
