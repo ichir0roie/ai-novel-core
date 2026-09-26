@@ -68,7 +68,7 @@ def _plot_section(text: str | None) -> str:
 # 元のテーブルと、そこから種を抜き出す本文。話は種(`key`)を、無ければ本文を使う。
 _SOURCE_TEXTS = (
     (Story, lambda story: story.text),
-    (Episode, lambda episode: (episode.key or "").strip() or episode.text),
+    (Episode, lambda episode: (episode.key or "").strip() or episode.body),
     (Character, lambda character: _plot_section(character.text)),
     (Event, lambda event: event.text),
 )

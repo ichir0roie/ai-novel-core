@@ -1,11 +1,11 @@
 import pytest
 
-from ai.claude_code import claude_code_time_keeper, story_writer
+from ai.claude_code import ai_client, claude_code_time_keeper
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.style import EPISODE_STYLE_INSTRUCTION
-from ai.time_keeper import episode_generator, episode_summary, main
+from ai.time_keeper import episode_generator, episode_summary, episode_text_generator, main
 from db.schema import (
-    Character, CharacterRelation, Episode, EpisodeIdea, Event, EventCharacter, Idea, Location, Story,
+    Character, CharacterRelation, Episode, EpisodeIdea, EpisodeText, Event, EventCharacter, Idea, Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -23,13 +23,13 @@ class _Writer(MockAIClient):
         self.calls[-1]["options"] = options
         if schema is episode_summary._SCHEMA:
             return {"summary": "要約した筋", "style": "短い地の文"}
-        if schema is episode_generator._SCHEMA:
+        if schema is episode_text_generator._SCHEMA:
             return {"title": " 地図の市 ", "viewpoint": "甲", "text": "甲は地図を買った。"}
         return decided
 
 
 def _writing_call(ai):
-    return next(call for call in ai.calls if call["schema"] is episode_generator._SCHEMA)
+    return next(call for call in ai.calls if call["schema"] is episode_text_generator._SCHEMA)
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ def _character(session, name, *, start=Stamp(2080)) -> Character:
 
 def _episode(session, story, number, *, start=None) -> Episode:
     record = Episode(story_id=story.id, start=start or Stamp(2100, 4, number), title=f"第{number}話",
-                     text=f"{number}話の本文", letters=6, synced=True)
+                     synced=True, episode_text=EpisodeText(text=f"{number}話の本文"))
     session.add(record)
     session.commit()
     return record
@@ -82,7 +82,7 @@ def test_episode_is_added_to_the_story_with_the_given_key_and_time(session, stor
     assert record.story_id == story.id
     assert record.key == KEY and record.start == WHEN
     assert record.title == "地図の市"
-    assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
+    assert record.body == "甲は地図を買った。" and record.episode_text.letters == len(record.body)
     assert record.synced is True
     assert record.viewpoint == "甲"
     assert record.place is None
@@ -96,7 +96,7 @@ def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
     episode_generator.generate(session, ai, story.id, KEY, "2100/05/01", [first.id, second.id])
 
     call = _writing_call(ai)
-    assert call["system"] == episode_generator._SYSTEM_PROMPT
+    assert call["system"] == episode_text_generator._SYSTEM_PROMPT
     assert EPISODE_STYLE_INSTRUCTION in call["system"] and EVENT_AGE_INSTRUCTION in call["system"]
     prompt = call["prompt"]
     assert "港町の筋書き" in prompt
@@ -208,7 +208,7 @@ def test_ideas_the_key_hits_are_linked_to_the_episode(session, story, place, mon
     idea = Idea(name="古い地図", kind="物", text="古い地図の説明", start=Stamp(2000), location_id=place.id)
     session.add(idea)
     session.commit()
-    monkeypatch.setattr(episode_generator.idea_context.idea_search, "keywords_of",
+    monkeypatch.setattr(episode_text_generator.idea_context.idea_search, "keywords_of",
                         lambda *a, **k: [{"keyword": "古い地図", "variants": [], "coined": False,
                                           "kind": "物", "description": "", "start": None, "end": None}])
     ai = _Writer(seed=1)
@@ -222,7 +222,7 @@ def test_ideas_the_key_hits_are_linked_to_the_episode(session, story, place, mon
 class _NoText(_Writer):
     def try_generate_json(self, prompt, schema, **kwargs):
         decided = super().try_generate_json(prompt, schema, **kwargs)
-        return {} if schema is episode_generator._SCHEMA else decided
+        return {} if schema is episode_text_generator._SCHEMA else decided
 
 
 def test_no_episode_is_added_without_a_text(session, story):
@@ -268,13 +268,12 @@ def test_claude_writes_only_the_text_with_the_episode_model(session, story, monk
 
     claude_code_time_keeper.claude_episode_main(story.id, KEY, WHEN, [first.id])
 
-    assert _writing_call(ai)["options"] == {
-        "model": story_writer.EPISODE_MODEL, "effort": story_writer.EPISODE_EFFORT}
-    assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)
+    assert _writing_call(ai)["options"] == {"model": "claude-fable-5-1", "effort": "high"}
+    assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_text_generator._SCHEMA)
 
 
 def _slot(session, story, *, title="枠の題", start=WHEN, key="", viewpoint="甲(十四歳)", place=None) -> Episode:
-    record = Episode(story_id=story.id, title=title, start=start, key=key, text="", letters=0,
+    record = Episode(story_id=story.id, title=title, start=start, key=key,
                      synced=False, viewpoint=viewpoint, place=place)
     session.add(record)
     session.commit()
@@ -290,7 +289,7 @@ def test_given_slot_is_filled_instead_of_adding_an_episode(session, story):
 
     assert record.id == slot.id and session.query(Episode).count() == 1
     assert record.title == "枠の題" and record.start == WHEN and record.key == KEY
-    assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
+    assert record.body == "甲は地図を買った。" and record.episode_text.letters == len(record.body)
     assert record.synced is True
     assert record.viewpoint == "甲(十四歳)" and record.place == "波止場"
     assert "視点: 甲(十四歳)" in _writing_call(ai)["prompt"]
@@ -326,7 +325,8 @@ def test_slot_is_left_untouched_without_a_text(session, story):
     assert episode_generator.generate(session, _NoText(seed=1), story.id, KEY, None, [first.id],
                                       episode_id=slot.id) is None
     session.refresh(slot)
-    assert slot.text == "" and slot.key == "" and slot.synced is False
+    assert slot.body == "" and slot.key == "" and slot.synced is False
+    assert session.query(EpisodeText).count() == 0
 
 
 def test_bad_slots_are_refused(session, story):
@@ -341,7 +341,7 @@ def test_bad_slots_are_refused(session, story):
     for episode_id in (12345, written.id, elsewhere.id):
         with pytest.raises(ValueError):
             episode_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], episode_id=episode_id)
-    assert session.get(Episode, written.id).text == "1話の本文"
+    assert session.get(Episode, written.id).body == "1話の本文"
 
 
 def test_claude_episode_main_fills_the_slot(session, story, monkeypatch):
@@ -351,3 +351,76 @@ def test_claude_episode_main_fills_the_slot(session, story, monkeypatch):
 
     assert claude_code_time_keeper.claude_episode_main(
         story.id, KEY, None, [first.id], episode_id=slot.id) == slot.id
+
+
+def test_claude_episode_main_takes_the_model_of_the_text(session, story, monkeypatch):
+    first = _character(session, "甲")
+    ai = _Writer(seed=1)
+    monkeypatch.setattr(claude_code_time_keeper, "ai_client", ai)
+
+    episode_id = claude_code_time_keeper.claude_episode_main(
+        story.id, KEY, WHEN, [first.id], model="claude-sonnet-5", effort="medium")
+
+    assert _writing_call(ai)["options"] == {"model": "claude-sonnet-5", "effort": "medium"}
+    text = session.get(Episode, episode_id).episode_text
+    assert (text.model, text.effort) == ("claude-sonnet-5", "medium")
+
+
+def test_other_generations_default_to_sonnet_medium():
+    assert (ai_client._MODEL, ai_client._EFFORT) == ("claude-sonnet-5", "medium")
+    assert (ai_client.EPISODE_TEXT_MODEL, ai_client.EPISODE_TEXT_EFFORT) == ("claude-fable-5-1", "high")
+
+
+def test_text_is_written_separately_into_the_frame(session, story):
+    first = _character(session, "甲")
+    before = _episode(session, story, 1)
+    slot = _slot(session, story, title="", key=KEY, place="波止場")
+    ai = _Writer(seed=1)
+
+    text = episode_text_generator.generate(session, ai, slot.id, [first.id], writer_options={"model": "m", "effort": "e"})
+
+    session.refresh(slot)
+    assert text.episode_id == slot.id and slot.episode_text.id == text.id
+    assert (text.text, text.letters, text.model, text.effort) == ("甲は地図を買った。", 9, "m", "e")
+    assert slot.title == "地図の市" and slot.viewpoint == "甲(十四歳)" and slot.place == "波止場"
+    assert slot.synced is True and session.query(Episode).count() == 2
+    prompt = _writing_call(ai)["prompt"]
+    assert f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {KEY}" in prompt
+    assert '"title": "第1話"' in prompt and before.id != slot.id
+
+
+def test_text_needs_a_frame_with_key_and_time(session, story):
+    first = _character(session, "甲")
+    no_key = _slot(session, story, key="")
+    no_time = _slot(session, story, key=KEY, start=None)
+    written = _episode(session, story, 1)
+    ai = _Writer(seed=1)
+
+    for episode_id in (12345, no_key.id, no_time.id, written.id):
+        with pytest.raises(ValueError):
+            episode_text_generator.generate(session, ai, episode_id, [first.id])
+    with pytest.raises(ValueError):
+        episode_text_generator.generate(session, ai, _slot(session, story, key=KEY).id, [])
+    assert session.query(EpisodeText).count() == 1
+
+
+def test_frame_is_left_without_a_text(session, story):
+    first = _character(session, "甲")
+    slot = _slot(session, story, key=KEY)
+
+    assert episode_text_generator.generate(session, _NoText(seed=1), slot.id, [first.id]) is None
+    session.refresh(slot)
+    assert slot.body == "" and slot.synced is False and session.query(EpisodeText).count() == 0
+
+
+def test_claude_episode_text_main_writes_with_fable_high(session, story, monkeypatch):
+    first = _character(session, "甲")
+    slot = _slot(session, story, key=KEY)
+    ai = _Writer(seed=1)
+    monkeypatch.setattr(claude_code_time_keeper, "ai_client", ai)
+
+    text_id = claude_code_time_keeper.claude_episode_text_main(slot.id, [first.id])
+
+    text = session.get(EpisodeText, text_id)
+    assert text.episode_id == slot.id and (text.model, text.effort) == ("claude-fable-5-1", "high")
+    assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_text_generator._SCHEMA)

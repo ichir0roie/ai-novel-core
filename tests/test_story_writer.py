@@ -3,7 +3,7 @@ import pytest
 from ai.claude_code import story_writer
 from ai.time_keeper import episode_summary
 from data_access_logic.query import common_query
-from db.schema import Episode, EpisodeSummary, Location, Story, summary_source_hash
+from db.schema import Episode, EpisodeSummary, EpisodeText, Location, Story, summary_source_hash
 from db.stamp import Stamp
 
 
@@ -22,7 +22,7 @@ def story(session):
 def add_episodes(session, story, count):
     for number in range(1, count + 1):
         session.add(Episode(story_id=story.id, start=Stamp(2100, 4, number), title=f"第{number}話",
-                            text=f"{number}話の本文", letters=6, synced=True))
+                            synced=True, episode_text=EpisodeText(text=f"{number}話の本文")))
     session.commit()
 
 
@@ -93,8 +93,9 @@ def test_written_episode_is_laid_out(session, story, monkeypatch):
 
     record = story_writer.write_next_episode(session, story.id)
 
-    assert record.text == "朝が来た。\n窓が白い。\n\n\n夜。"
-    assert record.letters == len(record.text)
+    assert record.body == "朝が来た。\n窓が白い。\n\n\n夜。"
+    assert record.episode_text.letters == len(record.body)
+    assert (record.episode_text.model, record.episode_text.effort) == ("claude-fable-5-1", "high")
 
 
 def test_recap_is_kept_in_the_episode_summary_table(session, story, calls):
@@ -124,7 +125,7 @@ def test_recap_is_rewritten_when_the_episode_text_changes(session, story, calls)
     add_episodes(session, story, 2)
     third = story_writer.write_next_episode(session, story.id)
     episode = session.query(Episode).filter_by(story_id=story.id, title="第2話").one()
-    episode.text = "2話の書き直した本文"
+    episode.episode_text.text = "2話の書き直した本文"
     session.commit()
     calls.clear()
 
@@ -162,7 +163,7 @@ def test_texts_are_passed_when_no_recap_is_written(session, story, monkeypatch):
     assert '"summary"' not in prompts[-1]
     assert "直前の話の文体" not in prompts[-1]
     assert session.query(EpisodeSummary).count() == 0
-    assert record.text == "本文"
+    assert record.body == "本文"
 
 
 def test_system_prompt_tells_to_follow_the_recap():
@@ -172,7 +173,7 @@ def test_system_prompt_tells_to_follow_the_recap():
 def test_seeded_episode_is_filled_in_place(session, story, calls):
     add_episodes(session, story, 2)
     seeded = Episode(story_id=story.id, start=Stamp(2100, 4, 3), title="堕ちる翼",
-                     key="## 場面\n1. 面会室 / ミレア", text="", letters=0,
+                     key="## 場面\n1. 面会室 / ミレア",
                      viewpoint="ミレア", place="エンピレオ", synced=False)
     session.add(seeded)
     session.commit()
@@ -180,7 +181,7 @@ def test_seeded_episode_is_filled_in_place(session, story, calls):
     record = story_writer.write_next_episode(session, story.id)
 
     assert record.id == seeded.id
-    assert record.text == "本文"
+    assert record.body == "本文"
     assert record.key == "## 場面\n1. 面会室 / ミレア"
     prompt = calls[-1]["prompt"]
     assert "この話の種" in prompt and "面会室 / ミレア" in prompt
@@ -190,7 +191,7 @@ def test_seeded_episode_is_filled_in_place(session, story, calls):
 def test_episode_id_picks_the_episode_to_write(session, story, calls):
     add_episodes(session, story, 1)
     seeds = [Episode(story_id=story.id, start=Stamp(2100, 4, number), title="", key=f"種{number}",
-                     text="", letters=0, synced=False) for number in (2, 3)]
+                     synced=False) for number in (2, 3)]
     session.add_all(seeds)
     session.commit()
 
@@ -203,7 +204,7 @@ def test_episode_id_picks_the_episode_to_write(session, story, calls):
 def test_seeded_later_episodes_do_not_block_writing(session, story, calls):
     add_episodes(session, story, 1)
     session.add(Episode(story_id=story.id, start=Stamp(2100, 4, 9), title="", key="先の種",
-                        text="", letters=0, synced=False))
+                        synced=False))
     session.commit()
 
     assert story_writer.write_next_episode(session, story.id) is not None
@@ -211,8 +212,8 @@ def test_seeded_later_episodes_do_not_block_writing(session, story, calls):
 
 def test_unsynced_written_episode_blocks_writing(session, story, calls):
     add_episodes(session, story, 2)
-    session.add(Episode(story_id=story.id, start=Stamp(2100, 4, 3), title="", key="", text="書いた本文",
-                        letters=5, synced=False))
+    session.add(Episode(story_id=story.id, start=Stamp(2100, 4, 3), title="", key="",
+                        synced=False, episode_text=EpisodeText(text="書いた本文")))
     session.commit()
 
     assert story_writer.write_next_episode(session, story.id) is None
@@ -221,9 +222,9 @@ def test_unsynced_written_episode_blocks_writing(session, story, calls):
 def test_previous_episodes_are_taken_from_before_the_target(session, story, calls):
     add_episodes(session, story, 2)
     seed = Episode(story_id=story.id, start=Stamp(2100, 4, 3), title="", key="種",
-                   text="", letters=0, synced=False)
+                   synced=False)
     session.add_all([seed, Episode(story_id=story.id, start=Stamp(2100, 4, 7), title="先の話", key="",
-                                   text="7話の本文", letters=6, synced=True)])
+                                   synced=True, episode_text=EpisodeText(text="7話の本文"))])
     session.commit()
 
     story_writer.write_next_episode(session, story.id, episode_id=seed.id)

@@ -6,10 +6,11 @@ from ai.claude_code import ai_client
 from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.story.commit_episode import CommitEpisode
 from ai.claude_code.interface.story.commit_story import CommitStory
-from db.schema import Episode, EpisodeSummary, Location, Story
+from db.schema import Episode, EpisodeSummary, EpisodeText, Location, Story
 from db.stamp import Stamp
 from tool.markdown.export_db import export_db
 from tool.markdown.import_db import import_db
+from tool.markdown.sync_db import sync_db
 
 
 @pytest.fixture
@@ -52,14 +53,14 @@ def test_commit_story_rejects_unknown_place():
 
 def test_episode_markdown_name_puts_story_id_and_start_first():
     start = Stamp(11572, 3, 25, 9, 30)
-    assert Episode(id=7, story_id=1, start=start, title="白い灯り", text="").markdown_name == \
+    assert Episode(id=7, story_id=1, start=start, title="白い灯り").markdown_name == \
         "1_11572-03-25-0930_白い灯り.md"
-    assert Episode(id=8, story_id=1, start=start, text="").markdown_name == "1_11572-03-25-0930.md"
+    assert Episode(id=8, story_id=1, start=start).markdown_name == "1_11572-03-25-0930.md"
     # 題だけを使う。filename は見ない
-    assert Episode(id=9, story_id=2, start=start, title="題", text="", filename="別名").markdown_name == \
+    assert Episode(id=9, story_id=2, start=start, title="題", filename="別名").markdown_name == \
         "2_11572-03-25-0930_題.md"
     # start が無ければ時刻の所を空ける
-    assert Episode(id=10, story_id=2, title="題", text="").markdown_name == "2__題.md"
+    assert Episode(id=10, story_id=2, title="題").markdown_name == "2__題.md"
 
 
 def test_episode_parse_markdown_stem():
@@ -74,6 +75,23 @@ def test_episode_parse_markdown_stem():
     assert Episode.parse_markdown_stem("下書き") == (None, {"filename": "下書き"})
 
 
+STORY_DIR = os.path.join("story", "1_遥かなる幻想郷まで")
+EPISODE_MD = os.path.join(STORY_DIR, "1_11572-03-25-0000_白い灯り.md")
+TEXT_DIR = os.path.join(STORY_DIR, "1_11572-03-25-0000_白い灯り")
+
+
+def _read(root, *parts):
+    with open(os.path.join(root, *parts), encoding="utf-8") as f:
+        return f.read()
+
+
+def _write(root, relative, content):
+    path = os.path.join(root, relative)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
 def test_episode_round_trips_through_markdown(session, place, tmp_path):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
@@ -81,14 +99,130 @@ def test_episode_round_trips_through_markdown(session, place, tmp_path):
 
     root = str(tmp_path / "worlds")
     export_db(root)
-    assert os.listdir(os.path.join(root, "episode")) == ["1_11572-03-25-0000_白い灯り.md"]
+    assert sorted(os.listdir(os.path.join(root, "story"))) == ["1_遥かなる幻想郷まで", "1_遥かなる幻想郷まで.md"]
+    assert not os.path.exists(os.path.join(root, "episode"))
 
     import_db(root)
     session.expire_all()
     assert session.query(Episode).count() == 1
     episode = session.get(Episode, 1)
     assert (episode.story_id, str(episode.start), episode.title) == (1, "11572/03/25 00:00:00", "白い灯り")
-    assert episode.filename is None
+    assert episode.filename is None and episode.directory_path is None
+    assert episode.body == "骨組み"
+
+
+def test_story_episode_and_text_are_nested(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place, "directory_path": "ノウル"}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "text": "一話の本文"}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/04/01 00:00:00",
+                   "title": "裁定", "key": "種だけ"}).run()
+
+    root = str(tmp_path / "worlds")
+    export_db(root)
+    story_dir = os.path.join(root, "story", "ノウル", "1_遥かなる幻想郷まで")
+    assert os.path.isfile(story_dir + ".md")
+    # 本文の無い話(枠)は、本文のディレクトリを持たない
+    assert sorted(os.listdir(story_dir)) == [
+        "1_11572-03-25-0000_白い灯り", "1_11572-03-25-0000_白い灯り.md", "1_11572-04-01-0000_裁定.md"]
+    assert os.listdir(os.path.join(story_dir, "1_11572-03-25-0000_白い灯り")) == ["1_本文.md"]
+
+
+def test_episode_text_markdown_is_the_body_only(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00", "title": "白い灯り",
+                   "key": "## 出来事\n娘が生まれる", "text": "扉が開いた。\nミレアが来た。"}).run()
+
+    root = str(tmp_path / "worlds")
+    export_db(root)
+
+    assert _read(root, TEXT_DIR, "1_本文.md") == "扉が開いた。\nミレアが来た。\n"
+    content = _read(root, EPISODE_MD)
+    assert "# data\n" in content and "# key\n## 出来事\n娘が生まれる" in content
+    # 本文は話の md に出さない
+    assert "# text" not in content and "扉が開いた" not in content and '"letters"' not in content
+
+
+def test_edited_episode_text_markdown_updates_the_body(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "text": "一話"}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    _write(root, os.path.join(TEXT_DIR, "1_本文.md"), "書き直した本文\n")
+    result = sync_db(root)
+
+    assert result["imported"] == {"episode_text": 1}
+    session.expire_all()
+    text = session.get(EpisodeText, 1)
+    assert (text.episode_id, text.text, text.letters) == (1, "書き直した本文", 7)
+
+
+def test_hand_written_text_markdown_in_the_episode_directory_becomes_its_body(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "key": "種"}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    _write(root, os.path.join(TEXT_DIR, "下書き.md"), "手で書いた本文\n")
+    result = sync_db(root)
+
+    assert result["imported"] == {"episode_text": 1}
+    session.expire_all()
+    episode = session.get(Episode, 1)
+    assert episode.body == "手で書いた本文"
+    assert (episode.episode_text.model, episode.episode_text.effort) == (None, None)
+    # 採番した id を名前に入れて置き直す
+    assert os.listdir(os.path.join(root, TEXT_DIR)) == [f"{episode.episode_text.id}_下書き.md"]
+
+
+def test_removed_text_markdown_removes_the_body(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "text": "一話"}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    os.remove(os.path.join(root, TEXT_DIR, "1_本文.md"))
+    sync_db(root)
+
+    session.expire_all()
+    assert session.query(EpisodeText).count() == 0
+    assert session.get(Episode, 1).body == ""
+    assert not os.path.exists(os.path.join(root, TEXT_DIR))
+
+
+def test_episode_moved_under_another_story_follows_that_story(session, place, tmp_path):
+    first = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    second = CommitStory({"name": "アルバ", "place_id": place}).run()
+    CommitEpisode({"story_id": first["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "key": "種"}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    content = _read(root, EPISODE_MD)
+    os.remove(os.path.join(root, EPISODE_MD))
+    _write(root, os.path.join("story", "2_アルバ", "1_11572-03-25-0000_白い灯り.md"), content)
+    sync_db(root)
+
+    session.expire_all()
+    assert session.get(Episode, 1).story_id == second["id"]
+    assert os.listdir(os.path.join(root, "story", "2_アルバ")) == ["2_11572-03-25-0000_白い灯り.md"]
+
+
+def test_markdown_written_before_the_manifest_is_registered_without_importing(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "text": "一話"}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+    os.remove(os.path.join(str(tmp_path), ".markdown_sync.json"))
+
+    result = sync_db(root)
+
+    assert result["imported"] == {} and result["written"] == [] and result["conflicts"] == []
 
 
 def test_episode_round_trips_without_start(session, place, tmp_path):
@@ -99,7 +233,8 @@ def test_episode_round_trips_without_start(session, place, tmp_path):
 
     root = str(tmp_path / "worlds")
     export_db(root)
-    assert sorted(os.listdir(os.path.join(root, "episode"))) == ["1_11572-03-25-0000_白い灯り.md", "1__裁定.md"]
+    assert sorted(name for name in os.listdir(os.path.join(root, STORY_DIR)) if name.endswith(".md")) == \
+        ["1_11572-03-25-0000_白い灯り.md", "1__裁定.md"]
 
     import_db(root)
     session.expire_all()
@@ -155,7 +290,7 @@ def test_commit_episode_requires_key_or_text(place):
         CommitEpisode({"story_id": story["id"], "title": "白い灯り"}).run()
 
 
-def test_episode_markdown_has_data_key_text_sections(session, place, tmp_path):
+def test_episode_markdown_has_data_and_key_sections(session, place, tmp_path):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     CommitEpisode({"story_id": story["id"], "title": "白い灯り",
                    "key": "## 出来事\n娘が生まれる", "text": "本文", "viewpoint": "カシル",
@@ -163,19 +298,17 @@ def test_episode_markdown_has_data_key_text_sections(session, place, tmp_path):
 
     root = str(tmp_path / "worlds")
     export_db(root)
-    with open(os.path.join(root, "episode", "1_11572-03-25-0000_白い灯り.md"), encoding="utf-8") as f:
-        content = f.read()
+    content = _read(root, EPISODE_MD)
     assert "# data\n" in content
-    assert content.index("# key\n") < content.index("# text\n")
     assert "## 出来事\n娘が生まれる" in content
     # 節として出す列は `# data` に出さない
-    assert '"key"' not in content and '"text"' not in content
+    assert '"key"' not in content
     assert '"viewpoint": "カシル"' in content
 
     import_db(root)
     session.expire_all()
     episode = session.get(Episode, 1)
-    assert (episode.key, episode.text) == ("## 出来事\n娘が生まれる", "本文")
+    assert (episode.key, episode.body) == ("## 出来事\n娘が生まれる", "本文")
     assert (episode.viewpoint, episode.place) == ("カシル", "エンピレオ")
     assert str(episode.start) == "11572/03/25 00:00:00"
 
@@ -190,7 +323,7 @@ def test_episode_markdown_keeps_empty_sections(session, place, tmp_path):
     import_db(root)
     session.expire_all()
     episode = session.get(Episode, 1)
-    assert (episode.key, episode.text) == ("種だけ", "")
+    assert (episode.key, episode.body) == ("種だけ", "")
 
 
 def test_story_markdown_name_uses_name(session, place, tmp_path):

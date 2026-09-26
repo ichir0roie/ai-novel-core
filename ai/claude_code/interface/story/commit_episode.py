@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from ai.claude_code import ai_client
 from ai.claude_code.interface._base import UnknownRecordError
+from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.story._base import StoryCommit
 from ai.instructions.style import layout_novel_text
 from ai.time_keeper import generated_content
-from db.schema import Episode, Story, get_env_session
-from db.schema_pydantic import to_dict
+from db.schema import Episode, EpisodeText, Story, get_env_session
 
 
 class CommitEpisode(StoryCommit):
@@ -17,9 +17,12 @@ class CommitEpisode(StoryCommit):
         self.episode = episode
 
     def execute(self, session) -> dict:
+        """`text`(本文)は話の列ではなく `EpisodeText` へ入れる。手で書いた本文なので model・effort は空にする。"""
         data = self.parse(self.episode)
         episode_id = data.pop("id", None)
         data.pop("synced", None)
+        data.pop("letters", None)
+        text = data.pop("text", None)
         self.check_columns(data)
         record = None
         if episode_id is not None:
@@ -29,30 +32,30 @@ class CommitEpisode(StoryCommit):
         elif data.get("story_id") in (None, ""):
             raise ValueError("story_id は必須(id を渡さず新しい話を足すとき)")
 
-        if record is None or "key" in data or "text" in data:
+        if record is None or "key" in data or text is not None:
             key = data.get("key", "" if record is None else record.key)
-            text = data.get("text", "" if record is None else record.text)
-            if key in (None, "") and text in (None, ""):
+            body = text if text is not None else ("" if record is None else record.body)
+            if key in (None, "") and body in (None, ""):
                 raise ValueError("key(種)か text(本文)のどちらかは必須")
-        if "text" in data:
-            data["text"] = layout_novel_text(str(data["text"] or ""))
-            data["letters"] = len(data["text"])
         if "story_id" in data:
             self.check_exists(session, Story, data["story_id"], "story_id")
 
         if record is None:
             data.setdefault("key", "")
-            data.setdefault("text", "")
-            data.setdefault("letters", 0)
             data.setdefault("title", "")
-            record = Episode(synced=False, **data)
+            record = Episode(**data)
             session.add(record)
         else:
             for key, value in data.items():
                 setattr(record, key, value)
-            record.synced = False
+        record.synced = False
+        if text is not None:
+            if record.episode_text is None:
+                record.episode_text = EpisodeText(text="")
+            record.episode_text.text = layout_novel_text(str(text or ""))
+            record.episode_text.model = record.episode_text.effort = None
         self.finalize(session, record)
-        return to_dict(record)
+        return _rows.episode_row(record)
 
     def run(self) -> dict:
         result = super().run()

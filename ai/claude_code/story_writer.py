@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`local_ai` には本文を書く生成器が無いので、ここだけは claude_ai 固有。
-自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。
+本文は `EpisodeText` に持つ。自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。
 """
 from __future__ import annotations
 
@@ -11,15 +11,10 @@ from ai.claude_code import ai_client
 from ai.claude_code.interface.story import _rows
 from ai.time_keeper import episode_summary, idea_context
 from data_access_logic.query import common_query
-from db.schema import Episode, Session, get_env_session
-from db.schema_pydantic import to_dict_with
+from db.schema import Episode, EpisodeText, Session, get_env_session
 
 # 一話ぶんの本文を書かせるので、断片の JSON より長く待つ。
 EPISODE_TIMEOUT = 900.0
-
-# 本文だけは質を優先する。要約・ミームなどの抽出は ai_client の既定(sonnet high)のまま。
-EPISODE_MODEL = "claude-fable-5-1"
-EPISODE_EFFORT = "high"
 
 # 本文の代わりに概要で渡す、直前の話の本数。文体の覚え書きは一番新しい話のものを使う。
 RECAP_EPISODE_LIMIT = 3
@@ -61,14 +56,14 @@ def _target_index(rows: list[Episode], episode_id: int | None) -> int:
             if record.id == int(episode_id):
                 return index
         raise ValueError(f"id={episode_id} という話がこの作品に無い")
-    written = [index for index, record in enumerate(rows) if (record.text or "").strip()]
+    written = [index for index, record in enumerate(rows) if record.body.strip()]
     return (written[-1] + 1) if written else 0
 
 
 def _blocking_unsynced(rows: list[Episode], index: int) -> list[dict]:
     """本文がまだ無い話(種だけ入れてある先の話)は、書きようがないので数えない。"""
     return [{"id": record.id, "title": record.title} for record in rows[:index]
-            if (record.text or "").strip() and not record.synced]
+            if record.body.strip() and not record.synced]
 
 
 def _episode_recap(session: Session, episode: dict) -> dict:
@@ -109,7 +104,7 @@ def _materials(
         raise ValueError(f"作品 {story.name} に立つ場所(place_id)が無い")
     _, until = common_query.resolve_time(session, time, story)
     result["time"] = str(until)
-    result["episodes"] = [to_dict_with(record) for record in rows[max(0, index - episodes):index]]
+    result["episodes"] = [_rows.episode_row(record) for record in rows[max(0, index - episodes):index]]
     result["cast"] = _rows.cast(session, story_id, until, count=count, levels=levels)
     result["brief"] = _rows.brief(session, story.place_id, until, reach=reach)
     return result
@@ -156,7 +151,7 @@ def write_next_episode(
 
     decided = ai_client.try_generate_json(
         "\n".join(lines), _SCHEMA, system=_SYSTEM_PROMPT, timeout=EPISODE_TIMEOUT,
-        model=EPISODE_MODEL, effort=EPISODE_EFFORT)
+        model=ai_client.EPISODE_TEXT_MODEL, effort=ai_client.EPISODE_TEXT_EFFORT)
     text = layout_novel_text(decided.get("text") or "")
     if not text:
         print(f"[claude_ai/story] {story['name']}: 本文が得られなかったので見送り")
@@ -164,19 +159,21 @@ def write_next_episode(
     title = (decided.get("title") or "").strip()
 
     if record is None:
-        record = Episode(story_id=story_id, title=title,
-                         text=text, letters=len(text), synced=True)
+        record = Episode(story_id=story_id, title=title, synced=True)
         session.add(record)
     else:
         record.title = title or record.title
-        record.text = text
-        record.letters = len(text)
         record.synced = True
+    if record.episode_text is None:
+        record.episode_text = EpisodeText(text="")
+    record.episode_text.text = text
+    record.episode_text.model = ai_client.EPISODE_TEXT_MODEL
+    record.episode_text.effort = ai_client.EPISODE_TEXT_EFFORT
     session.flush()
     idea_context.link(session, record, context.linked)
     session.commit()
     print(f"[claude_ai/story] {story_row.name}「{record.title}」"
-          f" id={record.id} {record.letters}字")
+          f" id={record.id} {record.episode_text.letters}字")
     return record
 
 

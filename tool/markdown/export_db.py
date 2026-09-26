@@ -5,6 +5,8 @@ import json
 import os
 from decimal import Decimal
 
+from sqlalchemy import inspect as sa_inspect
+
 from db.child_lists import dump_children
 from db.schema import WORLDS_ROOT, Base, MarkdownBase, get_novel_session
 from db.stamp import Stamp
@@ -13,7 +15,8 @@ from tool.markdown.sync_manifest import Manifest, digest, locked, read_text
 from tool.relation.render import render_relations
 
 
-__all__ = ["WORLDS_ROOT", "ExportError", "export_db", "export_changes", "render_row", "edited_markdown"]
+__all__ = ["WORLDS_ROOT", "ExportError", "export_db", "export_changes", "render_row", "edited_markdown",
+           "parent_of", "markdown_path"]
 
 IGNORE_COLUMNS = {"directory_path", "filename"}
 
@@ -24,11 +27,30 @@ class ExportError(ValueError):
     pass
 
 
+def parent_of(model: type) -> tuple[type, str] | None:
+    """`MARKDOWN_PARENT` の指す親のモデルと、親を指す列の名前。親の md の下に置かないモデルは None"""
+    if model.MARKDOWN_PARENT is None:
+        return None
+    relation = sa_inspect(model).relationships[model.MARKDOWN_PARENT]
+    return relation.mapper.class_, next(iter(relation.local_columns)).key
+
+
+def _depth(model: type) -> int:
+    parent = parent_of(model)
+    return 0 if parent is None else 1 + _depth(parent[0])
+
+
 def _markdown_models() -> list[type]:
-    return [
+    """親の md の下に置くモデルは、親より後に並べる(親の置き場所から自分の置き場所を決めるため)。"""
+    models = [
         mapper.class_ for mapper in Base.registry.mappers
         if issubclass(mapper.class_, MarkdownBase) and mapper.class_ is not MarkdownBase
     ]
+    return sorted(models, key=_depth)
+
+
+def _top_models(models: list[type]) -> list[type]:
+    return [model for model in models if parent_of(model) is None]
 
 
 def _serialize(value):
@@ -63,6 +85,8 @@ def _sections(model: type, row) -> dict[str, str]:
 
 
 def render_row(model: type, row) -> str:
+    if model.MARKDOWN_BODY_ONLY:
+        return f"{row.text or ''}\n"
     return _render(_row_data(model, row, IGNORE_COLUMNS), _sections(model, row))
 
 
@@ -73,8 +97,9 @@ def _write(path: str, text: str) -> None:
 
 
 def _markdown_files(root: str, models: list[type]) -> list[str]:
+    """親の md の下に置くモデルの md も、親のテーブルのディレクトリをたどって拾う。"""
     paths = []
-    for model in models:
+    for model in _top_models(models):
         for dirpath, _dirnames, filenames in os.walk(os.path.join(root, model.__tablename__)):
             paths.extend(os.path.normpath(os.path.join(dirpath, name))
                          for name in filenames if name.endswith(".md"))
@@ -87,20 +112,48 @@ def _remove_empty_dirs(top: str) -> None:
             os.rmdir(dirpath)
 
 
+def _directory(root: str, model: type, row, placed: dict[tuple[type, int], str]) -> str:
+    parent = parent_of(model)
+    if parent is None:
+        table_dir = os.path.join(root, model.__tablename__)
+        return os.path.join(table_dir, row.directory_path) if row.directory_path else table_dir
+    parent_model, column = parent
+    parent_path = placed.get((parent_model, getattr(row, column)))
+    if parent_path is None:
+        raise ExportError(
+            f"{model.__tablename__} id={row.id} の親 {parent_model.__tablename__} "
+            f"id={getattr(row, column)} が無いので、md の置き場所が決まらない")
+    return parent_path[: -len(".md")]
+
+
+def markdown_path(session, row) -> str:
+    """行の md の、`worlds/` からの相対パス(/ 区切り)。同名の md が他にあるときの逃がし先は考えない。"""
+    model = type(row)
+    parent = parent_of(model)
+    if parent is None:
+        parts = [model.__tablename__, row.directory_path]
+    else:
+        parent_row = session.get(parent[0], getattr(row, parent[1]))
+        parts = [markdown_path(session, parent_row)[: -len(".md")]]
+    return "/".join(part for part in [*parts, row.markdown_name] if part)
+
+
 def _expected(session, root: str, models: list[type]) -> tuple[dict[str, tuple], dict[str, int]]:
+    """書き出すはずの md のパスごとに、(モデル, 行, 中身)。`models` は `_markdown_models()` の並びで渡す。"""
     expected: dict[str, tuple] = {}
     counts: dict[str, int] = {}
+    placed: dict[tuple[type, int], str] = {}
     for model in models:
-        table_dir = os.path.join(root, model.__tablename__)
         rows = session.query(model).order_by(model.id.asc()).all()
         for row in rows:
-            dir_path = os.path.join(table_dir, row.directory_path) if row.directory_path else table_dir
+            dir_path = _directory(root, model, row, placed)
             # `directory_path` は / 区切りなので、walk で拾ったパスと比べられるよう揃える
             path = os.path.normpath(os.path.join(dir_path, row.markdown_name))
             if path in expected:
                 # 名前に id を含まないテーブルで同名になったら、id を頭に付けた(import が読める)名前へ逃がす
                 path = os.path.normpath(os.path.join(dir_path, f"{row.id}_{row.markdown_name}"))
             expected[path] = (model, row, render_row(model, row))
+            placed[(model, row.id)] = path
         counts[model.__tablename__] = len(rows)
     return expected, counts
 
@@ -150,7 +203,7 @@ def export_changes(session, root: str, manifest: Manifest) -> dict:
             removed.append(path)
     kept = {manifest.key(path) for path in expected}
     manifest.entries = {key: entry for key, entry in manifest.entries.items() if key in kept}
-    for model in models:
+    for model in _top_models(models):
         _remove_empty_dirs(os.path.join(root, model.__tablename__))
 
     maps = {os.path.normpath(path) for path in render_maps(session, root)}

@@ -20,8 +20,9 @@ ai/claude_code/
 - 各呼び出しは `--tools ""`(道具なし。`tools=("WebSearch", "WebFetch")` を渡したときだけ、その道具を許す)・`--no-session-persistence`・`--system-prompt`
   で、単発の「プロンプト → JSON」に絞る。カレントは一時ディレクトリにして、
   このリポジトリの `CLAUDE.md` や設定を読み込ませない
-- モデルと effort は `ai_client.py` の `_MODEL`(`claude-sonnet-5`)・`_EFFORT`(`high`)を既定にし、`--model` `--effort` に渡す。
-  本文の生成(`story_writer.py`)だけは `EPISODE_MODEL`(`claude-fable-5-1`)・`EPISODE_EFFORT`(`high`)を渡す
+- モデルと effort は `ai_client.py` の `_MODEL`(`claude-sonnet-5`)・`_EFFORT`(`medium`)を既定にし、`--model` `--effort` に渡す。
+  話の本文(`episode_text`)の生成(`story_writer.py`・`claude_episode_main`・`claude_episode_text_main`)だけは
+  `EPISODE_TEXT_MODEL`(`claude-fable-5-1`)・`EPISODE_TEXT_EFFORT`(`high`)を渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
 - ループの終わりに Claude Code の呼び出し回数・トークン・費用を出す
 
@@ -96,6 +97,6 @@ write_story(story_id=1, episode_id=40)     # 種だけ入っている話(id=40)�
   先まで種を並べてある作品でも止まらない
 - その話に種があればプロンプトへ載せ、視点・場所・種はそのままに、題と本文だけを上書きする
 - 止めるのは、**その話より前に**「本文はあるのに `synced` が下りている話」がある場合だけ
-- 書いた話は `synced=True` で確定する
+- 書いた話は `synced=True` で確定する。本文は話の `episode_text` に入れる
 - 本文の長さ・場面の切り方・文体は `ai/instructions/style.py`
   (`EPISODE_TARGET_LETTERS` / `EPISODE_STYLE_BASE`)

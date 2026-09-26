@@ -11,7 +11,7 @@ from ai.claude_code.interface.story.read_surroundings import ReadSurroundings
 from ai.claude_code.interface.story.set_episode_synced import SetEpisodeSynced
 from ai.claude_code.interface.story.start_story import StartStory
 from data_access_logic.query.common_query import NotFoundError
-from db.schema import Character, CharacterPlace, Episode, Event, EventCharacter, Location, Story
+from db.schema import Character, CharacterPlace, Episode, EpisodeText, Event, EventCharacter, Location, Story
 from db.stamp import Stamp
 
 
@@ -44,7 +44,7 @@ def world(session):
 def _episodes(session, story_id, numbers, *, synced=True):
     for number in numbers:
         session.add(Episode(story_id=story_id, start=Stamp(2100, 1, number), title=f"第{number}話",
-                            text=f"本文{number}", synced=synced))
+                            synced=synced, episode_text=EpisodeText(text=f"本文{number}")))
     session.commit()
 
 

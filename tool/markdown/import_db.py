@@ -44,7 +44,7 @@ def _parse(content: str, names: tuple[str, ...]) -> tuple[dict, dict[str, str]]:
     sections = {name: "" for name in names}
     data_match = _DATA_RE.search(content)
     if not data_match:
-        sections["text"] = content.rstrip("\n")
+        sections[names[0]] = content.rstrip("\n")
         return {}, sections
     data = json.loads(data_match.group(1))
 
@@ -63,12 +63,19 @@ def _parse(content: str, names: tuple[str, ...]) -> tuple[dict, dict[str, str]]:
 def _upsert(
     session, model: type, columns: set[str], stamp_columns: set[str],
     path: str, directory_path: str | None, content: str, manifest: Manifest,
+    parent_id: int | None = None,
 ) -> tuple[object, bool]:
-    """md を一件 db へ入れる。db 側も前回の同期から変わっていたら、衝突として True を返す。"""
+    """md を一件 db へ入れる。db 側も前回の同期から変わっていたら、衝突として True を返す。
+
+    `parent_id` は親の md の下に置くモデルの、置かれたディレクトリから決まる親の id。`# data` より勝つ。
+    """
     stem = os.path.basename(path)[: -len(".md")]
     row_id, stem_values = model.parse_markdown_stem(stem)
 
-    data, sections = _parse(content, model.TEXT_SECTIONS)
+    if model.MARKDOWN_BODY_ONLY:
+        data, sections = {}, {"text": content.rstrip("\n")}
+    else:
+        data, sections = _parse(content, model.TEXT_SECTIONS)
     data_id = data.pop("id", None)
     if row_id is None and data_id is not None:
         row_id = int(data_id)
@@ -76,6 +83,13 @@ def _upsert(
     children = {name: data.pop(name) for name in model.CHILD_LISTS if name in data}
     # `# data` にある欄はそれが勝つ。名前は `# data` に無い欄(filename や、手書き md の start/end)だけ埋める
     data.update({k: v for k, v in stem_values.items() if k not in data})
+    parent = export_db.parent_of(model)
+    if parent is not None:
+        if parent_id is not None:
+            data[parent[1]] = parent_id
+        elif row_id is None:
+            raise ImportDbError(
+                f"{path}: 親の {parent[0].__tablename__} の md(同じ名前で .md の付いたもの)が隣に無い")
 
     unknown = set(data) - columns
     if unknown:
@@ -124,39 +138,67 @@ def _upsert(
     return row, conflict
 
 
-def _unchanged_row(session, model: type, path: str, directory_path: str | None, content: str):
-    """md が db の行をそのまま書き出した中身と同じなら、その行を返す(取り込まなくてよい)。"""
-    stem = os.path.basename(path)[: -len(".md")]
-    row_id, _stem_values = model.parse_markdown_stem(stem)
-    if row_id is None:
-        data_match = _DATA_RE.search(content)
-        if not data_match:
-            return None
-        data_id = json.loads(data_match.group(1)).get("id")
-        row_id = int(data_id) if data_id is not None else None
-    row = session.get(model, row_id) if row_id is not None else None
-    if (row is None or row.directory_path != directory_path
-            or os.path.basename(path) != row.markdown_name
-            or export_db.render_row(model, row) != content):
-        return None
-    return row
+def _companion(path: str) -> str:
+    """親の md の下に置いた md の、親の md のパス(置かれたディレクトリに .md を付けたもの)。"""
+    return os.path.dirname(path) + ".md"
 
 
-def _edited_files(root: str, manifest: Manifest) -> list[tuple[type, str, str | None, str]]:
+def _model_of(path: str, table_dir: str, top: type, manifest: Manifest, expected: dict,
+              child_of: dict[type, type]) -> type:
+    """置き場所から、md がどのテーブルの行かを決める。親の md が隣にあるディレクトリの中なら、その子のテーブル。"""
+    if path in expected:
+        return expected[path][0]
+    entry = manifest.get(path)
+    models = _markdown_models()
+    if entry is not None and entry["table"] in models:
+        return models[entry["table"]]
+    companion = _companion(path)
+    if os.path.dirname(path) != table_dir and os.path.isfile(companion):
+        parent = _model_of(companion, table_dir, top, manifest, expected, child_of)
+        if parent in child_of:
+            return child_of[parent]
+    return top
+
+
+def _edited_files(root: str, manifest: Manifest, expected: dict) -> list[tuple[type, str, str | None, str]]:
+    """親の md の下に置くモデルの md は、`directory_path` を持たない(None で返す)。
+
+    親の md は、その下のディレクトリより先に並ぶ(walk がディレクトリの中のファイルを、下のディレクトリより先に返す)。
+    """
+    models = export_db._markdown_models()
+    child_of = {export_db.parent_of(model)[0]: model for model in models if export_db.parent_of(model)}
     edited = []
-    for table_name, model in _markdown_models().items():
-        table_dir = os.path.join(root, table_name)
-        for dirpath, _dirnames, filenames in os.walk(table_dir):
+    for top in export_db._top_models(models):
+        table_dir = os.path.join(root, top.__tablename__)
+        for dirpath, dirnames, filenames in os.walk(table_dir):
+            dirnames.sort()
             relative = os.path.relpath(dirpath, table_dir)
-            directory_path = None if relative == "." else relative.replace(os.sep, "/")
             for filename in sorted(filenames):
                 if not filename.endswith(".md"):
                     continue
-                path = os.path.join(dirpath, filename)
+                path = os.path.normpath(os.path.join(dirpath, filename))
                 content = read_text(path)
-                if manifest.edited(path, content):
-                    edited.append((model, path, directory_path, content))
+                if not manifest.edited(path, content):
+                    continue
+                model = _model_of(path, table_dir, top, manifest, expected, child_of)
+                directory_path = None
+                if model is top and relative != ".":
+                    directory_path = relative.replace(os.sep, "/")
+                edited.append((model, path, directory_path, content))
     return edited
+
+
+def _parent_id(model: type, path: str, manifest: Manifest, imported: dict[str, int]) -> int | None:
+    parent = export_db.parent_of(model)
+    if parent is None:
+        return None
+    companion = _companion(path)
+    if companion in imported:
+        return imported[companion]
+    entry = manifest.get(companion)
+    if entry is not None and entry["table"] == parent[0].__tablename__:
+        return entry["id"]
+    return None
 
 
 def _removed_rows(session, manifest: Manifest) -> list[tuple[type, str, object]]:
@@ -221,25 +263,29 @@ def import_changes(session, root: str, manifest: Manifest) -> dict:
 
     db 側も同じ行を直していたら md の方を勝たせ、その md を `conflicts` に返す。
     """
+    expected, _counts = export_db._expected(session, root, export_db._markdown_models())
     edited = []
-    for model, path, directory_path, content in _edited_files(root, manifest):
-        # 台帳が無い・古いだけで、db と同じ中身の md(git で両方そろって入ってきたものなど)は台帳に載せるだけにする
-        row = _unchanged_row(session, model, path, directory_path, content)
-        if row is None:
-            edited.append((model, path, directory_path, content))
+    for model, path, directory_path, content in _edited_files(root, manifest, expected):
+        # 台帳が無い・古いだけで、db と同じ中身・同じ置き場所の md(git で両方そろって入ってきたものなど)は台帳に載せるだけにする
+        known = expected.get(path)
+        if known is not None and known[0] is model and known[2] == content:
+            manifest.set(path, model.__tablename__, known[1].id, digest(content), digest(content))
         else:
-            manifest.set(path, model.__tablename__, row.id, digest(content), digest(content))
+            edited.append((model, path, directory_path, content))
     if edited:
         _backup()
     counts: dict[str, int] = {}
     conflicts = []
+    imported: dict[str, int] = {}
     for model, path, directory_path, content in edited:
         columns = {column.key for column in model.__table__.columns}
         stamp_columns = {
             column.key for column in model.__table__.columns
             if isinstance(column.type, StampType)
         }
-        _row, conflict = _upsert(session, model, columns, stamp_columns, path, directory_path, content, manifest)
+        row, conflict = _upsert(session, model, columns, stamp_columns, path, directory_path, content, manifest,
+                                _parent_id(model, path, manifest, imported))
+        imported[path] = row.id
         if conflict:
             conflicts.append(path)
         counts[model.__tablename__] = counts.get(model.__tablename__, 0) + 1

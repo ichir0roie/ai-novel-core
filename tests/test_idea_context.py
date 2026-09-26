@@ -437,7 +437,7 @@ def test_seeded_episode_is_written_with_the_ideas_of_its_seed(session, places, m
     session.add(story)
     session.flush()
     session.add(Episode(story_id=story.id, title="", key="1. 地下 / カシル / 寄生型を使う",
-                        text="", letters=0, synced=False))
+                        synced=False))
     session.commit()
     calls = []
 

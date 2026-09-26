@@ -29,6 +29,7 @@ from sqlalchemy.orm import (
     Mapped,
     mapped_column,
     relationship,
+    validates,
 )
 
 from sqlalchemy import func
@@ -114,6 +115,11 @@ class MarkdownBase(Base):
     CHILD_LISTS: tuple[str, ...] = ()
     # md 名の既定にする列。`# data` の無い手書きの md では、この列を md 名から埋める
     NAME_COLUMN: str | None = None
+    # 親の行を指す relationship の名前。持つテーブルの md は、`worlds/{table}/` ではなく
+    # 親の md と同じ名前(拡張子を除く)のディレクトリの下に置く
+    MARKDOWN_PARENT: str | None = None
+    # md を `# data` も見出しも無い、本文(text)だけで出し入れするか
+    MARKDOWN_BODY_ONLY: bool = False
 
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
 
@@ -571,16 +577,27 @@ class Story(EventSeededMixin, MarkdownBase):
 
 
 class Episode(EventSeededMixin, MarkdownBase):
+    """話の枠。種・時刻・視点・場所までを持ち、本文は `EpisodeText` が持つ。"""
 
     __tablename__ = "episode"
 
-    TEXT_SECTIONS = ("key", "text")
+    TEXT_SECTIONS = ("key",)
+    MARKDOWN_PARENT = "story"
+
+    # 本文は EpisodeText へ分けたので、MarkdownBase の text 列を持たない。
+    # 古い書き方(`episode.text`)を黙って素通りさせないよう、読み書きとも止める
+    @property
+    def text(self):
+        raise AttributeError("話の本文は Episode.body(書き込みは EpisodeText)にある")
+
+    @text.setter
+    def text(self, _value):
+        raise AttributeError("話の本文は EpisodeText に書く")
 
     story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), sort_order=200)
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
-    letters: Mapped[int | None] = mapped_column(Integer, comment="字数", sort_order=230)
     synced: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
         comment="同期フラグ。この話の出来事・行動が台帳へ戻してあるか。"
@@ -601,6 +618,14 @@ class Episode(EventSeededMixin, MarkdownBase):
         comment="キーテキスト。作者が入れる、AI 生成前の種。md では `# key` の節",
         sort_order=9990)
 
+    episode_text: Mapped["EpisodeText | None"] = relationship(
+        back_populates="episode", lazy="selectin", uselist=False)
+
+    @property
+    def body(self) -> str:
+        """本文。まだ書いていない話(枠)は空文字"""
+        return self.episode_text.text if self.episode_text is not None else ""
+
     def default_filename(self) -> str | None:
         return self.title or None
 
@@ -620,6 +645,33 @@ class Episode(EventSeededMixin, MarkdownBase):
             return None, {"story_id": int(story_part), "start": parse_episode_stamp_stem(stamp_part),
                           "title": title_part or None}
         return None, {"story_id": int(story_part), "title": rest or None}
+
+
+class EpisodeText(MarkdownBase):
+    """話の本文。話(`Episode`)の枠とは分けて生成し、md には本文だけを出す。"""
+
+    __tablename__ = "episode_text"
+
+    MARKDOWN_PARENT = "episode"
+    MARKDOWN_BODY_ONLY = True
+
+    episode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("episode.id"), unique=True, index=True, nullable=False, sort_order=200)
+    episode: Mapped[Episode] = relationship(back_populates="episode_text", lazy="noload")
+    letters: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=210)
+    model: Mapped[str | None] = mapped_column(
+        String, comment="本文を書いたモデル。空なら不明(手で書いた本文など)", sort_order=220)
+    effort: Mapped[str | None] = mapped_column(
+        String, comment="本文を書いたときの effort。空なら不明(手で書いた本文など)", sort_order=230)
+
+    @validates("text")
+    def _letters_follow_text(self, _key, value):
+        self.letters = len(value or "")
+        return value
+
+    def default_filename(self) -> str | None:
+        return "本文"
 
 
 _EPISODE_STAMP = re.compile(r"^\d+-\d{2}-\d{2}-\d{4}$")

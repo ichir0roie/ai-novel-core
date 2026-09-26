@@ -29,7 +29,7 @@ _SCHEMA = {
 
 
 def summarize(session: Session, episode: Episode, ai: AIClient) -> dict | None:
-    text = (episode.text or "").strip()
+    text = episode.body.strip()
     if not text:
         return None
     digest = summary_source_hash(text)
