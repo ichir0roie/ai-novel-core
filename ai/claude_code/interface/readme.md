@@ -30,6 +30,8 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「人物を足して」                     | `randomizer.create_random_character.CreateRandomCharacter()` → `randomizer.commit_character.CommitCharacter(character)`。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。`# 来歴` 節には節目を歳付きで書く(下の「人物の来歴」) |
 | 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `randomizer.generate_characters.GenerateCharacters(place_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`_generate_one`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
 | 「出来事を足して」                   | `randomizer.create_random_event.CreateRandomEvent()` → `randomizer.commit_event.CommitEvent(event)` |
+| 「この下書きから人物を AI に作らせて」「GUI の AI で作成(人物)」 | `randomizer.generate_character.GenerateCharacter(character={...}, time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`_generate_one`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 |
+| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成(出来事)」 | `randomizer.generate_event.GenerateEvent(event={...}, seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター |
 | 「この人物の出自・居場所を足して」   | `randomizer.commit_character_place.CommitCharacterPlace(place)`              |
 | 「この二人の相関を足して」           | `randomizer.commit_character_relation.CommitCharacterRelation(relation)`     |
 | 「アイデアを足して」                 | `randomizer.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める。`fact_check=False` で検めずに本文からだけ抜き出す |
@@ -62,6 +64,8 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話が残っていれば止まる           |
+| 「この下書きから話の枠を AI に決めさせて」「GUI の AI で枠を作る」 | `story.generate_plot.GeneratePlot(plot={"story_id": …, …}, character_ids=None, previous_plot_ids=None)`。題・種(`## 場面` / `## 狙い` の形)・時刻・視点・場所を下書きを核に AI が決めて、本文の無い話を足す(`id` を渡せばその本文の無い枠を決め直す)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ |
+| 「この下書きから一話ぶん AI に書かせて」「GUI の AI で本文まで書く」 | `story.generate_episode.GenerateEpisode(plot={"story_id": …, …}, character_ids=None, previous_plot_ids=None, place_id=None, model=None, effort=None, shared_style_extra="", style_extra="")`。種と時刻が揃っていれば常駐ループの `plot` と同じ生成で本文を書き、どちらかが空なら先に `GeneratePlot` と同じ生成で枠を決める。`id` を渡せばその本文の無い枠へ書く。登場人物を省けばその時刻に生きているメインキャラクター |
 | 「本文を確定する」「話の種を入れる」 | `story.commit_plot.CommitPlot(plot)`。`id` を渡せばその話を直し(渡した欄だけ)、省けば `story_id` の作品に新しい話を足す。`key`(種)か `text`(本文)のどちらかがあればよい。`text` は話の列ではなく `episode` へ入れ、返り値には `text` と `letters` を添える。`text` は `ai/instructions/style.py` の `layout_novel_text` で改行を整えてから入れる(地の文は一文一行、「◇」の行は空行二つ)。話に番号は無く、作品の中では `start` の順に並ぶ(`start` の無い話は後ろに id 順)。あいだに話を足すときは、前後の話のあいだの `start` を付ける |
 | 「未同期の話は残ってる?」           | `story.list_unsynced_plots.ListUnsyncedPlots(story_id=None)`           |
 | 「世界観へ反映済みにする」           | `story.set_plot_synced.SetPlotSynced(plot_id, synced=True)`   |
@@ -176,7 +180,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 前日譚をここで閉じる。父の顔は最後まで見せない。
 ```
-- 星ごとの地図と人物相関図は GUI の `/api/maps`(星ごとの svg は `/api/maps/{id}.svg`)・`/api/relations` で描く
+- 星ごとの地図と人物相関図は GUI の画面 `/maps`・`/relations` で描く(星ごとの svg は `/api/maps/{id}.svg`)
 - 場所の輪郭は `polygon` 欄(GeoJSON の Polygon。`[[経度, 緯度], ...]` の環を渡せば
   閉じて揃える)で `CommitPlace` / `UpdatePlace` から入れる。経緯度が無い面の場所
   (大陸など)にも持たせられ、地図では薄い面として描く

@@ -8,11 +8,17 @@
     .venv/bin/python -m gui.dev --api-port 8765 --web-port 3000
 
 `gui/web/node_modules` が無ければ先に `npm install` を回す。
+ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
+
+ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルート(`DEM_WORLD_DIR`)の
+`.brave-profile/` に作って開く(普段のプロファイルと分け、GUI 用のタブ・設定だけをそこに残す)。
+Brave が無ければ既定のブラウザで開く。
 """
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import signal
 import socket
@@ -22,6 +28,8 @@ import time
 import webbrowser
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BRAVE_PROFILE_DIR_NAME = ".brave-profile"
 
 
 def _npm() -> str:
@@ -29,10 +37,109 @@ def _npm() -> str:
     return shutil.which("npm") or "npm"
 
 
+def _brave() -> str | None:
+    for name in ("brave-browser", "brave-browser-stable", "brave", "brave.exe"):
+        found = shutil.which(name)
+        if found:
+            return found
+    candidates = [
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _brave_profile_dir() -> str:
+    world_dir = os.environ.get("DEM_WORLD_DIR") or os.getcwd()
+    return os.path.join(os.path.abspath(world_dir), BRAVE_PROFILE_DIR_NAME)
+
+
+def _open_browser(url: str) -> None:
+    brave = _brave()
+    if brave is None:
+        print("[gui/dev] Brave が見つからないので既定のブラウザで開く")
+        webbrowser.open(url)
+        return
+    profile = _brave_profile_dir()
+    os.makedirs(profile, exist_ok=True)
+    print(f"[gui/dev] Brave をプロファイル {profile} で開く")
+    # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
+    _popen([brave, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def _port_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
         return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _listening_pids(port: int) -> list[int]:
+    if sys.platform.startswith("linux"):
+        # lsof は環境によって node のソケットを列挙しない(next-server が見えなかった)ので、ss を使う
+        result = subprocess.run(["ss", "-Hltnp", f"sport = :{port}"], capture_output=True, text=True)
+        return sorted({int(pid) for pid in re.findall(r"pid=(\d+)", result.stdout)})
+    if os.name == "posix":
+        result = subprocess.run(["lsof", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"], capture_output=True, text=True)
+        return sorted({int(pid) for pid in result.stdout.split()})
+    result = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True)
+    pids = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[0] == "TCP" and parts[1].endswith(f":{port}") and parts[3] == "LISTENING":
+            pids.add(int(parts[4]))
+    return sorted(pids)
+
+
+def _kill(pid: int, force: bool) -> None:
+    if os.name != "posix":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+        return
+    sig = signal.SIGKILL if force else signal.SIGTERM
+    try:
+        pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        return
+    try:
+        # uvicorn --reload は親(監視)と子(ポートを聞く)に分かれるので、自分のグループでなければまとめて止める
+        if pgid != os.getpgid(0):
+            os.killpg(pgid, sig)
+        else:
+            os.kill(pid, sig)
+    except ProcessLookupError:
+        return
+
+
+def _wait_until_closed(port: int, timeout: float) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _port_open(port):
+            return True
+        time.sleep(0.2)
+    return not _port_open(port)
+
+
+def _free_port(port: int, name: str) -> bool:
+    try:
+        pids = _listening_pids(port)
+    except FileNotFoundError as e:
+        print(f"[gui/dev] ポート {port}({name})を使っている処理を調べられない({e.filename} が無い)", file=sys.stderr)
+        return False
+    if not pids:
+        print(f"[gui/dev] ポート {port}({name})を使っている処理が見つからない", file=sys.stderr)
+        return False
+    print(f"[gui/dev] ポート {port}({name})を使っている処理 {pids} を止める")
+    for pid in pids:
+        _kill(pid, force=False)
+    if _wait_until_closed(port, timeout=10.0):
+        return True
+    for pid in pids:
+        _kill(pid, force=True)
+    return _wait_until_closed(port, timeout=5.0)
 
 
 def _wait_for(port: int, name: str, process: subprocess.Popen, timeout: float = 90.0) -> bool:
@@ -48,9 +155,8 @@ def _wait_for(port: int, name: str, process: subprocess.Popen, timeout: float = 
     return False
 
 
-def _popen(args: list[str], cwd: str | None = None, env: dict | None = None) -> subprocess.Popen:
+def _popen(args: list[str], cwd: str | None = None, env: dict | None = None, **kwargs) -> subprocess.Popen:
     # 子をまとめて止められるよう、POSIX ではプロセスグループを分ける
-    kwargs = {}
     if os.name == "posix":
         kwargs["start_new_session"] = True
     else:
@@ -83,8 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     for port, name in ((args.api_port, "API"), (args.web_port, "画面")):
-        if _port_open(port):
-            print(f"[gui/dev] ポート {port}({name})は既に使われている。先に止めるか --{'api' if name == 'API' else 'web'}-port で変える",
+        if _port_open(port) and not _free_port(port, name):
+            print(f"[gui/dev] ポート {port}({name})を空けられない。手で止めるか --{'api' if name == 'API' else 'web'}-port で変える",
                   file=sys.stderr)
             return 1
     if not os.path.isdir(os.path.join(WEB_DIR, "node_modules")):
@@ -93,7 +199,8 @@ def main(argv: list[str] | None = None) -> int:
 
     api_args = [sys.executable, "-m", "uvicorn", "gui.api.app:app", "--port", str(args.api_port)]
     if not args.no_reload:
-        api_args.append("--reload")
+        # 監視は core/ だけ。cwd(世界のルート)を丸ごと見ると .venv まで走査して重い
+        api_args += ["--reload", "--reload-dir", CORE_DIR]
     web_env = {**os.environ, "NOVEL_API_URL": f"http://127.0.0.1:{args.api_port}"}
     web_args = [_npm(), "run", "dev", "--", "--port", str(args.web_port)]
 
@@ -110,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         url = f"http://localhost:{args.web_port}/"
         print(f"[gui/dev] API http://127.0.0.1:{args.api_port}/docs / 画面 {url}(Ctrl+C で止める)")
         if not args.no_browser:
-            webbrowser.open(url)
+            _open_browser(url)
         while True:
             for process, name in ((api, "API"), (web, "画面")):
                 if process.poll() is not None:

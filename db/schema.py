@@ -404,8 +404,9 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
     # 出自(生まれの場所)は別列を持たず、CharacterPlace の一番古い行として表す。
-    # 名字・体格・口調・性格は期間ごとに CharacterParameter が持ち、入口では `parameters` の配列で出し入れする。
-    CHILD_LISTS = ("parameters",)
+    # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterPlace が持ち、
+    # 入口では `parameters` / `places` の配列で出し入れする。
+    CHILD_LISTS = ("parameters", "places")
 
     def parameters_at(self, time=None) -> dict:
         return resolve_parameters(self.parameters, time)
@@ -416,7 +417,8 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterParameter.id")
     places: Mapped[list[CharacterPlace]] = relationship(
-        back_populates="character", lazy="noload", order_by="CharacterPlace.start.desc()"
+        back_populates="character", lazy="selectin", cascade="all, delete-orphan",
+        order_by="CharacterPlace.start.desc()"
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",

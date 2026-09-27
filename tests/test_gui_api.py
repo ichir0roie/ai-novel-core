@@ -45,8 +45,10 @@ def test_tables_meta_comes_from_schema(client, session):
     # 話は本文(episode)を text として持ち、字数は読むだけ
     plot_columns = {column["key"]: column for column in tables["plot"]["columns"]}
     assert plot_columns["text"]["section"] is True and plot_columns["letters"]["readonly"] is True
-    assert [child["name"] for child in tables["character"]["child_lists"]] == ["parameters"]
-    assert {column["key"] for column in tables["character"]["child_lists"][0]["columns"]} >= {"family_name", "tone"}
+    assert [child["name"] for child in tables["character"]["child_lists"]] == ["parameters", "places"]
+    child_columns_by_name = {child["name"]: {column["key"] for column in child["columns"]} for child in tables["character"]["child_lists"]}
+    assert child_columns_by_name["parameters"] >= {"family_name", "tone"}
+    assert child_columns_by_name["places"] == {"location_id", "start", "end"}
     assert {column["key"]: column["create_only"] for column in tables["character"]["columns"]}["place_id"] is True
     meme_columns = {column["key"]: column for column in tables["meme"]["columns"]}
     assert meme_columns["category"]["choices"] == ["信条", "欲求", "境遇", "集団", "理"]
@@ -61,15 +63,16 @@ def test_list_searches_filters_and_labels_references(client, session, world):
     session.commit()
 
     body = client.get("/api/tables/idea/records").json()
-    assert body["total"] == 3 and [item["name"] for item in body["items"]] == ["魔力", "宿り", "虫憑き"]
-    assert "text" not in body["items"][0] and body["items"][0]["preview"] == "世界の力"
+    # 既定は id の降順(新しい行が上)
+    assert body["total"] == 3 and [item["name"] for item in body["items"]] == ["虫憑き", "宿り", "魔力"]
+    assert "text" not in body["items"][2] and body["items"][2]["preview"] == "世界の力"
     assert body["labels"]["location_id"] == {str(world["world"]): "世界線"}
 
-    assert [item["name"] for item in client.get("/api/tables/idea/records?q=虫").json()["items"]] == ["宿り", "虫憑き"]
+    assert [item["name"] for item in client.get("/api/tables/idea/records?q=虫").json()["items"]] == ["虫憑き", "宿り"]
     assert [item["name"] for item in client.get("/api/tables/idea/records?confirmed=非承認").json()["items"]] == ["虫憑き"]
-    assert [item["name"] for item in client.get("/api/tables/idea/records?kind=技術&order=desc").json()["items"]] == ["宿り", "魔力"]
-    assert [item["name"] for item in client.get("/api/tables/idea/records?location_id=null").json()["items"]] == ["宿り", "虫憑き"]
-    page = client.get("/api/tables/idea/records?limit=1&offset=1").json()
+    assert [item["name"] for item in client.get("/api/tables/idea/records?kind=技術&order=asc").json()["items"]] == ["魔力", "宿り"]
+    assert [item["name"] for item in client.get("/api/tables/idea/records?location_id=null").json()["items"]] == ["虫憑き", "宿り"]
+    page = client.get("/api/tables/idea/records?limit=1&offset=1&order=asc").json()
     assert page["total"] == 3 and [item["name"] for item in page["items"]] == ["宿り"]
 
     options = client.get("/api/tables/location/options?q=村").json()["items"]
@@ -106,14 +109,17 @@ def test_character_with_parameters_and_birthplace(client, session, world):
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["record"]["parameters"][0]["family_name"] == "リヴ"
-    assert body["related"]["places"] == [
-        {"location_id": world["village"], "location": "村", "start": "2100/04/01 00:00:00", "end": None}]
+    assert body["record"]["places"] == [
+        {"location_id": world["village"], "start": "2100/04/01 00:00:00", "end": None}]
 
     updated = client.patch(f"/api/tables/character/records/{body['record']['id']}", json={
         "parameters": [{"family_name": "リヴ", "tone": "静か"}, {"start": "2120", "family_name": "アルト"}],
+        "places": [{"location_id": world["village"], "start": "2100/04/01 00:00:00", "end": "2120"}],
         "place_id": 999})
     assert updated.status_code == 200, updated.text
     assert [p["family_name"] for p in updated.json()["record"]["parameters"]] == ["リヴ", "アルト"]
+    assert updated.json()["record"]["places"] == [
+        {"location_id": world["village"], "start": "2100/04/01 00:00:00", "end": "2120/01/01 00:00:00"}]
     assert session.query(CharacterParameter).count() == 2
 
 
@@ -134,6 +140,32 @@ def test_plot_text_goes_to_episode_and_synced_is_kept(client, session, world):
     assert listed["items"][0]["label"] == "旅立ち" and "text" not in listed["items"][0]
     story = client.get(f"/api/tables/story/records/{world['story']}").json()
     assert story["related"]["plots"][0]["label"] == "旅立ち"
+
+
+def test_plots_list_by_start_and_any_column_can_sort(client, session, world):
+    later = Story(name="後の話", place_id=world["village"], text="", narration="", state="執筆中")
+    session.add(later)
+    session.flush()
+    session.add_all([
+        Plot(story_id=world["story"], title="三", key="", start="2100/04/03"),
+        Plot(story_id=world["story"], title="空", key="", start=None),
+        Plot(story_id=world["story"], title="一", key="", start="2100/04/01"),
+        Plot(story_id=later.id, title="二", key="", start="2100/04/02"),
+    ])
+    session.commit()
+
+    meta = next(t for t in client.get("/api/tables").json()["tables"] if t["name"] == "plot")
+    assert (meta["sort"], meta["order"]) == ("start", "asc")
+    titles = lambda query: [item["title"] for item in client.get(f"/api/tables/plot/records?{query}").json()["items"]]
+    assert titles("") == ["一", "二", "三", "空"]
+    assert titles("order=desc") == ["三", "二", "一", "空"]
+    assert titles(f"story_id={world['story']}") == ["一", "三", "空"]
+    assert titles("sort=id&order=desc") == ["二", "一", "空", "三"]
+    assert titles("sort=title&order=asc") == ["一", "三", "二", "空"]
+    story = client.get(f"/api/tables/story/records/{world['story']}").json()
+    assert [plot["label"] for plot in story["related"]["plots"]] == ["一", "三", "空"]
+    assert client.get("/api/tables/plot/records?sort=nope").status_code == 400
+    assert client.get("/api/tables/plot/records?order=sideways").status_code == 422
 
 
 def test_event_participants(client, session, world):
@@ -201,7 +233,7 @@ def test_review_flow_approves_and_rejects_in_order(client, session):
     assert client.get("/api/review/story/next").status_code == 404
 
 
-def test_maps_and_relations_are_served_as_html(client, session):
+def test_maps_and_relations_are_served_as_json(client, session):
     planet = Location(name="星", kind="星", text="", area=510_072_000)
     session.add(planet)
     session.flush()
@@ -212,14 +244,21 @@ def test_maps_and_relations_are_served_as_html(client, session):
     session.add_all([a, b])
     session.commit()
 
-    html = client.get("/api/maps")
-    assert html.status_code == 200 and html.headers["content-type"].startswith("text/html")
-    assert '"name": "東京"' in html.text and '"link": "/tables/location/' in html.text
+    maps = client.get("/api/maps")
+    assert maps.status_code == 200
+    body = maps.json()
+    [entry] = body["planets"]
+    assert entry["planet"]["name"] == "星" and entry["planet"]["radius_km"] == pytest.approx(6371, rel=0.01)
+    [point] = entry["points"]
+    assert point["name"] == "東京" and point["category"] == "都市" and point["link"].startswith("/tables/location/")
+    assert body["categories"] == ["大陸", "国", "都市", "自然"] and body["category_colors"]["都市"] and len(body["bearings"]) == 16
 
     svg = client.get(f"/api/maps/{planet.id}.svg")
     assert svg.status_code == 200 and svg.headers["content-type"].startswith("image/svg+xml")
     assert svg.text.startswith("<svg") and "東京" in svg.text
     assert client.get("/api/maps/999.svg").status_code == 404
 
-    relations = client.get("/api/relations")
-    assert relations.status_code == 200 and f'"link": "/tables/character/{a.id}"' in relations.text
+    relations = client.get("/api/relations").json()
+    assert [c["link"] for c in relations["characters"]] == [f"/tables/character/{a.id}", f"/tables/character/{b.id}"]
+    assert relations["relations"] == [] and len(relations["colors"]) == 10
+

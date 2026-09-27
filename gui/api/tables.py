@@ -46,12 +46,15 @@ class TableSpec:
     extra_fields: tuple[str, ...] = ()
     # `confirmed` を持ち、レビュー画面の対象になるか
     reviewable: bool = False
+    # 一覧の既定の並び(列名と向き)
+    sort: str = "id"
+    order: str = "desc"
 
 
 TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", "作品", Story, CommitStory, UpdateStory, "name", ("name", "text")),
     TableSpec("plot", "話", Plot, CommitPlot, CommitPlot, "title", ("title", "key"),
-              extra_fields=("text",)),
+              extra_fields=("text",), sort="start", order="asc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, "name", ("name", "text"),
               extra_fields=("place_id",)),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,

@@ -95,13 +95,35 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
             "name": "order",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "pattern": "^(asc|desc)$",
-              "default": "asc",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(asc|desc)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Order"
             }
           }
@@ -248,6 +270,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OptionList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tables/{table}/generate/{generator}": {
+      "post": {
+        "summary": "Generate Record",
+        "description": "「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。\nclaude を叩くので Claude Code の環境でだけ、裏の job として走る。結果(足した行)は `/api/jobs/{id}` で引く",
+        "operationId": "generate_record_api_tables__table__generate__generator__post",
+        "parameters": [
+          {
+            "name": "table",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Table"
+            }
+          },
+          {
+            "name": "generator",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Generator"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
                 }
               }
             }
@@ -634,15 +715,15 @@
     "/api/maps": {
       "get": {
         "summary": "Maps",
-        "description": "星ごとの地図(html)。場所の座標・領域から描く",
+        "description": "星ごとの地図の元データ。画面(`/maps`)が場所の座標・領域から描く",
         "operationId": "maps_api_maps_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/MapsResponse"
                 }
               }
             }
@@ -690,15 +771,15 @@
     "/api/relations": {
       "get": {
         "summary": "Relations",
-        "description": "人物相関図(html)",
+        "description": "人物相関図の元データ。画面(`/relations`)が描く",
         "operationId": "relations_api_relations_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
-              "text/html": {
+              "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/RelationsResponse"
                 }
               }
             }
@@ -771,6 +852,11 @@
             "type": "boolean",
             "title": "Section",
             "default": false
+          },
+          "markdown": {
+            "type": "boolean",
+            "title": "Markdown",
+            "default": true
           },
           "choices": {
             "anyOf": [
@@ -949,6 +1035,74 @@
         ],
         "title": "EntranceParam"
       },
+      "GenerateRequest": {
+        "properties": {
+          "draft": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Draft"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          }
+        },
+        "type": "object",
+        "title": "GenerateRequest"
+      },
+      "GeneratorMeta": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "entrance": {
+            "type": "string",
+            "title": "Entrance"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "create",
+              "edit",
+              "both"
+            ],
+            "title": "Mode"
+          },
+          "when_empty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When Empty"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMeta"
+            },
+            "type": "array",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "entrance",
+          "mode"
+        ],
+        "title": "GeneratorMeta",
+        "description": "「AI で作成」のボタン。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1072,6 +1226,258 @@
         ],
         "title": "JobList"
       },
+      "MapPlace": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "parent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Name"
+          },
+          "parent_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Kind"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          },
+          "alt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alt"
+          },
+          "polygon": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polygon"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "sample_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Region"
+          },
+          "sample_culture": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Culture"
+          },
+          "sample_era": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Era"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "category",
+          "parent_id",
+          "parent_name",
+          "parent_kind",
+          "lon",
+          "lat",
+          "alt",
+          "polygon",
+          "environment",
+          "sample_region",
+          "sample_culture",
+          "sample_era",
+          "start",
+          "end",
+          "link"
+        ],
+        "title": "MapPlace"
+      },
+      "MapsResponse": {
+        "properties": {
+          "planets": {
+            "items": {
+              "$ref": "#/components/schemas/PlanetMap"
+            },
+            "type": "array",
+            "title": "Planets"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "category_colors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Category Colors"
+          },
+          "shape_opacity": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Shape Opacity"
+          },
+          "bearings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bearings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "planets",
+          "categories",
+          "category_colors",
+          "shape_opacity",
+          "bearings"
+        ],
+        "title": "MapsResponse"
+      },
       "Option": {
         "properties": {
           "id": {
@@ -1105,6 +1511,83 @@
           "items"
         ],
         "title": "OptionList"
+      },
+      "Planet": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "radius_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radius Km"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "area",
+          "radius_km"
+        ],
+        "title": "Planet"
+      },
+      "PlanetMap": {
+        "properties": {
+          "planet": {
+            "$ref": "#/components/schemas/Planet"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MapPlace"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "shapes": {
+            "items": {
+              "$ref": "#/components/schemas/MapPlace"
+            },
+            "type": "array",
+            "title": "Shapes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "planet",
+          "points",
+          "shapes"
+        ],
+        "title": "PlanetMap"
       },
       "RecordList": {
         "properties": {
@@ -1181,6 +1664,180 @@
           "label"
         ],
         "title": "RecordResponse"
+      },
+      "Relation": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "character_id_1": {
+            "type": "integer",
+            "title": "Character Id 1"
+          },
+          "character_id_2": {
+            "type": "integer",
+            "title": "Character Id 2"
+          },
+          "relation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relation"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "character_id_1",
+          "character_id_2",
+          "relation",
+          "start",
+          "end",
+          "text"
+        ],
+        "title": "Relation"
+      },
+      "RelationCharacter": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "sex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sex"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "sex",
+          "start",
+          "end",
+          "link"
+        ],
+        "title": "RelationCharacter"
+      },
+      "RelationsResponse": {
+        "properties": {
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/RelationCharacter"
+            },
+            "type": "array",
+            "title": "Characters"
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/Relation"
+            },
+            "type": "array",
+            "title": "Relations"
+          },
+          "colors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Colors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "characters",
+          "relations",
+          "colors"
+        ],
+        "title": "RelationsResponse"
       },
       "ReviewNext": {
         "properties": {
@@ -1358,6 +2015,27 @@
           "count": {
             "type": "integer",
             "title": "Count"
+          },
+          "generators": {
+            "items": {
+              "$ref": "#/components/schemas/GeneratorMeta"
+            },
+            "type": "array",
+            "title": "Generators"
+          },
+          "sort": {
+            "type": "string",
+            "title": "Sort",
+            "default": "id"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Order",
+            "default": "desc"
           }
         },
         "type": "object",
@@ -1380,6 +2058,11 @@
             },
             "type": "array",
             "title": "Tables"
+          },
+          "claude_available": {
+            "type": "boolean",
+            "title": "Claude Available",
+            "default": false
           }
         },
         "type": "object",

@@ -19,6 +19,7 @@ class UpdateCharacter(CommitDraft):
         if character_id is None:
             raise ValueError("id は必須(直す対象の人物)")
         parameters = data.pop("parameters", None)
+        places = data.pop("places", None)
         self.check_columns(data)
 
         record = session.get(Character, character_id)
@@ -29,5 +30,7 @@ class UpdateCharacter(CommitDraft):
             setattr(record, key, value)
         if parameters is not None:
             load_children(record, "parameters", parameters)
+        if places is not None:
+            load_children(record, "places", places)
         self.finalize(session, record)
         return to_dict(record)

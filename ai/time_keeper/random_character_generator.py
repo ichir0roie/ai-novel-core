@@ -298,16 +298,45 @@ def _location_context(place: Location | None) -> str:
     return "\n".join(lines)
 
 
+def _hint_line(hints: dict, subject: str) -> str:
+    """作者が下書きに書いた名前・説明を、決めるときの核として渡す。書き方は AI に任せる(そのまま写させない)。"""
+    given = {label: (hints.get(key) or "").strip() for key, label in (("name", "名前"), ("text", "説明"))}
+    given = {label: value for label, value in given.items() if value}
+    if not given:
+        return ""
+    return (f"作者の指定(この{subject}の核にする。足りないところを補い、言い回しは変えてよい): "
+            + " / ".join(f"{label}: {value}" for label, value in given.items()) + "\n")
+
+
+def _apply_parameter_hints(parameters: dict, hints: dict) -> None:
+    """作者が決めた性別・体格・口調・性格などはサイコロの値より優先する。"""
+    rows = hints.get("parameters") or []
+    row = rows[0] if isinstance(rows, list) and rows else (rows if isinstance(rows, dict) else {})
+    for column, value in row.items():
+        if column in parameters and value not in (None, ""):
+            parameters[column] = value
+
+
 def _generate_one(
     session: Session, born_place: Location | None, time: Stamp, rng: random.Random,
-    ai: AIClient, person: bool = True,
+    ai: AIClient, person: bool = True, hints: dict | None = None,
 ) -> Character:
+    """`hints` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性別・体格・口調・性格・
+    種別・生年・没年・メインキャラクターかは決まった値として使う。渡された欄もすべて AI が組み立て直す。"""
+    hints = dict(hints or {})
     draft = build_character()
     # 生まれた時点で決める値なので、期間を限らない一行だけを持つ
     parameters = draft["parameters"][0]
+    _apply_parameter_hints(parameters, hints)
     if not person:
         for column in PERSON_PARAMETER_COLUMNS:
             parameters[column] = None
+        if hints.get("kind") in constants.NON_PERSON_KINDS:
+            draft["kind"] = hints["kind"]
+    if hints.get("main_character") is not None:
+        draft["main_character"] = bool(hints["main_character"])
+    birth = Stamp.parse(hints.get("start"))
+    fixed_age = max(0, time.year - birth.year) if birth is not None else None
 
     region_label = _region_label(session, born_place)
     story_text = _story_text(session, born_place, time)
@@ -336,16 +365,21 @@ def _generate_one(
         if person else ""
     )
 
+    kind_line = f"種別(決まっている): {draft['kind']}\n" if not person and hints.get("kind") in constants.NON_PERSON_KINDS else ""
+    age_line = f"年齢(決まっている。age はこの値にする): {fixed_age}\n" if fixed_age is not None else ""
     content_prompt = (
         f"出身: {born_place.name if born_place else '不明'}\n"
         f"出身地の特徴:\n{_location_context(born_place)}\n"
         f"地域: {region_label}\n"
+        f"{kind_line}"
         f"{person_line}"
+        f"{age_line}"
         f"現在の時刻: {time}\n"
         f"この場所・時刻に関連する筋書き:\n{story_label}\n"
         f"{later_label}"
         f"{element_line}"
         f"{meme_line}"
+        f"{_hint_line(hints, subject)}"
         f"既にいる人物・対象:\n{_record_context(nearby_characters)}\n"
         f"この場所に自然な{subject}を1件、決めてください。"
     )
@@ -355,8 +389,9 @@ def _generate_one(
     else:
         decided = ai.try_generate_json(
             content_prompt, _NON_PERSON_CONTENT_SCHEMA, system=_NON_PERSON_CONTENT_SYSTEM_PROMPT)
-        kind = decided.get("kind")
-        draft["kind"] = kind if kind in constants.NON_PERSON_KINDS else rng.choice(constants.NON_PERSON_KINDS)
+        if hints.get("kind") not in constants.NON_PERSON_KINDS:
+            kind = decided.get("kind")
+            draft["kind"] = kind if kind in constants.NON_PERSON_KINDS else rng.choice(constants.NON_PERSON_KINDS)
 
     draft["text"] = decided.get("text") or draft["text"]
     if person:
@@ -372,6 +407,8 @@ def _generate_one(
     except (TypeError, ValueError):
         age = rng.randint(*constants.GENERATION_CHARACTER_AGE_RANGE)
     age = min(max(age, constants.GENERATION_CHARACTER_AGE_RANGE[0]), constants.GENERATION_CHARACTER_AGE_RANGE[1])
+    if fixed_age is not None:
+        age = fixed_age
 
     if person:
         draft["text"] += f"\n\n# 来歴\n{history_section(decided.get('history'), time.year - age, age)}"
@@ -384,7 +421,7 @@ def _generate_one(
     dead_age = age + rng.randint(10, 100)
 
     draft["start"] = Stamp(time.year - age)
-    draft["end"] = Stamp(time.year - age + dead_age)
+    draft["end"] = Stamp.parse(hints.get("end")) or Stamp(time.year - age + dead_age)
 
     dialect_line = f"方言: {parameters['dialect']}\n" if person and parameters.get("dialect") else ""
     # 名前は、説明・年齢など中身が決まったあとに、その内容から連想して決める。
@@ -398,7 +435,9 @@ def _generate_one(
         f"場所の特徴:\n{_location_context(born_place)}\n"
         f"所属する地域: {region_label}\n"
         f"既にいる人物・対象の名: {_character_names(nearby_characters)}\n"
-        f"この{subject}に似合う名前を決めてください。"
+        + (f"作者が付けたい名: {hints['name'].strip()}(この{subject}に似合うならこれを使い、合わなければ近い響きにする)\n"
+           if (hints.get("name") or "").strip() else "")
+        + f"この{subject}に似合う名前を決めてください。"
     )
     if person:
         named = ai.try_generate_json(name_prompt, _PERSON_NAME_SCHEMA, system=_NAME_SYSTEM_PROMPT)

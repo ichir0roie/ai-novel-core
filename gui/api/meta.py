@@ -9,6 +9,7 @@ from db.child_lists import child_columns, child_model
 from db.schema import (
     CONFIRM_STATUSES, MEME_CATEGORIES, ConfirmStatusType, PolygonType, StampType,
 )
+from gui.api import generate
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
 
@@ -55,7 +56,8 @@ def _column_type(column) -> str:
     return "string"
 
 
-def column_meta(table: str, model: type, column, *, section: bool = False, readonly: bool = False) -> ColumnMeta:
+def column_meta(table: str, model: type, column, *, section: bool = False, markdown: bool = True,
+                 readonly: bool = False) -> ColumnMeta:
     kind = _column_type(column)
     choices = list(CONFIRM_STATUSES) if kind == "confirm" else _CHOICES.get((table, column.key))
     references = None
@@ -65,7 +67,7 @@ def column_meta(table: str, model: type, column, *, section: bool = False, reado
                 and column.server_default is None and not section)
     return ColumnMeta(
         key=column.key, label=_label(column.key, column.comment), type=kind, nullable=column.nullable,
-        required=required, section=section, choices=choices, references=references,
+        required=required, section=section, markdown=markdown, choices=choices, references=references,
         readonly=readonly or column.primary_key, comment=column.comment)
 
 
@@ -76,7 +78,8 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
         extras.append(ColumnMeta(key="letters", label=_LABELS["letters"], type="integer", nullable=False,
                                  required=False, readonly=True, comment="本文の字数。本文から数える"))
         extras.append(ColumnMeta(key="text", label=_LABELS["text"], type="string", nullable=True,
-                                 required=False, section=True, comment="本文(episode テーブル)。話一つにつき一つ"))
+                                 required=False, section=True, markdown=False,
+                                 comment="本文(episode テーブル)。話一つにつき一つ"))
     if spec.name == "character":
         extras.append(ColumnMeta(key="place_id", label="出自(場所)", type="integer", nullable=True,
                                  required=False, references="location", create_only=True,
@@ -91,6 +94,9 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
 def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     model = spec.model
     sections = set(model.TEXT_COLUMNS)
+    if spec.name == "plot":
+        # キーテキストは種の一言で本文ではないので、左の欄に置く
+        sections.discard("key")
     plain, long = [], []
     for column in model.__table__.columns:
         meta = column_meta(spec.name, model, column, section=column.key in sections)
@@ -113,7 +119,8 @@ def table_meta(session: Session, spec: TableSpec) -> TableMeta:
     count = session.scalar(select(func.count()).select_from(spec.model)) or 0
     return TableMeta(name=spec.name, label=spec.label, label_column=spec.label_column,
                      columns=table_columns(spec), child_lists=child_lists(spec),
-                     reviewable=spec.reviewable, count=count)
+                     reviewable=spec.reviewable, count=count, sort=spec.sort, order=spec.order,
+                     generators=[generator.to_meta() for generator in generate.generators_of(spec.name)])
 
 
 def all_tables(session: Session) -> list[TableMeta]:
@@ -121,3 +128,4 @@ def all_tables(session: Session) -> list[TableMeta]:
 
 
 _LABELS["parameters"] = "期間ごとのパラメータ"
+_LABELS["places"] = "期間ごとの居場所"

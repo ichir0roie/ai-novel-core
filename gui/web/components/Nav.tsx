@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getReviewSummary, type ReviewSummary } from "@/lib/api";
+import { HIDDEN_TABLES } from "@/lib/hidden";
 import { useMeta } from "@/lib/meta";
+import { T } from "@/lib/text";
 
 export default function Nav() {
   const pathname = usePathname();
@@ -19,16 +21,16 @@ export default function Nav() {
 
   return (
     <nav className="nav">
-      <Link href="/" className={`brand ${isActive("/") ? "active" : ""}`}>novel db</Link>
+      <Link href="/" className={`brand ${isActive("/") ? "active" : ""}`}>{T.appName}</Link>
       <span className="group">
         {summary?.tables.map((row) => (
           <Link key={row.table} href={`/review/${row.table}`} className={isActive(`/review/${row.table}`) ? "active" : ""}>
-            {row.label}レビュー{row.pending > 0 && <span className="badge">{row.pending}</span>}
+            {T.nav.review(row.label)}{row.pending > 0 && <span className="badge">{row.pending}</span>}
           </Link>
         ))}
       </span>
       <span className="group">
-        {tables.map((table) => (
+        {tables.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (
           <Link key={table.name} href={`/tables/${table.name}`} className={isActive(`/tables/${table.name}`) ? "active" : ""}>
             {table.label}
           </Link>
@@ -36,9 +38,7 @@ export default function Nav() {
       </span>
       <span className="spacer" />
       <span className="group">
-        <Link href="/interface" className={isActive("/interface") ? "active" : ""}>入口</Link>
-        <a href="/api/maps" target="_blank" rel="noreferrer">地図</a>
-        <a href="/api/relations" target="_blank" rel="noreferrer">相関図</a>
+        <Link href="/interface" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
       </span>
     </nav>
   );

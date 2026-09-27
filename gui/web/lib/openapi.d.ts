@@ -73,6 +73,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tables/{table}/generate/{generator}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Record
+         * @description 「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。
+         *     claude を叩くので Claude Code の環境でだけ、裏の job として走る。結果(足した行)は `/api/jobs/{id}` で引く
+         */
+        post: operations["generate_record_api_tables__table__generate__generator__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tables/{table}/records/{record_id}": {
         parameters: {
             query?: never;
@@ -225,7 +246,7 @@ export interface paths {
         };
         /**
          * Maps
-         * @description 星ごとの地図(html)。場所の座標・領域から描く
+         * @description 星ごとの地図の元データ。画面(`/maps`)が場所の座標・領域から描く
          */
         get: operations["maps_api_maps_get"];
         put?: never;
@@ -262,7 +283,7 @@ export interface paths {
         };
         /**
          * Relations
-         * @description 人物相関図(html)
+         * @description 人物相関図の元データ。画面(`/relations`)が描く
          */
         get: operations["relations_api_relations_get"];
         put?: never;
@@ -306,6 +327,11 @@ export interface components {
              * @default false
              */
             section: boolean;
+            /**
+             * Markdown
+             * @default true
+             */
+            markdown: boolean;
             /** Choices */
             choices?: string[] | null;
             /** References */
@@ -379,6 +405,38 @@ export interface components {
              */
             annotation: string;
         };
+        /** GenerateRequest */
+        GenerateRequest: {
+            /** Draft */
+            draft?: {
+                [key: string]: unknown;
+            };
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * GeneratorMeta
+         * @description 「AI で作成」のボタン。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。
+         */
+        GeneratorMeta: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Entrance */
+            entrance: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "create" | "edit" | "both";
+            /** When Empty */
+            when_empty?: string | null;
+            /** Params */
+            params?: components["schemas"]["ColumnMeta"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -422,6 +480,64 @@ export interface components {
             /** Jobs */
             jobs: components["schemas"]["JobInfo"][];
         };
+        /** MapPlace */
+        MapPlace: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Category */
+            category: string;
+            /** Parent Id */
+            parent_id: number | null;
+            /** Parent Name */
+            parent_name: string | null;
+            /** Parent Kind */
+            parent_kind: string | null;
+            /** Lon */
+            lon: number | null;
+            /** Lat */
+            lat: number | null;
+            /** Alt */
+            alt: number | null;
+            /** Polygon */
+            polygon: {
+                [key: string]: unknown;
+            } | null;
+            /** Environment */
+            environment: string | null;
+            /** Sample Region */
+            sample_region: string | null;
+            /** Sample Culture */
+            sample_culture: string | null;
+            /** Sample Era */
+            sample_era: string | null;
+            /** Start */
+            start: string | null;
+            /** End */
+            end: string | null;
+            /** Link */
+            link: string;
+        };
+        /** MapsResponse */
+        MapsResponse: {
+            /** Planets */
+            planets: components["schemas"]["PlanetMap"][];
+            /** Categories */
+            categories: string[];
+            /** Category Colors */
+            category_colors: {
+                [key: string]: string;
+            };
+            /** Shape Opacity */
+            shape_opacity: {
+                [key: string]: number;
+            };
+            /** Bearings */
+            bearings: string[];
+        };
         /** Option */
         Option: {
             /** Id */
@@ -433,6 +549,25 @@ export interface components {
         OptionList: {
             /** Items */
             items: components["schemas"]["Option"][];
+        };
+        /** Planet */
+        Planet: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string | null;
+            /** Area */
+            area: number | null;
+            /** Radius Km */
+            radius_km: number | null;
+        };
+        /** PlanetMap */
+        PlanetMap: {
+            planet: components["schemas"]["Planet"];
+            /** Points */
+            points: components["schemas"]["MapPlace"][];
+            /** Shapes */
+            shapes: components["schemas"]["MapPlace"][];
         };
         /** RecordList */
         RecordList: {
@@ -471,6 +606,49 @@ export interface components {
             related?: {
                 [key: string]: unknown;
             };
+        };
+        /** Relation */
+        Relation: {
+            /** Id */
+            id: number;
+            /** Character Id 1 */
+            character_id_1: number;
+            /** Character Id 2 */
+            character_id_2: number;
+            /** Relation */
+            relation: string | null;
+            /** Start */
+            start: number | null;
+            /** End */
+            end: number | null;
+            /** Text */
+            text: string;
+        };
+        /** RelationCharacter */
+        RelationCharacter: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Sex */
+            sex: string | null;
+            /** Start */
+            start: number | null;
+            /** End */
+            end: number | null;
+            /** Link */
+            link: string;
+        };
+        /** RelationsResponse */
+        RelationsResponse: {
+            /** Characters */
+            characters: components["schemas"]["RelationCharacter"][];
+            /** Relations */
+            relations: components["schemas"]["Relation"][];
+            /** Colors */
+            colors: string[];
         };
         /** ReviewNext */
         ReviewNext: {
@@ -546,11 +724,29 @@ export interface components {
             reviewable: boolean;
             /** Count */
             count: number;
+            /** Generators */
+            generators?: components["schemas"]["GeneratorMeta"][];
+            /**
+             * Sort
+             * @default id
+             */
+            sort: string;
+            /**
+             * Order
+             * @default desc
+             * @enum {string}
+             */
+            order: "asc" | "desc";
         };
         /** TablesResponse */
         TablesResponse: {
             /** Tables */
             tables: components["schemas"]["TableMeta"][];
+            /**
+             * Claude Available
+             * @default false
+             */
+            claude_available: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -620,7 +816,8 @@ export interface operations {
                 q?: string | null;
                 limit?: number;
                 offset?: number;
-                order?: string;
+                sort?: string | null;
+                order?: string | null;
             };
             header?: never;
             path: {
@@ -709,6 +906,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OptionList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_record_api_tables__table__generate__generator__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table: string;
+                generator: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobInfo"];
                 };
             };
             /** @description Validation Error */
@@ -1002,7 +1235,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": string;
+                    "application/json": components["schemas"]["MapsResponse"];
                 };
             };
         };
@@ -1053,7 +1286,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": string;
+                    "application/json": components["schemas"]["RelationsResponse"];
                 };
             };
         };

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getOptions, type Option } from "@/lib/api";
+import { T } from "@/lib/text";
 
 const cache = new Map<string, Promise<Option[]>>();
 
@@ -48,9 +49,9 @@ export default function ReferenceSelect({ table, value, nullable, onChange, disa
 
   return (
     <div style={{ display: "flex", gap: "0.3rem" }}>
-      <input type="text" placeholder="絞り込み" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: "8rem" }} disabled={disabled} />
+      <input type="text" placeholder={T.filter} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: "8rem" }} disabled={disabled} />
       <select value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} disabled={disabled}>
-        <option value="">{nullable ? "(なし)" : "選ぶ"}</option>
+        <option value="">{nullable ? T.none : T.select}</option>
         {shown.map((o) => (
           <option key={o.id} value={o.id}>
             {o.id}: {o.label}
@@ -75,7 +76,7 @@ export function ReferenceMultiSelect({ table, value, onChange }: MultiProps) {
   const toggle = (id: number) => onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   return (
     <div>
-      <input type="text" placeholder="絞り込み" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "0.3rem" }} />
+      <input type="text" placeholder={T.filter} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "0.3rem" }} />
       <div className="multi">
         {shown.map((o) => (
           <label key={o.id}>
@@ -83,7 +84,7 @@ export function ReferenceMultiSelect({ table, value, onChange }: MultiProps) {
             {o.id}: {o.label}
           </label>
         ))}
-        {shown.length === 0 && <span className="hint">候補なし</span>}
+        {shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
       </div>
     </div>
   );

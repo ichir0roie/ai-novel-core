@@ -2,11 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getEntrances, getJobs, runEntrance, type EntranceList, type EntranceMeta, type JobInfo, type Rec } from "@/lib/api";
-
-const AREA_LABEL: Record<string, string> = {
-  world: "世界を読む", story: "作品・話", randomizer: "足す・直す・消す", idea: "アイデアの中間段",
-  meme: "ミーム", review: "レビュー", fact_check: "検証", time_keeper: "常駐ループ(claude)",
-};
+import { PageTitle } from "@/lib/meta";
+import { T } from "@/lib/text";
 
 /** 引数の欄。JSON として読めればその値、読めなければ文字列のまま渡す。 */
 function parseArg(text: string): unknown {
@@ -52,17 +49,17 @@ function Runner({ entrance, claudeAvailable, onJob }: { entrance: EntranceMeta; 
       <h2 style={{ display: "flex", gap: "0.5rem", alignItems: "baseline", flexWrap: "wrap" }}>
         <code>{entrance.id}</code>
         {entrance.claude && <span className="chip">claude</span>}
-        {entrance.writes && <span className="chip">db に書く</span>}
+        {entrance.writes && <span className="chip">{T.endpoints.writesDb}</span>}
       </h2>
       {entrance.doc && <p className="hint">{entrance.doc}</p>}
-      {blocked && <div className="status error">claude コマンドを叩く入口は、Claude Code の環境(CLAUDECODE=1)で起こした API でだけ実行できる</div>}
+      {blocked && <div className="status error">{T.endpoints.claudeOnly}</div>}
       {entrance.params.length > 0 && (
         <div className="form">
           {entrance.params.map((param) => (
             <div key={param.name} className="field">
               <label>
                 {param.name}
-                {param.required && <span className="hint">必須</span>}
+                {param.required && <span className="hint">{T.required}</span>}
                 {param.annotation && <span className="key">{param.annotation}</span>}
               </label>
               <input
@@ -77,14 +74,14 @@ function Runner({ entrance, claudeAvailable, onJob }: { entrance: EntranceMeta; 
       )}
       <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", marginTop: "0.75rem" }}>
         <button className="primary" onClick={run} disabled={busy || blocked}>
-          {busy ? "実行中…" : "実行"}
+          {busy ? T.endpoints.running : T.endpoints.run}
         </button>
         {!entrance.claude && (
           <label className="check">
-            <input type="checkbox" checked={background} onChange={(e) => setBackground(e.target.checked)} /> 裏で走らせる
+            <input type="checkbox" checked={background} onChange={(e) => setBackground(e.target.checked)} /> {T.endpoints.runInBackground}
           </label>
         )}
-        <span className="hint">辞書・配列は JSON で書く(例: {`{"id": 3, "kind": "概念"}`} / [1, 2])</span>
+        <span className="hint">{T.endpoints.jsonHint}</span>
       </div>
       {error && <div className="status error">{error}</div>}
       {result !== null && (
@@ -132,20 +129,21 @@ export default function InterfacePage() {
 
   return (
     <>
-      <h1>入口を呼ぶ</h1>
+      <PageTitle kind={T.endpoints.title} />
+      <h1>{T.endpoints.title}</h1>
       {error && <div className="status error">{error}</div>}
       {catalog && !catalog.claude_available && (
-        <div className="status info">この API は Claude Code の外で起きているので、claude を叩く入口(常駐ループ・確定後に AI を回す入口)は実行できない</div>
+        <div className="status info">{T.endpoints.outsideClaude}</div>
       )}
       <div className="toolbar">
-        <input type="search" placeholder="入口を探す" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input type="search" placeholder={T.endpoints.searchPlaceholder} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: "1rem" }}>
         <div>
           {[...groups.entries()].map(([area, entrances]) => (
             <div key={area} style={{ marginBottom: "0.75rem" }}>
               <div className="hint" style={{ fontWeight: 600 }}>
-                {AREA_LABEL[area] ?? area}
+                {T.endpoints.area[area] ?? area}
               </div>
               {entrances.map((entrance) => (
                 <div key={entrance.id}>
@@ -159,19 +157,19 @@ export default function InterfacePage() {
           ))}
         </div>
         <div>
-          {current ? <Runner entrance={current} claudeAvailable={catalog?.claude_available ?? false} onJob={loadJobs} /> : <div className="status info">左から入口を選ぶ</div>}
-          <h2>裏で走らせた job</h2>
+          {current ? <Runner entrance={current} claudeAvailable={catalog?.claude_available ?? false} onJob={loadJobs} /> : <div className="status info">{T.endpoints.selectOne}</div>}
+          <h2>{T.endpoints.jobs}</h2>
           {jobs.length === 0 ? (
-            <div className="hint">まだ無い</div>
+            <div className="hint">{T.endpoints.noJobs}</div>
           ) : (
             <table className="list">
               <thead>
                 <tr>
-                  <th>状態</th>
-                  <th>入口</th>
-                  <th>引数</th>
-                  <th>結果 / エラー</th>
-                  <th>時刻</th>
+                  <th>{T.endpoints.columns.status}</th>
+                  <th>{T.endpoints.columns.entrance}</th>
+                  <th>{T.endpoints.columns.args}</th>
+                  <th>{T.endpoints.columns.result}</th>
+                  <th>{T.endpoints.columns.time}</th>
                 </tr>
               </thead>
               <tbody>

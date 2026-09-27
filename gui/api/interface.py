@@ -168,13 +168,19 @@ def to_jsonable(value: Any) -> Any:
     return repr(value)
 
 
-def invoke(entrance: Entrance, args: dict[str, Any]) -> Any:
-    """入口を呼ぶ。クラスなら組み立てて `run()`、関数ならそのまま。引数の食い違いは ValueError にして 400 へ"""
+def check_args(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
+    """引数を入口の signature に当てる。食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)"""
     args = _style_defaults(args, entrance.params)
     try:
         inspect.signature(entrance.target).bind(**args)
     except TypeError as error:
         raise ValueError(f"{entrance.id} の引数が合わない: {error}") from error
+    return args
+
+
+def invoke(entrance: Entrance, args: dict[str, Any]) -> Any:
+    """入口を呼ぶ。クラスなら組み立てて `run()`、関数ならそのまま。"""
+    args = check_args(entrance, args)
     target = entrance.target
     result = target(**args).run() if inspect.isclass(target) else target(**args)
     return to_jsonable(result)

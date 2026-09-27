@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import RecordForm from "@/components/RecordForm";
 import Related from "@/components/Related";
 import { decideReview, diff, getReviewNext, type ConfirmStatus, type Rec, type ReviewNext } from "@/lib/api";
-import { useTable } from "@/lib/meta";
+import { PageTitle, useTable } from "@/lib/meta";
+import { T } from "@/lib/text";
 
 export default function ReviewPage() {
   const { table } = useParams<{ table: string }>();
@@ -50,7 +51,7 @@ export default function ReviewPage() {
       const changes = diff(initial, value);
       delete changes.confirmed;
       await decideReview(table, id, decision ?? (initial.confirmed as ConfirmStatus), changes);
-      setDone(`id=${id} を${decision ?? "保存"}${decision ? "に" : ""}した`);
+      setDone(T.review.done(id, decision));
       await load(decision ? 0 : id - 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -74,57 +75,55 @@ export default function ReviewPage() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (!meta) return <div className="status info">読み込み中…</div>;
+  if (!meta) return <div className="status info">{T.loading}</div>;
 
   return (
-    <>
-      <h1>{meta.label}のレビュー</h1>
+    <div className="page-fill">
+      <PageTitle kind={meta.label} record={next?.label} />
+      <h1>{T.review.title(meta.label)}</h1>
       {error && <div className="status error">{error}</div>}
       {done && !error && <div className="status ok">{done}</div>}
       {next && !next.record && (
         <div className="panel">
-          未確認の{meta.label}はもう無い。<Link href={`/tables/${table}?confirmed=非承認`}>非承認の一覧</Link> /{" "}
-          <Link href={`/tables/${table}`}>{meta.label}の一覧</Link>
+          {T.review.noneLeft(meta.label)}<Link href={`/tables/${table}?confirmed=非承認`}>{T.review.rejectedList}</Link> /{" "}
+          <Link href={`/tables/${table}`}>{T.review.tableList(meta.label)}</Link>
         </div>
       )}
       {next?.record && (
-        <>
-          <div className="panel">
-            <div className="hint" style={{ marginBottom: "0.5rem" }}>
-              id={String(next.record.id)}{" "}
-              <Link href={`/tables/${table}/${next.record.id}`}>詳細を開く</Link>
-            </div>
-            <RecordForm meta={meta} value={value} onChange={setValue} mode="edit" />
+        <div className="panel fill">
+          <div className="hint" style={{ marginBottom: "0.5rem" }}>
+            id={String(next.record.id)}{" "}
+            <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
           </div>
-          <Related related={next.related ?? {}} />
-        </>
+          <RecordForm meta={meta} value={value} onChange={setValue} mode="edit" side={<Related related={next.related ?? {}} />} />
+        </div>
       )}
       <div className="actionbar">
         <div className="inner">
           <span className="meta">
-            残り {next?.remaining ?? "…"} 件
+            {T.review.remaining(next?.remaining ?? "…")}
             {next?.record && (
               <>
                 {" "}
-                <span className="kbd">Ctrl+Enter</span> 承認 <span className="kbd">Ctrl+BS</span> 非承認
+                <span className="kbd">Ctrl+Enter</span> {T.review.keyApprove} <span className="kbd">Ctrl+BS</span> {T.review.keyReject}
               </>
             )}
           </span>
           <span className="spacer" />
           <button className="danger" disabled={busy || !next?.record} onClick={() => decide("非承認")}>
-            非承認
+            {T.review.reject}
           </button>
           <button disabled={busy || !next?.record} onClick={() => void load((next?.record?.id as number) ?? 0)}>
-            スキップ
+            {T.review.skip}
           </button>
           <button disabled={busy || !next?.record} onClick={() => decide(null)}>
-            保存だけ
+            {T.review.saveOnly}
           </button>
           <button className="primary" disabled={busy || !next?.record} onClick={() => decide("承認")}>
-            承認
+            {T.review.approve}
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

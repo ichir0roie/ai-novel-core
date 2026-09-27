@@ -1,11 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import GeneratePanel from "@/components/GeneratePanel";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec } from "@/lib/api";
-import { useMeta, useTable } from "@/lib/meta";
+import { PageTitle, useMeta, useTable } from "@/lib/meta";
+import { T } from "@/lib/text";
 
 export default function NewRecordPage() {
   const { table } = useParams<{ table: string }>();
@@ -20,7 +22,16 @@ export default function NewRecordPage() {
     if (meta && value === null) setValue(emptyRecord(meta));
   }, [meta, value]);
 
-  if (!meta || value === null) return <div className="status info">読み込み中…</div>;
+  const generated = useCallback(
+    (id: number) => {
+      invalidateOptions(table);
+      void reload();
+      router.push(`/tables/${table}/${id}`);
+    },
+    [table, reload, router],
+  );
+
+  if (!meta || value === null) return <div className="status info">{T.loading}</div>;
 
   const submit = async () => {
     setBusy(true);
@@ -41,23 +52,25 @@ export default function NewRecordPage() {
   };
 
   return (
-    <>
-      <h1>{meta.label}を足す</h1>
+    <div className="page-fill">
+      <PageTitle kind={meta.label} />
+      <h1>{T.create.title(meta.label)}</h1>
       {error && <div className="status error">{error}</div>}
-      <div className="panel">
+      <div className="panel fill">
         <RecordForm meta={meta} value={value} onChange={setValue} mode="create" />
       </div>
+      <GeneratePanel table={table} meta={meta} draft={value} mode="create" onDone={generated} disabled={busy} />
       <div className="actionbar">
         <div className="inner">
           <span className="spacer" />
           <button onClick={() => router.push(`/tables/${table}`)} disabled={busy}>
-            やめる
+            {T.create.cancel}
           </button>
           <button className="primary" onClick={submit} disabled={busy}>
-            足す
+            {T.create.add}
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

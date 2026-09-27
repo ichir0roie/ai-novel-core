@@ -9,25 +9,25 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
 from ai.claude_code.interface._base import UnknownRecordError
 from db.schema import DB_PATH, WORLD_DIR, get_env_session
-from gui.api import interface, meta, records, review
+from gui.api import generate, interface, meta, records, review
 from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_claude_code
 from gui.api.jobs import runner
 from gui.api.models import (
-    Created, Decision, EntranceList, Health, JobInfo, JobList, OptionList, RecordList, RecordResponse, ReviewNext,
-    ReviewSummary, RunRequest, RunResult, TablesResponse,
+    Created, Decision, EntranceList, GenerateRequest, Health, JobInfo, JobList, MapsResponse, OptionList, RecordList,
+    RecordResponse, RelationsResponse, ReviewNext, ReviewSummary, RunRequest, RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
+from tool.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from tool.map.collect import collect_planets
-from tool.map.render_html import render_html as render_map_html
-from tool.map.render_svg import render_svg
+from tool.map.geometry import BEARINGS
+from tool.map.render_svg import COLORS, render_svg
 from tool.relation.collect import collect_relations
-from tool.relation.render_html import render_html as render_relation_html
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
 app.add_middleware(
@@ -84,18 +84,19 @@ def health() -> Health:
 
 @app.get("/api/tables", response_model=TablesResponse)
 def tables(session: Session = Depends(session_dep)) -> TablesResponse:
-    return TablesResponse(tables=meta.all_tables(session))
+    return TablesResponse(tables=meta.all_tables(session), claude_available=in_claude_code())
 
 
 @app.get("/api/tables/{table}/records", response_model=RecordList)
 def list_records(table: str, request: Request, q: str | None = None,
                  limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
-                 order: str = Query("asc", pattern="^(asc|desc)$"),
+                 sort: str | None = None, order: str | None = Query(None, pattern="^(asc|desc)$"),
                  session: Session = Depends(session_dep)) -> RecordList:
     spec = spec_of(table)
-    reserved = {"q", "limit", "offset", "order"}
+    reserved = {"q", "limit", "offset", "sort", "order"}
     filters = {key: value for key, value in request.query_params.items() if key not in reserved}
-    return records.list_records(session, spec, q=q, limit=limit, offset=offset, order=order, filters=filters)
+    return records.list_records(session, spec, q=q, limit=limit, offset=offset,
+                                sort=sort or spec.sort, order=order or spec.order, filters=filters)
 
 
 @app.get("/api/tables/{table}/options", response_model=OptionList)
@@ -111,6 +112,18 @@ def create_record(table: str, data: dict[str, Any], session: Session = Depends(s
     with session.begin():
         record_id = records.create_record(session, spec, data)
     return records.get_record(session, spec, record_id)
+
+
+@app.post("/api/tables/{table}/generate/{generator}", response_model=JobInfo, status_code=202)
+def generate_record(table: str, generator: str, request: GenerateRequest) -> JobInfo:
+    """「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。
+    claude を叩くので Claude Code の環境でだけ、裏の job として走る。結果(足した行)は `/api/jobs/{id}` で引く"""
+    spec = generate.generator_of(spec_of(table).name, generator)
+    entrance = interface.entrance_of(spec.entrance)
+    require_claude_code(entrance.id)
+    args = interface.check_args(entrance, generate.build_args(spec, request.draft, request.args))
+    job = runner.submit(entrance.id, args, lambda: interface.invoke(entrance, args))
+    return JobInfo(**job.to_dict())
 
 
 @app.get("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
@@ -179,10 +192,12 @@ def get_job(job_id: str) -> JobInfo:
     return JobInfo(**job.to_dict())
 
 
-@app.get("/api/maps", response_class=HTMLResponse)
-def maps(session: Session = Depends(session_dep)) -> HTMLResponse:
-    """星ごとの地図(html)。場所の座標・領域から描く"""
-    return HTMLResponse(render_map_html(collect_planets(session)))
+@app.get("/api/maps", response_model=MapsResponse)
+def maps(session: Session = Depends(session_dep)) -> MapsResponse:
+    """星ごとの地図の元データ。画面(`/maps`)が場所の座標・領域から描く"""
+    return MapsResponse(planets=collect_planets(session), categories=list(CATEGORIES),
+                        category_colors=dict(CATEGORY_COLORS), shape_opacity=dict(SHAPE_OPACITY),
+                        bearings=list(BEARINGS))
 
 
 @app.get("/api/maps/{planet_id}.svg")
@@ -193,10 +208,10 @@ def map_svg(planet_id: int, session: Session = Depends(session_dep)) -> Response
     raise UnknownRecordError(f"id={planet_id} の星に地図が無い(座標を持つ場所が無いか、星でない)")
 
 
-@app.get("/api/relations", response_class=HTMLResponse)
-def relations(session: Session = Depends(session_dep)) -> HTMLResponse:
-    """人物相関図(html)"""
-    return HTMLResponse(render_relation_html(collect_relations(session)))
+@app.get("/api/relations", response_model=RelationsResponse)
+def relations(session: Session = Depends(session_dep)) -> RelationsResponse:
+    """人物相関図の元データ。画面(`/relations`)が描く"""
+    return RelationsResponse(**collect_relations(session), colors=list(COLORS))
 
 
 _ = Created  # OpenAPI に出す型として残す

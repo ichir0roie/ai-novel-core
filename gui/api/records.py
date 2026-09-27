@@ -5,10 +5,10 @@ from __future__ import annotations
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
-from ai.claude_code.interface._base import UnknownRecordError
+from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
 from ai.claude_code.interface.randomizer.commit_event import CommitEvent
 from ai.time_keeper import idea_context
-from db.schema import Character, CharacterPlace, ConfirmStatusType, Event, EventCharacter, Location, Plot
+from db.schema import Character, ConfirmStatusType, Event, EventCharacter, Plot
 from db.schema_pydantic import to_dict
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
@@ -102,8 +102,18 @@ def _filter_value(column, value: str):
     return value
 
 
+def _ordering(model, sort: str, order: str):
+    column = model.__table__.columns.get(sort)
+    if column is None:
+        raise UnknownFieldError(f"{model.__tablename__} に列 {sort} は無い")
+    key = getattr(model, sort)
+    desc = order == "desc"
+    # 空の行はどちら向きでも後ろに、同じ値の中は id 順に
+    return [key.is_(None), key.desc() if desc else key, model.id.desc() if desc else model.id]
+
+
 def list_records(session: Session, spec: TableSpec, *, q: str | None, limit: int, offset: int,
-                 order: str, filters: dict[str, str]) -> RecordList:
+                 sort: str = "id", order: str = "desc", filters: dict[str, str]) -> RecordList:
     model = spec.model
     conditions = []
     if q:
@@ -116,8 +126,8 @@ def list_records(session: Session, spec: TableSpec, *, q: str | None, limit: int
         parsed = _filter_value(column, value)
         conditions.append(getattr(model, key).is_(None) if parsed is None else getattr(model, key) == parsed)
     total = session.scalar(select(func.count()).select_from(model).where(*conditions)) or 0
-    ordering = model.id.desc() if order == "desc" else model.id
-    rows = session.scalars(select(model).where(*conditions).order_by(ordering).limit(limit).offset(offset)).all()
+    rows = session.scalars(select(model).where(*conditions).order_by(*_ordering(model, sort, order))
+                           .limit(limit).offset(offset)).all()
     items = [_summary_dict(session, spec, row) for row in rows]
     return RecordList(total=total, limit=limit, offset=offset, items=items,
                       labels=reference_labels(session, spec, items))
@@ -150,20 +160,9 @@ def related_of(session: Session, spec: TableSpec, row) -> dict:
             {"table": table, "id": record.id, "label": label_of(spec_of(table), record)}
             for table, records in idea_context.linked_records(session, row.id).items()
             for record in records]
-    if spec.name == "character":
-        places = session.scalars(
-            select(CharacterPlace).where(CharacterPlace.character_id == row.id)
-            .order_by(CharacterPlace.start)).all()
-        location_names = {
-            location.id: location.name for location in session.scalars(
-                select(Location).where(Location.id.in_({place.location_id for place in places}))).all()
-        } if places else {}
-        related["places"] = [
-            {"location_id": place.location_id, "location": location_names.get(place.location_id),
-             "start": str(place.start) if place.start else None, "end": str(place.end) if place.end else None}
-            for place in places]
     if spec.name == "story":
-        plots = session.scalars(select(Plot).where(Plot.story_id == row.id).order_by(Plot.id)).all()
+        plots = session.scalars(select(Plot).where(Plot.story_id == row.id)
+                                .order_by(*_ordering(Plot, "start", "asc"))).all()
         related["plots"] = [{"table": "plot", "id": plot.id, "label": label_of(spec_of("plot"), plot),
                              "synced": plot.synced, "letters": plot.episode.letters if plot.episode else 0}
                             for plot in plots]
@@ -199,7 +198,7 @@ def update_record(session: Session, spec: TableSpec, record_id: int, data: dict)
     payload.pop("id", None)
     character_ids = payload.pop("character_ids", None) if spec.name == "event" else None
     if spec.name == "character":
-        payload.pop("place_id", None)  # 出自は足すときだけ。あとから直すのは UpdateCharacterPlace
+        payload.pop("place_id", None)  # 出自は足すときだけ。あとから直すのは CHILD_LISTS の places
     synced = payload.pop("synced", None) if spec.name == "plot" else None
     if payload:
         spec.updater({**payload, "id": record_id}).execute(session)

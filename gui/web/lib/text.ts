@@ -1,0 +1,207 @@
+import type { ConfirmStatus } from "@/lib/api";
+
+// 画面に出す文言はすべてここに置き、ページ・コンポーネントは文言を直書きしない。
+// db の値(承認/非承認/未確認、場所の category など)は文言ではなく値なので、ここには置かない。
+
+const join = (keys: string[]) => keys.join(", ");
+const dash = (v: unknown) => (v == null ? "-" : String(v));
+const span = (start: unknown, end: unknown) => (start == null && end == null ? "" : `${start ?? ""} – ${end ?? ""}`);
+const confirmWord: Record<ConfirmStatus, string> = { 承認: "approved", 非承認: "rejected", 未確認: "pending" };
+
+export const T = {
+  appName: "novel db",
+  appDescription: "Data editing GUI for ai-novel-core",
+  pageTitle: (kind: string, record?: string | null) => (record ? `${kind} - ${record}` : kind),
+
+  loading: "Loading…",
+  openRecord: "Open record",
+  required: "required",
+  none: "(none)",
+  select: "Select",
+  filter: "Filter",
+  noCandidates: "No candidates",
+  yes: "Yes",
+  no: "No",
+  zoom: "Zoom",
+  invalidJson: (error: string) => `Invalid JSON: ${error}`,
+  cannotReachApi: (error: string) => `Cannot reach API: ${error} (check that uvicorn is running)`,
+  span,
+  confirmWord,
+
+  nav: {
+    endpoints: "Endpoints",
+    review: (label: string) => `${label} review`,
+  },
+
+  home: {
+    title: "Review",
+    tables: "Tables",
+    pending: (label: string) => `${label}: pending`,
+    counts: (approved: number, rejected: number) => `approved ${approved} / rejected ${rejected}`,
+  },
+
+  list: {
+    plotsOf: (story: string) => `Plots of ${story}`,
+    story: (id: string) => `story ${id}`,
+    stories: "Stories",
+    tree: "Tree",
+    list: "List",
+    add: "+ Add",
+    empty: "(empty)",
+    searchPlaceholder: "Search name / text",
+    search: "Search",
+    all: "All",
+    removeFilter: "Remove this filter",
+    filterBy: (label: string) => `Filter by this ${label}`,
+    name: "Name",
+    text: "Text",
+    prev: "Prev",
+    next: "Next",
+    range: (from: number, to: number, total: number) => `${from}–${to} of ${total}`,
+  },
+
+  record: {
+    writtenByAi: "Written by AI",
+    saved: (keys: string[]) => `Saved (${join(keys)})`,
+    changed: (keys: string[]) => `Changed: ${join(keys)}`,
+    noChanges: "No changes",
+    revert: "Revert",
+    saveAndBack: "Save and back",
+    save: "Save",
+    emptySection: "(empty — click to edit)",
+    ageAt: "Age",
+  },
+
+  create: {
+    title: (label: string) => `New ${label}`,
+    cancel: "Cancel",
+    add: "Add",
+  },
+
+  review: {
+    title: (label: string) => `Review: ${label}`,
+    done: (id: number, decision: ConfirmStatus | null) => `id=${id}: ${decision ? confirmWord[decision] : "saved"}`,
+    noneLeft: (label: string) => `No pending ${label} left. `,
+    rejectedList: "Rejected list",
+    tableList: (label: string) => `${label} list`,
+    remaining: (n: number | string) => `${n} remaining`,
+    keyApprove: "approve",
+    keyReject: "reject",
+    reject: "Reject",
+    skip: "Skip",
+    saveOnly: "Save only",
+    approve: "Approve",
+  },
+
+  endpoints: {
+    title: "Call endpoint",
+    area: {
+      world: "Read world",
+      story: "Stories / plots",
+      randomizer: "Add / edit / delete",
+      idea: "Idea staging",
+      meme: "Memes",
+      review: "Review",
+      fact_check: "Fact check",
+      time_keeper: "Resident loop (claude)",
+    } as Record<string, string>,
+    writesDb: "writes db",
+    claudeOnly: "Endpoints that run the claude command can only be called from an API started inside Claude Code (CLAUDECODE=1)",
+    outsideClaude: "This API is running outside Claude Code, so endpoints that run claude (resident loop, post-approval AI) cannot be called",
+    running: "Running…",
+    run: "Run",
+    runInBackground: "Run in background",
+    jsonHint: 'Write dicts and arrays as JSON (e.g. {"id": 3, "kind": "概念"} / [1, 2])',
+    searchPlaceholder: "Search endpoints",
+    selectOne: "Select an endpoint on the left",
+    jobs: "Background jobs",
+    noJobs: "None yet",
+    columns: { status: "Status", entrance: "Endpoint", args: "Args", result: "Result / error", time: "Time" },
+  },
+
+  generate: {
+    noAddedId: (result: unknown) => `Cannot find id of the added row: ${JSON.stringify(result)}`,
+    failed: "Failed",
+    description: (mode: "create" | "edit") =>
+      `Generate with AI: the AI rebuilds every field around what you entered and ${mode === "create" ? "adds the row" : "writes the record"} (entered values may not survive as-is). Takes several minutes`,
+    unavailable: "This API is running outside Claude Code, so Generate with AI is unavailable (start with CLAUDECODE=1)",
+    inProgress: (jobId: string, status: string) =>
+      `AI is generating… (job ${jobId}, ${status}). The job continues if you leave this page. The result is also visible in the job list on the Endpoints page`,
+  },
+
+  related: {
+    relationGraph: { title: "Relation graph", sub: "Only relations involving this character" },
+    mapCentered: { title: "Map centered here", sub: "Map centered on this location" },
+    appearsIn: "Appears in",
+    noLinkedText: "(no linked text)",
+    plotList: "Plot list",
+    plotSummary: (plots: number, letters: number) => `${plots} plots / ${letters.toLocaleString()} chars`,
+    unsynced: (n: number) => ` / ${n} unsynced`,
+  },
+
+  storyTree: {
+    plots: (n: number) => `${n} plots`,
+    stories: (n: number) => `${n} stories`,
+    openLocation: "Open location",
+    noStories: "No stories yet",
+    noLocation: "No location",
+  },
+
+  childList: {
+    removeRow: "Remove this row",
+    addRow: "+ Add row",
+  },
+
+  maps: {
+    title: "Location map",
+    centeredOn: (name: string) => `Map centered on ${name}`,
+    fullMap: "Full map",
+    cannotPlace: (id: number) => `Location id=${id} has neither coordinates nor a polygon, so it cannot be placed on the map. `,
+    nonePlaceable: "No location has coordinates or a polygon.",
+    radius: (km: number) => `radius ≈ ${Math.round(km).toLocaleString()} km, 1° latitude ≈ ${Math.round((km * Math.PI) / 180).toLocaleString()} km`,
+    radiusUnknown: "radius unknown (no area)",
+    nameKind: (name: unknown, kind: unknown) => `${name} (${kind ?? ""})`,
+    parent: (name: unknown) => `parent: ${dash(name)}`,
+    polygonVertices: (n: number) => `polygon: ${n} vertices`,
+    environment: (e: string) => `environment: ${e}`,
+    lonLatAlt: (lon: number, lat: number, alt: unknown) => `lon ${lon} / lat ${lat} / alt ${dash(alt)}`,
+    period: (start: unknown, end: unknown) => `period: ${span(start, end)}`,
+    hintClick: "Click a point to show distance and bearing to the other locations. Double-click to open its record.",
+    hintCounts: (points: number, shapes: number) => `${points} locations with coordinates, ${shapes} with a polygon. Polygons are drawn as faint areas.`,
+    coordinates: "Coordinates",
+    environmentDt: "Environment",
+    columns: { location: "Location", bearing: "Bearing", distance: "Distance", elevationDiff: "Elevation diff" },
+    sameCoordinates: "same coordinates",
+    aboutDegrees: (deg: number) => `≈ ${deg.toFixed(1)}°`,
+    aboutKm: (km: number) => `≈ ${km.toLocaleString()} km`,
+    altDiffUnknown: "elevation diff unknown",
+    sameAltitude: "same altitude",
+    altDiff: (up: boolean, m: number) => `${up ? "up" : "down"} ${m.toLocaleString()} m`,
+  },
+
+  relations: {
+    title: "Character relations",
+    of: (name: string) => `Relations of ${name}`,
+    fullGraph: "Full graph",
+    noKind: "(no kind)",
+    year: "Year",
+    allTime: "All time",
+    relayout: "Re-layout",
+    noCharacters: "No characters.",
+    noCharacter: (id: number) => `No character with id=${id}.`,
+    hintClick: "Click a character to show their relations, or an arrow to show the relation text. Double-click to open the record. Drag characters to move them.",
+    hintCounts: (chars: number, rels: number, year: number | null) =>
+      `${chars} characters, ${rels} relations${year == null ? "" : ` (active in year ${year})`}. Arrows point from character_id_1 to character_id_2.`,
+    columns: { subject: "Subject", relation: "Relation", target: "Target", period: "Period" },
+    sex: "Sex",
+    period: "Period",
+    relation: "Relation",
+    noRelations: "No relations.",
+    noText: "No text.",
+    nameKind: (name: unknown, kind: unknown) => `${name} (${kind ?? ""})`,
+    sexOf: (sex: string) => `sex: ${sex}`,
+    periodOf: (span: string) => `period: ${span}`,
+    arrow: (from: string, to: string, relation: string | null) => `${from} → ${to}: ${relation ?? ""}`,
+    unknownId: (id: number) => `id=${id}`,
+  },
+} as const;

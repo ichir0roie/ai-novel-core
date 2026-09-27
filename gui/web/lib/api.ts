@@ -100,3 +100,29 @@ export const runEntrance = (id: string, args: Rec, background = false) =>
 export const getJobs = () => api<components["schemas"]["JobList"]>("/api/jobs");
 
 export const getJob = (id: string) => api<JobInfo>(`/api/jobs/${id}`);
+
+export type GeneratorMeta = components["schemas"]["GeneratorMeta"];
+
+/** 「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。claude を叩くので裏の job(202)になる。 */
+export const generateRecord = (table: string, generator: string, draft: Rec, args: Rec) =>
+  api<JobInfo>(`/api/tables/${table}/generate/${generator}`, { method: "POST", body: JSON.stringify({ draft, args }) });
+
+export type MapsResponse = components["schemas"]["MapsResponse"];
+export type PlanetMap = components["schemas"]["PlanetMap"];
+export type MapPlace = components["schemas"]["MapPlace"];
+export type RelationsResponse = components["schemas"]["RelationsResponse"];
+export type RelationCharacter = components["schemas"]["RelationCharacter"];
+export type Relation = components["schemas"]["Relation"];
+
+export const getMaps = () => api<MapsResponse>("/api/maps");
+export const getRelations = () => api<RelationsResponse>("/api/relations");
+
+/** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
+export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {
+  const items: Rec[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await listRecords(table, new URLSearchParams({ ...params, limit: "500", offset: String(offset) }));
+    items.push(...page.items);
+    if (items.length >= page.total || page.items.length === 0) return items;
+  }
+}

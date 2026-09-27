@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import { MetaProvider } from "@/lib/meta";
+import { T } from "@/lib/text";
 
 export const metadata: Metadata = {
-  title: "novel db",
-  description: "ai-novel-core のデータ編集 GUI",
+  title: T.appName,
+  description: T.appDescription,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

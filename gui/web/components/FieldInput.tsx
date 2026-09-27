@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
+import MarkdownField from "./MarkdownField";
+import PlainTextField from "./PlainTextField";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
+import { T } from "@/lib/text";
 
 type Props = {
   column: ColumnMeta;
@@ -39,7 +42,7 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   return (
     <>
       <textarea className="mono" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} disabled={disabled} />
-      {error && <span className="error">JSON として読めない: {error}</span>}
+      {error && <span className="error">{T.invalidJson(error)}</span>}
     </>
   );
 }
@@ -70,7 +73,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
   if (column.choices) {
     return (
       <select value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
-        <option value="">{column.nullable ? "(なし)" : "選ぶ"}</option>
+        <option value="">{column.nullable ? T.none : T.select}</option>
         {column.choices.map((choice) => (
           <option key={choice} value={choice}>
             {choice}
@@ -83,7 +86,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
     return (
       <label className="check">
         <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
-        {value ? "はい" : "いいえ"}
+        {value ? T.yes : T.no}
       </label>
     );
   }
@@ -111,7 +114,11 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
     );
   }
   if (column.section && !compact) {
-    return <textarea className="section" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+    return column.markdown === false ? (
+      <PlainTextField value={(value as string | null) ?? null} onChange={onChange} />
+    ) : (
+      <MarkdownField value={(value as string | null) ?? null} onChange={onChange} />
+    );
   }
   return <input type="text" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" && column.nullable ? null : e.target.value)} />;
 }
