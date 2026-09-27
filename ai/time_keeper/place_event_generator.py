@@ -174,6 +174,25 @@ def _draft_members(session: Session, draft: dict, place_id: int | None, time: St
     return members
 
 
+def complete_text(
+    session: Session, ai: AIClient, record: Event, *,
+    shared_style_extra: str = "", style_extra: str = "",
+) -> None:
+    """出来事の本文(text)が空のとき、記録・当事者・関連する設定から AI に小説の本文だけを書かせて埋める
+    (`id` 必須。名前・時刻・場所・当事者は変えない)。"""
+    if (record.text or "").strip():
+        raise ValueError("text はすでに埋まっている")
+    involved_ids = list(session.scalars(
+        select(EventCharacter.character_id).where(EventCharacter.event_id == record.id)))
+    members = [c for c in (session.get(Character, cid) for cid in involved_ids) if c is not None]
+    key = _draft_key({"name": record.name})
+    context = idea_context.gather(session, record.name or "", ai, record.location_id, record.time)
+    later_events = progression._later_events(session, record.location_id, members, record.start or record.time, ai)
+    _novelize(session, record, members, key, ai, context, later_events,
+              shared_style_extra=shared_style_extra, style_extra=style_extra)
+    idea_context.link(session, record, context.linked)
+
+
 def generate_from_draft(
     session: Session, ai: AIClient, draft: dict, rng: random.Random | None = None, *,
     shared_style_extra: str = "", style_extra: str = "",

@@ -96,6 +96,28 @@ def test_non_person_kind_in_the_draft_is_kept(session, place):
     assert session.get(Character, result["id"]).kind == "商会"
 
 
+def test_character_completes_the_missing_text_of_an_existing_record(session, place):
+    record = _character(session, place, "リオ")
+    record.text = ""
+    session.commit()
+    ai = _Ai(seed=1)
+
+    result = GenerateCharacter({"id": record.id}, ai=ai).run()
+
+    assert result["id"] == record.id
+    session.refresh(record)
+    assert record.text and record.name == "リオ"  # 名前は変わらない
+    assert session.query(Character).count() == 1  # 新しい行を足さず、この行を直す
+    content = _prompts(ai, random_character_generator._CONTENT_SCHEMA)
+    assert "名前(決まっている): リオ" in content
+
+
+def test_character_refuses_when_the_text_is_already_present(session, place):
+    record = _character(session, place, "リオ")
+    with pytest.raises(ValueError):
+        GenerateCharacter({"id": record.id}, ai=_Ai(seed=1)).run()
+
+
 # ---------------------------------------------------------------- 出来事
 
 def test_event_is_raised_at_the_named_characters_place_with_the_draft_as_the_scene(session, place):
@@ -126,6 +148,31 @@ def test_event_needs_a_place_or_characters(session, place):
     _event(session, place, WHEN)
     with pytest.raises(ValueError):
         GenerateEvent({}, ai=_Ai(seed=1)).run()
+
+
+def test_event_completes_the_missing_text_of_an_existing_record(session, place):
+    first = _character(session, place, "甲")
+    record = Event(name="市場の喧嘩", text="", time=WHEN, start=WHEN, end=WHEN, location_id=place.id)
+    record.event_characters = [EventCharacter(character_id=first.id)]
+    session.add(record)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    result = GenerateEvent({"id": record.id}, ai=ai).run()
+
+    assert result["id"] == record.id
+    session.refresh(record)
+    assert record.text and record.name == "市場の喧嘩"  # 名前は変わらない
+    assert result["character_ids"] == [first.id]
+    assert session.query(Event).count() == 1  # 新しい行を足さず、この行を直す
+
+
+def test_event_refuses_when_the_text_is_already_present(session, place):
+    record = _event(session, place, WHEN)
+    record.text = "すでにある本文"
+    session.commit()
+    with pytest.raises(ValueError):
+        GenerateEvent({"id": record.id}, ai=_Ai(seed=1)).run()
 
 
 # ---------------------------------------------------------------- 話の枠

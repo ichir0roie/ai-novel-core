@@ -317,6 +317,85 @@ def _apply_parameter_hints(parameters: dict, hints: dict) -> None:
             parameters[column] = value
 
 
+def complete_text(session: Session, record: Character, born_place: Location | None, ai: AIClient) -> str:
+    """人物・対象の本文(text)が空のとき、決まっている名前・属性・出自を核に AI に本文だけを書かせて返す
+    (db は触らない。呼び出し側が `record.text` に入れて確定する)。
+    性別・体格・口調・性格・種別・生年・没年・名前は変えない(`_generate_one` と違い、ここでは組み立て直さない)。"""
+    time = session.scalar(common_query.latest_time_select()) or record.start
+    if time is None:
+        raise ValueError("time が決められない(世界にまだ出来事が無く、record.start も空)")
+    person = record.kind == CHARACTER_KIND_PERSON
+    parameters = record.parameters_at(time) if person else {}
+    age = max(0, time.year - record.start.year) if record.start is not None else None
+
+    region_label = _region_label(session, born_place)
+    story_text = _story_text(session, born_place, time)
+    story_label = story_text or "(無し)"
+    later_label = _later_ideas_label(session, born_place, time)
+    elements = _story_elements(story_text, time, later_label, ai)
+    rng = random.Random()
+    chosen_element = rng.choice(elements) if elements else None
+    subject = "人物" if person else "対象"
+    element_line = f"この{subject}が体現する要素: {chosen_element}\n" if chosen_element else ""
+
+    drawn_memes = meme.draw(
+        session, rng, constants.MEME_PERSON_CATEGORIES if person else constants.MEME_NON_PERSON_CATEGORIES)
+    meme_line = (
+        f"この{subject}の行動原理(ミーム。{meme.position_legend()}):\n{meme.meme_section(drawn_memes)}\n"
+        if drawn_memes else ""
+    )
+
+    nearby_characters = _nearby_characters(session, born_place, time)
+    person_line = (
+        f"性別: {parameters.get('sex')} / 体格: {parameters.get('build')} / 口調: {parameters.get('tone')}\n"
+        f"性格({'/'.join(PERSONALITY_LEVELS)} の五段階): {_personality_label(parameters)}\n"
+        if person and parameters else ""
+    )
+    name_line = f"名前(決まっている): {record.name}\n" if record.name else ""
+    kind_line = f"種別(決まっている): {record.kind}\n" if not person else ""
+    age_line = f"年齢(決まっている。age はこの値にする): {age}\n" if age is not None else ""
+
+    content_prompt = (
+        f"{name_line}"
+        f"出身: {born_place.name if born_place else '不明'}\n"
+        f"出身地の特徴:\n{_location_context(born_place)}\n"
+        f"地域: {region_label}\n"
+        f"{kind_line}"
+        f"{person_line}"
+        f"{age_line}"
+        f"現在の時刻: {time}\n"
+        f"この場所・時刻に関連する筋書き:\n{story_label}\n"
+        f"{later_label}"
+        f"{element_line}"
+        f"{meme_line}"
+        f"既にいる人物・対象:\n{_record_context(nearby_characters)}\n"
+        f"この{subject}の本文(説明)を決めてください。"
+    )
+    if person:
+        decided = ai.try_generate_json(content_prompt, _CONTENT_SCHEMA, system=_CONTENT_SYSTEM_PROMPT)
+    else:
+        decided = ai.try_generate_json(
+            content_prompt, _NON_PERSON_CONTENT_SCHEMA, system=_NON_PERSON_CONTENT_SYSTEM_PROMPT)
+
+    text = (decided.get("text") or "").strip()
+    context = idea_context.gather(session, text, ai, born_place.id if born_place else None, time)
+    if context.related:
+        polished = ai.try_generate_json(
+            f"下書き: {text}\n{idea_context.prompt_section(context.related, context.called)}この説明を清書してください。",
+            _POLISH_SCHEMA, system=_POLISH_SYSTEM_PROMPT, timeout=constants.IDEA_POLISH_TIMEOUT)
+        text = (polished.get("text") or "").strip() or text
+    if person and age is not None:
+        text += f"\n\n# 来歴\n{history_section(decided.get('history'), time.year - age, age)}"
+    if drawn_memes:
+        text += f"\n\n# meme\n{meme.meme_section(drawn_memes)}"
+        principle = (decided.get("principle") or "").strip()
+        if principle:
+            text += f"\n\n# 行動原理\n{principle}"
+    text = fill_name_placeholder(text, record.name or "")
+    idea_context.link(session, record, context.linked)
+    return text
+
+
 def _generate_one(
     session: Session, born_place: Location | None, time: Stamp, rng: random.Random,
     ai: AIClient, person: bool = True, hints: dict | None = None,

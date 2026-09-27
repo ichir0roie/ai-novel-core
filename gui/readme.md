@@ -69,7 +69,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
 | GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、この API が Claude Code の環境かどうか |
 | POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `world.list_places.ListPlaces` や `time_keeper.daily_event`。`claude` を叩く入口と `background` は job の id を 202 で返す |
-| POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。`key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |
+| POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」「AI で補完」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す(下書きに `id` があれば、その行の空の本文だけを埋める)入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。`key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |
 | GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー(API を起こしているあいだだけ持つ) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
 | GET | `/api/maps/{planet_id}.svg` | 星ひとつの地図(svg)。場所の座標・領域から python で描く |
@@ -96,20 +96,25 @@ AI を引数に取る入口、`time_keeper.*`)。それらは
 - 数分〜十数分掛かるので、必ず裏の job にして 202 で id を返す。結果は `/api/jobs/{id}` で引く。job は一度に一つずつ走る
 - `shared_style_extra` / `style_extra` を渡さなければ、世界リポジトリの `instructions/style.py`(`SHARED_EXTRA` / `EPISODE_STYLE_EXTRA`)があればそこから埋める
 
-## AI で作成
+## AI で作成 / AI で補完
 
-足す画面(`/tables/<table>/new`)と、本文の無い話のページに「AI で作成」のボタンがある。欄に入れた値(全部空でもよい)を
-下書きとして渡し、AI が全部の欄を組み立て直して行を足す(入れた値はそのまま残らないことがある)。どのテーブルにどのボタンが
-出るかは `gui/api/generate.py` が決め、`/api/tables` の `generators` に載る。
+足す画面(`/tables/<table>/new`)に「AI で作成」のボタンがある。欄に入れた値(全部空でもよい)を下書きとして渡し、
+AI が全部の欄を組み立て直して行を足す(入れた値はそのまま残らないことがある)。
 
-| テーブル | ボタン | 入口 | 下書きの扱い |
-| --- | --- | --- | --- |
-| 人物 | AI で作成 | `randomizer.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`place_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 |
-| 出来事 | AI で作成 | `randomizer.generate_event.GenerateEvent` | 名前・本文は場面の指定。時刻・場所・当事者は決まった値(省けば世界の最新・当事者の現在地・居合わせるサブキャラクター) |
-| 話 | AI で枠を作る | `story.generate_plot.GeneratePlot` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。本文は書かない |
-| 話 | AI で本文まで書く | `story.generate_episode.GenerateEpisode` | 種と時刻が揃っていればそのまま本文を書く。どちらかが空なら先に枠を決める。本文の無い話のページにも出る(その枠へ書く)。登場人物を省けばメインキャラクター |
+本文(`text`)が空の行の詳細(編集)画面には「AI で補完」のボタンが出る(本文が埋まっていれば出ない)。その行の
+id を渡し、AI がその行の本文だけを書いて埋める(本文以外の欄は変えない)。「AI で作成」と同じ入口(クラス)を、
+別のキー・`mode="edit"` の生成器として呼ぶ。
 
-claude を叩くので裏の job になり、画面は job を待って、終わったら足した行のページへ移る(話の本文なら読み直す)。
+どのテーブルにどのボタンが出るかは `gui/api/generate.py` が決め、`/api/tables` の `generators` に載る。
+
+| テーブル | ボタン | 入口 | 足す画面 | 詳細画面(本文が空のときだけ) |
+| --- | --- | --- | --- | --- |
+| 人物 | AI で作成 / AI で補完 | `randomizer.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`place_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 | 決まっている名前・属性・出自を核に本文だけを書く |
+| 出来事 | AI で作成 / AI で補完 | `randomizer.generate_event.GenerateEvent` | 名前・本文は場面の指定。時刻・場所・当事者は決まった値(省けば世界の最新・当事者の現在地・居合わせるサブキャラクター) | 記録・当事者・関連する設定から小説の本文だけを書く |
+| 話 | AI で枠を作る | `story.generate_plot.GeneratePlot` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。本文は書かない | (出ない。枠のみで足す画面専用) |
+| 話 | AI で本文まで書く | `story.generate_episode.GenerateEpisode` | 種と時刻が揃っていればそのまま本文を書く。どちらかが空なら先に枠を決める | 本文の無い話のページに出る(その枠へ書く)。登場人物を省けばメインキャラクター |
+
+claude を叩くので裏の job になり、画面は job を待って、終わったら足した(直した)行のページへ移る(本文なら読み直す)。
 
 ## テスト
 

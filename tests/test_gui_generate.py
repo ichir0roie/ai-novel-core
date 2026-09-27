@@ -28,10 +28,15 @@ def test_tables_meta_lists_the_generators(client, monkeypatch):
     tables = {table["name"]: table for table in body["tables"]}
 
     assert body["claude_available"] is False
-    assert [g["key"] for g in tables["character"]["generators"]] == ["ai"]
-    assert tables["character"]["generators"][0]["entrance"] == "randomizer.generate_character.GenerateCharacter"
-    assert [p["key"] for p in tables["character"]["generators"][0]["params"]] == ["time"]
-    assert [g["key"] for g in tables["event"]["generators"]] == ["ai"]
+    assert [g["key"] for g in tables["character"]["generators"]] == ["ai", "complete"]
+    character = {g["key"]: g for g in tables["character"]["generators"]}
+    assert character["ai"]["entrance"] == "randomizer.generate_character.GenerateCharacter"
+    assert [p["key"] for p in character["ai"]["params"]] == ["time"]
+    assert character["ai"]["mode"] == "create"
+    assert character["complete"]["mode"] == "edit" and character["complete"]["when_empty"] == "text"
+    assert [g["key"] for g in tables["event"]["generators"]] == ["ai", "complete"]
+    event = {g["key"]: g for g in tables["event"]["generators"]}
+    assert event["complete"]["mode"] == "edit" and event["complete"]["when_empty"] == "text"
     plot = {g["key"]: g for g in tables["plot"]["generators"]}
     assert plot["frame"]["mode"] == "create" and plot["episode"]["mode"] == "both" and plot["episode"]["when_empty"] == "text"
     assert {p["key"] for p in plot["episode"]["params"]} == {"character_ids", "previous_plot_ids", "model", "effort"}
