@@ -1,5 +1,4 @@
 """アイデア・ミームを AI に Dラボ・ネット検索で検めさせ、妥当性と補足を `fact_check` 欄へ書く。"""
-import os
 
 import pytest
 
@@ -11,9 +10,6 @@ from ai.claude_code.interface.fact_check.check_facts import CheckFacts
 from ai.claude_code.interface.randomizer.commit_oracle import CommitOracle
 from ai.time_keeper import constants, meme
 from db.schema import Idea, Meme, Oracle
-from tool.markdown.export_db import export_db
-from tool.markdown import sync_manifest
-from tool.markdown.import_db import import_db
 
 
 class _FactChecker:
@@ -227,23 +223,3 @@ def test_extract_memes_checks_only_new(session, fake_check, monkeypatch):
     session.expire_all()
     reviews = {meme.text: meme.fact_check for meme in session.query(Meme).all()}
     assert reviews == {"古いミーム": None, "新しいミーム": "## 妥当性\n検めた:新しいミーム"}
-
-
-def test_check_round_trips_through_markdown(session, tmp_path):
-    session.add(Idea(id=5, name="魔力", kind="概念", text="本文", fact_check="## 妥当性\nありえる"))
-    session.commit()
-    root = str(tmp_path / "worlds")
-
-    export_db(root)
-    with open(os.path.join(root, "idea", "5_魔力.md"), encoding="utf-8") as f:
-        assert "# fact_check\n## 妥当性\nありえる\n" in f.read()
-
-    session.get(Idea, 5).fact_check = None
-    session.commit()
-    # 台帳が無ければ md をすべて取り込むので、db 側の変更より md が勝つ
-    os.remove(sync_manifest.manifest_path(root))
-    import_db(root)
-
-    session.expire_all()
-    idea = session.get(Idea, 5)
-    assert idea.text == "本文" and idea.fact_check == "## 妥当性\nありえる"

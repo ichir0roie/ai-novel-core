@@ -7,7 +7,7 @@ import { labelOf, listRecords, type ColumnMeta, type Rec, type RecordList } from
 import { useTable } from "@/lib/meta";
 
 const PAGE = 50;
-const HIDDEN = new Set(["id", "directory_path", "filename", "fact_check", "meme_seeded", "event_seeded", "polygon"]);
+const HIDDEN = new Set(["id", "fact_check", "meme_seeded", "event_seeded", "polygon"]);
 
 function cell(column: ColumnMeta, item: Rec, labels: RecordList["labels"]): string {
   const value = item[column.key];

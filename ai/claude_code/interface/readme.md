@@ -7,7 +7,7 @@ claude が db を触るときに呼ぶ入口を置く場所。**操作前にこ�
     from ai.claude_code.interface.world.list_places import ListPlaces
     ListPlaces(kind="村").run()
 
-db の触り方(入口越し・読み取り・md との同期)は CLAUDE.md の「db への接続」「md と db の同期」を見る。
+db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続」を見る。ユーザが見て直す窓口は `gui/`。
 
 ## 依頼内容 → 呼ぶコード
 
@@ -15,7 +15,6 @@ db の触り方(入口越し・読み取り・md との同期)は CLAUDE.md の�
 
 | 依頼内容(言い回しの例)           | 呼ぶコード                                                                 |
 | ---------------------------------- | -------------------------------------------------------------------------- |
-| 「同期して」「sync_db」             | `sync.sync_db.SyncDb()`。手で直された md だけを取り込み、手で消された md の行を db から消し(md に出さない要約・中間テーブル・子の行も一緒に消す。残っている他の md の行が指していれば止まる)、db と食い違う md だけを書き直す。`{"imported", "deleted", "conflicts", "written", "removed"}` を返す。`deleted` は手で消されて行を消した md、`conflicts` は md と db の両方で直されていて md を勝たせたもの。`# data` の無い手書きの md は、md 名を `filename` のほか場所・人物・アイデア・作品の `name` にも使い、種別(`kind`)の無いアイデアは AI が既にある種別から選んで付ける(応答が使えなければ「概念」)。取り込み・書き出しを片方だけ回すなら `sync.import_db.ImportDb()` / `sync.export_db.ExportDb()`(手で直された・消された md が残っていれば止まる。`ExportDb(force=True)` で押し切る) |
 | 「どんな場所がある?」「村の一覧」   | `world.list_places.ListPlaces(kind=None)`                                    |
 | 「この場所の近くには何がある?」     | `world.list_neighbors.ListNeighbors(place_id, kind=None, limit=None)`。同じ星の他の場所の方角・距離・高低差を近い順に返す |
 | 「人物の一覧」「誰がいる?」         | `world.list_characters.ListCharacters()`                                     |
@@ -43,15 +42,15 @@ db の触り方(入口越し・読み取り・md との同期)は CLAUDE.md の�
 | 「出来事を消して」「出来事を作り直して」 | `randomizer.delete_event.DeleteEvent(event_id)`。子の出来事が残っていれば止まる。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `text` に積み足した一文と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
 | 「アイデアを直して」                 | `randomizer.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す       |
 | 「アイデアを消して」                 | `randomizer.delete_idea.DeleteIdea(idea_id)`。下位のアイデアか呼び名が残っていれば止まる。結んだ本文との中間テーブルの行も消す |
-| 「覚え書きを足して」「oracle に書いて」 | `randomizer.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。置き場所は `directory_path`(`worlds/oracle/` からの相対)と `filename` で決める。確定したあとは `CommitIdea` と同じく、検めて(`fact_check`)、本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める |
+| 「覚え書きを足して」「oracle に書いて」 | `randomizer.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは `CommitIdea` と同じく、検めて(`fact_check`)、本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める |
 | 「覚え書きを直して」                 | `randomizer.update_oracle.UpdateOracle(oracle)`。`id` 必須、渡した欄だけ直す |
 | 「ミームを足して」「この考え方をミームに入れて」 | `randomizer.commit_meme.CommitMeme(meme)`。`text` 必須。`category` は 信条/欲求/境遇/集団/理 のいずれか(空でもよい。次の抽出で AI が振る)。ユーザが書いたものなので `confirmed` を渡さなければ 承認 で入れ、置き場所は分類のディレクトリ |
 | 「ミームを直して」「ミームの分類を直して」 | `randomizer.update_meme.UpdateMeme(meme)`。`id` 必須、渡した欄だけ直す。`category` は 信条/欲求/境遇/集団/理 のいずれか |
 | 「ミームを消して」                   | `randomizer.delete_meme.DeleteMeme(meme_id)`                                 |
-| 「出来事の種を直して」               | `randomizer.update_event_seed.UpdateEventSeed(seed)`。`id` 必須、渡した欄だけ直す。種は md に出ないので、語の置き換えなどは db を読んで id を拾ってから呼ぶ |
-| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。アイデア・oracle(`worlds/oracle/` の著者の覚え書き)の本文と検証結果(`fact_check`。別々の元として渡す)・人物の筋書き(`# plot`)・出来事の本文から抜き出し、分類を振って `confirmed=false` で `meme` テーブルへ足す(md は分類のディレクトリ `worlds/meme/<分類>/` に置く)。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(md に直接書いたものなど)に分類を振り、置き場所の無いものは分類のディレクトリへ置く。足したミームは AI が Dラボのナレッジとネット検索で検め、`fact_check` 欄へ書く(`ExtractMemes(fact_check=False)` で飛ばす)。足した件数を返す。抜き出しただけでは `DrawMemes` に出ず、ユーザが確かめて md の `confirmed` を true にするまで、人物へ引く・書き込む文脈には使われない(「判断待ちの一覧」に候補として出る) |
+| 「出来事の種を直して」               | `randomizer.update_event_seed.UpdateEventSeed(seed)`。`id` 必須、渡した欄だけ直す。語の置き換えなどは db を読んで id を拾ってから呼ぶ |
+| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。アイデア・oracle(著者の覚え書き)の本文と検証結果(`fact_check`。別々の元として渡す)・人物の筋書き(`# plot`)・出来事の本文から抜き出し、分類を振って `confirmed=未確認` で `meme` テーブルへ足す。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振る。足したミームは AI が Dラボのナレッジとネット検索で検め、`fact_check` 欄へ書く(`ExtractMemes(fact_check=False)` で飛ばす)。足した件数を返す。抜き出しただけでは `DrawMemes` に出ず、ユーザが GUI で承認するまで、人物へ引く・書き込む文脈には使われない(「判断待ちの一覧」に候補として出る) |
 | 「ミームを引いて」                   | `meme.draw_memes.DrawMemes(person=True, seed=None)`。ユーザが確かめた(`confirmed=承認`)ミームだけから、分類ごとに 0〜2 件引き、それぞれに古今表裏を割り振って返す。db には書かない |
-| 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、まだ要約の無い出来事・話もすべて見て `event_summary` / `episode_summary` を作る。`CommitEvent` / `CommitStory` / `CommitPlot` は確定した一件だけを見るので、md を直接編集して `import_db` した分などの取りこぼしを拾うのはこちら |
+| 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、まだ要約の無い出来事・話もすべて見て `event_summary` / `episode_summary` を作る。`CommitEvent` / `CommitStory` / `CommitPlot` は確定した一件だけを見るので、GUI から直した分などの取りこぼしを拾うのはこちら |
 | 「作品の一覧」                       | `story.list_stories.ListStories()`                                           |
 | 「話を書き始める」「次の話を書く」   | `story.start_story.StartStory(story_id)`。同期確認・見出し・直前の話・断面・顔ぶれを一度に出す |
 | 「前の話を読ませて」                 | `story.read_plots.ReadPlots(story_id, count=10, before=None, text=True)`。`before` は時刻で、start がそれより前の話に絞る |
@@ -77,7 +76,7 @@ db の触り方(入口越し・読み取り・md との同期)は CLAUDE.md の�
 `text` に、人物に掛かる筋書きはその人物の `text` の `# plot` の節に書く。
 
 **期間ごとのパラメータ**: 人物の名字(`family_name`)・体格(`sex` `height` `build`)・口調(`first_person` `second_person` `third_person` `tone` `dialect`)・
-性格(12 軸。無/低/並/高/必)は、`character_parameter` テーブルに期間ごとの行で持つ。md では人物の `# data` の
+性格(12 軸。無/低/並/高/必)は、`character_parameter` テーブルに期間ごとの行で持つ。入口では人物の
 `parameters` に配列で並ぶ(id と character_id は出さない。行は配列の並びで決まり、並びを変えなければ id も変わらない)。
 
 ```json
@@ -127,12 +126,12 @@ db の触り方(入口越し・読み取り・md との同期)は CLAUDE.md の�
    時刻は、出来事の時刻が `start` 以上 `end` 未満のもの(`end` が空なら限らない)。
    `start` が空のアイデアは時期が未定で、その時刻にもうあるかが分からないので、語が当たっても清書に渡さない(候補も足さない)。
    当たったアイデアに上位・下位のアイデアを足して、清書に「関係する設定」として渡す
-3. どのアイデアにも当たらなかった語は、AI が決めた種別(`kind`)と `confirmed=未確認` で、種別のディレクトリ(`worlds/idea/<kind>/`)に足す。
+3. どのアイデアにも当たらなかった語は、AI が決めた種別(`kind`)と `confirmed=未確認` で足す。
    場所は世界線、`start` / `end` は 1. で決めたもの(null ならそのまま空。時期が未定の候補になる)。候補はミームの抜き出しには他のアイデアと同じく出るが、
    `confirmed` が 承認 になるまで検索・断面・清書には出ない(`SearchIdeas` だけは確かめる前の候補も探せる)。
    確かめたら `confirmed` を 承認 に、設定ではないと退けたら 非承認 にする(GUI のレビュー画面 `gui/` で行う)。非承認の語は候補に戻さない
 4. 下書きが当たったアイデアと候補を、清書したレコードに中間テーブル(`event_idea` / `plot_idea` /
-   `character_idea`。md には出さない)で結ぶ
+   `character_idea`)で結ぶ
 
 | 生成 | 下書き | 清書 |
 | ---- | ------ | ---- |
@@ -154,20 +153,10 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
   まとめて行うので、`ExtractMemes` を別に呼ぶ必要は無い。確定の入口を通らなかった分の
   取りこぼしをまとめて拾いたいときは `RefreshGeneratedContent` を呼ぶ。これらの経路で足したミームは
   検めない(`fact_check` が空のまま)ので、`CheckFacts("meme")` で後から埋める
-- 話は枠(`plot`)と本文(`episode`)の二つのテーブルに分ける。話の md は `# data` `# key` の二節で、
-  `# key` は作者が入れる種(AI 生成前)。時期・場所・視点は `# data` の `start` / `end` / `place` / `viewpoint` に入る。
-  本文(AI か作者が書く、投稿する本文)は `episode` に一話一行で持ち、話の md と同じ名前の `.txt` に本文だけで出す。
-  字数(`letters`)は本文から数え、書いたモデル・effort(`model` / `effort`。手で書いた本文は空)と一緒に db にだけ持つ
-- 作品・話・本文は作品ごとのディレクトリ `worlds/story/<directory_path>/{id}_{name}/` にまとめる。
-  先頭に作品の記録 `0_{name}.md`(話の md は作品の id で始まるので、`0_` がどの並べ方でも先頭に来る。作品の id はディレクトリ名が持つ)、
-  続けてその作品の話 `{story_id}_{start}_{title}.md`(枠の記録)と、同じ名前の `{story_id}_{start}_{title}.txt`(本文)を並べる
-  (start は `年-月-日-時分`。start の無い話は `{story_id}__{title}.md`。同じ日の話は時分で並べ分ける)。
-  どの作品の話かは置き場所で決まり、md と txt を別の作品のディレクトリへ動かすとその作品の話になる。
-  ディレクトリを作って `0_{name}.md` を置けば新しい作品になる(中に置いた md と txt はその作品の話と本文になる)。
-  本文の無い話(枠)の md の隣に同じ名前の `.txt` を置いて同期すると、それがその話の本文になる。`.txt` を消すと本文も消える。
-  該当するファイルが無ければ空のデータで登録する。同じ名前の md が隣に無い `.txt` は空の話(題はファイル名から)の本文に、
-  `0_` の md が無いディレクトリに置いた `.txt` はディレクトリ名の空の作品の話にする。`worlds/story/` の直下の `.txt` だけは同期が止まる。
-  手で足した md に無い、空にできない文字列の列(作品の `narration` / `state` など)は空文字で入れる
+- 話は枠(`plot`)と本文(`episode`)の二つのテーブルに分ける。枠の `key` は作者が入れる種(AI 生成前)で、
+  時期・場所・視点は `start` / `end` / `place` / `viewpoint` に入る。
+  本文(AI か作者が書く、投稿する本文)は `episode` に一話一行で持つ。
+  字数(`letters`)は本文から数え、書いたモデル・effort(`model` / `effort`。手で書いた本文は空)と一緒に持つ
 - 本文は一話 5000〜8000 字(`ai/instructions/style.py` の `EPISODE_TARGET_LETTERS`)。
   場面の数と一場面の長さは決めず、中身に合わせる。**書く直前に種を場面まで割ってから本文に入る**。種はその話ぶんで 300〜500 字を目安に、
   `## 場面` の箇条書き(`場所 / 出る人 / そこで変わること`)と `## 狙い` で書く:
@@ -186,8 +175,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 前日譚をここで閉じる。父の顔は最後まで見せない。
 ```
-- `SyncDb` / `ExportDb` は md の写しに加えて、星ごとの地図 `{id}_map.svg`・`../worlds/maps/map.html`・
-  人物相関の `../worlds/maps/relation.html` も描く。`ImportDb` は md → db の逆向き
+- 星ごとの地図と人物相関図は GUI の `/api/maps`(星ごとの svg は `/api/maps/{id}.svg`)・`/api/relations` で描く
 - 場所の輪郭は `polygon` 欄(GeoJSON の Polygon。`[[経度, 緯度], ...]` の環を渡せば
   閉じて揃える)で `CommitPlace` / `UpdatePlace` から入れる。経緯度が無い面の場所
   (大陸など)にも持たせられ、地図では薄い面として描く
@@ -215,11 +203,11 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 その場合は `core` だけの汎用の文体になる。
 
 毎日のルーチンは、人物ごとに生まれてから 5〜20 年後を起点に自分の時を刻む。作品の時期には合わせず、
-作品の本文(筋書き)も渡さない。出来事の候補は、出来事の種(`event_seed` テーブル。md には出さない)から
+作品の本文(筋書き)も渡さない。出来事の候補は、出来事の種(`event_seed` テーブル)から
 ランダムに引いた種か、直前の出来事からの連想で立てる。種は作品の本文・話の種(`key`、無ければ本文)・
 人物の `# plot` の節・出来事の本文から、時代・場所・固有名詞を抜いて抜き出したもの。ルーチンの頭で、
 `event_seeded` が false の元だけから抜き出して true にする(`ai/time_keeper/event_seed.py`)。
-抜き出しは元ごとに一度だけ。本文を書き直して抜き出し直したいときは、その md の `event_seeded` を false に戻す。
+抜き出しは元ごとに一度だけ。本文を書き直して抜き出し直したいときは、その行の `event_seeded` を false に戻す。
 抜き出すときは似た種があるかを見ない。棚卸し前(`consolidated` が false)の種が 50 件たまったら、ルーチンの頭で
 AI に棚卸し済みの種と見比べさせ、同じ出来事の言い換えだけをまとめる(`event_seed.consolidate`)。
 人物ごとに時を刻むので、出来事を起こす時点より後に、別の人物の出来事が既にあることがある。その場所か当事者に掛かる
@@ -260,11 +248,10 @@ Claude のモデルの既定は `claude-sonnet-5` の `medium`(`ai_client.py` �
 
 ## 作り方
 
-置き場所は `<領域>/<動詞_対象>.py`。領域はいまのところ次の八つ。
+置き場所は `<領域>/<動詞_対象>.py`。領域はいまのところ次の七つ。
 
 - `randomizer/` — ランダム生成(作る／確定する)と、確定済みレコードの修正
 - `story/` — 作品・話(`story`/`plot`)まわりの読み書き(材料を引く・本文を確定する)
-- `sync/` — db と md の同期
 - `world/` — 場所・人物・アイデア・出来事の一覧(読む専用)
 - `meme/` — アイデア・oracle・人物の筋書き・出来事からのミームの抽出と、人物に持たせるミームの引き出し
 - `idea/` — 中間段(下書きの語をアイデアと照らす・本文とアイデアを結ぶ)
@@ -288,7 +275,7 @@ Claude のモデルの既定は `claude-sonnet-5` の `medium`(`ai_client.py` �
 ```
 Entrypoint(interface/_base.py)
 ├─ SessionEntrypoint            db セッションを開いて execute(session) へ渡す
-│   ├─ CommitEntrypoint         「確定する」系の共通処理(parse/check_columns/check_exists)
+│   ├─ CommitEntrypoint         「確定する」系の共通処理(parse/check_columns/check_exists)。GUI の API も execute(session) を呼ぶ
 │   │   ├─ randomizer.CommitDraft   → commit_*.py / update_*.py / delete_*.py / merge_idea.py
 │   │   ├─ story.StoryCommit        → commit_*.py / update_story.py / delete_story.py / set_plot_synced.py
 │   │   └─ idea.ResolveTerms / idea.LinkIdeas(候補を足す・結ぶので確定側)
@@ -300,7 +287,7 @@ Entrypoint(interface/_base.py)
 └─ randomizer.RandomDraft        db に触れない下書き作成 → create_random_*.py
 ```
 
-(`sync/` の二つと `meme.extract_memes.ExtractMemes`・`fact_check.check_facts.CheckFacts` は、`execute(session)` の外で
+(`meme.extract_memes.ExtractMemes`・`fact_check.check_facts.CheckFacts` は、`execute(session)` の外で
 db セッションを開き直したいので `Entrypoint` を直接継ぐ)
 
 ## 引き方は query 側にある

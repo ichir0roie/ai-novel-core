@@ -3,19 +3,20 @@ from __future__ import annotations
 
 from sqlalchemy import Select, or_, select
 
-from db.schema import Base, Plot, Episode, MarkdownBase
+from db.schema import Base, Plot, Episode, TextBase
 
 TODO_MARK = "TODO"
 
 
-def markdown_models() -> list[type]:
+def text_models() -> list[type]:
+    """本文を持つテーブル(`TextBase`)すべて"""
     return [mapper.class_ for mapper in Base.registry.mappers
-            if issubclass(mapper.class_, MarkdownBase) and mapper.class_ is not MarkdownBase]
+            if issubclass(mapper.class_, TextBase) and mapper.class_ is not TextBase]
 
 
 def todo_select(model) -> Select:
     return (select(model)
-            .where(or_(*(getattr(model, name).contains(TODO_MARK) for name in model.TEXT_SECTIONS)))
+            .where(or_(*(getattr(model, name).contains(TODO_MARK) for name in model.TEXT_COLUMNS)))
             .order_by(model.id))
 
 

@@ -14,7 +14,6 @@ from ai.time_keeper import (
     random_character_generator,
 )
 from ai.time_keeper._ai import AIClient
-from ai.time_keeper._export import export_step
 from ai.time_keeper._format import add_days, add_years, days_between, format_time
 
 
@@ -44,7 +43,6 @@ def loop_time(
             return current_time
         with get_env_session() as s:
             time_process(s, current_time, ai)
-        # export_step(format_time(current_time))
 
         next_process_day = random.randint(1, 60)
         current_time = add_days(current_time, next_process_day)

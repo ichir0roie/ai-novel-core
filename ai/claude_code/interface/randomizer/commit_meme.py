@@ -23,8 +23,6 @@ class CommitMeme(CommitDraft):
         if data.get("category") not in (None, *MEME_CATEGORIES):
             raise ValueError(f"category は {'/'.join(MEME_CATEGORIES)} のいずれか: {data['category']}")
         data.setdefault("confirmed", ConfirmStatus.APPROVED)
-        if data.get("category") and not data.get("directory_path"):
-            data["directory_path"] = data["category"]
         record = Meme(**data)
         session.add(record)
         self.finalize(session, record)

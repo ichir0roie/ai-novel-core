@@ -1,5 +1,4 @@
 import json
-import os
 
 import pytest
 
@@ -9,8 +8,6 @@ from ai.claude_code.interface.randomizer.update_character_relation import Update
 from ai.claude_code.interface.world.list_character_relations import ListCharacterRelations
 from db.schema import Character, CharacterRelation
 from db.stamp import Stamp
-from tool.markdown.export_db import export_db
-from tool.markdown.import_db import import_db
 
 
 @pytest.fixture
@@ -71,74 +68,3 @@ def test_update(session, people):
         UpdateCharacterRelation({"id": 9999, "relation": "x"}).run()
     with pytest.raises(ValueError, match="別の人物"):
         UpdateCharacterRelation({"id": created["id"], "character_id_2": people["mother"]}).run()
-
-
-def test_export_writes_markdown_and_html(session, people, tmp_path):
-    session.add(CharacterRelation(character_id_1=people["mother"], character_id_2=people["daughter"],
-                                  relation="母", text="共に暮らす。\n二行目。", start=Stamp(11572), end=Stamp(11582)))
-    session.commit()
-    root = str(tmp_path / "worlds")
-    counts = export_db(root)
-    assert counts["character_relation"] == 1
-
-    table_dir = os.path.join(root, "character_relation")
-    md_files = [n for n in os.listdir(table_dir) if n.endswith(".md")]
-    relation_id = session.query(CharacterRelation).one().id
-    assert md_files == [f"{relation_id}_{people['mother']}_{people['daughter']}.md"]
-    character_files = sorted(n for n in os.listdir(os.path.join(root, "character")) if n.endswith(".md"))
-    assert character_files == sorted(f"{i}_{n}.md" for n, i in
-                                     [("娘", people["daughter"]), ("母", people["mother"]), ("裁きの座", people["court"])])
-    with open(os.path.join(table_dir, md_files[0]), encoding="utf-8") as f:
-        md = f.read()
-    assert '"relation": "母"' in md and "# text\n共に暮らす。\n二行目。" in md
-    assert '"start": "11572/01/01 00:00:00"' in md
-
-    with open(os.path.join(root, "maps", "relation.html"), encoding="utf-8") as f:
-        html = f.read()
-    assert '"name": "裁きの座"' in html and '"relation": "母"' in html
-    assert f'"path": "{people["daughter"]}_娘.md"' in html
-    assert '"start": 11572, "end": 11582' in html
-    assert "</script>" in html and "<\\/" in html or "</" not in json.dumps("x")
-
-
-def test_export_without_relations_still_writes_html(session, people, tmp_path):
-    root = str(tmp_path / "worlds")
-    export_db(root)
-    with open(os.path.join(root, "maps", "relation.html"), encoding="utf-8") as f:
-        html = f.read()
-    assert '"relations": []' in html and '"name": "娘"' in html
-
-
-def test_import_reads_relation_back(session, people, tmp_path):
-    root = str(tmp_path / "worlds")
-    table_dir = os.path.join(root, "character_relation")
-    os.makedirs(table_dir)
-    data = {"character_id_1": people["daughter"], "character_id_2": people["court"], "relation": "追われる側",
-            "start": "11582", "end": None}
-    with open(os.path.join(table_dir, "娘と座.md"), "w", encoding="utf-8") as f:
-        f.write(f"# data\n```json\n{json.dumps(data, ensure_ascii=False)}\n```\n\n# text\n帳のどこにも入らない。\n")
-
-    counts = import_db(root)
-    assert counts["character_relation"] == 1
-    row = session.query(CharacterRelation).one()
-    assert (row.character_id_1, row.character_id_2, row.relation) == (people["daughter"], people["court"], "追われる側")
-    assert row.text == "帳のどこにも入らない。" and row.filename == "娘と座"
-    assert row.start == Stamp(11582) and row.end is None
-    assert os.listdir(table_dir) == [f"{row.id}_娘と座.md"]
-
-
-def test_import_does_not_keep_derived_filename(session, people, tmp_path):
-    root = str(tmp_path / "worlds")
-    table_dir = os.path.join(root, "character")
-    os.makedirs(table_dir)
-    with open(os.path.join(table_dir, f"{people['mother']}_母.md"), "w", encoding="utf-8") as f:
-        f.write('# data\n```json\n{"name": "母", "kind": "人物"}\n```\n\n# text\n本文\n')
-    with open(os.path.join(table_dir, f"{people['court']}_別名.md"), "w", encoding="utf-8") as f:
-        f.write('# data\n```json\n{"name": "裁きの座", "kind": "組織"}\n```\n\n# text\n本文\n')
-
-    import_db(root)
-    session.expire_all()
-    assert session.get(Character, people["mother"]).filename is None
-    assert session.get(Character, people["court"]).filename == "別名"
-    assert session.get(Character, people["mother"]).markdown_name == f"{people['mother']}_母.md"
-    assert session.get(Character, people["court"]).markdown_name == f"{people['court']}_別名.md"

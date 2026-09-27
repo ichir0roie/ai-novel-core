@@ -24,11 +24,10 @@ _SCHEMA = {
 }
 
 
-def judge(session: Session, name: str | None, text: str | None, directory_path: str | None, ai: AIClient) -> str:
+def judge(session: Session, name: str | None, text: str | None, ai: AIClient) -> str:
     kinds = session.scalars(select(Idea.kind).where(Idea.kind.is_not(None)).distinct().order_by(Idea.kind)).all()
     prompt = "\n".join([
         f"既にある種別: {'、'.join(kinds) or '(まだ無い)'}",
-        f"置き場所: {directory_path or '(直下)'}",
         f"名前: {name or ''}",
         "本文:",
         (text or "").strip(),

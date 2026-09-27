@@ -37,7 +37,7 @@
 # データ編集 GUI
 
 `gui/` に、ユーザが `novel.db` をブラウザから直す道具(FastAPI の API と Next.js の画面)がある。
-起動と API は `gui/readme.md`。未確認のアイデア・ミームの承認・非承認はここで行う。
+起動と API は `gui/readme.md`。未確認のアイデア・ミームの承認・非承認、星ごとの地図・人物相関図もここで見る。
 `confirmed` は 未確認/承認/非承認 の三段(`db.schema.ConfirmStatus`)で、承認だけが検索・生成・
 人物へ引く対象になる。非承認は使わないが、同じ語をまた候補に足さないよう行は残す。
 
@@ -59,12 +59,12 @@
 
 # 環境構築
 
-コード(このリポジトリ `ai-novel-core`)と実データ(`novel.db`・`worlds/`)は別リポジトリに分けている。
+コード(このリポジトリ `ai-novel-core`)と実データ(`novel.db`)は別リポジトリに分けている。
 実データ側のリポジトリ(private の `my-novel-world`)が、このリポジトリをサブモジュール `core/` として持つ。
 コードは環境変数 `DEM_WORLD_DIR` で渡されたディレクトリを世界として読み書きする(未設定なら import で止まる)。
 python・pytest・alembic は世界リポジトリのルートを cwd にし、`DEM_WORLD_DIR` にそのルートを、
 `PYTHONPATH` に `<ルート>/core` を渡して動かす。
-md と db の同期(`SyncDb`)が使う `novel.db` と `worlds/` は、それぞれ `DEM_NOVEL_DB_PATH` / `DEM_WORLDS_DIR` でも個別に差し替えられる。
+`novel.db` の場所は `DEM_NOVEL_DB_PATH` でも差し替えられる。
 自分の世界を作るときは、空のリポジトリで `git submodule add https://github.com/ichir0roie/ai-novel-core.git core` する。
 
 
@@ -111,7 +111,7 @@ git push
 - 対応する入口が無ければ、readme の「作り方」に沿って入口を新しく作ってから行う。
   足したら同じ作業のうちに readme の対応表へ行を足す(表に無い入口は次から見えない)
 - 読み取り(`select`)だけなら入口を通さなくてよい。python の `sqlite3` や SQLAlchemy で
-  好きに覗いてよい。読むだけなら同期(`SyncDb`)も回さなくてよい。
+  好きに覗いてよい。
   書き込み(`insert` `update` `delete`)は必ず入口越しに行う
 - 調査用の読み取り例(世界リポジトリのルートで `.venv/bin/python` を使う。`core/` は `.venv` の場所を持たない):
 
@@ -124,25 +124,10 @@ print(c.execute('select count(*) from character').fetchone())
 "
 ```
 
-# md と db の同期
+# ユーザがデータを見る・直す窓口
 
-db が正で、`worlds/` の md はユーザが db を読み書きするための窓口。Claude は db だけで作業を完結させ、
-md を読んで判断したり、md を直接書き換えたりはしない(`worlds/**/*.md` は直接変更しない)。
-
-同期は入口 `sync.sync_db.SyncDb()`(`tool.markdown.sync_db`)で行う。差分だけを動かすので、いつ何度呼んでもよい。
-
-- `worlds/` の隣の `.markdown_sync.json`(台帳)に、md ごとに前回の同期時点の md と db の中身のハッシュを持つ
-- 取り込み(`import_db`)は、台帳と中身が違う md(ユーザが手で直した・足した md)だけを db へ入れる。
-  台帳が無ければすべての md を取り込む
-- 台帳に載っているのに無くなった md(ユーザが手で消した md)は、同じ行を持つ md が他に無ければ db からも行を消す
-- 書き出し(`export_db`)は、db と中身が違う md だけを書き直し、db に行が無くなった md を消す。
-  手で直された md が残っていれば止まる(`force=True` で md を捨てて押し切る)
-- `sync_db` は取り込み → 書き出しの順に回す。同じ行を md と db の両方で直していたら、
-  md(ユーザの直接編集)を勝たせ、`conflicts` に返す。返ってきたら db 側でした修正をやり直す
-- 同期は `worlds/` の隣の `.markdown_sync.lock` で、セッションをまたいで一度に一つだけ走る
-
-db を修正する作業は、入口越しの修正 → `SyncDb()` の順で回す(ローカルでもクラウドでも同じ)。
-ユーザが md を直していそうなら、作業の前にも `SyncDb()` を回して取り込んでおく。
+db が唯一の正。ユーザは `gui/` の GUI(FastAPI + Next.js)で db を見て直す。md の写し(`worlds/`)と
+その同期(`SyncDb`)は廃止した。Claude は入口越しに db だけで作業を完結させ、報告も db を読んで行う。
 
 
 # schema の確認方法

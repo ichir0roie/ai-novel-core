@@ -53,9 +53,13 @@ def _rename_index(table: str, old: str, new: str, columns: list[str], unique: bo
 
 
 def _retable_manifest(mapping: dict[str, str]) -> None:
-    """md の台帳(`.markdown_sync.json`)が持つ表の名前も合わせる。古いままだと取り込みが md を別の表の行と取り違える"""
-    from db.schema import WORLDS_ROOT
-    from tool.markdown.sync_manifest import Manifest, locked
+    """md の台帳(`.markdown_sync.json`)が持つ表の名前も合わせる。古いままだと取り込みが md を別の表の行と取り違える。
+    md の同期は廃止したので、同期の道具が無ければ何もしない"""
+    try:
+        from db.schema import WORLDS_ROOT
+        from tool.markdown.sync_manifest import Manifest, locked
+    except ImportError:
+        return
 
     with locked(WORLDS_ROOT):
         manifest = Manifest(WORLDS_ROOT)

@@ -12,8 +12,8 @@ AI にラノベを書いてもらうためのプロジェクト。
 - **AI を差し替えられる。** 同じループをローカル AI(Ollama)でも Claude Code(`claude -p`)でも回せる
 - **db に触れる入口を一本化。** Claude は `ai/claude_code/interface/` の入口越しにだけ読み書きする。
   下書きを「作る」側は db に触れず辞書を返し、「確定する」側が実在確認と列チェックをして書き込む
-- **md で読める・直せる。** `SyncDb` で db と `worlds/` の md を差分だけ往復し、
-  星ごとの地図(svg / html)と人物相関図も書き出す
+- **GUI で読める・直せる。** `gui/`(FastAPI + Next.js)で一覧・修正・追加と、未確認のアイデア・ミームのレビュー、
+  星ごとの地図(svg / html)と人物相関図を見る
 - **本文は種から書く。** 話ごとに作者が `key`(場面割りと狙い)を置き、AI か作者が本文(`episode`)を書く
 - **時間に上限がない。** 年は何桁でもよく(ノウル一万年代など)、遠未来の世界線も同じ仕組みで扱う
 - **テストは本番に触れない。** `novel.test.db` とモック AI で、AI 無しにループを再走できる
@@ -26,7 +26,7 @@ AI にラノベを書いてもらうためのプロジェクト。
 | ---------------- | ------------------------------------------------------------- |
 | `db/` `ai/` ほか | 仕組み。db の形・入口・問い合わせ・ローカル AI                |
 | `../novel.db`    | **世界の記録と本文そのもの**(SQLite。世界リポジトリ側)        |
-| `../worlds/`     | db から書き出した**読む専用の写し**(`ExportDb`。無くてもよい) |
+| `gui/`           | データ編集 GUI(API と画面)。使い方は `gui/readme.md`         |
 | `CLAUDE.md`      | **Claude 向けの作業指針**                                     |
 
 ```
@@ -40,8 +40,9 @@ ai/                 AI に生成させる側をまとめた置き場
   local_ai/         ローカル AI(Ollama)の client と、それでループを回す入口
   claude_code/      Claude Code(`claude -p`)の client と、それでループを回す入口。本文(episode)もここが書く
     interface/      **Claude が呼ぶ入口。db に触れるのはここ越しだけ**
-                    randomizer/ story/ world/ sync/
-tool/               md への書き出し・読み戻し、危険操作(danger/)、テスト用の道具(test/。必ず novel.test.db を使う。
+                    randomizer/ story/ world/ meme/ idea/ review/ fact_check/
+gui/                データ編集 GUI。api/(FastAPI)と web/(Next.js)
+tool/               地図(map/)・人物相関図(relation/)の描画、危険操作(danger/)、テスト用の道具(test/。必ず novel.test.db を使う。
                     mock_ai_client で AI 無しに redrive_mock_world を回す、seed_mock_db で全テーブルにモックデータを流し込む)
 ```
 

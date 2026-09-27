@@ -3,9 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db.schema import (
-    Character, CharacterParameter, ConfirmStatus, Event, EventCharacter, Idea, Location, Meme, Plot, Story,
+    Character, CharacterParameter, ConfirmStatus, EventCharacter, Idea, Location, Meme, Plot, Story,
 )
-from db.stamp import Stamp
 from gui.api import app as app_module
 
 
@@ -159,7 +158,7 @@ def test_event_participants(client, session, world):
 def test_meme_create_defaults_to_approved(client, session):
     created = client.post("/api/tables/meme/records", json={"text": "約束を守る", "category": "信条"})
     assert created.status_code == 201, created.text
-    assert created.json()["record"]["confirmed"] == "承認" and created.json()["record"]["directory_path"] == "信条"
+    assert created.json()["record"]["confirmed"] == "承認" and created.json()["record"]["category"] == "信条"
     assert client.post("/api/tables/meme/records", json={"text": "x", "category": "変"}).status_code == 400
     assert client.post("/api/tables/meme/records", json={"text": " "}).status_code == 400
 
@@ -202,13 +201,25 @@ def test_review_flow_approves_and_rejects_in_order(client, session):
     assert client.get("/api/review/story/next").status_code == 404
 
 
-def test_sync_endpoint_runs_sync_db(client, monkeypatch):
-    calls = []
+def test_maps_and_relations_are_served_as_html(client, session):
+    planet = Location(name="星", kind="星", text="", area=510_072_000)
+    session.add(planet)
+    session.flush()
+    session.add(Location(name="東京", kind="都市", text="", parent_id=planet.id, location_planet=planet.id,
+                         location_longitude=139.7, location_latitude=35.7, location_altitude=40))
+    a = Character(name="甲", text="")
+    b = Character(name="乙", text="")
+    session.add_all([a, b])
+    session.commit()
 
-    class _Stub:
-        def run(self):
-            calls.append(True)
-            return {"imported": {}, "deleted": [], "conflicts": [], "written": [], "removed": []}
+    html = client.get("/api/maps")
+    assert html.status_code == 200 and html.headers["content-type"].startswith("text/html")
+    assert '"name": "東京"' in html.text and '"link": "/tables/location/' in html.text
 
-    monkeypatch.setattr(app_module, "SyncDb", _Stub)
-    assert client.post("/api/sync").json()["conflicts"] == [] and calls == [True]
+    svg = client.get(f"/api/maps/{planet.id}.svg")
+    assert svg.status_code == 200 and svg.headers["content-type"].startswith("image/svg+xml")
+    assert svg.text.startswith("<svg") and "東京" in svg.text
+    assert client.get("/api/maps/999.svg").status_code == 404
+
+    relations = client.get("/api/relations")
+    assert relations.status_code == 200 and f'"link": "/tables/character/{a.id}"' in relations.text

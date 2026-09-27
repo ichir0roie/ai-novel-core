@@ -53,11 +53,8 @@ claude_main(year=2027, max_days=30)
 
 ```
 .venv/bin/python -c "
-from ai.claude_code.interface.sync.sync_db import SyncDb
 from ai.claude_code.claude_code_time_keeper import claude_daily_event_main
-SyncDb().run()
 claude_daily_event_main()
-SyncDb().run()
 "
 ```
 
@@ -69,7 +66,7 @@ SyncDb().run()
 - その時刻に居場所が無い者・`active_random_generation` でない場所に居る者は選び直す
   (常駐ループが出来事の対象にしない者は、ここでも対象にしない)
 - 直前の出来事は、本文の代わりに要約(`event_summary.py`)を渡す。要約は `event_summary` テーブル
-  (md には出さない)に残し、本文が変わっていなければ作り直さない。要約が作れなければ本文のまま渡す
+  に残し、本文が変わっていなければ作り直さない。要約が作れなければ本文のまま渡す
 - 組み立ては常駐ループの `event_progression_generator` と同じ(当事者ごとの推測 → 候補をサイコロ → 記録)。
   選んだ者は必ず当事者に入る。居合わせる者のうち、自分の時間が既に先へ進んでいる者は加えない
 - 記録として起こしたあと、本文(`text`)だけを話と同じ小説の形、一話の三分の一(`EVENT_NOVEL_TARGET_LETTERS`)に
@@ -88,7 +85,7 @@ write_story(story_id=1, plot_id=40)     # 種だけ入っている話(id=40)を�
 材料は `start_story` 入口と同じ(作品の見出し・直前の話・断面・顔ぶれ)。
 直前の話は 3 話(`RECAP_EPISODE_LIMIT`)まで、本文の代わりに概要で渡す。書く前に一話ずつ本文を読ませて
 概要と文体の覚え書きを作らせ、概要を直前の話として、一番新しい話の文体の覚え書きと一緒に本文のプロンプトへ載せる。
-覚え書きは `story_summary` テーブル(md には出さない)に一話ずつ残し、本文が変わっていなければ作り直さない。
+覚え書きは `episode_summary` テーブルに一話ずつ残し、本文が変わっていなければ作り直さない。
 概要が作れなかった話は本文のまま渡す。
 
 - 書く話は `plot_id` で指す。省くと**本文の入っている最後の話の次**(`start` の順)を書く。

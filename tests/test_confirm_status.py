@@ -1,13 +1,10 @@
 """`confirmed` の三段(未確認/承認/非承認)。以前の bool からの読み替えと、非承認が候補・検索・引き出しに出ないこと。"""
-import os
-
 import pytest
 from sqlalchemy.exc import StatementError
 
 from ai.time_keeper import idea_context, meme as meme_module
 from data_access_logic.query import common_query, dictionary_query, meme_query
 from db.schema import ConfirmStatus, Idea, Location, Meme, parse_confirm_status
-from tool.markdown.import_db import import_db
 import random
 
 
@@ -78,18 +75,3 @@ def test_rejected_term_is_not_re_added_as_a_candidate(session):
     pending = idea_context._candidate_for(session, {**term, "keyword": "宿り", "kind": "技術"}, None)
     assert pending is not None and pending.confirmed == ConfirmStatus.PENDING
     assert session.query(Idea).filter_by(name="宿り").count() == 1
-
-
-def test_legacy_bool_in_markdown_is_imported_as_a_status(session, tmp_path):
-    root = str(tmp_path / "worlds")
-    os.makedirs(os.path.join(root, "idea"))
-    os.makedirs(os.path.join(root, "meme"))
-    with open(os.path.join(root, "idea", "宿り.md"), "w", encoding="utf-8") as f:
-        f.write('# data\n```json\n{"kind": "技術", "confirmed": false}\n```\n\n# text\n本文\n')
-    with open(os.path.join(root, "meme", "約束.md"), "w", encoding="utf-8") as f:
-        f.write('# data\n```json\n{"category": "信条", "confirmed": true}\n```\n\n# text\n約束を守る\n')
-
-    import_db(root)
-
-    assert session.query(Idea).one().confirmed == ConfirmStatus.PENDING
-    assert session.query(Meme).one().confirmed == ConfirmStatus.APPROVED

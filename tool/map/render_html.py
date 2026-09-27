@@ -233,7 +233,7 @@ function renderSide(planet, points, shapes) {
   side.innerHTML = `<h2>${esc(origin.name)} <span class="hint">(${esc(origin.kind)} / ${esc(origin.parent_name ?? "-")})</span></h2>` +
     `<dl><dt>座標</dt><dd>lon ${origin.lon} / lat ${origin.lat} / alt ${origin.alt ?? "-"}</dd>` +
     (origin.environment ? `<dt>環境</dt><dd>${esc(origin.environment)}</dd>` : "") +
-    `<dt>記事</dt><dd>${esc(origin.path)}</dd></dl>` +
+    `<dt>記事</dt><dd><a href="${esc(origin.link)}" target="_blank">GUI で開く</a></dd></dl>` +
     `<table><tr><th>場所</th><th>方角</th><th>距離</th><th>高低差</th></tr>` +
     rows.map(r => `<tr class="row" data-id="${r.p.id}"><td>${esc(r.p.name)}<br><span class="hint">${esc(r.p.parent_name ?? "")}</span></td>` +
       (r.deg < 0.01 ? `<td colspan="2">同じ経緯度</td>` : `<td>${bearingName(r.b)}<br><span class="hint">${Math.round(r.b)}°</span></td><td class="num">${distanceText(r.km, r.deg)}</td>`) + `<td>${altDiffText(r.diff)}</td></tr>`).join("") +

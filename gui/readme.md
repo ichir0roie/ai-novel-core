@@ -3,12 +3,13 @@
 `novel.db` をブラウザから見て直すための道具。API(`gui/api`、FastAPI)と画面(`gui/web`、Next.js)の二つ。
 
 - 未確認のアイデア・ミームを一件ずつ出し、直しながら「承認」「非承認」を付けて次へ進むレビュー画面
-- md に出るテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き)の一覧・表示・修正・追加
+- 本文を持つテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き)の一覧・表示・修正・追加
+- 星ごとの地図と人物相関図(`/api/maps` `/api/relations`)
 
 ## 構成の決め方
 
 列の定義(`db/schema.py`)、値の型(`Stamp`・`confirmed`)、確定・修正のときの検証(実在確認・別名の制約・
-子の行の扱い)、md との同期はすべて python 側にある。Next.js から SQLite を直接開くと、その全部を
+子の行の扱い)はすべて python 側にある。Next.js から SQLite を直接開くと、その全部を
 TypeScript にもう一度書くことになり、正が二つになる。そのため API は FastAPI で python 側に置き、
 書き込みは `ai/claude_code/interface/` の入口(`execute(session)`)を通す。画面は列の情報を
 `GET /api/tables` から受け取って組み立てるので、列を足しても画面のコードは変えなくてよい。
@@ -50,7 +51,8 @@ npm run dev          # http://localhost:3000
 | GET | `/api/review` | 未確認・承認・非承認の件数 |
 | GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
-| POST | `/api/sync` | `SyncDb()`。GUI で直した分を md へ出し、手で直した md を取り込む |
+| GET | `/api/maps` / `/api/maps/{planet_id}.svg` | 星ごとの地図(html / svg)。場所の座標・領域から描く |
+| GET | `/api/relations` | 人物相関図(html) |
 
 `table` は `story` `plot` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
 話(`plot`)は本文(`episode`)を `text` として一緒に扱う。出来事は `character_ids`(当事者)、

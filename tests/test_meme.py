@@ -166,8 +166,7 @@ def test_extracted_memes_keep_their_category(session):
 
     assert meme.refresh(session, ai) == 2
 
-    assert {m.text: (m.category, m.directory_path) for m in session.query(Meme)} == {
-        "約束を守る": ("信条", "信条"), "空を目指す": ("欲求", "欲求")}
+    assert {m.text: m.category for m in session.query(Meme)} == {"約束を守る": "信条", "空を目指す": "欲求"}
     assert all(m.confirmed == ConfirmStatus.PENDING for m in session.query(Meme))
 
 
@@ -223,7 +222,7 @@ def test_sources_are_drawn_again_when_the_duplicate_check_fails(session):
 def test_memes_without_a_category_are_classified(session):
     hand_written = Meme(text="手で書いたミーム")
     unanswered = Meme(text="分類の外を答えられたミーム")
-    placed = Meme(text="置き場所を決めたミーム", directory_path="手書き")
+    placed = Meme(text="置き場所を決めたミーム")
     session.add_all([hand_written, unanswered, placed])
     session.commit()
     ai = _Scripted({meme._CLASSIFY_SYSTEM_PROMPT: {"categories": [
@@ -231,9 +230,7 @@ def test_memes_without_a_category_are_classified(session):
 
     meme.refresh(session, ai)
 
-    assert (hand_written.category, hand_written.directory_path) == ("境遇", "境遇")
-    assert (unanswered.category, unanswered.directory_path) == (None, None)
-    assert (placed.category, placed.directory_path) == ("理", "手書き")
+    assert (hand_written.category, unanswered.category, placed.category) == ("境遇", None, "理")
     assert "1. 手で書いたミーム" in ai.calls_for(meme._CLASSIFY_SYSTEM_PROMPT)[0]["prompt"]
 
 
@@ -323,13 +320,13 @@ def test_delete_meme_removes_it(session):
 
 
 def test_commit_oracle_adds_a_note(session):
-    result = CommitOracle({"text": "覚え書き", "directory_path": "system-idea", "filename": "題"}).run()
+    result = CommitOracle({"text": "覚え書き", "title": "題"}).run()
 
     record = session.get(Oracle, result["id"])
-    assert (record.text, record.directory_path, record.filename) == ("覚え書き", "system-idea", "題")
+    assert (record.text, record.title) == ("覚え書き", "題")
     assert not record.meme_seeded
     with pytest.raises(ValueError, match="text は必須"):
-        CommitOracle({"filename": "空"}).run()
+        CommitOracle({"title": "空"}).run()
 
 
 @pytest.mark.parametrize("entrypoint, payload, model", [

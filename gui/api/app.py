@@ -9,12 +9,11 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
 from ai.claude_code.interface._base import UnknownRecordError
-from ai.claude_code.interface.sync.sync_db import SyncDb
 from db.schema import DB_PATH, WORLD_DIR, get_env_session
 from gui.api import meta, records, review
 from gui.api.models import (
@@ -22,6 +21,11 @@ from gui.api.models import (
     TablesResponse,
 )
 from gui.api.tables import spec_of
+from tool.map.collect import collect_planets
+from tool.map.render_html import render_html as render_map_html
+from tool.map.render_svg import render_svg
+from tool.relation.collect import collect_relations
+from tool.relation.render_html import render_html as render_relation_html
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
 app.add_middleware(
@@ -135,10 +139,24 @@ def review_decide(table: str, record_id: int, decision: Decision,
     return records.get_record(session, spec, record_id)
 
 
-@app.post("/api/sync")
-def sync() -> dict[str, Any]:
-    """db と `worlds/` の md を同期する(`SyncDb`)。GUI で直した分を md に出し、手で直した md を取り込む。"""
-    return SyncDb().run()
+@app.get("/api/maps", response_class=HTMLResponse)
+def maps(session: Session = Depends(session_dep)) -> HTMLResponse:
+    """星ごとの地図(html)。場所の座標・領域から描く"""
+    return HTMLResponse(render_map_html(collect_planets(session)))
+
+
+@app.get("/api/maps/{planet_id}.svg")
+def map_svg(planet_id: int, session: Session = Depends(session_dep)) -> Response:
+    for entry in collect_planets(session):
+        if entry["planet"]["id"] == planet_id:
+            return Response(render_svg(entry["planet"], entry["points"], entry["shapes"]), media_type="image/svg+xml")
+    raise UnknownRecordError(f"id={planet_id} の星に地図が無い(座標を持つ場所が無いか、星でない)")
+
+
+@app.get("/api/relations", response_class=HTMLResponse)
+def relations(session: Session = Depends(session_dep)) -> HTMLResponse:
+    """人物相関図(html)"""
+    return HTMLResponse(render_relation_html(collect_relations(session)))
 
 
 _ = Created  # OpenAPI に出す型として残す

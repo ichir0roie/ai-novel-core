@@ -6,7 +6,7 @@ from db.schema import Location
 
 @pytest.fixture
 def continents(session):
-    planet = Location(name="星", kind="星", text="", area=100, directory_path="星")
+    planet = Location(name="星", kind="星", text="", area=100)
     session.add(planet)
     session.flush()
     first = Location(name="大陸", kind="大陸", text="", parent_id=planet.id, area=30)

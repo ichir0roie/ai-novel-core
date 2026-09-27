@@ -1,5 +1,4 @@
 import json
-import os
 
 import pytest
 
@@ -8,11 +7,8 @@ from ai.claude_code.interface.randomizer.update_place import UpdatePlace
 from ai.claude_code.interface.world.list_neighbors import ListNeighbors
 from db.polygon import outer_ring, parse_polygon, polygon_center
 from db.schema import Location
-from tool.map.category import CATEGORY_COLORS, SHAPE_OPACITY
 from tool.map.collect import collect_planets
 from tool.map.layout import fit_frame
-from tool.markdown.export_db import export_db
-from tool.markdown.import_db import import_db
 
 TRIANGLE = [[10, 20], [30, 20], [30, 40]]
 CLOSED = {"type": "Polygon", "coordinates": [[[10.0, 20.0], [30.0, 20.0], [30.0, 40.0], [10.0, 20.0]]]}
@@ -61,34 +57,9 @@ def test_commit_and_update_place_store_polygon(session):
         UpdatePlace({"id": created["id"], "polygon": [[0, 0], [1, 1]]}).run()
 
 
-def test_polygon_round_trips_through_markdown(session, tmp_path):
-    planet = Location(name="星", kind="星", text="", directory_path="星")
-    session.add(planet)
-    session.flush()
-    session.add(Location(name="大陸", kind="大陸", text="本文", parent_id=planet.id,
-                         location_planet=planet.id, polygon=TRIANGLE))
-    session.commit()
-    root = str(tmp_path / "worlds")
-    export_db(root)
-
-    md_path = next(os.path.join(d, f) for d, _, fs in os.walk(os.path.join(root, "location"))
-                   for f in fs if f.endswith(".md") and "大陸" in open(os.path.join(d, f), encoding="utf-8").read())
-    with open(md_path, encoding="utf-8") as f:
-        content = f.read()
-    assert '"polygon": {\n    "type": "Polygon",' in content
-
-    content = content.replace("40.0", "45.0")
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write(content)
-    import_db(root)
-    session.expire_all()
-    row = session.query(Location).filter_by(name="大陸").one()
-    assert row.polygon["coordinates"][0][2] == [30.0, 45.0]
-
-
 @pytest.fixture
 def outlined(session):
-    planet = Location(name="星", kind="星", text="", area=510_072_000, directory_path="星")
+    planet = Location(name="星", kind="星", text="", area=510_072_000)
     session.add(planet)
     session.flush()
     continent = Location(name="大陸", kind="大陸", text="", parent_id=planet.id, location_planet=planet.id,
@@ -119,35 +90,3 @@ def test_list_neighbors_ignores_shape_only_places(outlined):
     result = ListNeighbors(outlined["town"]).run()
     assert [n["name"] for n in result["neighbors"]] == ["国"]
     assert result["neighbors"][0]["polygon"] == CLOSED
-
-
-def test_export_draws_polygons(outlined, tmp_path):
-    root = str(tmp_path / "worlds")
-    export_db(root)
-
-    with open(os.path.join(root, "location", "星", f"{outlined['planet']}_map.svg"), encoding="utf-8") as f:
-        svg = f.read()
-    assert svg.count('<g class="shape">') == 2
-    assert 'fill-rule="evenodd"' in svg and "薄い面は輪郭" in svg
-    # 点を持たない大陸だけ、面の真ん中に名を置く
-    assert svg.count('font-weight="bold" fill="#') == 1 and ">大陸</text>" in svg
-    # 面は親ではなく区分(大陸・国)の色で塗る
-    assert f'fill="{CATEGORY_COLORS["大陸"]}" fill-opacity="{SHAPE_OPACITY["大陸"]}"' in svg
-    assert f'fill="{CATEGORY_COLORS["国"]}" fill-opacity="{SHAPE_OPACITY["国"]}"' in svg
-
-    with open(os.path.join(root, "maps", "map.html"), encoding="utf-8") as f:
-        html = f.read()
-    assert '"shapes": [' in html and '"type": "Polygon"' in html
-    assert "function shapePath" in html
-
-
-def test_export_with_only_shapes_still_draws_planet(session, tmp_path):
-    planet = Location(name="星", kind="星", text="")
-    session.add(planet)
-    session.flush()
-    session.add(Location(name="大陸", kind="大陸", text="", parent_id=planet.id, location_planet=planet.id,
-                         polygon=TRIANGLE))
-    session.commit()
-    export_db(str(tmp_path / "worlds"))
-    with open(os.path.join(str(tmp_path / "worlds"), "location", f"{planet.id}_map.svg"), encoding="utf-8") as f:
-        assert ">大陸</text>" in f.read()

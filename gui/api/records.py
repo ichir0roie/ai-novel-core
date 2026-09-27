@@ -21,7 +21,7 @@ def label_of(spec: TableSpec, row) -> str:
         value = getattr(row, spec.label_column, None)
         if value:
             return str(value)
-    for name in spec.model.TEXT_SECTIONS:
+    for name in spec.model.TEXT_COLUMNS:
         value = (getattr(row, name, None) or "").strip()
         if value:
             first = value.splitlines()[0]
@@ -30,7 +30,7 @@ def label_of(spec: TableSpec, row) -> str:
 
 
 def _preview(spec: TableSpec, row) -> str:
-    for name in spec.model.TEXT_SECTIONS:
+    for name in spec.model.TEXT_COLUMNS:
         value = (getattr(row, name, None) or "").strip()
         if value:
             return value[:_PREVIEW_LENGTH] + ("…" if len(value) > _PREVIEW_LENGTH else "")
@@ -57,7 +57,7 @@ def record_dict(session: Session, spec: TableSpec, row) -> dict:
 
 def _summary_dict(session: Session, spec: TableSpec, row) -> dict:
     data = record_dict(session, spec, row)
-    for name in spec.model.TEXT_SECTIONS:
+    for name in spec.model.TEXT_COLUMNS:
         data.pop(name, None)
     data.pop("text", None)
     data["label"] = label_of(spec, row)

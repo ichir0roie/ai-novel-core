@@ -61,8 +61,7 @@ def _candidate_for(session: Session, term: dict, place_id: int | None) -> Idea |
         return None
     candidate = Idea(
         name=term["keyword"], kind=term["kind"], confirmed=ConfirmStatus.PENDING, text=term["description"],
-        location_id=_world_id(session, place_id), start=term["start"], end=term["end"],
-        directory_path=term["kind"].replace("/", "／") or None)
+        location_id=_world_id(session, place_id), start=term["start"], end=term["end"])
     session.add(candidate)
     session.flush()
     print(f"[time_keepr/idea] 候補を足した: {candidate.name}(id={candidate.id})")

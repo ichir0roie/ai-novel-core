@@ -4,7 +4,6 @@ from __future__ import annotations
 import enum
 import hashlib
 import os
-import re
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -82,7 +81,7 @@ class ConfirmStatus(enum.StrEnum):
 
 CONFIRM_STATUSES = tuple(status.value for status in ConfirmStatus)
 
-# 三段にする前の bool の書き方(md の `"confirmed": true` など)からの読み替え
+# 三段にする前の bool の書き方(true/false)からの読み替え
 _CONFIRM_LEGACY = {True: ConfirmStatus.APPROVED, False: ConfirmStatus.PENDING,
                    "true": ConfirmStatus.APPROVED, "false": ConfirmStatus.PENDING,
                    "1": ConfirmStatus.APPROVED, "0": ConfirmStatus.PENDING}
@@ -159,65 +158,20 @@ class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
 
 
-# 自分のディレクトリに置く md の名前の頭。子の md の名前は親の id(1 から)で始まるので、
-# ASCII 順でも数の順でも、ディレクトリの中の先頭に並ぶ
-RECORD_PREFIX = "0_"
+class TextBase(Base):
+    """本文(`text`)を持つ行。作品・人物・出来事・アイデアなど、物語の中身を文章で持つテーブルの基底。"""
 
-
-class MarkdownBase(Base):
     __abstract__ = True
 
-    # md 側で `# <名前>` の節として出し入れする列。`# data` には出さない
-    TEXT_SECTIONS: tuple[str, ...] = ("text",)
-    # `# data` に子の行の配列として出し入れする relationship の名前
+    # 長い文章の列(GUI では大きな入力欄。TODO の検索もこの列を見る)
+    TEXT_COLUMNS: tuple[str, ...] = ("text",)
+    # 子の行の配列として出し入れする relationship の名前(`db/child_lists.py`)
     CHILD_LISTS: tuple[str, ...] = ()
-    # md 名の既定にする列。`# data` の無い手書きの md では、この列を md 名から埋める
-    NAME_COLUMN: str | None = None
-    # 持つテーブルの md は、md 名(拡張子を除く)のディレクトリを作り、その中に `record_name` で置く
-    MARKDOWN_OWN_DIRECTORY: bool = False
-    # 親の行を指す relationship の名前。持つテーブルの md は、`worlds/{table}/` ではなく
-    # 親の md と同じディレクトリ(親は `MARKDOWN_OWN_DIRECTORY` を持つ)に並べる
-    MARKDOWN_PARENT: str | None = None
-    # 持つテーブルは md の代わりに、親の md と同じ名前で拡張子だけをこれにしたファイルを親の隣に置く。
-    # 親一行につき一行で、`# data` も見出しも無い本文(text)だけで出し入れする
-    BODY_FILE_EXTENSION: str | None = None
 
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
 
-    directory_path: Mapped[str | None] = mapped_column(
-        String, nullable=True, default=None, sort_order=20000,
-        comment="import,export時の配置先。worlds/{table}/ からの相対ディレクトリパス。"
-                "空ならテーブル直下に置く")
-    filename: Mapped[str | None] = mapped_column(
-        String, nullable=True, default=None, sort_order=20010,
-        comment="import,export時のファイル名(id・拡張子を除いた部分)。"
-                "空なら {id}.md。テーブルが持つ name 等の列とは別物")
 
-    def default_filename(self) -> str | None:
-        return getattr(self, self.NAME_COLUMN) if self.NAME_COLUMN else None
-
-    @property
-    def markdown_name(self) -> str:
-        name = self.filename or self.default_filename()
-        return f"{self.id}_{name.replace('/', '／')}.md" if name else f"{self.id}.md"
-
-    @property
-    def record_name(self) -> str:
-        """自分のディレクトリに置くときの md 名。id はディレクトリの名前が持つ"""
-        _, _, name = self.markdown_name[: -len(".md")].partition("_")
-        return f"{RECORD_PREFIX}{name}.md"
-
-    @classmethod
-    def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
-        id_part, _, filename_part = stem.partition("_")
-        row_id, filename = (int(id_part), filename_part or None) if id_part.isdigit() else (None, stem)
-        values = {"filename": filename}
-        if cls.NAME_COLUMN and filename:
-            values[cls.NAME_COLUMN] = filename
-        return row_id, values
-
-
-class Location(MarkdownBase):
+class Location(TextBase):
 
     __tablename__ = "location"
 
@@ -226,7 +180,7 @@ class Location(MarkdownBase):
     parent_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("location.id"), sort_order=220)
 
     # 位置は**一つの座標系だけ**で持つ。経度・緯度・高度で持ち、
-    # **どこを原点とするかは星ごとに決めて、その星の md に書く**。
+    # **どこを原点とするかは星ごとに決めて、その星の text に書く**。
     location_world: Mapped[float | None] = mapped_column(DECIMAL, comment="世界線番号 W", sort_order=230)
     location_planet: Mapped[int | None] = mapped_column(Integer, comment="惑星番号 P", sort_order=240)
     location_longitude: Mapped[float | None] = mapped_column(DECIMAL, comment="経度。基準の子午線から東へ何度(西は負)", sort_order=250)
@@ -263,8 +217,6 @@ class Location(MarkdownBase):
         remote_side="Location.id", viewonly=True, lazy="noload")
     children: Mapped[list[Location]] = relationship(viewonly=True)
 
-    NAME_COLUMN = "name"
-
 
 class EventSeededMixin:
     event_seeded: Mapped[bool] = mapped_column(
@@ -281,14 +233,14 @@ class MemeSeededMixin:
 
 
 class FactCheckMixin:
-    TEXT_SECTIONS = ("text", "fact_check")
+    TEXT_COLUMNS = ("text", "fact_check")
 
     fact_check: Mapped[str | None] = mapped_column(
         String, nullable=True, comment="AI が Dラボ・ネット検索で検めた妥当性と補足。空ならまだ検めていない",
         sort_order=10010)
 
 
-class Event(EventSeededMixin, MemeSeededMixin, MarkdownBase):
+class Event(EventSeededMixin, MemeSeededMixin, TextBase):
 
     __tablename__ = "event"
 
@@ -364,7 +316,7 @@ class MemeCategory(enum.StrEnum):
 MEME_CATEGORIES = tuple(category.value for category in MemeCategory)
 
 
-class Meme(FactCheckMixin, MarkdownBase):
+class Meme(FactCheckMixin, TextBase):
     """ミームは移り変わり・伝染していくものなので、どの元から抜き出したか、どの人物が持つかは持たない
     (元の側の `meme_seeded` で、抜き出し済みかだけを管理する)。
     """
@@ -383,10 +335,12 @@ class Meme(FactCheckMixin, MarkdownBase):
         sort_order=205)
 
 
-class Oracle(FactCheckMixin, MemeSeededMixin, MarkdownBase):
+class Oracle(FactCheckMixin, MemeSeededMixin, TextBase):
     """著者自身の創作・AI についての覚え書き。物語のデータではない。"""
 
     __tablename__ = "oracle"
+
+    title: Mapped[str | None] = mapped_column(String, comment="題。覚え書きを呼ぶ名前", sort_order=200)
 
 
 CHARACTER_KIND_PERSON = "人物"
@@ -425,7 +379,7 @@ def check_personality(data) -> None:
             f"性格は {'/'.join(PERSONALITY_LEVELS)} のいずれか: {bad}")
 
 
-class Character(EventSeededMixin, MemeSeededMixin, MarkdownBase):
+class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
@@ -450,10 +404,8 @@ class Character(EventSeededMixin, MemeSeededMixin, MarkdownBase):
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
     # 出自(生まれの場所)は別列を持たず、CharacterPlace の一番古い行として表す。
-    # 名字・体格・口調・性格は期間ごとに CharacterParameter が持ち、md では `# data` の parameters に並ぶ。
+    # 名字・体格・口調・性格は期間ごとに CharacterParameter が持ち、入口では `parameters` の配列で出し入れする。
     CHILD_LISTS = ("parameters",)
-
-    NAME_COLUMN = "name"
 
     def parameters_at(self, time=None) -> dict:
         return resolve_parameters(self.parameters, time)
@@ -565,7 +517,7 @@ class CharacterPlace(Base):
     place: Mapped[Location] = relationship(lazy="noload")
 
 
-class CharacterRelation(MarkdownBase):
+class CharacterRelation(TextBase):
     """`character_id_1` から見た `character_id_2` との関係を一行で持つ。"""
 
     __tablename__ = "character_relation"
@@ -584,16 +536,13 @@ class CharacterRelation(MarkdownBase):
     end: Mapped[Stamp | None] = mapped_column(
         StampType, comment="この関係が終わる時。空なら続いている", sort_order=140)
 
-    def default_filename(self) -> str | None:
-        return f"{self.character_id_1}_{self.character_id_2}"
-
     character_1: Mapped["Character"] = relationship(
         foreign_keys="CharacterRelation.character_id_1", lazy="noload")
     character_2: Mapped["Character"] = relationship(
         foreign_keys="CharacterRelation.character_id_2", lazy="noload")
 
 
-class Idea(FactCheckMixin, MemeSeededMixin, MarkdownBase):
+class Idea(FactCheckMixin, MemeSeededMixin, TextBase):
     __tablename__ = "idea"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
@@ -614,17 +563,16 @@ class Idea(FactCheckMixin, MemeSeededMixin, MarkdownBase):
         StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=240)
 
     parent_idea_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("idea.id"), comment="上位のアイデア。置いたディレクトリで決まる", sort_order=250)
+        Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
     alias_of_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), index=True,
         comment="作中での呼び名であるときの、本質のアイデア。呼び名は location_id・start・end の場所と時代で使い、"
                 "空の列はどこでも・いつでも使う。当てはまる呼び名が無ければ本質の name をそのまま使う",
         sort_order=260)
 
-    NAME_COLUMN = "name"
 
 
-class Story(EventSeededMixin, MarkdownBase):
+class Story(EventSeededMixin, TextBase):
 
     __tablename__ = "story"
 
@@ -648,20 +596,15 @@ class Story(EventSeededMixin, MarkdownBase):
         back_populates="story", lazy="noload",
         order_by="[Plot.start.asc().nulls_last(), Plot.id.asc()]")
 
-    NAME_COLUMN = "name"
-    MARKDOWN_OWN_DIRECTORY = True
 
-
-class Plot(EventSeededMixin, MarkdownBase):
+class Plot(EventSeededMixin, TextBase):
     """話の枠(プロット)。種・時刻・視点・場所までを持ち、本文は `Episode` が持つ。"""
 
     __tablename__ = "plot"
 
-    TEXT_SECTIONS = ("key",)
-    MARKDOWN_PARENT = "story"
-    NAME_COLUMN = "title"
+    TEXT_COLUMNS = ("key",)
 
-    # 本文は Episode へ分けたので、MarkdownBase の text 列を持たない。
+    # 本文は Episode へ分けたので、TextBase の text 列を持たない。
     # 古い書き方(`plot.text`)を黙って素通りさせないよう、読み書きとも止める
     @property
     def text(self):
@@ -692,7 +635,7 @@ class Plot(EventSeededMixin, MarkdownBase):
 
     key: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
-        comment="キーテキスト。作者が入れる、AI 生成前の種。md では `# key` の節",
+        comment="キーテキスト。作者が入れる、AI 生成前の種",
         sort_order=9990)
 
     episode: Mapped["Episode | None"] = relationship(
@@ -703,34 +646,11 @@ class Plot(EventSeededMixin, MarkdownBase):
         """本文。まだ書いていない話(枠)は空文字"""
         return self.episode.text if self.episode is not None else ""
 
-    def default_filename(self) -> str | None:
-        return self.title or None
 
-    @property
-    def markdown_name(self) -> str:
-        head = f"{self.story_id}_{plot_stamp_stem(self.start)}"
-        return f"{head}_{self.title.replace('/', '／')}.md" if self.title else f"{head}.md"
-
-    @classmethod
-    def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
-        # 名前は id を持たない({story_id}_{start}_{title})。行の取り違えを避けるため id は `# data` から読む
-        story_part, _, rest = stem.partition("_")
-        if not story_part.isdigit():
-            return super().parse_markdown_stem(stem)
-        stamp_part, _, title_part = rest.partition("_")
-        if stamp_part == "" or _PLOT_STAMP.match(stamp_part):
-            return None, {"story_id": int(story_part), "start": parse_plot_stamp_stem(stamp_part),
-                          "title": title_part or None}
-        return None, {"story_id": int(story_part), "title": rest or None}
-
-
-class Episode(MarkdownBase):
-    """話の本文。プロット(`Plot`)とは分けて生成し、プロットの md の隣に同じ名前の .txt で本文だけを出す。"""
+class Episode(TextBase):
+    """話の本文。プロット(`Plot`)とは分けて生成し、一話につき一行で持つ。"""
 
     __tablename__ = "episode"
-
-    MARKDOWN_PARENT = "plot"
-    BODY_FILE_EXTENSION = ".txt"
 
     plot_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("plot.id"), unique=True, index=True, nullable=False, sort_order=200)
@@ -747,31 +667,9 @@ class Episode(MarkdownBase):
         self.letters = len(value or "")
         return value
 
-    @classmethod
-    def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
-        # 名前はプロットの md と同じなので、行は置き場所(隣のプロット)から決める
-        return None, {}
-
-
-_PLOT_STAMP = re.compile(r"^\d+-\d{2}-\d{2}-\d{4}$")
-
-
-def plot_stamp_stem(start: Stamp | None) -> str:
-    """プロットの md 名の時刻。`/` `:` を名前に置けないので `年-月-日-時分` にする。空なら空文字"""
-    if start is None:
-        return ""
-    return f"{start.year}-{start.month:02d}-{start.day:02d}-{start.hour:02d}{start.minute:02d}"
-
-
-def parse_plot_stamp_stem(stem: str) -> Stamp | None:
-    if not stem:
-        return None
-    year, month, day, clock = stem.split("-")
-    return Stamp(int(year), int(month), int(day), int(clock[:2]), int(clock[2:]))
-
 
 class EpisodeSummary(Base):
-    """話の本文(`Episode`)の概要と文体の覚え書き。md には出さない。"""
+    """話の本文(`Episode`)の概要と文体の覚え書き。"""
 
     __tablename__ = "episode_summary"
 
@@ -785,7 +683,7 @@ class EpisodeSummary(Base):
 
 
 class EventIdea(Base):
-    """出来事の本文が踏まえたアイデア。md には出さない。"""
+    """出来事の本文が踏まえたアイデア。"""
 
     __tablename__ = "event_idea"
     __table_args__ = (UniqueConstraint("event_id", "idea_id"),)
@@ -795,7 +693,7 @@ class EventIdea(Base):
 
 
 class PlotIdea(Base):
-    """プロットの種から引いて本文が踏まえたアイデア。md には出さない。"""
+    """プロットの種から引いて本文が踏まえたアイデア。"""
 
     __tablename__ = "plot_idea"
     __table_args__ = (UniqueConstraint("plot_id", "idea_id"),)
@@ -805,7 +703,7 @@ class PlotIdea(Base):
 
 
 class CharacterIdea(Base):
-    """人物・対象の説明が踏まえたアイデア。md には出さない。"""
+    """人物・対象の説明が踏まえたアイデア。"""
 
     __tablename__ = "character_idea"
     __table_args__ = (UniqueConstraint("character_id", "idea_id"),)
@@ -820,7 +718,6 @@ IDEA_LINK_MODELS = {Event: EventIdea, Plot: PlotIdea, Character: CharacterIdea}
 # 既定値は持たない。場所を取り違えると sqlite が空の db を黙って作るので、未設定なら import で止める。
 WORLD_DIR = os.environ["DEM_WORLD_DIR"]
 NOVEL_DB_PATH = os.environ.get("DEM_NOVEL_DB_PATH", os.path.join(WORLD_DIR, "novel.db"))
-WORLDS_ROOT = os.environ.get("DEM_WORLDS_DIR", os.path.join(WORLD_DIR, "worlds"))
 DB_PATH = os.environ.get("DEM_DB_PATH", NOVEL_DB_PATH)
 
 

@@ -233,7 +233,6 @@ def test_unmatched_term_becomes_an_unconfirmed_idea_of_the_world(session, places
     assert candidate.confirmed == ConfirmStatus.PENDING
     assert candidate.location_id == places["world"].id
     assert candidate.start == Stamp(2090) and candidate.end == Stamp(2150)
-    assert candidate.directory_path == "技術"
     # 時期のはっきりしない語は、出来事の時刻を入れずに空のままにする
     assert undated.start is None and undated.end is None
 

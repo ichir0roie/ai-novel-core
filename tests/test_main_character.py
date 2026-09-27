@@ -1,5 +1,4 @@
-from ai.time_keeper import event_progression_generator, main
-from ai.time_keeper._export import export_step
+from ai.time_keeper import event_progression_generator
 from ai.time_keeper.random_character_generator import _generate_one
 from data_access_logic.query.base import character_active_condition
 from db.schema import Character, CharacterPlace, Location, Story
@@ -63,28 +62,3 @@ def test_character_without_the_flag_is_a_sub_character(session):
     session.commit()
 
     assert record.main_character is False
-
-
-def test_export_step_writes_worlds_root(session, tmp_path):
-    place = Location(name="村", kind="村", text="", start=Stamp(2000))
-    session.add(place)
-    session.commit()
-
-    root = str(tmp_path / "worlds")
-    export_step("test", root=root)
-
-    import os
-    assert os.path.isdir(os.path.join(root, "location"))
-
-
-def test_loop_time_does_not_export_per_step(session, monkeypatch):
-    place = _place(session)
-    _character(session, place, main_character=False)
-
-    calls: list[str] = []
-    monkeypatch.setattr(main, "export_step", lambda when: calls.append(when))
-    monkeypatch.setattr(main.random, "randint", lambda a, b: 1)
-
-    main.loop_time(MockAIClient(seed=2), start_time=Stamp(2100), max_days=3)
-
-    assert calls == []

@@ -1,4 +1,3 @@
-import os
 
 import pytest
 
@@ -10,7 +9,6 @@ from tool.map.geometry import (
     angular_distance_deg, bearing_deg, bearing_name, distance_km, planet_radius_km,
 )
 from tool.map.layout import fit_frame, place_labels, text_width
-from tool.markdown.export_db import export_db
 
 EARTH_AREA = 510_072_000
 TOKYO = (139.69, 35.69)
@@ -65,11 +63,10 @@ def test_place_labels_avoid_each_other():
 
 @pytest.fixture
 def star(session):
-    line = Location(name="世界線", kind="世界線", text="", directory_path="線")
+    line = Location(name="世界線", kind="世界線", text="")
     session.add(line)
     session.flush()
-    planet = Location(name="星", kind="星", text="", parent_id=line.id, area=EARTH_AREA,
-                      directory_path="線/星")
+    planet = Location(name="星", kind="星", text="", parent_id=line.id, area=EARTH_AREA)
     session.add(planet)
     session.flush()
     continent = Location(name="大陸", kind="大陸", text="", parent_id=planet.id, location_planet=planet.id)
@@ -79,8 +76,7 @@ def star(session):
 
     def country(name, parent, lon, lat, alt, kind="国"):
         row = Location(name=name, kind=kind, text="", parent_id=parent.id, location_planet=planet.id,
-                       location_longitude=lon, location_latitude=lat, location_altitude=alt,
-                       directory_path="線/星/地域")
+                       location_longitude=lon, location_latitude=lat, location_altitude=alt)
         session.add(row)
         return row
 
@@ -123,34 +119,3 @@ def test_list_neighbors_rejects_place_without_coordinates(star):
         ListNeighbors(star["continent"]).run()
     with pytest.raises(NotFoundError):
         ListNeighbors(999999).run()
-
-
-def test_export_writes_maps_next_to_planet(star, tmp_path):
-    root = str(tmp_path / "worlds")
-    export_db(root)
-
-    svg_path = os.path.join(root, "location", "線", "星", f"{star['planet']}_map.svg")
-    html_path = os.path.join(root, "maps", "map.html")
-    assert os.path.exists(svg_path) and os.path.exists(html_path)
-
-    with open(svg_path, encoding="utf-8") as f:
-        svg = f.read()
-    assert svg.startswith("<svg") and "東京 (+40 m)" in svg and "空の都 (+20,040 m)" in svg
-    assert "区分ごとの色" in svg and "(親なし)" not in svg
-    assert '<circle cx=' in svg and 'width="8.0" height="8.0"' in svg  # 国と町の印
-
-    with open(html_path, encoding="utf-8") as f:
-        html = f.read()
-    assert '"name": "ロンドン"' in html and '"radius_km"' in html
-    assert '"category": "国"' in html and '"category": "都市"' in html
-    assert "</script>" in html and "<\\/" not in svg
-
-
-def test_export_without_coordinates_writes_empty_html(session, tmp_path):
-    session.add(Location(name="ただの場所", kind="村", text=""))
-    session.commit()
-    root = str(tmp_path / "worlds")
-    export_db(root)
-    assert not [n for n in os.listdir(os.path.join(root, "location")) if n.endswith(".svg")]
-    with open(os.path.join(root, "maps", "map.html"), encoding="utf-8") as f:
-        assert "const PLANETS = [];" in f.read()

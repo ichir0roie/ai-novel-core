@@ -4,8 +4,7 @@ import os
 import pytest
 
 from tool.test import TEST_DB_PATH  # noqa: F401  schema より先に読む(db を novel.test.db に固定)
-from db.schema import Base, create_db, engine, get_env_session, get_test_session  # noqa: E402
-from tool.markdown import export_db, import_db, sync_db  # noqa: E402
+from db.schema import Base, create_db, engine, get_env_session  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.engine import Engine  # noqa: E402
 
@@ -32,16 +31,6 @@ def clean_tables():
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())
-    yield
-
-
-@pytest.fixture(autouse=True)
-def sync_tools_use_test_db(monkeypatch):
-    """`import_db` / `export_db` / `sync_db` は novel.db 固定なので、テスト中だけ novel.test.db へ向ける。"""
-    monkeypatch.setattr(export_db, "get_novel_session", get_test_session)
-    monkeypatch.setattr(sync_db, "get_novel_session", get_test_session)
-    monkeypatch.setattr(import_db, "get_novel_session", get_test_session)
-    monkeypatch.setattr(import_db, "NOVEL_DB_PATH", TEST_DB_PATH)
     yield
 
 

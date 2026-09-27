@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GUI が扱うテーブル。md に出るテーブル(`MarkdownBase`)を、確定・修正の入口と組にして持つ。
+"""GUI が扱うテーブル。本文を持つテーブル(`TextBase`)を、確定・修正の入口と組にして持つ。
 
 GUI からの書き込みは、入口の `execute(session)`(検証と db への書き込みだけ)を呼ぶ。
 `run()` は呼ばない。`run()` は確定のあとに AI(`claude -p`)で要約・ミーム・検証を作る段を持ち、
@@ -61,7 +61,7 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("location", "場所", Location, CommitPlace, UpdatePlace, "name", ("name", "text")),
     TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, "name", ("name", "text"), reviewable=True),
     TableSpec("meme", "ミーム", Meme, CommitMeme, UpdateMeme, None, ("text",), reviewable=True),
-    TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, None, ("text",)),
+    TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, "title", ("title", "text")),
 )
 
 TABLE_BY_NAME: dict[str, TableSpec] = {spec.name: spec for spec in TABLES}

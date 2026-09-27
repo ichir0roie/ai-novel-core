@@ -142,20 +142,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/sync": {
+    "/api/maps": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Sync
-         * @description db と `worlds/` の md を同期する(`SyncDb`)。GUI で直した分を md に出し、手で直した md を取り込む。
+         * Maps
+         * @description 星ごとの地図(html)。場所の座標・領域から描く
          */
-        post: operations["sync_api_sync_post"];
+        get: operations["maps_api_maps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/maps/{planet_id}.svg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Map Svg */
+        get: operations["map_svg_api_maps__planet_id__svg_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Relations
+         * @description 人物相関図(html)
+         */
+        get: operations["relations_api_relations_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -682,7 +719,7 @@ export interface operations {
             };
         };
     };
-    sync_api_sync_post: {
+    maps_api_maps_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -697,9 +734,58 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "text/html": string;
+                };
+            };
+        };
+    };
+    map_svg_api_maps__planet_id__svg_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planet_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    relations_api_relations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
         };

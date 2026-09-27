@@ -17,7 +17,7 @@ class ColumnMeta(BaseModel):
     type: ColumnType
     nullable: bool
     required: bool
-    # md の節になる長い本文か(フォームでは大きな textarea)
+    # 長い本文の列か(フォームでは大きな textarea)
     section: bool = False
     choices: list[str] | None = None
     # 他のテーブルの id を指すなら、そのテーブル名

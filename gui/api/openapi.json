@@ -497,20 +497,74 @@
         }
       }
     },
-    "/api/sync": {
-      "post": {
-        "summary": "Sync",
-        "description": "db と `worlds/` の md を同期する(`SyncDb`)。GUI で直した分を md に出し、手で直した md を取り込む。",
-        "operationId": "sync_api_sync_post",
+    "/api/maps": {
+      "get": {
+        "summary": "Maps",
+        "description": "星ごとの地図(html)。場所の座標・領域から描く",
+        "operationId": "maps_api_maps_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maps/{planet_id}.svg": {
+      "get": {
+        "summary": "Map Svg",
+        "operationId": "map_svg_api_maps__planet_id__svg_get",
+        "parameters": [
+          {
+            "name": "planet_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Planet Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Sync Api Sync Post"
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/relations": {
+      "get": {
+        "summary": "Relations",
+        "description": "人物相関図(html)",
+        "operationId": "relations_api_relations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }

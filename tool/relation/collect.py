@@ -17,8 +17,7 @@ def character_dict(character) -> dict:
         "id": character.id, "name": character.name, "kind": character.kind,
         "sex": character.parameters_at()["sex"],
         "start": _year(character.start), "end": _year(character.end),
-        "path": (f"{character.directory_path}/{character.markdown_name}"
-                 if character.directory_path else character.markdown_name),
+        "link": f"/tables/character/{character.id}",
     }
 
 

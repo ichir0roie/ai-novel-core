@@ -70,8 +70,6 @@ export const decideReview = (table: string, id: number, decision: ConfirmStatus,
     body: JSON.stringify({ decision, changes }),
   });
 
-export const runSync = () => api<Record<string, unknown>>("/api/sync", { method: "POST" });
-
 /** 読んだときの値から変わった欄だけを返す(入口は「渡した欄だけ直す」)。 */
 export function diff(initial: Rec, current: Rec): Rec {
   const changes: Rec = {};

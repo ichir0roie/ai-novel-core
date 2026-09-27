@@ -158,7 +158,7 @@ function renderGraph() {
     const c = byId.get(+g.dataset.id);
     g.onmousedown = e => { state.drag = { id: c.id, x: e.clientX, y: e.clientY, moved: false }; e.preventDefault(); };
     g.onmousemove = e => showTip(e, [`${c.name} (${c.kind ?? ""})`, c.sex ? `性別: ${c.sex}` : null,
-      spanText(c) ? `期間: ${spanText(c)}` : null, `記事: ${c.path}`]);
+      spanText(c) ? `期間: ${spanText(c)}` : null]);
     g.onmouseleave = () => { tip.style.display = "none"; };
   });
   graph.querySelectorAll(".edge").forEach(g => {
@@ -201,7 +201,7 @@ function renderSide() {
     side.innerHTML = `<h2>${esc(c.name)} <span class="hint">(${esc(c.kind ?? "")})</span></h2>` +
       `<dl>` + (c.sex ? `<dt>性別</dt><dd>${esc(c.sex)}</dd>` : "") +
       (spanText(c) ? `<dt>期間</dt><dd>${esc(spanText(c))}</dd>` : "") +
-      `<dt>記事</dt><dd>../character/${esc(c.path)}</dd></dl>` +
+      `<dt>記事</dt><dd><a href="${esc(c.link)}" target="_blank">GUI で開く</a></dd></dl>` +
       (mine.length ? table(mine.map(r => relationRow(r, sel.id)), ["", "相手", "関係", "期間", ""]) : `<p class="hint">関係は無い。</p>`);
   } else {
     side.innerHTML = `<h2>${esc(nameOf(sel.character_id_1))} → ${esc(nameOf(sel.character_id_2))}</h2>` +

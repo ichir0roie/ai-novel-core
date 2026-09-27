@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""`MarkdownBase.CHILD_LISTS` に挙げた子の行を、辞書の配列として出し入れする。
+"""`TextBase.CHILD_LISTS` に挙げた子の行を、辞書の配列として出し入れする。
 
-md の `# data` と、確定・修正の入口の両方がこれを通す。辞書には id と親への外部キーを持たせない
+確定・修正の入口と GUI の API がこれを通す。辞書には id と親への外部キーを持たせない
 (行は配列の並びで決まる)。
 """
 from __future__ import annotations

@@ -2,12 +2,12 @@
 """`db/schema.py` の列の定義から、フォームを組み立てるための情報を作る。列の定義はここでは持たない。"""
 from __future__ import annotations
 
-from sqlalchemy import JSON, Boolean, Integer, Numeric, String, func, select
+from sqlalchemy import JSON, Boolean, Integer, Numeric, func, select
 from sqlalchemy.orm import Session
 
 from db.child_lists import child_columns, child_model
 from db.schema import (
-    CONFIRM_STATUSES, MEME_CATEGORIES, ConfirmStatusType, Meme, PolygonType, StampType,
+    CONFIRM_STATUSES, MEME_CATEGORIES, ConfirmStatusType, PolygonType, StampType,
 )
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
@@ -20,7 +20,7 @@ _LABELS = {
     "character_id": "人物", "character_id_1": "人物 1", "character_id_2": "人物 2", "relation": "関係",
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
     "place_id": "場所", "viewpoint": "視点", "place": "場所(自由記述)", "synced": "同期済み",
-    "directory_path": "置き場所(ディレクトリ)", "filename": "ファイル名", "fact_check": "検証結果",
+    "title": "題", "fact_check": "検証結果",
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
     "alias_of_idea_id": "呼び名の本質", "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
     "letters": "字数", "character_ids": "当事者", "polygon": "領域(polygon)", "area": "広さ",
@@ -76,7 +76,7 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
         extras.append(ColumnMeta(key="letters", label=_LABELS["letters"], type="integer", nullable=False,
                                  required=False, readonly=True, comment="本文の字数。本文から数える"))
         extras.append(ColumnMeta(key="text", label=_LABELS["text"], type="string", nullable=True,
-                                 required=False, section=True, comment="本文(episode)。話の md の隣の .txt"))
+                                 required=False, section=True, comment="本文(episode テーブル)。話一つにつき一つ"))
     if spec.name == "character":
         extras.append(ColumnMeta(key="place_id", label="出自(場所)", type="integer", nullable=True,
                                  required=False, references="location", create_only=True,
@@ -90,7 +90,7 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
 
 def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     model = spec.model
-    sections = set(model.TEXT_SECTIONS)
+    sections = set(model.TEXT_COLUMNS)
     plain, long = [], []
     for column in model.__table__.columns:
         meta = column_meta(spec.name, model, column, section=column.key in sections)

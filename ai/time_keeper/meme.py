@@ -217,7 +217,6 @@ def _classify(session: Session, ai: AIClient) -> int:
             if 1 <= number <= len(batch) and item.get("category") in MEME_CATEGORIES:
                 meme = batch[number - 1][0]
                 meme.category = item["category"]
-                meme.directory_path = meme.directory_path or item["category"]
         session.commit()
     classified = sum(1 for meme in unclassified if meme.category)
     if unclassified:
@@ -254,7 +253,7 @@ def refresh(session: Session, ai: AIClient) -> int:
             _unseed(session, batch, failed)
             continue
         for text, category in fresh:
-            session.add(Meme(text=text, category=category, directory_path=category))
+            session.add(Meme(text=text, category=category))
             added += 1
         for record, _, _ in batch:
             if record not in failed:

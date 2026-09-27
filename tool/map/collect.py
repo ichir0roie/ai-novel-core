@@ -14,7 +14,7 @@ def _num(value):
 
 
 def planet_dict(planet) -> dict:
-    return {"id": planet.id, "name": planet.name, "directory_path": planet.directory_path,
+    return {"id": planet.id, "name": planet.name,
             "area": _num(planet.area), "radius_km": planet_radius_km(planet.area)}
 
 
@@ -34,7 +34,7 @@ def point_dict(session, place) -> dict:
         "sample_era": place.sample_era,
         "start": str(place.start) if place.start else None,
         "end": str(place.end) if place.end else None,
-        "path": f"{place.directory_path}/{place.id}.md" if place.directory_path else f"{place.id}.md",
+        "link": f"/tables/location/{place.id}",
     }
 
 
