@@ -49,6 +49,17 @@ def read_text(path: str) -> str:
         return f.read()
 
 
+def _rename_legacy_tables(entries: dict[str, dict]) -> None:
+    # 話の枠 episode → plot、本文 episode_text → episode の改名より前の台帳を読み替える。
+    # 台帳は git に載らないので、改名済みの db だけが pull で届き、マイグレーションが台帳に回らないことがある。
+    # 枠は .md・本文は .txt なので、古い "episode" はパスの拡張子で枠と決まる
+    for key, entry in entries.items():
+        if entry["table"] == "episode" and key.endswith(".md"):
+            entry["table"] = "plot"
+        elif entry["table"] == "episode_text":
+            entry["table"] = "episode"
+
+
 class Manifest:
     def __init__(self, root: str):
         self.root = os.path.abspath(root)
@@ -58,6 +69,7 @@ class Manifest:
         if self.exists:
             with open(path, encoding="utf-8") as f:
                 self.entries = json.load(f)
+            _rename_legacy_tables(self.entries)
 
     def key(self, path: str) -> str:
         return os.path.relpath(os.path.abspath(path), self.root).replace(os.sep, "/")

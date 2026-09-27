@@ -583,35 +583,35 @@ class Story(EventSeededMixin, MarkdownBase):
     start: Mapped[Stamp | None] = mapped_column(StampType, comment="立つ年", sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
-    episodes: Mapped[list["Episode"]] = relationship(
+    plots: Mapped[list["Plot"]] = relationship(
         back_populates="story", lazy="noload",
-        order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
+        order_by="[Plot.start.asc().nulls_last(), Plot.id.asc()]")
 
     NAME_COLUMN = "name"
     MARKDOWN_OWN_DIRECTORY = True
 
 
-class Episode(EventSeededMixin, MarkdownBase):
-    """話の枠。種・時刻・視点・場所までを持ち、本文は `EpisodeText` が持つ。"""
+class Plot(EventSeededMixin, MarkdownBase):
+    """話の枠(プロット)。種・時刻・視点・場所までを持ち、本文は `Episode` が持つ。"""
 
-    __tablename__ = "episode"
+    __tablename__ = "plot"
 
     TEXT_SECTIONS = ("key",)
     MARKDOWN_PARENT = "story"
     NAME_COLUMN = "title"
 
-    # 本文は EpisodeText へ分けたので、MarkdownBase の text 列を持たない。
-    # 古い書き方(`episode.text`)を黙って素通りさせないよう、読み書きとも止める
+    # 本文は Episode へ分けたので、MarkdownBase の text 列を持たない。
+    # 古い書き方(`plot.text`)を黙って素通りさせないよう、読み書きとも止める
     @property
     def text(self):
-        raise AttributeError("話の本文は Episode.body(書き込みは EpisodeText)にある")
+        raise AttributeError("話の本文は Plot.body(書き込みは Episode)にある")
 
     @text.setter
     def text(self, _value):
-        raise AttributeError("話の本文は EpisodeText に書く")
+        raise AttributeError("話の本文は Episode に書く")
 
     story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), sort_order=200)
-    story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
+    story: Mapped[Story] = relationship(back_populates="plots", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
     synced: Mapped[bool] = mapped_column(
@@ -634,20 +634,20 @@ class Episode(EventSeededMixin, MarkdownBase):
         comment="キーテキスト。作者が入れる、AI 生成前の種。md では `# key` の節",
         sort_order=9990)
 
-    episode_text: Mapped["EpisodeText | None"] = relationship(
-        back_populates="episode", lazy="selectin", uselist=False)
+    episode: Mapped["Episode | None"] = relationship(
+        back_populates="plot", lazy="selectin", uselist=False)
 
     @property
     def body(self) -> str:
         """本文。まだ書いていない話(枠)は空文字"""
-        return self.episode_text.text if self.episode_text is not None else ""
+        return self.episode.text if self.episode is not None else ""
 
     def default_filename(self) -> str | None:
         return self.title or None
 
     @property
     def markdown_name(self) -> str:
-        head = f"{self.story_id}_{episode_stamp_stem(self.start)}"
+        head = f"{self.story_id}_{plot_stamp_stem(self.start)}"
         return f"{head}_{self.title.replace('/', '／')}.md" if self.title else f"{head}.md"
 
     @classmethod
@@ -657,23 +657,23 @@ class Episode(EventSeededMixin, MarkdownBase):
         if not story_part.isdigit():
             return super().parse_markdown_stem(stem)
         stamp_part, _, title_part = rest.partition("_")
-        if stamp_part == "" or _EPISODE_STAMP.match(stamp_part):
-            return None, {"story_id": int(story_part), "start": parse_episode_stamp_stem(stamp_part),
+        if stamp_part == "" or _PLOT_STAMP.match(stamp_part):
+            return None, {"story_id": int(story_part), "start": parse_plot_stamp_stem(stamp_part),
                           "title": title_part or None}
         return None, {"story_id": int(story_part), "title": rest or None}
 
 
-class EpisodeText(MarkdownBase):
-    """話の本文。話(`Episode`)の枠とは分けて生成し、話の md の隣に同じ名前の .txt で本文だけを出す。"""
+class Episode(MarkdownBase):
+    """話の本文。プロット(`Plot`)とは分けて生成し、プロットの md の隣に同じ名前の .txt で本文だけを出す。"""
 
-    __tablename__ = "episode_text"
+    __tablename__ = "episode"
 
-    MARKDOWN_PARENT = "episode"
+    MARKDOWN_PARENT = "plot"
     BODY_FILE_EXTENSION = ".txt"
 
-    episode_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("episode.id"), unique=True, index=True, nullable=False, sort_order=200)
-    episode: Mapped[Episode] = relationship(back_populates="episode_text", lazy="noload")
+    plot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("plot.id"), unique=True, index=True, nullable=False, sort_order=200)
+    plot: Mapped[Plot] = relationship(back_populates="episode", lazy="noload")
     letters: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=210)
     model: Mapped[str | None] = mapped_column(
@@ -688,21 +688,21 @@ class EpisodeText(MarkdownBase):
 
     @classmethod
     def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
-        # 名前は話の md と同じなので、行は置き場所(隣の話)から決める
+        # 名前はプロットの md と同じなので、行は置き場所(隣のプロット)から決める
         return None, {}
 
 
-_EPISODE_STAMP = re.compile(r"^\d+-\d{2}-\d{2}-\d{4}$")
+_PLOT_STAMP = re.compile(r"^\d+-\d{2}-\d{2}-\d{4}$")
 
 
-def episode_stamp_stem(start: Stamp | None) -> str:
-    """話の md 名の時刻。`/` `:` を名前に置けないので `年-月-日-時分` にする。空なら空文字"""
+def plot_stamp_stem(start: Stamp | None) -> str:
+    """プロットの md 名の時刻。`/` `:` を名前に置けないので `年-月-日-時分` にする。空なら空文字"""
     if start is None:
         return ""
     return f"{start.year}-{start.month:02d}-{start.day:02d}-{start.hour:02d}{start.minute:02d}"
 
 
-def parse_episode_stamp_stem(stem: str) -> Stamp | None:
+def parse_plot_stamp_stem(stem: str) -> Stamp | None:
     if not stem:
         return None
     year, month, day, clock = stem.split("-")
@@ -710,6 +710,8 @@ def parse_episode_stamp_stem(stem: str) -> Stamp | None:
 
 
 class EpisodeSummary(Base):
+    """話の本文(`Episode`)の概要と文体の覚え書き。md には出さない。"""
+
     __tablename__ = "episode_summary"
 
     story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), index=True, sort_order=100)
@@ -731,13 +733,13 @@ class EventIdea(Base):
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
-class EpisodeIdea(Base):
-    """話の本文が踏まえたアイデア。md には出さない。"""
+class PlotIdea(Base):
+    """プロットの種から引いて本文が踏まえたアイデア。md には出さない。"""
 
-    __tablename__ = "episode_idea"
-    __table_args__ = (UniqueConstraint("episode_id", "idea_id"),)
+    __tablename__ = "plot_idea"
+    __table_args__ = (UniqueConstraint("plot_id", "idea_id"),)
 
-    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
+    plot_id: Mapped[int] = mapped_column(Integer, ForeignKey("plot.id"), index=True, sort_order=100)
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
@@ -751,7 +753,7 @@ class CharacterIdea(Base):
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
-IDEA_LINK_MODELS = {Event: EventIdea, Episode: EpisodeIdea, Character: CharacterIdea}
+IDEA_LINK_MODELS = {Event: EventIdea, Plot: PlotIdea, Character: CharacterIdea}
 
 
 # 既定値は持たない。場所を取り違えると sqlite が空の db を黙って作るので、未設定なら import で止める。

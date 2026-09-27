@@ -9,7 +9,7 @@ from sqlalchemy import select
 from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
 from data_access_logic.query import event_seed_query
-from db.schema import Character, Episode, Event, EventSeed, Session, Story
+from db.schema import Character, Plot, Event, EventSeed, Session, Story
 
 _SYSTEM_PROMPT = """\
 あなたは物語の編集者です。
@@ -68,12 +68,12 @@ def _plot_section(text: str | None) -> str:
 # 元のテーブルと、そこから種を抜き出す本文。話は種(`key`)を、無ければ本文を使う。
 _SOURCE_TEXTS = (
     (Story, lambda story: story.text),
-    (Episode, lambda episode: (episode.key or "").strip() or episode.body),
+    (Plot, lambda plot: (plot.key or "").strip() or plot.body),
     (Character, lambda character: _plot_section(character.text)),
     (Event, lambda event: event.text),
 )
 
-_Pending = tuple[Story | Episode | Character | Event, str]
+_Pending = tuple[Story | Plot | Character | Event, str]
 
 
 def _batches(items: list[tuple[object, str]], limit: int) -> list[list]:

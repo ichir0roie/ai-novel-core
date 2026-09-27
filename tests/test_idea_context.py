@@ -13,7 +13,7 @@ from ai.claude_code.interface.world.search_ideas import SearchIdeas
 from ai.time_keeper import character_event_generator, episode_summary, idea_context, idea_search, meme
 from ai.time_keeper import random_character_generator
 from db.schema import (
-    Character, CharacterIdea, CharacterPlace, Episode, EpisodeIdea, Event, EventIdea, Idea, Location, Story,
+    Character, CharacterIdea, CharacterPlace, Plot, PlotIdea, Event, EventIdea, Idea, Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -325,7 +325,7 @@ def test_resolve_terms_entry_adds_candidates_and_link_ideas_links_them(session, 
 
 def test_link_ideas_takes_exactly_one_owner(session):
     with pytest.raises(ValueError):
-        LinkIdeas([], event_id=1, episode_id=1).run()
+        LinkIdeas([], event_id=1, plot_id=1).run()
     with pytest.raises(ValueError):
         LinkIdeas([]).run()
 
@@ -429,14 +429,14 @@ def test_generated_character_is_not_polished_without_ideas(session, places):
     assert ai.calls_for(random_character_generator._POLISH_SCHEMA) == []
 
 
-def test_seeded_episode_is_written_with_the_ideas_of_its_seed(session, places, monkeypatch):
+def test_seeded_plot_is_written_with_the_ideas_of_its_seed(session, places, monkeypatch):
     idea = _idea(session, "寄生型", "悪魔のデータベースにあった治療", location_id=places["world"].id,
                  start=Stamp(2000))
     story = Story(name="村の話", place_id=places["village"].id, text="筋書き", narration="三人称",
                   state="執筆中", start=Stamp(2100, 4, 1), end=Stamp(2300))
     session.add(story)
     session.flush()
-    session.add(Episode(story_id=story.id, title="", key="1. 地下 / カシル / 寄生型を使う",
+    session.add(Plot(story_id=story.id, title="", key="1. 地下 / カシル / 寄生型を使う",
                         synced=False))
     session.commit()
     calls = []
@@ -455,4 +455,4 @@ def test_seeded_episode_is_written_with_the_ideas_of_its_seed(session, places, m
 
     assert "寄生型を使う" in calls[0]["prompt"]
     assert "関係する設定:" in calls[-1]["prompt"] and "悪魔のデータベースにあった治療" in calls[-1]["prompt"]
-    assert [row.idea_id for row in session.query(EpisodeIdea).filter_by(episode_id=record.id)] == [idea.id]
+    assert [row.idea_id for row in session.query(PlotIdea).filter_by(plot_id=record.id)] == [idea.id]

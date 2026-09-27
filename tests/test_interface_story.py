@@ -3,15 +3,15 @@ import pytest
 from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.story.delete_story import DeleteStory
 from ai.claude_code.interface.story.list_stories import ListStories
-from ai.claude_code.interface.story.list_unsynced_episodes import ListUnsyncedEpisodes
+from ai.claude_code.interface.story.list_unsynced_plots import ListUnsyncedPlots
 from ai.claude_code.interface.story.read_brief import ReadBrief
 from ai.claude_code.interface.story.read_cast import ReadCast
-from ai.claude_code.interface.story.read_episodes import ReadEpisodes
+from ai.claude_code.interface.story.read_plots import ReadPlots
 from ai.claude_code.interface.story.read_surroundings import ReadSurroundings
-from ai.claude_code.interface.story.set_episode_synced import SetEpisodeSynced
+from ai.claude_code.interface.story.set_plot_synced import SetPlotSynced
 from ai.claude_code.interface.story.start_story import StartStory
 from data_access_logic.query.common_query import NotFoundError
-from db.schema import Character, CharacterPlace, Episode, EpisodeText, Event, EventCharacter, Location, Story
+from db.schema import Character, CharacterPlace, Plot, Episode, Event, EventCharacter, Location, Story
 from db.stamp import Stamp
 
 
@@ -41,23 +41,23 @@ def world(session):
             "story": story.id, "alice": alice.id, "bell": bell.id}
 
 
-def _episodes(session, story_id, numbers, *, synced=True):
+def _plots(session, story_id, numbers, *, synced=True):
     for number in numbers:
-        session.add(Episode(story_id=story_id, start=Stamp(2100, 1, number), title=f"第{number}話",
-                            synced=synced, episode_text=EpisodeText(text=f"本文{number}")))
+        session.add(Plot(story_id=story_id, start=Stamp(2100, 1, number), title=f"第{number}話",
+                            synced=synced, episode=Episode(text=f"本文{number}")))
     session.commit()
 
 
-def test_list_stories_counts_episodes(session, world):
-    _episodes(session, world["story"], [1, 2])
-    _episodes(session, world["story"], [3], synced=False)
+def test_list_stories_counts_plots(session, world):
+    _plots(session, world["story"], [1, 2])
+    _plots(session, world["story"], [3], synced=False)
 
     stories = ListStories().run()
     assert len(stories) == 1
     assert stories[0]["name"] == "村の話"
     assert stories[0]["place_name"] == "村"
-    assert stories[0]["episode_count"] == 3
-    assert stories[0]["last_episode"]["title"] == "第3話"
+    assert stories[0]["plot_count"] == 3
+    assert stories[0]["last_plot"]["title"] == "第3話"
     assert [row["title"] for row in stories[0]["unsynced"]] == ["第3話"]
 
 
@@ -70,8 +70,8 @@ def test_delete_story_returns_deleted_row(session, world):
     assert session.get(Story, world["story"]) is None
 
 
-def test_delete_story_refuses_story_with_episodes(session, world):
-    _episodes(session, world["story"], [1])
+def test_delete_story_refuses_story_with_plots(session, world):
+    _plots(session, world["story"], [1])
     with pytest.raises(ValueError):
         DeleteStory(world["story"]).run()
     session.expire_all()
@@ -83,49 +83,49 @@ def test_delete_story_rejects_unknown_id():
         DeleteStory(9999).run()
 
 
-def test_read_episodes_returns_latest_in_order(session, world):
-    _episodes(session, world["story"], range(1, 6))
+def test_read_plots_returns_latest_in_order(session, world):
+    _plots(session, world["story"], range(1, 6))
 
-    assert [e["title"] for e in ReadEpisodes(world["story"], count=3).run()] == ["第3話", "第4話", "第5話"]
-    assert [e["title"] for e in ReadEpisodes(world["story"], count=2, before="2100/01/04").run()] == [
+    assert [e["title"] for e in ReadPlots(world["story"], count=3).run()] == ["第3話", "第4話", "第5話"]
+    assert [e["title"] for e in ReadPlots(world["story"], count=2, before="2100/01/04").run()] == [
         "第2話", "第3話"]
-    assert ReadEpisodes(world["story"], count=1).run()[0]["text"] == "本文5"
-    assert "text" not in ReadEpisodes(world["story"], count=1, text=False).run()[0]
+    assert ReadPlots(world["story"], count=1).run()[0]["text"] == "本文5"
+    assert "text" not in ReadPlots(world["story"], count=1, text=False).run()[0]
 
 
-def test_read_episodes_rejects_unknown_story():
+def test_read_plots_rejects_unknown_story():
     with pytest.raises(NotFoundError):
-        ReadEpisodes(9999).run()
+        ReadPlots(9999).run()
 
 
-def test_list_unsynced_episodes(session, world):
+def test_list_unsynced_plots(session, world):
     other = Story(name="別の話", place_id=world["village"], text="", narration="", state="構想中")
     session.add(other)
     session.commit()
-    _episodes(session, world["story"], [1])
-    _episodes(session, world["story"], [2], synced=False)
-    _episodes(session, other.id, [1], synced=False)
+    _plots(session, world["story"], [1])
+    _plots(session, world["story"], [2], synced=False)
+    _plots(session, other.id, [1], synced=False)
 
-    rows = ListUnsyncedEpisodes().run()
+    rows = ListUnsyncedPlots().run()
     assert [(row["story_id"], row["title"]) for row in rows] == [(world["story"], "第2話"), (other.id, "第1話")]
     assert rows[0]["story_name"] == "村の話"
     assert rows[0]["start"] == "2100/01/02 00:00:00"
-    assert [row["title"] for row in ListUnsyncedEpisodes(world["story"]).run()] == ["第2話"]
+    assert [row["title"] for row in ListUnsyncedPlots(world["story"]).run()] == ["第2話"]
 
 
-def test_set_episode_synced_toggles_flag(session, world):
-    _episodes(session, world["story"], [1], synced=False)
-    episode_id = session.query(Episode).one().id
+def test_set_plot_synced_toggles_flag(session, world):
+    _plots(session, world["story"], [1], synced=False)
+    plot_id = session.query(Plot).one().id
 
-    assert SetEpisodeSynced(episode_id).run()["synced"] is True
-    assert ListUnsyncedEpisodes(world["story"]).run() == []
-    assert SetEpisodeSynced(episode_id, False).run()["synced"] is False
-    assert [row["id"] for row in ListUnsyncedEpisodes(world["story"]).run()] == [episode_id]
+    assert SetPlotSynced(plot_id).run()["synced"] is True
+    assert ListUnsyncedPlots(world["story"]).run() == []
+    assert SetPlotSynced(plot_id, False).run()["synced"] is False
+    assert [row["id"] for row in ListUnsyncedPlots(world["story"]).run()] == [plot_id]
 
 
-def test_set_episode_synced_rejects_missing_episode(world):
+def test_set_plot_synced_rejects_missing_plot(world):
     with pytest.raises(UnknownRecordError):
-        SetEpisodeSynced(9999).run()
+        SetPlotSynced(9999).run()
 
 
 def test_read_brief_hides_hidden_events(session, world):
@@ -194,8 +194,8 @@ def test_read_surroundings_requires_time(world):
         ReadSurroundings(world["alice"], None)
 
 
-def test_start_story_stops_on_unsynced_episode(session, world):
-    _episodes(session, world["story"], [1], synced=False)
+def test_start_story_stops_on_unsynced_plot(session, world):
+    _plots(session, world["story"], [1], synced=False)
 
     result = StartStory(world["story"]).run()
     assert result["stopped"] is True
@@ -209,13 +209,13 @@ def test_start_story_stops_on_unsynced_episode(session, world):
 
 
 def test_start_story_gathers_materials(session, world):
-    _episodes(session, world["story"], [1, 2])
+    _plots(session, world["story"], [1, 2])
 
-    result = StartStory(world["story"], episodes=1).run()
+    result = StartStory(world["story"], plots=1).run()
     assert result["stopped"] is False
     assert result["story"]["name"] == "村の話"
     assert result["time"] == "2100/12/31 23:59:59"
-    assert [e["title"] for e in result["episodes"]] == ["第2話"]
+    assert [e["title"] for e in result["plots"]] == ["第2話"]
     assert sorted(c["name"] for c in result["cast"]["characters"]) == ["アル", "ベル"]
     assert result["brief"]["place"]["name"] == "村"
 
