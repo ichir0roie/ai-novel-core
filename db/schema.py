@@ -118,8 +118,9 @@ class MarkdownBase(Base):
     # 親の行を指す relationship の名前。持つテーブルの md は、`worlds/{table}/` ではなく
     # 親の md と同じ名前(拡張子を除く)のディレクトリの下に置く
     MARKDOWN_PARENT: str | None = None
-    # md を `# data` も見出しも無い、本文(text)だけで出し入れするか
-    MARKDOWN_BODY_ONLY: bool = False
+    # 持つテーブルは md の代わりに、親の md と同じ名前で拡張子だけをこれにしたファイルを親の隣に置く。
+    # 親一行につき一行で、`# data` も見出しも無い本文(text)だけで出し入れする
+    BODY_FILE_EXTENSION: str | None = None
 
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
 
@@ -648,12 +649,12 @@ class Episode(EventSeededMixin, MarkdownBase):
 
 
 class EpisodeText(MarkdownBase):
-    """話の本文。話(`Episode`)の枠とは分けて生成し、md には本文だけを出す。"""
+    """話の本文。話(`Episode`)の枠とは分けて生成し、話の md の隣に同じ名前の .txt で本文だけを出す。"""
 
     __tablename__ = "episode_text"
 
     MARKDOWN_PARENT = "episode"
-    MARKDOWN_BODY_ONLY = True
+    BODY_FILE_EXTENSION = ".txt"
 
     episode_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("episode.id"), unique=True, index=True, nullable=False, sort_order=200)
@@ -670,8 +671,10 @@ class EpisodeText(MarkdownBase):
         self.letters = len(value or "")
         return value
 
-    def default_filename(self) -> str | None:
-        return "本文"
+    @classmethod
+    def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
+        # 名前は話の md と同じなので、行は置き場所(隣の話)から決める
+        return None, {}
 
 
 _EPISODE_STAMP = re.compile(r"^\d+-\d{2}-\d{2}-\d{4}$")

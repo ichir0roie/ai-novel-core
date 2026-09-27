@@ -9,7 +9,7 @@ from ai.claude_code.interface.story.commit_story import CommitStory
 from db.schema import Episode, EpisodeSummary, EpisodeText, Location, Story
 from db.stamp import Stamp
 from tool.markdown.export_db import export_db
-from tool.markdown.import_db import import_db
+from tool.markdown.import_db import ImportDbError, import_db
 from tool.markdown.sync_db import sync_db
 
 
@@ -77,7 +77,7 @@ def test_episode_parse_markdown_stem():
 
 STORY_DIR = os.path.join("story", "1_遥かなる幻想郷まで")
 EPISODE_MD = os.path.join(STORY_DIR, "1_11572-03-25-0000_白い灯り.md")
-TEXT_DIR = os.path.join(STORY_DIR, "1_11572-03-25-0000_白い灯り")
+TEXT_TXT = os.path.join(STORY_DIR, "1_11572-03-25-0000_白い灯り.txt")
 
 
 def _read(root, *parts):
@@ -122,13 +122,12 @@ def test_story_episode_and_text_are_nested(session, place, tmp_path):
     export_db(root)
     story_dir = os.path.join(root, "story", "ノウル", "1_遥かなる幻想郷まで")
     assert os.path.isfile(story_dir + ".md")
-    # 本文の無い話(枠)は、本文のディレクトリを持たない
+    # 本文は話の md と同じ名前の .txt。本文の無い話(枠)は .txt を持たない
     assert sorted(os.listdir(story_dir)) == [
-        "1_11572-03-25-0000_白い灯り", "1_11572-03-25-0000_白い灯り.md", "1_11572-04-01-0000_裁定.md"]
-    assert os.listdir(os.path.join(story_dir, "1_11572-03-25-0000_白い灯り")) == ["1_本文.md"]
+        "1_11572-03-25-0000_白い灯り.md", "1_11572-03-25-0000_白い灯り.txt", "1_11572-04-01-0000_裁定.md"]
 
 
-def test_episode_text_markdown_is_the_body_only(session, place, tmp_path):
+def test_episode_text_is_the_body_only_txt(session, place, tmp_path):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00", "title": "白い灯り",
                    "key": "## 出来事\n娘が生まれる", "text": "扉が開いた。\nミレアが来た。"}).run()
@@ -136,21 +135,21 @@ def test_episode_text_markdown_is_the_body_only(session, place, tmp_path):
     root = str(tmp_path / "worlds")
     export_db(root)
 
-    assert _read(root, TEXT_DIR, "1_本文.md") == "扉が開いた。\nミレアが来た。\n"
+    assert _read(root, TEXT_TXT) == "扉が開いた。\nミレアが来た。\n"
     content = _read(root, EPISODE_MD)
     assert "# data\n" in content and "# key\n## 出来事\n娘が生まれる" in content
     # 本文は話の md に出さない
     assert "# text" not in content and "扉が開いた" not in content and '"letters"' not in content
 
 
-def test_edited_episode_text_markdown_updates_the_body(session, place, tmp_path):
+def test_edited_txt_updates_the_body(session, place, tmp_path):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
                    "title": "白い灯り", "text": "一話"}).run()
     root = str(tmp_path / "worlds")
     sync_db(root)
 
-    _write(root, os.path.join(TEXT_DIR, "1_本文.md"), "書き直した本文\n")
+    _write(root, TEXT_TXT, "書き直した本文\n")
     result = sync_db(root)
 
     assert result["imported"] == {"episode_text": 1}
@@ -159,14 +158,14 @@ def test_edited_episode_text_markdown_updates_the_body(session, place, tmp_path)
     assert (text.episode_id, text.text, text.letters) == (1, "書き直した本文", 7)
 
 
-def test_hand_written_text_markdown_in_the_episode_directory_becomes_its_body(session, place, tmp_path):
+def test_hand_written_txt_beside_a_frame_becomes_its_body(session, place, tmp_path):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
                    "title": "白い灯り", "key": "種"}).run()
     root = str(tmp_path / "worlds")
     sync_db(root)
 
-    _write(root, os.path.join(TEXT_DIR, "下書き.md"), "手で書いた本文\n")
+    _write(root, TEXT_TXT, "手で書いた本文\n")
     result = sync_db(root)
 
     assert result["imported"] == {"episode_text": 1}
@@ -174,24 +173,23 @@ def test_hand_written_text_markdown_in_the_episode_directory_becomes_its_body(se
     episode = session.get(Episode, 1)
     assert episode.body == "手で書いた本文"
     assert (episode.episode_text.model, episode.episode_text.effort) == (None, None)
-    # 採番した id を名前に入れて置き直す
-    assert os.listdir(os.path.join(root, TEXT_DIR)) == [f"{episode.episode_text.id}_下書き.md"]
+    assert _read(root, TEXT_TXT) == "手で書いた本文\n"
 
 
-def test_removed_text_markdown_removes_the_body(session, place, tmp_path):
+def test_removed_txt_removes_the_body(session, place, tmp_path):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
                    "title": "白い灯り", "text": "一話"}).run()
     root = str(tmp_path / "worlds")
     sync_db(root)
 
-    os.remove(os.path.join(root, TEXT_DIR, "1_本文.md"))
+    os.remove(os.path.join(root, TEXT_TXT))
     sync_db(root)
 
     session.expire_all()
     assert session.query(EpisodeText).count() == 0
     assert session.get(Episode, 1).body == ""
-    assert not os.path.exists(os.path.join(root, TEXT_DIR))
+    assert os.path.exists(os.path.join(root, EPISODE_MD))
 
 
 def test_episode_moved_under_another_story_follows_that_story(session, place, tmp_path):
@@ -358,3 +356,44 @@ def test_story_markdown_name_follows_name_edited_in_markdown(session, place, tmp
     import_db(root)
     export_db(root)
     assert os.listdir(os.path.join(root, "story")) == ["1_アルバ.md"]
+
+
+def test_episode_moves_with_its_txt_under_another_story(session, place, tmp_path):
+    first = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    second = CommitStory({"name": "アルバ", "place_id": place}).run()
+    CommitEpisode({"story_id": first["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "text": "一話"}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    moved = os.path.join(root, "story", "2_アルバ")
+    os.makedirs(moved)
+    for name in ("1_11572-03-25-0000_白い灯り.md", "1_11572-03-25-0000_白い灯り.txt"):
+        os.rename(os.path.join(root, STORY_DIR, name), os.path.join(moved, name))
+    sync_db(root)
+
+    session.expire_all()
+    assert session.get(Episode, 1).story_id == second["id"]
+    assert session.get(Episode, 1).body == "一話" and session.query(EpisodeText).count() == 1
+    assert sorted(os.listdir(moved)) == ["2_11572-03-25-0000_白い灯り.md", "2_11572-03-25-0000_白い灯り.txt"]
+
+
+def test_txt_without_an_episode_md_beside_it_stops_the_sync(session, place, tmp_path):
+    CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    _write(root, os.path.join(STORY_DIR, "メモ.txt"), "覚え書き\n")
+
+    with pytest.raises(ImportDbError):
+        sync_db(root)
+    assert os.path.exists(os.path.join(root, STORY_DIR, "メモ.txt"))
+
+
+def test_txt_outside_the_story_tree_is_left_alone(session, place, tmp_path):
+    root = str(tmp_path / "worlds")
+    _write(root, os.path.join("idea", "メモ.txt"), "覚え書き\n")
+
+    sync_db(root)
+
+    assert _read(root, "idea", "メモ.txt") == "覚え書き\n"

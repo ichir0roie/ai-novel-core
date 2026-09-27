@@ -16,7 +16,7 @@ from tool.relation.render import render_relations
 
 
 __all__ = ["WORLDS_ROOT", "ExportError", "export_db", "export_changes", "render_row", "edited_markdown",
-           "parent_of", "markdown_path"]
+           "parent_of", "markdown_path", "file_extensions"]
 
 IGNORE_COLUMNS = {"directory_path", "filename"}
 
@@ -53,6 +53,18 @@ def _top_models(models: list[type]) -> list[type]:
     return [model for model in models if parent_of(model) is None]
 
 
+def _top_of(model: type) -> type:
+    parent = parent_of(model)
+    return model if parent is None else _top_of(parent[0])
+
+
+def file_extensions(top: type, models: list[type]) -> tuple[str, ...]:
+    """`worlds/{top のテーブル}/` の下に置くファイルの拡張子。本文のファイルは、それを置くテーブルの下でだけ拾う"""
+    extensions = {model.BODY_FILE_EXTENSION for model in models
+                  if model.BODY_FILE_EXTENSION and _top_of(model) is top}
+    return (".md", *sorted(extensions))
+
+
 def _serialize(value):
     if isinstance(value, Stamp):
         return str(value)
@@ -85,7 +97,7 @@ def _sections(model: type, row) -> dict[str, str]:
 
 
 def render_row(model: type, row) -> str:
-    if model.MARKDOWN_BODY_ONLY:
+    if model.BODY_FILE_EXTENSION:
         return f"{row.text or ''}\n"
     return _render(_row_data(model, row, IGNORE_COLUMNS), _sections(model, row))
 
@@ -100,9 +112,10 @@ def _markdown_files(root: str, models: list[type]) -> list[str]:
     """親の md の下に置くモデルの md も、親のテーブルのディレクトリをたどって拾う。"""
     paths = []
     for model in _top_models(models):
+        extensions = file_extensions(model, models)
         for dirpath, _dirnames, filenames in os.walk(os.path.join(root, model.__tablename__)):
             paths.extend(os.path.normpath(os.path.join(dirpath, name))
-                         for name in filenames if name.endswith(".md"))
+                         for name in filenames if name.endswith(extensions))
     return sorted(paths)
 
 
@@ -112,18 +125,27 @@ def _remove_empty_dirs(top: str) -> None:
             os.rmdir(dirpath)
 
 
-def _directory(root: str, model: type, row, placed: dict[tuple[type, int], str]) -> str:
+def _beside_parent(model: type, parent_path: str) -> str:
+    """親の md の隣に置く本文のファイルか、親の md と同じ名前のディレクトリ(その中に md を置く)。"""
+    stem = parent_path[: -len(".md")]
+    return stem + model.BODY_FILE_EXTENSION if model.BODY_FILE_EXTENSION else stem
+
+
+def _path(root: str, model: type, row, placed: dict[tuple[type, int], str]) -> str:
     parent = parent_of(model)
     if parent is None:
         table_dir = os.path.join(root, model.__tablename__)
-        return os.path.join(table_dir, row.directory_path) if row.directory_path else table_dir
+        dir_path = os.path.join(table_dir, row.directory_path) if row.directory_path else table_dir
+        # `directory_path` は / 区切りなので、walk で拾ったパスと比べられるよう揃える
+        return os.path.normpath(os.path.join(dir_path, row.markdown_name))
     parent_model, column = parent
     parent_path = placed.get((parent_model, getattr(row, column)))
     if parent_path is None:
         raise ExportError(
             f"{model.__tablename__} id={row.id} の親 {parent_model.__tablename__} "
             f"id={getattr(row, column)} が無いので、md の置き場所が決まらない")
-    return parent_path[: -len(".md")]
+    beside = _beside_parent(model, parent_path)
+    return beside if model.BODY_FILE_EXTENSION else os.path.normpath(os.path.join(beside, row.markdown_name))
 
 
 def markdown_path(session, row) -> str:
@@ -131,11 +153,10 @@ def markdown_path(session, row) -> str:
     model = type(row)
     parent = parent_of(model)
     if parent is None:
-        parts = [model.__tablename__, row.directory_path]
-    else:
-        parent_row = session.get(parent[0], getattr(row, parent[1]))
-        parts = [markdown_path(session, parent_row)[: -len(".md")]]
-    return "/".join(part for part in [*parts, row.markdown_name] if part)
+        return "/".join(part for part in [model.__tablename__, row.directory_path, row.markdown_name] if part)
+    parent_row = session.get(parent[0], getattr(row, parent[1]))
+    beside = _beside_parent(model, markdown_path(session, parent_row))
+    return beside if model.BODY_FILE_EXTENSION else f"{beside}/{row.markdown_name}"
 
 
 def _expected(session, root: str, models: list[type]) -> tuple[dict[str, tuple], dict[str, int]]:
@@ -146,12 +167,10 @@ def _expected(session, root: str, models: list[type]) -> tuple[dict[str, tuple],
     for model in models:
         rows = session.query(model).order_by(model.id.asc()).all()
         for row in rows:
-            dir_path = _directory(root, model, row, placed)
-            # `directory_path` は / 区切りなので、walk で拾ったパスと比べられるよう揃える
-            path = os.path.normpath(os.path.join(dir_path, row.markdown_name))
+            path = _path(root, model, row, placed)
             if path in expected:
                 # 名前に id を含まないテーブルで同名になったら、id を頭に付けた(import が読める)名前へ逃がす
-                path = os.path.normpath(os.path.join(dir_path, f"{row.id}_{row.markdown_name}"))
+                path = os.path.join(os.path.dirname(path), f"{row.id}_{row.markdown_name}")
             expected[path] = (model, row, render_row(model, row))
             placed[(model, row.id)] = path
         counts[model.__tablename__] = len(rows)
