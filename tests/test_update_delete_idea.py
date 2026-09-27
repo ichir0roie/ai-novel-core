@@ -37,6 +37,19 @@ def test_update_repoints_parent(session, ideas):
     assert session.get(Idea, ideas["child"]).parent_idea_id == other.id
 
 
+def test_update_rejects_circular_parent(session, ideas):
+    grandchild = Idea(name="崩壊記念日", kind="呼称", parent_idea_id=ideas["child"], text="呼称")
+    session.add(grandchild)
+    session.commit()
+
+    with pytest.raises(ValueError, match="循環"):
+        UpdateIdea({"id": ideas["parent"], "parent_idea_id": grandchild.id}).run()
+    with pytest.raises(ValueError, match="循環"):
+        UpdateIdea({"id": ideas["parent"], "parent_idea_id": ideas["child"]}).run()
+    session.expire_all()
+    assert session.get(Idea, ideas["parent"]).parent_idea_id is None
+
+
 def test_update_rejects_bad_input(session, ideas):
     with pytest.raises(ValueError, match="id は必須"):
         UpdateIdea({"kind": "概念"}).run()

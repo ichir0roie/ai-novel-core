@@ -95,6 +95,9 @@ div.markdown-preview ul, div.markdown-preview ol { padding-left: 1.4em; }
 div.markdown-preview blockquote { margin: 0.4em 0; padding-left: 0.8em; border-left: 3px solid var(--line); color: var(--muted); }
 div.markdown-preview code { font-family: var(--mono); font-size: 0.85em; background: var(--chip); padding: 0.1em 0.3em; border-radius: 4px; }
 div.markdown-preview pre code { background: none; padding: 0; }
+div.markdown-preview table { border-collapse: collapse; margin: 0.4em 0; }
+div.markdown-preview th, div.markdown-preview td { border: 1px solid var(--line); padding: 0.3em 0.6em; text-align: left; }
+div.markdown-preview th { background: var(--chip); font-weight: 600; }
 
 /* 本文(section)欄のプレビュー表示(マークダウンではなく純粋なテキスト)。textarea.section と同じ箱 */
 div.plain-preview {
@@ -154,7 +157,10 @@ button.ghost { background: transparent; }
   .record-side { overflow: visible; flex-shrink: 0; }
   .record-text { flex-shrink: 0; }
   .record-text textarea.section, .record-text .markdown-preview { height: auto; min-height: 20rem; resize: vertical; }
+  .record-actions { position: static; }
 }
+
+.record-actions { margin-top: 1rem; position: sticky; bottom: 0; z-index: 1; }
 
 .actionbar { flex-shrink: 0; margin-top: 0.75rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 1.25rem; display: flex; gap: 0.6rem; align-items: center; }
 .actionbar .inner { width: 100%; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
@@ -222,3 +228,13 @@ button.ghost { background: transparent; }
 .tree-story { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.2rem 0; }
 .tree-story::before { content: "▸"; color: var(--muted); font-size: 0.75rem; }
 .tree-meta { display: inline-flex; gap: 0.5rem; align-items: baseline; }
+
+/* アイデアのツリー: 見出し行のドラッグ&ドロップで parent_idea_id を差し替える */
+.tree-idea-summary[draggable="true"] { cursor: grab; }
+.tree-idea-summary.dragging { opacity: 0.4; }
+.tree-idea-summary.drop-target { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
+.tree-root-drop {
+  border: 1px dashed var(--line); border-radius: 8px; padding: 0.5rem 0.7rem; margin-bottom: 0.7rem;
+  color: var(--muted); font-size: 0.85rem; text-align: center;
+}
+.tree-root-drop.drop-target { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }

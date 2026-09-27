@@ -147,6 +147,13 @@ export const T = {
     noLocation: "No location",
   },
 
+  ideaTree: {
+    empty: "No ideas yet",
+    open: "Open",
+    dropToRoot: "Drop here to make it a root idea (no parent)",
+    moveFailed: (error: string) => `Could not move: ${error}`,
+  },
+
   childList: {
     removeRow: "Remove this row",
     addRow: "+ Add row",

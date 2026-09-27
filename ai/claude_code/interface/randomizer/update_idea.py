@@ -25,12 +25,29 @@ class UpdateIdea(CommitDraft):
             raise ValueError(f"id={idea_id} というアイデアが見つからない")
 
         self.check_exists(session, Location, data.get("location_id"), "location_id")
-        if data.get("parent_idea_id") == idea_id:
+        new_parent_id = data.get("parent_idea_id")
+        if new_parent_id == idea_id:
             raise ValueError(f"parent_idea_id={idea_id} が自分自身を指している")
-        self.check_exists(session, Idea, data.get("parent_idea_id"), "parent_idea_id")
+        self.check_exists(session, Idea, new_parent_id, "parent_idea_id")
+        if new_parent_id is not None:
+            self._check_not_descendant(session, idea_id, new_parent_id)
         idea_alias.check(session, idea_id, data.get("alias_of_idea_id"))
 
         for key, value in data.items():
             setattr(record, key, value)
         self.finalize(session, record)
         return to_dict(record)
+
+    @staticmethod
+    def _check_not_descendant(session, idea_id: int, new_parent_id: int) -> None:
+        """new_parent_id が idea_id の下位(子孫)なら、親にすると木が循環するので弾く。"""
+        seen: set[int] = set()
+        ancestor_id: int | None = new_parent_id
+        while ancestor_id is not None and ancestor_id not in seen:
+            seen.add(ancestor_id)
+            ancestor = session.get(Idea, ancestor_id)
+            if ancestor is None or ancestor.parent_idea_id is None:
+                return
+            if ancestor.parent_idea_id == idea_id:
+                raise ValueError(f"parent_idea_id={new_parent_id} は id={idea_id} の下位のアイデアなので、親にすると循環する")
+            ancestor_id = ancestor.parent_idea_id

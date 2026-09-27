@@ -95,35 +95,38 @@ export default function ReviewPage() {
             id={String(next.record.id)}{" "}
             <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
           </div>
-          <RecordForm meta={meta} value={value} onChange={setValue} mode="edit" side={<Related related={next.related ?? {}} />} />
+          <RecordForm
+            meta={meta}
+            value={value}
+            onChange={setValue}
+            mode="edit"
+            side={<Related related={next.related ?? {}} />}
+            actions={
+              <div className="actionbar">
+                <div className="inner">
+                  <button className="danger" disabled={busy} onClick={() => decide("非承認")}>
+                    {T.review.reject}
+                  </button>
+                  <button disabled={busy} onClick={() => void load((next?.record?.id as number) ?? 0)}>
+                    {T.review.skip}
+                  </button>
+                  <button disabled={busy} onClick={() => decide(null)}>
+                    {T.review.saveOnly}
+                  </button>
+                  <button className="primary" disabled={busy} onClick={() => decide("承認")}>
+                    {T.review.approve}
+                  </button>
+                  <span className="spacer" />
+                  <span className="meta">
+                    {T.review.remaining(next?.remaining ?? "…")} <span className="kbd">Ctrl+Enter</span> {T.review.keyApprove}{" "}
+                    <span className="kbd">Ctrl+BS</span> {T.review.keyReject}
+                  </span>
+                </div>
+              </div>
+            }
+          />
         </div>
       )}
-      <div className="actionbar">
-        <div className="inner">
-          <span className="meta">
-            {T.review.remaining(next?.remaining ?? "…")}
-            {next?.record && (
-              <>
-                {" "}
-                <span className="kbd">Ctrl+Enter</span> {T.review.keyApprove} <span className="kbd">Ctrl+BS</span> {T.review.keyReject}
-              </>
-            )}
-          </span>
-          <span className="spacer" />
-          <button className="danger" disabled={busy || !next?.record} onClick={() => decide("非承認")}>
-            {T.review.reject}
-          </button>
-          <button disabled={busy || !next?.record} onClick={() => void load((next?.record?.id as number) ?? 0)}>
-            {T.review.skip}
-          </button>
-          <button disabled={busy || !next?.record} onClick={() => decide(null)}>
-            {T.review.saveOnly}
-          </button>
-          <button className="primary" disabled={busy || !next?.record} onClick={() => decide("承認")}>
-            {T.review.approve}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

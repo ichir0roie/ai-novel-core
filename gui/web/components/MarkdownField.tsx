@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { T } from "@/lib/text";
 
 type Props = {
@@ -28,7 +29,11 @@ export default function MarkdownField({ value, onChange }: Props) {
   }
   return (
     <div className="section markdown-preview" onClick={() => setEditing(true)}>
-      {text === "" ? <span className="hint">{T.record.emptySection}</span> : <ReactMarkdown>{text}</ReactMarkdown>}
+      {text === "" ? (
+        <span className="hint">{T.record.emptySection}</span>
+      ) : (
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      )}
     </div>
   );
 }

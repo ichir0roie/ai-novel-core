@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getRecord, labelOf, listRecords, type ColumnMeta, type Rec, type RecordList, type TableMeta } from "@/lib/api";
 import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
+import IdeaTree from "@/components/IdeaTree";
 import { T } from "@/lib/text";
 
 const PAGE = 50;
@@ -92,8 +93,8 @@ export default function TablePage() {
   const sort = params.get("sort") ?? meta.sort;
   const order = params.get("order") === "asc" ? "asc" : "desc";
 
-  // 作品(story)だけが場所の木のツリー表示を持ち、既定はツリー(`?view=list` で表)
-  const hasTree = table === "story";
+  // 作品(story)は場所の木、アイデア(idea)は parent_idea_id の木でツリー表示を持つ。既定はツリー(`?view=list` で表)
+  const hasTree = table === "story" || table === "idea";
   const tree = hasTree && (search.get("view") ?? "tree") === "tree";
   const viewSwitch = hasTree && (
     <span className="segment">
@@ -120,7 +121,7 @@ export default function TablePage() {
             </button>
           </Link>
         </div>
-        <StoryTree />
+        {table === "story" ? <StoryTree /> : <IdeaTree />}
       </>
     );
   }

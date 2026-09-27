@@ -26,11 +26,13 @@ type Props = {
   mode: "create" | "edit";
   /** 左の欄の末尾に置くもの(関連の一覧など) */
   side?: ReactNode;
+  /** 左の欄の一番下に置く保存系のボタン列 */
+  actions?: ReactNode;
 };
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
- * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, side }: Props) {
+ * 本文(section の列)は右半分で、他の欄と side・actions は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
+export default function RecordForm({ meta, value, onChange, mode, side, actions }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   const plain = columns.filter((c) => !c.section);
@@ -67,6 +69,7 @@ export default function RecordForm({ meta, value, onChange, mode, side }: Props)
           </div>
         ))}
         {side}
+        {actions && <div className="record-actions">{actions}</div>}
       </div>
       {sections.length > 0 && (
         <div className="record-text">

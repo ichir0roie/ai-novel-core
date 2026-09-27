@@ -89,25 +89,33 @@ export default function RecordPage() {
       {saved && !error && <div className="status ok">{saved}</div>}
       {loaded && (
         <div className="panel fill">
-          <RecordForm meta={meta} value={value} onChange={setValue} mode="edit" side={<Related related={loaded.related ?? {}} owner={{ table, id }} />} />
+          <RecordForm
+            meta={meta}
+            value={value}
+            onChange={setValue}
+            mode="edit"
+            side={<Related related={loaded.related ?? {}} owner={{ table, id }} />}
+            actions={
+              <div className="actionbar">
+                <div className="inner">
+                  <button onClick={() => loaded && setValue(loaded.record)} disabled={busy || !dirty}>
+                    {T.record.revert}
+                  </button>
+                  <button onClick={() => save(true)} disabled={busy || !dirty}>
+                    {T.record.saveAndBack}
+                  </button>
+                  <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
+                    {T.record.save}
+                  </button>
+                  <span className="spacer" />
+                  <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
+                </div>
+              </div>
+            }
+          />
         </div>
       )}
       {loaded && <GeneratePanel table={table} meta={meta} draft={value} mode="edit" onDone={generated} disabled={busy || dirty} />}
-      <div className="actionbar">
-        <div className="inner">
-          <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
-          <span className="spacer" />
-          <button onClick={() => loaded && setValue(loaded.record)} disabled={busy || !dirty}>
-            {T.record.revert}
-          </button>
-          <button onClick={() => save(true)} disabled={busy || !dirty}>
-            {T.record.saveAndBack}
-          </button>
-          <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
-            {T.record.save}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

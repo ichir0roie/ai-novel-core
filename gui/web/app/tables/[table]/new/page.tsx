@@ -57,20 +57,27 @@ export default function NewRecordPage() {
       <h1>{T.create.title(meta.label)}</h1>
       {error && <div className="status error">{error}</div>}
       <div className="panel fill">
-        <RecordForm meta={meta} value={value} onChange={setValue} mode="create" />
+        <RecordForm
+          meta={meta}
+          value={value}
+          onChange={setValue}
+          mode="create"
+          actions={
+            <div className="actionbar">
+              <div className="inner">
+                <button onClick={() => router.push(`/tables/${table}`)} disabled={busy}>
+                  {T.create.cancel}
+                </button>
+                <button className="primary" onClick={submit} disabled={busy}>
+                  {T.create.add}
+                </button>
+                <span className="spacer" />
+              </div>
+            </div>
+          }
+        />
       </div>
       <GeneratePanel table={table} meta={meta} draft={value} mode="create" onDone={generated} disabled={busy} />
-      <div className="actionbar">
-        <div className="inner">
-          <span className="spacer" />
-          <button onClick={() => router.push(`/tables/${table}`)} disabled={busy}>
-            {T.create.cancel}
-          </button>
-          <button className="primary" onClick={submit} disabled={busy}>
-            {T.create.add}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
