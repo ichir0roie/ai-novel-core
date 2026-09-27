@@ -349,6 +349,44 @@ class PersonalityLevel(enum.StrEnum):
 PERSONALITY_LEVELS = tuple(level.value for level in PersonalityLevel)
 PERSONALITY_DEFAULT = PersonalityLevel.NORMAL.value
 
+# マスターテーブル `personality_level` の行の id(1始まり、上の宣言順)。
+# マイグレーションはこの順で行を挿入するので、ここでの並びを変えたら移行も合わせて直す。
+_PERSONALITY_LEVEL_IDS = {level.value: index + 1 for index, level in enumerate(PersonalityLevel)}
+_PERSONALITY_LEVEL_LABELS = {id_: label for label, id_ in _PERSONALITY_LEVEL_IDS.items()}
+
+
+class PersonalityLevelType(TypeDecorator):
+    """性格12列。db には `personality_level`(無/低/並/高/必の5行だけのマスター)の id で持ち、
+    Python 側は文字列(無/低/並/高/必)のまま扱えるようにする。
+    """
+
+    impl = Integer
+    cache_ok = True
+    python_type = str
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        if value in _PERSONALITY_LEVEL_IDS:
+            return _PERSONALITY_LEVEL_IDS[value]
+        raise ValueError(f"性格は {'/'.join(PERSONALITY_LEVELS)} のいずれか: {value!r}")
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return _PERSONALITY_LEVEL_LABELS.get(value, value)
+
+
+class PersonalityLevelOption(Base):
+    """`personality_level` マスター。性格12列(誠実性など)から FK で引かれる、無/低/並/高/必の5行だけ。"""
+
+    __tablename__ = "personality_level"
+
+    name: Mapped[str] = mapped_column(String, nullable=False, sort_order=10)
+
+
 PERSONALITY_COLUMNS = (
     "sincerity", "curiosity", "proactivity", "cooperativeness", "sociability",
     "emotional_expression", "self_esteem", "self_efficacy", "stress_resilience",
@@ -452,19 +490,32 @@ class CharacterParameter(Base):
         String, comment="方言。方言の種類か、標準語で話すならその癖(語尾・言い回し・訛り)", sort_order=385)
 
     # --- 性格 -----------------------------------------------------------
-    # 各列は PersonalityLevel の値(無/低/並/高/必)。どの行でも決めていない軸は PERSONALITY_DEFAULT。
-    sincerity: Mapped[str | None] = mapped_column(String, comment="誠実性", sort_order=390)
-    curiosity: Mapped[str | None] = mapped_column(String, comment="好奇心", sort_order=400)
-    proactivity: Mapped[str | None] = mapped_column(String, comment="行動力", sort_order=410)
-    cooperativeness: Mapped[str | None] = mapped_column(String, comment="協調性", sort_order=420)
-    sociability: Mapped[str | None] = mapped_column(String, comment="社交性", sort_order=430)
-    emotional_expression: Mapped[str | None] = mapped_column(String, comment="感情表現", sort_order=440)
-    self_esteem: Mapped[str | None] = mapped_column(String, comment="自己肯定感", sort_order=450)
-    self_efficacy: Mapped[str | None] = mapped_column(String, comment="自己効力感", sort_order=460)
-    stress_resilience: Mapped[str | None] = mapped_column(String, comment="ストレス耐性", sort_order=470)
-    flexibility_of_values: Mapped[str | None] = mapped_column(String, comment="価値観の柔軟性", sort_order=480)
-    sensitivity: Mapped[str | None] = mapped_column(String, comment="感受性", sort_order=490)
-    imagination: Mapped[str | None] = mapped_column(String, comment="想像力", sort_order=500)
+    # 各列は personality_level への FK(Python 側は PersonalityLevel の値、無/低/並/高/必のまま扱える)。
+    # どの行でも決めていない軸は PERSONALITY_DEFAULT。
+    sincerity: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="誠実性", sort_order=390)
+    curiosity: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="好奇心", sort_order=400)
+    proactivity: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="行動力", sort_order=410)
+    cooperativeness: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="協調性", sort_order=420)
+    sociability: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="社交性", sort_order=430)
+    emotional_expression: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="感情表現", sort_order=440)
+    self_esteem: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="自己肯定感", sort_order=450)
+    self_efficacy: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="自己効力感", sort_order=460)
+    stress_resilience: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="ストレス耐性", sort_order=470)
+    flexibility_of_values: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="価値観の柔軟性", sort_order=480)
+    sensitivity: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="感受性", sort_order=490)
+    imagination: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"), comment="想像力", sort_order=500)
 
     character: Mapped[Character] = relationship(back_populates="parameters", lazy="noload")
 
@@ -727,6 +778,10 @@ def create_db(path=DB_PATH):
         # テーブルが空のうちしか効かないので create_all の前に打つ。
         conn.execute(text("PRAGMA encoding='UTF-8'"))
     Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add_all(PersonalityLevelOption(id=id_, name=name)
+                         for name, id_ in _PERSONALITY_LEVEL_IDS.items())
+        session.commit()
     return engine
 
 
