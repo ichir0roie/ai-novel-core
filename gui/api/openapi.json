@@ -497,6 +497,140 @@
         }
       }
     },
+    "/api/interface": {
+      "get": {
+        "summary": "List Entrances",
+        "description": "入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る",
+        "operationId": "list_entrances_api_interface_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntranceList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/interface/{entrance_id}": {
+      "post": {
+        "summary": "Run Entrance",
+        "description": "入口を呼ぶ。`claude` を叩く入口(と `background` を立てた呼び出し)は job の id を 202 で返し、結果は `/api/jobs/{id}` で引く",
+        "operationId": "run_entrance_api_interface__entrance_id__post",
+        "parameters": [
+          {
+            "name": "entrance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entrance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RunResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JobInfo"
+                    }
+                  ],
+                  "title": "Response Run Entrance Api Interface  Entrance Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "summary": "List Jobs",
+        "operationId": "list_jobs_api_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "summary": "Get Job",
+        "operationId": "get_job_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/maps": {
       "get": {
         "summary": "Maps",
@@ -722,6 +856,99 @@
         ],
         "title": "Decision"
       },
+      "EntranceList": {
+        "properties": {
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/EntranceMeta"
+            },
+            "type": "array",
+            "title": "Entrances"
+          },
+          "claude_available": {
+            "type": "boolean",
+            "title": "Claude Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entrances",
+          "claude_available"
+        ],
+        "title": "EntranceList"
+      },
+      "EntranceMeta": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "area": {
+            "type": "string",
+            "title": "Area"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "doc": {
+            "type": "string",
+            "title": "Doc"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/EntranceParam"
+            },
+            "type": "array",
+            "title": "Params"
+          },
+          "claude": {
+            "type": "boolean",
+            "title": "Claude"
+          },
+          "writes": {
+            "type": "boolean",
+            "title": "Writes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "area",
+          "name",
+          "doc",
+          "params",
+          "claude",
+          "writes"
+        ],
+        "title": "EntranceMeta"
+      },
+      "EntranceParam": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "annotation": {
+            "type": "string",
+            "title": "Annotation",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "required"
+        ],
+        "title": "EntranceParam"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -752,6 +979,98 @@
           "db_path"
         ],
         "title": "Health"
+      },
+      "JobInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "entrance": {
+            "type": "string",
+            "title": "Entrance"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "entrance",
+          "args",
+          "status",
+          "created_at"
+        ],
+        "title": "JobInfo"
+      },
+      "JobList": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobInfo"
+            },
+            "type": "array",
+            "title": "Jobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs"
+        ],
+        "title": "JobList"
       },
       "Option": {
         "properties": {
@@ -964,6 +1283,38 @@
           "rejected"
         ],
         "title": "ReviewTable"
+      },
+      "RunRequest": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          },
+          "background": {
+            "type": "boolean",
+            "title": "Background",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "RunRequest"
+      },
+      "RunResult": {
+        "properties": {
+          "entrance": {
+            "type": "string",
+            "title": "Entrance"
+          },
+          "result": {
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entrance"
+        ],
+        "title": "RunResult"
       },
       "TableMeta": {
         "properties": {

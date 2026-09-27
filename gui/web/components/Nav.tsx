@@ -36,6 +36,7 @@ export default function Nav() {
       </span>
       <span className="spacer" />
       <span className="group">
+        <Link href="/interface" className={isActive("/interface") ? "active" : ""}>入口</Link>
         <a href="/api/maps" target="_blank" rel="noreferrer">地図</a>
         <a href="/api/relations" target="_blank" rel="noreferrer">相関図</a>
       </span>

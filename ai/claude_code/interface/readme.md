@@ -8,6 +8,7 @@ claude が db を触るときに呼ぶ入口を置く場所。**操作前にこ�
     ListPlaces(kind="村").run()
 
 db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続」を見る。ユーザが見て直す窓口は `gui/`。
+ここの入口は GUI の API(`POST /api/interface/<領域>.<ファイル>.<クラス>`)からも同じ引数で呼べる(`gui/readme.md`)。
 
 ## 依頼内容 → 呼ぶコード
 

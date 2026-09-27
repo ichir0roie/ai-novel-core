@@ -142,6 +142,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Entrances
+         * @description 入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る
+         */
+        get: operations["list_entrances_api_interface_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/interface/{entrance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Entrance
+         * @description 入口を呼ぶ。`claude` を叩く入口(と `background` を立てた呼び出し)は job の id を 202 で返し、結果は `/api/jobs/{id}` で引く
+         */
+        post: operations["run_entrance_api_interface__entrance_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_api_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/maps": {
         parameters: {
             query?: never;
@@ -267,6 +341,44 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** EntranceList */
+        EntranceList: {
+            /** Entrances */
+            entrances: components["schemas"]["EntranceMeta"][];
+            /** Claude Available */
+            claude_available: boolean;
+        };
+        /** EntranceMeta */
+        EntranceMeta: {
+            /** Id */
+            id: string;
+            /** Area */
+            area: string;
+            /** Name */
+            name: string;
+            /** Doc */
+            doc: string;
+            /** Params */
+            params: components["schemas"]["EntranceParam"][];
+            /** Claude */
+            claude: boolean;
+            /** Writes */
+            writes: boolean;
+        };
+        /** EntranceParam */
+        EntranceParam: {
+            /** Name */
+            name: string;
+            /** Required */
+            required: boolean;
+            /** Default */
+            default?: unknown;
+            /**
+             * Annotation
+             * @default
+             */
+            annotation: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -278,6 +390,37 @@ export interface components {
             world_dir: string;
             /** Db Path */
             db_path: string;
+        };
+        /** JobInfo */
+        JobInfo: {
+            /** Id */
+            id: string;
+            /** Entrance */
+            entrance: string;
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+            /** Result */
+            result?: unknown;
+            /** Error */
+            error?: string | null;
+            /** Created At */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /** JobList */
+        JobList: {
+            /** Jobs */
+            jobs: components["schemas"]["JobInfo"][];
         };
         /** Option */
         Option: {
@@ -367,6 +510,25 @@ export interface components {
             approved: number;
             /** Rejected */
             rejected: number;
+        };
+        /** RunRequest */
+        RunRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Background
+             * @default false
+             */
+            background: boolean;
+        };
+        /** RunResult */
+        RunResult: {
+            /** Entrance */
+            entrance: string;
+            /** Result */
+            result?: unknown;
         };
         /** TableMeta */
         TableMeta: {
@@ -706,6 +868,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entrances_api_interface_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntranceList"];
+                };
+            };
+        };
+    };
+    run_entrance_api_interface__entrance_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entrance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResult"] | components["schemas"]["JobInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_jobs_api_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobList"];
+                };
+            };
+        };
+    };
+    get_job_api_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobInfo"];
                 };
             };
             /** @description Validation Error */

@@ -15,10 +15,12 @@ from sqlalchemy.orm import Session
 
 from ai.claude_code.interface._base import UnknownRecordError
 from db.schema import DB_PATH, WORLD_DIR, get_env_session
-from gui.api import meta, records, review
+from gui.api import interface, meta, records, review
+from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_claude_code
+from gui.api.jobs import runner
 from gui.api.models import (
-    Created, Decision, Health, OptionList, RecordList, RecordResponse, ReviewNext, ReviewSummary,
-    TablesResponse,
+    Created, Decision, EntranceList, Health, JobInfo, JobList, OptionList, RecordList, RecordResponse, ReviewNext,
+    ReviewSummary, RunRequest, RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
 from tool.map.collect import collect_planets
@@ -48,6 +50,11 @@ async def _unknown_table(_request: Request, error: KeyError):
 @app.exception_handler(UnknownRecordError)
 async def _unknown_record(_request: Request, error: UnknownRecordError):
     return JSONResponse(status_code=404, content={"detail": str(error)})
+
+
+@app.exception_handler(ClaudeCommandForbidden)
+async def _claude_forbidden(_request: Request, error: ClaudeCommandForbidden):
+    return JSONResponse(status_code=403, content={"detail": str(error)})
 
 
 @app.exception_handler(ValueError)
@@ -137,6 +144,39 @@ def review_decide(table: str, record_id: int, decision: Decision,
     with session.begin():
         review.decide(session, spec, record_id, decision.decision, decision.changes)
     return records.get_record(session, spec, record_id)
+
+
+@app.get("/api/interface", response_model=EntranceList)
+def list_entrances() -> EntranceList:
+    """入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る"""
+    return EntranceList(entrances=[e.to_dict() for e in interface.ENTRANCES.values()],
+                        claude_available=in_claude_code())
+
+
+@app.post("/api/interface/{entrance_id}", response_model=RunResult | JobInfo)
+def run_entrance(entrance_id: str, request: RunRequest, response: Response):
+    """入口を呼ぶ。`claude` を叩く入口(と `background` を立てた呼び出し)は job の id を 202 で返し、結果は `/api/jobs/{id}` で引く"""
+    entrance = interface.entrance_of(entrance_id)
+    if entrance.claude:
+        require_claude_code(entrance.id)
+    if entrance.claude or request.background:
+        job = runner.submit(entrance.id, request.args, lambda: interface.invoke(entrance, request.args))
+        response.status_code = 202
+        return JobInfo(**job.to_dict())
+    return RunResult(entrance=entrance.id, result=interface.invoke(entrance, request.args))
+
+
+@app.get("/api/jobs", response_model=JobList)
+def list_jobs() -> JobList:
+    return JobList(jobs=[JobInfo(**job.to_dict()) for job in runner.list()])
+
+
+@app.get("/api/jobs/{job_id}", response_model=JobInfo)
+def get_job(job_id: str) -> JobInfo:
+    job = runner.get(job_id)
+    if job is None:
+        raise UnknownRecordError(f"job が無い: {job_id}")
+    return JobInfo(**job.to_dict())
 
 
 @app.get("/api/maps", response_class=HTMLResponse)

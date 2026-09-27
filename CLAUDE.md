@@ -38,6 +38,8 @@
 
 `gui/` に、ユーザが `novel.db` をブラウザから直す道具(FastAPI の API と Next.js の画面)がある。
 起動と API は `gui/readme.md`。未確認のアイデア・ミームの承認・非承認、星ごとの地図・人物相関図もここで見る。
+`ai/claude_code/interface/` の入口と常駐ループは `/api/interface/{id}` からも呼べる。`claude` コマンドを叩く入口は
+Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る(`gui/api/interface.py`)。
 `confirmed` は 未確認/承認/非承認 の三段(`db.schema.ConfirmStatus`)で、承認だけが検索・生成・
 人物へ引く対象になる。非承認は使わないが、同じ語をまた候補に足さないよう行は残す。
 

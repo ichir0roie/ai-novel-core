@@ -86,3 +86,17 @@ export function labelOf(labels: Labels | undefined, column: string, id: unknown)
   const name = labels?.[column]?.[String(id)];
   return name ? `${name} (${id})` : String(id);
 }
+
+export type EntranceMeta = components["schemas"]["EntranceMeta"];
+export type EntranceList = components["schemas"]["EntranceList"];
+export type JobInfo = components["schemas"]["JobInfo"];
+export type RunResult = components["schemas"]["RunResult"];
+
+export const getEntrances = () => api<EntranceList>("/api/interface");
+
+export const runEntrance = (id: string, args: Rec, background = false) =>
+  api<RunResult | JobInfo>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args, background }) });
+
+export const getJobs = () => api<components["schemas"]["JobList"]>("/api/jobs");
+
+export const getJob = (id: string) => api<JobInfo>(`/api/jobs/${id}`);

@@ -5,6 +5,8 @@
 - 未確認のアイデア・ミームを一件ずつ出し、直しながら「承認」「非承認」を付けて次へ進むレビュー画面
 - 本文を持つテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き)の一覧・表示・修正・追加
 - 星ごとの地図と人物相関図(`/api/maps` `/api/relations`)
+- `ai/claude_code/interface/` の入口と常駐ループ(`claude_*_main`)を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
+  `claude` コマンドを叩くものは Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る
 
 ## 構成の決め方
 
@@ -51,6 +53,9 @@ npm run dev          # http://localhost:3000
 | GET | `/api/review` | 未確認・承認・非承認の件数 |
 | GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
+| GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、この API が Claude Code の環境かどうか |
+| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `world.list_places.ListPlaces` や `time_keeper.daily_event`。`claude` を叩く入口と `background` は job の id を 202 で返す |
+| GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー(API を起こしているあいだだけ持つ) |
 | GET | `/api/maps` / `/api/maps/{planet_id}.svg` | 星ごとの地図(html / svg)。場所の座標・領域から描く |
 | GET | `/api/relations` | 人物相関図(html) |
 
@@ -65,9 +70,19 @@ npm run dev          # http://localhost:3000
 (cd core/gui/web && npm run types)
 ```
 
+## 入口と claude コマンド
+
+`POST /api/interface/{id}` は、クラスの入口なら組み立てて `run()` を、常駐ループ側なら `claude_*_main` をそのまま呼ぶ。
+どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `run()` を上書きしている入口、
+AI を引数に取る入口、`time_keeper.*`)。それらは
+
+- Claude Code の環境(シェルに `CLAUDECODE=1` がある。Claude Code のセッションから起こした API)でだけ通す。外なら 403
+- 数分〜十数分掛かるので、必ず裏の job にして 202 で id を返す。結果は `/api/jobs/{id}` で引く。job は一度に一つずつ走る
+- `shared_style_extra` / `style_extra` を渡さなければ、世界リポジトリの `instructions/style.py`(`SHARED_EXTRA` / `EPISODE_STYLE_EXTRA`)があればそこから埋める
+
 ## テスト
 
 ```
-.venv/bin/python -m pytest core/tests/test_gui_api.py core/tests/test_confirm_status.py
+.venv/bin/python -m pytest core/tests/test_gui_api.py core/tests/test_gui_interface.py core/tests/test_confirm_status.py
 (cd core/gui/web && npm run typecheck && npm run lint)
 ```

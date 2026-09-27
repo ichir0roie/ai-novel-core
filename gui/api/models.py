@@ -107,3 +107,54 @@ class Health(BaseModel):
 
 class Created(BaseModel):
     id: int
+
+
+class EntranceParam(BaseModel):
+    name: str
+    required: bool
+    default: Any = None
+    annotation: str = ""
+
+
+class EntranceMeta(BaseModel):
+    id: str
+    area: str
+    name: str
+    doc: str
+    params: list[EntranceParam]
+    # claude コマンドを叩く(Claude Code の環境でだけ、裏の job として走る)
+    claude: bool
+    writes: bool
+
+
+class EntranceList(BaseModel):
+    entrances: list[EntranceMeta]
+    # この API が Claude Code の環境で起きているか(false なら claude=true の入口は 403)
+    claude_available: bool
+
+
+class RunRequest(BaseModel):
+    args: dict[str, Any] = Field(default_factory=dict)
+    # true なら claude を叩かない入口も裏の job で走らせる
+    background: bool = False
+
+
+class RunResult(BaseModel):
+    entrance: str
+    result: Any = None
+
+
+class JobInfo(BaseModel):
+    id: str
+    entrance: str
+    args: dict[str, Any]
+    status: Literal["queued", "running", "done", "failed"]
+    result: Any = None
+    error: str | None = None
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class JobList(BaseModel):
+    jobs: list[JobInfo]
