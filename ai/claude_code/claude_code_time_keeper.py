@@ -33,26 +33,32 @@ def claude_story_years_main(story_id: int, years: int = 5) -> Stamp:
     return loop_time_for_story(story_id, years)
 
 
-def daily_event(character_id: int | None = None, age: int | None = None) -> int | None:
+def daily_event(character_id: int | None = None, age: int | None = None, *,
+                shared_style_extra: str = "", style_extra: str = "") -> int | None:
     try:
-        return _main.daily_event(ai_client, character_id, age)
+        return _main.daily_event(ai_client, character_id, age,
+                                 shared_style_extra=shared_style_extra, style_extra=style_extra)
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
 
-def claude_daily_event_main(character_id: int | None = None, age: int | None = None) -> int | None:
-    return daily_event(character_id, age)
+def claude_daily_event_main(character_id: int | None = None, age: int | None = None, *,
+                            shared_style_extra: str = "", style_extra: str = "") -> int | None:
+    return daily_event(character_id, age, shared_style_extra=shared_style_extra, style_extra=style_extra)
 
 
-def place_event(place_id: int, time: Stamp | str, key: str) -> int | None:
+def place_event(place_id: int, time: Stamp | str, key: str, *,
+                shared_style_extra: str = "", style_extra: str = "") -> int | None:
     try:
-        return _main.place_event(ai_client, place_id, time, key)
+        return _main.place_event(ai_client, place_id, time, key,
+                                 shared_style_extra=shared_style_extra, style_extra=style_extra)
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
 
-def claude_place_event_main(place_id: int, time: Stamp | str, key: str) -> int | None:
-    return place_event(place_id, time, key)
+def claude_place_event_main(place_id: int, time: Stamp | str, key: str, *,
+                            shared_style_extra: str = "", style_extra: str = "") -> int | None:
+    return place_event(place_id, time, key, shared_style_extra=shared_style_extra, style_extra=style_extra)
 
 
 def _writer_options(model: str | None, effort: str | None) -> dict:
@@ -64,13 +70,15 @@ def plot(
     previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
     viewpoint: str | None = None, plot_id: int | None = None,
     model: str | None = None, effort: str | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     """`model` / `effort` は本文を書く呼び出しにだけ効く。省けば fable の high"""
     try:
         return _main.plot(
             ai_client, story_id, key, time, character_ids, previous_plot_ids,
             place_id=place_id, viewpoint=viewpoint, plot_id=plot_id,
-            writer_options=_writer_options(model, effort))
+            writer_options=_writer_options(model, effort),
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
@@ -80,20 +88,24 @@ def claude_plot_main(
     previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
     viewpoint: str | None = None, plot_id: int | None = None,
     model: str | None = None, effort: str | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     return plot(story_id, key, time, character_ids, previous_plot_ids,
-                place_id=place_id, viewpoint=viewpoint, plot_id=plot_id, model=model, effort=effort)
+                place_id=place_id, viewpoint=viewpoint, plot_id=plot_id, model=model, effort=effort,
+                shared_style_extra=shared_style_extra, style_extra=style_extra)
 
 
 def episode(
     plot_id: int, character_ids: list[int], previous_plot_ids: list[int] | None = None, *,
     place_id: int | None = None, model: str | None = None, effort: str | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     """話の枠に本文だけを書く。`model` / `effort` を省けば fable の high"""
     try:
         return _main.episode(
             ai_client, plot_id, character_ids, previous_plot_ids,
-            place_id=place_id, writer_options=_writer_options(model, effort))
+            place_id=place_id, writer_options=_writer_options(model, effort),
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
@@ -101,9 +113,11 @@ def episode(
 def claude_episode_main(
     plot_id: int, character_ids: list[int], previous_plot_ids: list[int] | None = None, *,
     place_id: int | None = None, model: str | None = None, effort: str | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     return episode(plot_id, character_ids, previous_plot_ids,
-                   place_id=place_id, model=model, effort=effort)
+                   place_id=place_id, model=model, effort=effort,
+                   shared_style_extra=shared_style_extra, style_extra=style_extra)
 
 
 if __name__ == "__main__":

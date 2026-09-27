@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
+from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.style import EPISODE_STYLE_INSTRUCTION, EPISODE_TARGET_LETTERS, layout_novel_text
+from ai.instructions.style import EPISODE_TARGET_LETTERS, layout_novel_text
 from ai.time_keeper import constants
 from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper import episode_summary, event_summary, idea_context
@@ -21,7 +22,8 @@ from ai.time_keeper.character_event_generator import _sheet
 from data_access_logic.query import common_query
 from db.schema import Character, Plot, Episode, Event, Location, Session, Stamp, Story
 
-_SYSTEM_PROMPT = f"""\
+def _system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> str:
+    return f"""\
 あなたは日本語のライトノベルを書く作家です。
 作品・この話の種・時刻・場所・登場人物・直前の話を渡すので、この作品の話を一話ぶん書いてください。
 種(key)は作者が決めたこの話の中身です。それを場面まで展開したものを本文にし、種に無い出来事を足さないでください。
@@ -30,8 +32,12 @@ _SYSTEM_PROMPT = f"""\
 「この時点より後に既に決まっている出来事」を渡したときは、それと矛盾させず、そこで起きることを先回りして書かないでください。
 「関係する設定」を渡したときは、それを踏まえて書いてください。
 {EVENT_AGE_INSTRUCTION}
-{EPISODE_STYLE_INSTRUCTION}
+{style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}
 JSON で答えてください。キーは title(サブタイトル。短く)・viewpoint(視点人物の名前。視点を渡したときはそれ)・text(本文)の三つだけ。"""
+
+
+# 文体の好み(舞台設定・既存の話から抽出した文体の癖など)を渡さない既定の文面。
+_SYSTEM_PROMPT = _system_prompt()
 
 _SCHEMA = {
     "type": "object",
@@ -147,10 +153,13 @@ def write(
     session: Session, ai: AIClient, story: Story, key: str, time: Stamp, characters: list[Character],
     previous_plot_ids: list[int] | None = None, *, place: Location | None = None,
     viewpoint: str | None = None, exclude_plot_id: int | None = None, writer_options: dict | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> Written | None:
     """本文を書くだけで、話にも本文の表にも書き込まない(材料の要約だけは作って残す)。
 
     `place` を省くと作品の立つ場所を材料に使う。`exclude_plot_id` は前の話から外す話(書き込む先の枠)。
+    `shared_style_extra` / `style_extra` は、世界の舞台設定・既存の話から抽出した文体の癖のような、
+    世界ごとの好みを呼び出し側(親リポジトリ側)から渡す。
     """
     context_place_id = place.id if place is not None else story.place_id
     context_place = place or (session.get(Location, story.place_id) if story.place_id else None)
@@ -188,8 +197,10 @@ def write(
         f"この話を{EPISODE_TARGET_LETTERS[0]}〜{EPISODE_TARGET_LETTERS[1]}字の本文に書いてください。",
     ]
 
+    system_prompt = (_system_prompt(shared_style_extra=shared_style_extra, style_extra=style_extra)
+                     if (shared_style_extra or style_extra) else _SYSTEM_PROMPT)
     decided = ai.try_generate_json(
-        "\n".join(lines), _SCHEMA, system=_SYSTEM_PROMPT, timeout=constants.EPISODE_TIMEOUT,
+        "\n".join(lines), _SCHEMA, system=system_prompt, timeout=constants.EPISODE_TIMEOUT,
         **(writer_options or {}))
     text = layout_novel_text(decided.get("text") or "")
     if not text:
@@ -237,12 +248,13 @@ def frame(session: Session, plot_id: int, story_id: int | None = None) -> Plot:
 def generate(
     session: Session, ai: AIClient, plot_id: int, character_ids: list[int],
     previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
-    writer_options: dict | None = None,
+    writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
     """枠(`plot_id` の話)の種・時刻・視点で本文を書いて付ける。
 
     `writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
     `place_id` を渡すと枠の場所もその名前にする。本文が得られなければ枠を変えずに None を返す。
+    `shared_style_extra` / `style_extra` は `write` に渡す(世界ごとの文体の好み)。
     """
     record = frame(session, plot_id)
     if not (record.key or "").strip():
@@ -258,7 +270,8 @@ def generate(
 
     written = write(session, ai, story, record.key.strip(), record.start, characters(session, character_ids),
                     previous_plot_ids, place=place, viewpoint=record.viewpoint,
-                    exclude_plot_id=record.id, writer_options=writer_options)
+                    exclude_plot_id=record.id, writer_options=writer_options,
+                    shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
         return None
     if place is not None:

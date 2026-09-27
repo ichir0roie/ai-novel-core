@@ -205,6 +205,12 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 (`ai.local_ai.` / `ai.claude_code.` を頭に付ける)
 
+上の四つ(`daily_event` / `place_event` / `plot` / `episode`。ローカル AI・Claude Code とも)は
+`shared_style_extra` / `style_extra` も渡せる。世界の舞台設定や、既存の話から抽出した文体の癖のような
+「ユーザーの好み」は `core` には定数で持たず(`ai/instructions/style.py` の `style_instruction()` を見る)、
+呼び出し側(世界リポジトリ側。例えば `instructions/style.py`)がこの二引数で渡す。省けば空でよく、
+その場合は `core` だけの汎用の文体になる。
+
 毎日のルーチンは、人物ごとに生まれてから 5〜20 年後を起点に自分の時を刻む。作品の時期には合わせず、
 作品の本文(筋書き)も渡さない。出来事の候補は、出来事の種(`event_seed` テーブル。md には出さない)から
 ランダムに引いた種か、直前の出来事からの連想で立てる。種は作品の本文・話の種(`key`、無ければ本文)・

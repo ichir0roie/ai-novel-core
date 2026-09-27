@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import json
 
-from ai.instructions.style import EPISODE_STYLE_INSTRUCTION, layout_novel_text
+from ai.instructions import style
+from ai.instructions.style import layout_novel_text
 from ai.claude_code import ai_client
 from ai.claude_code.interface.story import _rows
 from ai.time_keeper import episode_summary, idea_context
@@ -19,14 +20,19 @@ EPISODE_TIMEOUT = 900.0
 # 本文の代わりに概要で渡す、直前の話の本数。文体の覚え書きは一番新しい話のものを使う。
 RECAP_EPISODE_LIMIT = 3
 
-_SYSTEM_PROMPT = f"""\
+def _system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> str:
+    return f"""\
 あなたは日本語のライトノベルを書く作家です。
 作品の見出し・直前の話・世界の断面・顔ぶれを渡すので、この作品の次の話を一話ぶん書いてください。
 直前の話は本文の代わりに概要(summary)で渡します。概要の筋をそのまま受け継ぎ、文体の覚え書きを渡したときはそれに揃えてください。
-{EPISODE_STYLE_INSTRUCTION}
+{style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}
 種(key)を渡したときは、それを場面まで展開したものを本文にしてください。種に無い出来事を足さないでください。
 「関係する設定」を渡したときは、それを踏まえて書いてください。
 JSON で答えてください。キーは title(サブタイトル。短く)と text(本文)の二つだけ。"""
+
+
+# 文体の好み(舞台設定・既存の話から抽出した文体の癖など)を渡さない既定の文面。
+_SYSTEM_PROMPT = _system_prompt()
 
 _SCHEMA = {
     "type": "object",
@@ -113,6 +119,7 @@ def _materials(
 def write_next_episode(
     session: Session, story_id: int, time=None, *, plot_id: int | None = None,
     plots: int = RECAP_EPISODE_LIMIT, count: int = 5, reach: int = 60, levels: int = 1,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> Plot | None:
     story_row = common_query.get_story(session, story_id)
     rows = _ordered(session, story_id)
@@ -149,8 +156,10 @@ def write_next_episode(
         lines.append(f"視点と場所: {record.viewpoint or ''} / {record.place or ''}")
     lines.append("この作品の次の話を書いてください。")
 
+    system_prompt = (_system_prompt(shared_style_extra=shared_style_extra, style_extra=style_extra)
+                     if (shared_style_extra or style_extra) else _SYSTEM_PROMPT)
     decided = ai_client.try_generate_json(
-        "\n".join(lines), _SCHEMA, system=_SYSTEM_PROMPT, timeout=EPISODE_TIMEOUT,
+        "\n".join(lines), _SCHEMA, system=system_prompt, timeout=EPISODE_TIMEOUT,
         model=ai_client.EPISODE_MODEL, effort=ai_client.EPISODE_EFFORT)
     text = layout_novel_text(decided.get("text") or "")
     if not text:
@@ -178,13 +187,15 @@ def write_next_episode(
 
 
 def write_story(story_id: int, episodes_to_write: int = 1, time=None,
-                plot_id: int | None = None) -> list[Plot]:
+                plot_id: int | None = None, *,
+                shared_style_extra: str = "", style_extra: str = "") -> list[Plot]:
     """`plot_id` は一話目にだけ効く。二話目からは、本文の入っている最後の話の次を書く"""
     written: list[Plot] = []
     with get_env_session() as session:
         for offset in range(episodes_to_write):
             target = plot_id if offset == 0 else None
-            record = write_next_episode(session, story_id, time, plot_id=target)
+            record = write_next_episode(session, story_id, time, plot_id=target,
+                                        shared_style_extra=shared_style_extra, style_extra=style_extra)
             if record is None:
                 break
             written.append(record)

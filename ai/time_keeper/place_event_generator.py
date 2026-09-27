@@ -6,7 +6,8 @@ import random
 
 from sqlalchemy import select
 
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION, EVENT_NOVEL_INSTRUCTION
+from ai.instructions import event_writing
+from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.style import EVENT_NOVEL_TARGET_LETTERS, layout_novel_text
 from ai.time_keeper import constants
 from ai.time_keeper import event_progression_generator as progression
@@ -18,15 +19,20 @@ from data_access_logic.query import world_createion_query
 from data_access_logic.query.base import character_active_condition
 from db.schema import Character, Event, EventCharacter, Location, Session, Stamp
 
-_NOVEL_SYSTEM_PROMPT = f"""\
+def _novel_system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> str:
+    return f"""\
 あなたは日本語のライトノベルを書く作家です。
 ある場所で起きた出来事の記録と、場所・当事者・当事者それぞれの直前の出来事・場面の指定を渡すので、この出来事を小説の本文に書き起こしてください。
 場面の指定は、ジャンルや場面を一言で決めたものです。その味わいが伝わるように書いてください。
 「関係する設定」を渡したときは、それを踏まえて書いてください。
 「この時点より後に既に決まっている出来事」を渡したときは、それと矛盾させず、そこで起きることを先回りして書かないでください。
 {EVENT_AGE_INSTRUCTION}
-{EVENT_NOVEL_INSTRUCTION}
+{event_writing.event_novel_instruction(shared_style_extra=shared_style_extra, style_extra=style_extra)}
 JSON で答えてください。キーは text(本文)だけ。"""
+
+
+# 文体の好み(舞台設定・既存の話から抽出した文体の癖など)を渡さない既定の文面。
+_NOVEL_SYSTEM_PROMPT = _novel_system_prompt()
 
 _NOVEL_SCHEMA = {
     "type": "object",
@@ -58,7 +64,8 @@ def _note(key: str) -> str:
 
 def _novelize(
     session: Session, record: Event, members: list[Character], key: str, ai: AIClient,
-    ideas: idea_context.IdeaContext | None = None, later_events: list[dict] | None = None,
+    ideas: idea_context.IdeaContext | None = None, later_events: list[dict] | None = None, *,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> None:
     involved_ids = set(session.scalars(
         select(EventCharacter.character_id).where(EventCharacter.event_id == record.id)).all())
@@ -81,8 +88,10 @@ def _novelize(
         f"この出来事を、当事者のうち場面の指定が一番よく伝わる一人を視点人物にした"
         f"{EVENT_NOVEL_TARGET_LETTERS[0]}〜{EVENT_NOVEL_TARGET_LETTERS[1]}字の小説の本文に書き起こしてください。",
     ])
+    system_prompt = (_novel_system_prompt(shared_style_extra=shared_style_extra, style_extra=style_extra)
+                     if (shared_style_extra or style_extra) else _NOVEL_SYSTEM_PROMPT)
     decided = ai.try_generate_json(
-        prompt, _NOVEL_SCHEMA, system=_NOVEL_SYSTEM_PROMPT, timeout=constants.EVENT_NOVEL_TIMEOUT)
+        prompt, _NOVEL_SCHEMA, system=system_prompt, timeout=constants.EVENT_NOVEL_TIMEOUT)
     text = layout_novel_text(decided.get("text") or "")
     if not text:
         print(f"[time_keepr/place] {record.name}(id={record.id}): 本文を小説にできなかったので記録のまま残す")
@@ -94,9 +103,12 @@ def _novelize(
 
 def generate_at(
     session: Session, ai: AIClient, place_id: int, time: Stamp, key: str,
-    rng: random.Random | None = None,
+    rng: random.Random | None = None, *, shared_style_extra: str = "", style_extra: str = "",
 ) -> Event | None:
-    """居合わせるサブキャラクターを当事者の候補に、その場所・時刻に `key`(ジャンル・場面)に沿った出来事を起こす。"""
+    """居合わせるサブキャラクターを当事者の候補に、その場所・時刻に `key`(ジャンル・場面)に沿った出来事を起こす。
+
+    `shared_style_extra` / `style_extra` は `_novelize` に渡す(世界ごとの文体の好み)。
+    """
     key = (key or "").strip()
     if not key:
         raise ValueError("key(ジャンル・場面の指定)が空")
@@ -121,7 +133,8 @@ def generate_at(
         return None
     context = idea_context.gather(session, f"{record.name}\n{record.text}", ai, record.location_id, record.time)
     later_events = progression._later_events(session, record.location_id, members, record.start, ai)
-    _novelize(session, record, members, key, ai, context, later_events)
+    _novelize(session, record, members, key, ai, context, later_events,
+             shared_style_extra=shared_style_extra, style_extra=style_extra)
     idea_context.link(session, record, context.linked)
     session.commit()
     return record

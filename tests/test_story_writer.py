@@ -235,3 +235,13 @@ def test_previous_plots_are_taken_from_before_the_target(session, story, calls):
 def test_system_prompt_states_the_length_target():
     assert "一話は5000〜8000字" in story_writer._SYSTEM_PROMPT
     assert "場面" in story_writer._SYSTEM_PROMPT
+
+
+def test_style_extras_from_the_caller_reach_the_system_prompt(session, story, calls):
+    """世界の舞台設定・既存の話から抽出した文体の癖は、コアに定数で持たず、呼び出し側から渡す。"""
+    story_writer.write_next_episode(session, story.id,
+                                    shared_style_extra="西暦一万年のSF世界", style_extra="この世界の文体の癖")
+
+    system = calls[-1]["system"]
+    assert "西暦一万年のSF世界" in system and "この世界の文体の癖" in system
+    assert system != story_writer._SYSTEM_PROMPT
