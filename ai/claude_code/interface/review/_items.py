@@ -4,7 +4,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ai.time_keeper import idea_context
-from data_access_logic.query import dictionary_query, review_query
+from data_access_logic.query import dictionary_query, meme_query, review_query
 from db.schema import Idea, Story
 from tool.markdown import export_db
 
@@ -42,6 +42,24 @@ def candidate_items(session: Session) -> list[dict]:
                 f"種別: {idea.kind}",
                 f"確定: md の confirmed を true にする / "
                 f"統合: MergeIdea({idea.id}, 統合先の id) / 削除: DeleteIdea({idea.id})",
+            ]),
+        })
+    return items
+
+
+def unconfirmed_meme_items(session: Session) -> list[dict]:
+    items = []
+    for meme in session.scalars(meme_query.unconfirmed_memes_select()).all():
+        items.append({
+            "key": f"meme:{meme.id}",
+            "kind": "候補",
+            "title": f"ミーム候補「{meme.text}」を確かめる・直す・消す",
+            "detail": "\n".join([
+                meme.text,
+                f"分類: {meme.category or '(未分類)'}",
+                f"md: {md_path(session, meme)}",
+                f"確定: md の confirmed を true にする(確定するまで人物へ引く対象に出ない) / "
+                f"直す: UpdateMeme({{'id': {meme.id}, ...}}) / 削除: DeleteMeme({meme.id})",
             ]),
         })
     return items

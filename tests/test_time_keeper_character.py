@@ -79,7 +79,8 @@ def test_generate_non_person_has_no_personality_line(session):
 
 
 def _one_meme_per_category(session, monkeypatch):
-    session.add_all([Meme(text=f"{category}のミーム", category=category) for category in MEME_CATEGORIES])
+    session.add_all([Meme(text=f"{category}のミーム", category=category, confirmed=True)
+                     for category in MEME_CATEGORIES])
     session.commit()
     monkeypatch.setattr(constants, "MEME_DRAW_RANGE", (1, 1))
 

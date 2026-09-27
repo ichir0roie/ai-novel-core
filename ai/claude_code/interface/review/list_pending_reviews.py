@@ -3,7 +3,7 @@
 
     ListPendingReviews().run()
 
-候補のアイデア・世界観へ反映していない話・本文に残った TODO を、
+候補のアイデア・候補のミーム・世界観へ反映していない話・本文に残った TODO を、
 `{"key", "kind", "title", "detail"}` の辞書で返す。`key` は同じものを二度タスクにしないための印。
 """
 from __future__ import annotations
@@ -15,5 +15,6 @@ from ai.claude_code.interface.review import _items
 class ListPendingReviews(SessionEntrypoint):
     def execute(self, session) -> list[dict]:
         return [*_items.candidate_items(session),
+                *_items.unconfirmed_meme_items(session),
                 *_items.unsynced_plot_items(session),
                 *_items.todo_items(session)]
