@@ -7,6 +7,7 @@ import { getRecord, labelOf, listRecords, type ColumnMeta, type Rec, type Record
 import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
+import { openInNewTab } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 const PAGE = 50;
@@ -115,7 +116,7 @@ export default function TablePage() {
         </h1>
         <div className="toolbar">
           {viewSwitch}
-          <Link href={`/tables/${table}/new`}>
+          <Link href={`/tables/${table}/new`} target="_blank" rel="noopener noreferrer">
             <button type="button" className="primary">
               {T.list.add}
             </button>
@@ -153,7 +154,8 @@ export default function TablePage() {
       <PageTitle kind={meta.label} record={recordName} />
       {storyId && (
         <div className="hint">
-          <Link href="/tables/story">{T.list.stories}</Link> / <Link href={`/tables/story/${storyId}`}>{storyLabel ?? `id=${storyId}`}</Link>
+          <Link href="/tables/story" target="_blank" rel="noopener noreferrer">{T.list.stories}</Link> /{" "}
+          <Link href={`/tables/story/${storyId}`} target="_blank" rel="noopener noreferrer">{storyLabel ?? `id=${storyId}`}</Link>
         </div>
       )}
       <h1>
@@ -189,7 +191,7 @@ export default function TablePage() {
             ))}
           </span>
         )}
-        <Link href={`/tables/${table}/new`}>
+        <Link href={`/tables/${table}/new`} target="_blank" rel="noopener noreferrer">
           <button type="button" className="primary">
             {T.list.add}
           </button>
@@ -211,13 +213,9 @@ export default function TablePage() {
               key={String(item.id)}
               className="row"
               tabIndex={0}
-              onClick={(e) => {
-                const href = `/tables/${table}/${item.id}`;
-                if (e.ctrlKey || e.metaKey) window.open(href, "_blank");
-                else router.push(href);
-              }}
+              onClick={() => openInNewTab(`/tables/${table}/${item.id}`)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") router.push(`/tables/${table}/${item.id}`);
+                if (e.key === "Enter") openInNewTab(`/tables/${table}/${item.id}`);
               }}
             >
               <td>{String(item.id)}</td>

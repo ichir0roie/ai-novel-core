@@ -10,7 +10,7 @@ function StoryRow({ story }: { story: TreeStory }) {
   const span = [story.start, story.end].filter(Boolean).join(" 〜 ");
   return (
     <li className="tree-story">
-      <Link href={`/tables/story/${story.id}`}>{story.name}</Link>
+      <Link href={`/tables/story/${story.id}`} target="_blank" rel="noopener noreferrer">{story.name}</Link>
       <span className="tree-meta">
         {story.state && <span className="chip">{story.state}</span>}
         {span && <span>{span}</span>}
@@ -28,7 +28,7 @@ function PlaceNode({ node }: { node: TreeNode }) {
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
           {node.kind && <span className="tree-kind">{node.kind}</span>}
           <span className="tree-count">{T.storyTree.stories(node.total)}</span>
-          <Link href={`/tables/location/${node.id}`} className="tree-link" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/tables/location/${node.id}`} target="_blank" rel="noopener noreferrer" className="tree-link" onClick={(e) => e.stopPropagation()}>
             {T.storyTree.openLocation}
           </Link>
         </summary>

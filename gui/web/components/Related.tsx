@@ -15,7 +15,7 @@ export default function Related({ related, owner }: { related: Record<string, un
   return (
     <div className="panel related">
       {graph && (
-        <Link href={graph.href} className="jump">
+        <Link href={graph.href} target="_blank" rel="noopener noreferrer" className="jump">
           <span className="jump-title">{graph.title}</span>
           <span className="jump-sub">{graph.sub}</span>
         </Link>
@@ -29,7 +29,7 @@ export default function Related({ related, owner }: { related: Record<string, un
             <ul>
               {appearances.map((a) => (
                 <li key={`${a.table}:${a.id}`}>
-                  <Link href={`/tables/${a.table}/${a.id}`}>
+                  <Link href={`/tables/${a.table}/${a.id}`} target="_blank" rel="noopener noreferrer">
                     {a.table}「{a.label}」(id={a.id})
                   </Link>
                 </li>
@@ -39,7 +39,7 @@ export default function Related({ related, owner }: { related: Record<string, un
         </>
       )}
       {plots && owner?.table === "story" && (
-        <Link href={`/tables/plot?story_id=${owner.id}`} className="jump">
+        <Link href={`/tables/plot?story_id=${owner.id}`} target="_blank" rel="noopener noreferrer" className="jump">
           <span className="jump-title">{T.related.plotList}</span>
           <span className="jump-sub">
             {T.related.plotSummary(plots.length, plots.reduce((sum, p) => sum + (p.letters ?? 0), 0))}

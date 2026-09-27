@@ -23,7 +23,7 @@ export default function Home() {
       {summaryError && <div className="status error">{T.cannotReachApi(summaryError)}</div>}
       <div className="cards">
         {summary?.tables.map((row) => (
-          <Link key={row.table} href={`/review/${row.table}`} className="card">
+          <Link key={row.table} href={`/review/${row.table}`} target="_blank" rel="noopener noreferrer" className="card">
             <div className="sub">{T.home.pending(row.label)}</div>
             <div className="count">{row.pending}</div>
             <div className="sub">{T.home.counts(row.approved, row.rejected)}</div>
@@ -36,7 +36,7 @@ export default function Home() {
       {loading && <div className="status info">{T.loading}</div>}
       <div className="cards">
         {tables.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (
-          <Link key={table.name} href={`/tables/${table.name}`} className="card">
+          <Link key={table.name} href={`/tables/${table.name}`} target="_blank" rel="noopener noreferrer" className="card">
             <div className="sub">
               {table.label} <code>{table.name}</code>
             </div>
