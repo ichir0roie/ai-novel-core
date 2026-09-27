@@ -159,17 +159,18 @@ NOVEL_STYLE_BASE = """\
 中身が終わったときは、余韻を残すか、気の利いた落ちを付けて締める。"""
 
 
-def _scale_rule(unit: str, letters: tuple[int, int]) -> str:
+def _scale_rule(unit: str, letters: tuple[int, int] | None = None) -> str:
+    scale = f"{unit}は{letters[0]}〜{letters[1]}字。\n" if letters else ""
     return f"""\
-{unit}は{letters[0]}〜{letters[1]}字。
-場面の数と一場面の長さは決めず、中身に合わせる。場面が変わる(場所・時間・書く対象が変わる)ところにだけ、「{SCENE_BREAK}」だけの行を置く。
+{scale}場面の数と一場面の長さは決めず、中身に合わせる。場面が変わる(場所・時間・書く対象が変わる)ところにだけ、「{SCENE_BREAK}」だけの行を置く。
 字数は、実際に起きることで作る。修飾・言い換え・心情の反芻を足して伸ばさない。"""
 
 
 EPISODE_STYLE_BASE = f"""\
 {NOVEL_STYLE_BASE}
-{_scale_rule("一話", EPISODE_TARGET_LETTERS)}
-種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。"""
+{_scale_rule("一話")}
+種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。
+種(key)にある出来事は、渡された作品・登場人物・場所・直前の話・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。"""
 
 # 話と同じ小説の形で書く出来事の本文(毎日のルーチン)。文体の好み(extra)は呼び出し側から渡す。
 EVENT_NOVEL_STYLE_BASE = f"""\

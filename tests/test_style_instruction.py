@@ -127,10 +127,14 @@ def test_event_novel_shares_the_episode_novel_style():
     assert style.NOVEL_STYLE_BASE in style.style_instruction("event_novel")
 
 
-def test_episode_style_keeps_its_length_rule():
+def test_episode_style_has_no_length_target_but_expands_the_key_with_surrounding_data():
     base = style.EPISODE_STYLE_BASE
-    assert "一話は5000〜8000字。" in base
-    assert base.endswith("種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。")
+    assert "一話は5000〜8000字。" not in base
+    assert "字数は、実際に起きることで作る。" in base
+    assert "種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。" in base
+    assert base.endswith(
+        "種(key)にある出来事は、渡された作品・登場人物・場所・直前の話・関係する設定などの"
+        "周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。")
 
 
 @pytest.mark.parametrize("target", ["episode", "event_novel"])
