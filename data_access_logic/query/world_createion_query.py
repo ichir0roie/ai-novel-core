@@ -5,7 +5,7 @@ from sqlalchemy import Select, and_, func, or_, select
 
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, Event, EventCharacter, Location, Session, Stamp, Story,
+    Character, CharacterParameter, Event, EventCharacter, Location, Session, Stamp, Story,
 )
 
 
@@ -35,9 +35,25 @@ def alive_locations_select(time) -> Select:
 
 
 def alive_characters_select(time) -> Select:
-    return (select(Character)
-            .where(or_(Character.start.is_(None), Character.start <= time),
-                   or_(Character.end.is_(None), Character.end > time)))
+    """誕生・死亡は列を持たず `character_parameter` の行で表す(`Character.start` / `.end` を見る)。
+
+    誕生 = 一番早く始まる行の start(`Character.start` と同じ計算)。
+    死亡済みかは、一番後に始まる行(無ければ一番後に作った行。`Character.end` と同じ行)の end だけを見る
+    (途中の行の end は、育ちなどの区切りで死亡ではないことがあるため)。
+    """
+    born = (select(func.min(CharacterParameter.start))
+            .where(CharacterParameter.character_id == Character.id)
+            .correlate(Character).scalar_subquery())
+    last_row_id = (
+        select(CharacterParameter.id)
+        .where(CharacterParameter.character_id == Character.id)
+        .order_by(CharacterParameter.start.is_not(None).desc(),
+                  CharacterParameter.start.desc(), CharacterParameter.id.desc())
+        .limit(1).correlate(Character).scalar_subquery())
+    died = (select(CharacterParameter.end)
+            .where(CharacterParameter.id == last_row_id)
+            .correlate(Character).scalar_subquery())
+    return select(Character).where(or_(born.is_(None), born <= time), or_(died.is_(None), died > time))
 
 
 def active_story_count_select(time) -> Select:

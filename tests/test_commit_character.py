@@ -44,7 +44,8 @@ def test_commit_from_json_string(session, world):
     record = session.get(Character, result["id"])
     assert record.start == Stamp(2100) and record.end == Stamp(2160)
     [row] = record.parameters
-    assert row.start is None and row.end is None
+    # 誕生・死亡は列を持たず、この唯一の行の start / end がそれを兼ねる
+    assert row.start == Stamp(2100) and row.end == Stamp(2160)
     assert all(getattr(row, name) in PERSONALITY_LEVELS for name in PERSONALITY_COLUMNS)
     [parameter] = result["parameters"]
     assert {name: parameter[name] for name in PERSONALITY_COLUMNS} == {
@@ -184,8 +185,9 @@ def test_read_character_returns_values_of_the_time(world):
     assert (young["sincerity"], young["height"]) == ("無", 140.0)
     assert (grown["sincerity"], grown["height"]) == ("高", 140.0)
     assert len(grown["parameters"]) == 2
-    # 時刻を渡さなければ、期間を限らない値だけ
-    assert ReadCharacter(committed["id"]).run()["sincerity"] == "無"
+    # 時刻を渡さなければ、一番限る端が少ない行を採る。誕生(start=2100)を持つだけの最初の行と
+    # 期間の始まる二番目の行(start=2120)が限る端の数(1つ)で並ぶので、後の行が勝つ
+    assert ReadCharacter(committed["id"]).run()["sincerity"] == "高"
 
 
 def test_commit_place_from_json_string_checks_parent_span(session, world):

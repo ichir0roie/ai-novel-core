@@ -430,16 +430,49 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
         "出来事・筋書きのランダム生成は、この列が false(サブキャラクター)の人物・対象だけを対象にする",
         sort_order=240)
 
-    start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=250)
-    end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
-
     # 出自(生まれの場所)は別列を持たず、CharacterPlace の一番古い行として表す。
     # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterPlace が持ち、
-    # 入口では `parameters` / `places` の配列で出し入れする。
+    # 入口では `parameters` / `places` の配列で出し入れする。誕生・死亡も専用の列を持たず、
+    # `parameters` の一番早く始まる行の start・一番後に始まる行の end として表す(下の `start` / `end`)。
     CHILD_LISTS = ("parameters", "places")
+    # to_dict がこの名前で `start` / `end` プロパティも書き出す(実列と違い mapper.columns に出ないため)。
+    COMPUTED_COLUMNS = ("start", "end")
 
     def parameters_at(self, time=None) -> dict:
         return resolve_parameters(self.parameters, time)
+
+    def _last_parameter(self) -> "CharacterParameter | None":
+        if not self.parameters:
+            return None
+        bounded = [row for row in self.parameters if row.start is not None]
+        return max(bounded, key=lambda row: row.start) if bounded else self.parameters[-1]
+
+    @property
+    def start(self) -> Stamp | None:
+        """誕生。`parameters` の一番早く始まる行の start(どの行も空なら不明)。"""
+        starts = [row.start for row in self.parameters if row.start is not None]
+        return min(starts) if starts else None
+
+    @start.setter
+    def start(self, value) -> None:
+        row = self.parameters[0] if self.parameters else CharacterParameter()
+        if not self.parameters:
+            self.parameters.append(row)
+        row.start = Stamp.parse(value)
+
+    @property
+    def end(self) -> Stamp | None:
+        """死亡。`parameters` の一番後に始まる行(=今も効いている行)の end。"""
+        last = self._last_parameter()
+        return last.end if last else None
+
+    @end.setter
+    def end(self, value) -> None:
+        last = self._last_parameter()
+        if last is None:
+            last = CharacterParameter()
+            self.parameters.append(last)
+        last.end = Stamp.parse(value)
 
     # relationships
 
@@ -530,17 +563,30 @@ class CharacterParameter(Base):
         return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
 
 
+def _bounds(row: CharacterParameter) -> int:
+    return (row.start is not None) + (row.end is not None)
+
+
 def _parameter_order(row: CharacterParameter) -> tuple:
     # 期間を限る端が多い行ほど後に重ねて勝たせる。同じなら始まりの遅い行、後に足した行が勝つ
-    bounds = (row.start is not None) + (row.end is not None)
-    return bounds, row.start.to_int() if row.start is not None else -1, row.id or 0
+    return _bounds(row), row.start.to_int() if row.start is not None else -1, row.id or 0
 
 
 def resolve_parameters(rows, time=None) -> dict:
     time = Stamp.parse(time)
     values: dict = {column: None for column in PERSON_PARAMETER_COLUMNS}
     values.update({column: PERSONALITY_DEFAULT for column in PERSONALITY_COLUMNS})
-    for row in sorted((row for row in rows if row.covers(time)), key=_parameter_order):
+    rows = list(rows)
+    if time is None:
+        # 一番早く始まる行の start は誕生(`Character.start`)を、一番後に始まる行の end は
+        # 死亡(`Character.end`)を兼ねるので、`covers(None)`(期間を限らない行だけ)に絞ると、
+        # 誕生・死亡を持つだけの行(たいていは唯一の行)まで丸ごと外れてしまう。
+        # 代わりに、一番限る端が少ない(＝一番土台になる)行を採る。
+        least = min((_bounds(row) for row in rows), default=None)
+        selected = [row for row in rows if _bounds(row) == least]
+    else:
+        selected = [row for row in rows if row.covers(time)]
+    for row in sorted(selected, key=_parameter_order):
         for column in PARAMETER_COLUMNS:
             value = getattr(row, column)
             if value is not None:
