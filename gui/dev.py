@@ -197,21 +197,25 @@ def main(argv: list[str] | None = None) -> int:
         print("[gui/dev] gui/web/node_modules が無いので npm install を回す")
         subprocess.run([_npm(), "install", "--no-audit", "--no-fund"], cwd=WEB_DIR, check=True)
 
-    api_args = [sys.executable, "-m", "uvicorn", "gui.api.app:app", "--port", str(args.api_port)]
-    if not args.no_reload:
-        # 監視は core/ だけ。cwd(世界のルート)を丸ごと見ると .venv まで走査して重い
-        api_args += ["--reload", "--reload-dir", CORE_DIR]
-    web_env = {**os.environ, "NOVEL_API_URL": f"http://127.0.0.1:{args.api_port}"}
-    web_args = [_npm(), "run", "dev", "--", "--port", str(args.web_port)]
+    def spawn_api() -> subprocess.Popen:
+        api_args = [sys.executable, "-m", "uvicorn", "gui.api.app:app", "--port", str(args.api_port)]
+        if not args.no_reload:
+            # 監視は core/ だけ。cwd(世界のルート)を丸ごと見ると .venv まで走査して重い
+            api_args += ["--reload", "--reload-dir", CORE_DIR]
+        return _popen(api_args)
 
-    processes = []
+    def spawn_web() -> subprocess.Popen:
+        web_env = {**os.environ, "NOVEL_API_URL": f"http://127.0.0.1:{args.api_port}"}
+        web_args = [_npm(), "run", "dev", "--", "--port", str(args.web_port)]
+        return _popen(web_args, cwd=WEB_DIR, env=web_env)
+
+    api: subprocess.Popen | None = None
+    web: subprocess.Popen | None = None
     # Ctrl+C(SIGINT)だけでなく、タスクの停止などの SIGTERM でも finally を通して両方止める
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
-        api = _popen(api_args)
-        processes.append(api)
-        web = _popen(web_args, cwd=WEB_DIR, env=web_env)
-        processes.append(web)
+        api = spawn_api()
+        web = spawn_web()
         if not (_wait_for(args.api_port, "API", api) and _wait_for(args.web_port, "画面", web)):
             return 1
         url = f"http://localhost:{args.web_port}/"
@@ -219,17 +223,23 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_browser:
             _open_browser(url)
         while True:
-            for process, name in ((api, "API"), (web, "画面")):
-                if process.poll() is not None:
-                    print(f"[gui/dev] {name} が止まった(終了コード {process.returncode})。もう片方も止める", file=sys.stderr)
-                    return process.returncode or 1
+            # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
+            if api.poll() is not None:
+                print(f"[gui/dev] API が止まった(終了コード {api.returncode})。再起動する", file=sys.stderr)
+                api = spawn_api()
+                _wait_for(args.api_port, "API", api)
+            if web.poll() is not None:
+                print(f"[gui/dev] 画面が止まった(終了コード {web.returncode})。再起動する", file=sys.stderr)
+                web = spawn_web()
+                _wait_for(args.web_port, "画面", web)
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n[gui/dev] 止める")
         return 0
     finally:
-        for process in processes:
-            _terminate(process)
+        for process in (api, web):
+            if process is not None:
+                _terminate(process)
 
 
 if __name__ == "__main__":

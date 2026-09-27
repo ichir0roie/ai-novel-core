@@ -35,6 +35,7 @@ db の値(承認/非承認/未確認、場所の category など)と API から�
 ```
 export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 .venv/bin/python -m gui.dev              # API :8765 + 画面 :3000 を起こし、http://localhost:3000 を開く。Ctrl+C で両方止める
+                                          # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
 .venv/bin/python -m gui.dev --no-browser # 開かない。--api-port / --web-port でポートを変える
 ```
 
