@@ -4,9 +4,9 @@ import pytest
 from ai.claude_code.interface.randomizer.generate_character import GenerateCharacter
 from ai.claude_code.interface.randomizer.generate_event import GenerateEvent
 from ai.claude_code.interface.story.generate_episode import GenerateEpisode
-from ai.claude_code.interface.story.generate_plot import GeneratePlot
-from ai.time_keeper import episode_generator, plot_generator, random_character_generator
-from db.schema import Character, CharacterPlace, Event, EventCharacter, Location, Plot, Episode, Story
+from ai.claude_code.interface.story.generate_frame import GenerateFrame
+from ai.time_keeper import episode_generator, frame_generator, random_character_generator
+from db.schema import Character, CharacterPlace, Episode, Event, EventCharacter, Location, Story
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
@@ -20,7 +20,7 @@ class _Ai(MockAIClient):
         kwargs.pop("model", None)
         kwargs.pop("effort", None)
         decided = super().try_generate_json(prompt, schema, **kwargs)
-        if schema is plot_generator._FRAME_SCHEMA:
+        if schema is frame_generator._FRAME_SCHEMA:
             decided["start"] = "2100/06/01"
             decided["key"] = "## 場面\n1. 市場 / 甲 / 地図を買う\n## 狙い\n旅立ちの予感"
         if schema is episode_generator._SCHEMA:
@@ -177,37 +177,37 @@ def test_event_refuses_when_the_text_is_already_present(session, place):
 
 # ---------------------------------------------------------------- 話の枠
 
-def test_plot_frame_is_decided_without_a_body(session, place):
+def test_episode_frame_is_decided_without_a_body(session, place):
     story = session.query(Story).one()
     first = _character(session, place, "甲")
     ai = _Ai(seed=1)
 
-    result = GeneratePlot({"story_id": story.id, "title": "港にて"}, character_ids=[first.id], ai=ai).run()
+    result = GenerateFrame({"story_id": story.id, "title": "港にて"}, character_ids=[first.id], ai=ai).run()
 
-    record = session.get(Plot, result["id"])
+    record = session.get(Episode, result["id"])
     assert record.start == Stamp(2100, 6, 1) and "## 場面" in record.key and record.synced is False
-    assert record.body == "" and result["text"] == "" and result["letters"] == 0
-    prompt = _prompts(ai, plot_generator._FRAME_SCHEMA)
+    assert record.text == "" and result["text"] == "" and result["letters"] == 0
+    prompt = _prompts(ai, frame_generator._FRAME_SCHEMA)
     assert "作者の指定 題: 港にて" in prompt and '"name": "甲"' in prompt
 
 
-def test_plot_frame_keeps_the_drafted_time_and_can_redo_an_empty_frame(session, place):
+def test_episode_frame_keeps_the_drafted_time_and_can_redo_an_empty_frame(session, place):
     story = session.query(Story).one()
-    slot = Plot(story_id=story.id, title="", key="", start=None)
+    slot = Episode(story_id=story.id, title="", key="", start=None)
     session.add(slot)
     session.commit()
 
-    result = GeneratePlot({"id": slot.id, "start": "2101/01/02"}, ai=_Ai(seed=1)).run()
+    result = GenerateFrame({"id": slot.id, "start": "2101/01/02"}, ai=_Ai(seed=1)).run()
 
     assert result["id"] == slot.id
     session.refresh(slot)
     assert slot.start == Stamp(2101, 1, 2) and slot.key
-    assert session.query(Plot).count() == 1
+    assert session.query(Episode).count() == 1
 
 
-def test_plot_frame_needs_a_story(session):
+def test_episode_frame_needs_a_story(session):
     with pytest.raises(ValueError):
-        GeneratePlot({}, ai=_Ai(seed=1)).run()
+        GenerateFrame({}, ai=_Ai(seed=1)).run()
 
 
 # ---------------------------------------------------------------- 本文
@@ -220,10 +220,10 @@ def test_episode_from_a_bare_draft_decides_the_frame_then_writes_the_body(sessio
 
     result = GenerateEpisode({"story_id": story.id}, ai=ai).run()
 
-    record = session.get(Plot, result["id"])
-    assert record.body == "甲は地図を買った。" and record.title  # 題は枠を決めたときのものが残る
+    record = session.get(Episode, result["id"])
+    assert record.text == "甲は地図を買った。" and record.title  # 題は枠を決めたときのものが残る
     assert record.start == Stamp(2100, 6, 1) and "## 場面" in record.key and record.synced is True
-    assert any(call["schema"] is plot_generator._FRAME_SCHEMA for call in ai.calls)
+    assert any(call["schema"] is frame_generator._FRAME_SCHEMA for call in ai.calls)
     # 登場人物を省けばメインキャラクター
     assert f'"name": "{lead.name}"' in _prompts(ai, episode_generator._SCHEMA)
     assert '"name": "乙"' not in _prompts(ai, episode_generator._SCHEMA)
@@ -237,16 +237,16 @@ def test_episode_with_key_and_time_skips_the_frame_step(session, place):
     result = GenerateEpisode({"story_id": story.id, "key": "地図を買う", "start": str(WHEN), "title": "港の朝"},
                              character_ids=[first.id], ai=ai).run()
 
-    record = session.get(Plot, result["id"])
+    record = session.get(Episode, result["id"])
     assert record.key == "地図を買う" and record.start == WHEN and record.title == "港の朝"
-    assert record.body and result["letters"] == len(record.body)
-    assert not any(call["schema"] is plot_generator._FRAME_SCHEMA for call in ai.calls)
+    assert record.text and result["letters"] == len(record.text)
+    assert not any(call["schema"] is frame_generator._FRAME_SCHEMA for call in ai.calls)
 
 
 def test_episode_writes_into_an_existing_empty_frame(session, place):
     story = session.query(Story).one()
     first = _character(session, place, "甲")
-    slot = Plot(story_id=story.id, title="枠の題", key="地図を買う", start=WHEN)
+    slot = Episode(story_id=story.id, title="枠の題", key="地図を買う", start=WHEN)
     session.add(slot)
     session.commit()
 
@@ -256,13 +256,13 @@ def test_episode_writes_into_an_existing_empty_frame(session, place):
 
     assert result["id"] == slot.id
     session.refresh(slot)
-    assert slot.body == "甲は地図を買った。" and slot.title == "枠の題"
+    assert slot.text == "甲は地図を買った。" and slot.title == "枠の題"
     assert session.query(Episode).count() == 1
 
 
 def test_episode_refuses_a_frame_that_already_has_a_body(session, place):
     story = session.query(Story).one()
-    done = Plot(story_id=story.id, title="済", key="k", start=WHEN, episode=Episode(text="本文"))
+    done = Episode(story_id=story.id, title="済", key="k", start=WHEN, text="本文")
     session.add(done)
     session.commit()
     with pytest.raises(ValueError):

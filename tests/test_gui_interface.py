@@ -39,11 +39,11 @@ def test_catalog_lists_entrances_with_params_and_claude_flags(client, monkeypatc
     # 確定のあとに AI を回す入口・AI を受け取る入口・常駐ループ側は claude を叩く
     for entrance_id in ("randomizer.commit_idea.CommitIdea", "randomizer.commit_oracle.CommitOracle",
                         "randomizer.commit_event.CommitEvent", "randomizer.update_event.UpdateEvent",
-                        "story.commit_plot.CommitPlot", "story.commit_story.CommitStory",
+                        "story.commit_episode.CommitEpisode", "story.commit_story.CommitStory",
                         "fact_check.check_facts.CheckFacts", "meme.extract_memes.ExtractMemes",
                         "meme.refresh_generated_content.RefreshGeneratedContent",
                         "randomizer.generate_characters.GenerateCharacters",
-                        "time_keeper.daily_event", "time_keeper.plot", "time_keeper.write_story"):
+                        "time_keeper.daily_event", "time_keeper.write_episode", "time_keeper.write_story"):
         assert entrances[entrance_id]["claude"] is True, entrance_id
     assert [p["name"] for p in entrances["time_keeper.place_event"]["params"]] == [
         "place_id", "time", "key", "shared_style_extra", "style_extra"]
@@ -122,7 +122,7 @@ def test_style_defaults_come_from_the_world_instructions(monkeypatch):
     monkeypatch.setitem(sys.modules, "instructions", types.ModuleType("instructions"))
     monkeypatch.setitem(sys.modules, "instructions.style", style)
 
-    entrance = interface.entrance_of("time_keeper.episode")
-    filled = interface._style_defaults({"plot_id": 1, "style_extra": "自分で渡した"}, entrance.params)
-    assert filled == {"plot_id": 1, "style_extra": "自分で渡した", "shared_style_extra": "共有の癖"}
+    entrance = interface.entrance_of("time_keeper.fill_episode")
+    filled = interface._style_defaults({"episode_id": 1, "style_extra": "自分で渡した"}, entrance.params)
+    assert filled == {"episode_id": 1, "style_extra": "自分で渡した", "shared_style_extra": "共有の癖"}
     assert interface._style_defaults({"kind": None}, interface.entrance_of("world.list_places.ListPlaces").params) == {"kind": None}

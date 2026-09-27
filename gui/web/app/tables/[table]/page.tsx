@@ -13,8 +13,8 @@ import { T } from "@/lib/text";
 const PAGE = 50;
 const HIDDEN = new Set(["id", "meme_seeded", "event_seeded", "polygon"]);
 // 話の一覧は作品の詳細から開く前提なので、作品の列と本文は出さず、見出しに作品名を出す
-const HIDDEN_BY_TABLE: Record<string, string[]> = { plot: ["story_id"] };
-const NO_PREVIEW = new Set(["plot"]);
+const HIDDEN_BY_TABLE: Record<string, string[]> = { episode: ["story_id"] };
+const NO_PREVIEW = new Set(["episode"]);
 // 列名の query として扱わない(絞り込みのチップに出さない)もの
 const RESERVED = new Set(["q", "limit", "offset", "sort", "order", "confirmed"]);
 
@@ -42,7 +42,7 @@ export default function TablePage() {
   const [data, setData] = useState<RecordList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState(search.get("q") ?? "");
-  const storyId = table === "plot" ? search.get("story_id") : null;
+  const storyId = table === "episode" ? search.get("story_id") : null;
   const [storyLabel, setStoryLabel] = useState<string | null>(null);
 
   // 並びの既定はテーブルごと(TableMeta.sort / order)。meta が来るまでは決められない
@@ -72,7 +72,7 @@ export default function TablePage() {
     };
   }, [storyId]);
 
-  const title = storyId ? T.list.plotsOf(storyLabel ?? T.list.story(storyId)) : meta?.label;
+  const title = storyId ? T.list.episodesOf(storyLabel ?? T.list.story(storyId)) : meta?.label;
   const recordName = storyId ? (storyLabel ?? T.list.story(storyId)) : null;
 
   const setParams = (changes: Record<string, string | null>) => {

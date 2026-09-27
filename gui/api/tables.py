@@ -23,11 +23,11 @@ from ai.claude_code.interface.randomizer.update_idea import UpdateIdea
 from ai.claude_code.interface.randomizer.update_meme import UpdateMeme
 from ai.claude_code.interface.randomizer.update_oracle import UpdateOracle
 from ai.claude_code.interface.randomizer.update_place import UpdatePlace
-from ai.claude_code.interface.story.commit_plot import CommitPlot
+from ai.claude_code.interface.story.commit_episode import CommitEpisode
 from ai.claude_code.interface.story.commit_story import CommitStory
 from ai.claude_code.interface.story.update_story import UpdateStory
 from db.schema import (
-    Character, CharacterRelation, Event, Idea, Location, Meme, Oracle, Plot, Story,
+    Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story,
 )
 
 
@@ -53,8 +53,8 @@ class TableSpec:
 
 TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", "作品", Story, CommitStory, UpdateStory, "name", ("name", "text")),
-    TableSpec("plot", "話", Plot, CommitPlot, CommitPlot, "title", ("title", "key"),
-              extra_fields=("text",), sort="start", order="asc"),
+    TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, "title", ("title", "key"),
+              sort="start", order="asc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, "name", ("name", "text"),
               extra_fields=("place_id",)),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,

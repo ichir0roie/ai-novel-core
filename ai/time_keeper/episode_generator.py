@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""話の枠(種・時刻・視点・場所)と登場人物・前の話・作品から、話の本文(`Episode`)を書く。
+"""話の枠(種・時刻・視点・場所)と登場人物・前の話・作品から、話の本文(`Episode.text`)を書く。
 
 材料は呼び出し側が名指しし、登場人物それぞれの直近の出来事と、
 その時点より後に既に決まっている出来事を渡して、人物の側の時の流れと矛盾させない。
-枠(`Plot`)ごと足すときは `plot_generator` から呼ぶ。
+枠ごと足すときは `frame_generator` から呼ぶ。
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from ai.time_keeper._ai import AIClient
 from ai.time_keeper._format import format_time
 from ai.time_keeper.character_event_generator import _sheet
 from data_access_logic.query import common_query
-from db.schema import Character, Plot, Episode, Event, Location, Session, Stamp, Story
+from db.schema import Character, Episode, Event, Location, Session, Stamp, Story
 
 def _system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> str:
     return f"""\
@@ -73,39 +73,39 @@ def characters(session: Session, character_ids: list[int]) -> list[Character]:
     return characters
 
 
-def _previous_plots(
-    session: Session, story_id: int, time: Stamp, previous_plot_ids: list[int] | None,
-) -> list[Plot]:
-    """`previous_plot_ids` を省くと、作品の中で `time` より前の話を新しいほうから三つ取る。"""
-    if previous_plot_ids is None:
-        rows = session.scalars(common_query.plots_select(
+def _previous_episodes(
+    session: Session, story_id: int, time: Stamp, previous_episode_ids: list[int] | None,
+) -> list[Episode]:
+    """`previous_episode_ids` を省くと、作品の中で `time` より前の話を新しいほうから三つ取る。"""
+    if previous_episode_ids is None:
+        rows = session.scalars(common_query.episodes_select(
             story_id, count=constants.EPISODE_PREVIOUS_LIMIT, before=time)).all()
         return list(reversed(rows))
-    plots = []
-    for plot_id in dict.fromkeys(int(i) for i in previous_plot_ids):
-        plot = session.get(Plot, plot_id)
-        if plot is None:
-            raise ValueError(f"話 id={plot_id} が見つからない")
-        plots.append(plot)
-    return sorted(plots, key=lambda e: (e.start is None, e.start or Stamp(1), e.id))
+    episodes = []
+    for episode_id in dict.fromkeys(int(i) for i in previous_episode_ids):
+        episode = session.get(Episode, episode_id)
+        if episode is None:
+            raise ValueError(f"話 id={episode_id} が見つからない")
+        episodes.append(episode)
+    return sorted(episodes, key=lambda e: (e.start is None, e.start or Stamp(1), e.id))
 
 
-def _recap(session: Session, plots: list[Plot], ai: AIClient) -> dict:
+def _recap(session: Session, episodes: list[Episode], ai: AIClient) -> dict:
     """本文は写させないよう概要で渡す。概要が作れなかった話だけ本文のまま渡す。"""
     rows, styles = [], []
-    for plot in plots:
-        row = {"id": plot.id, "title": plot.title,
-               "start": str(plot.start) if plot.start else None}
-        note = episode_summary.summarize(session, plot, ai) or {}
+    for episode in episodes:
+        row = {"id": episode.id, "title": episode.title,
+               "start": str(episode.start) if episode.start else None}
+        note = episode_summary.summarize(session, episode, ai) or {}
         if note.get("summary"):
             rows.append({**row, "summary": note["summary"]})
-        elif plot.body.strip():
-            rows.append({**row, "text": plot.body})
+        elif episode.text.strip():
+            rows.append({**row, "text": episode.text})
         else:
-            rows.append({**row, "key": plot.key})
+            rows.append({**row, "key": episode.key})
         if note.get("style"):
             styles.append(note["style"])
-    return {"plots": rows, "style": styles[-1] if styles else ""}
+    return {"episodes": rows, "style": styles[-1] if styles else ""}
 
 
 def _event_rows(session: Session, events: list[Event], ai: AIClient) -> list[dict]:
@@ -151,21 +151,21 @@ class Written:
 
 def write(
     session: Session, ai: AIClient, story: Story, key: str, time: Stamp, characters: list[Character],
-    previous_plot_ids: list[int] | None = None, *, place: Location | None = None,
-    viewpoint: str | None = None, exclude_plot_id: int | None = None, writer_options: dict | None = None,
+    previous_episode_ids: list[int] | None = None, *, place: Location | None = None,
+    viewpoint: str | None = None, exclude_episode_id: int | None = None, writer_options: dict | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> Written | None:
-    """本文を書くだけで、話にも本文の表にも書き込まない(材料の要約だけは作って残す)。
+    """本文を書くだけで、話の行には書き込まない(材料の要約だけは作って残す)。
 
-    `place` を省くと作品の立つ場所を材料に使う。`exclude_plot_id` は前の話から外す話(書き込む先の枠)。
+    `place` を省くと作品の立つ場所を材料に使う。`exclude_episode_id` は前の話から外す話(書き込む先の枠)。
     `shared_style_extra` / `style_extra` は、世界の舞台設定・既存の話から抽出した文体の癖のような、
     世界ごとの好みを呼び出し側(親リポジトリ側)から渡す。
     """
     context_place_id = place.id if place is not None else story.place_id
     context_place = place or (session.get(Location, story.place_id) if story.place_id else None)
 
-    previous = [e for e in _previous_plots(session, story.id, time, previous_plot_ids)
-                if e.id != exclude_plot_id]
+    previous = [e for e in _previous_episodes(session, story.id, time, previous_episode_ids)
+                if e.id != exclude_episode_id]
     print(f"[time_keepr/episode] {story.name}(id={story.id}) {format_time(time)} の話: "
           f"登場人物 {', '.join(c.name or '?' for c in characters)} / "
           f"前の話 {[e.id for e in previous] or '(無し)'}")
@@ -179,7 +179,7 @@ def write(
         f"作品: {_dump(_story_row(story))}",
         f"時刻: {time}",
         f"場所: {_dump(_place_row(context_place))}",
-        f"直前の話(古い順): {_dump(recap['plots']) if recap['plots'] else '(無し)'}",
+        f"直前の話(古い順): {_dump(recap['episodes']) if recap['episodes'] else '(無し)'}",
     ]
     if recap["style"]:
         lines.append(f"直前の話の文体(これに揃える): {recap['style']}")
@@ -211,56 +211,53 @@ def write(
                    text=text, linked=context.linked)
 
 
-def attach(session: Session, plot: Plot, written: Written, writer_options: dict | None = None) -> Episode:
+def attach(session: Session, record: Episode, written: Written, writer_options: dict | None = None) -> Episode:
     """書いた本文を話に付けて確定する。枠の空いている題・視点は本文を書いたときのもので埋める。
 
-    自動生成なので `synced` を立てる(`schema.py` の `Plot.synced` の注記どおり)。
+    自動生成なので `synced` を立てる(`schema.py` の `Episode.synced` の注記どおり)。
     """
     options = writer_options or {}
-    plot.title = (plot.title or "").strip() or written.title
-    plot.viewpoint = plot.viewpoint or written.viewpoint
-    plot.synced = True
-    if plot.episode is None:
-        plot.episode = Episode(text="")
-    record = plot.episode
+    record.title = (record.title or "").strip() or written.title
+    record.viewpoint = record.viewpoint or written.viewpoint
+    record.synced = True
     record.text = written.text
     record.model, record.effort = options.get("model"), options.get("effort")
     session.flush()
-    idea_context.link(session, plot, written.linked)
+    idea_context.link(session, record, written.linked)
     session.commit()
-    print(f"[time_keepr/episode] {format_time(plot.start)}「{plot.title}」 "
-          f"id={plot.id} 本文 id={record.id} {record.letters}字")
+    print(f"[time_keepr/episode] {format_time(record.start)}「{record.title}」 "
+          f"id={record.id} {record.letters}字")
     return record
 
 
-def frame(session: Session, plot_id: int, story_id: int | None = None) -> Plot:
+def frame(session: Session, episode_id: int, story_id: int | None = None) -> Episode:
     """本文を書き込む枠。本文の入っている話は書き換えない。"""
-    record = session.get(Plot, plot_id)
+    record = session.get(Episode, episode_id)
     if record is None:
-        raise ValueError(f"話 id={plot_id} が見つからない")
+        raise ValueError(f"話 id={episode_id} が見つからない")
     if story_id is not None and record.story_id != story_id:
-        raise ValueError(f"話 id={plot_id} は作品 id={story_id} の話ではない")
-    if record.body.strip():
-        raise ValueError(f"話 id={plot_id} には本文が入っている")
+        raise ValueError(f"話 id={episode_id} は作品 id={story_id} の話ではない")
+    if record.text.strip():
+        raise ValueError(f"話 id={episode_id} には本文が入っている")
     return record
 
 
 def generate(
-    session: Session, ai: AIClient, plot_id: int, character_ids: list[int],
-    previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
+    session: Session, ai: AIClient, episode_id: int, character_ids: list[int],
+    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
-    """枠(`plot_id` の話)の種・時刻・視点で本文を書いて付ける。
+    """枠(`episode_id` の話)の種・時刻・視点で本文を書いて付ける。
 
     `writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
     `place_id` を渡すと枠の場所もその名前にする。本文が得られなければ枠を変えずに None を返す。
     `shared_style_extra` / `style_extra` は `write` に渡す(世界ごとの文体の好み)。
     """
-    record = frame(session, plot_id)
+    record = frame(session, episode_id)
     if not (record.key or "").strip():
-        raise ValueError(f"話 id={plot_id} の key(話の種)が空")
+        raise ValueError(f"話 id={episode_id} の key(話の種)が空")
     if record.start is None:
-        raise ValueError(f"話 id={plot_id} の start(話が立つ時刻)が空")
+        raise ValueError(f"話 id={episode_id} の start(話が立つ時刻)が空")
     if not character_ids:
         raise ValueError("character_ids(登場人物)が空")
     story = common_query.get_story(session, record.story_id)
@@ -269,8 +266,8 @@ def generate(
         raise ValueError(f"場所 id={place_id} が見つからない")
 
     written = write(session, ai, story, record.key.strip(), record.start, characters(session, character_ids),
-                    previous_plot_ids, place=place, viewpoint=record.viewpoint,
-                    exclude_plot_id=record.id, writer_options=writer_options,
+                    previous_episode_ids, place=place, viewpoint=record.viewpoint,
+                    exclude_episode_id=record.id, writer_options=writer_options,
                     shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
         return None

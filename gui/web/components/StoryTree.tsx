@@ -14,7 +14,7 @@ function StoryRow({ story }: { story: TreeStory }) {
       <span className="tree-meta">
         {story.state && <span className="chip">{story.state}</span>}
         {span && <span>{span}</span>}
-        <span>{T.storyTree.plots(story.plots)}</span>
+        <span>{T.storyTree.episodes(story.episodes)}</span>
       </span>
     </li>
   );
@@ -45,7 +45,7 @@ function PlaceNode({ node }: { node: TreeNode }) {
   );
 }
 
-type Source = { locations: Rec[]; stories: Rec[]; plots: Rec[] };
+type Source = { locations: Rec[]; stories: Rec[]; episodes: Rec[] };
 
 /** 場所・作品・話の一覧をそのまま引いて、木はブラウザで組む。タブに戻ったときに引き直す。 */
 export default function StoryTree() {
@@ -54,12 +54,12 @@ export default function StoryTree() {
 
   const load = useCallback(async () => {
     try {
-      const [locations, stories, plots] = await Promise.all([
+      const [locations, stories, episodes] = await Promise.all([
         listAllRecords("location", { sort: "id", order: "asc" }),
         listAllRecords("story", { sort: "id", order: "asc" }),
-        listAllRecords("plot", { sort: "id", order: "asc" }),
+        listAllRecords("episode", { sort: "id", order: "asc" }),
       ]);
-      setSource({ locations, stories, plots });
+      setSource({ locations, stories, episodes });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -72,7 +72,7 @@ export default function StoryTree() {
     return () => window.removeEventListener("focus", load);
   }, [load]);
 
-  const tree = useMemo(() => (source ? buildStoryTree(source.locations, source.stories, source.plots) : null), [source]);
+  const tree = useMemo(() => (source ? buildStoryTree(source.locations, source.stories, source.episodes) : null), [source]);
 
   if (error) return <div className="status error">{error}</div>;
   if (!tree) return <div className="status info">{T.loading}</div>;

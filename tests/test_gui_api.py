@@ -3,7 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db.schema import (
-    Character, CharacterParameter, ConfirmStatus, EventCharacter, Idea, Location, Meme, Plot, Story,
+    Character, CharacterParameter, ConfirmStatus, Episode, EventCharacter, Idea, Location, Meme, Story,
 )
 from gui.api import app as app_module
 
@@ -33,7 +33,7 @@ def test_tables_meta_comes_from_schema(client, session):
 
     tables = {table["name"]: table for table in client.get("/api/tables").json()["tables"]}
 
-    assert list(tables) == ["story", "plot", "character", "character_relation", "event", "location",
+    assert list(tables) == ["story", "episode", "character", "character_relation", "event", "location",
                             "idea", "meme", "oracle"]
     assert tables["idea"]["count"] == 1 and tables["idea"]["reviewable"] is True
     columns = {column["key"]: column for column in tables["idea"]["columns"]}
@@ -42,9 +42,10 @@ def test_tables_meta_comes_from_schema(client, session):
     assert columns["start"]["type"] == "stamp"
     assert columns["text"]["section"] is True and columns["text"]["label"] == "本文"
     assert columns["id"]["readonly"] is True
-    # 話は本文(episode)を text として持ち、字数は読むだけ
-    plot_columns = {column["key"]: column for column in tables["plot"]["columns"]}
-    assert plot_columns["text"]["section"] is True and plot_columns["letters"]["readonly"] is True
+    # 話は種(key)も本文(text)も大きな markdown 欄として出す。字数は本文から数えるので読むだけ
+    episode_columns = {column["key"]: column for column in tables["episode"]["columns"]}
+    assert episode_columns["text"]["section"] is True and episode_columns["key"]["section"] is True
+    assert episode_columns["letters"]["readonly"] is True
     assert [child["name"] for child in tables["character"]["child_lists"]] == ["parameters", "places"]
     child_columns_by_name = {child["name"]: {column["key"] for column in child["columns"]} for child in tables["character"]["child_lists"]}
     assert child_columns_by_name["parameters"] >= {"family_name", "tone"}
@@ -123,49 +124,49 @@ def test_character_with_parameters_and_birthplace(client, session, world):
     assert session.query(CharacterParameter).count() == 2
 
 
-def test_plot_text_goes_to_episode_and_synced_is_kept(client, session, world):
-    created = client.post("/api/tables/plot/records", json={
+def test_episode_text_goes_straight_to_the_row_and_synced_is_kept(client, session, world):
+    created = client.post("/api/tables/episode/records", json={
         "story_id": world["story"], "title": "旅立ち", "key": "村を出る", "text": "本文です。", "start": "2100/04/01"})
     assert created.status_code == 201, created.text
     record = created.json()["record"]
     assert record["text"] == "本文です。" and record["letters"] == 5 and record["synced"] is False
     assert created.json()["labels"]["story_id"] == {str(world["story"]): "村の話"}
 
-    updated = client.patch(f"/api/tables/plot/records/{record['id']}", json={"text": "直した本文。", "synced": True})
+    updated = client.patch(f"/api/tables/episode/records/{record['id']}", json={"text": "直した本文。", "synced": True})
     assert updated.json()["record"]["text"] == "直した本文。" and updated.json()["record"]["synced"] is True
     session.expire_all()
-    assert session.get(Plot, record["id"]).body == "直した本文。"
+    assert session.get(Episode, record["id"]).text == "直した本文。"
 
-    listed = client.get(f"/api/tables/plot/records?story_id={world['story']}").json()
+    listed = client.get(f"/api/tables/episode/records?story_id={world['story']}").json()
     assert listed["items"][0]["label"] == "旅立ち" and "text" not in listed["items"][0]
     story = client.get(f"/api/tables/story/records/{world['story']}").json()
-    assert story["related"]["plots"][0]["label"] == "旅立ち"
+    assert story["related"]["episodes"][0]["label"] == "旅立ち"
 
 
-def test_plots_list_by_start_and_any_column_can_sort(client, session, world):
+def test_episodes_list_by_start_and_any_column_can_sort(client, session, world):
     later = Story(name="後の話", place_id=world["village"], text="", narration="", state="執筆中")
     session.add(later)
     session.flush()
     session.add_all([
-        Plot(story_id=world["story"], title="三", key="", start="2100/04/03"),
-        Plot(story_id=world["story"], title="空", key="", start=None),
-        Plot(story_id=world["story"], title="一", key="", start="2100/04/01"),
-        Plot(story_id=later.id, title="二", key="", start="2100/04/02"),
+        Episode(story_id=world["story"], title="三", key="", start="2100/04/03"),
+        Episode(story_id=world["story"], title="空", key="", start=None),
+        Episode(story_id=world["story"], title="一", key="", start="2100/04/01"),
+        Episode(story_id=later.id, title="二", key="", start="2100/04/02"),
     ])
     session.commit()
 
-    meta = next(t for t in client.get("/api/tables").json()["tables"] if t["name"] == "plot")
+    meta = next(t for t in client.get("/api/tables").json()["tables"] if t["name"] == "episode")
     assert (meta["sort"], meta["order"]) == ("start", "asc")
-    titles = lambda query: [item["title"] for item in client.get(f"/api/tables/plot/records?{query}").json()["items"]]
+    titles = lambda query: [item["title"] for item in client.get(f"/api/tables/episode/records?{query}").json()["items"]]
     assert titles("") == ["一", "二", "三", "空"]
     assert titles("order=desc") == ["三", "二", "一", "空"]
     assert titles(f"story_id={world['story']}") == ["一", "三", "空"]
     assert titles("sort=id&order=desc") == ["二", "一", "空", "三"]
     assert titles("sort=title&order=asc") == ["一", "三", "二", "空"]
     story = client.get(f"/api/tables/story/records/{world['story']}").json()
-    assert [plot["label"] for plot in story["related"]["plots"]] == ["一", "三", "空"]
-    assert client.get("/api/tables/plot/records?sort=nope").status_code == 400
-    assert client.get("/api/tables/plot/records?order=sideways").status_code == 422
+    assert [episode["label"] for episode in story["related"]["episodes"]] == ["一", "三", "空"]
+    assert client.get("/api/tables/episode/records?sort=nope").status_code == 400
+    assert client.get("/api/tables/episode/records?order=sideways").status_code == 422
 
 
 def test_event_participants(client, session, world):

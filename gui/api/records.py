@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
 from ai.claude_code.interface.randomizer.commit_event import CommitEvent
 from ai.time_keeper import idea_context
-from db.schema import Character, ConfirmStatusType, Event, EventCharacter, Plot
+from db.schema import Character, ConfirmStatusType, Episode, Event, EventCharacter
 from db.schema_pydantic import to_dict
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
@@ -34,8 +34,6 @@ def _preview(spec: TableSpec, row) -> str:
         value = (getattr(row, name, None) or "").strip()
         if value:
             return value[:_PREVIEW_LENGTH] + ("…" if len(value) > _PREVIEW_LENGTH else "")
-    if spec.model is Plot:
-        return row.body[:_PREVIEW_LENGTH]
     return ""
 
 
@@ -47,9 +45,6 @@ def _participant_ids(session: Session, event_id: int) -> list[int]:
 
 def record_dict(session: Session, spec: TableSpec, row) -> dict:
     data = to_dict(row)
-    if spec.model is Plot:
-        data["text"] = row.body
-        data["letters"] = row.episode.letters if row.episode is not None else 0
     if spec.model is Event:
         data["character_ids"] = _participant_ids(session, row.id)
     return data
@@ -161,11 +156,11 @@ def related_of(session: Session, spec: TableSpec, row) -> dict:
             for table, records in idea_context.linked_records(session, row.id).items()
             for record in records]
     if spec.name == "story":
-        plots = session.scalars(select(Plot).where(Plot.story_id == row.id)
-                                .order_by(*_ordering(Plot, "start", "asc"))).all()
-        related["plots"] = [{"table": "plot", "id": plot.id, "label": label_of(spec_of("plot"), plot),
-                             "synced": plot.synced, "letters": plot.episode.letters if plot.episode else 0}
-                            for plot in plots]
+        episodes = session.scalars(select(Episode).where(Episode.story_id == row.id)
+                                .order_by(*_ordering(Episode, "start", "asc"))).all()
+        related["episodes"] = [{"table": "episode", "id": episode.id, "label": label_of(spec_of("episode"), episode),
+                             "synced": episode.synced, "letters": episode.letters}
+                            for episode in episodes]
     return related
 
 
@@ -199,13 +194,13 @@ def update_record(session: Session, spec: TableSpec, record_id: int, data: dict)
     character_ids = payload.pop("character_ids", None) if spec.name == "event" else None
     if spec.name == "character":
         payload.pop("place_id", None)  # 出自は足すときだけ。あとから直すのは CHILD_LISTS の places
-    synced = payload.pop("synced", None) if spec.name == "plot" else None
+    synced = payload.pop("synced", None) if spec.name == "episode" else None
     if payload:
         spec.updater({**payload, "id": record_id}).execute(session)
     if character_ids is not None:
         _set_participants(session, record_id, character_ids)
     if synced is not None:
-        # CommitPlot は直すたびに synced を落とす(本文を手で直したら世界観へ戻し直すため)。
+        # CommitEpisode は直すたびに synced を落とす(本文を手で直したら世界観へ戻し直すため)。
         # GUI で明示的に渡された値はユーザの判断なのでそれを勝たせる
-        session.get(Plot, record_id).synced = bool(synced)
+        session.get(Episode, record_id).synced = bool(synced)
         session.flush()

@@ -683,30 +683,24 @@ class Story(EventSeededMixin, TextBase):
     start: Mapped[Stamp | None] = mapped_column(StampType, comment="立つ年", sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
-    plots: Mapped[list["Plot"]] = relationship(
+    episodes: Mapped[list["Episode"]] = relationship(
         back_populates="story", lazy="noload",
-        order_by="[Plot.start.asc().nulls_last(), Plot.id.asc()]")
+        order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
 
-class Plot(EventSeededMixin, TextBase):
-    """話の枠(プロット)。種・時刻・視点・場所までを持ち、本文は `Episode` が持つ。"""
+class Episode(EventSeededMixin, TextBase):
+    """話。種・時刻・視点・場所と本文までを一行に持つ。"""
 
-    __tablename__ = "plot"
+    __tablename__ = "episode"
 
-    TEXT_COLUMNS = ("key",)
+    TEXT_COLUMNS = ("key", "text")
 
-    # 本文は Episode へ分けたので、TextBase の text 列を持たない。
-    # 古い書き方(`plot.text`)を黙って素通りさせないよう、読み書きとも止める
-    @property
-    def text(self):
-        raise AttributeError("話の本文は Plot.body(書き込みは Episode)にある")
-
-    @text.setter
-    def text(self, _value):
-        raise AttributeError("話の本文は Episode に書く")
+    text: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="",
+        comment="本文。まだ書いていない話(枠だけ)は空文字", sort_order=10000)
 
     story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), sort_order=200)
-    story: Mapped[Story] = relationship(back_populates="plots", lazy="noload")
+    story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
     synced: Mapped[bool] = mapped_column(
@@ -724,34 +718,17 @@ class Plot(EventSeededMixin, TextBase):
     place: Mapped[str | None] = mapped_column(
         String, comment="場所。自由記述(「ヴァレンツァ 外れの川」)", sort_order=280)
 
+    letters: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=290)
+    model: Mapped[str | None] = mapped_column(
+        String, comment="本文を書いたモデル。空なら不明(手で書いた本文など)", sort_order=300)
+    effort: Mapped[str | None] = mapped_column(
+        String, comment="本文を書いたときの effort。空なら不明(手で書いた本文など)", sort_order=310)
+
     key: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
         comment="キーテキスト。作者が入れる、AI 生成前の種",
-        sort_order=9990)
-
-    episode: Mapped["Episode | None"] = relationship(
-        back_populates="plot", lazy="selectin", uselist=False)
-
-    @property
-    def body(self) -> str:
-        """本文。まだ書いていない話(枠)は空文字"""
-        return self.episode.text if self.episode is not None else ""
-
-
-class Episode(TextBase):
-    """話の本文。プロット(`Plot`)とは分けて生成し、一話につき一行で持つ。"""
-
-    __tablename__ = "episode"
-
-    plot_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("plot.id"), unique=True, index=True, nullable=False, sort_order=200)
-    plot: Mapped[Plot] = relationship(back_populates="episode", lazy="noload")
-    letters: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=210)
-    model: Mapped[str | None] = mapped_column(
-        String, comment="本文を書いたモデル。空なら不明(手で書いた本文など)", sort_order=220)
-    effort: Mapped[str | None] = mapped_column(
-        String, comment="本文を書いたときの effort。空なら不明(手で書いた本文など)", sort_order=230)
+        sort_order=10010)
 
     @validates("text")
     def _letters_follow_text(self, _key, value):
@@ -783,13 +760,13 @@ class EventIdea(Base):
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
-class PlotIdea(Base):
-    """プロットの種から引いて本文が踏まえたアイデア。"""
+class EpisodeIdea(Base):
+    """話の種から引いて本文が踏まえたアイデア。"""
 
-    __tablename__ = "plot_idea"
-    __table_args__ = (UniqueConstraint("plot_id", "idea_id"),)
+    __tablename__ = "episode_idea"
+    __table_args__ = (UniqueConstraint("episode_id", "idea_id"),)
 
-    plot_id: Mapped[int] = mapped_column(Integer, ForeignKey("plot.id"), index=True, sort_order=100)
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
@@ -803,7 +780,7 @@ class CharacterIdea(Base):
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
-IDEA_LINK_MODELS = {Event: EventIdea, Plot: PlotIdea, Character: CharacterIdea}
+IDEA_LINK_MODELS = {Event: EventIdea, Episode: EpisodeIdea, Character: CharacterIdea}
 
 
 # 既定値は持たない。場所を取り違えると sqlite が空の db を黙って作るので、未設定なら import で止める。

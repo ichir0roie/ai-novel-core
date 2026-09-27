@@ -26,8 +26,8 @@ _PLAIN_RUNS = {SessionEntrypoint.run, CommitEntrypoint.run, RandomDraft.run}
 _TIME_KEEPER: dict[str, Callable] = {
     "daily_event": claude_code_time_keeper.claude_daily_event_main,
     "place_event": claude_code_time_keeper.claude_place_event_main,
-    "plot": claude_code_time_keeper.claude_plot_main,
-    "episode": claude_code_time_keeper.claude_episode_main,
+    "write_episode": claude_code_time_keeper.claude_write_episode_main,
+    "fill_episode": claude_code_time_keeper.claude_fill_episode_main,
     "loop": claude_code_time_keeper.claude_main,
     "story_years": claude_code_time_keeper.claude_story_years_main,
     "write_story": story_writer.write_story,

@@ -5,7 +5,7 @@ import random
 import traceback
 
 from ai.time_keeper import (
-    character_event_generator, plot_generator, episode_generator, event_progression_generator, event_seed, meme,
+    character_event_generator, frame_generator, episode_generator, event_progression_generator, event_seed, meme,
     place_event_generator,
 )
 from data_access_logic.query import common_query, world_createion_query
@@ -89,28 +89,28 @@ def place_event(
         return record.id if record is not None else None
 
 
-def plot(
+def write_episode(
     ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
-    previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint: str | None = None, writer_options: dict | None = None, plot_id: int | None = None,
+    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
+    viewpoint: str | None = None, writer_options: dict | None = None, episode_id: int | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     with get_env_session() as s:
-        record = plot_generator.generate(
-            s, ai, story_id, key, time, character_ids, previous_plot_ids,
-            place_id=place_id, viewpoint=viewpoint, writer_options=writer_options, plot_id=plot_id,
+        record = frame_generator.generate(
+            s, ai, story_id, key, time, character_ids, previous_episode_ids,
+            place_id=place_id, viewpoint=viewpoint, writer_options=writer_options, episode_id=episode_id,
             shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None
 
 
-def episode(
-    ai: AIClient, plot_id: int, character_ids: list[int], previous_plot_ids: list[int] | None = None,
+def fill_episode(
+    ai: AIClient, episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None,
     *, place_id: int | None = None, writer_options: dict | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     with get_env_session() as s:
         record = episode_generator.generate(
-            s, ai, plot_id, character_ids, previous_plot_ids,
+            s, ai, episode_id, character_ids, previous_episode_ids,
             place_id=place_id, writer_options=writer_options,
             shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None

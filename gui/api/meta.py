@@ -18,7 +18,7 @@ from gui.api.tables import TABLES, TableSpec
 _LABELS = {
     "id": "id", "name": "名前", "kind": "種別", "text": "本文", "start": "開始", "end": "終了",
     "title": "題", "key": "種(キーテキスト)", "category": "分類", "confirmed": "確認",
-    "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "plot_id": "話",
+    "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
     "character_id": "人物", "character_id_1": "人物 1", "character_id_2": "人物 2", "relation": "関係",
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
     "place_id": "場所", "viewpoint": "視点", "place": "場所(自由記述)", "synced": "同期済み",
@@ -81,12 +81,6 @@ def column_meta(table: str, model: type, column, *, section: bool = False, markd
 def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
     """入口が列の外で受け取る欄。"""
     extras = []
-    if spec.name == "plot":
-        extras.append(ColumnMeta(key="letters", label=_LABELS["letters"], type="integer", nullable=False,
-                                 required=False, readonly=True, comment="本文の字数。本文から数える"))
-        extras.append(ColumnMeta(key="text", label=_LABELS["text"], type="string", nullable=True,
-                                 required=False, section=True, markdown=False,
-                                 comment="本文(episode テーブル)。話一つにつき一つ"))
     if spec.name == "character":
         extras.append(ColumnMeta(key="place_id", label="出自(場所)", type="integer", nullable=True,
                                  required=False, references="location", create_only=True,
@@ -107,12 +101,12 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
 def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     model = spec.model
     sections = set(model.TEXT_COLUMNS)
-    if spec.name == "plot":
-        # キーテキストは種の一言で本文ではないので、左の欄に置く
-        sections.discard("key")
+    # 字数は本文から自動で数えるので、フォームでは直に書けない
+    readonly_columns = {"letters"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
-        meta = column_meta(spec.name, model, column, section=column.key in sections)
+        meta = column_meta(spec.name, model, column, section=column.key in sections,
+                           readonly=column.key in readonly_columns)
         (long if meta.section else plain).append(meta)
     extras = _extra_columns(spec)
     return plain + [meta for meta in extras if not meta.section] + long + [meta for meta in extras if meta.section]

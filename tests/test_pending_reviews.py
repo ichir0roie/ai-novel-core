@@ -3,7 +3,7 @@ from ai.claude_code.interface.review.list_pending_reviews import ListPendingRevi
 from ai.time_keeper import idea_context
 from db.schema import (
     ConfirmStatus,
-    Plot, Episode, Event, Idea, Location, Story,
+    Episode, Event, Idea, Location, Story,
 )
 from db.stamp import Stamp
 
@@ -31,27 +31,27 @@ def test_candidate_idea_is_listed_with_where_it_came_from(session):
     assert f"MergeIdea({candidate.id}, " in item["detail"]
 
 
-def test_written_but_unsynced_plot_is_listed_and_seed_only_one_is_not(session):
+def test_written_but_unsynced_episode_is_listed_and_seed_only_one_is_not(session):
     place = Location(name="村", kind="村", text="")
     session.add(place)
     session.flush()
     story = Story(name="村の話", place_id=place.id, text="", narration="", state="執筆中")
     session.add(story)
     session.flush()
-    written = Plot(story_id=story.id, title="旅立ち", synced=False, episode=Episode(text="本文"))
+    written = Episode(story_id=story.id, title="旅立ち", synced=False, text="本文")
     session.add_all([
         written,
-        Plot(story_id=story.id, title="", key="種だけ", synced=False),
-        Plot(story_id=story.id, title="済み", synced=True, episode=Episode(text="本文")),
+        Episode(story_id=story.id, title="", key="種だけ", synced=False),
+        Episode(story_id=story.id, title="済み", synced=True, text="本文"),
     ])
     session.commit()
 
     [item] = ListPendingReviews().run()
 
-    assert item["key"] == f"plot:{written.id}"
+    assert item["key"] == f"episode:{written.id}"
     assert item["title"] == "村の話「旅立ち」を世界観へ反映して synced を立てる"
-    assert f"SetPlotSynced({written.id})" in item["detail"]
-    assert f"gui: /tables/plot/{written.id}" in item["detail"]
+    assert f"SetEpisodeSynced({written.id})" in item["detail"]
+    assert f"gui: /tables/episode/{written.id}" in item["detail"]
 
 
 def test_todo_left_in_a_text_is_listed_with_its_lines(session):

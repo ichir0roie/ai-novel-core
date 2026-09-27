@@ -9,8 +9,8 @@ export type TreeStory = {
   state: string | null;
   start: string | null;
   end: string | null;
-  // 話(plot)の数
-  plots: number;
+  // 話(episode)の数
+  episodes: number;
 };
 
 export type TreeNode = {
@@ -37,7 +37,7 @@ function byStart(a: Rec, b: Rec): number {
   return sa < sb ? -1 : 1;
 }
 
-export function buildStoryTree(locations: Rec[], stories: Rec[], plots: Rec[]): StoryTree {
+export function buildStoryTree(locations: Rec[], stories: Rec[], episodes: Rec[]): StoryTree {
   const known = new Set(locations.map((l) => Number(l.id)));
   const children = new Map<number | null, Rec[]>();
   for (const place of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
@@ -46,10 +46,10 @@ export function buildStoryTree(locations: Rec[], stories: Rec[], plots: Rec[]): 
     children.set(key, [...(children.get(key) ?? []), place]);
   }
 
-  const plotCount = new Map<number, number>();
-  for (const plot of plots) {
-    const storyId = num(plot.story_id);
-    if (storyId !== null) plotCount.set(storyId, (plotCount.get(storyId) ?? 0) + 1);
+  const episodeCount = new Map<number, number>();
+  for (const episode of episodes) {
+    const storyId = num(episode.story_id);
+    if (storyId !== null) episodeCount.set(storyId, (episodeCount.get(storyId) ?? 0) + 1);
   }
 
   const storiesAt = new Map<number, TreeStory[]>();
@@ -58,7 +58,7 @@ export function buildStoryTree(locations: Rec[], stories: Rec[], plots: Rec[]): 
     const id = Number(story.id);
     const entry: TreeStory = {
       id, name: String(story.name ?? story.label ?? ""), state: str(story.state),
-      start: str(story.start), end: str(story.end), plots: plotCount.get(id) ?? 0,
+      start: str(story.start), end: str(story.end), episodes: episodeCount.get(id) ?? 0,
     };
     const place = num(story.place_id), world = num(story.world_id);
     const at = place !== null && known.has(place) ? place : world !== null && known.has(world) ? world : null;

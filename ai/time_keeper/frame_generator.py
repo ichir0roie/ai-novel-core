@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""作者が決めた種(`key`)・時刻・登場人物・前の話・作品から、話(`Plot`)を一話ぶん足す。
+"""作者が決めた種(`key`)・時刻・登場人物・前の話・作品から、話(`Episode`)を一話ぶん足す。
 
-話の枠(種・時刻・視点・場所)を決め、本文は `episode_generator` で分けて書いて `Episode` に持つ。
+話の枠(種・時刻・視点・場所)を決め、本文は `episode_generator` で分けて書いて同じ行に持つ。
 `story_writer` は作品の中で本文の入っている最後の話の次を、世界の断面から書く。
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper._ai import AIClient
 from ai.time_keeper._format import format_time
 from data_access_logic.query import common_query
-from db.schema import Plot, Location, Session, Stamp
+from db.schema import Episode, Location, Session, Stamp
 from db.stamp import StampError
 
 _FRAME_SYSTEM_PROMPT = """\
@@ -42,18 +42,18 @@ _FRAME_SCHEMA = {
 
 def generate(
     session: Session, ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None,
-    character_ids: list[int], previous_plot_ids: list[int] | None = None, *,
+    character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
     place_id: int | None = None, viewpoint: str | None = None, writer_options: dict | None = None,
-    plot_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
-) -> Plot | None:
+    episode_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
+) -> Episode | None:
     """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
 
     `place_id` を省くと作品の立つ場所を材料に使い、話の `place` は空のまま残す。
-    `plot_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・題・場所は、省けば枠のものを使う。
+    `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・題・場所は、省けば枠のものを使う。
     本文が得られなければ話を足さず(枠も変えず)に None を返す。
     `shared_style_extra` / `style_extra` は `episode_generator.write` に渡す(世界ごとの文体の好み)。
     """
-    slot = episode_generator.frame(session, plot_id, story_id) if plot_id is not None else None
+    slot = episode_generator.frame(session, episode_id, story_id) if episode_id is not None else None
     key = (key or (slot.key if slot else "") or "").strip()
     if not key:
         raise ValueError("key(話の種)が空")
@@ -70,8 +70,8 @@ def generate(
         raise ValueError(f"場所 id={place_id} が見つからない")
 
     written = episode_generator.write(
-        session, ai, story, key, time, characters, previous_plot_ids, place=place, viewpoint=viewpoint,
-        exclude_plot_id=slot.id if slot else None, writer_options=writer_options,
+        session, ai, story, key, time, characters, previous_episode_ids, place=place, viewpoint=viewpoint,
+        exclude_episode_id=slot.id if slot else None, writer_options=writer_options,
         shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
         print(f"[time_keepr/episode] {story.name}: 本文が得られなかったので話を足さない")
@@ -79,7 +79,7 @@ def generate(
 
     record = slot
     if record is None:
-        record = Plot(story_id=story.id, title="")
+        record = Episode(story_id=story.id, title="")
         session.add(record)
     if place is not None:
         record.place = place.name
@@ -101,22 +101,22 @@ def _frame_hint_lines(hints: dict) -> list[str]:
 
 def generate_frame(
     session: Session, ai: AIClient, story_id: int, hints: dict | None = None,
-    character_ids: list[int] | None = None, previous_plot_ids: list[int] | None = None, *,
-    plot_id: int | None = None,
-) -> Plot:
-    """作者の下書き(`hints`。GUI の欄の値)を核に、本文の無い話の枠を一つ決めて足す(`plot_id` を渡せばその枠へ書く)。
+    character_ids: list[int] | None = None, previous_episode_ids: list[int] | None = None, *,
+    episode_id: int | None = None,
+) -> Episode:
+    """作者の下書き(`hints`。GUI の欄の値)を核に、本文の無い話の枠を一つ決めて足す(`episode_id` を渡せばその枠へ書く)。
 
     題・種・視点・場所は下書きを核に AI が組み立て直し、時刻は下書きにあればそれを、無ければ AI が直前の話の後から選ぶ。
     本文は書かない(`episode_generator.generate` で別に書く)。
     """
     hints = dict(hints or {})
     story = common_query.get_story(session, story_id)
-    slot = episode_generator.frame(session, plot_id, story_id) if plot_id is not None else None
+    slot = episode_generator.frame(session, episode_id, story_id) if episode_id is not None else None
     fixed_time = Stamp.parse(hints.get("start")) or (slot.start if slot else None)
     characters = episode_generator.characters(session, character_ids or [])
 
-    previous = [e for e in episode_generator._previous_plots(
-        session, story.id, fixed_time or Stamp(99999, 12, 31), previous_plot_ids)
+    previous = [e for e in episode_generator._previous_episodes(
+        session, story.id, fixed_time or Stamp(99999, 12, 31), previous_episode_ids)
         if slot is None or e.id != slot.id]
     context_time = fixed_time or (previous[-1].start if previous and previous[-1].start else None) \
         or story.start or Stamp(1)
@@ -129,7 +129,7 @@ def generate_frame(
         f"作品: {_dump(episode_generator._story_row(story))}",
         f"作品の期間: {story.start or '(不定)'}〜{story.end or '(不定)'}",
         f"作品の立つ場所: {_dump(episode_generator._place_row(context_place))}",
-        f"直前の話(古い順): {_dump(recap['plots']) if recap['plots'] else '(無し。これが最初の話)'}",
+        f"直前の話(古い順): {_dump(recap['episodes']) if recap['episodes'] else '(無し。これが最初の話)'}",
     ]
     if cast:
         lines.append(f"登場人物: {_dump(cast)}")
@@ -155,7 +155,7 @@ def generate_frame(
 
     record = slot
     if record is None:
-        record = Plot(story_id=story.id, title="")
+        record = Episode(story_id=story.id, title="")
         session.add(record)
     record.title = (decided.get("title") or "").strip()
     record.key = key
@@ -165,5 +165,5 @@ def generate_frame(
     record.place = (decided.get("place") or "").strip() or None
     record.synced = False
     session.commit()
-    print(f"[time_keepr/plot] {story.name}(id={story.id}) {format_time(time)}「{record.title}」 id={record.id} の枠を決めた")
+    print(f"[time_keepr/frame] {story.name}(id={story.id}) {format_time(time)}「{record.title}」 id={record.id} の枠を決めた")
     return record

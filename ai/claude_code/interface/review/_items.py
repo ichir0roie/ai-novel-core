@@ -65,19 +65,19 @@ def unconfirmed_meme_items(session: Session) -> list[dict]:
     return items
 
 
-def unsynced_plot_items(session: Session) -> list[dict]:
+def unsynced_episode_items(session: Session) -> list[dict]:
     items = []
-    for plot in session.scalars(review_query.written_unsynced_plots_select()).all():
-        story = session.get(Story, plot.story_id)
-        story_name = story.name if story else f"作品 id={plot.story_id}"
+    for episode in session.scalars(review_query.written_unsynced_episodes_select()).all():
+        story = session.get(Story, episode.story_id)
+        story_name = story.name if story else f"作品 id={episode.story_id}"
         items.append({
-            "key": f"plot:{plot.id}",
+            "key": f"episode:{episode.id}",
             "kind": "未同期の話",
-            "title": f"{story_name}「{plot.title}」を世界観へ反映して synced を立てる",
+            "title": f"{story_name}「{episode.title}」を世界観へ反映して synced を立てる",
             "detail": "\n".join([
                 "本文の出来事・行動を台帳へ戻す。戻すまで、この作品の次の話が書けない。",
-                gui_path(plot),
-                f"済んだら: SetPlotSynced({plot.id})",
+                gui_path(episode),
+                f"済んだら: SetEpisodeSynced({episode.id})",
             ]),
         })
     return items

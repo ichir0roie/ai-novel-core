@@ -41,7 +41,7 @@ export const T = {
   },
 
   list: {
-    plotsOf: (story: string) => `Plots of ${story}`,
+    episodesOf: (story: string) => `Episodes of ${story}`,
     story: (id: string) => `story ${id}`,
     stories: "Stories",
     tree: "Tree",
@@ -97,7 +97,7 @@ export const T = {
     title: "Call endpoint",
     area: {
       world: "Read world",
-      story: "Stories / plots",
+      story: "Stories / episodes",
       randomizer: "Add / edit / delete",
       idea: "Idea staging",
       meme: "Memes",
@@ -134,13 +134,13 @@ export const T = {
     mapCentered: { title: "Map centered here", sub: "Map centered on this location" },
     appearsIn: "Appears in",
     noLinkedText: "(no linked text)",
-    plotList: "Plot list",
-    plotSummary: (plots: number, letters: number) => `${plots} plots / ${letters.toLocaleString()} chars`,
+    episodeList: "Episode list",
+    episodeSummary: (episodes: number, letters: number) => `${episodes} episodes / ${letters.toLocaleString()} chars`,
     unsynced: (n: number) => ` / ${n} unsynced`,
   },
 
   storyTree: {
-    plots: (n: number) => `${n} plots`,
+    episodes: (n: number) => `${n} episodes`,
     stories: (n: number) => `${n} stories`,
     openLocation: "Open location",
     noStories: "No stories yet",

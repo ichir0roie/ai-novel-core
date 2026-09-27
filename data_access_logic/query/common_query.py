@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from db.schema import (
     ConfirmStatus,
-    Character, CharacterPlace, CharacterRelation, Plot,
+    Character, CharacterPlace, CharacterRelation, Episode,
     Event, EventCharacter, Idea, Location,
     Story,
 )
@@ -295,35 +295,35 @@ def stories_select() -> Select:
             .order_by(Story.id))
 
 
-def plot_order() -> tuple:
+def episode_order() -> tuple:
     """作品の中の話の並び。start の順で、start の無い話は後ろに id 順"""
-    return (Plot.start.asc().nulls_last(), Plot.id.asc())
+    return (Episode.start.asc().nulls_last(), Episode.id.asc())
 
 
-def story_plots_select(story_id: int) -> Select:
-    return (select(Plot)
-            .where(Plot.story_id == story_id)
-            .order_by(*plot_order()))
+def story_episodes_select(story_id: int) -> Select:
+    return (select(Episode)
+            .where(Episode.story_id == story_id)
+            .order_by(*episode_order()))
 
 
-def plots_select(story_id: int, *, count: int = 10, before=None) -> Select:
+def episodes_select(story_id: int, *, count: int = 10, before=None) -> Select:
     """呼び出し側は取り出した後に `reversed()` して古い順に並べ直す
     (新しい順に `limit` するため、select 自体は新しい順のまま返す)。
     `before` は時刻。start がそれより前の話だけに絞る(start の無い話は外れる)。
     """
-    query = select(Plot).where(Plot.story_id == story_id)
+    query = select(Episode).where(Episode.story_id == story_id)
     if before is not None:
-        query = query.where(Plot.start < Stamp.parse(before))
-    return query.order_by(Plot.start.desc().nulls_first(), Plot.id.desc()).limit(count)
+        query = query.where(Episode.start < Stamp.parse(before))
+    return query.order_by(Episode.start.desc().nulls_first(), Episode.id.desc()).limit(count)
 
 
-def unsynced_plots_select(story_id: int | None = None) -> Select:
-    query = (select(Plot)
-             .options(selectinload(Plot.story))
-             .where(Plot.synced.is_(False)))
+def unsynced_episodes_select(story_id: int | None = None) -> Select:
+    query = (select(Episode)
+             .options(selectinload(Episode.story))
+             .where(Episode.synced.is_(False)))
     if story_id is not None:
-        query = query.where(Plot.story_id == story_id)
-    return query.order_by(Plot.story_id, *plot_order())
+        query = query.where(Episode.story_id == story_id)
+    return query.order_by(Episode.story_id, *episode_order())
 
 
 # ---------------------------------------------------------------- 断面

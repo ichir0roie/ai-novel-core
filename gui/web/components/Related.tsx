@@ -7,11 +7,11 @@ type Owner = { table: string; id: number | string };
 
 export default function Related({ related, owner }: { related: Record<string, unknown>; owner?: Owner }) {
   const appearances = related.appearances as Appearance[] | undefined;
-  const plots = related.plots as Appearance[] | undefined;
+  const episodes = related.episodes as Appearance[] | undefined;
   const graph = owner?.table === "character" ? { href: `/relations?character=${owner.id}`, ...T.related.relationGraph }
     : owner?.table === "location" ? { href: `/maps?location=${owner.id}`, ...T.related.mapCentered }
     : null;
-  if (!appearances?.length && !plots && !graph) return null;
+  if (!appearances?.length && !episodes && !graph) return null;
   return (
     <div className="panel related">
       {graph && (
@@ -38,12 +38,12 @@ export default function Related({ related, owner }: { related: Record<string, un
           )}
         </>
       )}
-      {plots && owner?.table === "story" && (
-        <Link href={`/tables/plot?story_id=${owner.id}`} target="_blank" rel="noopener noreferrer" className="jump">
-          <span className="jump-title">{T.related.plotList}</span>
+      {episodes && owner?.table === "story" && (
+        <Link href={`/tables/episode?story_id=${owner.id}`} target="_blank" rel="noopener noreferrer" className="jump">
+          <span className="jump-title">{T.related.episodeList}</span>
           <span className="jump-sub">
-            {T.related.plotSummary(plots.length, plots.reduce((sum, p) => sum + (p.letters ?? 0), 0))}
-            {plots.some((p) => !p.synced) ? T.related.unsynced(plots.filter((p) => !p.synced).length) : ""}
+            {T.related.episodeSummary(episodes.length, episodes.reduce((sum, p) => sum + (p.letters ?? 0), 0))}
+            {episodes.some((p) => !p.synced) ? T.related.unsynced(episodes.filter((p) => !p.synced).length) : ""}
           </span>
         </Link>
       )}

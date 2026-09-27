@@ -32,8 +32,9 @@ class Generator:
 
 _CHARACTER_IDS = ColumnMeta(key="character_ids", label="登場人物", type="id_list", nullable=True, required=False,
                             references="character", comment="この話に出す人物。空ならその時刻に生きているメインキャラクター")
-_PREVIOUS_PLOT_IDS = ColumnMeta(key="previous_plot_ids", label="直前の話", type="id_list", nullable=True, required=False,
-                                references="plot", comment="概要と文体の覚え書きで渡す話。空なら作品の中でその時刻より前の三話")
+_PREVIOUS_EPISODE_IDS = ColumnMeta(
+    key="previous_episode_ids", label="直前の話", type="id_list", nullable=True, required=False,
+    references="episode", comment="概要と文体の覚え書きで渡す話。空なら作品の中でその時刻より前の三話")
 
 GENERATORS: tuple[Generator, ...] = (
     Generator("character", "ai", "AI で作成", "randomizer.generate_character.GenerateCharacter", "character",
@@ -44,11 +45,11 @@ GENERATORS: tuple[Generator, ...] = (
     Generator("event", "ai", "AI で作成", "randomizer.generate_event.GenerateEvent", "event"),
     Generator("event", "complete", "AI で補完", "randomizer.generate_event.GenerateEvent", "event",
               mode="edit", when_empty="text"),
-    Generator("plot", "frame", "AI で枠を作る", "story.generate_plot.GeneratePlot", "plot",
-              params=(_CHARACTER_IDS, _PREVIOUS_PLOT_IDS)),
-    Generator("plot", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "plot",
+    Generator("episode", "frame", "AI で枠を作る", "story.generate_frame.GenerateFrame", "frame",
+              params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS)),
+    Generator("episode", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "episode",
               mode="both", when_empty="text",
-              params=(_CHARACTER_IDS, _PREVIOUS_PLOT_IDS,
+              params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS,
                       ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
                                  comment="空なら claude-fable-5-1"),
                       ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,

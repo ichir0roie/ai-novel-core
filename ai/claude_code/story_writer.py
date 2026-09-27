@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`local_ai` には本文を書く生成器が無いので、ここだけは claude_ai 固有。
-本文は `Episode` に持つ。自動生成なので `synced` は立てて確定する(`schema.py` の `Plot.synced` の注記どおり)。
+自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ai.claude_code import ai_client
 from ai.claude_code.interface.story import _rows
 from ai.time_keeper import episode_summary, idea_context
 from data_access_logic.query import common_query
-from db.schema import Plot, Episode, Session, get_env_session
+from db.schema import Episode, Session, get_env_session
 
 # 一話ぶんの本文を書かせるので、断片の JSON より長く待つ。
 EPISODE_TIMEOUT = 900.0
@@ -49,53 +49,53 @@ def _dump(value) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
-def _ordered(session: Session, story_id: int) -> list[Plot]:
-    return list(session.scalars(common_query.story_plots_select(story_id)).all())
+def _ordered(session: Session, story_id: int) -> list[Episode]:
+    return list(session.scalars(common_query.story_episodes_select(story_id)).all())
 
 
-def _target_index(rows: list[Plot], plot_id: int | None) -> int:
-    """書く話の位置。`plot_id` を省くと、本文の入っている最後の話の次。
+def _target_index(rows: list[Episode], episode_id: int | None) -> int:
+    """書く話の位置。`episode_id` を省くと、本文の入っている最後の話の次。
     その位置に種だけの話があればそれを埋め、無ければ末尾に新しい話を足す(len(rows) を返す)。
     """
-    if plot_id is not None:
+    if episode_id is not None:
         for index, record in enumerate(rows):
-            if record.id == int(plot_id):
+            if record.id == int(episode_id):
                 return index
-        raise ValueError(f"id={plot_id} という話がこの作品に無い")
-    written = [index for index, record in enumerate(rows) if record.body.strip()]
+        raise ValueError(f"id={episode_id} という話がこの作品に無い")
+    written = [index for index, record in enumerate(rows) if record.text.strip()]
     return (written[-1] + 1) if written else 0
 
 
-def _blocking_unsynced(rows: list[Plot], index: int) -> list[dict]:
+def _blocking_unsynced(rows: list[Episode], index: int) -> list[dict]:
     """本文がまだ無い話(種だけ入れてある先の話)は、書きようがないので数えない。"""
     return [{"id": record.id, "title": record.title} for record in rows[:index]
-            if record.body.strip() and not record.synced]
+            if record.text.strip() and not record.synced]
 
 
-def _plot_recap(session: Session, plot: dict) -> dict:
-    record = session.get(Plot, plot["id"])
+def _episode_recap(session: Session, episode: dict) -> dict:
+    record = session.get(Episode, episode["id"])
     return episode_summary.summarize(session, record, ai_client) or {}
 
 
-def _recap(session: Session, plots: list[dict]) -> dict:
+def _recap(session: Session, episodes: list[dict]) -> dict:
     rows, styles = [], []
-    for plot in plots:
-        if not (plot.get("text") or "").strip():
-            rows.append(plot)
+    for episode in episodes:
+        if not (episode.get("text") or "").strip():
+            rows.append(episode)
             continue
-        note = _plot_recap(session, plot)
+        note = _episode_recap(session, episode)
         if note.get("summary"):
-            rows.append({**{k: v for k, v in plot.items() if k != "text"}, "summary": note["summary"]})
+            rows.append({**{k: v for k, v in episode.items() if k != "text"}, "summary": note["summary"]})
         else:
-            rows.append(plot)
+            rows.append(episode)
         if note.get("style"):
             styles.append(note["style"])
-    return {"plots": rows, "style": styles[-1] if styles else ""}
+    return {"episodes": rows, "style": styles[-1] if styles else ""}
 
 
 def _materials(
     session: Session, story_id: int, time, *,
-    rows: list[Plot], index: int, plots: int, count: int, reach: int, levels: int,
+    rows: list[Episode], index: int, recap_count: int, count: int, reach: int, levels: int,
 ) -> dict:
     story = common_query.get_story(session, story_id)
     unsynced = _blocking_unsynced(rows, index)
@@ -110,23 +110,23 @@ def _materials(
         raise ValueError(f"作品 {story.name} に立つ場所(place_id)が無い")
     _, until = common_query.resolve_time(session, time, story)
     result["time"] = str(until)
-    result["plots"] = [_rows.plot_row(record) for record in rows[max(0, index - plots):index]]
+    result["episodes"] = [_rows.episode_row(record) for record in rows[max(0, index - recap_count):index]]
     result["cast"] = _rows.cast(session, story_id, until, count=count, levels=levels)
     result["brief"] = _rows.brief(session, story.place_id, until, reach=reach)
     return result
 
 
 def write_next_episode(
-    session: Session, story_id: int, time=None, *, plot_id: int | None = None,
-    plots: int = RECAP_EPISODE_LIMIT, count: int = 5, reach: int = 60, levels: int = 1,
+    session: Session, story_id: int, time=None, *, episode_id: int | None = None,
+    recap_count: int = RECAP_EPISODE_LIMIT, count: int = 5, reach: int = 60, levels: int = 1,
     shared_style_extra: str = "", style_extra: str = "",
-) -> Plot | None:
+) -> Episode | None:
     story_row = common_query.get_story(session, story_id)
     rows = _ordered(session, story_id)
-    index = _target_index(rows, plot_id)
+    index = _target_index(rows, episode_id)
 
     materials = _materials(session, story_id, time, rows=rows, index=index,
-                           plots=plots, count=count, reach=reach, levels=levels)
+                           recap_count=recap_count, count=count, reach=reach, levels=levels)
     story = materials["story"]
     if materials["stopped"]:
         print(f"[claude_ai/story] {story['name']}: 未同期の話 {materials['unsynced']} が残っているので書かない")
@@ -136,11 +136,11 @@ def write_next_episode(
     seed = (record.key or "").strip() if record is not None else ""
     context = (idea_context.gather(session, seed, ai_client, story_row.place_id, materials["time"])
                if seed else idea_context.IdeaContext())
-    recap = _recap(session, materials["plots"])
+    recap = _recap(session, materials["episodes"])
     lines = [
         f"作品: {_dump(story)}",
         f"時刻: {materials['time']}",
-        f"直前の話(古い順): {_dump(recap['plots']) if recap['plots'] else '(無し。第一話)'}",
+        f"直前の話(古い順): {_dump(recap['episodes']) if recap['episodes'] else '(無し。第一話)'}",
     ]
     if recap["style"]:
         lines.append(f"直前の話の文体(これに揃える): {recap['style']}")
@@ -168,33 +168,31 @@ def write_next_episode(
     title = (decided.get("title") or "").strip()
 
     if record is None:
-        record = Plot(story_id=story_id, title=title, synced=True)
+        record = Episode(story_id=story_id, title=title, synced=True)
         session.add(record)
     else:
         record.title = title or record.title
         record.synced = True
-    if record.episode is None:
-        record.episode = Episode(text="")
-    record.episode.text = text
-    record.episode.model = ai_client.EPISODE_MODEL
-    record.episode.effort = ai_client.EPISODE_EFFORT
+    record.text = text
+    record.model = ai_client.EPISODE_MODEL
+    record.effort = ai_client.EPISODE_EFFORT
     session.flush()
     idea_context.link(session, record, context.linked)
     session.commit()
     print(f"[claude_ai/story] {story_row.name}「{record.title}」"
-          f" id={record.id} {record.episode.letters}字")
+          f" id={record.id} {record.letters}字")
     return record
 
 
 def write_story(story_id: int, episodes_to_write: int = 1, time=None,
-                plot_id: int | None = None, *,
-                shared_style_extra: str = "", style_extra: str = "") -> list[Plot]:
-    """`plot_id` は一話目にだけ効く。二話目からは、本文の入っている最後の話の次を書く"""
-    written: list[Plot] = []
+                episode_id: int | None = None, *,
+                shared_style_extra: str = "", style_extra: str = "") -> list[Episode]:
+    """`episode_id` は一話目にだけ効く。二話目からは、本文の入っている最後の話の次を書く"""
+    written: list[Episode] = []
     with get_env_session() as session:
         for offset in range(episodes_to_write):
-            target = plot_id if offset == 0 else None
-            record = write_next_episode(session, story_id, time, plot_id=target,
+            target = episode_id if offset == 0 else None
+            record = write_next_episode(session, story_id, time, episode_id=target,
                                         shared_style_extra=shared_style_extra, style_extra=style_extra)
             if record is None:
                 break

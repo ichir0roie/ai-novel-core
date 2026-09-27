@@ -75,8 +75,8 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/maps/{planet_id}.svg` | 星ひとつの地図(svg)。場所の座標・領域から python で描く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
 
-`table` は `story` `plot` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
-話(`plot`)は本文(`episode`)を `text` として一緒に扱う。出来事は `character_ids`(当事者)、
+`table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
+話(`episode`)は枠(`key`)と本文(`text`)を一緒に扱う。出来事は `character_ids`(当事者)、
 人物は足すときだけ `place_id`(出自)を受け取る。
 
 型を変えたら OpenAPI と TS の型を作り直す。
@@ -111,7 +111,7 @@ id を渡し、AI がその行の本文だけを書いて埋める(本文以外�
 | --- | --- | --- | --- | --- |
 | 人物 | AI で作成 / AI で補完 | `randomizer.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`place_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 | 決まっている名前・属性・出自を核に本文だけを書く |
 | 出来事 | AI で作成 / AI で補完 | `randomizer.generate_event.GenerateEvent` | 名前・本文は場面の指定。時刻・場所・当事者は決まった値(省けば世界の最新・当事者の現在地・居合わせるサブキャラクター) | 記録・当事者・関連する設定から小説の本文だけを書く |
-| 話 | AI で枠を作る | `story.generate_plot.GeneratePlot` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。本文は書かない | (出ない。枠のみで足す画面専用) |
+| 話 | AI で枠を作る | `story.generate_frame.GenerateFrame` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。本文は書かない | (出ない。枠のみで足す画面専用) |
 | 話 | AI で本文まで書く | `story.generate_episode.GenerateEpisode` | 種と時刻が揃っていればそのまま本文を書く。どちらかが空なら先に枠を決める | 本文の無い話のページに出る(その枠へ書く)。登場人物を省けばメインキャラクター |
 
 claude を叩くので裏の job になり、画面は job を待って、終わったら足した(直した)行のページへ移る(本文なら読み直す)。

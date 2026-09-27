@@ -7,21 +7,21 @@ from __future__ import annotations
 
 from ai.claude_code.interface._base import CommitEntrypoint
 from ai.time_keeper import idea_context
-from db.schema import Character, Plot, Event, Idea
+from db.schema import Character, Episode, Event, Idea
 
 
 class LinkIdeas(CommitEntrypoint):
     model = Idea
 
-    def __init__(self, idea_ids, event_id: int | None = None, plot_id: int | None = None,
+    def __init__(self, idea_ids, event_id: int | None = None, episode_id: int | None = None,
                  character_id: int | None = None):
         self.idea_ids = [int(id_) for id_ in idea_ids]
-        self.owners = {Event: event_id, Plot: plot_id, Character: character_id}
+        self.owners = {Event: event_id, Episode: episode_id, Character: character_id}
 
     def execute(self, session) -> dict:
         given = [(model, int(id_)) for model, id_ in self.owners.items() if id_ is not None]
         if len(given) != 1:
-            raise ValueError("event_id / plot_id / character_id のどれか一つだけを渡す")
+            raise ValueError("event_id / episode_id / character_id のどれか一つだけを渡す")
         model, owner_id = given[0]
         self.check_exists(session, model, owner_id, f"{model.__tablename__}_id")
         for idea_id in self.idea_ids:

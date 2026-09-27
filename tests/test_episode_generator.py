@@ -3,9 +3,9 @@ import pytest
 from ai.claude_code import ai_client, claude_code_time_keeper
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.time_keeper import plot_generator, episode_summary, episode_generator, main
+from ai.time_keeper import frame_generator, episode_summary, episode_generator, main
 from db.schema import (
-    Character, CharacterRelation, Plot, PlotIdea, Episode, Event, EventCharacter, Idea, Location, Story,
+    Character, CharacterRelation, Episode, EpisodeIdea, Event, EventCharacter, Idea, Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -56,9 +56,9 @@ def _character(session, name, *, start=Stamp(2080)) -> Character:
     return record
 
 
-def _plot(session, story, number, *, start=None) -> Plot:
-    record = Plot(story_id=story.id, start=start or Stamp(2100, 4, number), title=f"第{number}話",
-                     synced=True, episode=Episode(text=f"{number}話の本文"))
+def _episode(session, story, number, *, start=None) -> Episode:
+    record = Episode(story_id=story.id, start=start or Stamp(2100, 4, number), title=f"第{number}話",
+                     synced=True, text=f"{number}話の本文")
     session.add(record)
     session.commit()
     return record
@@ -73,16 +73,16 @@ def _event(session, place, characters, start, name) -> Event:
     return record
 
 
-def test_plot_is_added_to_the_story_with_the_given_key_and_time(session, story):
+def test_episode_is_added_to_the_story_with_the_given_key_and_time(session, story):
     first = _character(session, "甲")
     ai = _Writer(seed=1)
 
-    record = plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
+    record = frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
 
     assert record.story_id == story.id
     assert record.key == KEY and record.start == WHEN
     assert record.title == "地図の市"
-    assert record.body == "甲は地図を買った。" and record.episode.letters == len(record.body)
+    assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
     assert record.synced is True
     assert record.viewpoint == "甲"
     assert record.place is None
@@ -93,7 +93,7 @@ def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
     second = _character(session, "乙")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, "2100/05/01", [first.id, second.id])
+    frame_generator.generate(session, ai, story.id, KEY, "2100/05/01", [first.id, second.id])
 
     call = _writing_call(ai)
     assert call["system"] == episode_generator._SYSTEM_PROMPT
@@ -112,8 +112,8 @@ def test_style_extras_from_the_caller_reach_the_system_prompt(session, story):
     first = _character(session, "甲")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id],
-                            shared_style_extra="西暦一万年のSF世界", style_extra="この世界の文体の癖")
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id],
+                             shared_style_extra="西暦一万年のSF世界", style_extra="この世界の文体の癖")
 
     system = _writing_call(ai)["system"]
     assert "西暦一万年のSF世界" in system and "この世界の文体の癖" in system
@@ -125,18 +125,18 @@ def test_unknown_characters_are_left_out_of_the_prompt(session, story):
     _character(session, "丙")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
 
     assert '"name": "丙"' not in _writing_call(ai)["prompt"]
 
 
-def test_previous_plots_are_given_as_summaries(session, story):
-    plots = [_plot(session, story, number) for number in range(1, 5)]
+def test_previous_episodes_are_given_as_summaries(session, story):
+    episodes = [_episode(session, story, number) for number in range(1, 5)]
     first = _character(session, "甲")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id],
-                               [plots[3].id, plots[1].id, plots[2].id])
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id],
+                             [episodes[3].id, episodes[1].id, episodes[2].id])
 
     prompt = _writing_call(ai)["prompt"]
     assert "話の本文" not in prompt
@@ -146,14 +146,14 @@ def test_previous_plots_are_given_as_summaries(session, story):
     assert "直前の話の文体(これに揃える): 短い地の文" in prompt
 
 
-def test_previous_plots_default_to_the_last_three_before_the_time(session, story):
+def test_previous_episodes_default_to_the_last_three_before_the_time(session, story):
     for number in range(1, 5):
-        _plot(session, story, number)
-    _plot(session, story, 9, start=Stamp(2100, 6, 1))
+        _episode(session, story, number)
+    _episode(session, story, 9, start=Stamp(2100, 6, 1))
     first = _character(session, "甲")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
 
     prompt = _writing_call(ai)["prompt"]
     for number in (2, 3, 4):
@@ -161,11 +161,11 @@ def test_previous_plots_default_to_the_last_three_before_the_time(session, story
     assert '"title": "第1話"' not in prompt and '"title": "第9話"' not in prompt
 
 
-def test_first_plot_has_no_previous_ones(session, story):
+def test_first_episode_has_no_previous_ones(session, story):
     first = _character(session, "甲")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
 
     assert "直前の話(古い順): (無し)" in _writing_call(ai)["prompt"]
     assert not any(call["schema"] is episode_summary._SCHEMA for call in ai.calls)
@@ -186,7 +186,7 @@ def test_characters_recent_and_later_events_are_told_without_their_texts(session
     session.commit()
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id, second.id])
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id, second.id])
 
     prompt = _writing_call(ai)["prompt"]
     assert '"name": "甲の前の出来事"' in prompt and '"place": "山村"' in prompt
@@ -199,7 +199,7 @@ def test_characters_recent_and_later_events_are_told_without_their_texts(session
     assert "の出来事の本文" not in prompt
 
 
-def test_given_place_and_viewpoint_are_kept_on_the_plot(session, story):
+def test_given_place_and_viewpoint_are_kept_on_the_episode(session, story):
     first = _character(session, "甲")
     second = _character(session, "乙")
     market = Location(name="魚市場", kind="市場", text="魚市場の説明")
@@ -207,8 +207,8 @@ def test_given_place_and_viewpoint_are_kept_on_the_plot(session, story):
     session.commit()
     ai = _Writer(seed=1)
 
-    record = plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id, second.id],
-                                        place_id=market.id, viewpoint="乙")
+    record = frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id, second.id],
+                                      place_id=market.id, viewpoint="乙")
 
     assert record.place == "魚市場" and record.viewpoint == "乙"
     prompt = _writing_call(ai)["prompt"]
@@ -216,7 +216,7 @@ def test_given_place_and_viewpoint_are_kept_on_the_plot(session, story):
     assert "視点: 乙" in prompt
 
 
-def test_ideas_the_key_hits_are_linked_to_the_plot(session, story, place, monkeypatch):
+def test_ideas_the_key_hits_are_linked_to_the_episode(session, story, place, monkeypatch):
     first = _character(session, "甲")
     idea = Idea(name="古い地図", kind="物", text="古い地図の説明", start=Stamp(2000), location_id=place.id)
     session.add(idea)
@@ -226,10 +226,10 @@ def test_ideas_the_key_hits_are_linked_to_the_plot(session, story, place, monkey
                                           "kind": "物", "description": "", "start": None, "end": None}])
     ai = _Writer(seed=1)
 
-    record = plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
+    record = frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
 
     assert "古い地図の説明" in _writing_call(ai)["prompt"]
-    assert [row.idea_id for row in session.query(PlotIdea).filter_by(plot_id=record.id)] == [idea.id]
+    assert [row.idea_id for row in session.query(EpisodeIdea).filter_by(episode_id=record.id)] == [idea.id]
 
 
 class _NoText(_Writer):
@@ -238,11 +238,11 @@ class _NoText(_Writer):
         return {} if schema is episode_generator._SCHEMA else decided
 
 
-def test_no_plot_is_added_without_a_text(session, story):
+def test_no_episode_is_added_without_a_text(session, story):
     first = _character(session, "甲")
 
-    assert plot_generator.generate(session, _NoText(seed=1), story.id, KEY, WHEN, [first.id]) is None
-    assert session.query(Plot).count() == 0
+    assert frame_generator.generate(session, _NoText(seed=1), story.id, KEY, WHEN, [first.id]) is None
+    assert session.query(Episode).count() == 0
 
 
 def test_bad_arguments_are_refused(session, story):
@@ -250,59 +250,59 @@ def test_bad_arguments_are_refused(session, story):
     ai = _Writer(seed=1)
 
     with pytest.raises(ValueError):
-        plot_generator.generate(session, ai, story.id, "  ", WHEN, [first.id])
+        frame_generator.generate(session, ai, story.id, "  ", WHEN, [first.id])
     with pytest.raises(ValueError):
-        plot_generator.generate(session, ai, story.id, KEY, WHEN, [])
+        frame_generator.generate(session, ai, story.id, KEY, WHEN, [])
     with pytest.raises(ValueError):
-        plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id + 100])
+        frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id + 100])
     with pytest.raises(ValueError):
-        plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], [12345])
+        frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], [12345])
     with pytest.raises(ValueError):
-        plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], place_id=12345)
+        frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], place_id=12345)
     with pytest.raises(LookupError):
-        plot_generator.generate(session, ai, story.id + 100, KEY, WHEN, [first.id])
-    assert session.query(Plot).count() == 0
+        frame_generator.generate(session, ai, story.id + 100, KEY, WHEN, [first.id])
+    assert session.query(Episode).count() == 0
 
 
-def test_main_plot_returns_the_id(session, story):
+def test_main_write_episode_returns_the_id(session, story):
     first = _character(session, "甲")
 
-    plot_id = main.plot(_Writer(seed=1), story.id, KEY, "2100/05/01", [first.id])
+    episode_id = main.write_episode(_Writer(seed=1), story.id, KEY, "2100/05/01", [first.id])
 
-    record = session.get(Plot, plot_id)
+    record = session.get(Episode, episode_id)
     assert record.start == WHEN and record.key == KEY
 
 
-def test_claude_writes_only_the_text_with_the_plot_model(session, story, monkeypatch):
+def test_claude_writes_only_the_text_with_the_episode_model(session, story, monkeypatch):
     first = _character(session, "甲")
-    _plot(session, story, 1)
+    _episode(session, story, 1)
     ai = _Writer(seed=1)
     monkeypatch.setattr(claude_code_time_keeper, "ai_client", ai)
 
-    claude_code_time_keeper.claude_plot_main(story.id, KEY, WHEN, [first.id])
+    claude_code_time_keeper.claude_write_episode_main(story.id, KEY, WHEN, [first.id])
 
     assert _writing_call(ai)["options"] == {"model": "claude-fable-5-1", "effort": "high"}
     assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)
 
 
-def _slot(session, story, *, title="枠の題", start=WHEN, key="", viewpoint="甲(十四歳)", place=None) -> Plot:
-    record = Plot(story_id=story.id, title=title, start=start, key=key,
+def _slot(session, story, *, title="枠の題", start=WHEN, key="", viewpoint="甲(十四歳)", place=None) -> Episode:
+    record = Episode(story_id=story.id, title=title, start=start, key=key,
                      synced=False, viewpoint=viewpoint, place=place)
     session.add(record)
     session.commit()
     return record
 
 
-def test_given_slot_is_filled_instead_of_adding_a_plot(session, story):
+def test_given_slot_is_filled_instead_of_adding_an_episode(session, story):
     first = _character(session, "甲")
     slot = _slot(session, story, place="波止場")
     ai = _Writer(seed=1)
 
-    record = plot_generator.generate(session, ai, story.id, KEY, None, [first.id], plot_id=slot.id)
+    record = frame_generator.generate(session, ai, story.id, KEY, None, [first.id], episode_id=slot.id)
 
-    assert record.id == slot.id and session.query(Plot).count() == 1
+    assert record.id == slot.id and session.query(Episode).count() == 1
     assert record.title == "枠の題" and record.start == WHEN and record.key == KEY
-    assert record.body == "甲は地図を買った。" and record.episode.letters == len(record.body)
+    assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
     assert record.synced is True
     assert record.viewpoint == "甲(十四歳)" and record.place == "波止場"
     assert "視点: 甲(十四歳)" in _writing_call(ai)["prompt"]
@@ -312,20 +312,20 @@ def test_slot_key_is_used_when_no_key_is_given_and_ai_title_fills_an_empty_one(s
     first = _character(session, "甲")
     slot = _slot(session, story, title="", key=KEY)
 
-    record = plot_generator.generate(session, _Writer(seed=1), story.id, None, None, [first.id],
-                                        plot_id=slot.id)
+    record = frame_generator.generate(session, _Writer(seed=1), story.id, None, None, [first.id],
+                                      episode_id=slot.id)
 
     assert record.key == KEY and record.title == "地図の市"
 
 
-def test_slot_is_not_given_as_its_own_previous_plot(session, story):
+def test_slot_is_not_given_as_its_own_previous_episode(session, story):
     first = _character(session, "甲")
-    before = _plot(session, story, 1)
+    before = _episode(session, story, 1)
     slot = _slot(session, story, title="枠の題")
     ai = _Writer(seed=1)
 
-    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], [before.id, slot.id],
-                               plot_id=slot.id)
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], [before.id, slot.id],
+                             episode_id=slot.id)
 
     prompt = _writing_call(ai)["prompt"]
     assert '"title": "第1話"' in prompt and '"title": "枠の題"' not in prompt
@@ -335,11 +335,12 @@ def test_slot_is_left_untouched_without_a_text(session, story):
     first = _character(session, "甲")
     slot = _slot(session, story)
 
-    assert plot_generator.generate(session, _NoText(seed=1), story.id, KEY, None, [first.id],
-                                      plot_id=slot.id) is None
+    assert frame_generator.generate(session, _NoText(seed=1), story.id, KEY, None, [first.id],
+                                    episode_id=slot.id) is None
     session.refresh(slot)
-    assert slot.body == "" and slot.key == "" and slot.synced is False
-    assert session.query(Episode).count() == 0
+    assert slot.text == "" and slot.key == "" and slot.synced is False
+    # 枠(slot)自身の一行だけで、本文を書いた行は増えない
+    assert session.query(Episode).count() == 1
 
 
 def test_bad_slots_are_refused(session, story):
@@ -347,35 +348,35 @@ def test_bad_slots_are_refused(session, story):
     other = Story(name="別の話", text="", narration="三人称", state="執筆中")
     session.add(other)
     session.commit()
-    written = _plot(session, story, 1)
+    written = _episode(session, story, 1)
     elsewhere = _slot(session, other)
     ai = _Writer(seed=1)
 
-    for plot_id in (12345, written.id, elsewhere.id):
+    for episode_id in (12345, written.id, elsewhere.id):
         with pytest.raises(ValueError):
-            plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], plot_id=plot_id)
-    assert session.get(Plot, written.id).body == "1話の本文"
+            frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id], episode_id=episode_id)
+    assert session.get(Episode, written.id).text == "1話の本文"
 
 
-def test_claude_plot_main_fills_the_slot(session, story, monkeypatch):
+def test_claude_write_episode_main_fills_the_slot(session, story, monkeypatch):
     first = _character(session, "甲")
     slot = _slot(session, story)
     monkeypatch.setattr(claude_code_time_keeper, "ai_client", _Writer(seed=1))
 
-    assert claude_code_time_keeper.claude_plot_main(
-        story.id, KEY, None, [first.id], plot_id=slot.id) == slot.id
+    assert claude_code_time_keeper.claude_write_episode_main(
+        story.id, KEY, None, [first.id], episode_id=slot.id) == slot.id
 
 
-def test_claude_plot_main_takes_the_model_of_the_text(session, story, monkeypatch):
+def test_claude_write_episode_main_takes_the_model_of_the_text(session, story, monkeypatch):
     first = _character(session, "甲")
     ai = _Writer(seed=1)
     monkeypatch.setattr(claude_code_time_keeper, "ai_client", ai)
 
-    plot_id = claude_code_time_keeper.claude_plot_main(
+    episode_id = claude_code_time_keeper.claude_write_episode_main(
         story.id, KEY, WHEN, [first.id], model="claude-sonnet-5", effort="medium")
 
     assert _writing_call(ai)["options"] == {"model": "claude-sonnet-5", "effort": "medium"}
-    text = session.get(Plot, plot_id).episode
+    text = session.get(Episode, episode_id)
     assert (text.model, text.effort) == ("claude-sonnet-5", "medium")
 
 
@@ -386,17 +387,17 @@ def test_other_generations_default_to_sonnet_medium():
 
 def test_text_is_written_separately_into_the_frame(session, story):
     first = _character(session, "甲")
-    before = _plot(session, story, 1)
+    before = _episode(session, story, 1)
     slot = _slot(session, story, title="", key=KEY, place="波止場")
     ai = _Writer(seed=1)
 
     text = episode_generator.generate(session, ai, slot.id, [first.id], writer_options={"model": "m", "effort": "e"})
 
     session.refresh(slot)
-    assert text.plot_id == slot.id and slot.episode.id == text.id
+    assert text.id == slot.id
     assert (text.text, text.letters, text.model, text.effort) == ("甲は地図を買った。", 9, "m", "e")
     assert slot.title == "地図の市" and slot.viewpoint == "甲(十四歳)" and slot.place == "波止場"
-    assert slot.synced is True and session.query(Plot).count() == 2
+    assert slot.synced is True and session.query(Episode).count() == 2
     prompt = _writing_call(ai)["prompt"]
     assert f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {KEY}" in prompt
     assert '"title": "第1話"' in prompt and before.id != slot.id
@@ -406,15 +407,16 @@ def test_text_needs_a_frame_with_key_and_time(session, story):
     first = _character(session, "甲")
     no_key = _slot(session, story, key="")
     no_time = _slot(session, story, key=KEY, start=None)
-    written = _plot(session, story, 1)
+    written = _episode(session, story, 1)
     ai = _Writer(seed=1)
 
-    for plot_id in (12345, no_key.id, no_time.id, written.id):
+    for episode_id in (12345, no_key.id, no_time.id, written.id):
         with pytest.raises(ValueError):
-            episode_generator.generate(session, ai, plot_id, [first.id])
+            episode_generator.generate(session, ai, episode_id, [first.id])
     with pytest.raises(ValueError):
         episode_generator.generate(session, ai, _slot(session, story, key=KEY).id, [])
-    assert session.query(Episode).count() == 1
+    # まだ本文が付いたのは最初に足した「written」だけ
+    assert session.query(Episode).filter(Episode.text != "").count() == 1
 
 
 def test_frame_is_left_without_a_text(session, story):
@@ -423,17 +425,19 @@ def test_frame_is_left_without_a_text(session, story):
 
     assert episode_generator.generate(session, _NoText(seed=1), slot.id, [first.id]) is None
     session.refresh(slot)
-    assert slot.body == "" and slot.synced is False and session.query(Episode).count() == 0
+    assert slot.text == "" and slot.synced is False
+    assert session.query(Episode).filter(Episode.text != "").count() == 0
 
 
-def test_claude_episode_main_writes_with_fable_high(session, story, monkeypatch):
+def test_claude_fill_episode_main_writes_with_fable_high(session, story, monkeypatch):
     first = _character(session, "甲")
     slot = _slot(session, story, key=KEY)
     ai = _Writer(seed=1)
     monkeypatch.setattr(claude_code_time_keeper, "ai_client", ai)
 
-    text_id = claude_code_time_keeper.claude_episode_main(slot.id, [first.id])
+    episode_id = claude_code_time_keeper.claude_fill_episode_main(slot.id, [first.id])
 
-    text = session.get(Episode, text_id)
-    assert text.plot_id == slot.id and (text.model, text.effort) == ("claude-fable-5-1", "high")
+    session.refresh(slot)
+    text = session.get(Episode, episode_id)
+    assert text.id == slot.id and (text.model, text.effort) == ("claude-fable-5-1", "high")
     assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)
