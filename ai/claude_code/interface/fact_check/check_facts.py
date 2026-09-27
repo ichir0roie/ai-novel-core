@@ -5,7 +5,7 @@
     CheckFacts("meme", limit=10).run()    まだ検めていないミームを 10 件だけ検める
     CheckFacts("idea", ids=[30]).run()    名指ししたものを検め直す
 
-アイデア・oracle は、検めたあと本文と検証結果からミームを抜き出し、足したミームも検める。
+アイデア・oracle は、検めたあと本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。
 `{"checked": 検めた件数, "memes_added": 足したミームの件数}` を返す。
 """
 from __future__ import annotations

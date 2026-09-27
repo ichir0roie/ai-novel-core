@@ -26,8 +26,8 @@ class CommitMemeSource(CommitDraft):
 
     抜き出しは確定のトランザクションを閉じてから行う(AI が答えなくても確定は残し、
     `meme_seeded` が false のまま次の抽出に回す)。足したミームの件数を `memes_added` で返す。
-    `fact_check` が立っていれば、抜き出す前に確定したもの自身を AI に検めさせ、本文と検証結果の
-    両方からミームを抜き出す。足したミームも検めさせる。
+    `fact_check` が立っていれば、抜き出す前に確定したもの自身を AI に検めさせ、検証結果を
+    足した本文からミームを抜き出す。足したミームも検めさせる。
     """
 
     fact_check = True
@@ -37,7 +37,7 @@ class CommitMemeSource(CommitDraft):
         with get_env_session() as session:
             if self.fact_check and result["text"].strip():
                 fact_checker.check(session, self.model.__tablename__, ids=[result["id"]])
-                result["fact_check"] = session.get(self.model, result["id"]).fact_check
+                result["text"] = session.get(self.model, result["id"]).text
             last_id = fact_checker.last_meme_id(session)
             result["memes_added"] = meme.refresh(session, ai_client)
             if self.fact_check:

@@ -32,7 +32,7 @@ _SYSTEM_PROMPT = f"""\
 - 固有名詞を抜いても特定の人物の役どころ・筋書き上の境遇をなぞるだけのもの(その人物にしか当てはまらない立場や状況)は抜き出さない。引いた人物がその人物の写しになるため。
 - 作者の前書き・使用環境・書き方の約束など、考え方にならない文からは抜き出さない。
 - 出来事(event)からは、当事者がその出来事を経て選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの記録からは抜き出さない。
-- 検証結果(〜の検証結果)は、用語の説明や覚え書きを現実の科学・歴史・思想・心理学に照らした調べ書き。\
+- 本文中の「検証結果」の節は、用語の説明や覚え書きを現実の科学・歴史・思想・心理学に照らした調べ書き。\
 そこに出てくる現実の人・集団の考え方や、研究で裏付けられた行動の傾向を、人物の行動原理になりうる考え方として抜き出す。\
 出典の一覧や、妥当性の判定そのものからは抜き出さない。
 - 一つの元から 0〜3 件。同じ元の中で似たミームは一つにまとめる。
@@ -111,10 +111,10 @@ def _plot_section(text: str | None) -> str:
 
 
 # 元のテーブルと、そこから抜き出す (見出し, 本文)。人物は `# plot` の節だけを使う。
-# アイデア・oracle は本文と検証結果(`fact_check`)を別の元として渡し、それぞれから抜き出させる。
+# アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。
 _SOURCE_TEXTS = (
-    (Idea, lambda idea: [("idea", idea.text), ("idea の検証結果", idea.fact_check)]),
-    (Oracle, lambda oracle: [("oracle", oracle.text), ("oracle の検証結果", oracle.fact_check)]),
+    (Idea, lambda idea: [("idea", idea.text)]),
+    (Oracle, lambda oracle: [("oracle", oracle.text)]),
     (Character, lambda character: [("character", _plot_section(character.text))]),
     (Event, lambda event: [("event", event.text)]),
 )
@@ -234,7 +234,6 @@ def _unseed(session: Session, batch: list[_Pending], failed: set) -> None:
 def refresh(session: Session, ai: AIClient) -> int:
     pending = _pending(session)
     added = 0
-    # 本文と検証結果が別の束に分かれたとき、片方でも抜き出せなければ、そのレコードは次の回に抜き出し直す。
     failed: set = set()
     for batch in _batches(pending, constants.MEME_BATCH_LETTERS):
         numbered = "\n\n".join(

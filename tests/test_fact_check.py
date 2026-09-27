@@ -1,4 +1,4 @@
-"""アイデア・ミームを AI に Dラボ・ネット検索で検めさせ、妥当性と補足を `fact_check` 欄へ書く。"""
+"""アイデア・ミームを AI に Dラボ・ネット検索で検めさせ、妥当性と補足を本文末尾の `# 検証結果` の節へ書く。"""
 
 import pytest
 
@@ -8,7 +8,7 @@ from ai.claude_code.interface.meme.extract_memes import ExtractMemes
 from ai.claude_code.interface.randomizer.commit_idea import CommitIdea
 from ai.claude_code.interface.fact_check.check_facts import CheckFacts
 from ai.claude_code.interface.randomizer.commit_oracle import CommitOracle
-from ai.time_keeper import constants, meme
+from ai.time_keeper import meme
 from db.schema import Idea, Meme, Oracle
 
 
@@ -82,7 +82,7 @@ def test_check_tools_include_dlab(monkeypatch):
 def test_check_fills_only_unreviewed_with_text(session, fake_check):
     session.add_all([
         Idea(name="魔力", kind="概念", text="大気に満ちる力"),
-        Idea(name="済み", kind="概念", text="検めてある", fact_check="前の結果"),
+        Idea(name="済み", kind="概念", text="検めてある\n\n# 検証結果\n前の結果"),
         Idea(name="空", kind="概念", text=""),
     ])
     session.commit()
@@ -90,22 +90,26 @@ def test_check_fills_only_unreviewed_with_text(session, fake_check):
     assert CheckFacts("idea").run() == {"checked": 1, "memes_added": 0}
 
     session.expire_all()
-    rows = {row.name: row.fact_check for row in session.query(Idea).all()}
-    assert rows == {"魔力": "## 妥当性\n検めた:大気に満ちる力", "済み": "前の結果", "空": None}
+    rows = {row.name: row.text for row in session.query(Idea).all()}
+    assert rows == {
+        "魔力": "大気に満ちる力\n\n# 検証結果\n## 妥当性\n検めた:大気に満ちる力",
+        "済み": "検めてある\n\n# 検証結果\n前の結果",
+        "空": "",
+    }
     prompt, kwargs = fake_check.calls[0]
     assert "アイデア「魔力」" in prompt
     assert kwargs["tools"] == fact_checker.tools()
 
 
 def test_check_by_ids_redoes_reviewed(session, fake_check):
-    meme = Meme(text="約束は守る", category="信条", fact_check="古い結果")
+    meme = Meme(text="約束は守る\n\n# 検証結果\n古い結果", category="信条")
     session.add(meme)
     session.commit()
 
     assert CheckFacts("meme", ids=[meme.id]).run() == {"checked": 1, "memes_added": 0}
 
     session.expire_all()
-    assert session.get(Meme, meme.id).fact_check == "## 妥当性\n検めた:約束は守る"
+    assert session.get(Meme, meme.id).text == "約束は守る\n\n# 検証結果\n## 妥当性\n検めた:約束は守る"
 
 
 def test_check_keeps_empty_when_ai_fails(session):
@@ -114,7 +118,7 @@ def test_check_keeps_empty_when_ai_fails(session):
 
     assert CheckFacts("meme").run() == {"checked": 0, "memes_added": 0}
     session.expire_all()
-    assert session.query(Meme).one().fact_check is None
+    assert session.query(Meme).one().text == "約束は守る"
 
 
 def test_check_rejects_unknown_table():
@@ -131,16 +135,16 @@ def test_commit_idea_checks_idea_and_new_memes(session, monkeypatch):
     result = CommitIdea({"name": "魔力灯り", "kind": "技術", "text": "魔力で灯る明かり"}).run()
 
     assert result["memes_added"] == 1
-    assert result["fact_check"] == "## 妥当性\n検めた:魔力で灯る明かり"
+    assert result["text"] == "魔力で灯る明かり\n\n# 検証結果\n## 妥当性\n検めた:魔力で灯る明かり"
     session.expire_all()
-    checks = {meme.text: meme.fact_check for meme in session.query(Meme).all()}
-    assert checks == {"古いミーム": None, "灯りは分け合う": "## 妥当性\n検めた:灯りは分け合う"}
+    texts = {meme.text for meme in session.query(Meme).all()}
+    assert texts == {"古いミーム", "灯りは分け合う\n\n# 検証結果\n## 妥当性\n検めた:灯りは分け合う"}
 
 
 def test_commit_idea_skips_check_when_asked(session, fake_check):
     result = CommitIdea({"name": "外部デバイス", "kind": "技術", "text": "身体アシスト"}, fact_check=False).run()
 
-    assert "fact_check" not in result or result["fact_check"] is None
+    assert result["text"] == "身体アシスト"
     assert fake_check.calls == []
 
 
@@ -150,14 +154,14 @@ def test_commit_oracle_checks_oracle_and_new_memes(session, monkeypatch):
 
     result = CommitOracle({"text": "毎朝書く"}).run()
 
-    assert result["fact_check"] == "## 妥当性\n検めた:毎朝書く"
+    assert result["text"] == "毎朝書く\n\n# 検証結果\n## 妥当性\n検めた:毎朝書く"
     assert [call[0].splitlines()[1] for call in fake.calls] == ["覚え書き(oracle)", "ミーム(分類: 信条)"]
     session.expire_all()
-    assert session.query(Meme).one().fact_check == "## 妥当性\n検めた:書くことで考える"
+    assert session.query(Meme).one().text == "書くことで考える\n\n# 検証結果\n## 妥当性\n検めた:書くことで考える"
     assert session.query(Oracle).one().meme_seeded
 
 
-def test_memes_are_drawn_from_text_and_fact_check_separately(session, monkeypatch):
+def test_memes_are_drawn_from_text_including_fact_check(session, monkeypatch):
     prompts = []
 
     def extract(prompt, schema, **kwargs):
@@ -166,24 +170,20 @@ def test_memes_are_drawn_from_text_and_fact_check_separately(session, monkeypatc
 
     monkeypatch.setattr(ai_client, "try_generate_json", extract)
     session.add_all([
-        Idea(name="魔力", kind="概念", text="大気に満ちる力", fact_check="## 補足\n錬金術師は秘密を守った"),
+        Idea(name="魔力", kind="概念", text="大気に満ちる力\n\n# 検証結果\n## 補足\n錬金術師は秘密を守った"),
         Oracle(text="毎朝書く"),
     ])
     session.commit()
 
     meme.refresh(session, ai_client)
 
-    assert "## 元1(idea)\n大気に満ちる力" in prompts[0]
-    assert "## 元2(idea の検証結果)\n## 補足\n錬金術師は秘密を守った" in prompts[0]
-    assert "## 元3(oracle)\n毎朝書く" in prompts[0]
-    assert "oracle の検証結果" not in prompts[0]
+    assert "## 元1(idea)\n大気に満ちる力\n\n# 検証結果\n## 補足\n錬金術師は秘密を守った" in prompts[0]
+    assert "## 元2(oracle)\n毎朝書く" in prompts[0]
 
 
-def test_record_is_unseeded_when_its_fact_check_part_fails(session, monkeypatch):
-    answers = iter([{"memes": []}, {}])
-    monkeypatch.setattr(ai_client, "try_generate_json", lambda *a, **k: next(answers, {}))
-    monkeypatch.setattr(constants, "MEME_BATCH_LETTERS", 10)
-    idea = Idea(name="魔力", kind="概念", text="大気に満ちる力", fact_check="錬金術師は秘密を守った")
+def test_record_is_unseeded_when_extraction_fails(session, monkeypatch):
+    monkeypatch.setattr(ai_client, "try_generate_json", lambda *a, **k: {})
+    idea = Idea(name="魔力", kind="概念", text="大気に満ちる力\n\n# 検証結果\n錬金術師は秘密を守った")
     session.add(idea)
     session.commit()
 
@@ -204,7 +204,7 @@ def test_check_resets_meme_seeded_and_extracts_from_result(session, monkeypatch)
 
     session.expire_all()
     assert session.get(Idea, idea.id).meme_seeded
-    assert session.query(Meme).one().fact_check == "## 妥当性\n検めた:秘密は力になる"
+    assert session.query(Meme).one().text == "秘密は力になる\n\n# 検証結果\n## 妥当性\n検めた:秘密は力になる"
 
 
 def test_extract_memes_checks_only_new(session, fake_check, monkeypatch):
@@ -221,5 +221,5 @@ def test_extract_memes_checks_only_new(session, fake_check, monkeypatch):
     assert ExtractMemes().run() == 1
 
     session.expire_all()
-    reviews = {meme.text: meme.fact_check for meme in session.query(Meme).all()}
-    assert reviews == {"古いミーム": None, "新しいミーム": "## 妥当性\n検めた:新しいミーム"}
+    texts = {meme.text for meme in session.query(Meme).all()}
+    assert texts == {"古いミーム", "新しいミーム\n\n# 検証結果\n## 妥当性\n検めた:新しいミーム"}

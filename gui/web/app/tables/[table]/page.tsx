@@ -9,7 +9,7 @@ import StoryTree from "@/components/StoryTree";
 import { T } from "@/lib/text";
 
 const PAGE = 50;
-const HIDDEN = new Set(["id", "fact_check", "meme_seeded", "event_seeded", "polygon"]);
+const HIDDEN = new Set(["id", "meme_seeded", "event_seeded", "polygon"]);
 // 話の一覧は作品の詳細から開く前提なので、作品の列と本文は出さず、見出しに作品名を出す
 const HIDDEN_BY_TABLE: Record<string, string[]> = { plot: ["story_id"] };
 const NO_PREVIEW = new Set(["plot"]);

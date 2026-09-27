@@ -232,14 +232,6 @@ class MemeSeededMixin:
         sort_order=9010)
 
 
-class FactCheckMixin:
-    TEXT_COLUMNS = ("text", "fact_check")
-
-    fact_check: Mapped[str | None] = mapped_column(
-        String, nullable=True, comment="AI が Dラボ・ネット検索で検めた妥当性と補足。空ならまだ検めていない",
-        sort_order=10010)
-
-
 class Event(EventSeededMixin, MemeSeededMixin, TextBase):
 
     __tablename__ = "event"
@@ -316,7 +308,7 @@ class MemeCategory(enum.StrEnum):
 MEME_CATEGORIES = tuple(category.value for category in MemeCategory)
 
 
-class Meme(FactCheckMixin, TextBase):
+class Meme(TextBase):
     """ミームは移り変わり・伝染していくものなので、どの元から抜き出したか、どの人物が持つかは持たない
     (元の側の `meme_seeded` で、抜き出し済みかだけを管理する)。
     """
@@ -335,7 +327,7 @@ class Meme(FactCheckMixin, TextBase):
         sort_order=205)
 
 
-class Oracle(FactCheckMixin, MemeSeededMixin, TextBase):
+class Oracle(MemeSeededMixin, TextBase):
     """著者自身の創作・AI についての覚え書き。物語のデータではない。"""
 
     __tablename__ = "oracle"
@@ -544,7 +536,7 @@ class CharacterRelation(TextBase):
         foreign_keys="CharacterRelation.character_id_2", lazy="noload")
 
 
-class Idea(FactCheckMixin, MemeSeededMixin, TextBase):
+class Idea(MemeSeededMixin, TextBase):
     __tablename__ = "idea"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)

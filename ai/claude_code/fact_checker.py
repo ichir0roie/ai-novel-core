@@ -7,8 +7,9 @@ Dラボの MCP のサーバー名は環境ごとに違う(`claude mcp list` で�
 from __future__ import annotations
 
 import os
+import re
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from ai.claude_code import ai_client
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
@@ -21,6 +22,21 @@ DEFAULT_DLAB_TOOLS = "mcp__d-lab"
 TIMEOUT = 900.0
 # 一度の呼び出しで検めさせる本文の字数の上限。一件でこれを超えるものは一件だけで渡す。
 BATCH_LETTERS = 3000
+
+# 検証結果は本文の末尾にこの見出しの節として持つ(別の列は持たない)。空ならまだ検めていない。
+FACT_CHECK_HEADING = "# 検証結果"
+_FACT_CHECK_SECTION = re.compile(r"\n*^#[ \t]*検証結果[ \t]*\n.*\Z", re.M | re.S)
+
+
+def strip_fact_check(text: str | None) -> str:
+    """本文から検証結果の節を取り除いた、素の本文を返す。"""
+    return _FACT_CHECK_SECTION.sub("", text or "").rstrip()
+
+
+def _append_fact_check(text: str | None, fact_check: str) -> str:
+    base = strip_fact_check(text)
+    return f"{base}\n\n{FACT_CHECK_HEADING}\n{fact_check}" if base else f"{FACT_CHECK_HEADING}\n{fact_check}"
+
 
 _SYSTEM_PROMPT = f"""\
 あなたは創作の設定を検める、科学・歴史・思想に詳しい校閲者です。
@@ -75,11 +91,12 @@ def tools() -> tuple[str, ...]:
 
 
 def _describe(record: Idea | Oracle | Meme) -> str:
+    text = strip_fact_check(record.text)
     if isinstance(record, Idea):
-        return f"アイデア「{record.name}」(種類: {record.kind})\n{record.text}"
+        return f"アイデア「{record.name}」(種類: {record.kind})\n{text}"
     if isinstance(record, Oracle):
-        return f"覚え書き(oracle)\n{record.text}"
-    return f"ミーム(分類: {record.category or '未分類'})\n{record.text}"
+        return f"覚え書き(oracle)\n{text}"
+    return f"ミーム(分類: {record.category or '未分類'})\n{text}"
 
 
 def _batches(records: list) -> list[list]:
@@ -102,7 +119,7 @@ def targets(session: Session, table: str, ids: list[int] | None = None, limit: i
     if ids is not None:
         query = query.where(model.id.in_(ids))
     else:
-        query = query.where(or_(model.fact_check.is_(None), model.fact_check == ""), model.text != "")
+        query = query.where(~model.text.contains(FACT_CHECK_HEADING), model.text != "")
     if limit is not None:
         query = query.limit(limit)
     return list(session.scalars(query).all())
@@ -127,7 +144,7 @@ def check(session: Session, table: str, ids: list[int] | None = None, limit: int
             text = item["fact_check"].strip()
             if 1 <= number <= len(batch) and text:
                 record = batch[number - 1]
-                record.fact_check = text
+                record.text = _append_fact_check(record.text, text)
                 # 検証結果もミームの元になるので、抜き出し直させる
                 if hasattr(record, "meme_seeded"):
                     record.meme_seeded = False
@@ -149,7 +166,7 @@ def check_new_memes(session: Session, last_id: int) -> int:
 
 
 def check_and_extract(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> dict:
-    """検めたあと、ミームの元(アイデア・oracle)なら本文と検証結果からミームを抜き出し、足したミームも検める。"""
+    """検めたあと、ミームの元(アイデア・oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
     checked = check(session, table, ids, limit)
     if table == "meme":
         return {"checked": checked, "memes_added": 0}
