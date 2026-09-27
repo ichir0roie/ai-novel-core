@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from db.child_lists import child_columns, child_model
 from db.schema import (
-    CONFIRM_STATUSES, MEME_CATEGORIES, ConfirmStatusType, PolygonType, StampType,
+    CONFIRM_STATUSES, MEME_CATEGORIES, PERSONALITY_LEVELS, ConfirmStatusType, PersonalityLevelType,
+    PolygonType, StampType,
 )
 from gui.api import generate
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
@@ -59,10 +60,16 @@ def _column_type(column) -> str:
 def column_meta(table: str, model: type, column, *, section: bool = False, markdown: bool = True,
                  readonly: bool = False) -> ColumnMeta:
     kind = _column_type(column)
-    choices = list(CONFIRM_STATUSES) if kind == "confirm" else _CHOICES.get((table, column.key))
+    is_personality = isinstance(column.type, PersonalityLevelType)
+    choices = (list(CONFIRM_STATUSES) if kind == "confirm"
+               else list(PERSONALITY_LEVELS) if is_personality
+               else _CHOICES.get((table, column.key)))
     references = None
-    for foreign_key in column.foreign_keys:
-        references = foreign_key.column.table.name
+    if not is_personality:
+        # 性格列は personality_level への FK を持つが、GUI では id の参照選択ではなく
+        # 上の choices(無/低/並/高/必)のプルダウンにする
+        for foreign_key in column.foreign_keys:
+            references = foreign_key.column.table.name
     required = (not column.nullable and not column.primary_key and column.default is None
                 and column.server_default is None and not section)
     return ColumnMeta(
