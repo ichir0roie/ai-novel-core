@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 
-from sqlalchemy import delete, select
+from sqlalchemy import String, delete, select
 
 from ai.claude_code import ai_client
 from ai.time_keeper import idea_kind
@@ -120,6 +120,7 @@ def _upsert(
     if model is Idea and not values.get("kind", row.kind if row is not None else None):
         values["kind"] = idea_kind.judge(session, values.get("name"), values.get("text"), directory_path, ai_client)
     if row is None:
+        values.update({key: "" for key in _required_texts(model) if values.get(key) is None})
         row = model(**values)
         session.add(row)
     else:
@@ -144,6 +145,39 @@ def _upsert(
         content = rendered
     manifest.set(path, model.__tablename__, row.id, digest(content), digest(rendered))
     return row, conflict
+
+
+def _required_texts(model: type) -> list[str]:
+    """空にできない文字列の列。md に無ければ、足す行は空文字で入れる。"""
+    return [column.key for column in model.__table__.columns
+            if not column.nullable and not column.primary_key and isinstance(column.type, String)
+            and column.default is None and column.server_default is None]
+
+
+def _fill_missing_parents(root: str, manifest: Manifest) -> None:
+    """手で足した本文のファイルに、同じ名前の md(話)が無ければ空の md を、そのディレクトリに作品の md(`0_`)が
+    無ければディレクトリ名で空の作品の md を置く。置いた md は、ほかの手で足した md と同じく取り込まれる。
+    テーブルのディレクトリの直下は作品のディレクトリではないので、何も置かない。
+    """
+    models = export_db._markdown_models()
+    for top in export_db._top_models(models):
+        table_dir = os.path.normpath(os.path.join(root, top.__tablename__))
+        bodies = tuple(extension for extension in export_db.file_extensions(top, models) if extension != ".md")
+        if not bodies or not top.MARKDOWN_OWN_DIRECTORY:
+            continue
+        for dirpath, _dirnames, filenames in os.walk(table_dir):
+            if os.path.normpath(dirpath) == table_dir:
+                continue
+            for filename in filenames:
+                path = os.path.normpath(os.path.join(dirpath, filename))
+                if not filename.endswith(bodies) or not manifest.edited(path, read_text(path)):
+                    continue
+                companion = _companion(path)
+                if os.path.exists(companion):
+                    continue
+                if _companion(companion) is None:
+                    export_db._write(os.path.join(dirpath, f"{RECORD_PREFIX}{os.path.basename(dirpath)}.md"), "")
+                export_db._write(companion, "")
 
 
 def _is_record(path: str) -> bool:
@@ -295,6 +329,7 @@ def import_changes(session, root: str, manifest: Manifest) -> dict:
     db 側も同じ行を直していたら md の方を勝たせ、その md を `conflicts` に返す。
     """
     expected, _counts = export_db._expected(session, root, export_db._markdown_models())
+    _fill_missing_parents(root, manifest)
     edited = []
     for model, path, directory_path, content in _edited_files(root, manifest, expected):
         # 台帳が無い・古いだけで、db と同じ中身・同じ置き場所の md(git で両方そろって入ってきたものなど)は台帳に載せるだけにする

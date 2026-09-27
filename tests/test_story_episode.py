@@ -384,16 +384,61 @@ def test_episode_moves_with_its_txt_under_another_story(session, place, tmp_path
         "0_アルバ.md", "2_11572-03-25-0000_白い灯り.md", "2_11572-03-25-0000_白い灯り.txt"]
 
 
-def test_txt_without_an_episode_md_beside_it_stops_the_sync(session, place, tmp_path):
-    CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+def test_txt_without_an_episode_md_is_registered_with_an_empty_episode(session, place, tmp_path):
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     root = str(tmp_path / "worlds")
     sync_db(root)
 
     _write(root, os.path.join(STORY_DIR, "メモ.txt"), "覚え書き\n")
+    result = sync_db(root)
+
+    assert result["imported"] == {"episode": 1, "episode_text": 1}
+    session.expire_all()
+    episode = session.query(Episode).one()
+    assert (episode.story_id, episode.title, episode.key, episode.start) == (story["id"], "メモ", "", None)
+    assert episode.body == "覚え書き"
+    assert sorted(os.listdir(os.path.join(root, STORY_DIR))) == ["0_遥かなる幻想郷まで.md", "1__メモ.md", "1__メモ.txt"]
+
+
+def test_txt_in_a_directory_without_a_story_md_is_registered_with_an_empty_story(session, place, tmp_path):
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    _write(root, os.path.join("story", "未定", "新作", "1_11600-01-01-0000_はじまり.txt"), "一話\n")
+    result = sync_db(root)
+
+    assert result["imported"] == {"story": 1, "episode": 1, "episode_text": 1}
+    session.expire_all()
+    story = session.query(Story).one()
+    episode = session.query(Episode).one()
+    assert (story.name, story.directory_path, story.narration, story.state, story.text) == ("新作", "未定", "", "", "")
+    assert (episode.story_id, episode.title, str(episode.start)) == (story.id, "はじまり", "11600/01/01 00:00:00")
+    assert episode.body == "一話"
+    assert sorted(os.listdir(os.path.join(root, "story", "未定", f"{story.id}_新作"))) == [
+        "0_新作.md", f"{story.id}_11600-01-01-0000_はじまり.md", f"{story.id}_11600-01-01-0000_はじまり.txt"]
+
+
+def test_story_md_without_data_is_registered_with_empty_columns(session, place, tmp_path):
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    _write(root, os.path.join("story", "新作", "0_新作.md"), "筋書き\n")
+    sync_db(root)
+
+    session.expire_all()
+    story = session.query(Story).one()
+    assert (story.name, story.text, story.narration, story.state) == ("新作", "筋書き", "", "")
+
+
+def test_txt_right_under_the_story_directory_stops_the_sync(session, place, tmp_path):
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+
+    _write(root, os.path.join("story", "メモ.txt"), "覚え書き\n")
 
     with pytest.raises(ImportDbError):
         sync_db(root)
-    assert os.path.exists(os.path.join(root, STORY_DIR, "メモ.txt"))
+    assert os.listdir(os.path.join(root, "story")) == ["メモ.txt"]
 
 
 def test_txt_outside_the_story_tree_is_left_alone(session, place, tmp_path):
@@ -416,8 +461,7 @@ def test_story_record_is_named_to_come_first_in_its_directory():
 def test_hand_made_story_directory_is_imported_with_its_episodes(session, place, tmp_path):
     root = str(tmp_path / "worlds")
     sync_db(root)
-    _write(root, os.path.join("story", "未定", "新作", "0_新作.md"),
-           '# data\n```json\n{"narration": "三人称", "state": "構想中"}\n```\n\n# text\n新作の筋書き\n')
+    _write(root, os.path.join("story", "未定", "新作", "0_新作.md"), "新作の筋書き\n")
     _write(root, os.path.join("story", "未定", "新作", "下書きの話.md"), "話の種\n")
     _write(root, os.path.join("story", "未定", "新作", "下書きの話.txt"), "話の本文\n")
 
