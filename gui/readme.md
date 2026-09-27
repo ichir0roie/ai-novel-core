@@ -23,19 +23,20 @@ TypeScript にもう一度書くことになり、正が二つになる。その
 
 ## 起動
 
-世界リポジトリのルートで(環境変数は他の python と同じ)。
+世界リポジトリのルートで(環境変数は他の python と同じ)。API と画面を一緒に起こしてブラウザで開くのは `gui.dev`。
+`gui/web/node_modules` が無ければ先に `npm install` を回す。VS Code なら タスク `gui`(世界リポジトリの `.vscode/tasks.json`)。
 
 ```
 export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
+.venv/bin/python -m gui.dev              # API :8765 + 画面 :3000 を起こし、http://localhost:3000 を開く。Ctrl+C で両方止める
+.venv/bin/python -m gui.dev --no-browser # 開かない。--api-port / --web-port でポートを変える
+```
+
+別々に起こすなら次の二つ。
+
+```
 .venv/bin/python -m uvicorn gui.api.app:app --port 8765 --reload
-```
-
-別のターミナルで画面を起動する(初回は `npm install`)。
-
-```
-cd core/gui/web
-npm install
-npm run dev          # http://localhost:3000
+(cd core/gui/web && npm install && npm run dev)     # http://localhost:3000
 ```
 
 `/api/*` は Next.js が `NOVEL_API_URL`(既定 `http://127.0.0.1:8765`)へ流すので、ブラウザから見ると同じオリジンになる。
