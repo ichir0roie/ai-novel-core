@@ -2,8 +2,9 @@
 """下書き(一段目)と清書(二段目)のあいだに挟む中間段。
 
 下書きから語を洗い出してアイデアと照らし、当たったアイデアとその上位・下位を清書に渡す。
-どのアイデアにも当たらなかった固有の語(`coined`)は、自動生成(`auto_generated`)のアイデアとして足す(候補)。
-候補も他のアイデアと同じく検索・清書に出る。下書きが踏まえたアイデアと候補は、中間テーブル(`event_idea` など)で清書したレコードに結ぶ。
+どのアイデアにも当たらなかった固有の語(`coined`)は、未確認(`confirmed=false`)のアイデアとして足す(候補)。
+候補は確かめる(`confirmed` を true にする)まで検索・清書には出ない。下書きが踏まえたアイデアと候補は、
+中間テーブル(`event_idea` など)で清書したレコードに結ぶ。
 清書に渡すアイデアは本質のアイデアにそろえ、その場所・時代の作中での呼び名(`idea_alias`)で呼ばせる。
 """
 from __future__ import annotations
@@ -50,13 +51,13 @@ def _is_proper_name(session: Session, word: str) -> bool:
 def _candidate_for(session: Session, term: dict, place_id: int | None) -> Idea | None:
     names = idea_search.spellings(term["keyword"])
     existing = session.scalars(
-        dictionary_query.auto_generated_ideas_select().where(Idea.name.in_(names))).first()
+        dictionary_query.unconfirmed_ideas_select().where(Idea.name.in_(names))).first()
     if existing is not None:
         return existing
     if _is_proper_name(session, term["keyword"]):
         return None
     candidate = Idea(
-        name=term["keyword"], kind=term["kind"], auto_generated=True, text=term["description"],
+        name=term["keyword"], kind=term["kind"], confirmed=False, text=term["description"],
         location_id=_world_id(session, place_id), start=term["start"], end=term["end"],
         directory_path=term["kind"].replace("/", "／") or None)
     session.add(candidate)

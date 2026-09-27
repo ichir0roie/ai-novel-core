@@ -128,10 +128,18 @@ def test_search_is_limited_to_ideas_in_effect_at_the_time(session):
     assert ended.id in [hit.idea.id for hit in idea_search.search(session, ["魔力"], time="2049/12/31")]
 
 
-def test_search_includes_auto_generated_ideas(session):
-    _idea(session, "虫憑き", kind="呼称", auto_generated=True)
+def test_search_excludes_unconfirmed_ideas_by_default(session):
+    _idea(session, "虫憑き", kind="呼称", confirmed=False)
 
-    assert [hit.idea.name for hit in idea_search.search(session, ["虫憑き"])] == ["虫憑き"]
+    assert idea_search.search(session, ["虫憑き"]) == []
+
+
+def test_search_includes_unconfirmed_ideas_when_asked(session):
+    _idea(session, "虫憑き", kind="呼称", confirmed=False)
+
+    hits = idea_search.search(session, ["虫憑き"], confirmed_only=False)
+
+    assert [hit.idea.name for hit in hits] == ["虫憑き"]
 
 
 def test_search_ideas_entry_takes_keywords_with_variants(session, places):
@@ -211,7 +219,7 @@ def test_resolve_at_a_time_leaves_undated_ideas_out_of_the_references(session, p
     assert context.candidates == []
 
 
-def test_unmatched_term_becomes_an_auto_generated_idea_of_the_world(session, places):
+def test_unmatched_term_becomes_an_unconfirmed_idea_of_the_world(session, places):
     context = idea_context.resolve(
         session, [{"keyword": "宿り", "variants": ["寄生"], "description": "体に虫を宿す治療", "kind": "技術",
                    "start": "2090", "end": "2150"},
@@ -221,7 +229,7 @@ def test_unmatched_term_becomes_an_auto_generated_idea_of_the_world(session, pla
     assert context.hits == [] and context.related == []
     [candidate, undated] = context.candidates
     assert (candidate.name, candidate.kind, candidate.text) == ("宿り", "技術", "体に虫を宿す治療")
-    assert candidate.auto_generated is True
+    assert candidate.confirmed is False
     assert candidate.location_id == places["world"].id
     assert candidate.start == Stamp(2090) and candidate.end == Stamp(2150)
     assert candidate.directory_path == "技術"
@@ -239,7 +247,7 @@ def test_general_words_do_not_become_candidates(session, places):
 
 
 def test_existing_candidate_is_reused(session, places):
-    old = _idea(session, "ヤドリ", kind="技術", auto_generated=True, start=Stamp(2200))
+    old = _idea(session, "ヤドリ", kind="技術", confirmed=False, start=Stamp(2200))
 
     context = idea_context.resolve(session, ["やどり"], places["village"].id, "2100")
 
@@ -258,17 +266,17 @@ def test_names_of_characters_and_places_do_not_become_candidates(session, places
     assert session.query(Idea).count() == 0
 
 
-def test_auto_generated_ideas_reach_the_brief_and_meme_extraction(session, places):
-    generated = _idea(session, "宿り", "体に虫を宿す治療", kind="技術", auto_generated=True,
-                      location_id=places["world"].id)
+def test_unconfirmed_ideas_are_left_out_of_the_brief_but_still_meme_extracted(session, places):
+    unconfirmed = _idea(session, "宿り", "体に虫を宿す治療", kind="技術", confirmed=False,
+                        location_id=places["world"].id)
     confirmed = _idea(session, "魔力", "世界の力", location_id=places["world"].id)
     ai = MockAIClient(seed=1)
 
     names = [idea["name"] for idea in _rows.brief(session, places["village"].id, "2100/01/01")["ideas"]]
     meme.refresh(session, ai)
 
-    assert names == ["宿り", "魔力"]
-    assert generated.meme_seeded is True and confirmed.meme_seeded is True
+    assert names == ["魔力"]
+    assert unconfirmed.meme_seeded is True and confirmed.meme_seeded is True
 
 
 def test_brief_leaves_out_ideas_not_in_effect_at_the_time(session, places):
@@ -334,7 +342,7 @@ def test_merge_idea_moves_links_and_removes_the_source(session):
     character = Character(name="甲", text="")
     session.add(character)
     session.commit()
-    candidate = _idea(session, "むしつき", kind="呼称", auto_generated=True)
+    candidate = _idea(session, "むしつき", kind="呼称", confirmed=False)
     target = _idea(session, "虫憑き")
     idea_context.link(session, character, [candidate, target])
     session.commit()
@@ -352,7 +360,7 @@ def test_delete_idea_removes_its_links(session):
     event = Event(name="出来事", text="", time=Stamp(2100))
     session.add(event)
     session.commit()
-    idea = _idea(session, "宿り", auto_generated=True)
+    idea = _idea(session, "宿り", confirmed=False)
     idea_context.link(session, event, [idea])
     session.commit()
 
@@ -390,7 +398,7 @@ def test_daily_event_novel_is_told_the_ideas_and_the_event_is_linked(session, pl
     linked = {row.idea_id for row in session.query(EventIdea).filter_by(event_id=record.id)}
     candidate = session.query(Idea).filter_by(name="宿り").one()
     assert linked == {idea.id, candidate.id}
-    assert candidate.auto_generated is True and candidate.start == Stamp(2050)
+    assert candidate.confirmed is False and candidate.start == Stamp(2050)
 
 
 def test_daily_event_without_matching_ideas_tells_no_setting(session, places):

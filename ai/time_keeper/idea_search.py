@@ -178,29 +178,33 @@ def _score(idea: Idea, keyword: list[str], variants: list[str]) -> int:
 
 def search_by_term(
     session: Session, keywords, place_id: int | None = None, time=None,
+    confirmed_only: bool = True,
 ) -> list[tuple[dict, list[Idea]]]:
-    """キーワードごとに当たったアイデア。`place_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。"""
+    """キーワードごとに当たったアイデア。`place_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。
+
+    `confirmed_only` を false にすると、まだ確かめていない候補(`confirmed=false`)も含める。"""
     place_ids = common_query.idea_scope_ids(session, place_id) if place_id is not None else None
     time = Stamp.parse(time)
     found = []
     for term in terms_of(keywords):
         keyword, variants = _spelled(term)
         rows = session.scalars(dictionary_query.ideas_by_terms_select(
-            keyword + variants, place_ids, time)).all()
+            keyword + variants, place_ids, time, confirmed_only=confirmed_only)).all()
         found.append((term, [idea for idea in rows if _score(idea, keyword, variants)]))
     return found
 
 
 def search(
     session: Session, keywords, place_id: int | None = None,
-    time=None, limit: int | None = None,
+    time=None, limit: int | None = None, confirmed_only: bool = True,
 ) -> list[Hit]:
     """キーワードと言い換えで引いたアイデアを、当たり方の強い順に返す。
 
     名前にキーワードが入っていれば 3、言い換えが入っていれば 2、本文にだけ入っていれば 1 を、キーワードごとに足す。
+    `confirmed_only` を false にすると、まだ確かめていない候補(`confirmed=false`)も含める。
     """
     hits: dict[int, Hit] = {}
-    for term, ideas in search_by_term(session, keywords, place_id, time):
+    for term, ideas in search_by_term(session, keywords, place_id, time, confirmed_only=confirmed_only):
         keyword, variants = _spelled(term)
         for idea in ideas:
             hit = hits.setdefault(idea.id, Hit(idea))
