@@ -34,9 +34,9 @@ class StartStory(StoryQuery):
         _, until = common_query.resolve_time(session, self.time, story)
         result["time"] = str(until)
         result["plots"] = _rows.plots(session, self.story_id, count=int(self.plots))
-        result["cast"] = _rows.cast(session, self.story_id, until, count=int(self.count),
-                                    levels=int(self.levels))
         if story.place_id is not None:
+            result["cast"] = _rows.cast(session, self.story_id, until, count=int(self.count),
+                                        levels=int(self.levels))
             result["brief"] = _rows.brief(session, story.place_id, until,
                                           reach=int(self.reach))
         return result

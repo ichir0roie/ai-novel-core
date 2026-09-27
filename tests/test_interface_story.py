@@ -220,6 +220,18 @@ def test_start_story_gathers_materials(session, world):
     assert result["brief"]["place"]["name"] == "村"
 
 
+def test_start_story_without_place_omits_cast_and_brief(session):
+    story = Story(name="場所の無い話", place_id=None, text="", narration="三人称", state="構想中",
+                  start=Stamp(2100))
+    session.add(story)
+    session.commit()
+
+    result = StartStory(story.id).run()
+    assert result["stopped"] is False
+    assert "cast" not in result
+    assert "brief" not in result
+
+
 def test_start_story_rejects_unknown_story():
     with pytest.raises(NotFoundError):
         StartStory(9999).run()
