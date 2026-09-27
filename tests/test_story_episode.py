@@ -72,7 +72,7 @@ def test_episode_parse_markdown_stem():
     assert Episode.parse_markdown_stem("2__題_二") == (None, {"story_id": 2, "start": None, "title": "題_二"})
     assert Episode.parse_markdown_stem("2_題") == (None, {"story_id": 2, "title": "題"})
     # 手で作った、数の付かない名前は story_id も決まらない
-    assert Episode.parse_markdown_stem("下書き") == (None, {"filename": "下書き"})
+    assert Episode.parse_markdown_stem("下書き") == (None, {"filename": "下書き", "title": "下書き"})
 
 
 STORY_DIR = os.path.join("story", "1_遥かなる幻想郷まで")
@@ -99,7 +99,7 @@ def test_episode_round_trips_through_markdown(session, place, tmp_path):
 
     root = str(tmp_path / "worlds")
     export_db(root)
-    assert sorted(os.listdir(os.path.join(root, "story"))) == ["1_遥かなる幻想郷まで", "1_遥かなる幻想郷まで.md"]
+    assert os.listdir(os.path.join(root, "story")) == ["1_遥かなる幻想郷まで"]
     assert not os.path.exists(os.path.join(root, "episode"))
 
     import_db(root)
@@ -121,10 +121,10 @@ def test_story_episode_and_text_are_nested(session, place, tmp_path):
     root = str(tmp_path / "worlds")
     export_db(root)
     story_dir = os.path.join(root, "story", "ノウル", "1_遥かなる幻想郷まで")
-    assert os.path.isfile(story_dir + ".md")
     # 本文は話の md と同じ名前の .txt。本文の無い話(枠)は .txt を持たない
+    # 作品の md は自分のディレクトリの先頭に並ぶ名前(`0_`)で置く
     assert sorted(os.listdir(story_dir)) == [
-        "1_11572-03-25-0000_白い灯り.md", "1_11572-03-25-0000_白い灯り.txt", "1_11572-04-01-0000_裁定.md"]
+        "0_遥かなる幻想郷まで.md", "1_11572-03-25-0000_白い灯り.md", "1_11572-03-25-0000_白い灯り.txt", "1_11572-04-01-0000_裁定.md"]
 
 
 def test_episode_text_is_the_body_only_txt(session, place, tmp_path):
@@ -207,7 +207,8 @@ def test_episode_moved_under_another_story_follows_that_story(session, place, tm
 
     session.expire_all()
     assert session.get(Episode, 1).story_id == second["id"]
-    assert os.listdir(os.path.join(root, "story", "2_アルバ")) == ["2_11572-03-25-0000_白い灯り.md"]
+    assert sorted(os.listdir(os.path.join(root, "story", "2_アルバ"))) == [
+        "0_アルバ.md", "2_11572-03-25-0000_白い灯り.md"]
 
 
 def test_markdown_written_before_the_manifest_is_registered_without_importing(session, place, tmp_path):
@@ -232,7 +233,7 @@ def test_episode_round_trips_without_start(session, place, tmp_path):
     root = str(tmp_path / "worlds")
     export_db(root)
     assert sorted(name for name in os.listdir(os.path.join(root, STORY_DIR)) if name.endswith(".md")) == \
-        ["1_11572-03-25-0000_白い灯り.md", "1__裁定.md"]
+        ["0_遥かなる幻想郷まで.md", "1_11572-03-25-0000_白い灯り.md", "1__裁定.md"]
 
     import_db(root)
     session.expire_all()
@@ -329,10 +330,10 @@ def test_story_markdown_name_uses_name(session, place, tmp_path):
                  "filename": "遥かなる幻想郷まで"}).run()
     root = str(tmp_path / "worlds")
     export_db(root)
-    assert os.listdir(os.path.join(root, "story")) == ["1_遥かなる幻想郷まで.md"]
+    assert os.listdir(os.path.join(root, STORY_DIR)) == ["0_遥かなる幻想郷まで.md"]
 
     # 手で直していない md は取り込まないので、本文に手を入れて取り込ませる
-    path = os.path.join(root, "story", "1_遥かなる幻想郷まで.md")
+    path = os.path.join(root, STORY_DIR, "0_遥かなる幻想郷まで.md")
     with open(path, encoding="utf-8") as f:
         content = f.read()
     with open(path, "w", encoding="utf-8") as f:
@@ -344,10 +345,12 @@ def test_story_markdown_name_uses_name(session, place, tmp_path):
 
 
 def test_story_markdown_name_follows_name_edited_in_markdown(session, place, tmp_path):
-    CommitStory({"name": "遥かなる幻想郷まで・アルバ編", "place_id": place}).run()
+    story = CommitStory({"name": "遥かなる幻想郷まで・アルバ編", "place_id": place}).run()
+    CommitEpisode({"story_id": story["id"], "start": "11572/03/25 00:00:00",
+                   "title": "白い灯り", "text": "一話"}).run()
     root = str(tmp_path / "worlds")
     export_db(root)
-    path = os.path.join(root, "story", "1_遥かなる幻想郷まで・アルバ編.md")
+    path = os.path.join(root, "story", "1_遥かなる幻想郷まで・アルバ編", "0_遥かなる幻想郷まで・アルバ編.md")
     with open(path, encoding="utf-8") as f:
         content = f.read()
     with open(path, "w", encoding="utf-8") as f:
@@ -355,7 +358,10 @@ def test_story_markdown_name_follows_name_edited_in_markdown(session, place, tmp
 
     import_db(root)
     export_db(root)
-    assert os.listdir(os.path.join(root, "story")) == ["1_アルバ.md"]
+    # 話と本文もディレクトリごと付いていく
+    assert os.listdir(os.path.join(root, "story")) == ["1_アルバ"]
+    assert sorted(os.listdir(os.path.join(root, "story", "1_アルバ"))) == [
+        "0_アルバ.md", "1_11572-03-25-0000_白い灯り.md", "1_11572-03-25-0000_白い灯り.txt"]
 
 
 def test_episode_moves_with_its_txt_under_another_story(session, place, tmp_path):
@@ -367,7 +373,6 @@ def test_episode_moves_with_its_txt_under_another_story(session, place, tmp_path
     sync_db(root)
 
     moved = os.path.join(root, "story", "2_アルバ")
-    os.makedirs(moved)
     for name in ("1_11572-03-25-0000_白い灯り.md", "1_11572-03-25-0000_白い灯り.txt"):
         os.rename(os.path.join(root, STORY_DIR, name), os.path.join(moved, name))
     sync_db(root)
@@ -375,7 +380,8 @@ def test_episode_moves_with_its_txt_under_another_story(session, place, tmp_path
     session.expire_all()
     assert session.get(Episode, 1).story_id == second["id"]
     assert session.get(Episode, 1).body == "一話" and session.query(EpisodeText).count() == 1
-    assert sorted(os.listdir(moved)) == ["2_11572-03-25-0000_白い灯り.md", "2_11572-03-25-0000_白い灯り.txt"]
+    assert sorted(os.listdir(moved)) == [
+        "0_アルバ.md", "2_11572-03-25-0000_白い灯り.md", "2_11572-03-25-0000_白い灯り.txt"]
 
 
 def test_txt_without_an_episode_md_beside_it_stops_the_sync(session, place, tmp_path):
@@ -397,3 +403,30 @@ def test_txt_outside_the_story_tree_is_left_alone(session, place, tmp_path):
     sync_db(root)
 
     assert _read(root, "idea", "メモ.txt") == "覚え書き\n"
+
+
+def test_story_record_is_named_to_come_first_in_its_directory():
+    story = Story(id=12, name="仮史：生成時代")
+    assert (story.markdown_name, story.record_name) == ("12_仮史：生成時代.md", "0_仮史：生成時代.md")
+    # 話の md は作品の id(1 から)で始まるので、ASCII 順でも作品の md が先に来る
+    assert sorted([Episode(story_id=12, start=Stamp(2034, 5, 20), title="無断学習").markdown_name,
+                   story.record_name]) == ["0_仮史：生成時代.md", "12_2034-05-20-0000_無断学習.md"]
+
+
+def test_hand_made_story_directory_is_imported_with_its_episodes(session, place, tmp_path):
+    root = str(tmp_path / "worlds")
+    sync_db(root)
+    _write(root, os.path.join("story", "未定", "新作", "0_新作.md"),
+           '# data\n```json\n{"narration": "三人称", "state": "構想中"}\n```\n\n# text\n新作の筋書き\n')
+    _write(root, os.path.join("story", "未定", "新作", "下書きの話.md"), "話の種\n")
+    _write(root, os.path.join("story", "未定", "新作", "下書きの話.txt"), "話の本文\n")
+
+    result = sync_db(root)
+
+    assert result["imported"] == {"story": 1, "episode": 1, "episode_text": 1}
+    session.expire_all()
+    story = session.query(Story).one()
+    episode = session.query(Episode).one()
+    assert (story.name, story.text, story.directory_path) == ("新作", "新作の筋書き", "未定")
+    assert (episode.story_id, episode.key, episode.body) == (story.id, "話の種", "話の本文")
+    assert sorted(os.listdir(os.path.join(root, "story", "未定"))) == [f"{story.id}_新作"]

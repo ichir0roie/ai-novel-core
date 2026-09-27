@@ -154,10 +154,12 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
   `# key` は作者が入れる種(AI 生成前)。時期・場所・視点は `# data` の `start` / `end` / `place` / `viewpoint` に入る。
   本文(AI か作者が書く、投稿する本文)は `episode_text` に一話一行で持ち、話の md と同じ名前の `.txt` に本文だけで出す。
   字数(`letters`)は本文から数え、書いたモデル・effort(`model` / `effort`。手で書いた本文は空)と一緒に db にだけ持つ
-- 作品・話・本文は入れ子に置く。作品 `worlds/story/<directory_path>/{id}_{name}.md` の隣の同じ名前のディレクトリに
-  その作品の話 `{story_id}_{start}_{title}.md`(枠の記録)と、同じ名前の `{story_id}_{start}_{title}.txt`(本文)を並べる
+- 作品・話・本文は作品ごとのディレクトリ `worlds/story/<directory_path>/{id}_{name}/` にまとめる。
+  先頭に作品の記録 `0_{name}.md`(話の md は作品の id で始まるので、`0_` がどの並べ方でも先頭に来る。作品の id はディレクトリ名が持つ)、
+  続けてその作品の話 `{story_id}_{start}_{title}.md`(枠の記録)と、同じ名前の `{story_id}_{start}_{title}.txt`(本文)を並べる
   (start は `年-月-日-時分`。start の無い話は `{story_id}__{title}.md`。同じ日の話は時分で並べ分ける)。
   どの作品の話かは置き場所で決まり、md と txt を別の作品のディレクトリへ動かすとその作品の話になる。
+  ディレクトリを作って `0_{name}.md` を置けば新しい作品になる(中に置いた md と txt はその作品の話と本文になる)。
   本文の無い話(枠)の md の隣に同じ名前の `.txt` を置いて同期すると、それがその話の本文になる。`.txt` を消すと本文も消える。
   同じ名前の md が隣に無い `.txt` が作品のディレクトリにあると、同期は止まる
 - 本文は一話 5000〜8000 字(`ai/instructions/style.py` の `EPISODE_TARGET_LETTERS`)。

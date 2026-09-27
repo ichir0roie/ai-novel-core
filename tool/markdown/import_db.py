@@ -12,7 +12,9 @@ from sqlalchemy import delete, select
 from ai.claude_code import ai_client
 from ai.time_keeper import idea_kind
 from db.child_lists import ChildListError, load_children
-from db.schema import NOVEL_DB_PATH, WORLDS_ROOT, Base, Idea, MarkdownBase, StampType, get_novel_session
+from db.schema import (
+    NOVEL_DB_PATH, RECORD_PREFIX, WORLDS_ROOT, Base, Idea, MarkdownBase, StampType, get_novel_session,
+)
 from db.stamp import Stamp
 from tool.markdown import export_db
 from tool.markdown.sync_manifest import Manifest, digest, locked, read_text
@@ -70,6 +72,9 @@ def _upsert(
     `parent_id` は親の md の下(本文のファイルなら隣)に置くモデルの、置き場所から決まる親の id。`# data` より勝つ。
     """
     stem = os.path.splitext(os.path.basename(path))[0]
+    if model.MARKDOWN_OWN_DIRECTORY and _is_record(path):
+        # 名前はディレクトリが持つ
+        stem = os.path.basename(os.path.dirname(path))
     row_id, stem_values = model.parse_markdown_stem(stem)
 
     if model.BODY_FILE_EXTENSION:
@@ -131,7 +136,7 @@ def _upsert(
         row.filename = None
     session.flush()
     rendered = export_db.render_row(model, row)
-    if row_id is None and not model.BODY_FILE_EXTENSION:
+    if row_id is None and not model.BODY_FILE_EXTENSION and not model.MARKDOWN_OWN_DIRECTORY:
         # 採番した id を md 側にも残す(名前か `# data` のどちらかに入る)
         os.remove(path)
         path = os.path.join(os.path.dirname(path), row.markdown_name)
@@ -141,15 +146,25 @@ def _upsert(
     return row, conflict
 
 
-def _companion(path: str) -> str:
-    """親の md のパス。md なら置かれたディレクトリに .md を付けたもの、本文のファイルなら拡張子を .md にしたもの。"""
+def _is_record(path: str) -> bool:
+    return path.endswith(".md") and os.path.basename(path).startswith(RECORD_PREFIX)
+
+
+def _companion(path: str) -> str | None:
+    """親の md のパス。md なら同じディレクトリで先頭に並ぶ md(`0_` で始まる)、本文のファイルなら拡張子を .md にしたもの。"""
     stem, extension = os.path.splitext(path)
-    return os.path.dirname(path) + ".md" if extension == ".md" else stem + ".md"
+    if extension != ".md":
+        return stem + ".md"
+    if _is_record(path):
+        return None
+    directory = os.path.dirname(path)
+    records = sorted(name for name in os.listdir(directory) if _is_record(name))
+    return os.path.join(directory, records[0]) if records else None
 
 
-def _model_of(path: str, table_dir: str, top: type, manifest: Manifest, expected: dict,
+def _model_of(path: str, top: type, manifest: Manifest, expected: dict,
               child_of: dict[tuple[type, str], type]) -> type | None:
-    """置き場所から、ファイルがどのテーブルの行かを決める。親の md が隣にあるディレクトリの中の md なら、その子のテーブル。
+    """置き場所から、ファイルがどのテーブルの行かを決める。同じディレクトリに `0_` で始まる md(親)があれば、その子のテーブル。
     本文のファイルは、隣の同じ名前の md のテーブルの子。決まらない本文のファイルは None。
     """
     if path in expected:
@@ -160,8 +175,8 @@ def _model_of(path: str, table_dir: str, top: type, manifest: Manifest, expected
         return models[entry["table"]]
     extension = os.path.splitext(path)[1]
     companion = _companion(path)
-    if (extension != ".md" or os.path.dirname(path) != table_dir) and os.path.isfile(companion):
-        parent = _model_of(companion, table_dir, top, manifest, expected, child_of)
+    if companion is not None and os.path.isfile(companion):
+        parent = _model_of(companion, top, manifest, expected, child_of)
         if (parent, extension) in child_of:
             return child_of[(parent, extension)]
     return top if extension == ".md" else None
@@ -169,8 +184,9 @@ def _model_of(path: str, table_dir: str, top: type, manifest: Manifest, expected
 
 def _edited_files(root: str, manifest: Manifest, expected: dict) -> list[tuple[type, str, str | None, str]]:
     """親の md の下に置くモデルの md は、`directory_path` を持たない(None で返す)。
+    自分のディレクトリに置く md の `directory_path` は、そのディレクトリの一つ上。
 
-    親の md は、その下のディレクトリより先に並ぶ(walk がディレクトリの中のファイルを、下のディレクトリより先に返す)。
+    同じディレクトリの中では親の md(`0_` で始まる)が先に並ぶ。
     """
     models = export_db._markdown_models()
     child_of = {(export_db.parent_of(model)[0], model.BODY_FILE_EXTENSION or ".md"): model
@@ -182,7 +198,7 @@ def _edited_files(root: str, manifest: Manifest, expected: dict) -> list[tuple[t
         for dirpath, dirnames, filenames in os.walk(table_dir):
             dirnames.sort()
             relative = os.path.relpath(dirpath, table_dir)
-            # 本文のファイルは、隣の md より後に並べる(md を先に取り込んで、親の id を決めておくため)
+            # 親の md を先に取り込んで、子の親の id を決めておく。本文のファイルは隣の md より後に並べる
             for filename in sorted(filenames, key=lambda name: (not name.endswith(".md"), name)):
                 if not filename.endswith(extensions):
                     continue
@@ -190,12 +206,13 @@ def _edited_files(root: str, manifest: Manifest, expected: dict) -> list[tuple[t
                 content = read_text(path)
                 if not manifest.edited(path, content):
                     continue
-                model = _model_of(path, table_dir, top, manifest, expected, child_of)
+                model = _model_of(path, top, manifest, expected, child_of)
                 if model is None:
                     raise ImportDbError(f"{path}: 同じ名前の、本文を持てる md が隣に無い")
                 directory_path = None
-                if model is top and relative != ".":
-                    directory_path = relative.replace(os.sep, "/")
+                if model is top:
+                    placed = os.path.dirname(relative) if model.MARKDOWN_OWN_DIRECTORY and _is_record(path) else relative
+                    directory_path = None if placed in (".", "") else placed.replace(os.sep, "/")
                 edited.append((model, path, directory_path, content))
     return edited
 
@@ -205,6 +222,8 @@ def _parent_id(model: type, path: str, manifest: Manifest, imported: dict[str, i
     if parent is None:
         return None
     companion = _companion(path)
+    if companion is None:
+        return None
     if companion in imported:
         return imported[companion]
     entry = manifest.get(companion)

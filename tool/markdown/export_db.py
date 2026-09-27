@@ -125,10 +125,17 @@ def _remove_empty_dirs(top: str) -> None:
             os.rmdir(dirpath)
 
 
-def _beside_parent(model: type, parent_path: str) -> str:
-    """親の md の隣に置く本文のファイルか、親の md と同じ名前のディレクトリ(その中に md を置く)。"""
-    stem = parent_path[: -len(".md")]
-    return stem + model.BODY_FILE_EXTENSION if model.BODY_FILE_EXTENSION else stem
+def _file_path(model: type, row, dir_path: str) -> str:
+    if model.MARKDOWN_OWN_DIRECTORY:
+        return os.path.join(dir_path, row.markdown_name[: -len(".md")], row.record_name)
+    return os.path.join(dir_path, row.markdown_name)
+
+
+def _child_path(model: type, row, parent_path: str) -> str:
+    """本文のファイルは親の md と同じ名前で隣に、md は親の md と同じディレクトリに置く。"""
+    if model.BODY_FILE_EXTENSION:
+        return parent_path[: -len(".md")] + model.BODY_FILE_EXTENSION
+    return _file_path(model, row, os.path.dirname(parent_path))
 
 
 def _path(root: str, model: type, row, placed: dict[tuple[type, int], str]) -> str:
@@ -137,15 +144,14 @@ def _path(root: str, model: type, row, placed: dict[tuple[type, int], str]) -> s
         table_dir = os.path.join(root, model.__tablename__)
         dir_path = os.path.join(table_dir, row.directory_path) if row.directory_path else table_dir
         # `directory_path` は / 区切りなので、walk で拾ったパスと比べられるよう揃える
-        return os.path.normpath(os.path.join(dir_path, row.markdown_name))
+        return os.path.normpath(_file_path(model, row, dir_path))
     parent_model, column = parent
     parent_path = placed.get((parent_model, getattr(row, column)))
     if parent_path is None:
         raise ExportError(
             f"{model.__tablename__} id={row.id} の親 {parent_model.__tablename__} "
             f"id={getattr(row, column)} が無いので、md の置き場所が決まらない")
-    beside = _beside_parent(model, parent_path)
-    return beside if model.BODY_FILE_EXTENSION else os.path.normpath(os.path.join(beside, row.markdown_name))
+    return os.path.normpath(_child_path(model, row, parent_path))
 
 
 def markdown_path(session, row) -> str:
@@ -153,10 +159,11 @@ def markdown_path(session, row) -> str:
     model = type(row)
     parent = parent_of(model)
     if parent is None:
-        return "/".join(part for part in [model.__tablename__, row.directory_path, row.markdown_name] if part)
-    parent_row = session.get(parent[0], getattr(row, parent[1]))
-    beside = _beside_parent(model, markdown_path(session, parent_row))
-    return beside if model.BODY_FILE_EXTENSION else f"{beside}/{row.markdown_name}"
+        path = _file_path(model, row, os.path.join(model.__tablename__, row.directory_path or ""))
+    else:
+        parent_row = session.get(parent[0], getattr(row, parent[1]))
+        path = _child_path(model, row, markdown_path(session, parent_row))
+    return os.path.normpath(path).replace(os.sep, "/")
 
 
 def _expected(session, root: str, models: list[type]) -> tuple[dict[str, tuple], dict[str, int]]:

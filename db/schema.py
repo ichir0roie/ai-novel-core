@@ -106,6 +106,11 @@ class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
 
 
+# 自分のディレクトリに置く md の名前の頭。子の md の名前は親の id(1 から)で始まるので、
+# ASCII 順でも数の順でも、ディレクトリの中の先頭に並ぶ
+RECORD_PREFIX = "0_"
+
+
 class MarkdownBase(Base):
     __abstract__ = True
 
@@ -115,8 +120,10 @@ class MarkdownBase(Base):
     CHILD_LISTS: tuple[str, ...] = ()
     # md 名の既定にする列。`# data` の無い手書きの md では、この列を md 名から埋める
     NAME_COLUMN: str | None = None
+    # 持つテーブルの md は、md 名(拡張子を除く)のディレクトリを作り、その中に `record_name` で置く
+    MARKDOWN_OWN_DIRECTORY: bool = False
     # 親の行を指す relationship の名前。持つテーブルの md は、`worlds/{table}/` ではなく
-    # 親の md と同じ名前(拡張子を除く)のディレクトリの下に置く
+    # 親の md と同じディレクトリ(親は `MARKDOWN_OWN_DIRECTORY` を持つ)に並べる
     MARKDOWN_PARENT: str | None = None
     # 持つテーブルは md の代わりに、親の md と同じ名前で拡張子だけをこれにしたファイルを親の隣に置く。
     # 親一行につき一行で、`# data` も見出しも無い本文(text)だけで出し入れする
@@ -140,6 +147,12 @@ class MarkdownBase(Base):
     def markdown_name(self) -> str:
         name = self.filename or self.default_filename()
         return f"{self.id}_{name.replace('/', '／')}.md" if name else f"{self.id}.md"
+
+    @property
+    def record_name(self) -> str:
+        """自分のディレクトリに置くときの md 名。id はディレクトリの名前が持つ"""
+        _, _, name = self.markdown_name[: -len(".md")].partition("_")
+        return f"{RECORD_PREFIX}{name}.md"
 
     @classmethod
     def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
@@ -575,6 +588,7 @@ class Story(EventSeededMixin, MarkdownBase):
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
     NAME_COLUMN = "name"
+    MARKDOWN_OWN_DIRECTORY = True
 
 
 class Episode(EventSeededMixin, MarkdownBase):
@@ -584,6 +598,7 @@ class Episode(EventSeededMixin, MarkdownBase):
 
     TEXT_SECTIONS = ("key",)
     MARKDOWN_PARENT = "story"
+    NAME_COLUMN = "title"
 
     # 本文は EpisodeText へ分けたので、MarkdownBase の text 列を持たない。
     # 古い書き方(`episode.text`)を黙って素通りさせないよう、読み書きとも止める
