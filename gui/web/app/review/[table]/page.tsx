@@ -61,14 +61,34 @@ export default function ReviewPage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || busy) return;
-      if (e.key === "Enter") {
+      if (busy || !next?.record) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void decide("承認");
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          void decide("非承認");
+        }
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const typing =
+        !!target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+      if (typing) return;
+      if (e.key === "a" || e.key === "A") {
         e.preventDefault();
         void decide("承認");
       }
-      if (e.key === "Backspace") {
+      if (e.key === "r" || e.key === "R") {
         e.preventDefault();
         void decide("非承認");
+      }
+      if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        void load((next?.record?.id as number) ?? 0);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -118,8 +138,9 @@ export default function ReviewPage() {
                   </button>
                   <span className="spacer" />
                   <span className="meta">
-                    {T.review.remaining(next?.remaining ?? "…")} <span className="kbd">Ctrl+Enter</span> {T.review.keyApprove}{" "}
-                    <span className="kbd">Ctrl+BS</span> {T.review.keyReject}
+                    {T.review.remaining(next?.remaining ?? "…")} <span className="kbd">A</span> {T.review.keyApprove}{" "}
+                    <span className="kbd">R</span> {T.review.keyReject}{" "}
+                    <span className="kbd">S</span> {T.review.keySkip}
                   </span>
                 </div>
               </div>

@@ -87,6 +87,7 @@ export const T = {
     remaining: (n: number | string) => `${n} remaining`,
     keyApprove: "approve",
     keyReject: "reject",
+    keySkip: "skip",
     reject: "Reject",
     skip: "Skip",
     saveOnly: "Save only",
