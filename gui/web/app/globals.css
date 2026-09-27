@@ -174,6 +174,39 @@ button.ghost { background: transparent; }
 .childlist .rowhead { color: var(--muted); font-family: var(--mono); font-size: 0.75rem; }
 .scroll-x { overflow-x: auto; }
 
+/* リードオンリーの子の表(パラメータ・居場所): 項目を縦・期間(レコード)を横に置く。
+   期間(列)は最小幅(26rem)だけ決め、中身が要れば際限なく広がってよい。
+   はみ出す分は(この表だけ)横スクロールで見せる。クリック・ハイライトは項目単位ではなく期間(列)単位 */
+.childlist.readonly table { width: auto; border-collapse: collapse; }
+.childlist.readonly th, .childlist.readonly td { min-width: 0; white-space: normal; overflow-wrap: break-word; vertical-align: top; border: 1px solid var(--line); }
+.childlist.readonly th[scope="row"] { text-align: left; white-space: normal; }
+.childlist.readonly .clickable { cursor: pointer; }
+.childlist.readonly .clickable.hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+/* 短い値の項目(人称・性格など)を並べる札。幅は中身まかせ(flex-wrap)で、決め打ちの列数・列幅を持たない。
+   ラベルの長さに応じて札自身が広がるので、短い札まで無理に同じ幅へ広げて折り返させることがない */
+.childlist.readonly .chipgrid { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.childlist.readonly .chip { border: 1px solid var(--line); border-radius: 4px; padding: 0.15rem 0.5rem; text-align: center; flex: 0 1 auto; }
+.childlist.readonly .chip-label { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.childlist.readonly .chip-value { font-size: 0.85rem; }
+/* 1 行を丸ごと使う項目(期間・体格など)。マス自体(外の枠)が既に境界を持つので、内側に二重の枠は作らず、
+   「キー | 値」を左詰めの 1 行で置くだけにする */
+.childlist.readonly .solo-field { display: flex; align-items: baseline; gap: 0.5rem; text-align: left; }
+.childlist.readonly .solo-key { flex: 0 0 auto; color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.childlist.readonly .solo-sep { flex: 0 0 auto; color: var(--line); }
+.childlist.readonly .solo-value { flex: 1; min-width: 0; }
+
+/* モーダル(子の行の編集など) */
+.modal-backdrop {
+  position: fixed; inset: 0; background: color-mix(in srgb, #000 45%, transparent);
+  display: flex; align-items: center; justify-content: center; z-index: 30; padding: 1rem;
+}
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.modal-head h2 { margin: 0; font-size: 1.05rem; }
+.modal-body { padding: 1rem; overflow: auto; }
+.modal-actions { display: flex; gap: 0.6rem; align-items: center; padding: 0.7rem 1rem; border-top: 1px solid var(--line); flex-shrink: 0; }
+.modal-actions .spacer { flex: 1; }
+
 .multi { border: 1px solid var(--line); border-radius: 6px; padding: 0.3rem 0.5rem; max-height: 12rem; overflow: auto; background: var(--panel); }
 .multi label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 
@@ -225,6 +258,7 @@ button.ghost { background: transparent; }
 .tree-name { font-weight: 600; }
 .tree-kind, .tree-count, .tree-meta { color: var(--muted); font-size: 0.85rem; }
 .tree-link { font-size: 0.8rem; margin-left: auto; }
+.tree-text { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.3rem 1.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-story { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.2rem 0; }
 .tree-story::before { content: "▸"; color: var(--muted); font-size: 0.75rem; }
 .tree-meta { display: inline-flex; gap: 0.5rem; align-items: baseline; }

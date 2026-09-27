@@ -1,8 +1,10 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
-import type { ChildListMeta, Rec } from "@/lib/api";
+import { Fragment, useState, type ReactNode } from "react";
+import type { ChildListMeta, ColumnMeta, Rec } from "@/lib/api";
 import FieldInput from "./FieldInput";
+import Modal from "./Modal";
+import { useOptions } from "./ReferenceSelect";
 import { T } from "@/lib/text";
 
 /** スキーマに無い、行から計算するだけの読み取り専用の列(居場所の期間から出す年齢など)。指定した列の右に挿む。 */
@@ -13,65 +15,255 @@ type Props = {
   rows: Rec[];
   onChange: (rows: Rec[]) => void;
   extraColumns?: ExtraColumn[];
+  /** true なら表はリードオンリーにし、列(行)クリックでモーダルの編集画面を開く(パラメータ・居場所)。 */
+  readOnly?: boolean;
 };
 
+/** リードオンリーの表の一マス。参照列(場所など)は id ではなく名前で出す。 */
+function ReadValue({ column, value }: { column: ColumnMeta; value: unknown }) {
+  const options = useOptions(column.references ?? undefined);
+  if (value == null || value === "") return <>—</>;
+  if (column.references) {
+    const option = options.find((o) => o.id === value);
+    return <>{option ? option.label : String(value)}</>;
+  }
+  if (column.type === "boolean") return <>{value ? T.yes : T.no}</>;
+  if (Array.isArray(value) || typeof value === "object") return <>{JSON.stringify(value)}</>;
+  return <>{String(value)}</>;
+}
+
+/** 空なら "—"、あれば stamp の日付部分だけ("11579/03/02 10:00:00" → "11579/03/02")。 */
+function formatDateOnly(value: unknown): string {
+  if (value == null || value === "") return "—";
+  return String(value).split(" ")[0];
+}
+
+/** 札 1 枚ぶん(項目名+値)。実在の列(誠実性など)だけでなく、期間・年齢のように
+ * 複数の列から合成する項目もこの形にそろえて、同じ ChipGrid で並べられるようにする。 */
+type Chip = { key: string; label: ReactNode; title?: string; render: (row: Rec) => ReactNode };
+
+function chipOf(column: ColumnMeta): Chip {
+  return {
+    key: column.key,
+    label: column.label,
+    title: column.comment ?? column.key,
+    render: (row) => <ReadValue column={column} value={row[column.key]} />,
+  };
+}
+
+/** 項目名を上、値を下に置く枠つきの小さな札。共有の見出し列に項目名を収めようとすると幅が合わず
+ * 折り返しが崩れるので、見出し列には置かず、各期間(列)のマスの中に項目名ごと(重複して)書く。
+ * 札の幅は中身まかせ(flex-wrap)で、決め打ちの列数・列幅は持たない。ラベルが長い札ほど自分の分だけ
+ * 幅を取るので、短い札を無理に同じ幅へ広げて折り返させることがない。 */
+function ChipGrid({ chips, row }: { chips: Chip[]; row: Rec }) {
+  return (
+    <div className="chipgrid">
+      {chips.map((c) => (
+        <div key={c.key} className="chip" title={c.title}>
+          <div className="chip-label">{c.label}</div>
+          <div className="chip-value">{c.render(row)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 1 行を丸ごと使う項目(期間・体格など)。項目名と値を「キー | 値」で横に並べ、左詰めにする。 */
+function SoloField({ chip, row }: { chip: Chip; row: Rec }) {
+  return (
+    <div className="solo-field" title={chip.title}>
+      <span className="solo-key">{chip.label}</span>
+      <span className="solo-sep">|</span>
+      <span className="solo-value">{chip.render(row)}</span>
+    </div>
+  );
+}
+
+/** リードオンリーの表の 1 行ぶんの中身。項目が多いので、素朴に 1 項目 1 行にはせず、
+ * 1 行を丸ごと使うだけの中身を持つ項目(期間・年齢・体格・口調・方言。期間・年齢は幅を目立たせたい、
+ * 体格等は自由記述で長くなりがち)は 1 項目 1 行のまま上にまとめ、それ以外の値の短い項目
+ * (一人称・二人称・三人称や性格など)はまとめて 1 行の札の並び(ChipGrid)にして下に置く。 */
+type RowSpec = { key: string; label: ReactNode; render: (row: Rec) => ReactNode };
+
+function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowSpec[] {
+  const byKey = new Map(columns.map((c) => [c.key, c]));
+  const consumed = new Set<string>();
+  const soloSpecs: RowSpec[] = [];
+
+  if (byKey.has("start") && byKey.has("end")) {
+    consumed.add("start");
+    consumed.add("end");
+    const startAge = extraColumns.find((e) => e.after === "start");
+    const endAge = extraColumns.find((e) => e.after === "end");
+    const period: Chip = { key: "__period", label: "期間", render: (row) => `${formatDateOnly(row.start)} ~ ${formatDateOnly(row.end)}` };
+    soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={period} row={row} /> });
+    if (startAge && endAge) {
+      const age: Chip = { key: "__age", label: "年齢", render: (row) => `${startAge.render(row)} ~ ${endAge.render(row)}` };
+      soloSpecs.push({ key: "__age", label: "", render: (row) => <SoloField chip={age} row={row} /> });
+    }
+  }
+
+  // 体格・口調・方言は自由記述で長い文になりがちなので、札には収めず 1 項目 1 行のまま出す
+  const soloKeys = new Set(["build", "tone", "dialect"]);
+  const soloColumns = [...soloKeys].map((key) => byKey.get(key)).filter((c): c is ColumnMeta => c != null);
+  for (const column of soloColumns) {
+    consumed.add(column.key);
+    const chip = chipOf(column);
+    soloSpecs.push({ key: `__solo_${column.key}`, label: "", render: (row) => <SoloField chip={chip} row={row} /> });
+  }
+
+  const chips: Chip[] = [];
+  for (const column of columns) {
+    if (!consumed.has(column.key)) chips.push(chipOf(column));
+  }
+
+  const specs: RowSpec[] = [...soloSpecs];
+  if (chips.length === 1) {
+    // 残りが 1 項目だけなら、わざわざ札にせず他の 1 行セルと同じ「キー | 値」にする(例: 居場所の「場所」)
+    const chip = chips[0];
+    specs.push({ key: "__grid", label: "", render: (row) => <SoloField chip={chip} row={row} /> });
+  } else if (chips.length > 1) {
+    specs.push({ key: "__grid", label: "", render: (row) => <ChipGrid chips={chips} row={row} /> });
+  }
+
+  return specs;
+}
+
+/** リードオンリーの表(パラメータ・居場所)。列(期間)ごとに幅を固定し、はみ出す分は横スクロールで見せる。
+ * クリック・ホバーの単位は列(期間・レコード)全体で、項目(マス)単位ではハイライトしない。 */
+function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMeta; rows: Rec[]; extraColumns: ExtraColumn[]; onOpen: (index: number) => void }) {
+  const rowSpecs = buildRowSpecs(meta.columns, extraColumns);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const columnProps = (index: number) => ({
+    className: `clickable${hovered === index ? " hover" : ""}`,
+    onClick: () => onOpen(index),
+    onMouseEnter: () => setHovered(index),
+    onMouseLeave: () => setHovered(null),
+  });
+  return (
+    <div className="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th />
+            {rows.map((_, index) => (
+              <th key={index} style={{ minWidth: "26rem" }} {...columnProps(index)}>
+                #{index + 1}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rowSpecs.map((spec) => (
+            <tr key={spec.key}>
+              <th scope="row">{spec.label}</th>
+              {rows.map((row, index) => (
+                <td key={index} {...columnProps(index)}>
+                  {spec.render(row)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** 子の行(期間ごとのパラメータなど)。並びで行が決まるので、行の入れ替えはしない。 */
-export default function ChildListEditor({ meta, rows, onChange, extraColumns = [] }: Props) {
+export default function ChildListEditor({ meta, rows, onChange, extraColumns = [], readOnly }: Props) {
+  const [editing, setEditing] = useState<number | null>(null);
   const update = (index: number, key: string, value: unknown) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
-  const add = () => onChange([...rows, Object.fromEntries(meta.columns.map((c) => [c.key, c.type === "boolean" ? false : null]))]);
+  const add = () => {
+    onChange([...rows, Object.fromEntries(meta.columns.map((c) => [c.key, c.type === "boolean" ? false : null]))]);
+    if (readOnly) setEditing(rows.length);
+  };
   const extrasAfter = (key: string) => extraColumns.filter((extra) => extra.after === key);
 
   return (
-    <div className="childlist">
-      <div className="scroll-x">
-        <table>
-          <thead>
-            <tr>
-              <th />
-              {meta.columns.map((column) => (
-                <Fragment key={column.key}>
-                  <th title={column.comment ?? column.key}>{column.label}</th>
-                  {extrasAfter(column.key).map((extra) => (
-                    <th key={extra.key} className="hint">
-                      {extra.label}
-                    </th>
-                  ))}
-                </Fragment>
-              ))}
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={index}>
-                <td className="rowhead">{index + 1}</td>
+    <div className={`childlist ${readOnly ? "readonly" : ""}`}>
+      {readOnly ? (
+        <ReadOnlyTable meta={meta} rows={rows} extraColumns={extraColumns} onOpen={setEditing} />
+      ) : (
+        <div className="scroll-x">
+          <table>
+            <thead>
+              <tr>
+                <th />
                 {meta.columns.map((column) => (
                   <Fragment key={column.key}>
-                    <td>
-                      <FieldInput column={column} value={row[column.key]} onChange={(v) => update(index, column.key, v)} compact />
-                    </td>
+                    <th title={column.comment ?? column.key}>{column.label}</th>
                     {extrasAfter(column.key).map((extra) => (
-                      <td key={extra.key} className="readonly">
-                        {extra.render(row)}
-                      </td>
+                      <th key={extra.key} className="hint">
+                        {extra.label}
+                      </th>
                     ))}
                   </Fragment>
                 ))}
-                <td>
-                  <button type="button" className="ghost" onClick={() => remove(index)} title={T.childList.removeRow}>
-                    ×
-                  </button>
-                </td>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  <td className="rowhead">{index + 1}</td>
+                  {meta.columns.map((column) => (
+                    <Fragment key={column.key}>
+                      <td>
+                        <FieldInput column={column} value={row[column.key]} onChange={(v) => update(index, column.key, v)} compact />
+                      </td>
+                      {extrasAfter(column.key).map((extra) => (
+                        <td key={extra.key} className="readonly">
+                          {extra.render(row)}
+                        </td>
+                      ))}
+                    </Fragment>
+                  ))}
+                  <td>
+                    <button type="button" className="ghost" onClick={() => remove(index)} title={T.childList.removeRow}>
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <button type="button" onClick={add} style={{ marginTop: "0.4rem" }}>
         {T.childList.addRow}
       </button>
+      {readOnly && editing !== null && rows[editing] && (
+        <Modal
+          title={`${meta.label} #${editing + 1}`}
+          onClose={() => setEditing(null)}
+          actions={
+            <>
+              <button type="button" className="danger" onClick={() => { remove(editing); setEditing(null); }}>
+                {T.childList.removeRow}
+              </button>
+              <span className="spacer" />
+              <button type="button" className="primary" onClick={() => setEditing(null)}>
+                {T.childList.close}
+              </button>
+            </>
+          }
+        >
+          <div className="form">
+            {meta.columns.map((column) => (
+              <div key={column.key} className="field">
+                <label title={column.comment ?? ""}>
+                  {column.label}
+                  <span className="key">{column.key}</span>
+                </label>
+                <FieldInput column={column} value={rows[editing][column.key]} onChange={(v) => update(editing, column.key, v)} />
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

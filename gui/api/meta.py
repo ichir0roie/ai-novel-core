@@ -82,15 +82,11 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
     """入口が列の外で受け取る欄。"""
     extras = []
     if spec.name == "character":
+        # 誕生・死亡(start/end)は専用の列を持たず、parameters の期間で表す(表・モーダルはそちらに出す)ので、
+        # ここでは列として足さない。値自体は COMPUTED_COLUMNS として record には引き続き乗る
         extras.append(ColumnMeta(key="place_id", label="出自(場所)", type="integer", nullable=True,
                                  required=False, references="location", create_only=True,
                                  comment="足すときの出自。CharacterPlace の一番古い行になる"))
-        extras.append(ColumnMeta(key="start", label=_LABELS["start"], type="stamp", nullable=True,
-                                 required=False, readonly=True,
-                                 comment="誕生。parameters の一番早く始まる行の start"))
-        extras.append(ColumnMeta(key="end", label=_LABELS["end"], type="stamp", nullable=True,
-                                 required=False, readonly=True,
-                                 comment="死亡。parameters の一番後に始まる行の end"))
     if spec.name == "event":
         extras.append(ColumnMeta(key="character_ids", label=_LABELS["character_ids"], type="id_list",
                                  nullable=True, required=False, references="character",
