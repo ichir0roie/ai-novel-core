@@ -55,12 +55,11 @@ class ParameterFactory(factory.DictFactory):
 
 
 class CharacterFactory(factory.DictFactory):
+    """誕生・死亡は列を持たず、下の `parameters`(期間を限らない一行)の start / end で表す。"""
+
     name = factory.Sequence(lambda n: f"仮名{n}")
     text = ""
     kind = CHARACTER_KIND_PERSON
-
-    start = None
-    end = None
 
     parameters = factory.LazyFunction(lambda: [ParameterFactory.build()])
 

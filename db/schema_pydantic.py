@@ -70,6 +70,8 @@ def to_dict(row) -> dict:
     data = to_model(row).model_dump()
     for name in getattr(type(row), "CHILD_LISTS", ()):
         data[name] = dump_children(row, name)
+    for name in getattr(type(row), "COMPUTED_COLUMNS", ()):
+        data[name] = getattr(row, name)
     return _to_jsonable(data)
 
 

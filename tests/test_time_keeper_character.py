@@ -64,7 +64,9 @@ def test_generate_person_passes_personality_to_ai_and_keeps_it(session):
 
     session.expire_all()
     stored = session.get(Character, record.id)
-    assert [(row.start, row.end) for row in stored.parameters] == [(None, None)]
+    # 誕生・死亡は列を持たず、この唯一の行の start / end がそれを兼ねる。死んでいないので end は空
+    assert [(row.start, row.end) for row in stored.parameters] == [(stored.start, stored.end)]
+    assert stored.start is not None and stored.end is None
     assert {name: stored.parameters_at()[name] for name in PERSONALITY_COLUMNS} == levels
 
 

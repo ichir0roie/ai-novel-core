@@ -7,6 +7,9 @@ from db.schema import Character
 from db.schema_pydantic import to_dict
 
 
+_UNSET = object()
+
+
 class UpdateCharacter(CommitDraft):
     model = Character
 
@@ -20,6 +23,9 @@ class UpdateCharacter(CommitDraft):
             raise ValueError("id は必須(直す対象の人物)")
         parameters = data.pop("parameters", None)
         places = data.pop("places", None)
+        # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
+        born = data.pop("start", _UNSET)
+        died = data.pop("end", _UNSET)
         self.check_columns(data)
 
         record = session.get(Character, character_id)
@@ -32,5 +38,9 @@ class UpdateCharacter(CommitDraft):
             load_children(record, "parameters", parameters)
         if places is not None:
             load_children(record, "places", places)
+        if born is not _UNSET:
+            record.start = born
+        if died is not _UNSET:
+            record.end = died
         self.finalize(session, record)
         return to_dict(record)

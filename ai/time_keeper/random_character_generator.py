@@ -497,10 +497,9 @@ def _generate_one(
         if principle:
             draft["text"] += f"\n\n# 行動原理\n{principle}"
 
-    dead_age = age + rng.randint(10, 100)
-
-    draft["start"] = Stamp(time.year - age)
-    draft["end"] = Stamp.parse(hints.get("end")) or Stamp(time.year - age + dead_age)
+    birth = Stamp(time.year - age)
+    # 死亡していない対象の end は空にする(自然死は character_lifespan が別に判定して書き込む)
+    death = Stamp.parse(hints.get("end"))
 
     dialect_line = f"方言: {parameters['dialect']}\n" if person and parameters.get("dialect") else ""
     # 名前は、説明・年齢など中身が決まったあとに、その内容から連想して決める。
@@ -528,6 +527,8 @@ def _generate_one(
 
     record = Character(**{key: value for key, value in draft.items() if key != "parameters"})
     load_children(record, "parameters", draft["parameters"])
+    record.start = birth
+    record.end = death
     session.add(record)
     session.flush()  # place から character_id で参照するため、先に id を確定する
 
