@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitMemeSource
 from ai.time_keeper import idea_alias
+from db.child_lists import load_children
 from db.schema import Idea, Location
 from db.schema_pydantic import to_dict
 
@@ -17,6 +18,7 @@ class CommitIdea(CommitMemeSource):
     def execute(self, session) -> dict:
         data = self.parse(self.idea)
         data.pop("id", None)
+        notes = data.pop("notes", [])
         self.check_columns(data)
         if not data.get("name"):
             raise ValueError("name は必須")
@@ -29,6 +31,7 @@ class CommitIdea(CommitMemeSource):
         idea_alias.check(session, None, data.get("alias_of_idea_id"))
 
         record = Idea(**data)
+        load_children(record, "notes", notes)
         session.add(record)
         self.finalize(session, record)
         return to_dict(record)

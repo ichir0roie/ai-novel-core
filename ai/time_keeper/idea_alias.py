@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from data_access_logic.query import common_query, dictionary_query
-from db.schema import Idea, Session
+from db.schema import Idea, Session, resolve_idea_text
 from db.stamp import Stamp
 
 
@@ -48,10 +48,14 @@ def name_of(idea: Idea, aliases: dict[int, Idea]) -> str:
     return alias.name if alias is not None else idea.name
 
 
-def text_of(idea: Idea, aliases: dict[int, Idea]) -> str:
-    """呼び名の本文(作中での受け止め方)を前に、本質の本文を後ろに並べる。"""
+def text_of(idea: Idea, aliases: dict[int, Idea], time=None) -> str:
+    """呼び名の本文(作中での受け止め方)を前に、本質の本文を後ろに並べる。
+
+    `time` を渡すと、それぞれその時刻に効く追記(`IdeaNote`)まで基本の本文に積み重ねた本文を使う。
+    """
     alias = aliases.get(idea.id)
-    parts = ((alias.text or "").strip() if alias is not None else "", (idea.text or "").strip())
+    parts = (resolve_idea_text(alias.text, alias.notes, time) if alias is not None else "",
+             resolve_idea_text(idea.text, idea.notes, time))
     return " ".join(part for part in parts if part)
 
 

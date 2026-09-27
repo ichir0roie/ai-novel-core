@@ -9,7 +9,7 @@ from ai.claude_code.interface.randomizer.update_idea import UpdateIdea
 from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.world.search_ideas import SearchIdeas
 from ai.time_keeper import idea_alias, idea_context
-from db.schema import Idea, Location
+from db.schema import Idea, IdeaNote, Location
 from db.stamp import Stamp
 
 
@@ -49,6 +49,24 @@ def test_alias_matching_the_place_and_time_is_chosen(session, places, energy):
     assert called == {energy.id: alias}
     assert idea_alias.name_of(energy, called) == "魔力"
     assert idea_alias.text_of(energy, called) == "住人は魔法の力だと思っている 化学エネルギーとして溜める"
+
+
+def test_text_of_folds_in_notes_covering_the_time(session, places, energy):
+    energy.notes = [IdeaNote(start=Stamp(2050), text="化学反応で生む方法も見つかった")]
+    alias = _idea(session, "魔力", "住人は魔法の力だと思っている", kind="呼称", alias_of_idea_id=energy.id,
+                  location_id=places["world"].id, start=Stamp(2000),
+                  notes=[IdeaNote(start=Stamp(2080), text="教会はこれを禁忌とした")])
+    session.commit()
+
+    called = idea_alias.called(session, [energy.id], places["village"].id, "2100")
+
+    assert called == {energy.id: alias}
+    assert idea_alias.text_of(energy, called) == (
+        "住人は魔法の力だと思っている 化学エネルギーとして溜める")
+    assert idea_alias.text_of(energy, called, "2050") == (
+        "住人は魔法の力だと思っている 化学エネルギーとして溜める\n化学反応で生む方法も見つかった")
+    assert idea_alias.text_of(energy, called, "2100") == (
+        "住人は魔法の力だと思っている\n教会はこれを禁忌とした 化学エネルギーとして溜める\n化学反応で生む方法も見つかった")
 
 
 def test_essence_name_is_used_when_no_alias_matches(session, places, energy):
