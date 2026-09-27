@@ -13,7 +13,7 @@ def test_nothing_to_review_on_an_empty_world(session):
 
 def test_candidate_idea_is_listed_with_where_it_came_from(session):
     event = Event(name="峠越え", text="", time=Stamp(2100))
-    candidate = Idea(name="宿り", kind="技術", auto_generated=True, text="体に虫を宿す治療",
+    candidate = Idea(name="宿り", kind="技術", confirmed=False, text="体に虫を宿す治療",
                      directory_path="技術")
     session.add_all([event, candidate, Idea(name="魔力", kind="技術", text="")])
     session.commit()

@@ -23,16 +23,19 @@ def essences(session: Session, ideas) -> list[Idea]:
     return list(found.values())
 
 
-def called(session: Session, essence_ids, place_id: int | None = None, time=None) -> dict[int, Idea]:
+def called(session: Session, essence_ids, place_id: int | None = None, time=None,
+          confirmed_only: bool = True) -> dict[int, Idea]:
     """本質のアイデアの id ごとに、その場所・時代で使う呼び名。当てはまる呼び名が無い id は入らない。
 
     場所が近い呼び名を先に、同じ近さなら使い始めの遅い呼び名を先に選ぶ。場所・時代の列が空の呼び名は最後。
+    `confirmed_only` を false にすると、まだ確かめていない呼び名(`confirmed=false`)も含める。
     """
     ids = list(dict.fromkeys(essence_ids))
     if not ids:
         return {}
     place_ids = common_query.idea_scope_ids(session, place_id) if place_id is not None else None
-    rows = session.scalars(dictionary_query.aliases_select(ids, place_ids, Stamp.parse(time))).all()
+    rows = session.scalars(dictionary_query.aliases_select(
+        ids, place_ids, Stamp.parse(time), confirmed_only=confirmed_only)).all()
     nearness = {id_: rank for rank, id_ in enumerate(place_ids or [])}
     chosen: dict[int, Idea] = {}
     for alias in sorted(rows, key=lambda alias: nearness.get(alias.location_id, len(nearness))):

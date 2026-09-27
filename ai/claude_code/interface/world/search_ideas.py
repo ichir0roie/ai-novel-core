@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""アイデアをあいまい検索する、claude が呼ぶ入口。自動生成(`auto_generated`)のアイデアも返す。
+"""アイデアをあいまい検索する、claude が呼ぶ入口。まだ確かめていない候補(`confirmed=false`)も返す。
 
     SearchIdeas("霊纏").run()
     SearchIdeas([{"keyword": "遺伝子異常", "variants": ["遺伝病", "血の病", "遺伝"]}], place_id=58, time="1200").run()
@@ -22,12 +22,14 @@ class SearchIdeas(SessionEntrypoint):
         self.time = time
 
     def execute(self, session) -> list[dict]:
-        hits = idea_search.search(session, self.keywords, self.place_id, self.time, limit=self.limit)
+        hits = idea_search.search(session, self.keywords, self.place_id, self.time, limit=self.limit,
+                                  confirmed_only=False)
         essences = {hit.idea.id: idea_alias.essences(session, [hit.idea])[0] for hit in hits}
-        called = idea_alias.called(session, [essence.id for essence in essences.values()], self.place_id, self.time)
+        called = idea_alias.called(session, [essence.id for essence in essences.values()], self.place_id, self.time,
+                                   confirmed_only=False)
         return [
             {"id": hit.idea.id, "name": hit.idea.name, "kind": hit.idea.kind,
-             "auto_generated": hit.idea.auto_generated,
+             "confirmed": hit.idea.confirmed,
              "parent_idea_id": hit.idea.parent_idea_id, "alias_of_idea_id": hit.idea.alias_of_idea_id,
              "called": idea_alias.name_of(essences[hit.idea.id], called), "text": hit.idea.text,
              "score": hit.score, "keywords": hit.keywords}

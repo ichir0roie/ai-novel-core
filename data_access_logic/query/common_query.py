@@ -329,7 +329,7 @@ def unsynced_plots_select(story_id: int | None = None) -> Select:
 
 def ideas_select(place_ids, time: Stamp | None = None) -> Select:
     return (select(Idea)
-            .where(dictionary_query.idea_in_scope(place_ids, time))
+            .where(dictionary_query.idea_in_scope(place_ids, time), Idea.confirmed.is_(True))
             .order_by(Idea.id))
 
 

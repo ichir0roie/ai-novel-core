@@ -34,41 +34,50 @@ def alias_in_scope(place_ids=None, time: Stamp | None = None) -> ColumnElement[b
     return and_(location, period)
 
 
-def aliases_select(essence_ids, place_ids=None, time: Stamp | None = None) -> Select:
+def aliases_select(essence_ids, place_ids=None, time: Stamp | None = None,
+                   confirmed_only: bool = True) -> Select:
+    conditions = [Idea.alias_of_idea_id.in_(list(essence_ids)), alias_in_scope(place_ids, time)]
+    if confirmed_only:
+        conditions.append(Idea.confirmed.is_(True))
     return (select(Idea)
-            .where(Idea.alias_of_idea_id.in_(list(essence_ids)), alias_in_scope(place_ids, time))
+            .where(*conditions)
             .order_by(Idea.start.desc().nulls_last(), Idea.id))
 
 
-def ideas_by_keyword_select(keyword: str) -> Select:
-    return ideas_by_terms_select([keyword])
+def ideas_by_keyword_select(keyword: str, confirmed_only: bool = True) -> Select:
+    return ideas_by_terms_select([keyword], confirmed_only=confirmed_only)
 
 
-def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None) -> Select:
-    """名前か本文に `terms` のどれかを含むアイデア。"""
+def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None,
+                          confirmed_only: bool = True) -> Select:
+    """名前か本文に `terms` のどれかを含むアイデア。`confirmed_only` を false にすると、
+    まだ確かめていない候補(`confirmed=false`)も含める。"""
     terms = [term for term in terms if term]
     if not terms:
         return select(Idea).where(false())
-    return (select(Idea)
-            .where(or_(*(Idea.name.contains(term, autoescape=True) for term in terms),
-                       *(Idea.text.contains(term, autoescape=True) for term in terms)),
-                   idea_in_scope(place_ids, time))
-            .order_by(Idea.id))
+    conditions = [or_(*(Idea.name.contains(term, autoescape=True) for term in terms),
+                      *(Idea.text.contains(term, autoescape=True) for term in terms)),
+                 idea_in_scope(place_ids, time)]
+    if confirmed_only:
+        conditions.append(Idea.confirmed.is_(True))
+    return select(Idea).where(*conditions).order_by(Idea.id)
 
 
-def auto_generated_ideas_select() -> Select:
-    return select(Idea).where(Idea.auto_generated.is_(True)).order_by(Idea.id)
+def unconfirmed_ideas_select() -> Select:
+    return select(Idea).where(Idea.confirmed.is_(False)).order_by(Idea.id)
 
 
-def ideas_by_parent_select(parent_ids, place_ids=None, time: Stamp | None = None) -> Select:
-    return (select(Idea)
-            .where(Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(place_ids, time))
-            .order_by(Idea.id))
+def ideas_by_parent_select(parent_ids, place_ids=None, time: Stamp | None = None,
+                           confirmed_only: bool = True) -> Select:
+    conditions = [Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(place_ids, time)]
+    if confirmed_only:
+        conditions.append(Idea.confirmed.is_(True))
+    return select(Idea).where(*conditions).order_by(Idea.id)
 
 
 def later_ideas_select(place_ids, time: Stamp) -> Select:
-    """`time` より後に始まる、`place_ids` の場所で効くアイデア(呼び名は除く)。"""
+    """`time` より後に始まる、`place_ids` の場所で効く確定済みのアイデア(呼び名は除く)。"""
     return (select(Idea)
             .where(Idea.location_id.in_(list(place_ids)), Idea.alias_of_idea_id.is_(None),
-                   Idea.start > time)
+                   Idea.start > time, Idea.confirmed.is_(True))
             .order_by(Idea.start, Idea.id))

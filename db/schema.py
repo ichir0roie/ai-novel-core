@@ -539,9 +539,10 @@ class Idea(FactCheckMixin, MemeSeededMixin, MarkdownBase):
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
-    auto_generated: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
-        comment="本文から自動で足した未確認のアイデアか。検索・生成には他と同じく出る。確かめたら false にする",
+    confirmed: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False,
+        comment="確かめた設定として使ってよいか。本文から自動で足した未確認の候補は false で、"
+                "検索・生成には出ない。確かめたら true にする",
         sort_order=215)
 
     location_id: Mapped[int | None] = mapped_column(
