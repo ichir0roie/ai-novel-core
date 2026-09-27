@@ -332,6 +332,11 @@ export interface components {
              * @default true
              */
             markdown: boolean;
+            /**
+             * Side
+             * @default false
+             */
+            side: boolean;
             /** Choices */
             choices?: string[] | null;
             /** References */

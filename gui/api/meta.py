@@ -99,10 +99,14 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     sections = set(model.TEXT_COLUMNS)
     # 字数は本文から自動で数えるので、フォームでは直に書けない
     readonly_columns = {"letters"} if spec.name == "episode" else set()
+    # AI 生成前の種は、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
+    side_columns = {"key"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
         meta = column_meta(spec.name, model, column, section=column.key in sections,
                            readonly=column.key in readonly_columns)
+        if column.key in side_columns:
+            meta = meta.model_copy(update={"side": True})
         (long if meta.section else plain).append(meta)
     extras = _extra_columns(spec)
     return plain + [meta for meta in extras if not meta.section] + long + [meta for meta in extras if meta.section]

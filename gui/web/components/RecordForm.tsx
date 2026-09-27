@@ -36,7 +36,8 @@ export default function RecordForm({ meta, value, onChange, mode, side, actions 
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   const plain = columns.filter((c) => !c.section);
-  const sections = columns.filter((c) => c.section);
+  const sections = columns.filter((c) => c.section && !c.side);
+  const sideSections = columns.filter((c) => c.section && c.side);
 
   return (
     <div className={`record ${sections.length ? "split" : ""}`}>
@@ -70,6 +71,15 @@ export default function RecordForm({ meta, value, onChange, mode, side, actions 
           </div>
         ))}
         {side}
+        {sideSections.map((column) => (
+          <div key={column.key} className="field section side" style={{ marginTop: "1rem" }}>
+            <label title={column.comment ?? ""}>
+              {column.label}
+              <span className="key">{column.key}</span>
+            </label>
+            <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
+          </div>
+        ))}
         {actions && <div className="record-actions">{actions}</div>}
       </div>
       {sections.length > 0 && (

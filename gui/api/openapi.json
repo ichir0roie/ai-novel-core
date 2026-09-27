@@ -858,6 +858,11 @@
             "title": "Markdown",
             "default": true
           },
+          "side": {
+            "type": "boolean",
+            "title": "Side",
+            "default": false
+          },
           "choices": {
             "anyOf": [
               {
