@@ -95,5 +95,5 @@ write_story(story_id=1, episode_id=40)     # 種だけ入っている話(id=40)�
 - その話に種があればプロンプトへ載せ、視点・場所・種はそのままに、題と本文だけを上書きする
 - 止めるのは、**その話より前に**「本文はあるのに `synced` が下りている話」がある場合だけ
 - 書いた話は `synced=True` で確定する。本文は話の `text` に入れる
-- 本文の長さ・場面の切り方・文体は `ai/instructions/style.py`
-  (`EPISODE_TARGET_LETTERS` / `EPISODE_STYLE_BASE`)
+- 本文の場面の切り方・文体は `ai/instructions/style.py` の `EPISODE_STYLE_BASE`。
+  字数の指定は無く、種(key)と周辺データ(登場人物・場所・直前の話・関係する設定など)を踏まえて詳しく書く

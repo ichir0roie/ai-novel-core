@@ -232,8 +232,8 @@ def test_previous_episodes_are_taken_from_before_the_target(session, story, call
     assert "7話の本文" not in calls[0]["prompt"]
 
 
-def test_system_prompt_states_the_length_target():
-    assert "一話は5000〜8000字" in story_writer._SYSTEM_PROMPT
+def test_system_prompt_has_no_fixed_length_target():
+    assert "一話は5000〜8000字" not in story_writer._SYSTEM_PROMPT
     assert "場面" in story_writer._SYSTEM_PROMPT
 
 

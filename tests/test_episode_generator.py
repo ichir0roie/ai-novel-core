@@ -104,7 +104,6 @@ def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
     assert f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {KEY}" in prompt
     assert '"name": "甲"' in prompt and '"age": 14' in prompt
     assert '"name": "乙"' in prompt
-    assert "5000〜8000字" in prompt
 
 
 def test_style_extras_from_the_caller_reach_the_system_prompt(session, story):

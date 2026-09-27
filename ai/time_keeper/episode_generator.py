@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.style import EPISODE_TARGET_LETTERS, layout_novel_text
+from ai.instructions.style import layout_novel_text
 from ai.time_keeper import constants
 from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper import episode_summary, event_summary, idea_context
@@ -192,10 +192,7 @@ def write(
         lines.append(idea_context.prompt_section(context.related, context.called))
     if viewpoint:
         lines.append(f"視点: {viewpoint}")
-    lines += [
-        f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {key}",
-        f"この話を{EPISODE_TARGET_LETTERS[0]}〜{EPISODE_TARGET_LETTERS[1]}字の本文に書いてください。",
-    ]
+    lines.append(f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {key}")
 
     system_prompt = (_system_prompt(shared_style_extra=shared_style_extra, style_extra=style_extra)
                      if (shared_style_extra or style_extra) else _SYSTEM_PROMPT)
