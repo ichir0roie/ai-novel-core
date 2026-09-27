@@ -3,8 +3,21 @@ from __future__ import annotations
 
 from sqlalchemy import ColumnElement, Select, and_, false, or_, select, true
 
-from db.schema import ConfirmStatus, Idea
+from db.schema import ConfirmStatus, Idea, IdeaNote
 from db.stamp import Stamp
+
+
+def idea_note_in_scope(time: Stamp | None = None) -> ColumnElement[bool]:
+    """`time` を渡さなければ絞らない(`idea_in_scope` と同じ)。"""
+    if time is None:
+        return true()
+    return and_(or_(IdeaNote.start.is_(None), IdeaNote.start <= time),
+                or_(IdeaNote.end.is_(None), time < IdeaNote.end))
+
+
+def idea_notes_join(time: Stamp | None = None) -> ColumnElement[bool]:
+    """`Idea` に `IdeaNote` を左外部結合するときの ON 条件。その時刻に効く追記だけを繋ぐ。"""
+    return and_(IdeaNote.idea_id == Idea.id, idea_note_in_scope(time))
 
 
 def idea_in_scope(place_ids=None, time: Stamp | None = None) -> ColumnElement[bool]:
@@ -50,17 +63,23 @@ def ideas_by_keyword_select(keyword: str, confirmed_only: bool = True) -> Select
 
 def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None,
                           confirmed_only: bool = True) -> Select:
-    """名前か本文に `terms` のどれかを含むアイデア。`confirmed_only` を false にすると、
-    まだ確かめていない候補(`confirmed=未確認`)も含める。"""
+    """名前か本文(基本の本文、またはその時代に効く追記 `IdeaNote`)に `terms` のどれかを含むアイデア。
+    追記を左外部結合するので、追記の無いアイデアも(基本の本文で当たれば)漏れない。
+    `confirmed_only` を false にすると、まだ確かめていない候補(`confirmed=未確認`)も含める。"""
     terms = [term for term in terms if term]
     if not terms:
         return select(Idea).where(false())
     conditions = [or_(*(Idea.name.contains(term, autoescape=True) for term in terms),
-                      *(Idea.text.contains(term, autoescape=True) for term in terms)),
+                      *(Idea.text.contains(term, autoescape=True) for term in terms),
+                      *(IdeaNote.text.contains(term, autoescape=True) for term in terms)),
                  idea_in_scope(place_ids, time)]
     if confirmed_only:
         conditions.append(Idea.confirmed == ConfirmStatus.APPROVED)
-    return select(Idea).where(*conditions).order_by(Idea.id)
+    return (select(Idea)
+            .outerjoin(IdeaNote, idea_notes_join(time))
+            .where(*conditions)
+            .distinct()
+            .order_by(Idea.id))
 
 
 def unconfirmed_ideas_select() -> Select:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from ai.time_keeper import idea_alias
+from db.child_lists import load_children
 from db.schema import Idea, Location
 from db.schema_pydantic import to_dict
 
@@ -18,6 +19,7 @@ class UpdateIdea(CommitDraft):
         idea_id = data.pop("id", None)
         if idea_id is None:
             raise ValueError("id は必須(直す対象のアイデア)")
+        notes = data.pop("notes", None)
         self.check_columns(data)
 
         record = session.get(Idea, idea_id)
@@ -35,6 +37,8 @@ class UpdateIdea(CommitDraft):
 
         for key, value in data.items():
             setattr(record, key, value)
+        if notes is not None:
+            load_children(record, "notes", notes)
         self.finalize(session, record)
         return to_dict(record)
 

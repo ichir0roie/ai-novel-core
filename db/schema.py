@@ -673,6 +673,53 @@ class Idea(MemeSeededMixin, TextBase):
                 "空の列はどこでも・いつでも使う。当てはまる呼び名が無ければ本質の name をそのまま使う",
         sort_order=260)
 
+    # 時代が進むにつれて分かった・変わった情報は text を書き換えず IdeaNote で積み足す。GUI では notes に並ぶ。
+    CHILD_LISTS = ("notes",)
+
+    def text_at(self, time=None) -> str:
+        return resolve_idea_text(self.text, self.notes, time)
+
+    notes: Mapped[list[IdeaNote]] = relationship(
+        back_populates="idea", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaNote.id")
+
+
+class IdeaNote(Base):
+    """アイデアの本文(`Idea.text`)に、時代ごとの追記を一行ずつ積む。
+
+    `start` から `end` の手前までのあいだ効き、空の `start` はいつでも・空の `end` はずっと効く。
+    ある時刻の説明は `resolve_idea_text` が、基本の本文にその時刻に効く追記を古い順に積み重ねて作る。
+    効く追記が無ければ(そもそも一つも無い場合も含め)基本の本文がそのまま全て。
+    """
+
+    __tablename__ = "idea_note"
+
+    idea_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="この追記が効き始める時。空ならいつでも効く", sort_order=110)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="この追記が効き終わる時(この時刻からは効かない)。空ならずっと効く", sort_order=120)
+    text: Mapped[str] = mapped_column(String, nullable=False, comment="追記の本文", sort_order=130)
+
+    idea: Mapped[Idea] = relationship(back_populates="notes", lazy="noload")
+
+    def covers(self, time: Stamp | None) -> bool:
+        """時刻が空なら、期間を限らない行だけが掛かる。"""
+        if time is None:
+            return self.start is None and self.end is None
+        return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
+
+
+def resolve_idea_notes(notes, time=None) -> list[IdeaNote]:
+    time = Stamp.parse(time)
+    return sorted((note for note in notes if note.covers(time)),
+                  key=lambda note: (note.start.to_int() if note.start is not None else -1, note.id or 0))
+
+
+def resolve_idea_text(text: str, notes, time=None) -> str:
+    """基本の本文に、その時刻に効く追記(`IdeaNote`)の本文を古い順に積み重ねる。"""
+    parts = [(text or "").strip()] + [note.text.strip() for note in resolve_idea_notes(notes, time)]
+    return "\n".join(part for part in parts if part)
 
 
 class Story(EventSeededMixin, TextBase):
