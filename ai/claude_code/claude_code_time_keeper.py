@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ai.claude_code import ai_client
-from ai.claude_code.ai_client import EPISODE_TEXT_EFFORT, EPISODE_TEXT_MODEL
+from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL
 from db.schema import Session, Stamp
 from ai.time_keeper import main as _main
 
@@ -56,54 +56,54 @@ def claude_place_event_main(place_id: int, time: Stamp | str, key: str) -> int |
 
 
 def _writer_options(model: str | None, effort: str | None) -> dict:
-    return {"model": model or EPISODE_TEXT_MODEL, "effort": effort or EPISODE_TEXT_EFFORT}
+    return {"model": model or EPISODE_MODEL, "effort": effort or EPISODE_EFFORT}
 
 
-def episode(
+def plot(
     story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
-    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint: str | None = None, episode_id: int | None = None,
+    previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
+    viewpoint: str | None = None, plot_id: int | None = None,
     model: str | None = None, effort: str | None = None,
 ) -> int | None:
     """`model` / `effort` は本文を書く呼び出しにだけ効く。省けば fable の high"""
     try:
-        return _main.episode(
-            ai_client, story_id, key, time, character_ids, previous_episode_ids,
-            place_id=place_id, viewpoint=viewpoint, episode_id=episode_id,
+        return _main.plot(
+            ai_client, story_id, key, time, character_ids, previous_plot_ids,
+            place_id=place_id, viewpoint=viewpoint, plot_id=plot_id,
             writer_options=_writer_options(model, effort))
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
 
-def claude_episode_main(
+def claude_plot_main(
     story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
-    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint: str | None = None, episode_id: int | None = None,
+    previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
+    viewpoint: str | None = None, plot_id: int | None = None,
     model: str | None = None, effort: str | None = None,
 ) -> int | None:
-    return episode(story_id, key, time, character_ids, previous_episode_ids,
-                   place_id=place_id, viewpoint=viewpoint, episode_id=episode_id, model=model, effort=effort)
+    return plot(story_id, key, time, character_ids, previous_plot_ids,
+                place_id=place_id, viewpoint=viewpoint, plot_id=plot_id, model=model, effort=effort)
 
 
-def episode_text(
-    episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
+def episode(
+    plot_id: int, character_ids: list[int], previous_plot_ids: list[int] | None = None, *,
     place_id: int | None = None, model: str | None = None, effort: str | None = None,
 ) -> int | None:
     """話の枠に本文だけを書く。`model` / `effort` を省けば fable の high"""
     try:
-        return _main.episode_text(
-            ai_client, episode_id, character_ids, previous_episode_ids,
+        return _main.episode(
+            ai_client, plot_id, character_ids, previous_plot_ids,
             place_id=place_id, writer_options=_writer_options(model, effort))
     finally:
         print(f"[claude_ai] {ai_client.usage_summary()}")
 
 
-def claude_episode_text_main(
-    episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
+def claude_episode_main(
+    plot_id: int, character_ids: list[int], previous_plot_ids: list[int] | None = None, *,
     place_id: int | None = None, model: str | None = None, effort: str | None = None,
 ) -> int | None:
-    return episode_text(episode_id, character_ids, previous_episode_ids,
-                        place_id=place_id, model=model, effort=effort)
+    return episode(plot_id, character_ids, previous_plot_ids,
+                   place_id=place_id, model=model, effort=effort)
 
 
 if __name__ == "__main__":

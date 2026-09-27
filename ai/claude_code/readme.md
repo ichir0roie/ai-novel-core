@@ -21,8 +21,8 @@ ai/claude_code/
   で、単発の「プロンプト → JSON」に絞る。カレントは一時ディレクトリにして、
   このリポジトリの `CLAUDE.md` や設定を読み込ませない
 - モデルと effort は `ai_client.py` の `_MODEL`(`claude-sonnet-5`)・`_EFFORT`(`medium`)を既定にし、`--model` `--effort` に渡す。
-  話の本文(`episode_text`)の生成(`story_writer.py`・`claude_episode_main`・`claude_episode_text_main`)だけは
-  `EPISODE_TEXT_MODEL`(`claude-fable-5-1`)・`EPISODE_TEXT_EFFORT`(`high`)を渡す
+  話の本文(`episode`)の生成(`story_writer.py`・`claude_plot_main`・`claude_episode_main`)だけは
+  `EPISODE_MODEL`(`claude-fable-5-1`)・`EPISODE_EFFORT`(`high`)を渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
 - ループの終わりに Claude Code の呼び出し回数・トークン・費用を出す
 
@@ -81,7 +81,7 @@ SyncDb().run()
 .venv/bin/python -c "
 from ai.claude_code.story_writer import write_story
 write_story(story_id=1, episodes_to_write=1)
-write_story(story_id=1, episode_id=40)     # 種だけ入っている話(id=40)を埋める
+write_story(story_id=1, plot_id=40)     # 種だけ入っている話(id=40)を埋める
 "
 ```
 
@@ -91,12 +91,12 @@ write_story(story_id=1, episode_id=40)     # 種だけ入っている話(id=40)�
 覚え書きは `story_summary` テーブル(md には出さない)に一話ずつ残し、本文が変わっていなければ作り直さない。
 概要が作れなかった話は本文のまま渡す。
 
-- 書く話は `episode_id` で指す。省くと**本文の入っている最後の話の次**(`start` の順)を書く。
+- 書く話は `plot_id` で指す。省くと**本文の入っている最後の話の次**(`start` の順)を書く。
   その位置に種だけの話が無ければ、`start` の無い新しい話として末尾に足す。
   種(`key`)だけ入れてある先の話は「まだ書かれていない」扱いなので、
   先まで種を並べてある作品でも止まらない
 - その話に種があればプロンプトへ載せ、視点・場所・種はそのままに、題と本文だけを上書きする
 - 止めるのは、**その話より前に**「本文はあるのに `synced` が下りている話」がある場合だけ
-- 書いた話は `synced=True` で確定する。本文は話の `episode_text` に入れる
+- 書いた話は `synced=True` で確定する。本文は話の `episode` に入れる
 - 本文の長さ・場面の切り方・文体は `ai/instructions/style.py`
   (`EPISODE_TARGET_LETTERS` / `EPISODE_STYLE_BASE`)

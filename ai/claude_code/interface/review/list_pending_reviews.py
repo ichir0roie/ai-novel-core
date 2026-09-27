@@ -15,5 +15,5 @@ from ai.claude_code.interface.review import _items
 class ListPendingReviews(SessionEntrypoint):
     def execute(self, session) -> list[dict]:
         return [*_items.candidate_items(session),
-                *_items.unsynced_episode_items(session),
+                *_items.unsynced_plot_items(session),
                 *_items.todo_items(session)]

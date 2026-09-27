@@ -70,18 +70,18 @@ def character_sheet(session: Session, character_id: int, *, until=None,
 
 
 def story_digest(session: Session, story: Story) -> dict:
-    episodes = session.scalars(common_query.story_episodes_select(story.id)).all()
+    plots = session.scalars(common_query.story_plots_select(story.id)).all()
     digest = to_dict_with(
         story, relations={"world": "world_name", "place": "place_name"})
-    digest["episode_count"] = len(episodes)
-    digest["last_episode"] = _episode_head(episodes[-1]) if episodes else None
-    digest["unsynced"] = [_episode_head(episode) for episode in episodes if not episode.synced]
+    digest["plot_count"] = len(plots)
+    digest["last_plot"] = _plot_head(plots[-1]) if plots else None
+    digest["unsynced"] = [_plot_head(plot) for plot in plots if not plot.synced]
     return digest
 
 
-def _episode_head(episode) -> dict:
-    return {"id": episode.id, "start": None if episode.start is None else str(episode.start),
-            "title": episode.title}
+def _plot_head(plot) -> dict:
+    return {"id": plot.id, "start": None if plot.start is None else str(plot.start),
+            "title": plot.title}
 
 
 def stories(session: Session) -> list[dict]:
@@ -89,30 +89,30 @@ def stories(session: Session) -> list[dict]:
     return [story_digest(session, story) for story in rows]
 
 
-def episode_row(episode, *, text: bool = True) -> dict:
+def plot_row(plot, *, text: bool = True) -> dict:
     """話の枠の列に、本文(`text`)と字数(`letters`)を足す。"""
-    data = to_dict_with(episode)
-    data["letters"] = episode.episode_text.letters if episode.episode_text is not None else 0
+    data = to_dict_with(plot)
+    data["letters"] = plot.episode.letters if plot.episode is not None else 0
     if text:
-        data["text"] = episode.body
+        data["text"] = plot.body
     return data
 
 
-def episodes(session: Session, story_id: int, *, count: int = 10, before=None,
+def plots(session: Session, story_id: int, *, count: int = 10, before=None,
              text: bool = True) -> list[dict]:
     common_query._get(session, Story, story_id, "story_id")
     rows = session.scalars(
-        common_query.episodes_select(story_id, count=count, before=before)).all()
-    return [episode_row(episode, text=text) for episode in reversed(rows)]
+        common_query.plots_select(story_id, count=count, before=before)).all()
+    return [plot_row(plot, text=text) for plot in reversed(rows)]
 
 
-def unsynced_episodes(session: Session, story_id: int | None = None) -> list[dict]:
-    rows = session.scalars(common_query.unsynced_episodes_select(story_id)).all()
-    return [{"id": episode.id, "story_id": episode.story_id,
-             "story_name": None if episode.story is None else episode.story.name,
-             "start": None if episode.start is None else str(episode.start),
-             "title": episode.title}
-            for episode in rows]
+def unsynced_plots(session: Session, story_id: int | None = None) -> list[dict]:
+    rows = session.scalars(common_query.unsynced_plots_select(story_id)).all()
+    return [{"id": plot.id, "story_id": plot.story_id,
+             "story_name": None if plot.story is None else plot.story.name,
+             "start": None if plot.start is None else str(plot.start),
+             "title": plot.title}
+            for plot in rows]
 
 
 def brief(session: Session, place_id: int, when=None, *, reach: int = 60,

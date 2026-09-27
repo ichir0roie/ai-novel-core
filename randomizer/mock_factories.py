@@ -8,7 +8,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from db.schema import (
     CHARACTER_KIND_PERSON,
-    Character, CharacterParameter, CharacterPlace, Episode, Event, EventCharacter,
+    Character, CharacterParameter, CharacterPlace, Plot, Event, EventCharacter,
     Idea, Location, Story,
 )
 from db.stamp import Stamp
@@ -224,9 +224,9 @@ class StoryFactory(_ModelFactory):
     end = _end_after_start()
 
 
-class EpisodeFactory(_ModelFactory):
+class PlotFactory(_ModelFactory):
     class Meta:
-        model = Episode
+        model = Plot
 
     story_id = _pool(Story, "StoryFactory")
     number = factory.Sequence(lambda n: n + 1)
@@ -249,5 +249,5 @@ ALL_FACTORIES = (
     CharacterPlaceFactory,
     IdeaFactory,
     StoryFactory,
-    EpisodeFactory,
+    PlotFactory,
 )

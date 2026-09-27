@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
-from db.schema import Episode, EpisodeSummary, Session, summary_source_hash
+from db.schema import Plot, EpisodeSummary, Session, summary_source_hash
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -28,9 +28,11 @@ _SCHEMA = {
 }
 
 
-def summarize(session: Session, episode: Episode, ai: AIClient) -> dict | None:
-    text = episode.body.strip()
-    if not text:
+def summarize(session: Session, plot: Plot, ai: AIClient) -> dict | None:
+    """プロットに付いた本文(`Episode`)を要約する。覚え書きは本文の行に付ける。"""
+    episode = plot.episode
+    text = plot.body.strip()
+    if episode is None or not text:
         return None
     digest = summary_source_hash(text)
     row = session.scalars(
@@ -38,7 +40,7 @@ def summarize(session: Session, episode: Episode, ai: AIClient) -> dict | None:
     if row is not None and row.source_hash == digest:
         return {"summary": row.summary, "style": row.style}
 
-    source = {"id": episode.id, "title": episode.title, "text": text}
+    source = {"id": plot.id, "title": plot.title, "text": text}
     decided = ai.try_generate_json(
         f"話: {json.dumps(source, ensure_ascii=False)}\nこの話の概要と文体を覚え書きにしてください。",
         _SCHEMA, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
@@ -46,7 +48,7 @@ def summarize(session: Session, episode: Episode, ai: AIClient) -> dict | None:
     if not all(note.values()):
         return None
     if row is None:
-        row = EpisodeSummary(story_id=episode.story_id, episode_id=episode.id)
+        row = EpisodeSummary(story_id=plot.story_id, episode_id=episode.id)
         session.add(row)
     row.source_hash = digest
     row.summary = note["summary"]
