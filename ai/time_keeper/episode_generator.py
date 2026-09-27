@@ -20,7 +20,7 @@ from ai.time_keeper._ai import AIClient
 from ai.time_keeper._format import format_time
 from ai.time_keeper.character_event_generator import _sheet
 from data_access_logic.query import common_query
-from db.schema import Character, Episode, Event, Location, Session, Stamp, Story
+from db.schema import Character, ConfirmStatus, Episode, Event, Location, Session, Stamp, Story
 
 def _system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> str:
     return f"""\
@@ -64,11 +64,16 @@ def _place_row(place: Location | None) -> dict | None:
 
 
 def characters(session: Session, character_ids: list[int]) -> list[Character]:
+    """話の登場人物として使えるのは、ユーザが確かめた(`confirmed=承認`)人物・対象だけ。"""
     characters = []
     for character_id in dict.fromkeys(int(i) for i in character_ids):
         character = session.get(Character, character_id)
         if character is None:
             raise ValueError(f"人物 id={character_id} が見つからない")
+        if character.confirmed != ConfirmStatus.APPROVED:
+            raise ValueError(
+                f"人物 id={character_id}({character.name})はまだ確かめていない"
+                f"(confirmed={character.confirmed})。GUI のレビュー画面で確かめてから話に使う")
         characters.append(character)
     return characters
 
@@ -122,17 +127,22 @@ def _event_rows(session: Session, events: list[Event], ai: AIClient) -> list[dic
 
 
 def _place_events(session: Session, place_id: int | None, time: Stamp) -> list[Event]:
+    """話に使うのは、ユーザが確かめた(`confirmed=承認`)出来事だけ。"""
     if place_id is None:
         return []
-    return list(reversed(session.scalars(common_query.events_of_place_select(
-        place_id, until=time, limit=constants.EPISODE_PLACE_EVENT_LIMIT)).all()))
+    query = common_query.events_of_place_select(
+        place_id, until=time, limit=constants.EPISODE_PLACE_EVENT_LIMIT
+    ).where(Event.confirmed == ConfirmStatus.APPROVED)
+    return list(reversed(session.scalars(query).all()))
 
 
 def _cast(session: Session, characters: list[Character], time: Stamp, ai: AIClient) -> list[dict]:
     rows = []
     for character in characters:
-        recent = session.scalars(common_query.events_of_character_select(
-            character.id, until=time, limit=constants.EPISODE_CHARACTER_EVENT_LIMIT)).all()
+        recent_query = common_query.events_of_character_select(
+            character.id, until=time, limit=constants.EPISODE_CHARACTER_EVENT_LIMIT
+        ).where(Event.confirmed == ConfirmStatus.APPROVED)
+        recent = session.scalars(recent_query).all()
         rows.append({
             **_sheet(character, time),
             "relations": progression._relations(session, character, time),

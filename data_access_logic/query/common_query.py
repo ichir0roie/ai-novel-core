@@ -267,8 +267,11 @@ def character_events_overlapping_select(character_id: int, time: Stamp) -> Selec
 
 
 def resident_character_ids_select(place_ids, until: Stamp) -> Select:
+    """話・断面に出す顔ぶれなので、ユーザが確かめた(`confirmed=承認`)人物・対象だけに絞る。"""
     return (select(CharacterPlace.character_id).distinct()
-            .where(CharacterPlace.location_id.in_(list(place_ids)), *_alive(CharacterPlace, until)))
+            .join(Character, Character.id == CharacterPlace.character_id)
+            .where(CharacterPlace.location_id.in_(list(place_ids)), *_alive(CharacterPlace, until),
+                   Character.confirmed == ConfirmStatus.APPROVED))
 
 
 def character_select(character_id: int) -> Select:

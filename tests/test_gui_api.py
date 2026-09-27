@@ -36,6 +36,7 @@ def test_tables_meta_comes_from_schema(client, session):
     assert list(tables) == ["story", "episode", "character", "character_relation", "event", "location",
                             "idea", "meme", "oracle"]
     assert tables["idea"]["count"] == 1 and tables["idea"]["reviewable"] is True
+    assert tables["character"]["reviewable"] is True and tables["event"]["reviewable"] is True
     columns = {column["key"]: column for column in tables["idea"]["columns"]}
     assert columns["confirmed"]["type"] == "confirm" and columns["confirmed"]["choices"] == ["未確認", "承認", "非承認"]
     assert columns["location_id"]["references"] == "location"
@@ -232,6 +233,20 @@ def test_review_flow_approves_and_rejects_in_order(client, session):
     assert client.get("/api/review/meme/next").json()["record"] is None
     assert client.post(f"/api/review/meme/{meme_id}", json={"decision": "変"}).status_code == 422
     assert client.get("/api/review/story/next").status_code == 404
+
+
+def test_review_flow_covers_character_and_event(client, session):
+    session.add(Character(name="未確認の人物", text="", confirmed=ConfirmStatus.PENDING))
+    session.commit()
+    character_id = session.query(Character).filter_by(name="未確認の人物").one().id
+
+    next_up = client.get("/api/review/character/next").json()
+    assert next_up["record"]["name"] == "未確認の人物"
+
+    decided = client.post(f"/api/review/character/{character_id}", json={"decision": "承認"})
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["record"]["confirmed"] == "承認"
+    assert client.get("/api/review/character/next").json()["record"] is None
 
 
 def test_maps_and_relations_are_served_as_json(client, session):

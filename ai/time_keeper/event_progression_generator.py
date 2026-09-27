@@ -23,7 +23,7 @@ from data_access_logic.query.base import (
     character_active_condition, location_active_condition,
 )
 from db.schema import (
-    Character, CharacterPlace, Event, EventCharacter,
+    Character, CharacterPlace, ConfirmStatus, Event, EventCharacter,
     Location, Session, Stamp,
 )
 from ai.time_keeper._ai import AIClient
@@ -490,6 +490,7 @@ event_text 内では番号ではなく名前で書く。
         location_id=place_id,
         start=time,
         end=end,
+        confirmed=ConfirmStatus.PENDING,
     )
     record.event_characters = [
         EventCharacter(character_id=cid) for cid in involved_character_ids

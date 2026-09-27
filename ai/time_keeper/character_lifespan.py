@@ -5,7 +5,7 @@ import random
 
 from ai.instructions.event_writing import EVENT_RECORD_INSTRUCTION
 from data_access_logic.query import common_query, world_createion_query
-from db.schema import CHARACTER_KIND_PERSON, Character, Event, EventCharacter, Session, Stamp
+from db.schema import CHARACTER_KIND_PERSON, Character, ConfirmStatus, Event, EventCharacter, Session, Stamp
 from ai.time_keeper._ai import AIClient
 from ai.time_keeper import constants
 from ai.time_keeper._format import format_time
@@ -70,6 +70,7 @@ def _kill(
         location_id=place_id,
         start=time,
         end=time,
+        confirmed=ConfirmStatus.PENDING,
     )
     record.event_characters = [EventCharacter(character_id=character.id)]
     session.add(record)

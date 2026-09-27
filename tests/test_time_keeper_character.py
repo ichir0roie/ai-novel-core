@@ -70,6 +70,12 @@ def test_generate_person_passes_personality_to_ai_and_keeps_it(session):
     assert {name: stored.parameters_at()[name] for name in PERSONALITY_COLUMNS} == levels
 
 
+def test_generated_character_is_unconfirmed(session):
+    place = _place(session)
+    record = _generate_one(session, place, Stamp(2100, 1, 1), random.Random(1), MockAIClient(seed=1), person=True)
+    assert record.confirmed == ConfirmStatus.PENDING
+
+
 def test_generate_non_person_has_no_personality_line(session):
     place = _place(session)
     ai = MockAIClient(seed=2)

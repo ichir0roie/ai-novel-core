@@ -525,7 +525,8 @@ def _generate_one(
     draft["name"] = named.get("name") or draft["name"]
     draft["text"] = fill_name_placeholder(draft["text"], draft["name"])
 
-    record = Character(**{key: value for key, value in draft.items() if key != "parameters"})
+    record = Character(**{key: value for key, value in draft.items() if key != "parameters"},
+                       confirmed=ConfirmStatus.PENDING)
     load_children(record, "parameters", draft["parameters"])
     record.start = birth
     record.end = death
