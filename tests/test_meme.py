@@ -94,6 +94,17 @@ def test_unseeded_records_are_the_ones_not_flagged(session):
     assert [row.id for row in rows] == [unseeded.id]
 
 
+def test_unconfirmed_memes_select_finds_only_the_unconfirmed(session):
+    confirmed = Meme(text="確かめた", category="信条", confirmed=True)
+    unconfirmed = Meme(text="未確認", category="信条")
+    session.add_all([confirmed, unconfirmed])
+    session.commit()
+
+    rows = session.scalars(meme_query.unconfirmed_memes_select()).all()
+
+    assert [row.id for row in rows] == [unconfirmed.id]
+
+
 def test_a_source_is_drawn_only_once_even_without_memes_or_after_edits(session):
     idea = _idea(session)
     meme.refresh(session, _NoMemes(seed=1))
@@ -157,6 +168,7 @@ def test_extracted_memes_keep_their_category(session):
 
     assert {m.text: (m.category, m.directory_path) for m in session.query(Meme)} == {
         "約束を守る": ("信条", "信条"), "空を目指す": ("欲求", "欲求")}
+    assert all(not m.confirmed for m in session.query(Meme))
 
 
 def test_a_meme_with_the_same_wording_is_dropped_without_asking(session):
@@ -226,7 +238,7 @@ def test_memes_without_a_category_are_classified(session):
 
 
 def _memes_in_every_category(session, count=3):
-    session.add_all([Meme(text=f"{category}{i}", category=category)
+    session.add_all([Meme(text=f"{category}{i}", category=category, confirmed=True)
                      for category in MEME_CATEGORIES for i in range(count)])
     session.commit()
 
@@ -249,13 +261,22 @@ def test_draw_takes_zero_to_two_per_category_with_a_position(session):
 
 
 def test_draw_never_takes_laws_and_skips_empty_categories(session):
-    session.add_all([Meme(text="世界の法則", category="理"), Meme(text="組織の論理", category="集団")])
+    session.add_all([Meme(text="世界の法則", category="理", confirmed=True),
+                      Meme(text="組織の論理", category="集団", confirmed=True)])
     session.commit()
     categories = {item["category"]
                   for seed in range(30)
                   for item in meme.draw(session, random.Random(seed), constants.MEME_NON_PERSON_CATEGORIES)}
     assert categories == {"集団"}
     assert "理" not in constants.MEME_PERSON_CATEGORIES + constants.MEME_NON_PERSON_CATEGORIES
+
+
+def test_draw_never_takes_unconfirmed_memes(session):
+    session.add(Meme(text="未確認の信条", category="信条", confirmed=False))
+    session.commit()
+
+    for seed in range(30):
+        assert meme.draw(session, random.Random(seed), constants.MEME_PERSON_CATEGORIES) == []
 
 
 def test_meme_section_lists_position_and_text():

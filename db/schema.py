@@ -322,6 +322,11 @@ class Meme(FactCheckMixin, MarkdownBase):
         String, nullable=True,
         comment=f"分類。{'/'.join(MEME_CATEGORIES)} のいずれか。空なら次の抽出で AI が振る",
         sort_order=200)
+    confirmed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="ユーザが確かめた考え方として使ってよいか。本文から自動で抜き出した直後は false で、"
+                "人物へ引く・書き込む対象に出ない。週次レビューなどで確かめたら true にする",
+        sort_order=205)
 
 
 class Oracle(FactCheckMixin, MemeSeededMixin, MarkdownBase):

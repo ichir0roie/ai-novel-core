@@ -270,7 +270,7 @@ def draw(session: Session, rng: random.Random, categories: tuple[str, ...]) -> l
     drawn = []
     for category in categories:
         memes = list(session.scalars(
-            select(Meme).where(Meme.category == category).order_by(Meme.id)).all())
+            select(Meme).where(Meme.category == category, Meme.confirmed.is_(True)).order_by(Meme.id)).all())
         count = min(rng.randint(*constants.MEME_DRAW_RANGE), len(memes))
         for meme in rng.sample(memes, count):
             drawn.append({"position": rng.choice(list(constants.MEME_POSITIONS)),
