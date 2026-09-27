@@ -101,10 +101,13 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     readonly_columns = {"letters"} if spec.name == "episode" else set()
     # AI 生成前の種は、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
     side_columns = {"key"} if spec.name == "episode" else set()
+    # 話の本文は小説の地の文なので、マークダウンとして解釈せずただのテキストとして扱う
+    plain_text_columns = {"text"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
         meta = column_meta(spec.name, model, column, section=column.key in sections,
-                           readonly=column.key in readonly_columns)
+                           readonly=column.key in readonly_columns,
+                           markdown=column.key not in plain_text_columns)
         if column.key in side_columns:
             meta = meta.model_copy(update={"side": True})
         (long if meta.section else plain).append(meta)

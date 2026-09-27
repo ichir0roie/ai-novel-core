@@ -146,14 +146,15 @@ button.ghost { background: transparent; }
    狭い画面(960px 以下)では縦に積み、全体をひとつのスクロールにする */
 .record { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; flex: 1; min-height: 0; height: 100%; }
 .record.split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.record-side { min-width: 0; min-height: 0; overflow: auto; padding-right: 0.25rem; }
+.record-side { min-width: 0; min-height: 0; overflow: auto; padding-right: 0.25rem; display: flex; flex-direction: column; }
 .record-side .related { margin-bottom: 0; }
 .record-text { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 1rem; }
 .record-text .field.section { flex: 1; min-height: 0; }
 .record-text textarea.section, .record-text .markdown-preview { height: 100%; min-height: 6rem; resize: none; overflow: auto; }
-/* 左側に置く section 欄(話のキーテキストなど)。本文と違って高さを決め、中だけスクロールする */
+/* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使い、中だけスクロールする */
+.record-side .field.section.side { flex: 1; min-height: 0; }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
-  height: 12rem; min-height: 0; resize: vertical; overflow: auto;
+  height: 100%; min-height: 0; resize: none; overflow: auto;
 }
 @media (max-width: 960px) {
   .record.split { grid-template-columns: minmax(0, 1fr); }
@@ -161,6 +162,8 @@ button.ghost { background: transparent; }
   .record-side { overflow: visible; flex-shrink: 0; }
   .record-text { flex-shrink: 0; }
   .record-text textarea.section, .record-text .markdown-preview { height: auto; min-height: 20rem; resize: vertical; }
+  .record-side .field.section.side { flex: none; }
+  .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 14rem; resize: vertical; }
   .record-actions { position: static; }
 }
 
