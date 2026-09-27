@@ -11,7 +11,7 @@ from ai.claude_code.interface.randomizer.update_meme import UpdateMeme
 from ai.claude_code.interface.randomizer.update_oracle import UpdateOracle
 from ai.time_keeper import constants, meme
 from data_access_logic.query import meme_query
-from db.schema import MEME_CATEGORIES, Character, Event, Idea, Meme, Oracle
+from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
@@ -95,7 +95,7 @@ def test_unseeded_records_are_the_ones_not_flagged(session):
 
 
 def test_unconfirmed_memes_select_finds_only_the_unconfirmed(session):
-    confirmed = Meme(text="確かめた", category="信条", confirmed=True)
+    confirmed = Meme(text="確かめた", category="信条", confirmed=ConfirmStatus.APPROVED)
     unconfirmed = Meme(text="未確認", category="信条")
     session.add_all([confirmed, unconfirmed])
     session.commit()
@@ -168,7 +168,7 @@ def test_extracted_memes_keep_their_category(session):
 
     assert {m.text: (m.category, m.directory_path) for m in session.query(Meme)} == {
         "約束を守る": ("信条", "信条"), "空を目指す": ("欲求", "欲求")}
-    assert all(not m.confirmed for m in session.query(Meme))
+    assert all(m.confirmed == ConfirmStatus.PENDING for m in session.query(Meme))
 
 
 def test_a_meme_with_the_same_wording_is_dropped_without_asking(session):
@@ -238,7 +238,7 @@ def test_memes_without_a_category_are_classified(session):
 
 
 def _memes_in_every_category(session, count=3):
-    session.add_all([Meme(text=f"{category}{i}", category=category, confirmed=True)
+    session.add_all([Meme(text=f"{category}{i}", category=category, confirmed=ConfirmStatus.APPROVED)
                      for category in MEME_CATEGORIES for i in range(count)])
     session.commit()
 
@@ -261,8 +261,8 @@ def test_draw_takes_zero_to_two_per_category_with_a_position(session):
 
 
 def test_draw_never_takes_laws_and_skips_empty_categories(session):
-    session.add_all([Meme(text="世界の法則", category="理", confirmed=True),
-                      Meme(text="組織の論理", category="集団", confirmed=True)])
+    session.add_all([Meme(text="世界の法則", category="理", confirmed=ConfirmStatus.APPROVED),
+                      Meme(text="組織の論理", category="集団", confirmed=ConfirmStatus.APPROVED)])
     session.commit()
     categories = {item["category"]
                   for seed in range(30)
@@ -272,7 +272,7 @@ def test_draw_never_takes_laws_and_skips_empty_categories(session):
 
 
 def test_draw_never_takes_unconfirmed_memes(session):
-    session.add(Meme(text="未確認の信条", category="信条", confirmed=False))
+    session.add(Meme(text="未確認の信条", category="信条", confirmed=ConfirmStatus.PENDING))
     session.commit()
 
     for seed in range(30):

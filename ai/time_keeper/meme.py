@@ -11,7 +11,7 @@ from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
 from data_access_logic.query import meme_query
-from db.schema import MEME_CATEGORIES, Character, Event, Idea, Meme, Oracle, Session
+from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle, Session
 
 CATEGORY_DESCRIPTIONS = {
     "信条": "何を大事にし、どう振る舞うか。一人の行動の型",
@@ -270,7 +270,7 @@ def draw(session: Session, rng: random.Random, categories: tuple[str, ...]) -> l
     drawn = []
     for category in categories:
         memes = list(session.scalars(
-            select(Meme).where(Meme.category == category, Meme.confirmed.is_(True)).order_by(Meme.id)).all())
+            select(Meme).where(Meme.category == category, Meme.confirmed == ConfirmStatus.APPROVED).order_by(Meme.id)).all())
         count = min(rng.randint(*constants.MEME_DRAW_RANGE), len(memes))
         for meme in rng.sample(memes, count):
             drawn.append({"position": rng.choice(list(constants.MEME_POSITIONS)),

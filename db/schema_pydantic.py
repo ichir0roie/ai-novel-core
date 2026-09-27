@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import enum
 from decimal import Decimal
 from typing import Any
 
@@ -26,6 +27,8 @@ def _python_type(column_type) -> type:
 def _field_type(column) -> type:
     if isinstance(column.type, schema.StampType):
         py_type = Stamp
+    elif isinstance(column.type, schema.ConfirmStatusType):
+        py_type = schema.ConfirmStatus
     elif isinstance(column.type, schema.PolygonType):
         py_type = dict
     else:
@@ -73,6 +76,8 @@ def to_dict(row) -> dict:
 def _to_jsonable(value):
     if isinstance(value, Stamp):
         return str(value)
+    if isinstance(value, enum.Enum):
+        return value.value
     if isinstance(value, Decimal):
         return float(value)
     if isinstance(value, dict):

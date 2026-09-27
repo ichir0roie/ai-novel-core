@@ -13,7 +13,8 @@ from ai.claude_code import ai_client
 from ai.time_keeper import idea_kind
 from db.child_lists import ChildListError, load_children
 from db.schema import (
-    NOVEL_DB_PATH, RECORD_PREFIX, WORLDS_ROOT, Base, Idea, MarkdownBase, StampType, get_novel_session,
+    NOVEL_DB_PATH, RECORD_PREFIX, WORLDS_ROOT, Base, ConfirmStatusType, Idea, MarkdownBase, StampType,
+    get_novel_session, parse_confirm_status,
 )
 from db.stamp import Stamp
 from tool.markdown import export_db
@@ -64,7 +65,7 @@ def _parse(content: str, names: tuple[str, ...]) -> tuple[dict, dict[str, str]]:
 
 def _upsert(
     session, model: type, columns: set[str], stamp_columns: set[str],
-    path: str, directory_path: str | None, content: str, manifest: Manifest,
+    confirm_columns: set[str], path: str, directory_path: str | None, content: str, manifest: Manifest,
     parent_id: int | None = None,
 ) -> tuple[object, bool]:
     """md を一件 db へ入れる。db 側も前回の同期から変わっていたら、衝突として True を返す。
@@ -107,6 +108,9 @@ def _upsert(
     for key, value in data.items():
         if key in stamp_columns and value not in (None, ""):
             value = Stamp.parse(value)
+        elif key in confirm_columns and value not in (None, ""):
+            # 三段にする前の `true` / `false` の md も、そのまま読める
+            value = parse_confirm_status(value)
         values[key] = value
     values.update(sections)
 
@@ -349,8 +353,12 @@ def import_changes(session, root: str, manifest: Manifest) -> dict:
             column.key for column in model.__table__.columns
             if isinstance(column.type, StampType)
         }
-        row, conflict = _upsert(session, model, columns, stamp_columns, path, directory_path, content, manifest,
-                                _parent_id(model, path, manifest, imported))
+        confirm_columns = {
+            column.key for column in model.__table__.columns
+            if isinstance(column.type, ConfirmStatusType)
+        }
+        row, conflict = _upsert(session, model, columns, stamp_columns, confirm_columns, path, directory_path,
+                                content, manifest, _parent_id(model, path, manifest, imported))
         imported[path] = row.id
         if conflict:
             conflicts.append(path)

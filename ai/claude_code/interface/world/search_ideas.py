@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""アイデアをあいまい検索する、claude が呼ぶ入口。まだ確かめていない候補(`confirmed=false`)も返す。
+"""アイデアをあいまい検索する、claude が呼ぶ入口。まだ確かめていない候補(`confirmed=未確認`・非承認)も返す。
 
     SearchIdeas("霊纏").run()
     SearchIdeas([{"keyword": "遺伝子異常", "variants": ["遺伝病", "血の病", "遺伝"]}], place_id=58, time="1200").run()

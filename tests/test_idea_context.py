@@ -13,6 +13,7 @@ from ai.claude_code.interface.world.search_ideas import SearchIdeas
 from ai.time_keeper import character_event_generator, episode_summary, idea_context, idea_search, meme
 from ai.time_keeper import random_character_generator
 from db.schema import (
+    ConfirmStatus,
     Character, CharacterIdea, CharacterPlace, Plot, PlotIdea, Event, EventIdea, Idea, Location, Story,
 )
 from db.stamp import Stamp
@@ -129,13 +130,13 @@ def test_search_is_limited_to_ideas_in_effect_at_the_time(session):
 
 
 def test_search_excludes_unconfirmed_ideas_by_default(session):
-    _idea(session, "虫憑き", kind="呼称", confirmed=False)
+    _idea(session, "虫憑き", kind="呼称", confirmed=ConfirmStatus.PENDING)
 
     assert idea_search.search(session, ["虫憑き"]) == []
 
 
 def test_search_includes_unconfirmed_ideas_when_asked(session):
-    _idea(session, "虫憑き", kind="呼称", confirmed=False)
+    _idea(session, "虫憑き", kind="呼称", confirmed=ConfirmStatus.PENDING)
 
     hits = idea_search.search(session, ["虫憑き"], confirmed_only=False)
 
@@ -229,7 +230,7 @@ def test_unmatched_term_becomes_an_unconfirmed_idea_of_the_world(session, places
     assert context.hits == [] and context.related == []
     [candidate, undated] = context.candidates
     assert (candidate.name, candidate.kind, candidate.text) == ("宿り", "技術", "体に虫を宿す治療")
-    assert candidate.confirmed is False
+    assert candidate.confirmed == ConfirmStatus.PENDING
     assert candidate.location_id == places["world"].id
     assert candidate.start == Stamp(2090) and candidate.end == Stamp(2150)
     assert candidate.directory_path == "技術"
@@ -247,7 +248,7 @@ def test_general_words_do_not_become_candidates(session, places):
 
 
 def test_existing_candidate_is_reused(session, places):
-    old = _idea(session, "ヤドリ", kind="技術", confirmed=False, start=Stamp(2200))
+    old = _idea(session, "ヤドリ", kind="技術", confirmed=ConfirmStatus.PENDING, start=Stamp(2200))
 
     context = idea_context.resolve(session, ["やどり"], places["village"].id, "2100")
 
@@ -267,7 +268,7 @@ def test_names_of_characters_and_places_do_not_become_candidates(session, places
 
 
 def test_unconfirmed_ideas_are_left_out_of_the_brief_but_still_meme_extracted(session, places):
-    unconfirmed = _idea(session, "宿り", "体に虫を宿す治療", kind="技術", confirmed=False,
+    unconfirmed = _idea(session, "宿り", "体に虫を宿す治療", kind="技術", confirmed=ConfirmStatus.PENDING,
                         location_id=places["world"].id)
     confirmed = _idea(session, "魔力", "世界の力", location_id=places["world"].id)
     ai = MockAIClient(seed=1)
@@ -342,7 +343,7 @@ def test_merge_idea_moves_links_and_removes_the_source(session):
     character = Character(name="甲", text="")
     session.add(character)
     session.commit()
-    candidate = _idea(session, "むしつき", kind="呼称", confirmed=False)
+    candidate = _idea(session, "むしつき", kind="呼称", confirmed=ConfirmStatus.PENDING)
     target = _idea(session, "虫憑き")
     idea_context.link(session, character, [candidate, target])
     session.commit()
@@ -360,7 +361,7 @@ def test_delete_idea_removes_its_links(session):
     event = Event(name="出来事", text="", time=Stamp(2100))
     session.add(event)
     session.commit()
-    idea = _idea(session, "宿り", confirmed=False)
+    idea = _idea(session, "宿り", confirmed=ConfirmStatus.PENDING)
     idea_context.link(session, event, [idea])
     session.commit()
 
@@ -398,7 +399,7 @@ def test_daily_event_novel_is_told_the_ideas_and_the_event_is_linked(session, pl
     linked = {row.idea_id for row in session.query(EventIdea).filter_by(event_id=record.id)}
     candidate = session.query(Idea).filter_by(name="宿り").one()
     assert linked == {idea.id, candidate.id}
-    assert candidate.confirmed is False and candidate.start == Stamp(2050)
+    assert candidate.confirmed == ConfirmStatus.PENDING and candidate.start == Stamp(2050)
 
 
 def test_daily_event_without_matching_ideas_tells_no_setting(session, places):

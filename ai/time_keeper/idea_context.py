@@ -2,8 +2,8 @@
 """下書き(一段目)と清書(二段目)のあいだに挟む中間段。
 
 下書きから語を洗い出してアイデアと照らし、当たったアイデアとその上位・下位を清書に渡す。
-どのアイデアにも当たらなかった固有の語(`coined`)は、未確認(`confirmed=false`)のアイデアとして足す(候補)。
-候補は確かめる(`confirmed` を true にする)まで検索・清書には出ない。下書きが踏まえたアイデアと候補は、
+どのアイデアにも当たらなかった固有の語(`coined`)は、未確認(`confirmed=未確認`)のアイデアとして足す(候補)。
+候補は確かめる(`confirmed` を 承認 にする)まで検索・清書には出ない。退けた(非承認)語は候補にも足さない。下書きが踏まえたアイデアと候補は、
 中間テーブル(`event_idea` など)で清書したレコードに結ぶ。
 清書に渡すアイデアは本質のアイデアにそろえ、その場所・時代の作中での呼び名(`idea_alias`)で呼ばせる。
 """
@@ -18,6 +18,7 @@ from ai.time_keeper import constants, idea_alias, idea_search
 from ai.time_keeper._ai import AIClient
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import (
+    ConfirmStatus,
     IDEA_LINK_MODELS, Character, Idea, Location, Session,
 )
 from db.stamp import Stamp
@@ -51,13 +52,15 @@ def _is_proper_name(session: Session, word: str) -> bool:
 def _candidate_for(session: Session, term: dict, place_id: int | None) -> Idea | None:
     names = idea_search.spellings(term["keyword"])
     existing = session.scalars(
-        dictionary_query.unconfirmed_ideas_select().where(Idea.name.in_(names))).first()
+        select(Idea).where(Idea.confirmed != ConfirmStatus.APPROVED, Idea.name.in_(names))
+        .order_by(Idea.id)).first()
     if existing is not None:
-        return existing
+        # 退けた語(非承認)は設定ではないと決めたものなので、候補に戻さず結びもしない
+        return None if existing.confirmed == ConfirmStatus.REJECTED else existing
     if _is_proper_name(session, term["keyword"]):
         return None
     candidate = Idea(
-        name=term["keyword"], kind=term["kind"], confirmed=False, text=term["description"],
+        name=term["keyword"], kind=term["kind"], confirmed=ConfirmStatus.PENDING, text=term["description"],
         location_id=_world_id(session, place_id), start=term["start"], end=term["end"],
         directory_path=term["kind"].replace("/", "／") or None)
     session.add(candidate)

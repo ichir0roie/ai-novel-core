@@ -40,7 +40,7 @@ def candidate_items(session: Session) -> list[dict]:
                 f"出てきた所: {_appearances(session, idea)}",
                 f"md: {md_path(session, idea)}",
                 f"種別: {idea.kind}",
-                f"確定: md の confirmed を true にする / "
+                f"確定: GUI のレビュー画面で承認する(md の confirmed を 承認 にする) / 退ける: 非承認にする / "
                 f"統合: MergeIdea({idea.id}, 統合先の id) / 削除: DeleteIdea({idea.id})",
             ]),
         })
@@ -58,7 +58,7 @@ def unconfirmed_meme_items(session: Session) -> list[dict]:
                 meme.text,
                 f"分類: {meme.category or '(未分類)'}",
                 f"md: {md_path(session, meme)}",
-                f"確定: md の confirmed を true にする(確定するまで人物へ引く対象に出ない) / "
+                f"確定: GUI のレビュー画面で承認する(md の confirmed を 承認 にする。確定するまで人物へ引く対象に出ない) / 退ける: 非承認にする / "
                 f"直す: UpdateMeme({{'id': {meme.id}, ...}}) / 削除: DeleteMeme({meme.id})",
             ]),
         })

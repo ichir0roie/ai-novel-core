@@ -7,6 +7,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from db.schema import (
+    ConfirmStatus,
     Character, CharacterPlace, CharacterRelation, Plot,
     Event, EventCharacter, Idea, Location,
     Story,
@@ -329,7 +330,7 @@ def unsynced_plots_select(story_id: int | None = None) -> Select:
 
 def ideas_select(place_ids, time: Stamp | None = None) -> Select:
     return (select(Idea)
-            .where(dictionary_query.idea_in_scope(place_ids, time), Idea.confirmed.is_(True))
+            .where(dictionary_query.idea_in_scope(place_ids, time), Idea.confirmed == ConfirmStatus.APPROVED)
             .order_by(Idea.id))
 
 

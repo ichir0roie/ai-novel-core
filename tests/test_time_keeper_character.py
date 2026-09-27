@@ -6,6 +6,7 @@ from ai.time_keeper.random_character_generator import (
     history_section,
 )
 from db.schema import (
+    ConfirmStatus,
     MEME_CATEGORIES, PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterParameter, Idea, Location, Meme,
     Story,
 )
@@ -79,7 +80,7 @@ def test_generate_non_person_has_no_personality_line(session):
 
 
 def _one_meme_per_category(session, monkeypatch):
-    session.add_all([Meme(text=f"{category}のミーム", category=category, confirmed=True)
+    session.add_all([Meme(text=f"{category}のミーム", category=category, confirmed=ConfirmStatus.APPROVED)
                      for category in MEME_CATEGORIES])
     session.commit()
     monkeypatch.setattr(constants, "MEME_DRAW_RANGE", (1, 1))

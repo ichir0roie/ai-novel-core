@@ -68,6 +68,59 @@ class PolygonType(TypeDecorator):
         return parse_polygon(value)
 
 
+class ConfirmStatus(enum.StrEnum):
+    """アイデア・ミームの `confirmed` 列の値。ユーザが確かめたかを三段で持つ。
+
+    - 未確認: 本文から自動で足した直後の候補。検索・生成・人物へ引く対象に出ない
+    - 承認: ユーザが確かめた。使ってよい
+    - 非承認: ユーザが退けた。使わないが、同じ語をまた候補に足さないよう行は残す
+    """
+    PENDING = "未確認"
+    APPROVED = "承認"
+    REJECTED = "非承認"
+
+
+CONFIRM_STATUSES = tuple(status.value for status in ConfirmStatus)
+
+# 三段にする前の bool の書き方(md の `"confirmed": true` など)からの読み替え
+_CONFIRM_LEGACY = {True: ConfirmStatus.APPROVED, False: ConfirmStatus.PENDING,
+                   "true": ConfirmStatus.APPROVED, "false": ConfirmStatus.PENDING,
+                   "1": ConfirmStatus.APPROVED, "0": ConfirmStatus.PENDING}
+
+
+def parse_confirm_status(value) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, ConfirmStatus):
+        return value.value
+    if isinstance(value, bool) or (isinstance(value, int) and value in (0, 1)):
+        return _CONFIRM_LEGACY[bool(value)].value
+    text = str(value).strip()
+    if text in CONFIRM_STATUSES:
+        return text
+    legacy = _CONFIRM_LEGACY.get(text.lower())
+    if legacy is not None:
+        return legacy.value
+    raise ValueError(f"confirmed は {'/'.join(CONFIRM_STATUSES)} のいずれか: {value!r}")
+
+
+class ConfirmStatusType(TypeDecorator):
+    """`confirmed` 列。db には値の文字列(未確認/承認/非承認)で持ち、以前の bool も受け取る。"""
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return parse_confirm_status(value)
+
+    def process_result_value(self, value, dialect):
+        # マイグレーション前の db(1/0)を読んでも落ちないよう、読むときも読み替える
+        try:
+            return parse_confirm_status(value)
+        except ValueError:
+            return value
+
+
 LOCATION_COLUMNS = ("location_world", "location_planet",
                     "location_longitude", "location_latitude",
                     "location_altitude")
@@ -322,10 +375,11 @@ class Meme(FactCheckMixin, MarkdownBase):
         String, nullable=True,
         comment=f"分類。{'/'.join(MEME_CATEGORIES)} のいずれか。空なら次の抽出で AI が振る",
         sort_order=200)
-    confirmed: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
-        comment="ユーザが確かめた考え方として使ってよいか。本文から自動で抜き出した直後は false で、"
-                "人物へ引く・書き込む対象に出ない。週次レビューなどで確かめたら true にする",
+    confirmed: Mapped[str] = mapped_column(
+        ConfirmStatusType, default=ConfirmStatus.PENDING, nullable=False,
+        comment=f"ユーザが確かめた考え方として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
+                "本文から自動で抜き出した直後は 未確認 で、人物へ引く・書き込む対象に出ない。"
+                "レビューで確かめたら 承認、退けたら 非承認 にする",
         sort_order=205)
 
 
@@ -544,10 +598,11 @@ class Idea(FactCheckMixin, MemeSeededMixin, MarkdownBase):
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
-    confirmed: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False,
-        comment="確かめた設定として使ってよいか。本文から自動で足した未確認の候補は false で、"
-                "検索・生成には出ない。確かめたら true にする",
+    confirmed: Mapped[str] = mapped_column(
+        ConfirmStatusType, default=ConfirmStatus.APPROVED, nullable=False,
+        comment=f"確かめた設定として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
+                "本文から自動で足した候補は 未確認 で、検索・生成には出ない。"
+                "確かめたら 承認、設定ではないと退けたら 非承認 にする",
         sort_order=215)
 
     location_id: Mapped[int | None] = mapped_column(

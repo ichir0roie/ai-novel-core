@@ -1,0 +1,117 @@
+"use client";
+
+import { useState } from "react";
+import type { ColumnMeta } from "@/lib/api";
+import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
+
+type Props = {
+  column: ColumnMeta;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  compact?: boolean;
+  disabled?: boolean;
+};
+
+const STATUS_CLASS: Record<string, string> = { 承認: "approve", 非承認: "reject", 未確認: "pending" };
+
+function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
+  const [text, setText] = useState(value == null ? "" : JSON.stringify(value, null, 2));
+  const [error, setError] = useState<string | null>(null);
+  // 親が値を差し替えたら(読み直し・戻す)、表示中の文字列も追従させる
+  const [shown, setShown] = useState(value);
+  if (shown !== value) {
+    setShown(value);
+    setText(value == null ? "" : JSON.stringify(value, null, 2));
+  }
+  const commit = () => {
+    if (text.trim() === "") {
+      setError(null);
+      onChange(null);
+      return;
+    }
+    try {
+      onChange(JSON.parse(text));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <>
+      <textarea className="mono" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} disabled={disabled} />
+      {error && <span className="error">JSON として読めない: {error}</span>}
+    </>
+  );
+}
+
+export default function FieldInput({ column, value, onChange, compact, disabled }: Props) {
+  const readonly = disabled || column.readonly;
+  if (readonly) {
+    return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
+  }
+
+  if (column.type === "id_list" && column.references) {
+    return <ReferenceMultiSelect table={column.references} value={(value as number[] | null) ?? []} onChange={onChange} />;
+  }
+  if (column.references) {
+    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} />;
+  }
+  if (column.type === "confirm") {
+    return (
+      <div className="segment">
+        {(column.choices ?? []).map((choice) => (
+          <button key={choice} type="button" className={`${value === choice ? "on" : ""} ${STATUS_CLASS[choice] ?? ""}`} onClick={() => onChange(choice)}>
+            {choice}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (column.choices) {
+    return (
+      <select value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
+        <option value="">{column.nullable ? "(なし)" : "選ぶ"}</option>
+        {column.choices.map((choice) => (
+          <option key={choice} value={choice}>
+            {choice}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  if (column.type === "boolean") {
+    return (
+      <label className="check">
+        <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
+        {value ? "はい" : "いいえ"}
+      </label>
+    );
+  }
+  if (column.type === "integer" || column.type === "number") {
+    return (
+      <input
+        type="number"
+        step={column.type === "integer" ? 1 : "any"}
+        value={value == null ? "" : String(value)}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      />
+    );
+  }
+  if (column.type === "json") {
+    return <JsonInput value={value} onChange={onChange} />;
+  }
+  if (column.type === "stamp") {
+    return (
+      <input
+        type="text"
+        placeholder="11579/03/02 10:00:00"
+        value={(value as string | null) ?? ""}
+        onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+      />
+    );
+  }
+  if (column.section && !compact) {
+    return <textarea className="section" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value)} />;
+  }
+  return <input type="text" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" && column.nullable ? null : e.target.value)} />;
+}
