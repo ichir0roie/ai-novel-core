@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
 import { buildIdeaTree, descendantIds, type IdeaNode } from "@/lib/ideaTree";
+import { openInNewTab } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 type RowProps = {
@@ -22,6 +22,7 @@ function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd
   const classes = ["tree-idea-summary"];
   if (draggingId === node.id) classes.push("dragging");
   if (dropTarget === node.id && !isBlocked) classes.push("drop-target");
+  const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
 
   return (
     <li className="tree-place">
@@ -29,6 +30,10 @@ function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd
         <summary
           className={classes.join(" ")}
           draggable={draggingId === null}
+          onClick={(e) => {
+            e.preventDefault();
+            openInNewTab(`/tables/idea/${node.id}`);
+          }}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = "move";
             onDragStart(node.id);
@@ -48,10 +53,12 @@ function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
           {node.kind && <span className="tree-kind">{node.kind}</span>}
           {node.confirmed && node.confirmed !== "承認" && <span className="chip">{node.confirmed}</span>}
-          <Link href={`/tables/idea/${node.id}`} className="tree-link" onClick={(e) => e.stopPropagation()}>
-            {T.ideaTree.open}
-          </Link>
+          <span className="tree-meta">
+            {node.locationName && <span>{node.locationName}</span>}
+            {span && <span>{span}</span>}
+          </span>
         </summary>
+        {node.preview && <p className="tree-text">{node.preview}</p>}
         {node.children.length > 0 && (
           <ul className="tree">
             {node.children.map((child) => (
@@ -79,6 +86,7 @@ const ROOT = -1;
 /** アイデア一覧をツリーで表示し、見出し行のドラッグ&ドロップで `parent_idea_id` を差し替える。 */
 export default function IdeaTree() {
   const [ideas, setIdeas] = useState<Rec[] | null>(null);
+  const [locations, setLocations] = useState<Rec[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -86,8 +94,12 @@ export default function IdeaTree() {
 
   const load = useCallback(async () => {
     try {
-      const items = await listAllRecords("idea", { sort: "id", order: "asc" });
+      const [items, locs] = await Promise.all([
+        listAllRecords("idea", { sort: "id", order: "asc" }),
+        listAllRecords("location", { sort: "id", order: "asc" }),
+      ]);
       setIdeas(items);
+      setLocations(locs);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -100,7 +112,7 @@ export default function IdeaTree() {
     return () => window.removeEventListener("focus", load);
   }, [load]);
 
-  const nodes = useMemo(() => (ideas ? buildIdeaTree(ideas) : []), [ideas]);
+  const nodes = useMemo(() => (ideas ? buildIdeaTree(ideas, locations) : []), [ideas, locations]);
   const blocked = useMemo(() => (draggingId === null ? new Set<number>() : descendantIds(nodes, draggingId)), [nodes, draggingId]);
 
   const moveTo = useCallback(
