@@ -1,8 +1,5 @@
 # 作業指針
 
-## ローカル環境
-コード修正は worktree を切って行う。作業用の worktree 上で編集し、編集が完了したら元のブランチ(主に main)へ merge する。
-
 ## コマンド実行時のエラー対応
 
 コマンド実行でエラーが出たら、直後に握りつぶさず、原因を特定して対策してから作業を再開する。
@@ -42,13 +39,6 @@
 Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る(`gui/api/interface.py`)。
 `confirmed` は 未確認/承認/非承認 の三段(`db.schema.ConfirmStatus`)で、承認だけが検索・生成・
 人物へ引く対象になる。非承認は使わないが、同じ語をまた候補に足さないよう行は残す。
-
-# 「更新」の依頼があった場合
-- main ブランチへのコミットを頼まれたときは、深く調査しない
-- 変更内容を掘り下げて「なぜ」まで書いた丁寧なメッセージを作らず、diff・変更ファイルの表層だけを見て、端的なメッセージでそのままコミットする
-- プッシュ前に、最新の変更を取り込んで、コンフリクトがあれば解消してからpush
-- コミットは `core/`(このリポジトリ)と世界リポジトリ(my-novel-world)の両方に同じメッセージで行う。
-  手順は「環境構築」のとおり `core/` → 世界の順
 
 # 文字コード
 
@@ -101,30 +91,6 @@ git push
   schema.py とリビジョンの食い違いは `alembic check` を手で打って確かめる
 - プルリクを作る前に必ず、変更に対するテストケースを実装し、影響範囲のテストを回し、
   出たエラーを直してから作る
-
-# db への接続
-
-- コードから触るときは `from db.schema import get_env_session` で `Session` を開く。
-  `engine` も同じモジュールにある
-- 作業として db を読み書きするときは `ai/claude_code/interface/` の入口越しに、
-  既存の python コードを呼んで行う。
-- `ai/claude_code/interface/readme.md` を操作前のマニュアルとする。
-  操作の前にその「依頼内容 → 呼ぶコード」の対応表を引き、依頼に当たる入口を呼ぶ
-- 対応する入口が無ければ、readme の「作り方」に沿って入口を新しく作ってから行う。
-  足したら同じ作業のうちに readme の対応表へ行を足す(表に無い入口は次から見えない)
-- 読み取り(`select`)だけなら入口を通さなくてよい。python の `sqlite3` や SQLAlchemy で
-  好きに覗いてよい。
-  書き込み(`insert` `update` `delete`)は必ず入口越しに行う
-- 調査用の読み取り例(世界リポジトリのルートで `.venv/bin/python` を使う。`core/` は `.venv` の場所を持たない):
-
-```
-.venv/bin/python -c "
-import sqlite3
-from db.schema import NOVEL_DB_PATH
-c = sqlite3.connect(NOVEL_DB_PATH)
-print(c.execute('select count(*) from character').fetchone())
-"
-```
 
 # ユーザがデータを見る・直す窓口
 
