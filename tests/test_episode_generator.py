@@ -1,8 +1,8 @@
 import pytest
 
 from ai.claude_code import ai_client, claude_code_time_keeper
+from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.style import EPISODE_STYLE_INSTRUCTION
 from ai.time_keeper import plot_generator, episode_summary, episode_generator, main
 from db.schema import (
     Character, CharacterRelation, Plot, PlotIdea, Episode, Event, EventCharacter, Idea, Location, Story,
@@ -97,7 +97,7 @@ def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
 
     call = _writing_call(ai)
     assert call["system"] == episode_generator._SYSTEM_PROMPT
-    assert EPISODE_STYLE_INSTRUCTION in call["system"] and EVENT_AGE_INSTRUCTION in call["system"]
+    assert style.style_instruction("episode") in call["system"] and EVENT_AGE_INSTRUCTION in call["system"]
     prompt = call["prompt"]
     assert "港町の筋書き" in prompt
     assert "港町の説明" in prompt
@@ -105,6 +105,19 @@ def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
     assert '"name": "甲"' in prompt and '"age": 14' in prompt
     assert '"name": "乙"' in prompt
     assert "5000〜8000字" in prompt
+
+
+def test_style_extras_from_the_caller_reach_the_system_prompt(session, story):
+    """世界の舞台設定・既存の話から抽出した文体の癖は、コアに定数で持たず、呼び出し側から渡す。"""
+    first = _character(session, "甲")
+    ai = _Writer(seed=1)
+
+    plot_generator.generate(session, ai, story.id, KEY, WHEN, [first.id],
+                            shared_style_extra="西暦一万年のSF世界", style_extra="この世界の文体の癖")
+
+    system = _writing_call(ai)["system"]
+    assert "西暦一万年のSF世界" in system and "この世界の文体の癖" in system
+    assert system != episode_generator._SYSTEM_PROMPT
 
 
 def test_unknown_characters_are_left_out_of_the_prompt(session, story):

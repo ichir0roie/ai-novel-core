@@ -58,23 +58,36 @@ def time_process(
     event_progression_generator.generate_random(s, time, ai)
 
 
-def daily_event(ai: AIClient, character_id: int | None = None, age: int | None = None) -> int | None:
-    """ルーチンで起こした出来事は `CommitEvent` を通らないので、ミームもここで抜き出す(前の回の出来事が元になる)。"""
+def daily_event(
+    ai: AIClient, character_id: int | None = None, age: int | None = None, *,
+    shared_style_extra: str = "", style_extra: str = "",
+) -> int | None:
+    """ルーチンで起こした出来事は `CommitEvent` を通らないので、ミームもここで抜き出す(前の回の出来事が元になる)。
+
+    `shared_style_extra` / `style_extra` は、世界の舞台設定・既存の話から抽出した文体の癖のような、
+    世界ごとの好みを呼び出し側(親リポジトリ側)から渡す。
+    """
     with get_env_session() as s:
         meme.refresh(s, ai)
         event_seed.refresh(s, ai)
         event_seed.consolidate(s, ai)
-        record = character_event_generator.generate_next(s, ai, character_id=character_id, age=age)
+        record = character_event_generator.generate_next(
+            s, ai, character_id=character_id, age=age,
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None
 
 
-def place_event(ai: AIClient, place_id: int, time: Stamp | str, key: str) -> int | None:
+def place_event(
+    ai: AIClient, place_id: int, time: Stamp | str, key: str, *,
+    shared_style_extra: str = "", style_extra: str = "",
+) -> int | None:
     time = Stamp.parse(time)
     with get_env_session() as s:
         meme.refresh(s, ai)
         event_seed.refresh(s, ai)
         event_seed.consolidate(s, ai)
-        record = place_event_generator.generate_at(s, ai, place_id, time, key)
+        record = place_event_generator.generate_at(
+            s, ai, place_id, time, key, shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None
 
 
@@ -82,22 +95,26 @@ def plot(
     ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
     previous_plot_ids: list[int] | None = None, *, place_id: int | None = None,
     viewpoint: str | None = None, writer_options: dict | None = None, plot_id: int | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     with get_env_session() as s:
         record = plot_generator.generate(
             s, ai, story_id, key, time, character_ids, previous_plot_ids,
-            place_id=place_id, viewpoint=viewpoint, writer_options=writer_options, plot_id=plot_id)
+            place_id=place_id, viewpoint=viewpoint, writer_options=writer_options, plot_id=plot_id,
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None
 
 
 def episode(
     ai: AIClient, plot_id: int, character_ids: list[int], previous_plot_ids: list[int] | None = None,
     *, place_id: int | None = None, writer_options: dict | None = None,
+    shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     with get_env_session() as s:
         record = episode_generator.generate(
             s, ai, plot_id, character_ids, previous_plot_ids,
-            place_id=place_id, writer_options=writer_options)
+            place_id=place_id, writer_options=writer_options,
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None
 
 

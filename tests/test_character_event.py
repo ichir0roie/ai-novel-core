@@ -278,6 +278,21 @@ def test_text_is_rewritten_as_a_novel_of_the_decided_event(session):
     assert record.text == f"モックtext{len(ai.calls)}"
 
 
+def test_style_extras_from_the_caller_reach_the_novel_system_prompt(session):
+    """世界の舞台設定・既存の話から抽出した文体の癖は、コアに定数で持たず、呼び出し側から渡す。"""
+    place = _place(session)
+    character = _character(session, place)
+    _event(session, place, [character], Stamp(2100, 5, 1), Stamp(2100, 5, 10), "峠越え")
+    ai = MockAIClient(seed=1)
+
+    character_event_generator.generate_next(session, ai, random.Random(1),
+                                            shared_style_extra="西暦一万年のSF世界", style_extra="この世界の文体の癖")
+
+    novel = ai.calls[-1]
+    assert "西暦一万年のSF世界" in novel["system"] and "この世界の文体の癖" in novel["system"]
+    assert novel["system"] != character_event_generator._NOVEL_SYSTEM_PROMPT
+
+
 class _WritesNovelInOneLine(MockAIClient):
     def try_generate_json(self, prompt, schema, **kwargs):
         if schema is character_event_generator._NOVEL_SCHEMA:

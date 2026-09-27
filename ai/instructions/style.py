@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""土台(`*_BASE`)は手で書く。特徴(`*_EXTRACTED`)は既存の話(`Episode`)の本文から
-抽出して書き換える枠で、本文がまだ無いあいだは空。
+"""土台(`*_BASE`)はここに定数で置く、共通・対象ごとの固定の文体指示。
 
-対象ごとの土台と特徴は共通とは別に持っているので、あとから対象ごとに別の文面を用意できる。
+世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、世界ごとに違う
+「好み」は、ここには定数で持たない。`style_instruction()` の `shared_extra`(共通に効く)・
+`extra`(その対象だけに効く)として、呼び出し側(親リポジトリ側)から渡す。
+
+対象ごとの土台は共通とは別に持っているので、あとから対象ごとに別の文面を用意できる。
 """
 from __future__ import annotations
 
@@ -118,38 +121,23 @@ def layout_novel_text(text: str) -> str:
 @dataclass(frozen=True)
 class StyleInstruction:
     base: str = ""
-    extracted: str = ""
+    extra: str = ""
 
     @property
     def text(self) -> str:
-        return "\n".join(part.strip() for part in (self.base, self.extracted) if part.strip())
+        return "\n".join(part.strip() for part in (self.base, self.extra) if part.strip())
 
 
 # --- 共通(どの文にも効く文体) ---------------------------------------------
+# 世界の舞台設定や、既存の話から抽出した文体の癖は、世界ごとに違う「ユーザーの好み」なので
+# ここには置かない。呼び出し側(親リポジトリ)が style_instruction() の shared_extra / extra で渡す。
 
 SHARED_STYLE_BASE = """\
 語の選び方・文の運び方は、この世界の文章すべてで揃える。
 修飾を重ねない。抽象名詞で言い換えず、物と動作の名前で書く。
 同じ語・同じ言い回しを近い距離で繰り返さない。
 
-基本的な文体はライトノベルを参考にする。
-
-舞台は西暦一万年ごろの SF 世界。英語由来のカタカナ語(チーム・リーダーなど)は日常の語としてそのまま使う。
-古い日本語の言い回し(仲間の集まりを「一党」と呼ぶなど)は、古代の表現として、古い文献や古風な人物の口にだけ出す。
-「盗賊一党」のような悪党の集まりの呼び方は、そのまま使ってよい。
-
-"""
-
-# 既存の話の本文から抽出した特徴。本文が溜まるたびにここだけを書き換える。
-SHARED_STYLE_EXTRACTED = """\
-語は日常でそのまま通じるものを選び、硬い制度語・古い言い回しへ寄せない
-(「届け出る」より「報告する」、「体を持たない」より「実体を持たない」)。
-世界の仕掛けに掛かる語だけは、噛み砕いた言い換えへ逃げずにそのまま書く
-(「生きものの釣り合い」より「遺伝情報の均衡」)。
-一般的な表現には簡単な漢字を使う。
-"""
-
-SHARED_STYLE = StyleInstruction(base=SHARED_STYLE_BASE, extracted=SHARED_STYLE_EXTRACTED)
+基本的な文体はライトノベルを参考にする。"""
 
 
 # --- 対象ごと --------------------------------------------------------------
@@ -183,40 +171,7 @@ EPISODE_STYLE_BASE = f"""\
 {_scale_rule("一話", EPISODE_TARGET_LETTERS)}
 種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。"""
 
-EPISODE_STYLE_EXTRACTED = """\
-1〜4話(5千年の希望・裁定・翼は捨てて・ヴァレンツァの朝)の本文から抜き出した書き方。この先の話も同じ調子で続ける。
-括弧の例は直す向きや形を示すもので、言い回し・場面を本文へ流用しない。
-
-地の文:
-場面の頭の一文で、場所か時間を短く言い切ってから始める(「裁定室は天井が高い。」「三日後に通達が来た。」)。
-情景には、冷たさ・匂い・音のような体で分かることを一つ添え、あとは物と動作で書く。
-年数・日数・階・等級のような数は、ぼかさず具体的な数で書く(「四年」「地下七階」「銅の三」)。
-地の文の独白は、視点人物がその場で思った言葉のまま書く。比喩や警句・一般論へ言い換えず、好き・困ったといった感情を隠さない(「これがこんなに大きいものだと忘れている」より「こんなに大きかったっけ」)。
-報せを受けた衝撃は、内心の説明を重ねずに動作ひとつで書く(「二度読んだ」「三度目を読もうとして、やめた」より「握りしめた」)。
-人物が隠している物事は、一度だけ見せて、その場の誰にも説明させない。見た人物の手や目が止まるところまでで切る。
-
-セリフ:
-人物の言動で表せるところは、積極的にセリフにする。視点人物のひとりの場面でも、段取りや内心を地の文で説明せず、独り言として口に出させる(「報告書はまだ書いていない。どうせいつも誤魔化して書いているだけだし。」より「ふぅ、やっとついた…。報告書は、…あとでいいか。どうせいつも誤魔化しているだけだし。」)。
-詫び・戸惑いもセリフに出させ、地の文の説明へ回さない(「順序が逆になった」より「順序が逆になってしまった。すまない」)。
-セリフは話し言葉で書く。書き言葉の丁寧さへ寄せず、崩した言い方・呼びかけを使う(「ほんとうに」より「ほんとに」、「言ってください」より「おしえてよ」)。
-問いには「？」、強い感情には「！」、言い淀みには「…」を置き、句点や言い切りに含ませない。「？」「！」は全角で書く。
-一言ずつのセリフを何往復も続けない。一つのセリフに、相手への返事とその人物が言いたいことを一緒に持たせて、往復の数を減らす(「大きい」「二年は着られるの」「今年は？」「今年も着られるでしょう」より「母さま、これ大きいよ。手が出ない」「二年は着られるの。今年は、折ったぶんで大丈夫」)。
-行き先や事情を聞かれたら、一語で突き放さず、これからどうするかまで答えさせる(「家を探す」より「これから生きていくところ。まずは家を探しましょう」)。
-短い応酬を残すのは、同じ言葉を受けて返すところだけにする。そのままなぞらず、「？」と「。」で問いと答えの差を付ける(「翼も？」「翼も。」)。
-セリフで理屈を積み上げて説明しない。言いたいことを短く言い切らせ、相手には理屈ではなく感情で返させる。
-「AではなくBだ」の対句で決めない。整った言い換えより、話者がそう思っていることをそのまま言わせる(「規格の外じゃない。規格より前だ」より「規格なんて問題じゃない」)。
-設定や制度は、察させる言い方に寄せず、その場の人物が分かる言葉で言い切らせる(「この部屋の記録は、局の様式に無い」より「この部屋の会話は記録されない」)。
-
-口調:
-制度や事務の側に立つ人物の口調だけは硬いまま残し、人間の口調との差を広げる。
-硬い口調の人物も、身内の話になると一語だけ素の言い方が漏れる。漏れたことに本人が気づくところまで書く(裁定の席で娘に「自分の孫だけ贔屓しろと言うの？」と言ってから、「孫」と口にしたことに気づく)。
-事務の側の人物の決まり文句は、話をまたいで同じ言い方で繰り返す。あとの話で別の人物がそれを返すと効く(ピリムの「欄を埋める」→アウレアの「埋めるな」)。
-幼い子のセリフは、その年齢で使う短い形にする(「痛くなかった？」より「痛い？」)。
-
-題:
-題は詩的な体言止めへ寄せず、人物の言葉に近い言い回しにする(「堕ちる翼」より「翼は捨てて」)。"""
-
-# 話と同じ小説の形で書く出来事の本文(毎日のルーチン)。特徴は話のもの(EPISODE_STYLE_EXTRACTED)を使う。
+# 話と同じ小説の形で書く出来事の本文(毎日のルーチン)。文体の好み(extra)は呼び出し側から渡す。
 EVENT_NOVEL_STYLE_BASE = f"""\
 {NOVEL_STYLE_BASE}
 {_scale_rule("出来事一件", EVENT_NOVEL_TARGET_LETTERS)}"""
@@ -225,39 +180,32 @@ STORY_STYLE_BASE = """\
 作品の筋書きは読ませる文ではなく、後から段階を測るための文として書く。
 段階ごとに一〜二文で、誰と何を巡ってか分かる言い方にする。"""
 
-STORY_STYLE_EXTRACTED = ""
-
 EVENT_STYLE_BASE = """\
 出来事の記録は情景も語り口も持たせず、事実と関係だけで書く。
 一文に一件だけ入れ、起きた順に並べる。"""
-
-EVENT_STYLE_EXTRACTED = ""
 
 IDEA_STYLE_BASE = """\
 アイデアの説明は、それを知らない読み手が一読で掴める短さにする。
 物・制度・技のどれなのかを先に置き、来歴はその後に一文で足す。"""
 
-IDEA_STYLE_EXTRACTED = ""
-
-STYLE_INSTRUCTIONS: dict[str, StyleInstruction] = {
-    "episode": StyleInstruction(base=EPISODE_STYLE_BASE, extracted=EPISODE_STYLE_EXTRACTED),
-    "event_novel": StyleInstruction(base=EVENT_NOVEL_STYLE_BASE, extracted=EPISODE_STYLE_EXTRACTED),
-    "story": StyleInstruction(base=STORY_STYLE_BASE, extracted=STORY_STYLE_EXTRACTED),
-    "event": StyleInstruction(base=EVENT_STYLE_BASE, extracted=EVENT_STYLE_EXTRACTED),
-    "idea": StyleInstruction(base=IDEA_STYLE_BASE, extracted=IDEA_STYLE_EXTRACTED),
+STYLE_BASES: dict[str, str] = {
+    "episode": EPISODE_STYLE_BASE,
+    "event_novel": EVENT_NOVEL_STYLE_BASE,
+    "story": STORY_STYLE_BASE,
+    "event": EVENT_STYLE_BASE,
+    "idea": IDEA_STYLE_BASE,
 }
 
 
-def style_instruction(target: str) -> str:
-    if target not in STYLE_INSTRUCTIONS:
+def style_instruction(target: str, *, shared_extra: str = "", extra: str = "") -> str:
+    """文体の指示を組み立てる。
+
+    ここに定数で置くのは、共通(SHARED_STYLE_BASE)と対象ごと(STYLE_BASES)の固定の文面だけ。
+    世界の舞台設定や、既存の話から抽出した文体の癖のような、世界ごとに違う「好み」は定数に持たず、
+    呼び出し側(親リポジトリ)が `shared_extra`(共通に効く)・`extra`(この対象だけに効く)として渡す。
+    """
+    if target not in STYLE_BASES:
         raise ValueError(f"文体の指示が無い対象: {target}")
-    return "\n".join(
-        text for text in (SHARED_STYLE.text, STYLE_INSTRUCTIONS[target].text) if text)
-
-
-SHARED_STYLE_INSTRUCTION = SHARED_STYLE.text
-EPISODE_STYLE_INSTRUCTION = style_instruction("episode")
-EVENT_NOVEL_STYLE_INSTRUCTION = style_instruction("event_novel")
-STORY_STYLE_INSTRUCTION = style_instruction("story")
-EVENT_STYLE_INSTRUCTION = style_instruction("event")
-IDEA_STYLE_INSTRUCTION = style_instruction("idea")
+    shared = StyleInstruction(base=SHARED_STYLE_BASE, extra=shared_extra).text
+    own = StyleInstruction(base=STYLE_BASES[target], extra=extra).text
+    return "\n".join(text for text in (shared, own) if text)

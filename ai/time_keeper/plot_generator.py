@@ -16,13 +16,14 @@ def generate(
     session: Session, ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None,
     character_ids: list[int], previous_plot_ids: list[int] | None = None, *,
     place_id: int | None = None, viewpoint: str | None = None, writer_options: dict | None = None,
-    plot_id: int | None = None,
+    plot_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Plot | None:
     """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
 
     `place_id` を省くと作品の立つ場所を材料に使い、話の `place` は空のまま残す。
     `plot_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・題・場所は、省けば枠のものを使う。
     本文が得られなければ話を足さず(枠も変えず)に None を返す。
+    `shared_style_extra` / `style_extra` は `episode_generator.write` に渡す(世界ごとの文体の好み)。
     """
     slot = episode_generator.frame(session, plot_id, story_id) if plot_id is not None else None
     key = (key or (slot.key if slot else "") or "").strip()
@@ -42,7 +43,8 @@ def generate(
 
     written = episode_generator.write(
         session, ai, story, key, time, characters, previous_plot_ids, place=place, viewpoint=viewpoint,
-        exclude_plot_id=slot.id if slot else None, writer_options=writer_options)
+        exclude_plot_id=slot.id if slot else None, writer_options=writer_options,
+        shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
         print(f"[time_keepr/episode] {story.name}: 本文が得られなかったので話を足さない")
         return None

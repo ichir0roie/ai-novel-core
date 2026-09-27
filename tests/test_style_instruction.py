@@ -3,12 +3,12 @@ import pytest
 from ai.instructions import style
 
 
-def test_text_joins_base_and_extracted():
-    instruction = style.StyleInstruction(base="土台", extracted="特徴")
-    assert instruction.text == "土台\n特徴"
+def test_text_joins_base_and_extra():
+    instruction = style.StyleInstruction(base="土台", extra="好み")
+    assert instruction.text == "土台\n好み"
 
 
-def test_text_is_base_only_while_extracted_is_empty():
+def test_text_is_base_only_while_extra_is_empty():
     assert style.StyleInstruction(base="土台").text == "土台"
 
 
@@ -20,7 +20,27 @@ def test_text_is_empty_without_both():
 def test_style_instruction_has_shared_and_own_base(target):
     text = style.style_instruction(target)
     assert style.SHARED_STYLE_BASE.strip() in text
-    assert style.STYLE_INSTRUCTIONS[target].base in text
+    assert style.STYLE_BASES[target] in text
+
+
+@pytest.mark.parametrize("target", ["episode", "event_novel", "story", "event", "idea"])
+def test_style_instruction_appends_the_shared_extra_from_the_caller(target):
+    """世界の舞台設定・既存の話から抽出した文体の癖のような世界ごとの好みは、定数ではなく呼び出し側から渡す。"""
+    text = style.style_instruction(target, shared_extra="この世界だけの舞台設定")
+    assert "この世界だけの舞台設定" in text
+
+
+def test_style_instruction_appends_the_target_extra_from_the_caller():
+    text = style.style_instruction("episode", extra="この話だけの文体の癖")
+    assert "この話だけの文体の癖" in text
+    assert "この話だけの文体の癖" not in style.style_instruction("event")
+
+
+def test_style_instruction_needs_no_extra_to_work_standalone():
+    """コアだけでも(親リポジトリ側の値を渡さなくても)成り立つ既定値であること。"""
+    text = style.style_instruction("episode")
+    assert style.SHARED_STYLE_BASE.strip() in text
+    assert style.EPISODE_STYLE_BASE in text
 
 
 def test_style_instruction_rejects_unknown_target():
@@ -96,7 +116,7 @@ def test_layout_is_stable_on_laid_out_text():
 
 def test_event_novel_is_a_third_of_an_episode():
     assert style.EVENT_NOVEL_TARGET_LETTERS == (1700, 2700)
-    text = style.EVENT_NOVEL_STYLE_INSTRUCTION
+    text = style.style_instruction("event_novel")
     assert "出来事一件は1700〜2700字" in text
     assert "一話は5000〜8000字" not in text
     assert "種(key)" not in text
@@ -104,8 +124,7 @@ def test_event_novel_is_a_third_of_an_episode():
 
 def test_event_novel_shares_the_episode_novel_style():
     assert style.NOVEL_STYLE_BASE in style.EPISODE_STYLE_BASE
-    assert style.NOVEL_STYLE_BASE in style.EVENT_NOVEL_STYLE_INSTRUCTION
-    assert style.EPISODE_STYLE_EXTRACTED in style.EVENT_NOVEL_STYLE_INSTRUCTION
+    assert style.NOVEL_STYLE_BASE in style.style_instruction("event_novel")
 
 
 def test_episode_style_keeps_its_length_rule():
@@ -140,28 +159,4 @@ def test_novel_style_closes_by_whether_the_content_is_over(target):
 def test_episode_prompt_embeds_the_episode_style():
     from ai.claude_code import story_writer
 
-    assert style.EPISODE_STYLE_INSTRUCTION in story_writer._SYSTEM_PROMPT
-
-
-def test_episode_style_carries_the_extracted_habits():
-    extracted = style.EPISODE_STYLE_EXTRACTED
-    assert "話し言葉" in extracted
-    assert "「？」" in extracted and "「！」" in extracted and "「…」" in extracted
-    assert extracted in style.EPISODE_STYLE_INSTRUCTION
-
-
-def test_shared_extracted_leaves_the_umeru_wording_alone():
-    """「欄を埋める」はピリムの癖として残すので、共通の言い換えからは外す。"""
-    assert "欄を埋める" not in style.SHARED_STYLE_EXTRACTED
-    assert "欄を埋める" in style.EPISODE_STYLE_EXTRACTED
-
-
-def test_shared_extracted_reaches_every_target():
-    for target in style.STYLE_INSTRUCTIONS:
-        assert style.SHARED_STYLE_EXTRACTED in style.style_instruction(target)
-
-
-def test_shared_extracted_prefers_everyday_words():
-    extracted = style.SHARED_STYLE_EXTRACTED
-    assert "「体を持たない」より「実体を持たない」" in extracted
-    assert "「生きものの釣り合い」より「遺伝情報の均衡」" in extracted
+    assert style.style_instruction("episode") in story_writer._SYSTEM_PROMPT

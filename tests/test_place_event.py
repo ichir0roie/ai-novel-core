@@ -173,6 +173,20 @@ def test_novel_is_told_each_ones_previous_event_and_the_later_ones(session):
     assert record.text == f"モックtext{len(ai.calls)}"
 
 
+def test_style_extras_from_the_caller_reach_the_novel_system_prompt(session):
+    """世界の舞台設定・既存の話から抽出した文体の癖は、コアに定数で持たず、呼び出し側から渡す。"""
+    place = _place(session)
+    _character(session, place, "甲")
+    ai = MockAIClient(seed=1)
+
+    place_event_generator.generate_at(session, ai, place.id, WHEN, KEY, random.Random(1),
+                                      shared_style_extra="西暦一万年のSF世界", style_extra="この世界の文体の癖")
+
+    novel = ai.calls[-1]
+    assert "西暦一万年のSF世界" in novel["system"] and "この世界の文体の癖" in novel["system"]
+    assert novel["system"] != place_event_generator._NOVEL_SYSTEM_PROMPT
+
+
 def test_place_event_takes_the_time_as_text_and_returns_the_id(session):
     place = _place(session)
     character = _character(session, place, "甲")
