@@ -232,8 +232,6 @@ class EpisodeFactory(_ModelFactory):
     number = factory.Sequence(lambda n: n + 1)
     title = factory.Faker("sentence", nb_words=4, locale=_LOCALE)
     key = factory.Faker("text", max_nb_chars=200, locale=_LOCALE)
-    text = factory.Faker("text", max_nb_chars=1000, locale=_LOCALE)
-    letters = factory.LazyAttribute(lambda o: len(o.text))
     synced = factory.Faker("pybool")
     start = _optional_stamp()
     end = _end_after_start()

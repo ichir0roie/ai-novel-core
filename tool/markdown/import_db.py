@@ -7,12 +7,14 @@ import os
 import re
 import shutil
 
-from sqlalchemy import delete, select
+from sqlalchemy import String, delete, select
 
 from ai.claude_code import ai_client
 from ai.time_keeper import idea_kind
 from db.child_lists import ChildListError, load_children
-from db.schema import NOVEL_DB_PATH, WORLDS_ROOT, Base, Idea, MarkdownBase, StampType, get_novel_session
+from db.schema import (
+    NOVEL_DB_PATH, RECORD_PREFIX, WORLDS_ROOT, Base, Idea, MarkdownBase, StampType, get_novel_session,
+)
 from db.stamp import Stamp
 from tool.markdown import export_db
 from tool.markdown.sync_manifest import Manifest, digest, locked, read_text
@@ -44,7 +46,7 @@ def _parse(content: str, names: tuple[str, ...]) -> tuple[dict, dict[str, str]]:
     sections = {name: "" for name in names}
     data_match = _DATA_RE.search(content)
     if not data_match:
-        sections["text"] = content.rstrip("\n")
+        sections[names[0]] = content.rstrip("\n")
         return {}, sections
     data = json.loads(data_match.group(1))
 
@@ -63,12 +65,22 @@ def _parse(content: str, names: tuple[str, ...]) -> tuple[dict, dict[str, str]]:
 def _upsert(
     session, model: type, columns: set[str], stamp_columns: set[str],
     path: str, directory_path: str | None, content: str, manifest: Manifest,
+    parent_id: int | None = None,
 ) -> tuple[object, bool]:
-    """md を一件 db へ入れる。db 側も前回の同期から変わっていたら、衝突として True を返す。"""
-    stem = os.path.basename(path)[: -len(".md")]
+    """md を一件 db へ入れる。db 側も前回の同期から変わっていたら、衝突として True を返す。
+
+    `parent_id` は親の md の下(本文のファイルなら隣)に置くモデルの、置き場所から決まる親の id。`# data` より勝つ。
+    """
+    stem = os.path.splitext(os.path.basename(path))[0]
+    if model.MARKDOWN_OWN_DIRECTORY and _is_record(path):
+        # 名前はディレクトリが持つ
+        stem = os.path.basename(os.path.dirname(path))
     row_id, stem_values = model.parse_markdown_stem(stem)
 
-    data, sections = _parse(content, model.TEXT_SECTIONS)
+    if model.BODY_FILE_EXTENSION:
+        data, sections = {}, {"text": content.rstrip("\n")}
+    else:
+        data, sections = _parse(content, model.TEXT_SECTIONS)
     data_id = data.pop("id", None)
     if row_id is None and data_id is not None:
         row_id = int(data_id)
@@ -76,6 +88,16 @@ def _upsert(
     children = {name: data.pop(name) for name in model.CHILD_LISTS if name in data}
     # `# data` にある欄はそれが勝つ。名前は `# data` に無い欄(filename や、手書き md の start/end)だけ埋める
     data.update({k: v for k, v in stem_values.items() if k not in data})
+    parent = export_db.parent_of(model)
+    if parent is not None:
+        if parent_id is not None:
+            data[parent[1]] = parent_id
+        elif row_id is None:
+            raise ImportDbError(
+                f"{path}: 親の {parent[0].__tablename__} の md(同じ名前で .md の付いたもの)が隣に無い")
+    if model.BODY_FILE_EXTENSION and row_id is None:
+        # 親一行につき一行なので、その親の行があれば直す
+        row_id = session.scalar(select(model.id).where(getattr(model, parent[1]) == parent_id))
 
     unknown = set(data) - columns
     if unknown:
@@ -98,6 +120,7 @@ def _upsert(
     if model is Idea and not values.get("kind", row.kind if row is not None else None):
         values["kind"] = idea_kind.judge(session, values.get("name"), values.get("text"), directory_path, ai_client)
     if row is None:
+        values.update({key: "" for key in _required_texts(model) if values.get(key) is None})
         row = model(**values)
         session.add(row)
     else:
@@ -114,7 +137,7 @@ def _upsert(
         row.filename = None
     session.flush()
     rendered = export_db.render_row(model, row)
-    if row_id is None:
+    if row_id is None and not model.BODY_FILE_EXTENSION and not model.MARKDOWN_OWN_DIRECTORY:
         # 採番した id を md 側にも残す(名前か `# data` のどちらかに入る)
         os.remove(path)
         path = os.path.join(os.path.dirname(path), row.markdown_name)
@@ -124,39 +147,123 @@ def _upsert(
     return row, conflict
 
 
-def _unchanged_row(session, model: type, path: str, directory_path: str | None, content: str):
-    """md が db の行をそのまま書き出した中身と同じなら、その行を返す(取り込まなくてよい)。"""
-    stem = os.path.basename(path)[: -len(".md")]
-    row_id, _stem_values = model.parse_markdown_stem(stem)
-    if row_id is None:
-        data_match = _DATA_RE.search(content)
-        if not data_match:
-            return None
-        data_id = json.loads(data_match.group(1)).get("id")
-        row_id = int(data_id) if data_id is not None else None
-    row = session.get(model, row_id) if row_id is not None else None
-    if (row is None or row.directory_path != directory_path
-            or os.path.basename(path) != row.markdown_name
-            or export_db.render_row(model, row) != content):
-        return None
-    return row
+def _required_texts(model: type) -> list[str]:
+    """空にできない文字列の列。md に無ければ、足す行は空文字で入れる。"""
+    return [column.key for column in model.__table__.columns
+            if not column.nullable and not column.primary_key and isinstance(column.type, String)
+            and column.default is None and column.server_default is None]
 
 
-def _edited_files(root: str, manifest: Manifest) -> list[tuple[type, str, str | None, str]]:
-    edited = []
-    for table_name, model in _markdown_models().items():
-        table_dir = os.path.join(root, table_name)
+def _fill_missing_parents(root: str, manifest: Manifest) -> None:
+    """手で足した本文のファイルに、同じ名前の md(話)が無ければ空の md を、そのディレクトリに作品の md(`0_`)が
+    無ければディレクトリ名で空の作品の md を置く。置いた md は、ほかの手で足した md と同じく取り込まれる。
+    テーブルのディレクトリの直下は作品のディレクトリではないので、何も置かない。
+    """
+    models = export_db._markdown_models()
+    for top in export_db._top_models(models):
+        table_dir = os.path.normpath(os.path.join(root, top.__tablename__))
+        bodies = tuple(extension for extension in export_db.file_extensions(top, models) if extension != ".md")
+        if not bodies or not top.MARKDOWN_OWN_DIRECTORY:
+            continue
         for dirpath, _dirnames, filenames in os.walk(table_dir):
-            relative = os.path.relpath(dirpath, table_dir)
-            directory_path = None if relative == "." else relative.replace(os.sep, "/")
-            for filename in sorted(filenames):
-                if not filename.endswith(".md"):
+            if os.path.normpath(dirpath) == table_dir:
+                continue
+            for filename in filenames:
+                path = os.path.normpath(os.path.join(dirpath, filename))
+                if not filename.endswith(bodies) or not manifest.edited(path, read_text(path)):
                     continue
-                path = os.path.join(dirpath, filename)
+                companion = _companion(path)
+                if os.path.exists(companion):
+                    continue
+                if _companion(companion) is None:
+                    export_db._write(os.path.join(dirpath, f"{RECORD_PREFIX}{os.path.basename(dirpath)}.md"), "")
+                export_db._write(companion, "")
+
+
+def _is_record(path: str) -> bool:
+    return path.endswith(".md") and os.path.basename(path).startswith(RECORD_PREFIX)
+
+
+def _companion(path: str) -> str | None:
+    """親の md のパス。md なら同じディレクトリで先頭に並ぶ md(`0_` で始まる)、本文のファイルなら拡張子を .md にしたもの。"""
+    stem, extension = os.path.splitext(path)
+    if extension != ".md":
+        return stem + ".md"
+    if _is_record(path):
+        return None
+    directory = os.path.dirname(path)
+    records = sorted(name for name in os.listdir(directory) if _is_record(name))
+    return os.path.join(directory, records[0]) if records else None
+
+
+def _model_of(path: str, top: type, manifest: Manifest, expected: dict,
+              child_of: dict[tuple[type, str], type]) -> type | None:
+    """置き場所から、ファイルがどのテーブルの行かを決める。同じディレクトリに `0_` で始まる md(親)があれば、その子のテーブル。
+    本文のファイルは、隣の同じ名前の md のテーブルの子。決まらない本文のファイルは None。
+    """
+    if path in expected:
+        return expected[path][0]
+    entry = manifest.get(path)
+    models = _markdown_models()
+    if entry is not None and entry["table"] in models:
+        return models[entry["table"]]
+    extension = os.path.splitext(path)[1]
+    companion = _companion(path)
+    if companion is not None and os.path.isfile(companion):
+        parent = _model_of(companion, top, manifest, expected, child_of)
+        if (parent, extension) in child_of:
+            return child_of[(parent, extension)]
+    return top if extension == ".md" else None
+
+
+def _edited_files(root: str, manifest: Manifest, expected: dict) -> list[tuple[type, str, str | None, str]]:
+    """親の md の下に置くモデルの md は、`directory_path` を持たない(None で返す)。
+    自分のディレクトリに置く md の `directory_path` は、そのディレクトリの一つ上。
+
+    同じディレクトリの中では親の md(`0_` で始まる)が先に並ぶ。
+    """
+    models = export_db._markdown_models()
+    child_of = {(export_db.parent_of(model)[0], model.BODY_FILE_EXTENSION or ".md"): model
+                for model in models if export_db.parent_of(model)}
+    edited = []
+    for top in export_db._top_models(models):
+        table_dir = os.path.join(root, top.__tablename__)
+        extensions = export_db.file_extensions(top, models)
+        for dirpath, dirnames, filenames in os.walk(table_dir):
+            dirnames.sort()
+            relative = os.path.relpath(dirpath, table_dir)
+            # 親の md を先に取り込んで、子の親の id を決めておく。本文のファイルは隣の md より後に並べる
+            for filename in sorted(filenames, key=lambda name: (not name.endswith(".md"), name)):
+                if not filename.endswith(extensions):
+                    continue
+                path = os.path.normpath(os.path.join(dirpath, filename))
                 content = read_text(path)
-                if manifest.edited(path, content):
-                    edited.append((model, path, directory_path, content))
+                if not manifest.edited(path, content):
+                    continue
+                model = _model_of(path, top, manifest, expected, child_of)
+                if model is None:
+                    raise ImportDbError(f"{path}: 同じ名前の、本文を持てる md が隣に無い")
+                directory_path = None
+                if model is top:
+                    placed = os.path.dirname(relative) if model.MARKDOWN_OWN_DIRECTORY and _is_record(path) else relative
+                    directory_path = None if placed in (".", "") else placed.replace(os.sep, "/")
+                edited.append((model, path, directory_path, content))
     return edited
+
+
+def _parent_id(model: type, path: str, manifest: Manifest, imported: dict[str, int]) -> int | None:
+    parent = export_db.parent_of(model)
+    if parent is None:
+        return None
+    companion = _companion(path)
+    if companion is None:
+        return None
+    if companion in imported:
+        return imported[companion]
+    entry = manifest.get(companion)
+    if entry is not None and entry["table"] == parent[0].__tablename__:
+        return entry["id"]
+    return None
 
 
 def _removed_rows(session, manifest: Manifest) -> list[tuple[type, str, object]]:
@@ -221,25 +328,30 @@ def import_changes(session, root: str, manifest: Manifest) -> dict:
 
     db 側も同じ行を直していたら md の方を勝たせ、その md を `conflicts` に返す。
     """
+    expected, _counts = export_db._expected(session, root, export_db._markdown_models())
+    _fill_missing_parents(root, manifest)
     edited = []
-    for model, path, directory_path, content in _edited_files(root, manifest):
-        # 台帳が無い・古いだけで、db と同じ中身の md(git で両方そろって入ってきたものなど)は台帳に載せるだけにする
-        row = _unchanged_row(session, model, path, directory_path, content)
-        if row is None:
-            edited.append((model, path, directory_path, content))
+    for model, path, directory_path, content in _edited_files(root, manifest, expected):
+        # 台帳が無い・古いだけで、db と同じ中身・同じ置き場所の md(git で両方そろって入ってきたものなど)は台帳に載せるだけにする
+        known = expected.get(path)
+        if known is not None and known[0] is model and known[2] == content:
+            manifest.set(path, model.__tablename__, known[1].id, digest(content), digest(content))
         else:
-            manifest.set(path, model.__tablename__, row.id, digest(content), digest(content))
+            edited.append((model, path, directory_path, content))
     if edited:
         _backup()
     counts: dict[str, int] = {}
     conflicts = []
+    imported: dict[str, int] = {}
     for model, path, directory_path, content in edited:
         columns = {column.key for column in model.__table__.columns}
         stamp_columns = {
             column.key for column in model.__table__.columns
             if isinstance(column.type, StampType)
         }
-        _row, conflict = _upsert(session, model, columns, stamp_columns, path, directory_path, content, manifest)
+        row, conflict = _upsert(session, model, columns, stamp_columns, path, directory_path, content, manifest,
+                                _parent_id(model, path, manifest, imported))
+        imported[path] = row.id
         if conflict:
             conflicts.append(path)
         counts[model.__tablename__] = counts.get(model.__tablename__, 0) + 1

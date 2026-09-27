@@ -22,7 +22,11 @@ _tally = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
 
 
 _MODEL = "claude-sonnet-5"
-_EFFORT = "high"
+_EFFORT = "medium"
+
+# 話の本文(EpisodeText)だけは質を優先する。要約・ミーム・出来事などはすべて上の既定のまま。
+EPISODE_TEXT_MODEL = "claude-fable-5-1"
+EPISODE_TEXT_EFFORT = "high"
 
 
 def _command() -> str:

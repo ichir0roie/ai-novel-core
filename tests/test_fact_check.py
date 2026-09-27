@@ -62,10 +62,10 @@ def test_build_args_allows_given_tools_only(monkeypatch):
     assert mcp[mcp.index("--mcp-config") + 1] == "mcp.json"
 
 
-def test_build_args_defaults_to_sonnet_high():
+def test_build_args_defaults_to_sonnet_medium():
     args = ai_client._build_args(None, None)
     assert args[args.index("--model") + 1] == "claude-sonnet-5"
-    assert args[args.index("--effort") + 1] == "high"
+    assert args[args.index("--effort") + 1] == "medium"
 
     args = ai_client._build_args(None, None, model="claude-fable-5-1", effort="high")
     assert args[args.index("--model") + 1] == "claude-fable-5-1"

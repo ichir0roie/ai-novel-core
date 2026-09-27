@@ -89,12 +89,21 @@ def stories(session: Session) -> list[dict]:
     return [story_digest(session, story) for story in rows]
 
 
+def episode_row(episode, *, text: bool = True) -> dict:
+    """話の枠の列に、本文(`text`)と字数(`letters`)を足す。"""
+    data = to_dict_with(episode)
+    data["letters"] = episode.episode_text.letters if episode.episode_text is not None else 0
+    if text:
+        data["text"] = episode.body
+    return data
+
+
 def episodes(session: Session, story_id: int, *, count: int = 10, before=None,
              text: bool = True) -> list[dict]:
     common_query._get(session, Story, story_id, "story_id")
     rows = session.scalars(
         common_query.episodes_select(story_id, count=count, before=before)).all()
-    return [to_dict_with(episode, text=text) for episode in reversed(rows)]
+    return [episode_row(episode, text=text) for episode in reversed(rows)]
 
 
 def unsynced_episodes(session: Session, story_id: int | None = None) -> list[dict]:

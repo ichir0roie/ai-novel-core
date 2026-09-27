@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 from ai.time_keeper import idea_context
 from data_access_logic.query import dictionary_query, review_query
 from db.schema import Idea, Story
+from tool.markdown import export_db
 
 
-def md_path(record) -> str:
-    parts = ["worlds", record.__tablename__, record.directory_path, record.markdown_name]
-    return "/".join(part for part in parts if part)
+def md_path(session: Session, record) -> str:
+    return f"worlds/{export_db.markdown_path(session, record)}"
 
 
 def _label(record) -> str:
@@ -38,7 +38,7 @@ def candidate_items(session: Session) -> list[dict]:
             "detail": "\n".join([
                 idea.text or "(説明なし)",
                 f"出てきた所: {_appearances(session, idea)}",
-                f"md: {md_path(idea)}",
+                f"md: {md_path(session, idea)}",
                 f"種別: {idea.kind}",
                 f"確定: md の auto_generated を false にする / "
                 f"統合: MergeIdea({idea.id}, 統合先の id) / 削除: DeleteIdea({idea.id})",
@@ -58,7 +58,7 @@ def unsynced_episode_items(session: Session) -> list[dict]:
             "title": f"{story_name}「{episode.title}」を世界観へ反映して synced を立てる",
             "detail": "\n".join([
                 "本文の出来事・行動を台帳へ戻す。戻すまで、この作品の次の話が書けない。",
-                f"md: {md_path(episode)}",
+                f"md: {md_path(session, episode)}",
                 f"済んだら: SetEpisodeSynced({episode.id})",
             ]),
         })
@@ -76,6 +76,6 @@ def todo_items(session: Session) -> list[dict]:
                 "key": f"todo:{model.__tablename__}:{record.id}",
                 "kind": "TODO",
                 "title": f"TODO を片付ける: {model.__tablename__}「{_label(record)}」",
-                "detail": "\n".join([*lines, f"md: {md_path(record)}"]),
+                "detail": "\n".join([*lines, f"md: {md_path(session, record)}"]),
             })
     return items

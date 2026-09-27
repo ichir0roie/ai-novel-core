@@ -29,6 +29,7 @@ from sqlalchemy.orm import (
     Mapped,
     mapped_column,
     relationship,
+    validates,
 )
 
 from sqlalchemy import func
@@ -105,6 +106,11 @@ class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
 
 
+# 自分のディレクトリに置く md の名前の頭。子の md の名前は親の id(1 から)で始まるので、
+# ASCII 順でも数の順でも、ディレクトリの中の先頭に並ぶ
+RECORD_PREFIX = "0_"
+
+
 class MarkdownBase(Base):
     __abstract__ = True
 
@@ -114,6 +120,14 @@ class MarkdownBase(Base):
     CHILD_LISTS: tuple[str, ...] = ()
     # md 名の既定にする列。`# data` の無い手書きの md では、この列を md 名から埋める
     NAME_COLUMN: str | None = None
+    # 持つテーブルの md は、md 名(拡張子を除く)のディレクトリを作り、その中に `record_name` で置く
+    MARKDOWN_OWN_DIRECTORY: bool = False
+    # 親の行を指す relationship の名前。持つテーブルの md は、`worlds/{table}/` ではなく
+    # 親の md と同じディレクトリ(親は `MARKDOWN_OWN_DIRECTORY` を持つ)に並べる
+    MARKDOWN_PARENT: str | None = None
+    # 持つテーブルは md の代わりに、親の md と同じ名前で拡張子だけをこれにしたファイルを親の隣に置く。
+    # 親一行につき一行で、`# data` も見出しも無い本文(text)だけで出し入れする
+    BODY_FILE_EXTENSION: str | None = None
 
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
 
@@ -133,6 +147,12 @@ class MarkdownBase(Base):
     def markdown_name(self) -> str:
         name = self.filename or self.default_filename()
         return f"{self.id}_{name.replace('/', '／')}.md" if name else f"{self.id}.md"
+
+    @property
+    def record_name(self) -> str:
+        """自分のディレクトリに置くときの md 名。id はディレクトリの名前が持つ"""
+        _, _, name = self.markdown_name[: -len(".md")].partition("_")
+        return f"{RECORD_PREFIX}{name}.md"
 
     @classmethod
     def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
@@ -568,19 +588,32 @@ class Story(EventSeededMixin, MarkdownBase):
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
     NAME_COLUMN = "name"
+    MARKDOWN_OWN_DIRECTORY = True
 
 
 class Episode(EventSeededMixin, MarkdownBase):
+    """話の枠。種・時刻・視点・場所までを持ち、本文は `EpisodeText` が持つ。"""
 
     __tablename__ = "episode"
 
-    TEXT_SECTIONS = ("key", "text")
+    TEXT_SECTIONS = ("key",)
+    MARKDOWN_PARENT = "story"
+    NAME_COLUMN = "title"
+
+    # 本文は EpisodeText へ分けたので、MarkdownBase の text 列を持たない。
+    # 古い書き方(`episode.text`)を黙って素通りさせないよう、読み書きとも止める
+    @property
+    def text(self):
+        raise AttributeError("話の本文は Episode.body(書き込みは EpisodeText)にある")
+
+    @text.setter
+    def text(self, _value):
+        raise AttributeError("話の本文は EpisodeText に書く")
 
     story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), sort_order=200)
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
-    letters: Mapped[int | None] = mapped_column(Integer, comment="字数", sort_order=230)
     synced: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
         comment="同期フラグ。この話の出来事・行動が台帳へ戻してあるか。"
@@ -601,6 +634,14 @@ class Episode(EventSeededMixin, MarkdownBase):
         comment="キーテキスト。作者が入れる、AI 生成前の種。md では `# key` の節",
         sort_order=9990)
 
+    episode_text: Mapped["EpisodeText | None"] = relationship(
+        back_populates="episode", lazy="selectin", uselist=False)
+
+    @property
+    def body(self) -> str:
+        """本文。まだ書いていない話(枠)は空文字"""
+        return self.episode_text.text if self.episode_text is not None else ""
+
     def default_filename(self) -> str | None:
         return self.title or None
 
@@ -620,6 +661,35 @@ class Episode(EventSeededMixin, MarkdownBase):
             return None, {"story_id": int(story_part), "start": parse_episode_stamp_stem(stamp_part),
                           "title": title_part or None}
         return None, {"story_id": int(story_part), "title": rest or None}
+
+
+class EpisodeText(MarkdownBase):
+    """話の本文。話(`Episode`)の枠とは分けて生成し、話の md の隣に同じ名前の .txt で本文だけを出す。"""
+
+    __tablename__ = "episode_text"
+
+    MARKDOWN_PARENT = "episode"
+    BODY_FILE_EXTENSION = ".txt"
+
+    episode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("episode.id"), unique=True, index=True, nullable=False, sort_order=200)
+    episode: Mapped[Episode] = relationship(back_populates="episode_text", lazy="noload")
+    letters: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=210)
+    model: Mapped[str | None] = mapped_column(
+        String, comment="本文を書いたモデル。空なら不明(手で書いた本文など)", sort_order=220)
+    effort: Mapped[str | None] = mapped_column(
+        String, comment="本文を書いたときの effort。空なら不明(手で書いた本文など)", sort_order=230)
+
+    @validates("text")
+    def _letters_follow_text(self, _key, value):
+        self.letters = len(value or "")
+        return value
+
+    @classmethod
+    def parse_markdown_stem(cls, stem: str) -> tuple[int | None, dict]:
+        # 名前は話の md と同じなので、行は置き場所(隣の話)から決める
+        return None, {}
 
 
 _EPISODE_STAMP = re.compile(r"^\d+-\d{2}-\d{2}-\d{4}$")

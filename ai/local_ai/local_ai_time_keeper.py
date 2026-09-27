@@ -35,6 +35,13 @@ def episode(
                         place_id=place_id, viewpoint=viewpoint, episode_id=episode_id)
 
 
+def episode_text(
+    episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
+    place_id: int | None = None,
+) -> int | None:
+    return main.episode_text(ai_client, episode_id, character_ids, previous_episode_ids, place_id=place_id)
+
+
 if __name__ == "__main__":
     year = int(input("year>>"))
     stamp = Stamp(

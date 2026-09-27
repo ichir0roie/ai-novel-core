@@ -5,7 +5,7 @@ import random
 import traceback
 
 from ai.time_keeper import (
-    character_event_generator, episode_generator, event_progression_generator, event_seed, meme,
+    character_event_generator, episode_generator, episode_text_generator, event_progression_generator, event_seed, meme,
     place_event_generator,
 )
 from data_access_logic.query import common_query, world_createion_query
@@ -87,6 +87,17 @@ def episode(
         record = episode_generator.generate(
             s, ai, story_id, key, time, character_ids, previous_episode_ids,
             place_id=place_id, viewpoint=viewpoint, writer_options=writer_options, episode_id=episode_id)
+        return record.id if record is not None else None
+
+
+def episode_text(
+    ai: AIClient, episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None,
+    *, place_id: int | None = None, writer_options: dict | None = None,
+) -> int | None:
+    with get_env_session() as s:
+        record = episode_text_generator.generate(
+            s, ai, episode_id, character_ids, previous_episode_ids,
+            place_id=place_id, writer_options=writer_options)
         return record.id if record is not None else None
 
 

@@ -6,7 +6,7 @@ from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.randomizer.update_event_seed import UpdateEventSeed
 from ai.time_keeper import event_seed
 from data_access_logic.query import event_seed_query
-from db.schema import Character, Episode, Event, EventSeed, Story
+from db.schema import Character, Episode, EpisodeText, Event, EventSeed, Story
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
@@ -32,9 +32,10 @@ def _story(session, text="村の筋書き") -> Story:
 
 def test_seeds_are_drawn_out_of_stories_episodes_character_plots_and_events(session):
     story = _story(session)
-    with_key = Episode(story_id=story.id, title="一", text="本文一", key="種一", synced=False)
-    text_only = Episode(story_id=story.id, title="二", text="本文二", key="", synced=False)
-    empty = Episode(story_id=story.id, title="三", text="", key="", synced=False)
+    with_key = Episode(story_id=story.id, title="一", key="種一", synced=False,
+                       episode_text=EpisodeText(text="本文一"))
+    text_only = Episode(story_id=story.id, title="二", key="", synced=False, episode_text=EpisodeText(text="本文二"))
+    empty = Episode(story_id=story.id, title="三", key="", synced=False)
     planned = Character(name="甲", text="説明\n\n# plot\n\n起: 旅に出る\n\n# 来歴\n\n村の生まれ")
     unplanned = Character(name="乙", text="説明だけ")
     happened = Event(name="峠越え", text="峠を越えた", time=Stamp(2100))
