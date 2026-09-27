@@ -28,10 +28,10 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「判断待ちの一覧」「週次レビュー」   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO。Todoist へ載せる手順はスキル `weekly-review` |
 | 「場所を足して」                     | `randomizer.create_random_place.CreateRandomPlace()` で下書き → 内容を決めて `randomizer.commit_place.CommitPlace(place)` |
 | 「人物を足して」                     | `randomizer.create_random_character.CreateRandomCharacter()` → `randomizer.commit_character.CommitCharacter(character)`。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。`# 来歴` 節には節目を歳付きで書く(下の「人物の来歴」) |
-| 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `randomizer.generate_characters.GenerateCharacters(place_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`_generate_one`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
+| 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `randomizer.generate_characters.GenerateCharacters(place_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`_generate_one`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る。`confirmed=未確認` で足す(下の「出来事・人物の承認フラグ」) |
 | 「出来事を足して」                   | `randomizer.create_random_event.CreateRandomEvent()` → `randomizer.commit_event.CommitEvent(event)` |
-| 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `randomizer.generate_character.GenerateCharacter(character={...}, time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`_generate_one`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない) |
-| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `randomizer.generate_event.GenerateEvent(event={...}, seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない) |
+| 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `randomizer.generate_character.GenerateCharacter(character={...}, time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`_generate_one`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
+| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `randomizer.generate_event.GenerateEvent(event={...}, seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
 | 「この人物の出自・居場所を足して」   | `randomizer.commit_character_place.CommitCharacterPlace(place)`              |
 | 「この二人の相関を足して」           | `randomizer.commit_character_relation.CommitCharacterRelation(relation)`     |
 | 「アイデアを足して」                 | `randomizer.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める。`fact_check=False` で検めずに本文からだけ抜き出す |
@@ -125,6 +125,22 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 - ユーザが確かめた(`confirmed=承認`)ミームだけを引く。抜き出したばかりの `confirmed=未確認` のミームと、退けた `非承認` のミームは、
   週次レビューで確かめられるまで、毎日のルーチン・場所の出来事・人物生成のどれでも文脈に取り入れられない
 - 時の流れの中で生む人物(`ai/time_keeper/random_character_generator.py`)は、この引き方と整理を自動で行う
+
+## 出来事・人物の承認フラグ
+
+`event` / `character` も `confirmed`(未確認/承認/非承認)を持つ。列の既定値は 承認(GUI から手で足す・
+`CommitEvent` / `CommitCharacter` で確定するときは渡さなければ 承認)だが、ランダム生成(常駐ループの毎日の
+ルーチン・場所の出来事・自然死・`GenerateCharacter(s)` / `GenerateEvent` が使う自動生成)は明示的に
+`confirmed=未確認` で足す。ユーザが GUI のレビュー画面(`reviewable=True`)で確かめて 承認 にするまで:
+
+- `write_episode` / `fill_episode`(`GenerateEpisode` / `GenerateFrame` も同じ)は、渡された `character_ids` に
+  未確認・非承認の人物が混ざっていると止まる。登場人物を省いたときの既定(生きているメインキャラクター)にも
+  未確認・非承認は出てこない
+- 話に渡す材料(場所の直近の出来事・登場人物それぞれの直近の出来事)も、未確認・非承認の出来事は使わない
+- `ReadCast` / `ReadBrief` の顔ぶれ、`ReadSurroundings` の周りの人物・出来事にも、未確認・非承認は出てこない
+
+(「この時点より後に既に決まっている出来事」は、まだ確かめていない出来事でも矛盾を避けるために渡す。
+毎日のルーチン・場所の出来事どうしの候補選び・当事者選びも、承認済みに絞らない)
 
 ## 中間段(下書き → 語の洗い出し → 清書)
 
@@ -227,8 +243,8 @@ AI に棚卸し済みの種と見比べさせ、同じ出来事の言い換え�
 そうした出来事(`age` で差し込むときは主役自身の後の出来事も)は、要約を添えて「この時点より後に既に決まっている出来事」として
 記録を決める段にも小説に書き起こす段にも渡し、矛盾させない。`age` を渡したときは、直前の出来事はその時点より前に終わったものに限り、
 その時点に別の出来事の最中にいる者は当事者から外す(主役なら選び直す)。
-ルーチンで起こした出来事は `CommitEvent` を通らないので、ルーチンの頭でミームも棚卸しする(`meme.refresh`)。
-前の回までに起こした出来事から、当事者が行き着いた考え方をミームとして抜き出す。
+ルーチンで起こした出来事は `CommitEvent` を通らないので、`confirmed=未確認` で足し、ルーチンの頭でミームも棚卸しする
+(`meme.refresh`)。前の回までに起こした出来事から、当事者が行き着いた考え方をミームとして抜き出す。
 
 場所の出来事(`place_event`)は、毎日のルーチンの主役の代わりに場所・時刻・`key`(ジャンルや場面を一言で。「市場の喧嘩」「怪談」など)を決めて起こす。
 それ以外は毎日のルーチンと同じ(頭でのミーム・種の棚卸し、種を引く、作品の本文を渡さない、後の出来事を渡す、小説に書き起こす)。

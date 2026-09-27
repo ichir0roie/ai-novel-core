@@ -8,7 +8,9 @@ from ai.claude_code.interface.randomizer.create_random_place import CreateRandom
 from ai.claude_code.interface.randomizer.delete_event import DeleteEvent
 from ai.claude_code.interface.randomizer.delete_place import DeletePlace
 from ai.claude_code.interface.randomizer.update_event import UpdateEvent
-from db.schema import Character, Event, EventCharacter, EventIdea, EventSummary, Idea, Location
+from db.schema import (
+    Character, ConfirmStatus, Event, EventCharacter, EventIdea, EventSummary, Idea, Location,
+)
 
 
 @pytest.fixture
@@ -58,6 +60,17 @@ def test_commit_event_writes_characters(session, place, character):
 
     links = session.query(EventCharacter).all()
     assert [(link.event_id, link.character_id) for link in links] == [(event["id"], character)]
+
+
+def test_commit_event_defaults_to_approved(session, place):
+    event = CommitEvent({"name": "祭り", "text": "", "time": "2100", "location_id": place}).run()
+    assert session.get(Event, event["id"]).confirmed == ConfirmStatus.APPROVED
+
+
+def test_commit_event_confirmed_can_be_overridden(session, place):
+    event = CommitEvent({"name": "祭り", "text": "", "time": "2100", "location_id": place,
+                         "confirmed": ConfirmStatus.PENDING}).run()
+    assert session.get(Event, event["id"]).confirmed == ConfirmStatus.PENDING
 
 
 def test_commit_event_summarizes_the_event_right_away(session, place, monkeypatch):

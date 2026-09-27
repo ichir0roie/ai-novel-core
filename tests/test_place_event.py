@@ -5,7 +5,9 @@ import pytest
 
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION, EVENT_NOVEL_INSTRUCTION
 from ai.time_keeper import event_progression_generator, main, place_event_generator
-from db.schema import Character, CharacterPlace, Event, EventCharacter, EventSeed, Location, Story
+from db.schema import (
+    Character, CharacterPlace, ConfirmStatus, Event, EventCharacter, EventSeed, Location, Story,
+)
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
@@ -78,6 +80,16 @@ def test_event_happens_at_the_given_place_and_time_among_those_there(session):
     prompts = "".join(call["prompt"] for call in ai.calls)
     for name in ("よその者", "主役格", "故人", "まだ生まれない者"):
         assert f"'name': '{name}'" not in prompts
+
+
+def test_generated_place_event_is_unconfirmed(session):
+    place = _place(session)
+    _character(session, place, "甲")
+    ai = _InvolvesEveryone(seed=1)
+
+    record = place_event_generator.generate_at(session, ai, place.id, WHEN, KEY, random.Random(1))
+
+    assert record.confirmed == ConfirmStatus.PENDING
 
 
 def test_those_in_another_event_then_are_left_out(session):

@@ -7,7 +7,7 @@ from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.story._base import StoryQuery
 from ai.time_keeper import episode_generator, frame_generator
 from data_access_logic.query import world_createion_query
-from db.schema import Character, Stamp
+from db.schema import Character, ConfirmStatus, Stamp
 
 
 class GenerateEpisode(StoryQuery):
@@ -44,7 +44,9 @@ class GenerateEpisode(StoryQuery):
     def _main_characters(session, time: Stamp) -> list[int]:
         return list(session.scalars(
             world_createion_query.alive_characters_select(time)
-            .where(Character.main_character.is_(True)).order_by(Character.id)).all())
+            .where(Character.main_character.is_(True),
+                   Character.confirmed == ConfirmStatus.APPROVED)
+            .order_by(Character.id)).all())
 
     def execute(self, session) -> dict:
         draft = dict(self.episode)

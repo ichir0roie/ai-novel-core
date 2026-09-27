@@ -10,7 +10,7 @@ from ai.claude_code.interface.randomizer.update_character import UpdateCharacter
 from ai.claude_code.interface.story.update_story import UpdateStory
 from ai.claude_code.interface.story.read_character import ReadCharacter
 from db.schema import (
-    PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterPlace, Location, Story,
+    PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location, Story,
 )
 from db.stamp import Stamp
 from randomizer.random_character_generator import build_parameter
@@ -54,6 +54,17 @@ def test_commit_from_json_string(session, world):
     place = session.query(CharacterPlace).filter_by(character_id=record.id).one()
     assert place.location_id == world["root"]
     assert place.start == Stamp(2100)
+
+
+def test_committed_character_defaults_to_approved(session, world):
+    result = CommitCharacter(_draft(place_id=world["root"], start="2100")).run()
+    assert session.get(Character, result["id"]).confirmed == ConfirmStatus.APPROVED
+
+
+def test_committed_character_confirmed_can_be_overridden(session, world):
+    result = CommitCharacter(
+        _draft(place_id=world["root"], start="2100", confirmed=ConfirmStatus.PENDING)).run()
+    assert session.get(Character, result["id"]).confirmed == ConfirmStatus.PENDING
 
 
 def test_committed_character_is_a_sub_character_by_default(session, world):

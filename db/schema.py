@@ -239,6 +239,12 @@ class Event(EventSeededMixin, MemeSeededMixin, TextBase):
     name: Mapped[str] = mapped_column(String, sort_order=200)
     # 断面(ReadBrief)に出すかどうかだけを持つ。分類は name/text の書き方で表す。
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, sort_order=210)
+    confirmed: Mapped[str] = mapped_column(
+        ConfirmStatusType, default=ConfirmStatus.APPROVED, nullable=False,
+        comment=f"ユーザが確かめた出来事として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
+                "ランダム生成の直後は 未確認 で、話・筋書きには使われない。"
+                "確かめたら 承認、無かったことにするなら 非承認 にする",
+        sort_order=215)
     time: Mapped[Stamp] = mapped_column(StampType, index=True, sort_order=220)
 
     parent_event_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("event.id"), sort_order=230)
@@ -423,6 +429,12 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     kind: Mapped[str] = mapped_column(
         String, default=CHARACTER_KIND_PERSON, nullable=False,
         comment="種別。「人物」か、人物以外の対象(国・組織・商会・氏族・集団・物など)", sort_order=230)
+    confirmed: Mapped[str] = mapped_column(
+        ConfirmStatusType, default=ConfirmStatus.APPROVED, nullable=False,
+        comment=f"ユーザが確かめた人物・対象として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
+                "ランダム生成の直後は 未確認 で、話・筋書きには使われない。"
+                "確かめたら 承認、無かったことにするなら 非承認 にする",
+        sort_order=235)
 
     main_character: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,

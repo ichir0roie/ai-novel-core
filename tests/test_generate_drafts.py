@@ -6,7 +6,9 @@ from ai.claude_code.interface.randomizer.generate_event import GenerateEvent
 from ai.claude_code.interface.story.generate_episode import GenerateEpisode
 from ai.claude_code.interface.story.generate_frame import GenerateFrame
 from ai.time_keeper import episode_generator, frame_generator, random_character_generator
-from db.schema import Character, CharacterPlace, Episode, Event, EventCharacter, Location, Story
+from db.schema import (
+    Character, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Location, Story,
+)
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
@@ -43,8 +45,9 @@ def place(session):
     return record
 
 
-def _character(session, place, name, *, main_character=False) -> Character:
-    record = Character(name=name, text=f"{name}の説明", start=Stamp(2080), main_character=main_character)
+def _character(session, place, name, *, main_character=False, confirmed=ConfirmStatus.APPROVED) -> Character:
+    record = Character(name=name, text=f"{name}の説明", start=Stamp(2080), main_character=main_character,
+                       confirmed=confirmed)
     session.add(record)
     session.flush()
     session.add(CharacterPlace(character_id=record.id, location_id=place.id, start=Stamp(2080)))
@@ -272,5 +275,12 @@ def test_episode_refuses_a_frame_that_already_has_a_body(session, place):
 def test_episode_needs_characters_when_there_is_no_main_character(session, place):
     story = session.query(Story).one()
     _character(session, place, "甲")
+    with pytest.raises(ValueError):
+        GenerateEpisode({"story_id": story.id, "key": "k", "start": str(WHEN)}, ai=_Ai(seed=1)).run()
+
+
+def test_episode_auto_selection_skips_unconfirmed_main_characters(session, place):
+    story = session.query(Story).one()
+    _character(session, place, "甲", main_character=True, confirmed=ConfirmStatus.PENDING)
     with pytest.raises(ValueError):
         GenerateEpisode({"story_id": story.id, "key": "k", "start": str(WHEN)}, ai=_Ai(seed=1)).run()

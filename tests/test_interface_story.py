@@ -11,7 +11,9 @@ from ai.claude_code.interface.story.read_surroundings import ReadSurroundings
 from ai.claude_code.interface.story.set_episode_synced import SetEpisodeSynced
 from ai.claude_code.interface.story.start_story import StartStory
 from data_access_logic.query.common_query import NotFoundError
-from db.schema import Character, CharacterPlace, Episode, Event, EventCharacter, Location, Story
+from db.schema import (
+    Character, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Location, Story,
+)
 from db.stamp import Stamp
 
 
@@ -152,6 +154,17 @@ def test_read_brief_requires_time(world):
         ReadBrief(world["village"], None).run()
 
 
+def test_read_brief_leaves_out_unconfirmed_characters(session, world):
+    session.add(Character(name="未確認の者", text="", confirmed=ConfirmStatus.PENDING))
+    session.flush()
+    unconfirmed = session.query(Character).filter_by(name="未確認の者").one()
+    session.add(CharacterPlace(character_id=unconfirmed.id, location_id=world["village"], start=Stamp(2000)))
+    session.commit()
+
+    brief = ReadBrief(world["village"], "2100").run()
+    assert sorted(c["name"] for c in brief["present_characters"]) == ["アル", "ベル"]
+
+
 def test_read_cast_climbs_levels(session, world):
     story = Story(name="家の話", place_id=world["house"], text="", narration="", state="構想中",
                   start=Stamp(2100))
@@ -166,6 +179,20 @@ def test_read_cast_climbs_levels(session, world):
     assert cast["scope"]["name"] == "村"
     assert cast["time"] == "2100/12/31 23:59:59"
     assert sorted(c["name"] for c in cast["characters"]) == ["アル", "ベル"]
+
+
+def test_read_cast_leaves_out_unconfirmed_characters(session, world):
+    story = Story(name="家の話", place_id=world["house"], text="", narration="", state="構想中",
+                 start=Stamp(2100))
+    session.add(story)
+    session.add(Character(name="未確認の者", text="", confirmed=ConfirmStatus.PENDING))
+    session.flush()
+    unconfirmed = session.query(Character).filter_by(name="未確認の者").one()
+    session.add(CharacterPlace(character_id=unconfirmed.id, location_id=world["house"], start=Stamp(2000)))
+    session.commit()
+
+    cast = ReadCast(story.id, levels=0).run()
+    assert [c["name"] for c in cast["characters"]] == ["ベル"]
 
 
 def test_read_cast_requires_place(session):
@@ -187,6 +214,20 @@ def test_read_surroundings_collects_neighbors_and_events(session, world):
     assert sorted(c["name"] for c in around["characters"]) == ["アル", "ベル"]
     assert [e["name"] for e in around["events"]] == ["再会"]
     assert around["events"][0]["characters"] == [{"id": world["alice"], "name": "アル"}]
+
+
+def test_read_surroundings_leaves_out_unconfirmed_characters_and_events(session, world):
+    session.add(Character(name="未確認の者", text="", confirmed=ConfirmStatus.PENDING))
+    session.add(Event(name="未確認の出来事", text="", location_id=world["house"], time=Stamp(2100, 3, 1),
+                      confirmed=ConfirmStatus.PENDING))
+    session.flush()
+    unconfirmed = session.query(Character).filter_by(name="未確認の者").one()
+    session.add(CharacterPlace(character_id=unconfirmed.id, location_id=world["house"], start=Stamp(2000)))
+    session.commit()
+
+    around = ReadSurroundings(world["alice"], "2100").run()
+    assert sorted(c["name"] for c in around["characters"]) == ["アル", "ベル"]
+    assert [e["name"] for e in around["events"]] == []
 
 
 def test_read_surroundings_requires_time(world):

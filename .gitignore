@@ -3,8 +3,10 @@ __pycache__/
 scripts
 
 .env
+.venv
 
 backup
 
 tmp
 .pytest_cache
+*.test.db

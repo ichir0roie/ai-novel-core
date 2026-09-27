@@ -5,7 +5,7 @@ from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.time_keeper import frame_generator, episode_summary, episode_generator, main
 from db.schema import (
-    Character, CharacterRelation, Episode, EpisodeIdea, Event, EventCharacter, Idea, Location, Story,
+    Character, CharacterRelation, ConfirmStatus, Episode, EpisodeIdea, Event, EventCharacter, Idea, Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -49,8 +49,8 @@ def story(session, place):
     return record
 
 
-def _character(session, name, *, start=Stamp(2080)) -> Character:
-    record = Character(name=name, text=f"{name}の説明", start=start)
+def _character(session, name, *, start=Stamp(2080), confirmed=ConfirmStatus.APPROVED) -> Character:
+    record = Character(name=name, text=f"{name}の説明", start=start, confirmed=confirmed)
     session.add(record)
     session.commit()
     return record
@@ -64,9 +64,9 @@ def _episode(session, story, number, *, start=None) -> Episode:
     return record
 
 
-def _event(session, place, characters, start, name) -> Event:
+def _event(session, place, characters, start, name, *, confirmed=ConfirmStatus.APPROVED) -> Event:
     record = Event(name=name, text=f"{name}の本文", time=start, start=start, end=start,
-                   location_id=place.id if place else None)
+                   location_id=place.id if place else None, confirmed=confirmed)
     record.event_characters = [EventCharacter(character_id=c.id) for c in characters]
     session.add(record)
     session.commit()
@@ -117,6 +117,15 @@ def test_style_extras_from_the_caller_reach_the_system_prompt(session, story):
     system = _writing_call(ai)["system"]
     assert "西暦一万年のSF世界" in system and "この世界の文体の癖" in system
     assert system != episode_generator._SYSTEM_PROMPT
+
+
+def test_unconfirmed_characters_are_rejected(session, story):
+    first = _character(session, "甲")
+    pending = _character(session, "丙", confirmed=ConfirmStatus.PENDING)
+    ai = _Writer(seed=1)
+
+    with pytest.raises(ValueError, match="確かめていない"):
+        frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id, pending.id])
 
 
 def test_unknown_characters_are_left_out_of_the_prompt(session, story):
@@ -196,6 +205,19 @@ def test_characters_recent_and_later_events_are_told_without_their_texts(session
     assert '"name": "港町の前の出来事"' in here
     assert "よその出来事" not in prompt
     assert "の出来事の本文" not in prompt
+
+
+def test_unconfirmed_events_are_left_out_of_the_prompt(session, story, place):
+    first = _character(session, "甲")
+    _event(session, place, [first], Stamp(2100, 3, 1), "甲の未確認の出来事", confirmed=ConfirmStatus.PENDING)
+    _event(session, place, [], Stamp(2100, 4, 1), "港町の未確認の出来事", confirmed=ConfirmStatus.PENDING)
+    ai = _Writer(seed=1)
+
+    frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id])
+
+    prompt = _writing_call(ai)["prompt"]
+    assert "甲の未確認の出来事" not in prompt
+    assert "港町の未確認の出来事" not in prompt
 
 
 def test_given_place_and_viewpoint_are_kept_on_the_episode(session, story):
