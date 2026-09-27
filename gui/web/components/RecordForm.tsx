@@ -7,8 +7,8 @@ import FieldInput from "./FieldInput";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-/** 居場所の開始・終了それぞれの隣に、その時点の人物の年齢を出す(人物の start が生年)。 */
-function placeAgeColumns(birth: unknown): ExtraColumn[] {
+/** 期間ごとの居場所・パラメータの開始・終了それぞれの隣に、その時点の人物の年齢を出す(人物の start が生年)。 */
+function ageColumns(birth: unknown): ExtraColumn[] {
   return [
     { key: "start_age", after: "start", label: T.record.ageAt, render: (row) => formatAge(ageAt(birth, row.start)) },
     { key: "end_age", after: "end", label: T.record.ageAt, render: (row) => formatAge(ageAt(birth, row.end)) },
@@ -62,7 +62,7 @@ export default function RecordForm({ meta, value, onChange, mode, side }: Props)
               meta={child}
               rows={(value[child.name] as Rec[] | undefined) ?? []}
               onChange={(rows) => set(child.name, rows)}
-              extraColumns={child.name === "places" ? placeAgeColumns(value.start) : undefined}
+              extraColumns={child.name === "places" || child.name === "parameters" ? ageColumns(value.start) : undefined}
             />
           </div>
         ))}

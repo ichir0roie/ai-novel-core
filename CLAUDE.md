@@ -7,7 +7,6 @@
 - 原因がコードにあれば、コードを直す
 - 原因が呼び出し方(渡す引数・環境変数・実行手順)にあれば、指示書(この `CLAUDE.md` や各スキルの `SKILL.md` など)を直す
 
-
 # コーディング規約
 
 コードを読んで内容を理解すること。
@@ -31,15 +30,6 @@
 `style_extra`。呼び出し元(世界リポジトリの `instructions/` や、Claude Code のスキル)がこれらの引数に
 自分の値を渡す。
 
-# データ編集 GUI
-
-`gui/` に、ユーザが `novel.db` をブラウザから直す道具(FastAPI の API と Next.js の画面)がある。
-起動と API は `gui/readme.md`。未確認のアイデア・ミームの承認・非承認、星ごとの地図・人物相関図もここで見る。
-`ai/claude_code/interface/` の入口と常駐ループは `/api/interface/{id}` からも呼べる。`claude` コマンドを叩く入口は
-Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る(`gui/api/interface.py`)。
-`confirmed` は 未確認/承認/非承認 の三段(`db.schema.ConfirmStatus`)で、承認だけが検索・生成・
-人物へ引く対象になる。非承認は使わないが、同じ語をまた候補に足さないよう行は残す。
-
 # 文字コード
 
 - リポジトリのテキスト(`.py` `.md` `.json` `.yaml` など)はすべて UTF-8(BOM 無し)。
@@ -58,7 +48,6 @@ python・pytest・alembic は世界リポジトリのルートを cwd にし、`
 `PYTHONPATH` に `<ルート>/core` を渡して動かす。
 `novel.db` の場所は `DEM_NOVEL_DB_PATH` でも差し替えられる。
 自分の世界を作るときは、空のリポジトリで `git submodule add https://github.com/ichir0roie/ai-novel-core.git core` する。
-
 
 git のコマンドは世界リポジトリのルートで打つ。
 
@@ -94,13 +83,18 @@ git push
 
 # ユーザがデータを見る・直す窓口
 
-db が唯一の正。ユーザは `gui/` の GUI(FastAPI + Next.js)で db を見て直す。md の写し(`worlds/`)と
+db が唯一の正。ユーザは `gui/` の GUI(FastAPI + Next.js。起動と API は `gui/readme.md`)で `novel.db` を
+見て直す。未確認のアイデア・ミームの承認/非承認、星ごとの地図・人物相関図もここで見る。md の写し(`worlds/`)と
 その同期(`SyncDb`)は廃止した。Claude は入口越しに db だけで作業を完結させ、報告も db を読んで行う。
 
+`ai/claude_code/interface/` の入口と常駐ループは `/api/interface/{id}` からも呼べる。`claude` コマンドを叩く
+入口は Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る(`gui/api/interface.py`)。
+
+`confirmed` は 未確認/承認/非承認 の三段(`db.schema.ConfirmStatus`)で、承認だけが検索・生成・
+人物へ引く対象になる。非承認は使わないが、同じ語をまた候補に足さないよう行は残す。
 
 # schema の確認方法
 
 - 列の定義は `db/schema.py` が唯一の正。
-
 - マイグレーションは `db/alembic/`。コマンド例は `db/alembic/README` にある。
 - `schema.py` を変えたら alembic の `revision --autogenerate` → 内容確認 → `upgrade head` の順。
