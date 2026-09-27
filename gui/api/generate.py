@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""「AI で作成」のボタン。テーブルごとに、欄の値(下書き)を核に AI が全欄を組み立て直して行を足す入口を結ぶ。
+"""「AI で作成」「AI で補完」のボタン。テーブルごとに、欄の値(下書き)を核に AI が全欄を組み立て直して行を足す
+(`mode="edit"` / `"both"` なら、既存行の本文が空のときに限り、その行の本文だけを埋める)入口を結ぶ。
 
 入口は `ai/claude_code/interface/` の `Generate*`(claude を叩くので Claude Code の環境でだけ、裏の job として走る)。
 下書きは入口の第一引数に、`params` の値はそのままの名前で入口の引数に渡す。
@@ -38,7 +39,11 @@ GENERATORS: tuple[Generator, ...] = (
     Generator("character", "ai", "AI で作成", "randomizer.generate_character.GenerateCharacter", "character",
               params=(ColumnMeta(key="time", label="現在の時刻", type="stamp", nullable=True, required=False,
                                  comment="この時刻に生きている人物として作る。空なら世界の最新の出来事の時刻"),)),
+    Generator("character", "complete", "AI で補完", "randomizer.generate_character.GenerateCharacter", "character",
+              mode="edit", when_empty="text"),
     Generator("event", "ai", "AI で作成", "randomizer.generate_event.GenerateEvent", "event"),
+    Generator("event", "complete", "AI で補完", "randomizer.generate_event.GenerateEvent", "event",
+              mode="edit", when_empty="text"),
     Generator("plot", "frame", "AI で枠を作る", "story.generate_plot.GeneratePlot", "plot",
               params=(_CHARACTER_IDS, _PREVIOUS_PLOT_IDS)),
     Generator("plot", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "plot",
