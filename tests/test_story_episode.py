@@ -91,10 +91,10 @@ def test_commit_episode_accepts_key_only(session, place):
     assert str(episode["start"]) == "11572/03/25 00:00:00"
 
 
-def test_commit_episode_requires_key_or_text(place):
+def test_commit_episode_allows_empty_key_and_text(place):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
-    with pytest.raises(ValueError):
-        CommitEpisode({"story_id": story["id"], "title": "白い灯り"}).run()
+    episode = CommitEpisode({"story_id": story["id"], "title": "白い灯り"}).run()
+    assert (episode["key"], episode["text"]) == ("", "")
 
 
 def test_commit_episode_writes_characters(session, place):

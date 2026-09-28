@@ -31,11 +31,6 @@ class CommitEpisode(CommitAndRefresh):
         elif data.get("story_id") in (None, ""):
             raise ValueError("story_id は必須(id を渡さず新しい話を足すとき)")
 
-        if record is None or "key" in data or text is not None:
-            key = data.get("key", "" if record is None else record.key)
-            body = text if text is not None else ("" if record is None else record.text)
-            if key in (None, "") and body in (None, ""):
-                raise ValueError("key(種)か text(本文)のどちらかは必須")
         if "story_id" in data:
             self.check_exists(session, Story, data["story_id"], "story_id")
         if "viewpoint_character_id" in data:
