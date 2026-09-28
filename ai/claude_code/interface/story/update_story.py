@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from ai.claude_code.interface.story._base import StoryCommit
 from db.schema import Location, Story
-from db.schema_pydantic import to_dict
 
 
 class UpdateStory(StoryCommit):
@@ -14,19 +13,12 @@ class UpdateStory(StoryCommit):
 
     def execute(self, session) -> dict:
         data = self.parse(self.story)
-        story_id = data.pop("id", None)
-        if story_id is None:
-            raise ValueError("id は必須(直す対象の作品)")
+        story_id = self.require_id(data, "直す対象の作品")
         self.check_columns(data)
 
-        record = session.get(Story, story_id)
-        if record is None:
-            raise ValueError(f"id={story_id} という作品が見つからない")
+        record = self.get_or_raise(session, story_id, "作品")
 
         self.check_exists(session, Location, data.get("world_id"), "world_id")
         self.check_exists(session, Location, data.get("place_id"), "place_id")
 
-        for key, value in data.items():
-            setattr(record, key, value)
-        self.finalize(session, record)
-        return to_dict(record)
+        return self.apply(session, record, data)

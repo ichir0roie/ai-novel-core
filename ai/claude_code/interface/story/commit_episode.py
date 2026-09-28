@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from ai.claude_code import ai_client
-from ai.claude_code.interface._base import UnknownRecordError
+from ai.claude_code.interface.randomizer._base import CommitAndRefresh
 from ai.claude_code.interface.story import _rows
-from ai.claude_code.interface.story._base import StoryCommit
 from ai.instructions.style import layout_novel_text
-from ai.time_keeper import generated_content
-from db.schema import Episode, Story, get_env_session
+from db.schema import Episode, Story
 
 
-class CommitEpisode(StoryCommit):
+class CommitEpisode(CommitAndRefresh):
     model = Episode
 
     def __init__(self, episode: str | dict):
@@ -26,9 +23,7 @@ class CommitEpisode(StoryCommit):
         self.check_columns(data)
         record = None
         if episode_id is not None:
-            record = session.get(Episode, episode_id)
-            if record is None:
-                raise UnknownRecordError(f"id={episode_id} という話が見つからない")
+            record = self.get_or_raise(session, episode_id, "話")
         elif data.get("story_id") in (None, ""):
             raise ValueError("story_id は必須(id を渡さず新しい話を足すとき)")
 
@@ -54,9 +49,3 @@ class CommitEpisode(StoryCommit):
             record.model = record.effort = None
         self.finalize(session, record)
         return _rows.episode_row(record)
-
-    def run(self) -> dict:
-        result = super().run()
-        with get_env_session() as session:
-            generated_content.refresh(session, ai_client, session.get(Episode, result["id"]))
-        return result

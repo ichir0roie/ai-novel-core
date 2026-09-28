@@ -4,14 +4,12 @@
 """
 from __future__ import annotations
 
-from ai.claude_code import ai_client
-from ai.claude_code.interface.randomizer._base import CommitDraft
-from ai.time_keeper import generated_content
-from db.schema import Character, Event, EventCharacter, Location, get_env_session
+from ai.claude_code.interface.randomizer._base import CommitAndRefresh
+from db.schema import Character, Event, EventCharacter, Location
 from db.schema_pydantic import to_dict
 
 
-class CommitEvent(CommitDraft):
+class CommitEvent(CommitAndRefresh):
     model = Event
 
     def __init__(self, event: str | dict):
@@ -39,9 +37,3 @@ class CommitEvent(CommitDraft):
         session.add(record)
         self.finalize(session, record)
         return {**to_dict(record), "character_ids": character_ids}
-
-    def run(self) -> dict:
-        result = super().run()
-        with get_env_session() as session:
-            generated_content.refresh(session, ai_client, session.get(Event, result["id"]))
-        return result

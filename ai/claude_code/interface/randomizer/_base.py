@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ai.claude_code import ai_client, fact_checker
 from ai.claude_code.interface._base import CommitEntrypoint, Entrypoint
-from ai.time_keeper import meme
+from ai.time_keeper import generated_content, meme
 from db.schema import get_env_session
 
 
@@ -19,6 +19,18 @@ class RandomDraft(Entrypoint):
 
 class CommitDraft(CommitEntrypoint):
     pass
+
+
+class CommitAndRefresh(CommitDraft):
+    """記録を確定したあと、確定のトランザクションを閉じてから `generated_content.refresh`
+    でミーム抽出・要約を追いかける基底(AI が答えなくても確定自体は残るよう、別のセッションで行う)。
+    """
+
+    def run(self) -> dict:
+        result = super().run()
+        with get_env_session() as session:
+            generated_content.refresh(session, ai_client, session.get(self.model, result["id"]))
+        return result
 
 
 class CommitMemeSource(CommitDraft):

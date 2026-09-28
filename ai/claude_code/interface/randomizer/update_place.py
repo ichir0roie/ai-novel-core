@@ -6,7 +6,6 @@ from sqlalchemy import func, select
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from db.polygon import parse_polygon
 from db.schema import Location
-from db.schema_pydantic import to_dict
 
 
 class UpdatePlace(CommitDraft):
@@ -17,24 +16,17 @@ class UpdatePlace(CommitDraft):
 
     def execute(self, session) -> dict:
         data = self.parse(self.place)
-        place_id = data.pop("id", None)
-        if place_id is None:
-            raise ValueError("id は必須(直す対象の場所)")
+        place_id = self.require_id(data, "直す対象の場所")
         self.check_columns(data)
 
-        record = session.get(Location, place_id)
-        if record is None:
-            raise ValueError(f"id={place_id} という場所が見つからない")
+        record = self.get_or_raise(session, place_id, "場所")
 
         if "area" in data:
             self._check_area(session, record, data["area"])
         if "polygon" in data:
             data["polygon"] = parse_polygon(data["polygon"])
 
-        for key, value in data.items():
-            setattr(record, key, value)
-        self.finalize(session, record)
-        return to_dict(record)
+        return self.apply(session, record, data)
 
     @staticmethod
     def _check_area(session, record: Location, area) -> None:

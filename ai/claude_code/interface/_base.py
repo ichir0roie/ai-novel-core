@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from db.schema import get_env_session
+from db.schema_pydantic import to_dict
 
 
 class Entrypoint:
@@ -68,3 +69,26 @@ class CommitEntrypoint(SessionEntrypoint):
         if unknown:
             raise UnknownFieldError(
                 f"{model.__name__} のスキーマに無い欄: {sorted(unknown)}")
+
+    @staticmethod
+    def require_id(data: dict, label: str) -> int:
+        """更新・確定の対象を指す `id` を data から取り出す。無ければ入力ミス。"""
+        id_ = data.pop("id", None)
+        if id_ is None:
+            raise ValueError(f"id は必須({label})")
+        return id_
+
+    def get_or_raise(self, session, id_, label: str, model: type | None = None):
+        """自分自身の id で行を引く。見つからなければ 404 相当の `UnknownRecordError`。"""
+        model = model or self.model
+        record = session.get(model, id_)
+        if record is None:
+            raise UnknownRecordError(f"id={id_} という{label}が見つからない")
+        return record
+
+    def apply(self, session, record, data: dict) -> dict:
+        """残った列を setattr してから `finalize` し、`to_dict` で返す。"""
+        for key, value in data.items():
+            setattr(record, key, value)
+        self.finalize(session, record)
+        return to_dict(record)

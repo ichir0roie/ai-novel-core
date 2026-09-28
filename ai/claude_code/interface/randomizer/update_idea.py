@@ -5,7 +5,6 @@ from ai.claude_code.interface.randomizer._base import CommitDraft
 from ai.time_keeper import idea_alias
 from db.child_lists import load_children
 from db.schema import Idea, Location
-from db.schema_pydantic import to_dict
 
 
 class UpdateIdea(CommitDraft):
@@ -16,15 +15,11 @@ class UpdateIdea(CommitDraft):
 
     def execute(self, session) -> dict:
         data = self.parse(self.idea)
-        idea_id = data.pop("id", None)
-        if idea_id is None:
-            raise ValueError("id は必須(直す対象のアイデア)")
+        idea_id = self.require_id(data, "直す対象のアイデア")
         notes = data.pop("notes", None)
         self.check_columns(data)
 
-        record = session.get(Idea, idea_id)
-        if record is None:
-            raise ValueError(f"id={idea_id} というアイデアが見つからない")
+        record = self.get_or_raise(session, idea_id, "アイデア")
 
         self.check_exists(session, Location, data.get("location_id"), "location_id")
         new_parent_id = data.get("parent_idea_id")
@@ -35,12 +30,9 @@ class UpdateIdea(CommitDraft):
             self._check_not_descendant(session, idea_id, new_parent_id)
         idea_alias.check(session, idea_id, data.get("alias_of_idea_id"))
 
-        for key, value in data.items():
-            setattr(record, key, value)
         if notes is not None:
             load_children(record, "notes", notes)
-        self.finalize(session, record)
-        return to_dict(record)
+        return self.apply(session, record, data)
 
     @staticmethod
     def _check_not_descendant(session, idea_id: int, new_parent_id: int) -> None:

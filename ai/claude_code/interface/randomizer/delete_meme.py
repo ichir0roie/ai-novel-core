@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from db.schema import Meme
 
@@ -13,9 +12,7 @@ class DeleteMeme(CommitDraft):
         self.meme_id = meme_id
 
     def execute(self, session) -> dict:
-        record = session.get(Meme, int(self.meme_id))
-        if record is None:
-            raise UnknownRecordError(f"meme_id={self.meme_id} という id の meme が見つからない")
+        record = self.get_or_raise(session, int(self.meme_id), "ミーム")
 
         data = {"id": record.id, "category": record.category, "text": record.text}
         session.delete(record)

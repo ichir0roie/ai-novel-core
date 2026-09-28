@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from db.schema import Location
 
@@ -15,10 +14,7 @@ class DeletePlace(CommitDraft):
         self.place_id = place_id
 
     def execute(self, session) -> dict:
-        record = session.get(Location, int(self.place_id))
-        if record is None:
-            raise UnknownRecordError(
-                f"place_id={self.place_id} という id の location が見つからない")
+        record = self.get_or_raise(session, int(self.place_id), "場所")
         child = session.scalars(
             select(Location.id).where(Location.parent_id == record.id)).first()
         if child is not None:
