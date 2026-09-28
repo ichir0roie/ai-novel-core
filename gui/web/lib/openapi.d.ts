@@ -439,6 +439,8 @@ export interface components {
             mode: "create" | "edit" | "both";
             /** When Empty */
             when_empty?: string | null;
+            /** When Not Empty */
+            when_not_empty?: string | null;
             /** Params */
             params?: components["schemas"]["ColumnMeta"][];
         };

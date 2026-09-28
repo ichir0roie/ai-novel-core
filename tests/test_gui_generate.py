@@ -45,6 +45,9 @@ def test_tables_meta_lists_the_generators(client, monkeypatch):
     # モデルのプルダウンは ai_client の一覧をそのまま choices に出し、既定値は comment に載せる
     assert params["model"]["choices"] == list(ai_client.AVAILABLE_MODELS)
     assert ai_client.EPISODE_MODEL in params["model"]["comment"]
+    assert episode["revise"]["mode"] == "edit" and episode["revise"]["when_not_empty"] == "text"
+    assert {p["key"] for p in episode["revise"]["params"]} == {
+        "character_ids", "instruction", "previous_episode_ids", "model", "effort"}
     assert tables["idea"]["generators"] == []
 
 

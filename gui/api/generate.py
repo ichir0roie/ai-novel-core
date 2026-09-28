@@ -24,18 +24,25 @@ class Generator:
     draft_arg: str
     mode: str = "create"
     when_empty: str | None = None
+    when_not_empty: str | None = None
     params: tuple[ColumnMeta, ...] = field(default_factory=tuple)
 
     def to_meta(self) -> GeneratorMeta:
         return GeneratorMeta(key=self.key, label=self.label, entrance=self.entrance, mode=self.mode,
-                             when_empty=self.when_empty, params=list(self.params))
+                             when_empty=self.when_empty, when_not_empty=self.when_not_empty,
+                             params=list(self.params))
 
 
 _CHARACTER_IDS = ColumnMeta(key="character_ids", label="登場人物", type="id_list", nullable=True, required=False,
                             references="character", comment="この話に出す人物。空ならその時刻に生きているメインキャラクター")
+_CHARACTER_IDS_REQUIRED = ColumnMeta(
+    key="character_ids", label="登場人物", type="id_list", nullable=False, required=True,
+    references="character", comment="この話に出る人物(初登場・既出とも)")
 _PREVIOUS_EPISODE_IDS = ColumnMeta(
     key="previous_episode_ids", label="直前の話", type="id_list", nullable=True, required=False,
     references="episode", comment="概要と文体の覚え書きで渡す話。空なら作品の中でその時刻より前の三話")
+_INSTRUCTION = ColumnMeta(key="instruction", label="直す指示", type="string", nullable=True, required=False,
+                          comment="空なら文体の好みに沿って見直すだけ")
 
 GENERATORS: tuple[Generator, ...] = (
     Generator("character", "ai", "AI で作成", "randomizer.generate_character.GenerateCharacter", "character",
@@ -51,6 +58,14 @@ GENERATORS: tuple[Generator, ...] = (
     Generator("episode", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "episode",
               mode="both", when_empty="text",
               params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS,
+                      ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
+                                 choices=list(ai_client.AVAILABLE_MODELS),
+                                 comment=f"空なら {ai_client.EPISODE_MODEL}"),
+                      ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,
+                                 comment=f"空なら {ai_client.EPISODE_EFFORT}"))),
+    Generator("episode", "revise", "AI で推敲する", "story.revise_episode.ReviseEpisode", "episode",
+              mode="edit", when_not_empty="text",
+              params=(_CHARACTER_IDS_REQUIRED, _INSTRUCTION, _PREVIOUS_EPISODE_IDS,
                       ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
                                  choices=list(ai_client.AVAILABLE_MODELS),
                                  comment=f"空なら {ai_client.EPISODE_MODEL}"),

@@ -5,8 +5,8 @@ import random
 import traceback
 
 from ai.time_keeper import (
-    character_event_generator, frame_generator, episode_generator, event_progression_generator, event_seed, meme,
-    place_event_generator,
+    character_event_generator, frame_generator, episode_generator, episode_reviser, event_progression_generator,
+    event_seed, meme, place_event_generator,
 )
 from data_access_logic.query import common_query, world_createion_query
 from db.schema import Session, Stamp, Story, get_env_session
@@ -111,6 +111,19 @@ def fill_episode(
     with get_env_session() as s:
         record = episode_generator.generate(
             s, ai, episode_id, character_ids, previous_episode_ids,
+            place_id=place_id, writer_options=writer_options,
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
+        return record.id if record is not None else None
+
+
+def revise_episode(
+    ai: AIClient, episode_id: int, character_ids: list[int], instruction: str = "",
+    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
+    writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
+) -> int | None:
+    with get_env_session() as s:
+        record = episode_reviser.generate(
+            s, ai, episode_id, character_ids, instruction, previous_episode_ids,
             place_id=place_id, writer_options=writer_options,
             shared_style_extra=shared_style_extra, style_extra=style_extra)
         return record.id if record is not None else None

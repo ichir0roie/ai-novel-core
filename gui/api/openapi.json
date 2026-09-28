@@ -1090,6 +1090,17 @@
             ],
             "title": "When Empty"
           },
+          "when_not_empty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When Not Empty"
+          },
           "params": {
             "items": {
               "$ref": "#/components/schemas/ColumnMeta"

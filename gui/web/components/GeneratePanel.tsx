@@ -39,7 +39,10 @@ export default function GeneratePanel({ table, meta, draft, mode, onDone, disabl
   const [error, setError] = useState<string | null>(null);
 
   const generators = (meta.generators ?? []).filter(
-    (generator) => (generator.mode === "both" || generator.mode === mode) && (mode === "create" || !generator.when_empty || isEmpty(draft[generator.when_empty])),
+    (generator) =>
+      (generator.mode === "both" || generator.mode === mode) &&
+      (mode === "create" || !generator.when_empty || isEmpty(draft[generator.when_empty])) &&
+      (mode === "create" || !generator.when_not_empty || !isEmpty(draft[generator.when_not_empty])),
   );
 
   const running = job !== null && (job.status === "queued" || job.status === "running");

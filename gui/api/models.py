@@ -49,6 +49,8 @@ class GeneratorMeta(BaseModel):
     mode: Literal["create", "edit", "both"]
     # 直す画面では、この欄が空のときだけ出す(本文の無い話にだけ「本文を書く」を出すなど)
     when_empty: str | None = None
+    # 直す画面では、この欄が空でないときだけ出す(本文のある話にだけ「推敲する」を出すなど)
+    when_not_empty: str | None = None
     # 行の欄の外で受け取る指定(現在の時刻・登場人物など)
     params: list[ColumnMeta] = Field(default_factory=list)
 

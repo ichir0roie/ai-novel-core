@@ -5,7 +5,8 @@ from ai.claude_code.interface.randomizer.generate_character import GenerateChara
 from ai.claude_code.interface.randomizer.generate_event import GenerateEvent
 from ai.claude_code.interface.story.generate_episode import GenerateEpisode
 from ai.claude_code.interface.story.generate_frame import GenerateFrame
-from ai.time_keeper import episode_generator, frame_generator, random_character_generator
+from ai.claude_code.interface.story.revise_episode import ReviseEpisode
+from ai.time_keeper import episode_generator, episode_reviser, frame_generator, random_character_generator
 from db.schema import (
     Character, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Location, Story,
 )
@@ -27,6 +28,8 @@ class _Ai(MockAIClient):
             decided["key"] = "## 場面\n1. 市場 / 甲 / 地図を買う\n## 狙い\n旅立ちの予感"
         if schema is episode_generator._SCHEMA:
             decided = {"title": "地図の市", "viewpoint": "甲", "text": "甲は地図を買った。"}
+        if schema is episode_reviser._SCHEMA:
+            decided = {"title": "", "text": "書き直した後の本文。"}
         return decided
 
 
@@ -284,3 +287,42 @@ def test_episode_auto_selection_skips_unconfirmed_main_characters(session, place
     _character(session, place, "甲", main_character=True, confirmed=ConfirmStatus.PENDING)
     with pytest.raises(ValueError):
         GenerateEpisode({"story_id": story.id, "key": "k", "start": str(WHEN)}, ai=_Ai(seed=1)).run()
+
+
+# ---------------------------------------------------------------- 推敲
+
+def test_episode_revise_rewrites_the_existing_body(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    episode = Episode(story_id=story.id, title="港にて", key="地図を買う", start=WHEN, text="甲は市場を歩いた。")
+    session.add(episode)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    result = ReviseEpisode({"id": episode.id}, character_ids=[first.id], instruction="外見を厚く書く", ai=ai).run()
+
+    assert result["id"] == episode.id
+    session.refresh(episode)
+    assert episode.text == "書き直した後の本文。" and episode.title == "港にて"  # 題は空で返れば変えない
+    assert session.query(Episode).count() == 1  # 新しい行を足さず、この行を直す
+    prompt = _prompts(ai, episode_reviser._SCHEMA)
+    assert "甲は市場を歩いた。" in prompt and "外見を厚く書く" in prompt
+
+
+def test_episode_revise_refuses_when_the_body_is_empty(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    episode = Episode(story_id=story.id, title="", key="k", start=WHEN, text="")
+    session.add(episode)
+    session.commit()
+    with pytest.raises(ValueError):
+        ReviseEpisode({"id": episode.id}, character_ids=[first.id], ai=_Ai(seed=1)).run()
+
+
+def test_episode_revise_needs_character_ids(session, place):
+    story = session.query(Story).one()
+    episode = Episode(story_id=story.id, title="", key="k", start=WHEN, text="本文")
+    session.add(episode)
+    session.commit()
+    with pytest.raises(ValueError):
+        ReviseEpisode({"id": episode.id}, character_ids=[], ai=_Ai(seed=1)).run()
