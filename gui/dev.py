@@ -10,9 +10,13 @@
 `gui/web/node_modules` が無ければ先に `npm install` を回す。
 ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
 
-ブラウザは Chrome があればそれを使い、プロファイルを世界リポジトリのルート(`DEM_WORLD_DIR`)の
-`.chrome-profile/` に作って開く(普段のプロファイルと分け、GUI 用のタブ・設定だけをそこに残す)。
-Chrome が無ければ既定のブラウザで開く。
+ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルート(`DEM_WORLD_DIR`)の
+`.brave-profile/` に作って開く(普段のプロファイルと分け、GUI 用のタブ・設定だけをそこに残す)。
+Brave が無ければ既定のブラウザで開く。
+
+macOS だけは、普段使いの Brave と Dock・メニューバーが同じアプリとして重なって邪魔になるのを避けるため、
+`~/Applications/Brave Browser (GUI Debug).app` という別アプリ(bundle id を変えたコピー)を用意し、
+そちらを開く(無ければ `/Applications/Brave Browser.app` から初回だけ作る)。
 """
 from __future__ import annotations
 
@@ -31,7 +35,9 @@ import webbrowser
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CHROME_PROFILE_DIR_NAME = ".chrome-profile"
+BRAVE_PROFILE_DIR_NAME = ".brave-profile"
+BRAVE_DEBUG_APP_NAME = "Brave Browser (GUI Debug).app"
+BRAVE_DEBUG_BUNDLE_ID = "com.brave.Browser.guidebug"
 
 
 def _npm() -> str:
@@ -39,16 +45,48 @@ def _npm() -> str:
     return shutil.which("npm") or "npm"
 
 
-def _chrome() -> str | None:
-    for name in ("google-chrome", "google-chrome-stable", "chrome", "chrome.exe"):
+def _brave_debug_app_path() -> str:
+    return os.path.join(os.path.expanduser("~/Applications"), BRAVE_DEBUG_APP_NAME)
+
+
+def _ensure_brave_debug_app() -> str | None:
+    # 普段使いの Brave をそのまま開くと Dock・メニューバーで同じアプリとして重なり、
+    # 普段の Brave 利用の邪魔になる。bundle id を変えたコピーを別アプリとして用意する
+    debug_app = _brave_debug_app_path()
+    exe = os.path.join(debug_app, "Contents", "MacOS", "Brave Browser")
+    if os.path.isfile(exe):
+        return exe
+    source = "/Applications/Brave Browser.app"
+    if not os.path.isdir(source):
+        return None
+    print(f"[gui/dev] デバッグ専用の Brave app を {debug_app} に作る(初回のみ)")
+    os.makedirs(os.path.dirname(debug_app), exist_ok=True)
+    shutil.copytree(source, debug_app)
+    plist_path = os.path.join(debug_app, "Contents", "Info.plist")
+    subprocess.run(
+        ["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleIdentifier {BRAVE_DEBUG_BUNDLE_ID}", plist_path],
+        check=True,
+    )
+    subprocess.run(
+        ["/usr/libexec/PlistBuddy", "-c", "Set :CFBundleName Brave Browser (GUI Debug)", plist_path],
+        check=True,
+    )
+    # コピーでコード署名が崩れて Gatekeeper に弾かれるので、ad-hoc で署名し直す
+    subprocess.run(["codesign", "--force", "--deep", "--sign", "-", debug_app], check=True)
+    return exe if os.path.isfile(exe) else None
+
+
+def _brave() -> str | None:
+    if sys.platform == "darwin":
+        return _ensure_brave_debug_app()
+    for name in ("brave-browser", "brave-browser-stable", "brave", "brave.exe"):
         found = shutil.which(name)
         if found:
             return found
     candidates = [
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "Application", "chrome.exe"),
-        os.path.join(os.environ.get("PROGRAMFILES", ""), "Google", "Chrome", "Application", "chrome.exe"),
-        os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "Google", "Chrome", "Application", "chrome.exe"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
     ]
     for path in candidates:
         if os.path.isfile(path):
@@ -56,22 +94,22 @@ def _chrome() -> str | None:
     return None
 
 
-def _chrome_profile_dir() -> str:
+def _brave_profile_dir() -> str:
     world_dir = os.environ.get("DEM_WORLD_DIR") or os.getcwd()
-    return os.path.join(os.path.abspath(world_dir), CHROME_PROFILE_DIR_NAME)
+    return os.path.join(os.path.abspath(world_dir), BRAVE_PROFILE_DIR_NAME)
 
 
 def _open_browser(url: str) -> None:
-    chrome = _chrome()
-    if chrome is None:
-        print("[gui/dev] Chrome が見つからないので既定のブラウザで開く")
+    brave = _brave()
+    if brave is None:
+        print("[gui/dev] Brave が見つからないので既定のブラウザで開く")
         webbrowser.open(url)
         return
-    profile = _chrome_profile_dir()
+    profile = _brave_profile_dir()
     os.makedirs(profile, exist_ok=True)
-    print(f"[gui/dev] Chrome をプロファイル {profile} で開く")
+    print(f"[gui/dev] Brave をプロファイル {profile} で開く")
     # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
-    _popen([chrome, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _popen([brave, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _port_open(port: int) -> bool:
