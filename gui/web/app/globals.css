@@ -91,14 +91,14 @@ input, select, textarea, button { font: inherit; color: inherit; }
 input[type="text"], input[type="search"], input[type="number"], select, textarea {
   width: 100%; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
 }
-textarea { min-height: 6rem; resize: vertical; line-height: 1.7; }
-textarea.section { min-height: 14rem; flex: 1; }
+textarea { min-height: 12rem; resize: vertical; line-height: 1.7; }
+textarea.section { min-height: 28rem; flex: 1; }
 textarea.mono { font-family: var(--mono); font-size: 0.85rem; }
 input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 0; }
 
 /* 本文(section)欄のプレビュー表示。textarea.section と同じ箱で、クリックで編集(textarea)に切り替わる */
 div.markdown-preview {
-  min-height: 14rem; flex: 1; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 6px;
+  min-height: 28rem; flex: 1; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 6px;
   background: var(--panel); line-height: 1.7; cursor: pointer; overflow: auto;
 }
 div.markdown-preview:hover { border-color: var(--accent); }
@@ -114,7 +114,7 @@ div.markdown-preview th { background: var(--chip); font-weight: 600; }
 
 /* 本文(section)欄のプレビュー表示(マークダウンではなく純粋なテキスト)。textarea.section と同じ箱 */
 div.plain-preview {
-  min-height: 14rem; flex: 1; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 6px;
+  min-height: 28rem; flex: 1; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 6px;
   background: var(--panel); line-height: 1.7; cursor: pointer; overflow: auto; white-space: pre-wrap;
 }
 div.plain-preview:hover { border-color: var(--accent); }
@@ -173,10 +173,17 @@ button.ghost { background: transparent; }
 .record-header .status { margin: 0; }
 .record-text { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 1rem; }
 .record-text .field.section { flex: 1; min-height: 0; }
-.record-text textarea.section, .record-text .markdown-preview, .record-text .plain-preview { height: 100%; min-height: 4rem; resize: none; overflow: auto; }
-/* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使い、中だけスクロールする。
-   左の欄が埋まっていても潰れないよう、最低の高さは持たせる(足りなければ左の欄ごとスクロールする) */
-.record-side .field.section.side { flex: 1 0 14rem; min-height: 14rem; }
+.record-text textarea.section, .record-text .markdown-preview, .record-text .plain-preview { height: 100%; min-height: 8rem; resize: none; overflow: auto; }
+/* 「AI で作成」。押すと本文の右側で大半(9 割ほど)を使って開く。閉じているあいだは何も置かない(body が null) */
+.generate-right { flex: 9 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.generate-right > .panel.generate { flex: 1; min-height: 0; overflow: auto; margin: 0; }
+/* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使う。
+   推敲欄を開いていないとき左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
+   (保存ボタンを見るのに左の欄ごとスクロールしなくてよい)。最低でも見出し+数行は見える高さは残す */
+.record-side .field.section.side { flex: 1 1 28rem; min-height: 8rem; }
+/* ただし推敲欄を開いているときは、指示を書くのにキーテキストを見比べるので潰さない。
+   28rem を割り込みそうなら(足りなければ)左の欄ごとスクロールする側に戻す */
+.record-side:has(.revise-panel.open) .field.section.side { flex-shrink: 0; min-height: 28rem; }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
   flex: 1; height: auto; min-height: 0; resize: none; overflow: auto;
 }
@@ -185,17 +192,38 @@ button.ghost { background: transparent; }
   .record { overflow: auto; display: flex; flex-direction: column; }
   .record-side { overflow: visible; flex-shrink: 0; }
   .record-text { flex-shrink: 0; }
-  .record-text textarea.section, .record-text .markdown-preview, .record-text .plain-preview { height: auto; min-height: 20rem; resize: vertical; }
+  .record-text textarea.section, .record-text .markdown-preview, .record-text .plain-preview { height: auto; min-height: 40rem; resize: vertical; }
   .record-side .field.section.side { flex: none; }
-  .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 14rem; resize: vertical; }
-  .record-actions { position: static; }
+  .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 28rem; resize: vertical; }
+  .revise-panel.open { flex: none; min-height: 0; }
+  .revise-body textarea.section, .revise-body .markdown-preview, .revise-body .plain-preview { height: auto; min-height: 32rem; resize: vertical; }
+  .generate-right { flex: none; }
 }
 
-.record-actions { margin-top: 1rem; position: sticky; bottom: 0; z-index: 1; }
+/* 「AI で推敲する」。開くボタンは save の隣(actionbar)に置き、押すと指示テキストを大きく書ける
+   専用パネルがここに開く(本文を見ながら指示を書きたいので、左の欄の大半(7 割ほど)を使う) */
+.revise-panel { display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; margin-top: 0.75rem; }
+/* flex-shrink を 0 にして、置き場所(record-side)が狭くても本文欄の下(20rem)より縮めない。
+   縮められる余地が無ければ record-side 自体がスクロールして受け止める(場面欄の 28rem と同じ考え方) */
+.revise-panel.open { flex: 7 0 auto; min-height: 18rem; }
+.revise-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-shrink: 0; }
+.revise-body { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.revise-body .field.section { flex: 1 0 auto; min-height: 20rem; }
+.revise-body textarea.section, .revise-body .markdown-preview, .revise-body .plain-preview { height: 100%; min-height: 20rem; resize: none; overflow: auto; }
+.revise-fields { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; flex-shrink: 0; }
+.revise-fields .field { min-width: 10rem; }
+
+/* 保存系のボタンと「AI で作成」パネルを、左の欄の一番下にまとめて隣り合わせに置く(フロートさせず、通常の流れの末尾) */
+.record-actions { margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.record-actions > .actionbar { flex-shrink: 0; margin-top: 0; }
+.record-actions > .generate-body { flex: 1; min-width: 260px; }
+.record-actions > .generate-body:empty { display: none; }
 
 .actionbar { flex-shrink: 0; margin-top: 0.75rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 1.25rem; display: flex; gap: 0.6rem; align-items: center; }
 .actionbar .inner { width: 100%; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .actionbar .spacer { flex: 1; }
+/* 「AI で作成」「AI で推敲する」の開閉ボタン(押しているあいだだけ強調) */
+.actionbar button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .actionbar .meta { color: var(--muted); font-size: 0.85rem; }
 
 .childlist table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -233,11 +261,28 @@ button.ghost { background: transparent; }
 }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
 .modal.wide { max-width: min(96vw, 1600px); }
+/* 幅の広い .modal(640px)より小さくてよい、小さなモーダル(日時ピッカーなど)。固定幅でよく、中身に合わせて伸縮させる必要はない */
+.modal.compact { width: min(94vw, 22rem); max-width: min(94vw, 22rem); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .modal-head h2 { margin: 0; font-size: 1.05rem; }
 .modal-body { padding: 1rem; overflow: auto; }
 .modal-actions { display: flex; gap: 0.6rem; align-items: center; padding: 0.7rem 1rem; border-top: 1px solid var(--line); flex-shrink: 0; }
 .modal-actions .spacer { flex: 1; }
+
+/* stamp 欄(年月日時分秒)のカレンダー形式ポップアップ(Modal の中身) */
+.stamp-picker { display: flex; flex-direction: column; gap: 0.6rem; min-width: 16rem; }
+.stamp-year-row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; }
+.stamp-year-row button.ghost { padding: 0.3rem 0.6rem; flex-shrink: 0; }
+.stamp-year { width: 7rem; flex-shrink: 0; text-align: center; }
+.stamp-monthgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.25rem; }
+.stamp-month { padding: 0.35rem 0; border-radius: 6px; text-align: center; }
+.stamp-month.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stamp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; }
+.stamp-day { padding: 0.35rem 0; border-radius: 6px; text-align: center; }
+.stamp-day.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stamp-time { display: flex; gap: 0.6rem; }
+.stamp-time label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); flex: 1; }
+.stamp-preview { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); text-align: center; }
 
 .multi { border: 1px solid var(--line); border-radius: 6px; padding: 0.3rem 0.5rem; max-height: 12rem; overflow: auto; background: var(--panel); }
 .multi label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
@@ -282,16 +327,8 @@ button.ghost { background: transparent; }
   .viz-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40%; }
 }
 
-/* 「AI で作成」。本文の欄の下に置き、開いているあいだは右側の 9 割を使う(本文は 1 割)。
-   本文にカーソルがあるか中身があるあいだは閉じて、開くための帯だけを残す */
-.record-generate { display: flex; flex-direction: column; gap: 0.4rem; min-height: 0; }
-.record-generate.open { flex: 9; }
-.record-generate.closed { flex: none; }
-.record-generate.closed .generate-body { display: none; }
-.record-generate:has(> .generate-body:empty) { display: none; }
-.record-generate .generate-body { flex: 1; min-height: 0; }
-.generate-toggle { align-self: flex-start; padding: 0.2rem 0.7rem; font-size: 0.85rem; color: var(--muted); }
-.generate-body > .panel.generate { margin: 0; height: 100%; overflow: auto; padding: 0.7rem 0.9rem; }
+/* 「AI で作成」。保存ボタンの並び(.record-actions)の中で、その隣に置く */
+.generate-body > .panel.generate { margin: 0; padding: 0.7rem 0.9rem; }
 .panel.generate .form { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem 1rem; }
 .panel.generate .multi { max-height: 16rem; }
 .generate-buttons { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; }

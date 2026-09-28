@@ -32,6 +32,9 @@ EPISODE_EFFORT = "high"
 # 一覧の更新は本ファイルの値だけを直せばよい(GUI 側は choices としてこの値をそのまま受け取る)。
 AVAILABLE_MODELS = (EPISODE_MODEL, "claude-opus-5", "claude-opus-5-5", _MODEL, "claude-haiku-4-5")
 
+# GUI の「本文の effort」プルダウンに出す一覧。claude CLI の --effort に渡せる値(--help の一覧)そのまま。
+AVAILABLE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
 
 def _command() -> str:
     name = os.environ.get("DEM_CLAUDE_AI_COMMAND", "claude")

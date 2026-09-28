@@ -877,6 +877,17 @@
             ],
             "title": "Choices"
           },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          },
           "references": {
             "anyOf": [
               {
@@ -1107,6 +1118,11 @@
             },
             "type": "array",
             "title": "Params"
+          },
+          "panel": {
+            "type": "boolean",
+            "title": "Panel",
+            "default": false
           }
         },
         "type": "object",

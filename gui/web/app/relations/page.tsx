@@ -186,8 +186,7 @@ export default function RelationsPage() {
     if (!selected) {
       return (
         <>
-          <p className="hint">{T.relations.hintClick}</p>
-          <p className="hint">
+          <p className="hint" title={T.relations.hintClick}>
             {T.relations.hintCounts(chars.length, rels.length, year)}
           </p>
           {rels.length > 0 && (

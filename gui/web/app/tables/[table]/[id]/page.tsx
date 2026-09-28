@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import GeneratePanel from "@/components/GeneratePanel";
+import { useGeneratePanel } from "@/components/GeneratePanel";
 import RecordForm from "@/components/RecordForm";
+import { useRevisePanel } from "@/components/RevisePanel";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
 import { diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
@@ -56,6 +57,9 @@ export default function RecordPage() {
     void load();
   }, [table, load]);
 
+  const generatePanel = useGeneratePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
+  const revisePanel = useRevisePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
+
   if (!meta) return <div className="status info">{T.loading}</div>;
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
@@ -101,7 +105,8 @@ export default function RecordPage() {
                 {saved && !error && <div className="status ok">{saved}</div>}
               </>
             }
-            generate={<GeneratePanel table={table} meta={meta} draft={value} mode="edit" onDone={generated} disabled={busy} />}
+            generate={generatePanel?.body}
+            revise={revisePanel?.body}
             side={<Related related={loaded.related ?? {}} owner={{ table, id }} />}
             actions={
               <div className="actionbar">
@@ -115,6 +120,8 @@ export default function RecordPage() {
                   <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
                     {T.record.save}
                   </button>
+                  {generatePanel?.toggle}
+                  {revisePanel?.toggle}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
                 </div>

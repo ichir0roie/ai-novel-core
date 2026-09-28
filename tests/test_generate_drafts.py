@@ -37,6 +37,24 @@ def _prompts(ai, schema=None):
     return "\n".join(call["prompt"] for call in ai.calls if schema is None or call["schema"] is schema)
 
 
+class _FailingBodyAi(_Ai):
+    """話の枠は決めるが、本文を書く呼び出しだけ失敗させる(下書きが先に保存されているか確かめる用)。"""
+
+    def try_generate_json(self, prompt, schema, **kwargs):
+        if schema is episode_generator._SCHEMA:
+            raise RuntimeError("本文の生成に失敗(テスト用)")
+        return super().try_generate_json(prompt, schema, **kwargs)
+
+
+class _FailingReviseAi(_Ai):
+    """推敲の呼び出しだけ失敗させる(下書きが先に保存されているか確かめる用)。"""
+
+    def try_generate_json(self, prompt, schema, **kwargs):
+        if schema is episode_reviser._SCHEMA:
+            raise RuntimeError("推敲に失敗(テスト用)")
+        return super().try_generate_json(prompt, schema, **kwargs)
+
+
 @pytest.fixture
 def place(session):
     record = Location(name="港町", kind="町", text="港町の説明", start=Stamp(2000))
@@ -275,6 +293,18 @@ def test_episode_refuses_a_frame_that_already_has_a_body(session, place):
         GenerateEpisode({"id": done.id}, character_ids=[1], ai=_Ai(seed=1)).run()
 
 
+def test_episode_draft_is_saved_before_the_body_is_written_so_a_failure_keeps_it(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+
+    with pytest.raises(RuntimeError):
+        GenerateEpisode({"story_id": story.id, "key": "地図を買う", "start": str(WHEN), "title": "港の朝"},
+                        character_ids=[first.id], ai=_FailingBodyAi(seed=1)).run()
+
+    saved = session.query(Episode).one()
+    assert saved.title == "港の朝" and saved.key == "地図を買う" and saved.start == WHEN and saved.text == ""
+
+
 def test_episode_needs_characters_when_there_is_no_main_character(session, place):
     story = session.query(Story).one()
     _character(session, place, "甲")
@@ -316,13 +346,71 @@ def test_episode_revise_refuses_when_the_body_is_empty(session, place):
     session.add(episode)
     session.commit()
     with pytest.raises(ValueError):
-        ReviseEpisode({"id": episode.id}, character_ids=[first.id], ai=_Ai(seed=1)).run()
+        ReviseEpisode({"id": episode.id}, character_ids=[first.id], instruction="外見を厚く書く", ai=_Ai(seed=1)).run()
 
 
-def test_episode_revise_needs_character_ids(session, place):
+def test_episode_revise_needs_characters_when_there_is_no_main_character(session, place):
     story = session.query(Story).one()
+    _character(session, place, "甲")
     episode = Episode(story_id=story.id, title="", key="k", start=WHEN, text="本文")
     session.add(episode)
     session.commit()
     with pytest.raises(ValueError):
-        ReviseEpisode({"id": episode.id}, character_ids=[], ai=_Ai(seed=1)).run()
+        ReviseEpisode({"id": episode.id}, instruction="外見を厚く書く", ai=_Ai(seed=1)).run()
+
+
+def test_episode_revise_auto_selects_main_characters_when_character_ids_is_omitted(session, place):
+    story = session.query(Story).one()
+    lead = _character(session, place, "甲", main_character=True)
+    _character(session, place, "乙")
+    episode = Episode(story_id=story.id, title="港にて", key="地図を買う", start=WHEN, text="甲は市場を歩いた。")
+    session.add(episode)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    result = ReviseEpisode({"id": episode.id}, instruction="外見を厚く書く", ai=ai).run()
+
+    assert result["id"] == episode.id
+    prompt = _prompts(ai, episode_reviser._SCHEMA)
+    # 登場人物を省けばメインキャラクター(GenerateEpisode と同じ選び方)
+    assert f'"name": "{lead.name}"' in prompt and '"name": "乙"' not in prompt
+
+
+def test_episode_revise_also_saves_the_drafted_title_and_key(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    episode = Episode(story_id=story.id, title="旧題", key="旧key", start=WHEN, text="甲は市場を歩いた。")
+    session.add(episode)
+    session.commit()
+
+    result = ReviseEpisode({"id": episode.id, "title": "新題", "key": "新key"},
+                           character_ids=[first.id], instruction="外見を厚く書く", ai=_Ai(seed=1)).run()
+
+    assert result["id"] == episode.id
+    session.refresh(episode)
+    assert episode.title == "新題" and episode.key == "新key" and episode.text == "書き直した後の本文。"
+
+
+def test_episode_revise_draft_is_saved_before_the_ai_call_so_a_failure_keeps_it(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    episode = Episode(story_id=story.id, title="旧題", key="旧key", start=WHEN, text="甲は市場を歩いた。")
+    session.add(episode)
+    session.commit()
+
+    with pytest.raises(RuntimeError):
+        ReviseEpisode({"id": episode.id, "title": "新題", "key": "新key"},
+                      character_ids=[first.id], instruction="外見を厚く書く", ai=_FailingReviseAi(seed=1)).run()
+
+    session.refresh(episode)
+    assert episode.title == "新題" and episode.key == "新key" and episode.text == "甲は市場を歩いた。"
+
+
+def test_episode_revise_needs_instruction(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    episode = Episode(story_id=story.id, title="", key="k", start=WHEN, text="本文")
+    session.add(episode)
+    session.commit()
+    with pytest.raises(ValueError):
+        ReviseEpisode({"id": episode.id}, character_ids=[first.id], instruction="  ", ai=_Ai(seed=1)).run()

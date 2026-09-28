@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { generateRecord, getJob, type ColumnMeta, type GeneratorMeta, type JobInfo, type Rec, type TableMeta } from "@/lib/api";
+import { useState, type ReactNode } from "react";
+import { generateRecord, type ColumnMeta, type GeneratorMeta, type Rec, type TableMeta } from "@/lib/api";
+import { compactDraft, isEmpty, matchingGenerators, useGenerateJob } from "@/lib/generateJob";
 import { useMeta } from "@/lib/meta";
 import FieldInput from "./FieldInput";
 import { T } from "@/lib/text";
 
 type Props = {
   table: string;
-  meta: TableMeta;
+  /** 読み込み中は undefined になる(その間は何も出さない) */
+  meta: TableMeta | undefined;
   /** 欄の値(下書き)。空の欄は AI が補う */
   draft: Rec;
   mode: "create" | "edit";
@@ -17,56 +19,22 @@ type Props = {
   disabled?: boolean;
 };
 
-/** 欄の値(下書き)を core の空の判定(None・空文字・空の配列)に合わせて省く。 */
-function compactDraft(draft: Rec): Rec {
-  const data: Rec = {};
-  for (const [key, value] of Object.entries(draft)) {
-    if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) continue;
-    data[key] = value;
-  }
-  return data;
-}
+export type PanelParts = { toggle: ReactNode; body: ReactNode };
 
-function isEmpty(value: unknown): boolean {
-  return value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
-}
-
-/** 「AI で作成」。欄の値を核に AI が全欄を組み立て直して行を足す。claude を叩く裏の job なので、終わるまで待って結果の行へ移る。 */
-export default function GeneratePanel({ table, meta, draft, mode, onDone, disabled }: Props) {
+/** 「AI で作成」。欄の値を核に AI が全欄を組み立て直して行を足す(claude を叩く裏の job)。
+ * 呼ぶ側(save ボタンの並び)に置く小さなボタン(`toggle`)と、押すと開く欄(`body`。無ければ null)を分けて返す。
+ * 指定できる欄(params)が無ければボタン自体がその場で実行し、`body` は結果待ち・エラーの表示だけになる。
+ * 大きな専用パネルで出す推敲(`panel: true`)は `useRevisePanel` の担当なので、ここでは出さない。 */
+export function useGeneratePanel({ table, meta, draft, mode, onDone, disabled }: Props): PanelParts | null {
   const { claudeAvailable } = useMeta();
+  const [open, setOpen] = useState(false);
   const [args, setArgs] = useState<Rec>({});
-  const [job, setJob] = useState<JobInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { job, error, running, start, setError } = useGenerateJob((id) => {
+    setOpen(false);
+    onDone(id);
+  });
 
-  const generators = (meta.generators ?? []).filter(
-    (generator) =>
-      (generator.mode === "both" || generator.mode === mode) &&
-      (mode === "create" || !generator.when_empty || isEmpty(draft[generator.when_empty])) &&
-      (mode === "create" || !generator.when_not_empty || !isEmpty(draft[generator.when_not_empty])),
-  );
-
-  const running = job !== null && (job.status === "queued" || job.status === "running");
-  useEffect(() => {
-    if (!running || !job) return;
-    const timer = setInterval(async () => {
-      try {
-        const latest = await getJob(job.id);
-        setJob(latest);
-        if (latest.status === "done") {
-          const id = (latest.result as { id?: number } | null)?.id;
-          if (typeof id === "number") onDone(id);
-          else setError(T.generate.noAddedId(latest.result));
-        } else if (latest.status === "failed") {
-          setError(latest.error ?? T.generate.failed);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        setJob(null);
-      }
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [running, job, onDone]);
-
+  const generators = matchingGenerators(meta, draft, mode, false);
   if (generators.length === 0) return null;
 
   const params = new Map<string, ColumnMeta>();
@@ -74,29 +42,44 @@ export default function GeneratePanel({ table, meta, draft, mode, onDone, disabl
 
   const run = async (generator: GeneratorMeta) => {
     setError(null);
-    try {
-      const mine: Rec = {};
-      for (const param of generator.params ?? []) if (!isEmpty(args[param.key])) mine[param.key] = args[param.key];
-      setJob(await generateRecord(table, generator.key, compactDraft(draft), mine));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    const mine: Rec = {};
+    for (const param of generator.params ?? []) if (!isEmpty(args[param.key])) mine[param.key] = args[param.key];
+    await start(() => generateRecord(table, generator.key, compactDraft(draft), mine));
   };
 
-  const buttons = (
-    <div className="generate-buttons">
-      {generators.map((generator) => (
-        <button key={generator.key} className="primary" onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
-          {generator.label}
-        </button>
-      ))}
-    </div>
-  );
+  const status = (running && job && <div className="hint">{T.generate.inProgress(job.id, job.status)}</div>) || (error && <div className="status error">{error}</div>);
 
-  return (
-    <div className="panel generate">
-      {!claudeAvailable && <div className="status error">{T.generate.unavailable}</div>}
-      {params.size > 0 ? (
+  // 指定できる欄が無い生成(character の「AI で補完」など)は、開閉を挟まずボタンがそのまま実行する
+  if (params.size === 0) {
+    return {
+      toggle: (
+        <>
+          {generators.map((generator) => (
+            <button key={generator.key} onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
+              {generator.label}
+            </button>
+          ))}
+        </>
+      ),
+      body: status ? <div className="panel generate">{status}</div> : null,
+    };
+  }
+
+  return {
+    toggle: (
+      <button
+        type="button"
+        className={open ? "on" : ""}
+        onClick={() => setOpen(!open)}
+        disabled={disabled || !claudeAvailable}
+        title={claudeAvailable ? T.generate.description(mode) : T.generate.unavailable}
+      >
+        {generators.map((g) => g.label).join(" / ")}
+      </button>
+    ),
+    body: open ? (
+      <div className="panel generate">
+        {!claudeAvailable && <div className="status error">{T.generate.unavailable}</div>}
         <div className="form">
           {[...params.values()].map((param) => (
             <div key={param.key} className="field">
@@ -107,13 +90,16 @@ export default function GeneratePanel({ table, meta, draft, mode, onDone, disabl
               <FieldInput column={param} value={args[param.key]} onChange={(v) => setArgs({ ...args, [param.key]: v })} disabled={running} />
             </div>
           ))}
-          {buttons}
+          <div className="generate-buttons">
+            {generators.map((generator) => (
+              <button key={generator.key} className="primary" onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
+                {generator.label}
+              </button>
+            ))}
+          </div>
         </div>
-      ) : (
-        buttons
-      )}
-      {running && job && <div className="hint">{T.generate.inProgress(job.id, job.status)}</div>}
-      {error && <div className="status error">{error}</div>}
-    </div>
-  );
+        {status}
+      </div>
+    ) : null,
+  };
 }

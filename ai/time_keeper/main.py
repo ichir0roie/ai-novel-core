@@ -117,7 +117,7 @@ def fill_episode(
 
 
 def revise_episode(
-    ai: AIClient, episode_id: int, character_ids: list[int], instruction: str = "",
+    ai: AIClient, episode_id: int, character_ids: list[int], instruction: str,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:

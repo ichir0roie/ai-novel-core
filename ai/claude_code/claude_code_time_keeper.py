@@ -102,12 +102,12 @@ claude_fill_episode_main = fill_episode
 
 @_with_usage_summary
 def revise_episode(
-    episode_id: int, character_ids: list[int], instruction: str = "",
+    episode_id: int, character_ids: list[int], instruction: str,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     model: str | None = None, effort: str | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
-    """すでに本文のある話を、指示(`instruction`)に沿って書き直す。`model` / `effort` を省けば fable の high"""
+    """すでに本文のある話を、指示(`instruction`。必須)に沿って書き直す。`model` / `effort` を省けば fable の high"""
     return _main.revise_episode(
         ai_client, episode_id, character_ids, instruction, previous_episode_ids,
         place_id=place_id, writer_options=_writer_options(model, effort),

@@ -7,7 +7,7 @@ from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.story._base import StoryQuery
 from ai.time_keeper import episode_generator, frame_generator
 from data_access_logic.query import world_createion_query
-from db.schema import Character, ConfirmStatus, Stamp
+from db.schema import Character, ConfirmStatus, Episode, Stamp
 
 
 class GenerateEpisode(StoryQuery):
@@ -18,6 +18,9 @@ class GenerateEpisode(StoryQuery):
     どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
     `character_ids` を省けばその時刻に生きているメインキャラクター。`model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
+
+    AI 呼び出し(数分〜十数分かかることがある)の前に、下書きの題・種・視点・場所・時刻を一度保存する。
+    途中で失敗しても、この保存分(枠)は db に残る。
     """
 
     def __init__(self, episode: dict, character_ids: list[int] | None = None,
@@ -59,12 +62,17 @@ class GenerateEpisode(StoryQuery):
             raise ValueError("story_id は必須")
         story_id = int(story_id)
 
-        key = (draft.get("key") or (slot.key if slot else "") or "").strip()
-        time = Stamp.parse(draft.get("start")) or (slot.start if slot else None)
+        if slot is None:
+            slot = Episode(story_id=story_id, title="", key="")
+            session.add(slot)
+        episode_generator.save_draft(session, slot, draft)
+
+        key = (draft.get("key") or slot.key or "").strip()
+        time = Stamp.parse(draft.get("start")) or slot.start
         if not key or time is None:
             slot = frame_generator.generate_frame(
                 session, self.ai, story_id, draft, self.character_ids, self.previous_episode_ids,
-                episode_id=slot.id if slot else None)
+                episode_id=slot.id)
             key, time = slot.key, slot.start
 
         character_ids = list(self.character_ids or [])
@@ -77,16 +85,8 @@ class GenerateEpisode(StoryQuery):
         record = frame_generator.generate(
             session, self.ai, story_id, key, time, character_ids, self.previous_episode_ids,
             place_id=self.place_id, viewpoint=viewpoint, writer_options=self._writer_options(),
-            episode_id=slot.id if slot else None,
+            episode_id=slot.id,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if record is None:
             raise ValueError("本文が得られなかった")
-        title = (draft.get("title") or "").strip()
-        place = (draft.get("place") or "").strip()
-        end = Stamp.parse(draft.get("end"))
-        if slot is None and (title or place or end is not None):
-            record.title = title or record.title
-            record.place = place or record.place
-            record.end = end or record.end
-            session.commit()
         return _rows.episode_row(record)

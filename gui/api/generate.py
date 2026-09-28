@@ -26,23 +26,29 @@ class Generator:
     when_empty: str | None = None
     when_not_empty: str | None = None
     params: tuple[ColumnMeta, ...] = field(default_factory=tuple)
+    # true なら「AI で作成」の小さなボタン列には出さず、左の欄の一番下に大きく開く専用パネル(GUI 側)で出す
+    # (推敲は指示文を書き込みながら本文も見たいので、他の AI 生成とは別の場所に大きく開く)
+    panel: bool = False
 
     def to_meta(self) -> GeneratorMeta:
         return GeneratorMeta(key=self.key, label=self.label, entrance=self.entrance, mode=self.mode,
                              when_empty=self.when_empty, when_not_empty=self.when_not_empty,
-                             params=list(self.params))
+                             params=list(self.params), panel=self.panel)
 
 
 _CHARACTER_IDS = ColumnMeta(key="character_ids", label="登場人物", type="id_list", nullable=True, required=False,
                             references="character", comment="この話に出す人物。空ならその時刻に生きているメインキャラクター")
-_CHARACTER_IDS_REQUIRED = ColumnMeta(
-    key="character_ids", label="登場人物", type="id_list", nullable=False, required=True,
-    references="character", comment="この話に出る人物(初登場・既出とも)")
 _PREVIOUS_EPISODE_IDS = ColumnMeta(
     key="previous_episode_ids", label="直前の話", type="id_list", nullable=True, required=False,
     references="episode", comment="概要と文体の覚え書きで渡す話。空なら作品の中でその時刻より前の三話")
-_INSTRUCTION = ColumnMeta(key="instruction", label="直す指示", type="string", nullable=True, required=False,
-                          comment="空なら文体の好みに沿って見直すだけ")
+# 推敲の指示文。大きなマークダウンの欄(section)で必須にする(本文が空のときの「AI で書く」と違い、
+# 推敲は必ず観点を指示するので、空なら文体の好みに沿って見直すだけ、という省略は無くした)
+_INSTRUCTION = ColumnMeta(key="instruction", label="Instruction", type="string", nullable=False, required=True,
+                          section=True, comment="どこをどう直すか(例: 初登場キャラの外見・性格を厚く書く)")
+_MODEL_PARAM = ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
+                          choices=list(ai_client.AVAILABLE_MODELS), default=ai_client.EPISODE_MODEL)
+_EFFORT_PARAM = ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,
+                           choices=list(ai_client.AVAILABLE_EFFORTS), default=ai_client.EPISODE_EFFORT)
 
 GENERATORS: tuple[Generator, ...] = (
     Generator("character", "ai", "AI で作成", "randomizer.generate_character.GenerateCharacter", "character",
@@ -57,20 +63,12 @@ GENERATORS: tuple[Generator, ...] = (
               params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS)),
     Generator("episode", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "episode",
               mode="both", when_empty="text",
-              params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS,
-                      ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
-                                 choices=list(ai_client.AVAILABLE_MODELS),
-                                 comment=f"空なら {ai_client.EPISODE_MODEL}"),
-                      ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,
-                                 comment=f"空なら {ai_client.EPISODE_EFFORT}"))),
+              params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS, _MODEL_PARAM, _EFFORT_PARAM)),
+    # 登場人物・直前の話は聞かず、既定(話の start に生きているメインキャラクター・その時刻より前の三話)を使う
+    # (ReviseEpisode 側で解決する)。GUI の専用レイアウト(RevisePanel)は指示文・モデル・effort だけを出す
     Generator("episode", "revise", "AI で推敲する", "story.revise_episode.ReviseEpisode", "episode",
-              mode="edit", when_not_empty="text",
-              params=(_CHARACTER_IDS_REQUIRED, _INSTRUCTION, _PREVIOUS_EPISODE_IDS,
-                      ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
-                                 choices=list(ai_client.AVAILABLE_MODELS),
-                                 comment=f"空なら {ai_client.EPISODE_MODEL}"),
-                      ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,
-                                 comment=f"空なら {ai_client.EPISODE_EFFORT}"))),
+              mode="edit", when_not_empty="text", panel=True,
+              params=(_INSTRUCTION, _MODEL_PARAM, _EFFORT_PARAM)),
 )
 
 

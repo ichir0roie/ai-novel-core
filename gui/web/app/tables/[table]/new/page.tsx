@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import GeneratePanel from "@/components/GeneratePanel";
+import { useGeneratePanel } from "@/components/GeneratePanel";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec } from "@/lib/api";
@@ -31,6 +31,8 @@ export default function NewRecordPage() {
     },
     [table, reload, openPage],
   );
+
+  const generatePanel = useGeneratePanel({ table, meta, draft: value ?? {}, mode: "create", onDone: generated, disabled: busy });
 
   if (!meta || value === null) return <div className="status info">{T.loading}</div>;
 
@@ -62,7 +64,7 @@ export default function NewRecordPage() {
           value={value}
           onChange={setValue}
           mode="create"
-          generate={<GeneratePanel table={table} meta={meta} draft={value} mode="create" onDone={generated} disabled={busy} />}
+          generate={generatePanel?.body}
           titleNote={T.create.title(meta.label)}
           header={error && <div className="status error">{error}</div>}
           actions={
@@ -74,6 +76,7 @@ export default function NewRecordPage() {
                 <button className="primary" onClick={submit} disabled={busy}>
                   {T.create.add}
                 </button>
+                {generatePanel?.toggle}
                 <span className="spacer" />
               </div>
             </div>

@@ -5,6 +5,7 @@ import type { ColumnMeta } from "@/lib/api";
 import MarkdownField from "./MarkdownField";
 import PlainTextField from "./PlainTextField";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
+import StampInput from "./StampInput";
 import { T } from "@/lib/text";
 
 type Props = {
@@ -71,12 +72,15 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
     );
   }
   if (column.choices) {
+    // 値がまだ無ければ、選択肢の既定値(column.default)を初期選択にする(何も選ばず実行すれば、
+    // 入口側もこの既定値を使うので見た目と動きが揃う)
+    const shown = (value as string | null) ?? column.default ?? "";
     return (
-      <select value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
+      <select value={shown} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
         <option value="">{column.nullable ? column.comment ?? T.none : T.select}</option>
         {column.choices.map((choice) => (
           <option key={choice} value={choice}>
-            {choice}
+            {choice === column.default ? `${choice} (default)` : choice}
           </option>
         ))}
       </select>
@@ -104,14 +108,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
     return <JsonInput value={value} onChange={onChange} />;
   }
   if (column.type === "stamp") {
-    return (
-      <input
-        type="text"
-        placeholder="11579/03/02 10:00:00"
-        value={(value as string | null) ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-      />
-    );
+    return <StampInput value={(value as string | null) ?? null} onChange={onChange} disabled={disabled} />;
   }
   if (column.section && !compact) {
     return column.markdown === false ? (

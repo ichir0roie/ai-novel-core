@@ -246,8 +246,7 @@ export default function MapsPage() {
           <aside className="viz-side">
             {!originPoint ? (
               <>
-                <p className="hint">{T.maps.hintClick}</p>
-                <p className="hint">
+                <p className="hint" title={T.maps.hintClick}>
                   {T.maps.hintCounts(points.length, shapes.length)}
                 </p>
               </>

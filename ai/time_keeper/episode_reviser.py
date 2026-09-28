@@ -68,7 +68,7 @@ def revise(
     lines.append(f"登場人物: {episode_generator._dump(cast)}")
     lines.append(f"今の題: {record.title or '(無し)'}")
     lines.append(f"今の本文: {record.text}")
-    lines.append(f"直す指示: {instruction.strip() or '(指定なし。文体の好みに沿って見直すだけ)'}")
+    lines.append(f"直す指示: {instruction.strip()}")
 
     system_prompt = (_system_prompt(shared_style_extra=shared_style_extra, style_extra=style_extra)
                      if (shared_style_extra or style_extra) else _SYSTEM_PROMPT)
@@ -97,11 +97,11 @@ def attach(session: Session, record: Episode, written: episode_generator.Written
 
 
 def generate(
-    session: Session, ai: AIClient, episode_id: int, character_ids: list[int], instruction: str = "",
+    session: Session, ai: AIClient, episode_id: int, character_ids: list[int], instruction: str,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
-    """すでに本文のある話(`episode_id`)を、指示(`instruction`)に沿って書き直す。
+    """すでに本文のある話(`episode_id`)を、指示(`instruction`。必須)に沿って書き直す。
 
     `character_ids` はこの話に出る人物(初登場・既出とも)。前の話の概要に出ていない人物は、
     その材料から AI が初登場と判断して外見・性格の描写を厚くする。本文が空の話は止まる
@@ -114,6 +114,8 @@ def generate(
         raise ValueError(f"話 id={episode_id} には本文が無い(先に episode_generator.generate で書く)")
     if not character_ids:
         raise ValueError("character_ids(登場人物)が空")
+    if not instruction.strip():
+        raise ValueError("instruction(直す指示)が空")
     story = common_query.get_story(session, record.story_id)
     characters = episode_generator.characters(session, character_ids)
     place = session.get(Location, place_id) if place_id is not None else None

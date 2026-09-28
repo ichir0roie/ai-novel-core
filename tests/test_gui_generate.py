@@ -42,12 +42,19 @@ def test_tables_meta_lists_the_generators(client, monkeypatch):
     assert episode["frame"]["mode"] == "create" and episode["episode"]["mode"] == "both" and episode["episode"]["when_empty"] == "text"
     assert {p["key"] for p in episode["episode"]["params"]} == {"character_ids", "previous_episode_ids", "model", "effort"}
     params = {p["key"]: p for p in episode["episode"]["params"]}
-    # モデルのプルダウンは ai_client の一覧をそのまま choices に出し、既定値は comment に載せる
+    # モデル・effort のプルダウンは ai_client の一覧をそのまま choices に出し、既定値は default に載せる
     assert params["model"]["choices"] == list(ai_client.AVAILABLE_MODELS)
-    assert ai_client.EPISODE_MODEL in params["model"]["comment"]
+    assert params["model"]["default"] == ai_client.EPISODE_MODEL
+    assert params["effort"]["choices"] == list(ai_client.AVAILABLE_EFFORTS)
+    assert params["effort"]["default"] == ai_client.EPISODE_EFFORT
     assert episode["revise"]["mode"] == "edit" and episode["revise"]["when_not_empty"] == "text"
-    assert {p["key"] for p in episode["revise"]["params"]} == {
-        "character_ids", "instruction", "previous_episode_ids", "model", "effort"}
+    # 推敲は本文を見ながら大きく開く専用パネル(RevisePanel)の側で拾うので、小さなボタン列には出さない
+    assert episode["revise"]["panel"] is True
+    assert episode["episode"]["panel"] is False
+    # 登場人物・直前の話は聞かない(ReviseEpisode 側の既定に任せる)。専用レイアウトは指示文・モデル・effort だけ
+    assert {p["key"] for p in episode["revise"]["params"]} == {"instruction", "model", "effort"}
+    instruction = next(p for p in episode["revise"]["params"] if p["key"] == "instruction")
+    assert instruction["required"] is True and instruction["nullable"] is False and instruction["section"] is True
     assert tables["idea"]["generators"] == []
 
 

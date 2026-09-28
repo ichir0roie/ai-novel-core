@@ -118,6 +118,27 @@ id を渡し、AI がその行の本文だけを書いて埋める(本文以外�
 
 claude を叩くので裏の job になり、画面は job を待って、終わったら足した(直した)行のページへ移る(本文なら読み直す)。
 
+## AI で推敲する
+
+本文のある話の詳細画面には「AI で推敲する」も出る(`story.revise_episode.ReviseEpisode`、`generate.py` では
+`panel=True`)。直す指示(`instruction`)を必須で受け取り、筋は変えず指示にある観点だけを直す。
+登場人物(`character_ids`)・直前の話(`previous_episode_ids`)は聞かない。省くと `ReviseEpisode` 側が
+話の start の時点で生きているメインキャラクター(`GenerateEpisode` と同じ選び方)・その時刻より前の三話を
+自動で使う(下の「AI で作成 / AI で補完」の表にある `GenerateEpisode` の既定と同じ考え方)。
+
+上の「AI で作成 / AI で補完」の小さなボタン列(`GeneratePanel`)とは別に、本文を見ながら大きな指示文を
+書けるよう専用のパネル(`RevisePanel`)で出す。開くボタンは save の隣(actionbar)に置き、押すと左の欄の
+一番下で大半(7 割ほど)を使って開く(本文は右にそのまま残る)。汎用のフィールド一覧(`GeneratePanel` と同じ
+組み方)だと参照選択の欄(フィルター付き)が場所を取って指示テキストが埋もれるので、`RevisePanel` は
+専用の構成で組む: 指示テキスト(大きなマークダウン欄)・モデル・effort・実行ボタン。タイトル・
+キーテキストは見出しや左の欄に既に出ているので、ここでは繰り返さない。
+モデル・effort の選択肢は `AI で本文まで書く` と共通(`ai_client.AVAILABLE_MODELS` / `AVAILABLE_EFFORTS`)。
+選んでいなければプルダウンの見た目も既定値(`ColumnMeta.default`)を選んだ状態にする(実際に渡す値は
+未選択のままなら省く。既定値を選んだ体裁と、渡さず入口側の既定に任せる動きを揃えている)。
+
+`GeneratorMeta.panel` が true の生成器は `GeneratePanel` には出さず、`RevisePanel` の側だけが拾う
+(テーブルごとに一つを想定)。
+
 ## テスト
 
 ```

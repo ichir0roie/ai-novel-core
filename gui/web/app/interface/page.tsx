@@ -46,12 +46,11 @@ function Runner({ entrance, claudeAvailable, onJob }: { entrance: EntranceMeta; 
 
   return (
     <div className="panel">
-      <h2 style={{ display: "flex", gap: "0.5rem", alignItems: "baseline", flexWrap: "wrap" }}>
+      <h2 title={entrance.doc || undefined} style={{ display: "flex", gap: "0.5rem", alignItems: "baseline", flexWrap: "wrap" }}>
         <code>{entrance.id}</code>
         {entrance.claude && <span className="chip">claude</span>}
         {entrance.writes && <span className="chip">{T.endpoints.writesDb}</span>}
       </h2>
-      {entrance.doc && <p className="hint">{entrance.doc}</p>}
       {blocked && <div className="status error">{T.endpoints.claudeOnly}</div>}
       {entrance.params.length > 0 && (
         <div className="form">

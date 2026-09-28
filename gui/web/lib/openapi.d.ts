@@ -339,6 +339,8 @@ export interface components {
             side: boolean;
             /** Choices */
             choices?: string[] | null;
+            /** Default */
+            default?: string | null;
             /** References */
             references?: string | null;
             /**
@@ -443,6 +445,11 @@ export interface components {
             when_not_empty?: string | null;
             /** Params */
             params?: components["schemas"]["ColumnMeta"][];
+            /**
+             * Panel
+             * @default false
+             */
+            panel: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {

@@ -32,8 +32,13 @@ type Props = {
   side?: ReactNode;
   /** 左の欄の一番下に置く保存系のボタン列 */
   actions?: ReactNode;
-  /** 「AI で作成」のパネル。本文の欄の下に置き、本文が空でカーソルも無いあいだだけ右側の大半を使って開く */
+  /** 「AI で作成」で開く欄({@link import("./GeneratePanel").useGeneratePanel} の `body`。
+   * 開くボタン(`toggle`)は呼び出し側が actions(保存系のボタン列)に置く。
+   * 本文(section)があれば右側で本文の 9 割ほどを使い、無ければ左の欄の保存ボタンの隣に出す */
   generate?: ReactNode;
+  /** 「AI で推敲する」で開く欄({@link import("./RevisePanel").useRevisePanel} の `body`)。
+   * 開くボタン(`toggle`)は呼び出し側が actions に置く。左の欄の一番下、保存ボタンの下で大半(7 割ほど)を使う */
+  revise?: ReactNode;
 };
 
 /** 見出しとして出す名前の欄。クリックすると入力欄になり、Enter・Esc・フォーカスが外れると見出しに戻る。 */
@@ -62,13 +67,12 @@ function EditableTitle({ value, placeholder, onChange }: { value: string; placeh
   );
 }
 
-function isBlank(value: unknown): boolean {
-  return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
-}
-
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
- * 本文(section の列)は右半分で、他の欄と side・actions は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, generate }: Props) {
+ * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。
+ * 「AI で作成」「AI で推敲する」を開くボタンは常に save の隣(actions)に置き、開いた欄(generate/revise)だけを
+ * ここで置く。本文があれば AI で作成の欄は右側(本文の 9 割)、推敲の欄は左側の一番下(7 割ほど)に開く。
+ * 本文が無いテーブル(推敲の対象外)では、AI で作成の欄は左の欄の保存ボタンの隣に出す。 */
+export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, generate, revise }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   // 名前の欄は見出しで直し、id は見出しの横に出すので、フォームには並べない
@@ -76,11 +80,6 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
   const plain = columns.filter((c) => !c.section && c !== titleColumn && c.key !== "id");
   const sections = columns.filter((c) => c.section && !c.side);
   const sideSections = columns.filter((c) => c.section && c.side);
-  const [textFocused, setTextFocused] = useState(false);
-  // 本文を書いている(カーソルがある・中身がある)あいだは閉じる。閉じていても帯を押せば開ける
-  const [forceOpen, setForceOpen] = useState(false);
-  const writing = textFocused || sections.some((c) => !isBlank(value[c.key]));
-  const generateOpen = !writing || forceOpen;
 
   return (
     <div className={`record ${sections.length ? "split" : ""}`}>
@@ -135,23 +134,18 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
             <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
           </div>
         ))}
-        {sections.length === 0 && generate && <div className="generate-body">{generate}</div>}
-        {actions && <div className="record-actions">{actions}</div>}
+        {revise}
+        {(actions || (sections.length === 0 && generate)) && (
+          <div className="record-actions">
+            {actions}
+            {sections.length === 0 && generate && <div className="generate-body">{generate}</div>}
+          </div>
+        )}
       </div>
       {sections.length > 0 && (
         <div className="record-text">
           {sections.map((column) => (
-            <div
-              key={column.key}
-              className="field section"
-              onFocus={() => {
-                setTextFocused(true);
-                setForceOpen(false);
-              }}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setTextFocused(false);
-              }}
-            >
+            <div key={column.key} className="field section">
               <label title={column.comment ?? ""}>
                 {column.label}
                 <span className="key">{column.key}</span>
@@ -159,16 +153,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
               <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
             </div>
           ))}
-          {generate && (
-            <div className={`record-generate ${generateOpen ? "open" : "closed"}`}>
-              {writing && (
-                <button type="button" className="generate-toggle" onClick={() => setForceOpen(!forceOpen)}>
-                  {T.generate.toggle(generateOpen)}
-                </button>
-              )}
-              <div className="generate-body">{generate}</div>
-            </div>
-          )}
+          {generate && <div className="generate-right">{generate}</div>}
         </div>
       )}
     </div>

@@ -25,6 +25,8 @@ class ColumnMeta(BaseModel):
     # 本文とは別に参照するだけの短い種)
     side: bool = False
     choices: list[str] | None = None
+    # choices のうち、空欄のときに実際に使われる値(プルダウンにその選択肢だと分かるよう "(default)" を添える)
+    default: str | None = None
     # 他のテーブルの id を指すなら、そのテーブル名
     references: str | None = None
     readonly: bool = False
@@ -53,6 +55,8 @@ class GeneratorMeta(BaseModel):
     when_not_empty: str | None = None
     # 行の欄の外で受け取る指定(現在の時刻・登場人物など)
     params: list[ColumnMeta] = Field(default_factory=list)
+    # true なら「AI で作成」の小さなボタン列(GeneratePanel)には出さず、専用の大きなパネル(RevisePanel)で出す
+    panel: bool = False
 
 
 class TableMeta(BaseModel):

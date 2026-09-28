@@ -237,6 +237,28 @@ def attach(session: Session, record: Episode, written: Written, writer_options: 
     return record
 
 
+_DRAFT_FIELDS = ("title", "key", "viewpoint", "place")
+
+
+def save_draft(session: Session, record: Episode, draft: dict) -> None:
+    """AI 呼び出し(数分〜十数分かかることがある)の前に、作者の下書きの値でレコードを一度保存しておく。
+
+    途中で失敗しても、GUI やスキルの呼び出し元がまだ確定していなかった題・種・視点・場所・時刻の
+    編集を失わないようにする。`text`(本文)は AI が書く対象なので、呼び出し側が `draft` から外しておくこと。
+    """
+    for field in _DRAFT_FIELDS:
+        value = (draft.get(field) or "").strip()
+        if value:
+            setattr(record, field, value)
+    start = Stamp.parse(draft.get("start"))
+    if start is not None:
+        record.start = start
+    end = Stamp.parse(draft.get("end"))
+    if end is not None:
+        record.end = end
+    session.commit()
+
+
 def frame(session: Session, episode_id: int, story_id: int | None = None) -> Episode:
     """本文を書き込む枠。本文の入っている話は書き換えない。"""
     record = session.get(Episode, episode_id)

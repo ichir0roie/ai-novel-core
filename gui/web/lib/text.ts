@@ -123,7 +123,7 @@ export const T = {
   },
 
   generate: {
-    toggle: (open: boolean) => (open ? "▾ Hide AI generation" : "▸ AI generation"),
+    close: "Close",
     noAddedId: (result: unknown) => `Cannot find id of the added row: ${JSON.stringify(result)}`,
     failed: "Failed",
     description: (mode: "create" | "edit") =>
@@ -192,6 +192,17 @@ export const T = {
     altDiffUnknown: "elevation diff unknown",
     sameAltitude: "same altitude",
     altDiff: (up: boolean, m: number) => `${up ? "up" : "down"} ${m.toLocaleString()} m`,
+  },
+
+  stamp: {
+    pick: "Pick date & time",
+    pickIcon: "📅",
+    clear: "Clear",
+    set: "Set",
+    hour: "H",
+    minute: "M",
+    second: "S",
+    month: (m: number) => `${m}`,
   },
 
   relations: {
