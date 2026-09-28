@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import type { ChildListMeta, ColumnMeta, Rec } from "@/lib/api";
-import FieldInput, { CHILD_FREEFORM_TEXT_KEYS } from "./FieldInput";
+import FieldInput, { AutoGrowTextarea, CHILD_FREEFORM_TEXT_KEYS } from "./FieldInput";
 import Modal from "./Modal";
 import { useOptions } from "./ReferenceSelect";
+import StampInput from "./StampInput";
 import { T } from "@/lib/text";
 
 /** スキーマに無い、行から計算するだけの読み取り専用の列(居場所の期間から出す年齢など)。指定した列の右に挿む。 */
@@ -169,21 +170,115 @@ function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMe
   );
 }
 
-/** 本文の下に続ける、上から下へ流れる読み取り専用の札(display が "flow" の子リスト。アイデアの呼び名など)。
- * 横スクロールの表にはせず札を縦に積むが、各札の中身は ReadOnlyTable(期間ごとのパラメータなど)と同じ
- * buildRowSpecs で組む: 自由記述で長くなりがちな列(注釈など)だけ 1 項目 1 行、それ以外の短い値
- * (呼び名・場所など)は ChipGrid で横に並べる。札の高さは中身に応じて自然に伸び縮みする。 */
-function FlowList({ meta, rows, onOpen }: { meta: ChildListMeta; rows: Rec[]; onOpen: (index: number) => void }) {
-  const rowSpecs = buildRowSpecs(meta.columns, []);
+/** 本文の下に続ける、上から下へ流れる札(display が "flow" の子リスト。アイデアの呼び名など)。
+ * モーダルは開かず、札をクリックするとその場で編集用の入力に差し替わる(EditableTitle と同じ考え方)。
+ * 1 行目に短い項目(番号・期間・呼び名・場所など)を横に並べ、2 行目に自由記述(注釈)を
+ * 行数ぶんの高さの textarea(編集時)またはそのままの文章(表示時)で出す。 */
+function FlowCard({
+  meta, row, index, editing, onEdit, onStopEdit, onChange, onRemove,
+}: {
+  meta: ChildListMeta;
+  row: Rec;
+  index: number;
+  editing: boolean;
+  onEdit: () => void;
+  onStopEdit: () => void;
+  onChange: (key: string, value: unknown) => void;
+  onRemove: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const hasPeriod = meta.columns.some((c) => c.key === "start") && meta.columns.some((c) => c.key === "end");
+  const longColumns = meta.columns.filter((c) => CHILD_FREEFORM_TEXT_KEYS.has(c.key));
+  // 1 行目は 番号 → 名前 → 期間 → それ以外の短い項目(場所など)の順に並べる。
+  const nameColumn = meta.columns.find((c) => c.key === "name");
+  const otherLineColumns = meta.columns.filter(
+    (c) => !CHILD_FREEFORM_TEXT_KEYS.has(c.key) && c.key !== "start" && c.key !== "end" && c.key !== "name");
+
+  // クリック・タブでカードの外へ焦点が移ったら編集を終える。マウスのクリックでは relatedTarget が
+  // 当てにならないブラウザがあるので、一拍置いて document.activeElement がカードの中かどうかで見る。
+  const stopIfFocusLeft = () => {
+    window.setTimeout(() => {
+      if (!ref.current?.contains(document.activeElement)) onStopEdit();
+    }, 0);
+  };
+
+  return (
+    <div ref={ref} className={`flow-card ${editing ? "editing" : ""}`} onClick={editing ? undefined : onEdit} onBlur={editing ? stopIfFocusLeft : undefined}>
+      <div className="flow-line">
+        <span className="flow-index">#{index + 1}</span>
+        {nameColumn && (
+          <div className="flow-field flow-name" title={nameColumn.comment ?? nameColumn.key}>
+            {editing ? (
+              <FieldInput column={nameColumn} value={row[nameColumn.key]} onChange={(v) => onChange(nameColumn.key, v)} compact />
+            ) : (
+              <ReadValue column={nameColumn} value={row[nameColumn.key]} />
+            )}
+          </div>
+        )}
+        {hasPeriod && (
+          editing ? (
+            <span className="flow-period-edit">
+              <StampInput value={(row.start as string | null) ?? null} onChange={(v) => onChange("start", v)} />
+              <span className="solo-sep">~</span>
+              <StampInput value={(row.end as string | null) ?? null} onChange={(v) => onChange("end", v)} />
+            </span>
+          ) : (
+            <span className="flow-period">{formatDateOnly(row.start)} ~ {formatDateOnly(row.end)}</span>
+          )
+        )}
+        {otherLineColumns.map((column) => (
+          <div key={column.key} className="flow-field" title={column.comment ?? column.key}>
+            {editing ? (
+              <FieldInput column={column} value={row[column.key]} onChange={(v) => onChange(column.key, v)} compact />
+            ) : (
+              <ReadValue column={column} value={row[column.key]} />
+            )}
+          </div>
+        ))}
+        {editing && (
+          <button type="button" className="ghost flow-remove" onClick={onRemove} title={T.childList.removeRow}>
+            ×
+          </button>
+        )}
+      </div>
+      {longColumns.map((column) => (
+        <div key={column.key} className="flow-detail">
+          {editing ? (
+            <AutoGrowTextarea value={(row[column.key] as string | null) ?? ""} onChange={(v) => onChange(column.key, v)} />
+          ) : (
+            <div className="flow-detail-text"><ReadValue column={column} value={row[column.key]} /></div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FlowList({
+  meta, rows, editingIndex, onEdit, onStopEdit, onChange, onRemove,
+}: {
+  meta: ChildListMeta;
+  rows: Rec[];
+  editingIndex: number | null;
+  onEdit: (index: number) => void;
+  onStopEdit: () => void;
+  onChange: (index: number, key: string, value: unknown) => void;
+  onRemove: (index: number) => void;
+}) {
   return (
     <div className="flowlist">
       {rows.map((row, index) => (
-        <div key={index} className="flow-card" onClick={() => onOpen(index)}>
-          <div className="flow-index">#{index + 1}</div>
-          {rowSpecs.map((spec) => (
-            <Fragment key={spec.key}>{spec.render(row)}</Fragment>
-          ))}
-        </div>
+        <FlowCard
+          key={index}
+          meta={meta}
+          row={row}
+          index={index}
+          editing={editingIndex === index}
+          onEdit={() => onEdit(index)}
+          onStopEdit={onStopEdit}
+          onChange={(key, value) => onChange(index, key, value)}
+          onRemove={() => onRemove(index)}
+        />
       ))}
     </div>
   );
@@ -205,7 +300,15 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
   return (
     <div className={`childlist ${readOnly ? "readonly" : ""} ${meta.display === "flow" ? "flow" : ""}`}>
       {meta.display === "flow" ? (
-        <FlowList meta={meta} rows={rows} onOpen={setEditing} />
+        <FlowList
+          meta={meta}
+          rows={rows}
+          editingIndex={editing}
+          onEdit={setEditing}
+          onStopEdit={() => setEditing(null)}
+          onChange={update}
+          onRemove={(index) => { remove(index); setEditing(null); }}
+        />
       ) : meta.display === "periodic" ? (
         <ReadOnlyTable meta={meta} rows={rows} extraColumns={extraColumns} onOpen={setEditing} />
       ) : (
@@ -257,7 +360,7 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
       <button type="button" onClick={add} style={{ marginTop: "0.4rem" }}>
         {T.childList.addRow}
       </button>
-      {readOnly && editing !== null && rows[editing] && (
+      {meta.display === "periodic" && editing !== null && rows[editing] && (
         <Modal
           title={`${meta.label} #${editing + 1}`}
           onClose={() => setEditing(null)}

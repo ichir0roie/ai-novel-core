@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
 import MarkdownField from "./MarkdownField";
 import PlainTextField from "./PlainTextField";
@@ -17,12 +17,47 @@ const TREE_REFERENCE_TABLES = new Set(["location", "idea"]);
  * 「1 項目 1 行のまま出す」列として使うので、ここで共有する。 */
 export const CHILD_FREEFORM_TEXT_KEYS = new Set(["build", "tone", "dialect", "detail"]);
 
+/** 固定の高さ・flex を持たず、中身の行数ぶんだけ伸び縮みする textarea(スクロールバーを持たない)。
+ * 本文(MarkdownField)・アイデアの呼び名の注釈など、枠の大きさを内容に委ねたい欄で使う。 */
+export function AutoGrowTextarea({
+  value, onChange, className, placeholder, autoFocus, onBlur,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+  onBlur?: () => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      className={`auto-grow ${className ?? ""}`}
+      value={value}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
+    />
+  );
+}
+
 type Props = {
   column: ColumnMeta;
   value: unknown;
   onChange: (value: unknown) => void;
   compact?: boolean;
   disabled?: boolean;
+  /** 本文(section)欄の高さを、枠いっぱい(既定)ではなく中身の行数ぶんにする。
+   * すぐ下に続けて出す一覧(アイデアの呼び名など)のために空間を残したいときに使う。 */
+  autoHeight?: boolean;
 };
 
 const STATUS_CLASS: Record<string, string> = { 承認: "approve", 非承認: "reject", 未確認: "pending" };
@@ -57,7 +92,7 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   );
 }
 
-export default function FieldInput({ column, value, onChange, compact, disabled }: Props) {
+export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight }: Props) {
   const readonly = disabled || column.readonly;
   if (readonly) {
     return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
@@ -126,14 +161,14 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
     return column.markdown === false ? (
       <PlainTextField value={(value as string | null) ?? null} onChange={onChange} />
     ) : (
-      <MarkdownField value={(value as string | null) ?? null} onChange={onChange} />
+      <MarkdownField value={(value as string | null) ?? null} onChange={onChange} autoHeight={autoHeight} />
     );
   }
   if (!compact && CHILD_FREEFORM_TEXT_KEYS.has(column.key)) {
     return (
-      <textarea
+      <AutoGrowTextarea
         value={(value as string | null) ?? ""}
-        onChange={(e) => onChange(e.target.value === "" && column.nullable ? null : e.target.value)}
+        onChange={(v) => onChange(v === "" && column.nullable ? null : v)}
       />
     );
   }

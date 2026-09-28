@@ -148,12 +148,13 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
       {sections.length > 0 && (
         <div className="record-text">
           {sections.map((column) => (
-            <div key={column.key} className="field section">
+            <div key={column.key} className={`field section ${flowChildLists.length > 0 ? "auto" : ""}`}>
               <label title={column.comment ?? ""}>
                 {column.label}
                 <span className="key">{column.key}</span>
               </label>
-              <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
+              <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
+                autoHeight={flowChildLists.length > 0} />
             </div>
           ))}
           {flowChildLists.map((child) => (
