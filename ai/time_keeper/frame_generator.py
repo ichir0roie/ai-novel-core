@@ -41,14 +41,15 @@ _FRAME_SCHEMA = {
 
 def generate(
     session: Session, ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None,
-    character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
+    character_ids: list[int] | None, previous_episode_ids: list[int] | None = None, *,
     place_id: int | None = None, viewpoint_character_id: int | None = None,
     writer_options: dict | None = None,
     episode_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
     """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
 
-    `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・場所は、省けば枠(`slot`)のものを使う。
+    `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・場所・登場人物は、省けば枠(`slot`)のものを使う
+    (登場人物は枠の `episode_character`)。渡した登場人物は、足した話の `episode_character` としても残す。
     どちらも枠(既存の話)が無ければ空のままで、`place_id` が空なら作品の立つ場所を材料に使う
     (話の `place_id` 自体は空のまま残す)。本文が得られなければ話を足さず(枠も変えず)に None を返す。
     `shared_style_extra` / `style_extra` は `episode_generator.write` に渡す(世界ごとの文体の好み)。
@@ -64,8 +65,7 @@ def generate(
         viewpoint_character_id = slot.viewpoint_character_id
     if place_id is None and slot is not None:
         place_id = slot.place_id
-    if not character_ids:
-        raise ValueError("character_ids(登場人物)が空")
+    character_ids = episode_generator.resolve_character_ids(session, slot.id if slot else None, character_ids)
     story = common_query.get_story(session, story_id)
     characters = episode_generator.characters(session, character_ids)
     place = session.get(Location, place_id) if place_id is not None else None
@@ -92,6 +92,8 @@ def generate(
     if place is not None:
         record.place_id = place.id
     record.key, record.start, record.viewpoint_character_id = key, time, viewpoint_character_id
+    session.flush()
+    episode_generator.set_characters(session, record.id, character_ids)
     episode_generator.attach(session, record, written)
     return record
 
@@ -128,11 +130,15 @@ def generate_frame(
     題・種は下書きを核に AI が組み立て直し、時刻は下書きにあればそれを、無ければ AI が直前の話の後から選ぶ。
     視点(`viewpoint_character_id`)・場所(`place_id`)は AI には決めさせず、下書きにあればその id をそのまま使う
     (無ければ NULL のまま)。本文は書かない(`episode_generator.generate` で別に書く)。
+    登場人物(`character_ids`)を省けば枠の `episode_character`(枠が無ければ登場人物なしで決める)。
+    渡した登場人物は、枠の `episode_character` としても残す。
     """
     hints = dict(hints or {})
     story = common_query.get_story(session, story_id)
     slot = episode_generator.frame(session, episode_id, story_id) if episode_id is not None else None
     fixed_time = Stamp.parse(hints.get("start")) or (slot.start if slot else None)
+    if character_ids is None and slot is not None:
+        character_ids = episode_generator.character_ids_of(session, slot.id)
     characters = episode_generator.characters(session, character_ids or [])
 
     previous = [e for e in episode_generator._previous_episodes(
@@ -188,6 +194,9 @@ def generate_frame(
     if place_id not in (None, ""):
         record.place_id = int(place_id)
     record.synced = False
+    session.flush()
+    if character_ids is not None:
+        episode_generator.set_characters(session, record.id, character_ids)
     session.commit()
     print(f"[time_keepr/frame] {story.name}(id={story.id}) {format_time(time)}「{record.title}」 id={record.id} の枠を決めた")
     return record

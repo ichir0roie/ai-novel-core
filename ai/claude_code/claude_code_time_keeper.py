@@ -67,7 +67,7 @@ def _writer_options(model: str | None, effort: str | None) -> dict:
 
 @_with_usage_summary
 def write_episode(
-    story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
+    story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int] | None,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     viewpoint_character_id: int | None = None, episode_id: int | None = None,
     model: str | None = None, effort: str | None = None,
@@ -86,7 +86,7 @@ claude_write_episode_main = write_episode
 
 @_with_usage_summary
 def fill_episode(
-    episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
+    episode_id: int, character_ids: list[int] | None = None, previous_episode_ids: list[int] | None = None, *,
     place_id: int | None = None, model: str | None = None, effort: str | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
@@ -102,7 +102,7 @@ claude_fill_episode_main = fill_episode
 
 @_with_usage_summary
 def revise_episode(
-    episode_id: int, character_ids: list[int], instruction: str,
+    episode_id: int, character_ids: list[int] | None, instruction: str,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     model: str | None = None, effort: str | None = None,
     shared_style_extra: str = "", style_extra: str = "",

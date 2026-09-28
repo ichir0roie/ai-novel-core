@@ -90,7 +90,7 @@ def place_event(
 
 
 def write_episode(
-    ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
+    ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int] | None,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     viewpoint_character_id: int | None = None, writer_options: dict | None = None,
     episode_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
@@ -104,7 +104,8 @@ def write_episode(
 
 
 def fill_episode(
-    ai: AIClient, episode_id: int, character_ids: list[int], previous_episode_ids: list[int] | None = None,
+    ai: AIClient, episode_id: int, character_ids: list[int] | None = None,
+    previous_episode_ids: list[int] | None = None,
     *, place_id: int | None = None, writer_options: dict | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
@@ -117,7 +118,7 @@ def fill_episode(
 
 
 def revise_episode(
-    ai: AIClient, episode_id: int, character_ids: list[int], instruction: str,
+    ai: AIClient, episode_id: int, character_ids: list[int] | None, instruction: str,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:

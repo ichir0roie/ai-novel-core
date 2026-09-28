@@ -39,11 +39,13 @@ export function useGeneratePanel({ table, meta, draft, mode, onDone, disabled }:
 
   const params = new Map<string, ColumnMeta>();
   for (const generator of generators) for (const param of generator.params ?? []) params.set(param.key, param);
+  // 下書きにも同じ欄がある指定(episode の登場人物 character_ids)は、触るまで下書きの値を出して渡す
+  const valueOf = (key: string) => (key in args ? args[key] : draft[key]);
 
   const run = async (generator: GeneratorMeta) => {
     setError(null);
     const mine: Rec = {};
-    for (const param of generator.params ?? []) if (!isEmpty(args[param.key])) mine[param.key] = args[param.key];
+    for (const param of generator.params ?? []) if (!isEmpty(valueOf(param.key))) mine[param.key] = valueOf(param.key);
     await start(() => generateRecord(table, generator.key, compactDraft(draft), mine));
   };
 
@@ -87,7 +89,7 @@ export function useGeneratePanel({ table, meta, draft, mode, onDone, disabled }:
                 {param.label}
                 <span className="key">{param.key}</span>
               </label>
-              <FieldInput column={param} value={args[param.key]} onChange={(v) => setArgs({ ...args, [param.key]: v })} disabled={running} />
+              <FieldInput column={param} value={valueOf(param.key)} onChange={(v) => setArgs({ ...args, [param.key]: v })} disabled={running} />
             </div>
           ))}
           <div className="generate-buttons">

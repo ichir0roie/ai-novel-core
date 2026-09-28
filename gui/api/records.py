@@ -10,8 +10,7 @@ from ai.claude_code.interface.randomizer.commit_event import CommitEvent
 from ai.time_keeper import idea_context
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, CharacterPlace, ConfirmStatusType, Episode, EpisodeCharacter, Event, EventCharacter,
-    Location, Story,
+    Character, ConfirmStatusType, Episode, EpisodeCharacter, Event, EventCharacter, Story,
 )
 from db.schema_pydantic import to_dict
 from gui.api.models import Option, RecordList, RecordResponse
@@ -167,7 +166,10 @@ def _context_block(session: Session, table: str, rows) -> dict:
 
 
 def _episode_context(session: Session, episode: Episode) -> dict:
-    """話の時期(start〜end)・場所(place_id)に重なる出来事・人物・場所・作品。時期の無い話は出しようがない。"""
+    """話の時期(start〜end)・場所(place_id)に重なる出来事・作品。時期の無い話は出しようがない。
+
+    人物・場所はここでは拾わない(話の人物は `episode_character`、場所は `place_id` がそのまま持つ)。
+    """
     since = episode.start
     if since is None:
         return {}
@@ -180,21 +182,6 @@ def _episode_context(session: Session, episode: Episode) -> dict:
     events = session.scalars(select(Event).where(*event_conditions)
                             .order_by(Event.time, Event.id).limit(_CONTEXT_LIMIT)).all()
 
-    character_ids = set(session.scalars(
-        select(EventCharacter.character_id).where(EventCharacter.event_id.in_([e.id for e in events]))))
-    if place_ids:
-        character_ids.update(session.scalars(
-            select(CharacterPlace.character_id).where(
-                CharacterPlace.location_id.in_(place_ids),
-                or_(CharacterPlace.start.is_(None), CharacterPlace.start <= until),
-                or_(CharacterPlace.end.is_(None), CharacterPlace.end >= since))))
-    characters = (session.scalars(select(Character).where(Character.id.in_(character_ids))
-                                 .order_by(Character.id)).all() if character_ids else [])
-
-    location_ids = place_ids | {e.location_id for e in events if e.location_id is not None}
-    locations = (session.scalars(select(Location).where(Location.id.in_(location_ids))
-                                .order_by(Location.id)).all() if location_ids else [])
-
     story_conditions = [Story.id != episode.story_id,
                        or_(Story.start.is_(None), Story.start <= until),
                        or_(Story.end.is_(None), Story.end >= since)]
@@ -204,8 +191,6 @@ def _episode_context(session: Session, episode: Episode) -> dict:
                              .order_by(Story.id).limit(_CONTEXT_LIMIT)).all()
 
     return {"event": _context_block(session, "event", events),
-            "character": _context_block(session, "character", characters),
-            "location": _context_block(session, "location", locations),
             "story": _context_block(session, "story", stories)}
 
 

@@ -247,9 +247,9 @@ def test_episode_context_gathers_by_time_and_place(client, session, world):
     context = client.get(f"/api/tables/episode/records/{episode['id']}").json()["related"]["context"]
 
     assert {item["id"] for item in context["event"]["items"]} == {in_range.id}
-    assert {item["id"] for item in context["character"]["items"]} == {near.id, resident.id}
-    assert {item["id"] for item in context["location"]["items"]} == {world["village"], river.id}
     assert {item["id"] for item in context["story"]["items"]} == {overlapping.id}
+    # 人物・場所は時期・場所では拾わない(話の人物は episode_character、場所は place_id が持つ)
+    assert set(context) == {"event", "story"}
     assert context["event"]["labels"]["location_id"][str(river.id)] == "はずれの川"
 
     # 時期の無い話は、時期・場所で比べようがないので関連は空

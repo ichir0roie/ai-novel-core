@@ -3,7 +3,10 @@ import pytest
 from ai.claude_code import story_writer
 from ai.time_keeper import episode_summary
 from data_access_logic.query import common_query
-from db.schema import Character, Episode, EpisodeSummary, Location, Story, summary_source_hash
+from db.schema import (
+    Character, CharacterPlace, ConfirmStatus, Episode, EpisodeCharacter, EpisodeSummary, Location, Story,
+    summary_source_hash,
+)
 from db.stamp import Stamp
 
 
@@ -248,3 +251,24 @@ def test_style_extras_from_the_caller_reach_the_system_prompt(session, story, ca
     system = calls[-1]["system"]
     assert "西暦一万年のSF世界" in system and "この世界の文体の癖" in system
     assert system != story_writer._SYSTEM_PROMPT
+
+
+def test_cast_is_only_the_episode_characters_not_those_living_at_the_place(session, story, calls):
+    """顔ぶれは書く話の episode_character だけ。作品の場所に住む人物を時刻・場所で拾わない。"""
+    add_episodes(session, story, 1)
+    lead = Character(name="ミレア", text="", start=Stamp(2080), confirmed=ConfirmStatus.APPROVED)
+    resident = Character(name="村の住人", text="", start=Stamp(2080), main_character=True,
+                         confirmed=ConfirmStatus.APPROVED)
+    session.add_all([lead, resident])
+    session.flush()
+    session.add(CharacterPlace(character_id=resident.id, location_id=story.place_id, start=Stamp(2080)))
+    seeded = Episode(story_id=story.id, start=Stamp(2100, 4, 2), title="", key="種", synced=False)
+    seeded.episode_characters = [EpisodeCharacter(character_id=lead.id)]
+    session.add(seeded)
+    session.commit()
+
+    story_writer.write_next_episode(session, story.id)
+
+    prompt = calls[-1]["prompt"]
+    assert '"name": "ミレア"' in prompt
+    assert "村の住人" not in prompt and "present_characters" not in prompt
