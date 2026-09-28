@@ -806,6 +806,16 @@
             },
             "type": "array",
             "title": "Columns"
+          },
+          "display": {
+            "type": "string",
+            "enum": [
+              "table",
+              "periodic",
+              "flow"
+            ],
+            "title": "Display",
+            "default": "table"
           }
         },
         "type": "object",

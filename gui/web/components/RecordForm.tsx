@@ -7,7 +7,8 @@ import FieldInput from "./FieldInput";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-/** 期間ごとの居場所・パラメータの開始・終了それぞれの隣に、その時点の人物の年齢を出す(人物の start が生年)。 */
+/** 期間ごとの居場所・パラメータの開始・終了それぞれの隣に、その時点の人物の年齢を出す(人物の start が生年)。
+ * 年齢は人物固有の概念なので、人物テーブルの期間子リストにだけ足す。 */
 function ageColumns(birth: unknown): ExtraColumn[] {
   return [
     { key: "start_age", after: "start", label: T.record.ageAt, render: (row) => formatAge(ageAt(birth, row.start)) },
@@ -80,6 +81,9 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
   const plain = columns.filter((c) => !c.section && c !== titleColumn && c.key !== "id");
   const sections = columns.filter((c) => c.section && !c.side);
   const sideSections = columns.filter((c) => c.section && c.side);
+  // display が "flow" の子リスト(アイデアの呼び名など)は本文(section)の下に続けて出す。それ以外は左の欄に並べる
+  const sideChildLists = meta.child_lists.filter((c) => c.display !== "flow");
+  const flowChildLists = meta.child_lists.filter((c) => c.display === "flow");
 
   return (
     <div className={`record ${sections.length ? "split" : ""}`}>
@@ -109,7 +113,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
             </div>
           ))}
         </div>
-        {meta.child_lists.map((child) => (
+        {sideChildLists.map((child) => (
           <div key={child.name} className="field wide" style={{ marginTop: "1rem" }}>
             <label>
               {child.label}
@@ -119,8 +123,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
               meta={child}
               rows={(value[child.name] as Rec[] | undefined) ?? []}
               onChange={(rows) => set(child.name, rows)}
-              extraColumns={child.name === "places" || child.name === "parameters" ? ageColumns(value.start) : undefined}
-              readOnly={child.name === "places" || child.name === "parameters" || child.name === "recognitions"}
+              extraColumns={child.display === "periodic" && meta.name === "character" ? ageColumns(value.start) : undefined}
             />
           </div>
         ))}
@@ -151,6 +154,19 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 <span className="key">{column.key}</span>
               </label>
               <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
+            </div>
+          ))}
+          {flowChildLists.map((child) => (
+            <div key={child.name} className="field wide">
+              <label>
+                {child.label}
+                <span className="key">{child.name}</span>
+              </label>
+              <ChildListEditor
+                meta={child}
+                rows={(value[child.name] as Rec[] | undefined) ?? []}
+                onChange={(rows) => set(child.name, rows)}
+              />
             </div>
           ))}
           {generate && <div className="generate-right">{generate}</div>}

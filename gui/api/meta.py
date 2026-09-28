@@ -30,6 +30,13 @@ _LABELS = {
 
 _CHOICES = {("meme", "category"): list(MEME_CATEGORIES)}
 
+# CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
+# 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
+_CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
+    "character": {"parameters": "periodic", "places": "periodic"},
+    "idea": {"recognitions": "flow"},
+}
+
 
 def _label(key: str, comment: str | None) -> str:
     if key in _LABELS:
@@ -116,11 +123,13 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
 
 def child_lists(spec: TableSpec) -> list[ChildListMeta]:
     result = []
+    display_by_name = _CHILD_LIST_DISPLAY.get(spec.name, {})
     for name in spec.model.CHILD_LISTS:
         child = child_model(spec.model, name)
         keys = child_columns(spec.model, name)
         columns = [column_meta(child.__tablename__, child, child.__table__.columns[key]) for key in keys]
-        result.append(ChildListMeta(name=name, label=_label(name, None), columns=columns))
+        result.append(ChildListMeta(name=name, label=_label(name, None), columns=columns,
+                                    display=display_by_name.get(name, "table")))
     return result
 
 

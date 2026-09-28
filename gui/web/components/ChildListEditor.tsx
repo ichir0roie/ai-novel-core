@@ -15,8 +15,6 @@ type Props = {
   rows: Rec[];
   onChange: (rows: Rec[]) => void;
   extraColumns?: ExtraColumn[];
-  /** true なら表はリードオンリーにし、列(行)クリックでモーダルの編集画面を開く(パラメータ・居場所・呼び名)。 */
-  readOnly?: boolean;
 };
 
 /** リードオンリーの表の一マス。参照列(場所など)は id ではなく名前で出す。 */
@@ -129,7 +127,8 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
   return specs;
 }
 
-/** リードオンリーの表(パラメータ・居場所・呼び名)。列(期間)ごとに幅を固定し、はみ出す分は横スクロールで見せる。
+/** リードオンリーの表(パラメータ・居場所など、display が "periodic" の子リスト)。
+ * 列(期間)ごとに幅を固定し、はみ出す分は横スクロールで見せる。
  * クリック・ホバーの単位は列(期間・レコード)全体で、項目(マス)単位ではハイライトしない。 */
 function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMeta; rows: Rec[]; extraColumns: ExtraColumn[]; onOpen: (index: number) => void }) {
   const rowSpecs = buildRowSpecs(meta.columns, extraColumns);
@@ -170,9 +169,29 @@ function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMe
   );
 }
 
+/** 本文の下に続ける、上から下へ流れる読み取り専用の札(display が "flow" の子リスト。アイデアの呼び名など)。
+ * 列を横に並べる表にはせず、1 項目を 1 行の「キー | 値」で縦に積むので、自由記述の注釈が長くても
+ * 横スクロールにならず、札の高さは中身に応じて自然に伸び縮みする。 */
+function FlowList({ meta, rows, onOpen }: { meta: ChildListMeta; rows: Rec[]; onOpen: (index: number) => void }) {
+  const chips = meta.columns.map(chipOf);
+  return (
+    <div className="flowlist">
+      {rows.map((row, index) => (
+        <div key={index} className="flow-card" onClick={() => onOpen(index)}>
+          <div className="flow-index">#{index + 1}</div>
+          {chips.map((chip) => (
+            <SoloField key={chip.key} chip={chip} row={row} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 子の行(期間ごとのパラメータなど)。並びで行が決まるので、行の入れ替えはしない。 */
-export default function ChildListEditor({ meta, rows, onChange, extraColumns = [], readOnly }: Props) {
+export default function ChildListEditor({ meta, rows, onChange, extraColumns = [] }: Props) {
   const [editing, setEditing] = useState<number | null>(null);
+  const readOnly = meta.display !== "table";
   const update = (index: number, key: string, value: unknown) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
@@ -183,8 +202,10 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
   const extrasAfter = (key: string) => extraColumns.filter((extra) => extra.after === key);
 
   return (
-    <div className={`childlist ${readOnly ? "readonly" : ""}`}>
-      {readOnly ? (
+    <div className={`childlist ${readOnly ? "readonly" : ""} ${meta.display === "flow" ? "flow" : ""}`}>
+      {meta.display === "flow" ? (
+        <FlowList meta={meta} rows={rows} onOpen={setEditing} />
+      ) : meta.display === "periodic" ? (
         <ReadOnlyTable meta={meta} rows={rows} extraColumns={extraColumns} onOpen={setEditing} />
       ) : (
         <div className="scroll-x">

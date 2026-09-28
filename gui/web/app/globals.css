@@ -254,6 +254,13 @@ button.ghost { background: transparent; }
 .childlist.readonly .solo-sep { flex: 0 0 auto; color: var(--line); }
 .childlist.readonly .solo-value { flex: 1; min-width: 0; }
 
+/* 本文の下に続ける、上から下へ流れる読み取り専用の札(アイデアの呼び名など)。
+   横に並べる表にはせず、札ひとつぶんが 1 レコードで、中身(自由記述の注釈など)に応じて高さが自然に伸び縮みする */
+.childlist.flow .flowlist { display: flex; flex-direction: column; gap: 0.5rem; }
+.childlist.flow .flow-card { border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.7rem; cursor: pointer; }
+.childlist.flow .flow-card:hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.childlist.flow .flow-index { color: var(--muted); font-size: 0.72rem; font-family: var(--mono); margin-bottom: 0.2rem; }
+
 /* モーダル(子の行の編集など) */
 .modal-backdrop {
   position: fixed; inset: 0; background: color-mix(in srgb, #000 45%, transparent);

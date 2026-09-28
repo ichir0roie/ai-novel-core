@@ -306,6 +306,12 @@ export interface components {
             label: string;
             /** Columns */
             columns: components["schemas"]["ColumnMeta"][];
+            /**
+             * Display
+             * @default table
+             * @enum {string}
+             */
+            display: "table" | "periodic" | "flow";
         };
         /** ColumnMeta */
         ColumnMeta: {
