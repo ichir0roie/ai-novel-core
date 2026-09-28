@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getRecord, labelOf, listRecords, type ColumnMeta, type Rec, type RecordList, type TableMeta } from "@/lib/api";
+import { getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
+import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
@@ -11,28 +12,8 @@ import { openInNewTab } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 const PAGE = 50;
-const HIDDEN = new Set(["id", "meme_seeded", "event_seeded", "polygon"]);
-// 話の一覧は作品の詳細から開く前提なので、作品の列と本文は出さず、見出しに作品名を出す
-const HIDDEN_BY_TABLE: Record<string, string[]> = { episode: ["story_id"] };
-const NO_PREVIEW = new Set(["episode"]);
 // 列名の query として扱わない(絞り込みのチップに出さない)もの
 const RESERVED = new Set(["q", "limit", "offset", "sort", "order", "confirmed"]);
-
-function cellText(column: ColumnMeta, item: Rec, labels: RecordList["labels"]): string {
-  const value = item[column.key];
-  if (value == null) return "";
-  if (column.references) return labelOf(labels, column.key, value);
-  if (column.type === "boolean") return value ? "✓" : "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-function listColumns(meta: TableMeta): ColumnMeta[] {
-  const hidden = new Set([...HIDDEN, ...(HIDDEN_BY_TABLE[meta.name] ?? [])]);
-  return meta.columns
-    .filter((c) => !c.section && !hidden.has(c.key) && c.type !== "id_list" && !c.create_only && c.key !== meta.label_column)
-    .slice(0, 7);
-}
 
 export default function TablePage() {
   const { table } = useParams<{ table: string }>();
