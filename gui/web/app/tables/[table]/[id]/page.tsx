@@ -90,18 +90,18 @@ export default function RecordPage() {
             value={value}
             onChange={setValue}
             mode="edit"
+            titleNote={
+              <>
+                <Link href={`/tables/${table}`}>{meta.label}</Link> / id={id}
+              </>
+            }
             header={
               <>
-                <div className="title-line">
-                  <h1>{loaded.label ?? "…"}</h1>
-                  <span className="hint">
-                    <Link href={`/tables/${table}`}>{meta.label}</Link> / id={id}
-                  </span>
-                </div>
                 {error && <div className="status error">{error}</div>}
                 {saved && !error && <div className="status ok">{saved}</div>}
               </>
             }
+            generate={<GeneratePanel table={table} meta={meta} draft={value} mode="edit" onDone={generated} disabled={busy} />}
             side={<Related related={loaded.related ?? {}} owner={{ table, id }} />}
             actions={
               <div className="actionbar">
@@ -123,7 +123,6 @@ export default function RecordPage() {
           />
         </div>
       )}
-      {loaded && <GeneratePanel table={table} meta={meta} draft={value} mode="edit" onDone={generated} disabled={busy || dirty} />}
     </div>
   );
 }

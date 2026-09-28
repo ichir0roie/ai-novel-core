@@ -120,14 +120,14 @@ export default function ReviewPage() {
             value={value}
             onChange={setValue}
             mode="edit"
+            titleNote={
+              <>
+                {T.review.title(meta.label)} / id={String(next.record.id)}{" "}
+                <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
+              </>
+            }
             header={
               <>
-                <div className="title-line">
-                  <h1>{T.review.title(meta.label)}</h1>
-                  <span className="hint">
-                    id={String(next.record.id)} <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
-                  </span>
-                </div>
                 {error && <div className="status error">{error}</div>}
                 {done && !error && <div className="status ok">{done}</div>}
               </>

@@ -62,12 +62,9 @@ export default function NewRecordPage() {
           value={value}
           onChange={setValue}
           mode="create"
-          header={
-            <>
-              <h1>{T.create.title(meta.label)}</h1>
-              {error && <div className="status error">{error}</div>}
-            </>
-          }
+          generate={<GeneratePanel table={table} meta={meta} draft={value} mode="create" onDone={generated} disabled={busy} />}
+          titleNote={T.create.title(meta.label)}
+          header={error && <div className="status error">{error}</div>}
           actions={
             <div className="actionbar">
               <div className="inner">
@@ -83,7 +80,6 @@ export default function NewRecordPage() {
           }
         />
       </div>
-      <GeneratePanel table={table} meta={meta} draft={value} mode="create" onDone={generated} disabled={busy} />
     </div>
   );
 }

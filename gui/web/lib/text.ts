@@ -62,6 +62,7 @@ export const T = {
   },
 
   record: {
+    clickToEdit: "Click to edit",
     writtenByAi: "Written by AI",
     saved: (keys: string[]) => `Saved (${join(keys)})`,
     changed: (keys: string[]) => `Changed: ${join(keys)}`,
@@ -122,6 +123,7 @@ export const T = {
   },
 
   generate: {
+    toggle: (open: boolean) => (open ? "▾ Hide AI generation" : "▸ AI generation"),
     noAddedId: (result: unknown) => `Cannot find id of the added row: ${JSON.stringify(result)}`,
     failed: "Failed",
     description: (mode: "create" | "edit") =>
