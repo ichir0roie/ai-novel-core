@@ -12,7 +12,7 @@ from ai.claude_code import ai_client
 from ai.claude_code.interface.story import _rows
 from ai.time_keeper import episode_summary, idea_context
 from data_access_logic.query import common_query
-from db.schema import Episode, Session, get_env_session
+from db.schema import Character, Episode, Location, Session, get_env_session
 
 # 一話ぶんの本文を書かせるので、断片の JSON より長く待つ。
 EPISODE_TIMEOUT = 900.0
@@ -152,8 +152,13 @@ def write_next_episode(
         lines.append(f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {seed}")
     if context.related:
         lines.append(idea_context.prompt_section(context.related, context.called))
-    if record is not None and (record.viewpoint or record.place):
-        lines.append(f"視点と場所: {record.viewpoint or ''} / {record.place or ''}")
+    if record is not None and (record.viewpoint_character_id or record.place_id):
+        # `viewpoint_character`/`place` は noload なので、id から明示的に引き直す
+        viewpoint_character = (session.get(Character, record.viewpoint_character_id)
+                               if record.viewpoint_character_id else None)
+        place = session.get(Location, record.place_id) if record.place_id else None
+        lines.append(f"視点と場所: {viewpoint_character.name if viewpoint_character else ''} / "
+                     f"{place.name if place else ''}")
     lines.append("この作品の次の話を書いてください。")
 
     system_prompt = (_system_prompt(shared_style_extra=shared_style_extra, style_extra=style_extra)
@@ -174,8 +179,6 @@ def write_next_episode(
         record.title = title or record.title
         record.synced = True
     record.text = text
-    record.model = ai_client.EPISODE_MODEL
-    record.effort = ai_client.EPISODE_EFFORT
     session.flush()
     idea_context.link(session, record, context.linked)
     session.commit()

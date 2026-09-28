@@ -74,4 +74,8 @@ class ReviseEpisode(StoryQuery):
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if revised is None:
             raise ValueError("本文が得られなかった")
+        # 推敲に使った登場人物を、この話の episode_character としても残す(episode_reviser.generate
+        # 自身は commit 済みだが、StoryQuery は外側で commit を挟まないのでここでも明示的に commit する)
+        episode_generator.set_characters(session, revised.id, character_ids)
+        session.commit()
         return _rows.episode_row(revised)

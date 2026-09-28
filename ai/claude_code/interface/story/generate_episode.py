@@ -81,12 +81,17 @@ class GenerateEpisode(StoryQuery):
         if not character_ids:
             raise ValueError("character_ids(登場人物)が空で、その時刻に生きているメインキャラクターも居ない")
 
-        viewpoint = (draft.get("viewpoint") or "").strip() or None
+        viewpoint_character_id = draft.get("viewpoint_character_id")
+        viewpoint_character_id = int(viewpoint_character_id) if viewpoint_character_id not in (None, "") else None
         record = frame_generator.generate(
             session, self.ai, story_id, key, time, character_ids, self.previous_episode_ids,
-            place_id=self.place_id, viewpoint=viewpoint, writer_options=self._writer_options(),
-            episode_id=slot.id,
+            place_id=self.place_id, viewpoint_character_id=viewpoint_character_id,
+            writer_options=self._writer_options(), episode_id=slot.id,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if record is None:
             raise ValueError("本文が得られなかった")
+        # 生成に使った登場人物を、この話の episode_character としても残す(frame_generator.generate
+        # 自身は commit 済みだが、StoryQuery は外側で commit を挟まないのでここでも明示的に commit する)
+        episode_generator.set_characters(session, record.id, character_ids)
+        session.commit()
         return _rows.episode_row(record)

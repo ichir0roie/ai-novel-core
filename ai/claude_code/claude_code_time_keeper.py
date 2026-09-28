@@ -69,14 +69,14 @@ def _writer_options(model: str | None, effort: str | None) -> dict:
 def write_episode(
     story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int],
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint: str | None = None, episode_id: int | None = None,
+    viewpoint_character_id: int | None = None, episode_id: int | None = None,
     model: str | None = None, effort: str | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
     """`model` / `effort` は本文を書く呼び出しにだけ効く。省けば fable の high"""
     return _main.write_episode(
         ai_client, story_id, key, time, character_ids, previous_episode_ids,
-        place_id=place_id, viewpoint=viewpoint, episode_id=episode_id,
+        place_id=place_id, viewpoint_character_id=viewpoint_character_id, episode_id=episode_id,
         writer_options=_writer_options(model, effort),
         shared_style_extra=shared_style_extra, style_extra=style_extra)
 

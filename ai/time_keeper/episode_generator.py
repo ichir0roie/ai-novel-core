@@ -10,17 +10,19 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
+from sqlalchemy import delete
+
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.style import layout_novel_text
-from ai.time_keeper import constants
+from ai.time_keeper import constants, episode_character_matching
 from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper import episode_summary, event_summary, idea_context
 from ai.time_keeper._ai import AIClient
 from ai.time_keeper._format import format_time
 from ai.time_keeper.character_event_generator import _sheet
 from data_access_logic.query import common_query
-from db.schema import Character, ConfirmStatus, Episode, Event, Location, Session, Stamp, Story
+from db.schema import Character, ConfirmStatus, Episode, EpisodeCharacter, Event, Location, Session, Stamp, Story
 
 def _system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> str:
     return f"""\
@@ -218,17 +220,17 @@ def write(
                    text=text, linked=context.linked)
 
 
-def attach(session: Session, record: Episode, written: Written, writer_options: dict | None = None) -> Episode:
+def attach(session: Session, record: Episode, written: Written) -> Episode:
     """書いた本文を話に付けて確定する。枠の空いている題・視点は本文を書いたときのもので埋める。
 
     自動生成なので `synced` を立てる(`schema.py` の `Episode.synced` の注記どおり)。
     """
-    options = writer_options or {}
     record.title = (record.title or "").strip() or written.title
-    record.viewpoint = record.viewpoint or written.viewpoint
+    if record.viewpoint_character_id is None:
+        record.viewpoint_character_id = episode_character_matching.match_viewpoint_character_id(
+            session, written.viewpoint)
     record.synced = True
     record.text = written.text
-    record.model, record.effort = options.get("model"), options.get("effort")
     session.flush()
     idea_context.link(session, record, written.linked)
     session.commit()
@@ -237,7 +239,8 @@ def attach(session: Session, record: Episode, written: Written, writer_options: 
     return record
 
 
-_DRAFT_FIELDS = ("title", "key", "viewpoint", "place")
+_DRAFT_FIELDS = ("title", "key")
+_DRAFT_ID_FIELDS = ("viewpoint_character_id", "place_id")
 
 
 def save_draft(session: Session, record: Episode, draft: dict) -> None:
@@ -250,6 +253,10 @@ def save_draft(session: Session, record: Episode, draft: dict) -> None:
         value = (draft.get(field) or "").strip()
         if value:
             setattr(record, field, value)
+    for field in _DRAFT_ID_FIELDS:
+        value = draft.get(field)
+        if value not in (None, ""):
+            setattr(record, field, int(value))
     start = Stamp.parse(draft.get("start"))
     if start is not None:
         record.start = start
@@ -257,6 +264,14 @@ def save_draft(session: Session, record: Episode, draft: dict) -> None:
     if end is not None:
         record.end = end
     session.commit()
+
+
+def set_characters(session: Session, episode_id: int, character_ids: list[int]) -> None:
+    """話の登場人物(`episode_character`)を `character_ids` で全置換する(生成・推敲の確定時に呼ぶ)。"""
+    ids = list(dict.fromkeys(int(i) for i in character_ids))
+    session.execute(delete(EpisodeCharacter).where(EpisodeCharacter.episode_id == episode_id))
+    session.add_all([EpisodeCharacter(episode_id=episode_id, character_id=character_id) for character_id in ids])
+    session.flush()
 
 
 def frame(session: Session, episode_id: int, story_id: int | None = None) -> Episode:
@@ -294,12 +309,15 @@ def generate(
     if place_id is not None and place is None:
         raise ValueError(f"場所 id={place_id} が見つからない")
 
+    viewpoint_character = (session.get(Character, record.viewpoint_character_id)
+                           if record.viewpoint_character_id is not None else None)
     written = write(session, ai, story, record.key.strip(), record.start, characters(session, character_ids),
-                    previous_episode_ids, place=place, viewpoint=record.viewpoint,
+                    previous_episode_ids, place=place,
+                    viewpoint=viewpoint_character.name if viewpoint_character else None,
                     exclude_episode_id=record.id, writer_options=writer_options,
                     shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
         return None
     if place is not None:
-        record.place = place.name
-    return attach(session, record, written, writer_options)
+        record.place_id = place.id
+    return attach(session, record, written)

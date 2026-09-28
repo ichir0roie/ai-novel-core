@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import json
 
-from ai.time_keeper import episode_generator
+from ai.time_keeper import episode_character_matching, episode_generator
 from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper._ai import AIClient
 from ai.time_keeper._format import format_time
 from data_access_logic.query import common_query
-from db.schema import Episode, Location, Session, Stamp
+from db.schema import Character, Episode, Location, Session, Stamp
 from db.stamp import StampError
 
 _FRAME_SYSTEM_PROMPT = """\
@@ -43,12 +43,13 @@ _FRAME_SCHEMA = {
 def generate(
     session: Session, ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None,
     character_ids: list[int], previous_episode_ids: list[int] | None = None, *,
-    place_id: int | None = None, viewpoint: str | None = None, writer_options: dict | None = None,
+    place_id: int | None = None, viewpoint_character_id: int | None = None,
+    writer_options: dict | None = None,
     episode_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
     """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
 
-    `place_id` を省くと作品の立つ場所を材料に使い、話の `place` は空のまま残す。
+    `place_id` を省くと作品の立つ場所を材料に使い、話の `place_id` は空のまま残す。
     `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・題・場所は、省けば枠のものを使う。
     本文が得られなければ話を足さず(枠も変えず)に None を返す。
     `shared_style_extra` / `style_extra` は `episode_generator.write` に渡す(世界ごとの文体の好み)。
@@ -60,7 +61,8 @@ def generate(
     time = Stamp.parse(time) if time else (slot.start if slot else None)
     if time is None:
         raise ValueError("time(話が立つ時刻)が空")
-    viewpoint = viewpoint or (slot.viewpoint if slot else None)
+    if viewpoint_character_id is None and slot is not None:
+        viewpoint_character_id = slot.viewpoint_character_id
     if not character_ids:
         raise ValueError("character_ids(登場人物)が空")
     story = common_query.get_story(session, story_id)
@@ -68,9 +70,14 @@ def generate(
     place = session.get(Location, place_id) if place_id is not None else None
     if place_id is not None and place is None:
         raise ValueError(f"場所 id={place_id} が見つからない")
+    viewpoint_character = (session.get(Character, viewpoint_character_id)
+                           if viewpoint_character_id is not None else None)
+    if viewpoint_character_id is not None and viewpoint_character is None:
+        raise ValueError(f"視点 id={viewpoint_character_id} が見つからない")
 
     written = episode_generator.write(
-        session, ai, story, key, time, characters, previous_episode_ids, place=place, viewpoint=viewpoint,
+        session, ai, story, key, time, characters, previous_episode_ids, place=place,
+        viewpoint=viewpoint_character.name if viewpoint_character else None,
         exclude_episode_id=slot.id if slot else None, writer_options=writer_options,
         shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
@@ -82,9 +89,9 @@ def generate(
         record = Episode(story_id=story.id, title="")
         session.add(record)
     if place is not None:
-        record.place = place.name
-    record.key, record.start, record.viewpoint = key, time, viewpoint
-    episode_generator.attach(session, record, written, writer_options)
+        record.place_id = place.id
+    record.key, record.start, record.viewpoint_character_id = key, time, viewpoint_character_id
+    episode_generator.attach(session, record, written)
     return record
 
 
@@ -92,11 +99,22 @@ def _dump(value) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
-def _frame_hint_lines(hints: dict) -> list[str]:
+def _frame_hint_lines(session: Session, hints: dict) -> list[str]:
     """時刻(start)は決まった値として別に渡すので、ここでは扱わない。"""
-    labels = {"title": "題", "key": "種", "end": "終わりの時刻(決まっている)", "viewpoint": "視点", "place": "場所"}
-    return [f"作者の指定 {labels[field]}: {str(hints[field]).strip()}"
+    labels = {"title": "題", "key": "種", "end": "終わりの時刻(決まっている)"}
+    lines = [f"作者の指定 {labels[field]}: {str(hints[field]).strip()}"
             for field in labels if str(hints.get(field) or "").strip()]
+    viewpoint_character_id = hints.get("viewpoint_character_id")
+    if viewpoint_character_id not in (None, ""):
+        viewpoint_character = session.get(Character, int(viewpoint_character_id))
+        if viewpoint_character is not None:
+            lines.append(f"作者の指定 視点: {viewpoint_character.name}")
+    place_id = hints.get("place_id")
+    if place_id not in (None, ""):
+        place = session.get(Location, int(place_id))
+        if place is not None:
+            lines.append(f"作者の指定 場所: {place.name}")
+    return lines
 
 
 def generate_frame(
@@ -137,7 +155,7 @@ def generate_frame(
         lines.append(f"この時点より後に既に決まっている出来事: {_dump(later_events)}")
     if fixed_time is not None:
         lines.append(f"作者の指定 時刻(決まっている): {fixed_time}")
-    lines += _frame_hint_lines(hints)
+    lines += _frame_hint_lines(session, hints)
     lines.append("この作品の次の一話の枠を決めてください。")
 
     decided = ai.try_generate_json("\n".join(lines), _FRAME_SCHEMA, system=_FRAME_SYSTEM_PROMPT)
@@ -161,8 +179,9 @@ def generate_frame(
     record.key = key
     record.start = time
     record.end = Stamp.parse(hints.get("end")) or record.end
-    record.viewpoint = (decided.get("viewpoint") or "").strip() or None
-    record.place = (decided.get("place") or "").strip() or None
+    record.viewpoint_character_id = episode_character_matching.match_viewpoint_character_id(
+        session, decided.get("viewpoint"))
+    record.place_id = episode_character_matching.match_place_id(session, decided.get("place"))
     record.synced = False
     session.commit()
     print(f"[time_keepr/frame] {story.name}(id={story.id}) {format_time(time)}「{record.title}」 id={record.id} の枠を決めた")
