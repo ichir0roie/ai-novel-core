@@ -257,6 +257,42 @@ def test_unmatched_term_becomes_an_unconfirmed_idea_of_the_world(session, places
     assert undated.start is None and undated.end is None
 
 
+def test_unmatched_term_gets_the_existing_classification_as_parent(session, places):
+    star = _idea(session, "星", "惑星のアイデア", kind="星", location_id=places["planet"].id)
+    classification = _idea(session, "技術", "分類", kind="技術", location_id=places["planet"].id,
+                           parent_idea_id=star.id)
+
+    context = idea_context.resolve(
+        session, [{"keyword": "宿り", "description": "治療", "kind": "技術"}], places["village"].id)
+
+    [candidate] = context.candidates
+    assert candidate.parent_idea_id == classification.id
+    # 分類自体は新しく作られない(既存の一件のまま)
+    assert session.query(Idea).filter_by(name="技術", kind="技術").count() == 1
+
+
+def test_unmatched_term_creates_the_missing_classification(session, places):
+    world_idea = _idea(session, "世界線", "ルートのアイデア", kind="世界線", location_id=places["world"].id)
+
+    context = idea_context.resolve(
+        session, [{"keyword": "宿り", "description": "治療", "kind": "技術"}], places["village"].id)
+
+    [candidate] = context.candidates
+    classification = session.get(Idea, candidate.parent_idea_id)
+    assert classification.name == "技術" and classification.kind == "技術"
+    assert classification.location_id == places["world"].id
+    assert classification.parent_idea_id == world_idea.id
+    assert classification.confirmed == ConfirmStatus.APPROVED
+
+
+def test_unmatched_term_without_a_known_place_gets_no_parent(session):
+    context = idea_context.resolve(
+        session, [{"keyword": "宿り", "description": "治療", "kind": "技術"}], None)
+
+    [candidate] = context.candidates
+    assert candidate.parent_idea_id is None
+
+
 def test_general_words_do_not_become_candidates(session, places):
     context = idea_context.resolve(
         session, [{"keyword": "鍛冶師", "variants": ["鍛冶"], "description": "", "coined": False}],

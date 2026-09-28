@@ -6,6 +6,7 @@
 候補は確かめる(`confirmed` を 承認 にする)まで検索・清書には出ない。退けた(非承認)語は候補にも足さない。下書きが踏まえたアイデアと候補は、
 中間テーブル(`event_idea` など)で清書したレコードに結ぶ。
 清書に渡すアイデアは本質のアイデアにそろえ、その場所・時代の作中での呼び名(`idea_alias`)で呼ばせる。
+候補には `find_or_create_classification` で kind の分類(その kind をまとめる器。無ければ作る)を親として付ける。
 """
 from __future__ import annotations
 
@@ -49,6 +50,41 @@ def _is_proper_name(session: Session, word: str) -> bool:
             or session.scalar(select(Location.id).where(Location.name == word).limit(1)) is not None)
 
 
+def _location_anchor_idea(session: Session, place_id: int | None) -> Idea | None:
+    """`place_id` の場所チェーン(根から)を末端から遡り、対応するアイデア(通常は「星」)が
+    見つかった、一番深いものを返す。どこにも見つからなければ None。"""
+    if place_id is None:
+        return None
+    for step in reversed(common_query.place_path(session, place_id)):
+        idea = session.scalars(
+            select(Idea).where(Idea.kind == step["kind"], Idea.location_id == step["id"])
+            .order_by(Idea.id)).first()
+        if idea is not None:
+            return idea
+    return None
+
+
+def find_or_create_classification(session: Session, kind: str, place_id: int | None) -> Idea | None:
+    """`kind` をまとめる分類のアイデア(`name == kind` の行)を、`place_id` の属する世界・星から探し、
+    無ければその下に作る。分類の親は `_location_anchor_idea` が見つけたアイデア。それも見つからなければ
+    親を決めようがないので None(呼び出し側は `parent_idea_id` を設定しない)。"""
+    anchor = _location_anchor_idea(session, place_id)
+    if anchor is None:
+        return None
+    existing = session.scalars(
+        select(Idea).where(Idea.kind == kind, Idea.name == kind, Idea.location_id == anchor.location_id)
+        .order_by(Idea.id)).first()
+    if existing is not None:
+        return existing
+    classification = Idea(
+        name=kind, kind=kind, confirmed=ConfirmStatus.APPROVED, parent_idea_id=anchor.id,
+        location_id=anchor.location_id, text=f'{anchor.name}における「{kind}」のアイデアをまとめる分類。')
+    session.add(classification)
+    session.flush()
+    print(f"[time_keepr/idea] 分類を足した: {classification.name}(id={classification.id})")
+    return classification
+
+
 def _candidate_for(session: Session, term: dict, place_id: int | None) -> Idea | None:
     names = idea_search.spellings(term["keyword"])
     existing = session.scalars(
@@ -59,9 +95,11 @@ def _candidate_for(session: Session, term: dict, place_id: int | None) -> Idea |
         return None if existing.confirmed == ConfirmStatus.REJECTED else existing
     if _is_proper_name(session, term["keyword"]):
         return None
+    classification = find_or_create_classification(session, term["kind"], place_id)
     candidate = Idea(
         name=term["keyword"], kind=term["kind"], confirmed=ConfirmStatus.PENDING, text=term["description"],
-        location_id=_world_id(session, place_id), start=term["start"], end=term["end"])
+        location_id=_world_id(session, place_id), start=term["start"], end=term["end"],
+        parent_idea_id=classification.id if classification is not None else None)
     session.add(candidate)
     session.flush()
     print(f"[time_keepr/idea] 候補を足した: {candidate.name}(id={candidate.id})")
