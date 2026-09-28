@@ -10,7 +10,6 @@ export type IdeaNode = {
   start: string | null;
   end: string | null;
   locationName: string | null;
-  preview: string | null;
   children: IdeaNode[];
 };
 
@@ -43,7 +42,6 @@ export function buildIdeaTree(ideas: Rec[], locations: Rec[] = []): IdeaNode[] {
       start: str(idea.start),
       end: str(idea.end),
       locationName: locationId !== null ? (locationName.get(locationId) ?? `(id ${locationId})`) : null,
-      preview: str(idea.preview),
       children: (childrenOf.get(id) ?? []).map(node),
     };
   };

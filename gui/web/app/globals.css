@@ -342,13 +342,21 @@ button.ghost { background: transparent; }
 .tree-name { font-weight: 600; }
 .tree-kind, .tree-count, .tree-meta { color: var(--muted); font-size: 0.85rem; }
 .tree-link { font-size: 0.8rem; margin-left: auto; }
-.tree-text { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.3rem 1.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-story { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.2rem 0; }
 .tree-story::before { content: "▸"; color: var(--muted); font-size: 0.75rem; }
 .tree-meta { display: inline-flex; gap: 0.5rem; align-items: baseline; }
 
+/* アイデアツリー: 親の見出しとその子の並びを横に伸ばす(親 1 行 + 右へ子が連なる組織図の形)。
+   本文は出さず見出し行だけなので、深い階層でも横スクロールで追える幅に収める */
+.idea-tree { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.idea-tree-root { overflow-x: auto; padding-bottom: 0.5rem; }
+.idea-tree .idea-tree { margin-left: 1rem; padding-left: 1rem; border-left: 1px solid var(--line); }
+.idea-tree-node > details { display: flex; align-items: flex-start; gap: 1rem; }
+.idea-tree-node > details > summary { flex: none; }
+
 /* アイデアツリーの見出し行はクリックでアイデアの詳細を開くので、開閉は別のキャレットボタンで行う
    (既定のマーカー三角はクリックしても開閉しないので隠す) */
+.tree-idea-summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; padding: 0.25rem 0; white-space: nowrap; }
 .tree-idea-summary::marker { content: ""; }
 .tree-idea-summary::-webkit-details-marker { display: none; }
 .tree-caret {

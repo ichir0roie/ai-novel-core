@@ -31,7 +31,7 @@ function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart
   const key = String(node.id);
 
   return (
-    <li className="tree-place">
+    <li className="idea-tree-node">
       <details open>
         <summary
           className={classes.join(" ")}
@@ -78,9 +78,8 @@ function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart
             {span && <span>{span}</span>}
           </span>
         </summary>
-        {node.preview && <p className="tree-text">{node.preview}</p>}
         {node.children.length > 0 && openState.isOpen(key) && (
-          <ul className="tree">
+          <ul className="idea-tree">
             {node.children.map((child) => (
               <IdeaRow
                 key={child.id}
@@ -187,7 +186,7 @@ export default function IdeaTree() {
       >
         {T.ideaTree.dropToRoot}
       </div>
-      <ul className="tree tree-root">
+      <ul className="idea-tree idea-tree-root">
         {nodes.map((node) => (
           <IdeaRow
             key={node.id}
