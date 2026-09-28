@@ -12,15 +12,21 @@ from db.schema import (
     Idea, Location, Story,
 )
 from db.stamp import Stamp
-from randomizer.random_character_generator import (
-    _BUILD_CHOICES, _FIRST_PERSON_CHOICES, _personality,
-    _SECOND_PERSON_CHOICES, _SEX_CHOICES, _THIRD_PERSON_CHOICES, _TONE_CHOICES,
-)
+from randomizer.random_character_generator import _personality
 
 _session = scoped_session(sessionmaker())
 
 _LOCALE = "ja_JP"
 _YEAR_RANGE = (4000, 5000)
+
+# 実際の生成(ai/time_keeper/random_character_generator.py)は人物説明に合わせて AI が自分で
+# 決めるが、ここは db にそれらしい見た目のダミー行を積むだけの目的なので、少ない候補からのサイコロでよい。
+_SEX_CHOICES = ("男", "女", "不定")
+_BUILD_CHOICES = ("細身", "小柄", "がっしり", "長身", "ふくよか", "痩身")
+_TONE_CHOICES = ("丁寧", "ぶっきらぼう", "早口", "のんびり", "無口", "高圧的")
+_FIRST_PERSON_CHOICES = ("わたし", "俺", "僕", "あたし", "自分", "うち")
+_SECOND_PERSON_CHOICES = ("あなた", "君", "お前", "そちら", "あんた")
+_THIRD_PERSON_CHOICES = ("さん", "くん", "ちゃん", "殿", "氏")
 
 _LOCATION_KINDS = ("世界線", "惑星", "大陸", "国", "地方", "都市", "町", "村", "森", "山", "海", "島")
 _ENVIRONMENTS = ("温帯", "寒帯", "乾燥帯", "熱帯", "高地", "沿岸", "湿地", "砂漠", "凍土")

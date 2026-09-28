@@ -55,10 +55,19 @@ _CONTENT_SYSTEM_PROMPT = f"""\
 「性格」は各軸を {'/'.join(PERSONALITY_LEVELS)} の五段階で渡す(サイコロで決まっていて変えられない)。人物説明はこの段階と矛盾しないようにし、「無」「必」の軸はその極端さが生活・仕事・人との関わり方に具体的な癖として表れるように書く。段階の語をそのまま書き写さない。
 {_meme_instruction("人物")}
 {_PLACEHOLDER_INSTRUCTION}
-キーは次の五つだけ。
+性別・体格・一人称・二人称・三人称・口調は、「決まっている」として値が渡されていればその値をそのまま書く。渡されていなければ、
+候補から選ぶのではなく、text の人物像・年齢・出自・生い立ちに合わせてあなた自身で考えて決める。誰にでも当てはまる
+無難なものに寄せず、この人物固有の言葉づかいにする。
+キーは次の十一だけ。
 - text: 具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば地の文として含め、別項目には分けない。「優しい」「謎めいた」のような、誰にでも当てはまる抽象的な形容だけで済ませず、この人物固有の具体的な癖・関わり・生い立ちを最低一つ含める。
 - age: 年齢(整数)。{_AGE_RANGE}の範囲で、text の人物説明と矛盾しない値をあなた自身で決める。例えば老成した説明なら年長めに、幼さの残る説明なら年少めに。
 - principle: 行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字。
+- sex: 性別。「男」「女」に限らず、この人物に合う性のあり方を自由に決めてよい。
+- build: 体格。背丈・肉付き・立ち姿など、生活・仕事に合う体つきを1文で決める。
+- first_person: 一人称。年齢・性別・性格・出自・話し相手との間柄に合わせて決める。
+- second_person: 二人称。この人物が相手を呼ぶときの言葉を決める。
+- third_person: 三人称。この人物が他者に付ける呼び方(敬称)を決める。
+- tone: 口調。文体・話し方の癖が伝わるように1文で決める。
 - dialect: 方言。出身地・参考地域・参考文化・生業・生い立ち・年齢・性格・口調から、この人物がどんな言葉で話すかを1〜2文で決める。土地の言葉で話すなら、どの地方風の方言か(現実の方言を手本にしてよい)と、特徴的な語尾・言い回しを一つ以上。標準語で話すなら、その人物らしい癖(語尾・口ぐせ・言い淀み・訛りの名残など)を一つ以上。誰にでも当てはまる「普通の話し方」で済ませない。
 - history: 来歴。生まれてから age の歳までの節目を、歳の順に3〜5件。各要素は age(その時の歳。0 以上、上の age 以下の整数)と text(その歳に何があり、立場・仕事・住まい・人間関係がどう変わったかの1文)。人物説明の立場・仕事・住まいには、いつそうなったかの節目を必ず含める。"""
 
@@ -68,6 +77,12 @@ _CONTENT_SCHEMA = {
         "text": {"type": "string"},
         "age": {"type": "integer", "minimum": constants.GENERATION_CHARACTER_AGE_RANGE[0], "maximum": constants.GENERATION_CHARACTER_AGE_RANGE[1]},
         "principle": {"type": "string"},
+        "sex": {"type": "string"},
+        "build": {"type": "string"},
+        "first_person": {"type": "string"},
+        "second_person": {"type": "string"},
+        "third_person": {"type": "string"},
+        "tone": {"type": "string"},
         "dialect": {"type": "string"},
         "history": {
             "type": "array",
@@ -83,7 +98,10 @@ _CONTENT_SCHEMA = {
             },
         },
     },
-    "required": ["text", "age", "principle", "dialect", "history"],
+    "required": [
+        "text", "age", "principle", "sex", "build", "first_person", "second_person", "third_person",
+        "tone", "dialect", "history",
+    ],
     "additionalProperties": False,
 }
 
@@ -309,12 +327,28 @@ def _hint_line(hints: dict, subject: str) -> str:
 
 
 def _apply_parameter_hints(parameters: dict, hints: dict) -> None:
-    """作者が決めた性別・体格・口調・性格などはサイコロの値より優先する。"""
+    """作者が決めた性別・体格・口調・性格などは、サイコロ(性格)や AI の決定(性別・体格・一人称・
+    二人称・三人称・口調)より優先する。"""
     rows = hints.get("parameters") or []
     row = rows[0] if isinstance(rows, list) and rows else (rows if isinstance(rows, dict) else {})
     for column, value in row.items():
         if column in parameters and value not in (None, ""):
             parameters[column] = value
+
+
+_PARAMETER_HINT_LABELS = {
+    "sex": "性別", "build": "体格", "first_person": "一人称",
+    "second_person": "二人称", "third_person": "三人称", "tone": "口調",
+}
+
+
+def _fixed_parameter_line(parameters: dict) -> str:
+    """作者の指定(`_apply_parameter_hints` 済み)で既に決まっている項目だけを、AI に「決まっている」
+    値として渡す。決まっていない項目は書かず、AI 自身に考えさせる。"""
+    given = {label: parameters.get(key) for key, label in _PARAMETER_HINT_LABELS.items() if parameters.get(key)}
+    if not given:
+        return ""
+    return "決まっている(この通りにする): " + " / ".join(f"{label}: {value}" for label, value in given.items()) + "\n"
 
 
 def complete_text(session: Session, record: Character, born_place: Location | None, ai: AIClient) -> str:
@@ -347,8 +381,8 @@ def complete_text(session: Session, record: Character, born_place: Location | No
 
     nearby_characters = _nearby_characters(session, born_place, time)
     person_line = (
-        f"性別: {parameters.get('sex')} / 体格: {parameters.get('build')} / 口調: {parameters.get('tone')}\n"
         f"性格({'/'.join(PERSONALITY_LEVELS)} の五段階): {_personality_label(parameters)}\n"
+        + _fixed_parameter_line(parameters)
         if person and parameters else ""
     )
     name_line = f"名前(決まっている): {record.name}\n" if record.name else ""
@@ -400,8 +434,9 @@ def _generate_one(
     session: Session, born_place: Location | None, time: Stamp, rng: random.Random,
     ai: AIClient, person: bool = True, hints: dict | None = None,
 ) -> Character:
-    """`hints` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性別・体格・口調・性格・
-    種別・生年・没年・メインキャラクターかは決まった値として使う。渡された欄もすべて AI が組み立て直す。"""
+    """`hints` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性格・種別・生年・没年・
+    メインキャラクターかは決まった値として使う。性別・体格・一人称・二人称・三人称・口調は、hints にあれば
+    その値を、無ければ人物説明に合わせて AI が決める。"""
     hints = dict(hints or {})
     draft = build_character()
     # 生まれた時点で決める値なので、期間を限らない一行だけを持つ
@@ -439,8 +474,8 @@ def _generate_one(
 
     nearby_characters = _nearby_characters(session, born_place, time)
     person_line = (
-        f"性別: {parameters['sex']} / 体格: {parameters['build']} / 口調: {parameters['tone']}\n"
         f"性格({'/'.join(PERSONALITY_LEVELS)} の五段階): {_personality_label(parameters)}\n"
+        + _fixed_parameter_line(parameters)
         if person else ""
     )
 
@@ -475,6 +510,9 @@ def _generate_one(
     draft["text"] = decided.get("text") or draft["text"]
     if person:
         parameters["dialect"] = (decided.get("dialect") or "").strip() or None
+        for key in _PARAMETER_HINT_LABELS:
+            # 作者の指定(先に parameters へ入れてある)があればそれを保ち、無ければ AI の決定を使う
+            parameters[key] = parameters.get(key) or (decided.get(key) or "").strip() or None
     context = idea_context.gather(session, draft["text"], ai, born_place.id if born_place else None, time)
     if context.related:
         polished = ai.try_generate_json(
@@ -502,12 +540,20 @@ def _generate_one(
     death = Stamp.parse(hints.get("end"))
 
     dialect_line = f"方言: {parameters['dialect']}\n" if person and parameters.get("dialect") else ""
+    # 性別・体格・一人称などは、ここまでで作者の指定と AI の決定がすべて出そろっている。
+    # content_prompt 用の person_line(まだ決まっていない項目を隠して AI に決めさせるためのもの)とは別に、
+    # ここで決まった値をすべて名前決めの材料として渡す。
+    final_person_line = (
+        f"性格({'/'.join(PERSONALITY_LEVELS)} の五段階): {_personality_label(parameters)}\n"
+        + _fixed_parameter_line(parameters)
+        if person else ""
+    )
     # 名前は、説明・年齢など中身が決まったあとに、その内容から連想して決める。
     name_prompt = (
         f"種別: {draft['kind']}\n"
         f"説明: {draft['text']}\n"
         f"年齢: {age}\n"
-        f"{person_line}"
+        f"{final_person_line}"
         f"{dialect_line}"
         f"居場所: {born_place.name if born_place else '不明'}\n"
         f"場所の特徴:\n{_location_context(born_place)}\n"

@@ -5,14 +5,6 @@ import factory
 
 from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS
 
-_SEX_CHOICES = ("男", "女", "不定")
-_BUILD_CHOICES = ("細身", "小柄", "がっしり", "長身", "ふくよか", "痩身")
-_TONE_CHOICES = ("丁寧", "ぶっきらぼう", "早口", "のんびり", "無口", "高圧的")
-_FIRST_PERSON_CHOICES = ("わたし", "俺", "僕", "あたし", "自分", "うち")
-_SECOND_PERSON_CHOICES = ("あなた", "君", "お前", "そちら", "あんた")
-_THIRD_PERSON_CHOICES = ("さん", "くん", "ちゃん", "殿", "氏")
-
-
 
 def _personality():
     return factory.Faker("random_element", elements=PERSONALITY_LEVELS)
@@ -29,16 +21,19 @@ class ParameterFactory(factory.DictFactory):
     start = None
     end = None
 
-    # 名字は出自・身分・土地柄で決まるので、サイコロでは引かず名づけのときに決める
+    # 名字は出自・身分・土地柄で決まるので、サイコロでは引かず名づけのときに決める。
+    # 性別・体格・一人称・二人称・三人称・口調も、少ない候補からサイコロで引くと種類が偏るので、
+    # ここでは None のままにし、人物説明に合わせて AI が自分で考えて決める
+    # (ai/time_keeper/random_character_generator.py の `_CONTENT_SCHEMA` 側)。
     family_name = None
-    sex = factory.Faker("random_element", elements=_SEX_CHOICES)
+    sex = None
     height = factory.Faker("pyfloat", min_value=140, max_value=195, right_digits=1, positive=True)
-    build_ = factory.Faker("random_element", elements=_BUILD_CHOICES)
+    build_ = None
 
-    first_person = factory.Faker("random_element", elements=_FIRST_PERSON_CHOICES)
-    second_person = factory.Faker("random_element", elements=_SECOND_PERSON_CHOICES)
-    third_person = factory.Faker("random_element", elements=_THIRD_PERSON_CHOICES)
-    tone = factory.Faker("random_element", elements=_TONE_CHOICES)
+    first_person = None
+    second_person = None
+    third_person = None
+    tone = None
 
     sincerity = _personality()
     curiosity = _personality()
