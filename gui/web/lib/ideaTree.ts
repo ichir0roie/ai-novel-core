@@ -48,16 +48,18 @@ export function buildIdeaTree(ideas: Rec[], locations: Rec[] = []): IdeaNode[] {
   return (childrenOf.get(null) ?? []).map(node);
 }
 
-/** id の子孫(自分自身は含まない)の id 集合。ドラッグ&ドロップで循環になる相手をあらかじめ弾くのに使う。 */
+/** id のノードを木から探す。 */
+export function findNode(nodes: IdeaNode[], id: number): IdeaNode | null {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const found = findNode(n.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** id の子孫(自分自身は含まない)の id 集合。移動モードで、循環になる移動先をあらかじめ弾くのに使う。 */
 export function descendantIds(nodes: IdeaNode[], id: number): Set<number> {
-  const find = (list: IdeaNode[]): IdeaNode | null => {
-    for (const n of list) {
-      if (n.id === id) return n;
-      const found = find(n.children);
-      if (found) return found;
-    }
-    return null;
-  };
   const result = new Set<number>();
   const collect = (n: IdeaNode) => {
     for (const child of n.children) {
@@ -65,7 +67,7 @@ export function descendantIds(nodes: IdeaNode[], id: number): Set<number> {
       collect(child);
     }
   };
-  const target = find(nodes);
+  const target = findNode(nodes, id);
   if (target) collect(target);
   return result;
 }

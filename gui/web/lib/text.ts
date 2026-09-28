@@ -158,7 +158,11 @@ export const T = {
 
   ideaTree: {
     empty: "No ideas yet",
-    dropToRoot: "Drop here to make it a root idea (no parent)",
+    addChild: "+ Add child",
+    move: "Move",
+    cancelMove: "Cancel move",
+    moveModeHint: (name: string) => `Moving "${name}" — click another idea to make it the new parent`,
+    moveToRoot: "Move here to make it a root idea (no parent)",
     moveFailed: (error: string) => `Could not move: ${error}`,
     collapse: "Collapse",
     expand: "Expand",

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
-import { buildIdeaTree, descendantIds, type IdeaNode } from "@/lib/ideaTree";
+import { buildIdeaTree, descendantIds, findNode, type IdeaNode } from "@/lib/ideaTree";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
@@ -12,21 +12,22 @@ type OpenState = ReturnType<typeof useTreeOpen>;
 type RowProps = {
   node: IdeaNode;
   openState: OpenState;
-  draggingId: number | null;
+  movingId: number | null;
   blocked: Set<number>;
-  dropTarget: number | null;
-  onDragStart: (id: number) => void;
-  onDragEnd: () => void;
-  onDragOverNode: (id: number) => void;
-  onDropOnNode: (id: number) => void;
+  onStartMove: (id: number) => void;
+  onCancelMove: () => void;
+  onMoveHere: (id: number) => void;
 };
 
-function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart, onDragEnd, onDragOverNode, onDropOnNode }: RowProps) {
+function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove, onMoveHere }: RowProps) {
   const openPage = useOpenPage();
-  const isBlocked = draggingId !== null && (draggingId === node.id || blocked.has(node.id));
-  const classes = ["tree-idea-summary", "tree-draggable"];
-  if (draggingId === node.id) classes.push("dragging");
-  if (dropTarget === node.id && !isBlocked) classes.push("drop-target");
+  const inMoveMode = movingId !== null;
+  const isSelf = movingId === node.id;
+  const isBlocked = inMoveMode && (isSelf || blocked.has(node.id));
+  const classes = ["tree-idea-summary"];
+  if (isSelf) classes.push("moving");
+  else if (isBlocked) classes.push("move-blocked");
+  else if (inMoveMode) classes.push("move-target");
   const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
   const key = String(node.id);
 
@@ -35,25 +36,13 @@ function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart
       <details open>
         <summary
           className={classes.join(" ")}
-          draggable={draggingId === null}
           onClick={(e) => {
             e.preventDefault();
+            if (inMoveMode) {
+              if (!isBlocked) onMoveHere(node.id);
+              return;
+            }
             openPage(`/tables/idea/${node.id}`, e);
-          }}
-          onDragStart={(e) => {
-            e.dataTransfer.effectAllowed = "move";
-            onDragStart(node.id);
-          }}
-          onDragEnd={onDragEnd}
-          onDragOver={(e) => {
-            if (isBlocked) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-            onDragOverNode(node.id);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (!isBlocked) onDropOnNode(node.id);
           }}
         >
           {node.children.length > 0 && (
@@ -77,6 +66,31 @@ function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart
             {node.locationName && <span>{node.locationName}</span>}
             {span && <span>{span}</span>}
           </span>
+          <button
+            type="button"
+            className="tree-move-btn"
+            disabled={inMoveMode && !isSelf}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (isSelf) onCancelMove();
+              else if (!inMoveMode) onStartMove(node.id);
+            }}
+          >
+            {isSelf ? T.ideaTree.cancelMove : T.ideaTree.move}
+          </button>
+          <button
+            type="button"
+            className="tree-add-child-btn"
+            disabled={inMoveMode}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              openPage(`/tables/idea/new?parent_idea_id=${node.id}`, e);
+            }}
+          >
+            {T.ideaTree.addChild}
+          </button>
         </summary>
         {node.children.length > 0 && openState.isOpen(key) && (
           <ul className="idea-tree">
@@ -85,13 +99,11 @@ function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart
                 key={child.id}
                 node={child}
                 openState={openState}
-                draggingId={draggingId}
+                movingId={movingId}
                 blocked={blocked}
-                dropTarget={dropTarget}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onDragOverNode={onDragOverNode}
-                onDropOnNode={onDropOnNode}
+                onStartMove={onStartMove}
+                onCancelMove={onCancelMove}
+                onMoveHere={onMoveHere}
               />
             ))}
           </ul>
@@ -101,16 +113,14 @@ function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart
   );
 }
 
-const ROOT = -1;
-
-/** アイデア一覧をツリーで表示し、見出し行のドラッグ&ドロップで `parent_idea_id` を差し替える。 */
+/** アイデア一覧をツリーで表示する。各行の Move ボタンで移動モードに入り、そのあと別のアイデアをクリックすると
+ * `parent_idea_id` をそこへ差し替える(量が多いとスクロールで見切れるドラッグ&ドロップは使わない)。 */
 export default function IdeaTree() {
   const [ideas, setIdeas] = useState<Rec[] | null>(null);
   const [locations, setLocations] = useState<Rec[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const [movingId, setMovingId] = useState<number | null>(null);
   const openState = useTreeOpen("idea");
 
   const load = useCallback(async () => {
@@ -134,7 +144,8 @@ export default function IdeaTree() {
   }, [load]);
 
   const nodes = useMemo(() => (ideas ? buildIdeaTree(ideas, locations) : []), [ideas, locations]);
-  const blocked = useMemo(() => (draggingId === null ? new Set<number>() : descendantIds(nodes, draggingId)), [nodes, draggingId]);
+  const blocked = useMemo(() => (movingId === null ? new Set<number>() : descendantIds(nodes, movingId)), [nodes, movingId]);
+  const movingNode = useMemo(() => (movingId === null ? null : findNode(nodes, movingId)), [nodes, movingId]);
 
   const moveTo = useCallback(
     async (id: number, parentId: number | null) => {
@@ -142,6 +153,7 @@ export default function IdeaTree() {
       try {
         await updateRecord("idea", id, { parent_idea_id: parentId });
         await load();
+        setMovingId(null);
       } catch (e) {
         setSaveError(T.ideaTree.moveFailed(e instanceof Error ? e.message : String(e)));
       }
@@ -149,19 +161,9 @@ export default function IdeaTree() {
     [load],
   );
 
-  const onDragEnd = () => {
-    setDraggingId(null);
-    setDropTarget(null);
-  };
-  const onDropOnNode = (parentId: number) => {
-    const id = draggingId;
-    onDragEnd();
-    if (id !== null && id !== parentId) void moveTo(id, parentId);
-  };
-  const onDropOnRoot = () => {
-    const id = draggingId;
-    onDragEnd();
-    if (id !== null) void moveTo(id, null);
+  const onMoveHere = (parentId: number | null) => {
+    if (movingId === null || movingId === parentId) return;
+    void moveTo(movingId, parentId);
   };
 
   if (error) return <div className="status error">{error}</div>;
@@ -171,34 +173,25 @@ export default function IdeaTree() {
   return (
     <div className="panel">
       {saveError && <div className="status error">{saveError}</div>}
-      <div
-        className={`tree-root-drop ${dropTarget === ROOT ? "drop-target" : ""}`}
-        onDragOver={(e) => {
-          if (draggingId === null) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          setDropTarget(ROOT);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          onDropOnRoot();
-        }}
-      >
-        {T.ideaTree.dropToRoot}
-      </div>
+      {movingId !== null && (
+        <div className="tree-move-hint">{T.ideaTree.moveModeHint(movingNode?.name ?? `(id ${movingId})`)}</div>
+      )}
+      {movingId !== null && (
+        <button type="button" className="tree-root-drop" onClick={() => onMoveHere(null)}>
+          {T.ideaTree.moveToRoot}
+        </button>
+      )}
       <ul className="idea-tree idea-tree-root">
         {nodes.map((node) => (
           <IdeaRow
             key={node.id}
             node={node}
             openState={openState}
-            draggingId={draggingId}
+            movingId={movingId}
             blocked={blocked}
-            dropTarget={dropTarget}
-            onDragStart={setDraggingId}
-            onDragEnd={onDragEnd}
-            onDragOverNode={setDropTarget}
-            onDropOnNode={onDropOnNode}
+            onStartMove={setMovingId}
+            onCancelMove={() => setMovingId(null)}
+            onMoveHere={onMoveHere}
           />
         ))}
       </ul>
