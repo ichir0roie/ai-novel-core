@@ -120,7 +120,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
               rows={(value[child.name] as Rec[] | undefined) ?? []}
               onChange={(rows) => set(child.name, rows)}
               extraColumns={child.name === "places" || child.name === "parameters" ? ageColumns(value.start) : undefined}
-              readOnly={child.name === "places" || child.name === "parameters"}
+              readOnly={child.name === "places" || child.name === "parameters" || child.name === "recognitions"}
             />
           </div>
         ))}

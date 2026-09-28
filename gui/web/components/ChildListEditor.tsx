@@ -15,7 +15,7 @@ type Props = {
   rows: Rec[];
   onChange: (rows: Rec[]) => void;
   extraColumns?: ExtraColumn[];
-  /** true なら表はリードオンリーにし、列(行)クリックでモーダルの編集画面を開く(パラメータ・居場所)。 */
+  /** true なら表はリードオンリーにし、列(行)クリックでモーダルの編集画面を開く(パラメータ・居場所・呼び名)。 */
   readOnly?: boolean;
 };
 
@@ -103,8 +103,8 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
     }
   }
 
-  // 体格・口調・方言は自由記述で長い文になりがちなので、札には収めず 1 項目 1 行のまま出す
-  const soloKeys = new Set(["build", "tone", "dialect"]);
+  // 体格・口調・方言・呼び名の注釈は自由記述で長い文になりがちなので、札には収めず 1 項目 1 行のまま出す
+  const soloKeys = new Set(["build", "tone", "dialect", "detail"]);
   const soloColumns = [...soloKeys].map((key) => byKey.get(key)).filter((c): c is ColumnMeta => c != null);
   for (const column of soloColumns) {
     consumed.add(column.key);
@@ -129,7 +129,7 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
   return specs;
 }
 
-/** リードオンリーの表(パラメータ・居場所)。列(期間)ごとに幅を固定し、はみ出す分は横スクロールで見せる。
+/** リードオンリーの表(パラメータ・居場所・呼び名)。列(期間)ごとに幅を固定し、はみ出す分は横スクロールで見せる。
  * クリック・ホバーの単位は列(期間・レコード)全体で、項目(マス)単位ではハイライトしない。 */
 function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMeta; rows: Rec[]; extraColumns: ExtraColumn[]; onOpen: (index: number) => void }) {
   const rowSpecs = buildRowSpecs(meta.columns, extraColumns);
