@@ -25,6 +25,8 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
@@ -76,6 +78,18 @@ def _port_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.2)
         return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _http_alive(port: int, timeout: float = 1.0) -> bool:
+    # uvicorn --reload はワーカーの起動に失敗しても listen socket は監視役(reloader)側に
+    # 残ったままなので、_port_open の TCP 接続だけでは死活が分からない。実際に応答が返るかで見る
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=timeout)
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except OSError:
+        return False
 
 
 def _listening_pids(port: int) -> list[int]:
@@ -142,13 +156,18 @@ def _free_port(port: int, name: str) -> bool:
     return _wait_until_closed(port, timeout=5.0)
 
 
+# uvicorn --reload はワーカーの起動に失敗しても監視役(reloader)自体は生き続けるため、
+# プロセスの生死だけを見ていると応答しないまま気付けない。応答が無い時間もあわせて見る
+STALL_TIMEOUT = 20.0
+
+
 def _wait_for(port: int, name: str, process: subprocess.Popen, timeout: float = 90.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if process.poll() is not None:
             print(f"[gui/dev] {name} が終了コード {process.returncode} で止まった", file=sys.stderr)
             return False
-        if _port_open(port):
+        if _http_alive(port):
             return True
         time.sleep(0.3)
     print(f"[gui/dev] {name} が {timeout:.0f} 秒で立ち上がらなかった", file=sys.stderr)
@@ -211,6 +230,31 @@ def main(argv: list[str] | None = None) -> int:
 
     api: subprocess.Popen | None = None
     web: subprocess.Popen | None = None
+    down_since: dict[str, float | None] = {"API": None, "画面": None}
+
+    def watch(process: subprocess.Popen, port: int, name: str, spawn) -> subprocess.Popen:
+        # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
+        if process.poll() is not None:
+            print(f"[gui/dev] {name} が止まった(終了コード {process.returncode})。再起動する", file=sys.stderr)
+            process = spawn()
+            _wait_for(port, name, process)
+            down_since[name] = None
+            return process
+        if _http_alive(port):
+            down_since[name] = None
+            return process
+        since = down_since[name]
+        if since is None:
+            down_since[name] = time.time()
+        elif time.time() - since > STALL_TIMEOUT:
+            print(f"[gui/dev] {name} が応答しないまま {STALL_TIMEOUT:.0f} 秒止まっている"
+                  "(reload 先のコードにエラーが残っている?)。作り直す", file=sys.stderr)
+            _terminate(process)
+            process = spawn()
+            _wait_for(port, name, process)
+            down_since[name] = None
+        return process
+
     # Ctrl+C(SIGINT)だけでなく、タスクの停止などの SIGTERM でも finally を通して両方止める
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
@@ -223,15 +267,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_browser:
             _open_browser(url)
         while True:
-            # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
-            if api.poll() is not None:
-                print(f"[gui/dev] API が止まった(終了コード {api.returncode})。再起動する", file=sys.stderr)
-                api = spawn_api()
-                _wait_for(args.api_port, "API", api)
-            if web.poll() is not None:
-                print(f"[gui/dev] 画面が止まった(終了コード {web.returncode})。再起動する", file=sys.stderr)
-                web = spawn_web()
-                _wait_for(args.web_port, "画面", web)
+            api = watch(api, args.api_port, "API", spawn_api)
+            web = watch(web, args.web_port, "画面", spawn_web)
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n[gui/dev] 止める")
