@@ -161,6 +161,7 @@ export const T = {
     openLocation: "Open location",
     noCharacters: "No characters yet",
     noLocation: "No location",
+    collapseAll: "Collapse all",
   },
 
   ideaTree: {

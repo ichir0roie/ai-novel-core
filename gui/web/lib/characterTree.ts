@@ -63,3 +63,14 @@ export function buildCharacterTree(
   };
   return { nodes: (children.get(null) ?? []).map(node).filter((n): n is TreeNode => n !== null), unplaced };
 }
+
+/** 開閉できるノード(場所)の id をすべて集める。「すべて閉じる」で使う。 */
+export function collapsibleIds(tree: CharacterTree): string[] {
+  const result: string[] = [];
+  const collect = (node: TreeNode) => {
+    result.push(String(node.id));
+    node.children.forEach(collect);
+  };
+  tree.nodes.forEach(collect);
+  return result;
+}

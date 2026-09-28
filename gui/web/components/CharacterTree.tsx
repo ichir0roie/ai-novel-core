@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getCharacterLocations, listAllRecords, type Rec } from "@/lib/api";
-import { buildCharacterTree, type TreeCharacter, type TreeNode } from "@/lib/characterTree";
+import { buildCharacterTree, collapsibleIds, type TreeCharacter, type TreeNode } from "@/lib/characterTree";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
 
@@ -86,6 +86,9 @@ export default function CharacterTree() {
 
   return (
     <div className="panel">
+      <button type="button" className="tree-root-drop" onClick={() => openState.closeAll([...collapsibleIds(tree), UNPLACED])}>
+        {T.characterTree.collapseAll}
+      </button>
       <ul className="tree tree-root">
         {tree.nodes.map((node) => (
           <PlaceNode key={node.id} node={node} openState={openState} />
