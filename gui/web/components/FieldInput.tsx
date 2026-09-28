@@ -12,6 +12,11 @@ import { T } from "@/lib/text";
 // 親子を持つテーブル(場所・アイデア)は、プルダウンではなくツリーで選ばせる
 const TREE_REFERENCE_TABLES = new Set(["location", "idea"]);
 
+/** 子の行の列のうち、自由記述で長い文になりがちな列名(体格・口調・方言・呼び名の注釈など)。
+ * 単純な一行入力ではなく textarea にする。読み取り専用表示(ChildListEditor)でも同じ集合を
+ * 「1 項目 1 行のまま出す」列として使うので、ここで共有する。 */
+export const CHILD_FREEFORM_TEXT_KEYS = new Set(["build", "tone", "dialect", "detail"]);
+
 type Props = {
   column: ColumnMeta;
   value: unknown;
@@ -122,6 +127,14 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
       <PlainTextField value={(value as string | null) ?? null} onChange={onChange} />
     ) : (
       <MarkdownField value={(value as string | null) ?? null} onChange={onChange} />
+    );
+  }
+  if (!compact && CHILD_FREEFORM_TEXT_KEYS.has(column.key)) {
+    return (
+      <textarea
+        value={(value as string | null) ?? ""}
+        onChange={(e) => onChange(e.target.value === "" && column.nullable ? null : e.target.value)}
+      />
     );
   }
   return <input type="text" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" && column.nullable ? null : e.target.value)} />;

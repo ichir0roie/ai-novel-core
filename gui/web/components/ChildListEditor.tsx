@@ -2,7 +2,7 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import type { ChildListMeta, ColumnMeta, Rec } from "@/lib/api";
-import FieldInput from "./FieldInput";
+import FieldInput, { CHILD_FREEFORM_TEXT_KEYS } from "./FieldInput";
 import Modal from "./Modal";
 import { useOptions } from "./ReferenceSelect";
 import { T } from "@/lib/text";
@@ -102,8 +102,8 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
   }
 
   // 体格・口調・方言・呼び名の注釈は自由記述で長い文になりがちなので、札には収めず 1 項目 1 行のまま出す
-  const soloKeys = new Set(["build", "tone", "dialect", "detail"]);
-  const soloColumns = [...soloKeys].map((key) => byKey.get(key)).filter((c): c is ColumnMeta => c != null);
+  // (どの列が対象かは編集用の textarea 化(FieldInput)と共有する)
+  const soloColumns = [...CHILD_FREEFORM_TEXT_KEYS].map((key) => byKey.get(key)).filter((c): c is ColumnMeta => c != null);
   for (const column of soloColumns) {
     consumed.add(column.key);
     const chip = chipOf(column);
@@ -170,17 +170,18 @@ function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMe
 }
 
 /** 本文の下に続ける、上から下へ流れる読み取り専用の札(display が "flow" の子リスト。アイデアの呼び名など)。
- * 列を横に並べる表にはせず、1 項目を 1 行の「キー | 値」で縦に積むので、自由記述の注釈が長くても
- * 横スクロールにならず、札の高さは中身に応じて自然に伸び縮みする。 */
+ * 横スクロールの表にはせず札を縦に積むが、各札の中身は ReadOnlyTable(期間ごとのパラメータなど)と同じ
+ * buildRowSpecs で組む: 自由記述で長くなりがちな列(注釈など)だけ 1 項目 1 行、それ以外の短い値
+ * (呼び名・場所など)は ChipGrid で横に並べる。札の高さは中身に応じて自然に伸び縮みする。 */
 function FlowList({ meta, rows, onOpen }: { meta: ChildListMeta; rows: Rec[]; onOpen: (index: number) => void }) {
-  const chips = meta.columns.map(chipOf);
+  const rowSpecs = buildRowSpecs(meta.columns, []);
   return (
     <div className="flowlist">
       {rows.map((row, index) => (
         <div key={index} className="flow-card" onClick={() => onOpen(index)}>
           <div className="flow-index">#{index + 1}</div>
-          {chips.map((chip) => (
-            <SoloField key={chip.key} chip={chip} row={row} />
+          {rowSpecs.map((spec) => (
+            <Fragment key={spec.key}>{spec.render(row)}</Fragment>
           ))}
         </div>
       ))}
