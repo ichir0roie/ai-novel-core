@@ -99,6 +99,8 @@ class RecordResponse(BaseModel):
 class Option(BaseModel):
     id: int
     label: str
+    # ツリー選択(場所・アイデアなど、自己参照で親子を持つテーブル)で親を辿るための列の値
+    parent_id: int | None = None
 
 
 class OptionList(BaseModel):

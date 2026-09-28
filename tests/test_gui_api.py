@@ -79,8 +79,30 @@ def test_list_searches_filters_and_labels_references(client, session, world):
     assert page["total"] == 3 and [item["name"] for item in page["items"]] == ["宿り"]
 
     options = client.get("/api/tables/location/options?q=村").json()["items"]
-    assert options == [{"id": world["village"], "label": "村"}]
+    assert options == [{"id": world["village"], "label": "村", "parent_id": world["world"]}]
     assert client.get("/api/tables/nope/records").status_code == 404
+
+
+def test_options_expose_parent_id_only_for_tree_tables(client, session, world):
+    """場所・アイデアの選択肢には親の id を添えて GUI のプルダウンをツリーにできるようにする。
+    自己参照の親子を持たないテーブル(作品など)は常に null。"""
+    essence = Idea(name="本質", kind="技術", text="")
+    session.add(essence)
+    session.flush()
+    child = Idea(name="子", kind="技術", text="", parent_idea_id=essence.id)
+    session.add(child)
+    session.commit()
+
+    location_options = {o["id"]: o for o in client.get("/api/tables/location/options").json()["items"]}
+    assert location_options[world["village"]]["parent_id"] == world["world"]
+    assert location_options[world["world"]]["parent_id"] is None
+
+    idea_options = {o["id"]: o for o in client.get("/api/tables/idea/options").json()["items"]}
+    assert idea_options[child.id]["parent_id"] == essence.id
+    assert idea_options[essence.id]["parent_id"] is None
+
+    story_options = client.get("/api/tables/story/options").json()["items"]
+    assert all(o.get("parent_id") is None for o in story_options)
 
 
 def test_create_update_and_errors_go_through_the_entrances(client, session, world):

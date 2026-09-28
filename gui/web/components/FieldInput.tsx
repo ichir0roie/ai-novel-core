@@ -6,7 +6,11 @@ import MarkdownField from "./MarkdownField";
 import PlainTextField from "./PlainTextField";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
 import StampInput from "./StampInput";
+import TreeReferenceSelect from "./TreeReferenceSelect";
 import { T } from "@/lib/text";
+
+// 親子を持つテーブル(場所・アイデア)は、プルダウンではなくツリーで選ばせる
+const TREE_REFERENCE_TABLES = new Set(["location", "idea"]);
 
 type Props = {
   column: ColumnMeta;
@@ -56,6 +60,9 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
 
   if (column.type === "id_list" && column.references) {
     return <ReferenceMultiSelect table={column.references} value={(value as number[] | null) ?? []} onChange={onChange} />;
+  }
+  if (column.references && TREE_REFERENCE_TABLES.has(column.references)) {
+    return <TreeReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} />;
   }
   if (column.references) {
     return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} />;

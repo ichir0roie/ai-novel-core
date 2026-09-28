@@ -49,6 +49,9 @@ class TableSpec:
     # 一覧の既定の並び(列名と向き)
     sort: str = "id"
     order: str = "desc"
+    # 自己参照で親子を持つ列(あれば)。選択肢(`/options`)にこの列の値を添えて、
+    # GUI のプルダウンをツリー表示にする(`ReferenceTreeSelect`)
+    tree_parent_column: str | None = None
 
 
 TABLES: tuple[TableSpec, ...] = (
@@ -61,8 +64,10 @@ TABLES: tuple[TableSpec, ...] = (
               UpdateCharacterRelation, "relation", ("relation", "text")),
     TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, "name", ("name", "text"),
               extra_fields=("character_ids",), reviewable=True),
-    TableSpec("location", "場所", Location, CommitPlace, UpdatePlace, "name", ("name", "text")),
-    TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, "name", ("name", "text"), reviewable=True),
+    TableSpec("location", "場所", Location, CommitPlace, UpdatePlace, "name", ("name", "text"),
+              tree_parent_column="parent_id"),
+    TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, "name", ("name", "text"), reviewable=True,
+              tree_parent_column="parent_idea_id"),
     TableSpec("meme", "ミーム", Meme, CommitMeme, UpdateMeme, None, ("text",), reviewable=True),
     TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, "title", ("title", "text")),
 )

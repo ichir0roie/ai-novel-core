@@ -164,6 +164,11 @@ export const T = {
     expand: "Expand",
   },
 
+  treeSelect: {
+    collapse: "Collapse",
+    expand: "Expand",
+  },
+
   childList: {
     removeRow: "Remove this row",
     addRow: "+ Add row",
