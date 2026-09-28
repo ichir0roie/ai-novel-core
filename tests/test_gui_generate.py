@@ -4,6 +4,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
+from ai.claude_code import ai_client
 from gui.api import app as app_module, interface
 
 
@@ -40,6 +41,10 @@ def test_tables_meta_lists_the_generators(client, monkeypatch):
     episode = {g["key"]: g for g in tables["episode"]["generators"]}
     assert episode["frame"]["mode"] == "create" and episode["episode"]["mode"] == "both" and episode["episode"]["when_empty"] == "text"
     assert {p["key"] for p in episode["episode"]["params"]} == {"character_ids", "previous_episode_ids", "model", "effort"}
+    params = {p["key"]: p for p in episode["episode"]["params"]}
+    # モデルのプルダウンは ai_client の一覧をそのまま choices に出し、既定値は comment に載せる
+    assert params["model"]["choices"] == list(ai_client.AVAILABLE_MODELS)
+    assert ai_client.EPISODE_MODEL in params["model"]["comment"]
     assert tables["idea"]["generators"] == []
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ai.claude_code import ai_client
 from gui.api.models import ColumnMeta, GeneratorMeta
 
 
@@ -51,9 +52,10 @@ GENERATORS: tuple[Generator, ...] = (
               mode="both", when_empty="text",
               params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS,
                       ColumnMeta(key="model", label="本文のモデル", type="string", nullable=True, required=False,
-                                 comment="空なら claude-fable-5-1"),
+                                 choices=list(ai_client.AVAILABLE_MODELS),
+                                 comment=f"空なら {ai_client.EPISODE_MODEL}"),
                       ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,
-                                 comment="空なら high"))),
+                                 comment=f"空なら {ai_client.EPISODE_EFFORT}"))),
 )
 
 

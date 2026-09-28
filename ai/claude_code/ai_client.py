@@ -28,6 +28,10 @@ _EFFORT = "medium"
 EPISODE_MODEL = "claude-fable-5-1"
 EPISODE_EFFORT = "high"
 
+# GUI の「本文のモデル」プルダウンに出す一覧(claude CLI の --model にそのまま渡せる名前)。
+# 一覧の更新は本ファイルの値だけを直せばよい(GUI 側は choices としてこの値をそのまま受け取る)。
+AVAILABLE_MODELS = (EPISODE_MODEL, "claude-opus-5", "claude-opus-5-5", _MODEL, "claude-haiku-4-5")
+
 
 def _command() -> str:
     name = os.environ.get("DEM_CLAUDE_AI_COMMAND", "claude")

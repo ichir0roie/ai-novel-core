@@ -73,7 +73,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled 
   if (column.choices) {
     return (
       <select value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
-        <option value="">{column.nullable ? T.none : T.select}</option>
+        <option value="">{column.nullable ? column.comment ?? T.none : T.select}</option>
         {column.choices.map((choice) => (
           <option key={choice} value={choice}>
             {choice}
