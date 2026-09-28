@@ -1,7 +1,7 @@
 """話とキャラクターの多対多、視点・場所をFKへ
 
 Revision ID: c74e2f466cc6
-Revises: c1141ba5ff4e
+Revises: cdf2736ad036
 Create Date: 2026-09-28 23:43:26.227941
 
 話の登場人物を持つ中間テーブル episode_character を足し、自由記述だった
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'c74e2f466cc6'
-down_revision: Union[str, Sequence[str], None] = 'c1141ba5ff4e'
+down_revision: Union[str, Sequence[str], None] = 'cdf2736ad036'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
