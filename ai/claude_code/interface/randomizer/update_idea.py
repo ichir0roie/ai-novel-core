@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
-from ai.time_keeper import idea_alias
 from db.child_lists import load_children
 from db.schema import Idea, Location
 
@@ -17,6 +16,7 @@ class UpdateIdea(CommitDraft):
         data = self.parse(self.idea)
         idea_id = self.require_id(data, "直す対象のアイデア")
         notes = data.pop("notes", None)
+        recognitions = data.pop("recognitions", None)
         self.check_columns(data)
 
         record = self.get_or_raise(session, idea_id, "アイデア")
@@ -28,10 +28,11 @@ class UpdateIdea(CommitDraft):
         self.check_exists(session, Idea, new_parent_id, "parent_idea_id")
         if new_parent_id is not None:
             self._check_not_descendant(session, idea_id, new_parent_id)
-        idea_alias.check(session, idea_id, data.get("alias_of_idea_id"))
 
         if notes is not None:
             load_children(record, "notes", notes)
+        if recognitions is not None:
+            load_children(record, "recognitions", recognitions)
         return self.apply(session, record, data)
 
     @staticmethod

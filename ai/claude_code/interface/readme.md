@@ -24,7 +24,7 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「このアイデアは何?」「アイデアを調べて」 | `world.search_ideas.SearchIdeas(keywords, place_id=None, limit=None, time=None)`。名前・本文(基本の本文と追記の両方)の部分一致のあいまい検索。`keywords` は語一つか、`{"keyword", "variants"}`(言い換え)のリスト。当たり方の強い順に返す。自動生成の候補も返す。`place_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名。`text` は `time` の時点に効く追記(下の「アイデアの追記」)まで積み重ねた本文 |
 | 「この下書きに関わる設定は?」(中間段を自分で回す) | `idea.resolve_terms.ResolveTerms(terms, place_id=None, time=None)`。下書きから洗い出した語(`{"keyword", "variants", "description", "kind", "start", "end"}`)をアイデアと照らし、当たったものと上位・下位を返す。当たらなかった語は候補として足す(下の「中間段」)。候補の効く期間は語の `start` / `end`。`start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け(言えなければ省いて None)、`end` は分かるときだけ付ける。`time` は出来事の時刻。`time` を渡すと `start` が空(時期が未定)のアイデアは `ideas` に入れない。呼び名に当たったら本質のアイデアにそろえ、作中の呼び名を `called` に付ける |
 | 「この本文が踏まえたアイデアを結んで」 | `idea.link_ideas.LinkIdeas(idea_ids, event_id=None, episode_id=None, character_id=None)`。三つのうち一つだけ渡す |
-| 「この候補をあのアイデアにまとめて」 | `randomizer.merge_idea.MergeIdea(source_id, target_id)`。結んだ本文と source の呼び名を付け替えてから source を消す |
+| 「この候補をあのアイデアにまとめて」 | `randomizer.merge_idea.MergeIdea(source_id, target_id)`。結んだ本文と source の認識(呼び名)を付け替えてから source を消す |
 | 「判断待ちの一覧」「週次レビュー」   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO。Todoist へ載せる手順はスキル `weekly-review` |
 | 「場所を足して」                     | `randomizer.create_random_place.CreateRandomPlace()` で下書き → 内容を決めて `randomizer.commit_place.CommitPlace(place)` |
 | 「人物を足して」                     | `randomizer.create_random_character.CreateRandomCharacter()` → `randomizer.commit_character.CommitCharacter(character)`。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。`# 来歴` 節には節目を歳付きで書く(下の「人物の来歴」) |
@@ -34,8 +34,8 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `randomizer.generate_event.GenerateEvent(event={...}, seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
 | 「この人物の出自・居場所を足して」   | `randomizer.commit_character_place.CommitCharacterPlace(place)`              |
 | 「この二人の相関を足して」           | `randomizer.commit_character_relation.CommitCharacterRelation(relation)`     |
-| 「アイデアを足して」                 | `randomizer.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。時代ごとの追記は `notes`(下の「アイデアの追記」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める。`fact_check=False` で検めずに本文からだけ抜き出す |
-| 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `randomizer.commit_idea.CommitIdea(idea)` に `alias_of_idea_id`(本質のアイデア)を付けて足す。呼び名を使う場所・時代は `location_id` / `start` / `end`(空の列はどこでも・いつでも)。清書・断面・検索は、場所・時代が当てはまる呼び名のうち場所の近いものを選んで本質のアイデアをその名で呼び、当てはまらなければ本質の `name` を使う。呼び名の呼び名は持てない |
+| 「アイデアを足して」                 | `randomizer.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。時代ごとの追記は `notes`(下の「アイデアの追記」)、場所・時代ごとの作中の呼び名は `recognitions`(下の「アイデアの認識(呼び名)」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める。`fact_check=False` で検めずに本文からだけ抜き出す |
+| 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `randomizer.commit_idea.CommitIdea(idea)` / `randomizer.update_idea.UpdateIdea(idea)` に `recognitions`(下の「アイデアの認識(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「アイデア・oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"idea"` / `"oracle"` / `"meme"`。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、`fact_check` 欄へ入れる。`ids` を省くと `fact_check` が空のものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。アイデア・oracle は検めたあと本文と検証結果からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `randomizer.update_place.UpdatePlace(place)`                                 |
 | 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `randomizer.update_character.UpdateCharacter({"id": …, "parameters": [...]})`。期間ごとの行の配列をまるごと渡す(下の「期間ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
@@ -43,8 +43,8 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「場所を消して」                     | `randomizer.delete_place.DeletePlace(place_id)`                              |
 | 「出来事を直して」                   | `randomizer.update_event.UpdateEvent(event)`。`id` 必須、渡した欄だけ直す。当事者は変えない。直したあと要約(`event_summary`)を作り直す |
 | 「出来事を消して」「出来事を作り直して」 | `randomizer.delete_event.DeleteEvent(event_id)`。子の出来事が残っていれば止まる。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `text` に積み足した一文と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
-| 「アイデアを直して」                 | `randomizer.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す。`notes` を渡すと配列をまるごと置き換える(下の「アイデアの追記」) |
-| 「アイデアを消して」                 | `randomizer.delete_idea.DeleteIdea(idea_id)`。下位のアイデアか呼び名が残っていれば止まる。結んだ本文との中間テーブルの行も消す |
+| 「アイデアを直して」                 | `randomizer.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す。`notes` / `recognitions` を渡すとそれぞれ配列をまるごと置き換える(下の「アイデアの追記」「アイデアの認識(呼び名)」) |
+| 「アイデアを消して」                 | `randomizer.delete_idea.DeleteIdea(idea_id)`。下位のアイデアが残っていれば止まる。結んだ本文との中間テーブルの行、認識(呼び名)・追記の行も消す |
 | 「覚え書きを足して」「oracle に書いて」 | `randomizer.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは `CommitIdea` と同じく、検めて(`fact_check`)、本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める |
 | 「覚え書きを直して」                 | `randomizer.update_oracle.UpdateOracle(oracle)`。`id` 必須、渡した欄だけ直す |
 | 「ミームを足して」「この考え方をミームに入れて」 | `randomizer.commit_meme.CommitMeme(meme)`。`text` 必須。`category` は 信条/欲求/境遇/集団/理 のいずれか(空でもよい。次の抽出で AI が振る)。ユーザが書いたものなので `confirmed` を渡さなければ 承認 で入れ、置き場所は分類のディレクトリ |
@@ -127,6 +127,30 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 - `SearchIdeas` の名前・本文検索、`idea_search`(あいまい検索の当たり方の判定)、清書に渡す
   「関係する設定」(`idea_context.prompt_section`)は、いずれもこの積み重ねた本文を使う
 
+**アイデアの認識(呼び名)**: アイデアの作中での呼び名(本質の `name` とは別に、この場所・この時代ではこう呼ぶ、
+という言い方)は、`idea_recognition` テーブルに場所・時代ごとの行(`location_id` / `start` / `end` / `name` / `detail`)
+で積む。入口ではアイデアの `recognitions` に配列で並ぶ(id と idea_id は出さない。行は配列の並びで決まり、
+並びを変えなければ id も変わらない)。
+
+```json
+"recognitions": [
+  {"location_id": 12, "start": null, "end": "11700", "name": "魔力", "detail": "住人は魔法の力だと思っている"},
+  {"location_id": null, "start": null, "end": null, "name": "力", "detail": null}
+]
+```
+
+- `location_id` は効く場所(その場所と配下で効く)、`start` / `end` は効く期間。どちらも空ならどこでも・いつでも効く
+- `name` は必須。その場所・時代でアイデアをこう呼ぶ、という作中の呼び名
+- `detail` は呼び名についての注釈(作中でどう受け止められているか)。無くてもよい
+- `CommitIdea` / `UpdateIdea` は `recognitions` を受け取る。`UpdateIdea` に渡すと配列をまるごと置き換える
+- `SearchIdeas` の名前・本文検索、`idea_search`、`idea_context`(中間段)、清書に渡す「関係する設定」
+  (`idea_context.prompt_section`)は、いずれもアイデアの `recognitions` を見て、当てはまる場所・時代の
+  認識があればその `name` で呼び、`detail` を本質の本文の前に添える。当てはまる認識が無ければ本質の `name` をそのまま使う
+- ある場所・時代の認識(呼び名)がある行は、清書のプロンプト(`ai/instructions/idea_context.py`)で
+  「その場所・時代の人物はこの名前を認識しているもの」として扱われ、本文ではその名で呼ぶ
+- `MergeIdea` は `source_id` の `recognitions` を `target_id` へ付け替えてから `source_id` を消す。
+  `DeleteIdea` は下位のアイデアが残っていなければそのまま消し、`recognitions` も一緒に消える
+
 人物の来歴は、その人物の `text` の `# 来歴` 節に、節目を `- <年>年(<歳>歳): <何があり、立場・仕事・住まい・人間関係がどう変わったか>`
 の箇条書きで、歳の順に書く。人物説明にある立場・仕事・住まいには、いつそうなったかの節目を必ず入れる。
 「現在」の行は要らない。出来事の生成は、この歳と age を見比べてその時点の段階
@@ -168,8 +192,9 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 
 1. 下書きから、設定資料と照らす語とその言い換えを AI に挙げさせる(`idea_search.keywords_of`)。
    出来事の時刻と下書きの中身から、語ごとの `start` / `end` も決めさせる。ある程度はっきりした `start` が言えない語は null、`end` は分かる語だけ
-2. 語と言い換えで、アイデアの名前・本文を部分一致で引く(`idea_search.search`)。その場所・時刻で効くアイデアだけ。
-   場所は、アイデアの `location_id` が現在地から最上位までの場所のどれかに当たるもの。
+2. 語と言い換えで、アイデアの名前・本文(場所・時代ごとの作中の呼び名 `idea_recognition` の `name` / `detail` も含む)を
+   部分一致で引く(`idea_search.search`)。その場所・時刻で効くアイデアだけ。
+   場所は、アイデアの `location_id`(または当たった `idea_recognition` の `location_id`)が現在地から最上位までの場所のどれかに当たるもの。
    時刻は、出来事の時刻が `start` 以上 `end` 未満のもの(`end` が空なら限らない)。
    `start` が空のアイデアは時期が未定で、その時刻にもうあるかが分からないので、語が当たっても清書に渡さない(候補も足さない)。
    当たったアイデアに上位・下位のアイデアを足して、清書に「関係する設定」として渡す

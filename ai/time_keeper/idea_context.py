@@ -112,8 +112,7 @@ def resolve(session: Session, keywords, place_id: int | None = None, time=None) 
         candidate = _candidate_for(session, term, place_id)
         if candidate is not None and candidate not in context.candidates:
             context.candidates.append(candidate)
-    context.related = _dated(idea_alias.essences(
-        session, _related(session, _dated(idea_alias.essences(session, context.hits), time), place_id, time)), time)
+    context.related = _dated(_related(session, _dated(context.hits, time), place_id, time), time)
     context.called = idea_alias.called(session, [idea.id for idea in context.related], place_id, time)
     return context
 

@@ -135,8 +135,8 @@ def brief(session: Session, place_id: int, when=None, *, reach: int = 60,
     recent = [event_row(row) for row in session.scalars(recent_query).all()]
 
     character_ids = residents(session, place_ids, until)
-    ideas = idea_alias.essences(session, session.scalars(
-        common_query.ideas_select(common_query.idea_scope_ids(session, place_id), until)).all())
+    ideas = session.scalars(
+        common_query.ideas_select(common_query.idea_scope_ids(session, place_id), until)).all()
     called = idea_alias.called(session, [idea.id for idea in ideas], place_id, until)
 
     character_names = _names_for(session, character_ids, "Character")

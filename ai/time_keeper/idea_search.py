@@ -167,12 +167,15 @@ def _spelled(term: dict) -> tuple[list[str], list[str]]:
 
 
 def _score(idea: Idea, keyword: list[str], variants: list[str], time: Stamp | None = None) -> int:
-    if any(_contains(idea.name, s) for s in keyword):
+    # 場所・時代を問わず、作中の呼び名(idea_recognition)にも本質と同じ強さで当たる
+    names = [idea.name, *(recognition.name for recognition in idea.recognitions)]
+    if any(_contains(name, s) for name in names for s in keyword):
         return _NAME_SCORE
-    if any(_contains(idea.name, s) for s in variants):
+    if any(_contains(name, s) for name in names for s in variants):
         return _VARIANT_NAME_SCORE
-    text = resolve_idea_text(idea.text, idea.notes, time)
-    if any(_contains(text, s) for s in keyword + variants):
+    texts = [resolve_idea_text(idea.text, idea.notes, time),
+             *(recognition.detail or "" for recognition in idea.recognitions)]
+    if any(_contains(text, s) for text in texts for s in keyword + variants):
         return _TEXT_SCORE
     return 0
 
