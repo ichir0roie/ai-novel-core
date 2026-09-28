@@ -5,7 +5,8 @@
 - 未確認のアイデア・ミームを一件ずつ出し、直しながら「承認」「非承認」を付けて次へ進むレビュー画面
 - 本文を持つテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き)の一覧・表示・修正・追加
 - 作品の一覧(`/tables/story`)は既定で、場所の木(`parent_id`)に作品(`place_id`、無ければ `world_id`)をぶら下げたツリー。
-  場所・作品・話の一覧 API を引いてブラウザ側で組む(`gui/web/lib/storyTree.ts`)。`?view=list` で表に切り替える
+  場所・作品・話の一覧 API を引いてブラウザ側で組む(`gui/web/lib/storyTree.ts`)。`?view=list` で表に切り替える。
+  枝の開閉はブラウザの localStorage に覚える(`gui/web/lib/treeOpen.ts`。既定は開いた状態)
 - 星ごとの地図(`/maps`)と人物相関図(`/relations`)。元データは `/api/maps` `/api/relations`。ナビには出さず、
   場所の詳細から `/maps?location=<id>`(その場所を中心に置いて描く)へ、人物の詳細から `/relations?character=<id>`
   (その人物に関わる関係だけを描く)へ飛ぶ

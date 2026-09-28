@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { listAllRecords, type Rec } from "@/lib/api";
 import { buildStoryTree, type TreeNode, type TreeStory } from "@/lib/storyTree";
 import { T } from "@/lib/text";
+import { useTreeOpen } from "@/lib/treeOpen";
+
+type OpenState = ReturnType<typeof useTreeOpen>;
 
 function StoryRow({ story }: { story: TreeStory }) {
   const span = [story.start, story.end].filter(Boolean).join(" 〜 ");
@@ -20,10 +23,11 @@ function StoryRow({ story }: { story: TreeStory }) {
   );
 }
 
-function PlaceNode({ node }: { node: TreeNode }) {
+function PlaceNode({ node, openState }: { node: TreeNode; openState: OpenState }) {
+  const key = String(node.id);
   return (
     <li className="tree-place">
-      <details open>
+      <details open={openState.isOpen(key)} onToggle={(e) => openState.setOpen(key, e.currentTarget.open)}>
         <summary>
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
           {node.kind && <span className="tree-kind">{node.kind}</span>}
@@ -37,7 +41,7 @@ function PlaceNode({ node }: { node: TreeNode }) {
             <StoryRow key={story.id} story={story} />
           ))}
           {node.children.map((child) => (
-            <PlaceNode key={child.id} node={child} />
+            <PlaceNode key={child.id} node={child} openState={openState} />
           ))}
         </ul>
       </details>
@@ -51,6 +55,7 @@ type Source = { locations: Rec[]; stories: Rec[]; episodes: Rec[] };
 export default function StoryTree() {
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const openState = useTreeOpen("story");
 
   const load = useCallback(async () => {
     try {
@@ -82,11 +87,11 @@ export default function StoryTree() {
     <div className="panel">
       <ul className="tree tree-root">
         {tree.nodes.map((node) => (
-          <PlaceNode key={node.id} node={node} />
+          <PlaceNode key={node.id} node={node} openState={openState} />
         ))}
         {tree.unplaced.length > 0 && (
           <li className="tree-place">
-            <details open>
+            <details open={openState.isOpen("unplaced")} onToggle={(e) => openState.setOpen("unplaced", e.currentTarget.open)}>
               <summary>
                 <span className="tree-name">{T.storyTree.noLocation}</span>
                 <span className="tree-count">{T.storyTree.stories(tree.unplaced.length)}</span>
