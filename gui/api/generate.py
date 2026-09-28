@@ -36,6 +36,9 @@ class Generator:
                              params=list(self.params), panel=self.panel)
 
 
+_CHARACTER_IDS = ColumnMeta(key="character_ids", label="登場人物", type="id_list", nullable=True, required=False,
+                            references="character",
+                            comment="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
 _PREVIOUS_EPISODE_IDS = ColumnMeta(
     key="previous_episode_ids", label="直前の話", type="id_list", nullable=True, required=False,
     references="episode", comment="概要と文体の覚え書きで渡す話。空なら作品の中でその時刻より前の三話")
@@ -57,12 +60,11 @@ GENERATORS: tuple[Generator, ...] = (
     Generator("event", "ai", "AI で作成", "randomizer.generate_event.GenerateEvent", "event"),
     Generator("event", "complete", "AI で補完", "randomizer.generate_event.GenerateEvent", "event",
               mode="edit", when_empty="text"),
-    # 登場人物は聞かず、下書きの character_ids(話の episode_character と同じ欄)を使う
     Generator("episode", "frame", "AI で枠を作る", "story.generate_frame.GenerateFrame", "frame",
-              params=(_PREVIOUS_EPISODE_IDS,)),
+              params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS)),
     Generator("episode", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "episode",
               mode="both", when_empty="text",
-              params=(_PREVIOUS_EPISODE_IDS, _MODEL_PARAM, _EFFORT_PARAM)),
+              params=(_CHARACTER_IDS, _PREVIOUS_EPISODE_IDS, _MODEL_PARAM, _EFFORT_PARAM)),
     # 直前の話は聞かず、既定(その時刻より前の三話)を使う(ReviseEpisode 側で解決する)。
     # GUI の専用レイアウト(RevisePanel)は指示文・モデル・effort だけを出す
     Generator("episode", "revise", "AI で推敲する", "story.revise_episode.ReviseEpisode", "episode",

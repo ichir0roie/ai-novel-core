@@ -15,7 +15,8 @@ class GenerateEpisode(StoryQuery):
 
     種(`key`)と時刻(`start`)が下書きに揃っていれば、そのまま `write_episode`(常駐ループ側)と同じ生成で本文を書く。
     どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
-    登場人物は下書きの `character_ids`(話の `episode_character` と同じ欄)。下書きに無ければ枠の `episode_character`。
+    登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`(話の `episode_character`
+    と同じ欄)、それも無ければ枠の `episode_character`。使う登場人物は枠の `episode_character` として保存する。
     空なら止まる(時刻・場所から人物を拾う既定は持たない)。`model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
 
@@ -23,10 +24,12 @@ class GenerateEpisode(StoryQuery):
     途中で失敗しても、この保存分(枠)は db に残る。
     """
 
-    def __init__(self, episode: dict, previous_episode_ids: list[int] | None = None,
+    def __init__(self, episode: dict, character_ids: list[int] | None = None,
+                 previous_episode_ids: list[int] | None = None,
                  model: str | None = None, effort: str | None = None, *,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.episode = dict(episode or {})
+        self.character_ids = character_ids
         self.previous_episode_ids = previous_episode_ids
         self.model = model
         self.effort = effort
@@ -46,6 +49,8 @@ class GenerateEpisode(StoryQuery):
             draft.pop(key, None)
         episode_id = draft.pop("id", None)
         character_ids = draft.pop("character_ids", None)
+        if self.character_ids is not None:
+            character_ids = self.character_ids
         slot = episode_generator.frame(session, episode_id) if episode_id is not None else None
         story_id = draft.get("story_id") or (slot.story_id if slot else None)
         if story_id in (None, ""):

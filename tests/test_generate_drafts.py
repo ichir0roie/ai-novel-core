@@ -401,6 +401,32 @@ def test_episode_uses_the_frames_episode_characters_when_the_draft_has_none(sess
     assert '"name": "甲"' in prompt and '"name": "乙"' not in prompt
 
 
+def test_episode_characters_chosen_in_the_panel_win_over_the_draft_and_are_saved(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    second = _character(session, place, "乙")
+    slot = Episode(story_id=story.id, title="枠の題", key="地図を買う", start=WHEN)
+    slot.episode_characters = [EpisodeCharacter(character_id=first.id)]
+    session.add(slot)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    GenerateEpisode({"id": slot.id, "character_ids": [first.id]}, character_ids=[second.id], ai=ai).run()
+
+    prompt = _prompts(ai, episode_generator._SCHEMA)
+    assert '"name": "乙"' in prompt and '"name": "甲"' not in prompt
+    assert episode_generator.character_ids_of(session, slot.id) == [second.id]
+
+
+def test_episode_frame_characters_chosen_in_the_panel_are_saved(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+
+    result = GenerateFrame({"story_id": story.id}, character_ids=[first.id], ai=_Ai(seed=1)).run()
+
+    assert episode_generator.character_ids_of(session, result["id"]) == [first.id]
+
+
 def test_episode_refuses_unconfirmed_characters(session, place):
     story = session.query(Story).one()
     pending = _character(session, place, "甲", confirmed=ConfirmStatus.PENDING)

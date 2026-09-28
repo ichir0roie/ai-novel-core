@@ -40,9 +40,9 @@ def test_tables_meta_lists_the_generators(client, monkeypatch):
     assert event["complete"]["mode"] == "edit" and event["complete"]["when_empty"] == "text"
     episode = {g["key"]: g for g in tables["episode"]["generators"]}
     assert episode["frame"]["mode"] == "create" and episode["episode"]["mode"] == "both" and episode["episode"]["when_empty"] == "text"
-    # 登場人物は聞かない(下書きの character_ids、つまり話の episode_character を使う)
-    assert {p["key"] for p in episode["episode"]["params"]} == {"previous_episode_ids", "model", "effort"}
-    assert {p["key"] for p in episode["frame"]["params"]} == {"previous_episode_ids"}
+    # 登場人物はパネルで選べる(初めは下書きの character_ids、つまり話の episode_character)
+    assert {p["key"] for p in episode["episode"]["params"]} == {"character_ids", "previous_episode_ids", "model", "effort"}
+    assert {p["key"] for p in episode["frame"]["params"]} == {"character_ids", "previous_episode_ids"}
     params = {p["key"]: p for p in episode["episode"]["params"]}
     # モデル・effort のプルダウンは ai_client の一覧をそのまま choices に出し、既定値は default に載せる
     assert params["model"]["choices"] == list(ai_client.AVAILABLE_MODELS)
@@ -82,9 +82,10 @@ def test_generate_runs_the_entrance_as_a_job_with_the_draft(client, monkeypatch)
     accepted = client.post("/api/tables/episode/generate/episode", json={
         "draft": {"story_id": 3, "title": "", "key": None, "start": "", "viewpoint_character_id": None, "text": "",
                   "character_ids": [1, 2]},
-        "args": {"model": ""}})
+        "args": {"character_ids": [2], "model": ""}})
     assert accepted.status_code == 202, accepted.text
     job = _wait(client, accepted.json()["id"])
     assert job["status"] == "done" and job["result"]["id"] == 7 and job["entrance"] == entrance.id
     # 空の欄(None・空文字・空の配列)は「指定なし」なので渡さない
-    assert calls[0]["episode"] == {"story_id": 3, "character_ids": [1, 2]} and "model" not in calls[0]
+    assert calls[0]["episode"] == {"story_id": 3, "character_ids": [1, 2]} and calls[0]["character_ids"] == [2]
+    assert "model" not in calls[0]

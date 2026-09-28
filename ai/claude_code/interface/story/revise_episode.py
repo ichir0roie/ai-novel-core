@@ -12,8 +12,9 @@ from db.schema import Episode
 class ReviseEpisode(StoryQuery):
     """すでに本文のある話(`episode` の `id`)を、直す指示(`instruction`。必須)に沿って AI に書き直させる。
 
-    筋は変えず、指示にある観点だけを直す。登場人物(この話に出る人物。初登場・既出とも)は下書きの `character_ids`
-    (話の `episode_character` と同じ欄)。下書きに無ければこの話の `episode_character`。空なら止まる。
+    筋は変えず、指示にある観点だけを直す。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、
+    省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければこの話の `episode_character`。
+    使う登場人物はこの話の `episode_character` として保存する。空なら止まる。
     前の話の概要に出ていない人物は、その材料から AI が初登場と判断して外見・性格の描写を厚くする。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
@@ -22,11 +23,13 @@ class ReviseEpisode(StoryQuery):
     その下書きの値を一度保存する。途中で失敗しても、この保存分は db に残る。
     """
 
-    def __init__(self, episode: dict, instruction: str, previous_episode_ids: list[int] | None = None,
+    def __init__(self, episode: dict, instruction: str, character_ids: list[int] | None = None,
+                 previous_episode_ids: list[int] | None = None,
                  model: str | None = None, effort: str | None = None, *,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.episode = dict(episode or {})
         self.instruction = instruction
+        self.character_ids = character_ids
         self.previous_episode_ids = previous_episode_ids
         self.model = model
         self.effort = effort
@@ -50,7 +53,8 @@ class ReviseEpisode(StoryQuery):
         draft = {k: v for k, v in self.episode.items()
                  if k not in ("id", "text", "synced", "letters", "character_ids")}
         character_ids = episode_generator.resolve_character_ids(
-            session, record.id, self.episode.get("character_ids"))
+            session, record.id,
+            self.character_ids if self.character_ids is not None else self.episode.get("character_ids"))
         if draft:
             # AI 呼び出し(数分かかることがある)の前に、題・種など今の下書きの値を一度保存しておく
             episode_generator.save_draft(session, record, draft)
