@@ -56,14 +56,18 @@ export default function NewRecordPage() {
   return (
     <div className="page-fill">
       <PageTitle kind={meta.label} />
-      <h1>{T.create.title(meta.label)}</h1>
-      {error && <div className="status error">{error}</div>}
       <div className="panel fill">
         <RecordForm
           meta={meta}
           value={value}
           onChange={setValue}
           mode="create"
+          header={
+            <>
+              <h1>{T.create.title(meta.label)}</h1>
+              {error && <div className="status error">{error}</div>}
+            </>
+          }
           actions={
             <div className="actionbar">
               <div className="inner">

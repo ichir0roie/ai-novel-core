@@ -24,6 +24,8 @@ type Props = {
   value: Rec;
   onChange: (value: Rec) => void;
   mode: "create" | "edit";
+  /** 左の欄の一番上に置く見出し(記録の名前・id・保存の結果など)。本文の欄を上まで使うため、枠の外ではなくここに置く */
+  header?: ReactNode;
   /** 左の欄の末尾に置くもの(関連の一覧など) */
   side?: ReactNode;
   /** 左の欄の一番下に置く保存系のボタン列 */
@@ -32,7 +34,7 @@ type Props = {
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
  * 本文(section の列)は右半分で、他の欄と side・actions は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, side, actions }: Props) {
+export default function RecordForm({ meta, value, onChange, mode, header, side, actions }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   const plain = columns.filter((c) => !c.section);
@@ -42,6 +44,7 @@ export default function RecordForm({ meta, value, onChange, mode, side, actions 
   return (
     <div className={`record ${sections.length ? "split" : ""}`}>
       <div className="record-side">
+        {header && <div className="record-header">{header}</div>}
         <div className="form">
           {plain.map((column) => (
             <div key={column.key} className={`field ${column.type === "id_list" || column.type === "json" ? "wide" : ""}`}>

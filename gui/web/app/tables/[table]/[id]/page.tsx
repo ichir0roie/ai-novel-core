@@ -82,12 +82,7 @@ export default function RecordPage() {
   return (
     <div className="page-fill">
       <PageTitle kind={meta.label} record={loaded?.label} />
-      <div className="hint">
-        <Link href={`/tables/${table}`}>{meta.label}</Link> / id={id}
-      </div>
-      <h1>{loaded?.label ?? "…"}</h1>
-      {error && <div className="status error">{error}</div>}
-      {saved && !error && <div className="status ok">{saved}</div>}
+      {!loaded && error && <div className="status error">{error}</div>}
       {loaded && (
         <div className="panel fill">
           <RecordForm
@@ -95,6 +90,18 @@ export default function RecordPage() {
             value={value}
             onChange={setValue}
             mode="edit"
+            header={
+              <>
+                <div className="title-line">
+                  <h1>{loaded.label ?? "…"}</h1>
+                  <span className="hint">
+                    <Link href={`/tables/${table}`}>{meta.label}</Link> / id={id}
+                  </span>
+                </div>
+                {error && <div className="status error">{error}</div>}
+                {saved && !error && <div className="status ok">{saved}</div>}
+              </>
+            }
             side={<Related related={loaded.related ?? {}} owner={{ table, id }} />}
             actions={
               <div className="actionbar">

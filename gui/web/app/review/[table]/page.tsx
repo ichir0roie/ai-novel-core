@@ -100,9 +100,13 @@ export default function ReviewPage() {
   return (
     <div className="page-fill">
       <PageTitle kind={meta.label} record={next?.label} />
-      <h1>{T.review.title(meta.label)}</h1>
-      {error && <div className="status error">{error}</div>}
-      {done && !error && <div className="status ok">{done}</div>}
+      {!next?.record && (
+        <>
+          <h1>{T.review.title(meta.label)}</h1>
+          {error && <div className="status error">{error}</div>}
+          {done && !error && <div className="status ok">{done}</div>}
+        </>
+      )}
       {next && !next.record && (
         <div className="panel">
           {T.review.noneLeft(meta.label)}<Link href={`/tables/${table}?confirmed=非承認`}>{T.review.rejectedList}</Link> /{" "}
@@ -111,15 +115,23 @@ export default function ReviewPage() {
       )}
       {next?.record && (
         <div className="panel fill">
-          <div className="hint" style={{ marginBottom: "0.5rem" }}>
-            id={String(next.record.id)}{" "}
-            <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
-          </div>
           <RecordForm
             meta={meta}
             value={value}
             onChange={setValue}
             mode="edit"
+            header={
+              <>
+                <div className="title-line">
+                  <h1>{T.review.title(meta.label)}</h1>
+                  <span className="hint">
+                    id={String(next.record.id)} <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
+                  </span>
+                </div>
+                {error && <div className="status error">{error}</div>}
+                {done && !error && <div className="status ok">{done}</div>}
+              </>
+            }
             side={<Related related={next.related ?? {}} />}
             actions={
               <div className="actionbar">

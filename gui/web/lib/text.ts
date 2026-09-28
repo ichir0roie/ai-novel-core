@@ -29,6 +29,7 @@ export const T = {
   confirmWord,
 
   nav: {
+    menu: "Menu",
     endpoints: "Endpoints",
     review: (label: string) => `${label} review`,
   },
