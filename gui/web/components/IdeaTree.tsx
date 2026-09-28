@@ -28,7 +28,6 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
   if (isSelf) classes.push("moving");
   else if (isBlocked) classes.push("move-blocked");
   else if (inMoveMode) classes.push("move-target");
-  const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
   const key = String(node.id);
 
   return (
@@ -60,12 +59,7 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
             </button>
           )}
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
-          {node.kind && <span className="tree-kind">{node.kind}</span>}
           {node.confirmed && node.confirmed !== "承認" && <span className="chip">{node.confirmed}</span>}
-          <span className="tree-meta">
-            {node.locationName && <span>{node.locationName}</span>}
-            {span && <span>{span}</span>}
-          </span>
           <button
             type="button"
             className="tree-move-btn"
@@ -117,7 +111,6 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
  * `parent_idea_id` をそこへ差し替える(量が多いとスクロールで見切れるドラッグ&ドロップは使わない)。 */
 export default function IdeaTree() {
   const [ideas, setIdeas] = useState<Rec[] | null>(null);
-  const [locations, setLocations] = useState<Rec[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<number | null>(null);
@@ -125,12 +118,8 @@ export default function IdeaTree() {
 
   const load = useCallback(async () => {
     try {
-      const [items, locs] = await Promise.all([
-        listAllRecords("idea", { sort: "id", order: "asc" }),
-        listAllRecords("location", { sort: "id", order: "asc" }),
-      ]);
+      const items = await listAllRecords("idea", { sort: "id", order: "asc" });
       setIdeas(items);
-      setLocations(locs);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -143,7 +132,7 @@ export default function IdeaTree() {
     return () => window.removeEventListener("focus", load);
   }, [load]);
 
-  const nodes = useMemo(() => (ideas ? buildIdeaTree(ideas, locations) : []), [ideas, locations]);
+  const nodes = useMemo(() => (ideas ? buildIdeaTree(ideas) : []), [ideas]);
   const blocked = useMemo(() => (movingId === null ? new Set<number>() : descendantIds(nodes, movingId)), [nodes, movingId]);
   const movingNode = useMemo(() => (movingId === null ? null : findNode(nodes, movingId)), [nodes, movingId]);
 

@@ -5,18 +5,14 @@ import type { Rec } from "./api";
 export type IdeaNode = {
   id: number;
   name: string | null;
-  kind: string | null;
   confirmed: string | null;
-  start: string | null;
-  end: string | null;
-  locationName: string | null;
   children: IdeaNode[];
 };
 
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
 const str = (v: unknown): string | null => (v == null ? null : String(v));
 
-export function buildIdeaTree(ideas: Rec[], locations: Rec[] = []): IdeaNode[] {
+export function buildIdeaTree(ideas: Rec[]): IdeaNode[] {
   const known = new Set(ideas.map((i) => Number(i.id)));
   const childrenOf = new Map<number | null, Rec[]>();
   for (const idea of [...ideas].sort((a, b) => Number(a.id) - Number(b.id))) {
@@ -25,26 +21,12 @@ export function buildIdeaTree(ideas: Rec[], locations: Rec[] = []): IdeaNode[] {
     childrenOf.set(key, [...(childrenOf.get(key) ?? []), idea]);
   }
 
-  const locationName = new Map<number, string>();
-  for (const location of locations) {
-    const id = num(location.id);
-    if (id !== null) locationName.set(id, str(location.name) ?? `(id ${id})`);
-  }
-
-  const node = (idea: Rec): IdeaNode => {
-    const id = Number(idea.id);
-    const locationId = num(idea.location_id);
-    return {
-      id,
-      name: str(idea.name),
-      kind: str(idea.kind),
-      confirmed: str(idea.confirmed),
-      start: str(idea.start),
-      end: str(idea.end),
-      locationName: locationId !== null ? (locationName.get(locationId) ?? `(id ${locationId})`) : null,
-      children: (childrenOf.get(id) ?? []).map(node),
-    };
-  };
+  const node = (idea: Rec): IdeaNode => ({
+    id: Number(idea.id),
+    name: str(idea.name),
+    confirmed: str(idea.confirmed),
+    children: (childrenOf.get(Number(idea.id)) ?? []).map(node),
+  });
   return (childrenOf.get(null) ?? []).map(node);
 }
 
