@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from sqlalchemy import delete, select
 
-from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from db.schema import Event, EventCharacter, EventIdea, EventSummary
 
@@ -15,9 +14,7 @@ class DeleteEvent(CommitDraft):
         self.event_id = event_id
 
     def execute(self, session) -> dict:
-        record = session.get(Event, int(self.event_id))
-        if record is None:
-            raise UnknownRecordError(f"event_id={self.event_id} という id の event が見つからない")
+        record = self.get_or_raise(session, int(self.event_id), "出来事")
         child = session.scalars(
             select(Event.id).where(Event.parent_event_id == record.id)).first()
         if child is not None:

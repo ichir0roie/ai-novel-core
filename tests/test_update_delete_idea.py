@@ -75,7 +75,7 @@ def test_delete_removes_idea(session, ideas):
 def test_delete_keeps_idea_with_children(session, ideas):
     with pytest.raises(ValueError, match="下位のアイデアが残っている"):
         DeleteIdea(ideas["parent"]).run()
-    with pytest.raises(UnknownRecordError, match="idea_id=999"):
+    with pytest.raises(UnknownRecordError, match="id=999"):
         DeleteIdea(999).run()
     session.expire_all()
     assert session.get(Idea, ideas["parent"]) is not None

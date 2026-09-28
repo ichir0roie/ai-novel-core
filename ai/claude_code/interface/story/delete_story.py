@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.story._base import StoryCommit
 from db.schema import Episode, Story
 
@@ -15,10 +14,7 @@ class DeleteStory(StoryCommit):
         self.story_id = story_id
 
     def execute(self, session) -> dict:
-        record = session.get(Story, int(self.story_id))
-        if record is None:
-            raise UnknownRecordError(
-                f"story_id={self.story_id} という id の story が見つからない")
+        record = self.get_or_raise(session, int(self.story_id), "作品")
 
         episode_id = session.scalar(
             select(Episode.id).where(Episode.story_id == record.id).limit(1))

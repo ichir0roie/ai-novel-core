@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from ai.time_keeper import idea_context
 from db.schema import Idea
@@ -16,9 +15,7 @@ class DeleteIdea(CommitDraft):
         self.idea_id = idea_id
 
     def execute(self, session) -> dict:
-        record = session.get(Idea, int(self.idea_id))
-        if record is None:
-            raise UnknownRecordError(f"idea_id={self.idea_id} という id の idea が見つからない")
+        record = self.get_or_raise(session, int(self.idea_id), "アイデア")
         child = session.scalars(
             select(Idea.id).where(Idea.parent_idea_id == record.id)).first()
         if child is not None:

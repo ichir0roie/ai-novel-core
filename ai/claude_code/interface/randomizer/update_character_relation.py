@@ -14,14 +14,10 @@ class UpdateCharacterRelation(CommitDraft):
 
     def execute(self, session) -> dict:
         data = self.parse(self.relation)
-        relation_id = data.pop("id", None)
-        if relation_id is None:
-            raise ValueError("id は必須(直す対象の相関)")
+        relation_id = self.require_id(data, "直す対象の相関")
         self.check_columns(data)
 
-        record = session.get(CharacterRelation, relation_id)
-        if record is None:
-            raise ValueError(f"id={relation_id} という人物の相関が見つからない")
+        record = self.get_or_raise(session, relation_id, "人物の相関")
         for key in ("character_id_1", "character_id_2"):
             self.check_exists(session, Character, data.get(key), key)
 

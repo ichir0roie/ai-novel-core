@@ -4,7 +4,6 @@ from __future__ import annotations
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from db.child_lists import load_children
 from db.schema import Character
-from db.schema_pydantic import to_dict
 
 
 _UNSET = object()
@@ -18,9 +17,7 @@ class UpdateCharacter(CommitDraft):
 
     def execute(self, session) -> dict:
         data = self.parse(self.character)
-        character_id = data.pop("id", None)
-        if character_id is None:
-            raise ValueError("id は必須(直す対象の人物)")
+        character_id = self.require_id(data, "直す対象の人物")
         parameters = data.pop("parameters", None)
         places = data.pop("places", None)
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
@@ -28,12 +25,8 @@ class UpdateCharacter(CommitDraft):
         died = data.pop("end", _UNSET)
         self.check_columns(data)
 
-        record = session.get(Character, character_id)
-        if record is None:
-            raise ValueError(f"id={character_id} という人物が見つからない")
+        record = self.get_or_raise(session, character_id, "人物")
 
-        for key, value in data.items():
-            setattr(record, key, value)
         if parameters is not None:
             load_children(record, "parameters", parameters)
         if places is not None:
@@ -42,5 +35,4 @@ class UpdateCharacter(CommitDraft):
             record.start = born
         if died is not _UNSET:
             record.end = died
-        self.finalize(session, record)
-        return to_dict(record)
+        return self.apply(session, record, data)

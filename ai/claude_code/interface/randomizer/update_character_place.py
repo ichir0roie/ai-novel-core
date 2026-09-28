@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from db.schema import Character, CharacterPlace, Location
-from db.schema_pydantic import to_dict
 
 
 class UpdateCharacterPlace(CommitDraft):
@@ -15,18 +14,11 @@ class UpdateCharacterPlace(CommitDraft):
 
     def execute(self, session) -> dict:
         data = self.parse(self.place)
-        place_id = data.pop("id", None)
-        if place_id is None:
-            raise ValueError("id は必須(直す対象の居場所)")
+        place_id = self.require_id(data, "直す対象の居場所")
         self.check_columns(data)
         self.check_exists(session, Character, data.get("character_id"), "character_id")
         self.check_exists(session, Location, data.get("location_id"), "location_id")
 
-        record = session.get(CharacterPlace, place_id)
-        if record is None:
-            raise ValueError(f"id={place_id} という居場所が見つからない")
+        record = self.get_or_raise(session, place_id, "居場所")
 
-        for key, value in data.items():
-            setattr(record, key, value)
-        self.finalize(session, record)
-        return to_dict(record)
+        return self.apply(session, record, data)
