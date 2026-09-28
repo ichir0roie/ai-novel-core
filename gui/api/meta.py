@@ -25,7 +25,7 @@ _LABELS = {
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
     "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
     "letters": "字数", "character_ids": "当事者", "polygon": "領域(polygon)", "area": "広さ",
-    "environment": "環境", "active_random_generation": "自動生成の対象",
+    "environment": "環境", "active_random_generation": "自動生成の対象", "description": "説明",
 }
 
 _CHOICES = {("meme", "category"): list(MEME_CATEGORIES)}
@@ -33,7 +33,7 @@ _CHOICES = {("meme", "category"): list(MEME_CATEGORIES)}
 # CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
-    "character": {"parameters": "periodic", "places": "periodic"},
+    "character": {"parameters": "periodic", "places": "periodic", "histories": "flow"},
     "idea": {"recognitions": "flow"},
 }
 
@@ -147,4 +147,5 @@ def all_tables(session: Session) -> list[TableMeta]:
 
 _LABELS["parameters"] = "期間ごとのパラメータ"
 _LABELS["places"] = "期間ごとの居場所"
+_LABELS["histories"] = "期間ごとの説明"
 _LABELS["recognitions"] = "場所・時代ごとの呼び名"

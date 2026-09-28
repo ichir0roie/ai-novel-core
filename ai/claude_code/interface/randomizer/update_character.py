@@ -20,6 +20,7 @@ class UpdateCharacter(CommitDraft):
         character_id = self.require_id(data, "直す対象の人物")
         parameters = data.pop("parameters", None)
         places = data.pop("places", None)
+        histories = data.pop("histories", None)
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
         born = data.pop("start", _UNSET)
         died = data.pop("end", _UNSET)
@@ -31,6 +32,8 @@ class UpdateCharacter(CommitDraft):
             load_children(record, "parameters", parameters)
         if places is not None:
             load_children(record, "places", places)
+        if histories is not None:
+            load_children(record, "histories", histories)
         if born is not _UNSET:
             record.start = born
         if died is not _UNSET:

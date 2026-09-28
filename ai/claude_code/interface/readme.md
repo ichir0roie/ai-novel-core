@@ -39,7 +39,8 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「アイデア・oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"idea"` / `"oracle"` / `"meme"`。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、`fact_check` 欄へ入れる。`ids` を省くと `fact_check` が空のものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。アイデア・oracle は検めたあと本文と検証結果からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `randomizer.update_place.UpdatePlace(place)`                                 |
 | 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `randomizer.update_character.UpdateCharacter({"id": …, "parameters": [...]})`。期間ごとの行の配列をまるごと渡す(下の「期間ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
-| 「人物を直して」                     | `randomizer.update_character.UpdateCharacter(character)`。名字・体格・口調・性格は `parameters` に入れる(渡さなければ触らない)。出自・居場所は `randomizer.update_character_place.UpdateCharacterPlace(place)`、相関は `randomizer.update_character_relation.UpdateCharacterRelation(relation)` |
+| 「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」 | `randomizer.update_character.UpdateCharacter({"id": …, "histories": [...]})`。期間ごとの行の配列をまるごと渡す(下の「期間ごとの説明の変化(character_history)」) |
+| 「人物を直して」                     | `randomizer.update_character.UpdateCharacter(character)`。名字・体格・口調・性格は `parameters` に、説明の期間ごとの変化は `histories` に入れる(渡さなければ触らない)。出自・居場所は `randomizer.update_character_place.UpdateCharacterPlace(place)`、相関は `randomizer.update_character_relation.UpdateCharacterRelation(relation)` |
 | 「場所を消して」                     | `randomizer.delete_place.DeletePlace(place_id)`                              |
 | 「出来事を直して」                   | `randomizer.update_event.UpdateEvent(event)`。`id` 必須、渡した欄だけ直す。当事者は変えない。直したあと要約(`event_summary`)を作り直す |
 | 「出来事を消して」「出来事を作り直して」 | `randomizer.delete_event.DeleteEvent(event_id)`。子の出来事が残っていれば止まる。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `text` に積み足した一文と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
@@ -109,6 +110,23 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 - `name` は名字を含めない名だけを持つ。名字は `family_name` に分け、結婚・養子・家の取り立てなどで変わるなら、
   変わった時点からの行を足す。名字を持たない身分なら空。`CreateRandomCharacter` の下書きでは空なので、
   出自・身分・土地柄から決めて入れる(時の流れの中で生む人物は、名づけのときに AI が決める)
+
+**期間ごとの説明の変化(character_history)**: 人物の説明の変化は、`character.text` 自体を書き換えず、
+`character_history` テーブルに期間ごとの行(`start` / `end` / `description`)で積む。入口では人物の
+`histories` に配列で並ぶ(id と character_id は出さない。行は配列の並びで決まり、並びを変えなければ id も変わらない)。
+下の「アイデアの認識(呼び名)」と同じ扱いの子テーブルで、GUI の見た目もそちらに揃えている。
+
+```json
+"histories": [
+  {"start": null, "end": "11600", "description": "村の鍛冶屋の徒弟として働いていた"},
+  {"start": "11600", "end": null, "description": "師の死後、鍛冶屋を継いで営んでいる"}
+]
+```
+
+- `start` / `end` が空なら、その端は限らない。両方空の行は全期間に効く。`end` の時刻からは効かない
+- `description` は必須。その期間での人物の説明
+- `CommitCharacter` / `UpdateCharacter` は `histories` を受け取る。`UpdateCharacter` に渡すと配列をまるごと置き換える
+- 下の「人物の来歴」で説明する `text` の `# 来歴` 節(節目の箇条書き)とは別物。今のところ両者を自動で同期する仕組みは無い
 
 **アイデアの追記**: アイデアの基本の本文(`text`)は書き換えず、時代が進むにつれて分かった・変わった情報は
 `idea_note` テーブルに期間ごとの行(`start` / `end` / `text`)で積む。入口ではアイデアの `notes` に配列で並ぶ

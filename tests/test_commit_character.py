@@ -10,7 +10,8 @@ from ai.claude_code.interface.randomizer.update_character import UpdateCharacter
 from ai.claude_code.interface.story.update_story import UpdateStory
 from ai.claude_code.interface.story.read_character import ReadCharacter
 from db.schema import (
-    PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location, Story,
+    PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterPlace, ConfirmStatus,
+    Location, Story,
 )
 from db.stamp import Stamp
 from randomizer.random_character_generator import build_parameter
@@ -170,6 +171,45 @@ def test_update_accepts_stamp_string_with_five_digit_year(session, world):
     assert updated["start"] == "11572/01/01 00:00:00"
     session.expire_all()
     assert session.get(Story, story_id).start == Stamp(11572)
+
+
+def test_commit_character_with_histories(session, world):
+    histories = [
+        {"start": None, "end": "2150", "description": "村の鍛冶屋の徒弟として働いていた"},
+        {"start": "2150", "end": None, "description": "師の死後、鍛冶屋を継いで営んでいる"},
+    ]
+    result = CommitCharacter(_draft(place_id=world["root"], start="2100", histories=histories)).run()
+
+    assert [row["description"] for row in result["histories"]] == [
+        "師の死後、鍛冶屋を継いで営んでいる", "村の鍛冶屋の徒弟として働いていた"]
+    record = session.get(Character, result["id"])
+    assert session.query(CharacterHistory).filter_by(character_id=record.id).count() == 2
+
+
+def test_update_character_histories(session, world):
+    committed = CommitCharacter(_draft(place_id=world["root"], start="2100")).run()
+    assert committed["histories"] == []
+
+    histories = [{"start": None, "end": None, "description": "見習い"}]
+    updated = UpdateCharacter({"id": committed["id"], "histories": histories}).run()
+    assert [row["description"] for row in updated["histories"]] == ["見習い"]
+    session.expire_all()
+    [row] = session.get(Character, committed["id"]).histories
+    row_id = row.id
+
+    # 同じ位置の行は使い回し、配列をまるごと置き換える
+    replaced = [dict(histories[0], description="親方"), {"start": "2150", "end": None, "description": "独立"}]
+    updated = UpdateCharacter({"id": committed["id"], "histories": replaced}).run()
+    assert {row["description"] for row in updated["histories"]} == {"親方", "独立"}
+    session.expire_all()
+    record = session.get(Character, committed["id"])
+    assert len(record.histories) == 2
+    assert any(row.id == row_id for row in record.histories)
+
+    # histories を渡さなければ触らない
+    UpdateCharacter({"id": committed["id"], "name": "別名"}).run()
+    session.expire_all()
+    assert len(session.get(Character, committed["id"]).histories) == 2
 
 
 def test_update_requires_id():

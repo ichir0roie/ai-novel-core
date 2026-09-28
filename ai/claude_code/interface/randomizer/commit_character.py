@@ -19,6 +19,7 @@ class CommitCharacter(CommitDraft):
         data.pop("id", None)
         place_id = data.pop("place_id", None)
         parameters = data.pop("parameters", [])
+        histories = data.pop("histories", [])
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
         born = data.pop("start", None)
         died = data.pop("end", None)
@@ -30,6 +31,7 @@ class CommitCharacter(CommitDraft):
 
         record = Character(**data)
         load_children(record, "parameters", parameters)
+        load_children(record, "histories", histories)
         if born is not None:
             record.start = born
         if died is not None:

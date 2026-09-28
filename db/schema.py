@@ -446,7 +446,9 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterPlace が持ち、
     # 入口では `parameters` / `places` の配列で出し入れする。誕生・死亡も専用の列を持たず、
     # `parameters` の一番早く始まる行の start・一番後に始まる行の end として表す(下の `start` / `end`)。
-    CHILD_LISTS = ("parameters", "places")
+    # 人物の説明の変化は期間ごとに CharacterHistory が持ち、入口では `histories` の配列で出し入れする
+    # (Idea の `recognitions` と同じ扱い)。
+    CHILD_LISTS = ("parameters", "places", "histories")
     # to_dict がこの名前で `start` / `end` プロパティも書き出す(実列と違い mapper.columns に出ないため)。
     COMPUTED_COLUMNS = ("start", "end")
 
@@ -494,6 +496,10 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     places: Mapped[list[CharacterPlace]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterPlace.start.desc()"
+    )
+    histories: Mapped[list["CharacterHistory"]] = relationship(
+        back_populates="character", lazy="selectin", cascade="all, delete-orphan",
+        order_by="CharacterHistory.start.desc()"
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",
@@ -643,6 +649,26 @@ class CharacterRelation(TextBase):
         foreign_keys="CharacterRelation.character_id_1", lazy="noload")
     character_2: Mapped["Character"] = relationship(
         foreign_keys="CharacterRelation.character_id_2", lazy="noload")
+
+
+class CharacterHistory(Base):
+    """人物の説明(来歴)を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
+
+    `character.text` 自体は書き換えず、時が進むにつれて変わった立場・境遇などを
+    `start` から `end` の手前までの期間ごとに `description` として積む。
+    """
+
+    __tablename__ = "character_history"
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="この説明が効き始める時。空なら始まりを限らない", sort_order=110)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="この説明が効き終わる時(この時からは効かない)。空なら終わりを限らない", sort_order=120)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="この期間での説明", sort_order=130)
+
+    character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
 
 
 class Idea(MemeSeededMixin, TextBase):

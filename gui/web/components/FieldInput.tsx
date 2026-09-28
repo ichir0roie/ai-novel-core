@@ -15,7 +15,7 @@ const TREE_REFERENCE_TABLES = new Set(["location", "idea"]);
 /** 子の行の列のうち、自由記述で長い文になりがちな列名(体格・口調・方言・呼び名の注釈など)。
  * 単純な一行入力ではなく textarea にする。読み取り専用表示(ChildListEditor)でも同じ集合を
  * 「1 項目 1 行のまま出す」列として使うので、ここで共有する。 */
-export const CHILD_FREEFORM_TEXT_KEYS = new Set(["build", "tone", "dialect", "detail"]);
+export const CHILD_FREEFORM_TEXT_KEYS = new Set(["build", "tone", "dialect", "detail", "description"]);
 
 /** 固定の高さ・flex を持たず、中身の行数ぶんだけ伸び縮みする textarea(スクロールバーを持たない)。
  * 本文(MarkdownField)・アイデアの呼び名の注釈など、枠の大きさを内容に委ねたい欄で使う。 */

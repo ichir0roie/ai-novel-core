@@ -48,10 +48,13 @@ def test_tables_meta_comes_from_schema(client, session):
     episode_columns = {column["key"]: column for column in tables["episode"]["columns"]}
     assert episode_columns["text"]["section"] is True and episode_columns["key"]["section"] is True
     assert episode_columns["letters"]["readonly"] is True
-    assert [child["name"] for child in tables["character"]["child_lists"]] == ["parameters", "places"]
+    assert [child["name"] for child in tables["character"]["child_lists"]] == ["parameters", "places", "histories"]
     child_columns_by_name = {child["name"]: {column["key"] for column in child["columns"]} for child in tables["character"]["child_lists"]}
     assert child_columns_by_name["parameters"] >= {"family_name", "tone"}
     assert child_columns_by_name["places"] == {"location_id", "start", "end"}
+    assert child_columns_by_name["histories"] == {"start", "end", "description"}
+    child_display_by_name = {child["name"]: child["display"] for child in tables["character"]["child_lists"]}
+    assert child_display_by_name == {"parameters": "periodic", "places": "periodic", "histories": "flow"}
     assert {column["key"]: column["create_only"] for column in tables["character"]["columns"]}["place_id"] is True
     meme_columns = {column["key"]: column for column in tables["meme"]["columns"]}
     assert meme_columns["category"]["choices"] == ["信条", "欲求", "境遇", "集団", "理"]
