@@ -43,17 +43,8 @@ export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 ポートが既に使われていれば(前回の起動の残りなど)、それを聞いている処理を止めてから起こす(Linux は `ss`、macOS は `lsof`、
 Windows は `netstat` で探す)。止められなければ終了コード 1 で止まる。
 
-ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルートの `.brave-profile/` に作って
-(`--user-data-dir`)開く。普段のプロファイルと分かれるので、GUI 用のタブ・設定だけがそこに残る。
-`.brave-profile/` は世界リポジトリの `.gitignore` に入れておく。Brave が無ければ既定のブラウザで開く。
-
-macOS だけは普段使いの Brave をそのまま開かず、`~/Applications/Brave Browser (GUI Debug).app`
-(bundle id を変えたコピー。無ければ `/Applications/Brave Browser.app` から初回だけ作る)を開く。
-Dock・メニューバーで普段の Brave と同じアプリとして重ならないようにするため。
-
-Linux では同じ目的で `~/.local/share/applications/brave_gui_debug.desktop` という専用のランチャーを
-(無ければ)自動で用意する。アプリ一覧・タスクバーで普段使いの Brave と見分けやすくするため
-(実際の起動はこのファイル経由ではなく、いつも通り直接プロセスを起こす)。
+ブラウザは Brave があれば普段使いのままそれを開く(専用プロファイルなどは作らない)。
+Brave が無ければ既定のブラウザで開く。
 
 別々に起こすなら次の二つ。
 

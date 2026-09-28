@@ -10,16 +10,8 @@
 `gui/web/node_modules` が無ければ先に `npm install` を回す。
 ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
 
-ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルート(`DEM_WORLD_DIR`)の
-`.brave-profile/` に作って開く(普段のプロファイルと分け、GUI 用のタブ・設定だけをそこに残す)。
-Brave が無ければ既定のブラウザで開く。
-
-macOS だけは、普段使いの Brave と Dock・メニューバーが同じアプリとして重なって邪魔になるのを避けるため、
-`~/Applications/Brave Browser (GUI Debug).app` という別アプリ(bundle id を変えたコピー)を用意し、
-そちらを開く(無ければ `/Applications/Brave Browser.app` から初回だけ作る)。
-
-Linux では `~/.local/share/applications/brave_gui_debug.desktop` という専用のランチャーを
-(無ければ)自動で用意する。アプリ一覧・タスクバーで普段使いの Brave と区別しやすくするため。
+ブラウザは Brave があれば普段使いのままそれを開き(専用プロファイルなどは作らない)、
+無ければ既定のブラウザで開く。
 """
 from __future__ import annotations
 
@@ -38,9 +30,6 @@ import webbrowser
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BRAVE_PROFILE_DIR_NAME = ".brave-profile"
-BRAVE_DEBUG_APP_NAME = "Brave Browser (GUI Debug).app"
-BRAVE_DEBUG_BUNDLE_ID = "com.brave.Browser.guidebug"
 
 
 def _npm() -> str:
@@ -48,45 +37,13 @@ def _npm() -> str:
     return shutil.which("npm") or "npm"
 
 
-def _brave_debug_app_path() -> str:
-    return os.path.join(os.path.expanduser("~/Applications"), BRAVE_DEBUG_APP_NAME)
-
-
-def _ensure_brave_debug_app() -> str | None:
-    # 普段使いの Brave をそのまま開くと Dock・メニューバーで同じアプリとして重なり、
-    # 普段の Brave 利用の邪魔になる。bundle id を変えたコピーを別アプリとして用意する
-    debug_app = _brave_debug_app_path()
-    exe = os.path.join(debug_app, "Contents", "MacOS", "Brave Browser")
-    if os.path.isfile(exe):
-        return exe
-    source = "/Applications/Brave Browser.app"
-    if not os.path.isdir(source):
-        return None
-    print(f"[gui/dev] デバッグ専用の Brave app を {debug_app} に作る(初回のみ)")
-    os.makedirs(os.path.dirname(debug_app), exist_ok=True)
-    shutil.copytree(source, debug_app)
-    plist_path = os.path.join(debug_app, "Contents", "Info.plist")
-    subprocess.run(
-        ["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleIdentifier {BRAVE_DEBUG_BUNDLE_ID}", plist_path],
-        check=True,
-    )
-    subprocess.run(
-        ["/usr/libexec/PlistBuddy", "-c", "Set :CFBundleName Brave Browser (GUI Debug)", plist_path],
-        check=True,
-    )
-    # コピーでコード署名が崩れて Gatekeeper に弾かれるので、ad-hoc で署名し直す
-    subprocess.run(["codesign", "--force", "--deep", "--sign", "-", debug_app], check=True)
-    return exe if os.path.isfile(exe) else None
-
-
 def _brave() -> str | None:
-    if sys.platform == "darwin":
-        return _ensure_brave_debug_app()
     for name in ("brave-browser", "brave-browser-stable", "brave", "brave.exe"):
         found = shutil.which(name)
         if found:
             return found
     candidates = [
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
         os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
         os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
@@ -97,57 +54,15 @@ def _brave() -> str | None:
     return None
 
 
-def _brave_profile_dir() -> str:
-    world_dir = os.environ.get("DEM_WORLD_DIR") or os.getcwd()
-    return os.path.join(os.path.abspath(world_dir), BRAVE_PROFILE_DIR_NAME)
-
-
-LINUX_DESKTOP_ENTRY_NAME = "brave_gui_debug.desktop"
-
-
-def _linux_desktop_entry_path() -> str:
-    return os.path.join(os.path.expanduser("~/.local/share/applications"), LINUX_DESKTOP_ENTRY_NAME)
-
-
-def _ensure_linux_desktop_entry(brave: str, profile: str) -> None:
-    # アプリ一覧・タスクバーで普段使いの Brave と区別できるよう、専用のランチャーを用意する
-    # (`~/.local/share/applications` の他のプロファイル別ランチャーと同じやり方)。
-    # 実際の起動はこのファイル経由ではなく、いつも通り _popen で直接行う
-    path = _linux_desktop_entry_path()
-    content = (
-        "[Desktop Entry]\n"
-        "Version=1.0\n"
-        "Name=brave gui debug\n"
-        "Comment=novel-world の gui.dev 専用の Brave(通常の Brave とプロファイルを分ける)\n"
-        f"Exec={brave} --user-data-dir={profile} %U\n"
-        "StartupNotify=true\n"
-        "Terminal=false\n"
-        "Icon=brave-browser\n"
-        "Type=Application\n"
-        "Categories=Network;WebBrowser;\n"
-    )
-    if os.path.isfile(path):
-        with open(path, encoding="utf-8") as f:
-            if f.read() == content:
-                return
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-
 def _open_browser(url: str) -> None:
     brave = _brave()
     if brave is None:
         print("[gui/dev] Brave が見つからないので既定のブラウザで開く")
         webbrowser.open(url)
         return
-    profile = _brave_profile_dir()
-    os.makedirs(profile, exist_ok=True)
-    if sys.platform.startswith("linux"):
-        _ensure_linux_desktop_entry(brave, profile)
-    print(f"[gui/dev] Brave をプロファイル {profile} で開く")
+    print(f"[gui/dev] Brave で {url} を開く")
     # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
-    _popen([brave, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _popen([brave, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _port_open(port: int) -> bool:
@@ -234,6 +149,7 @@ def _free_port(port: int, name: str) -> bool:
 
 # uvicorn --reload はワーカーの起動に失敗しても監視役(reloader)自体は生き続けるため、
 # プロセスの生死だけを見ていると応答しないまま気付けない。応答が無い時間もあわせて見る
+WATCH_INTERVAL = 20.0
 STALL_TIMEOUT = 20.0
 
 
@@ -345,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
         while True:
             api = watch(api, args.api_port, "API", spawn_api, "/api/health")
             web = watch(web, args.web_port, "画面", spawn_web)
-            time.sleep(1)
+            time.sleep(WATCH_INTERVAL)
     except KeyboardInterrupt:
         print("\n[gui/dev] 止める")
         return 0
