@@ -11,37 +11,40 @@ export default function ContextTable({ table, items, labels }: { table: string; 
   if (!meta) return <div className="status info">{T.loading}</div>;
   const columns = listColumns(meta);
   return (
-    <table className="list">
-      <thead>
-        <tr>
-          <th>id</th>
-          <th>{T.list.name}</th>
-          {columns.map((c) => (
-            <th key={c.key}>{c.label}</th>
-          ))}
-          {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr
-            key={String(item.id)}
-            className="row"
-            tabIndex={0}
-            onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
-            }}
-          >
-            <td>{String(item.id)}</td>
-            <td className="name">{String(item.label ?? "")}</td>
+    // 狭幅では横に長い表になりがちなので、表だけを横スクロールできるようにする
+    <div className="scroll-x">
+      <table className="list">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>{T.list.name}</th>
             {columns.map((c) => (
-              <td key={c.key}>{cellText(c, item, labels)}</td>
+              <th key={c.key}>{c.label}</th>
             ))}
-            {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+            {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr
+              key={String(item.id)}
+              className="row"
+              tabIndex={0}
+              onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
+              }}
+            >
+              <td>{String(item.id)}</td>
+              <td className="name">{String(item.label ?? "")}</td>
+              {columns.map((c) => (
+                <td key={c.key}>{cellText(c, item, labels)}</td>
+              ))}
+              {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

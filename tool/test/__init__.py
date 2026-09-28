@@ -16,3 +16,5 @@ if "db.schema" in sys.modules:
             f"tool.test 配下は {TEST_DB_PATH} しか使わないので、こちらを先に import する")
 
 os.environ["DEM_DB_PATH"] = TEST_DB_PATH
+# DEM_DATABASE_URL(RDS など)があるとそちらが優先されてしまうので、テストは常に sqlite に落とす
+os.environ.pop("DEM_DATABASE_URL", None)

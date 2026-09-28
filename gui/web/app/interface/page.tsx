@@ -138,7 +138,7 @@ export default function InterfacePage() {
       <div className="toolbar">
         <input type="search" placeholder={T.endpoints.searchPlaceholder} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: "1rem" }}>
+      <div className="interface-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: "1rem" }}>
         <div>
           {[...groups.entries()].map(([area, entrances]) => (
             <div key={area} style={{ marginBottom: "0.75rem" }}>
@@ -162,32 +162,35 @@ export default function InterfacePage() {
           {jobs.length === 0 ? (
             <div className="hint">{T.endpoints.noJobs}</div>
           ) : (
-            <table className="list">
-              <thead>
-                <tr>
-                  <th>{T.endpoints.columns.status}</th>
-                  <th>{T.endpoints.columns.entrance}</th>
-                  <th>{T.endpoints.columns.args}</th>
-                  <th>{T.endpoints.columns.result}</th>
-                  <th>{T.endpoints.columns.time}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <tr key={job.id}>
-                    <td>{job.status}</td>
-                    <td>
-                      <code>{job.entrance}</code>
-                    </td>
-                    <td className="preview">{JSON.stringify(job.args)}</td>
-                    <td className="preview" title={job.error ?? JSON.stringify(job.result)}>
-                      {job.error ?? (job.result === null ? "" : JSON.stringify(job.result))}
-                    </td>
-                    <td className="hint">{job.finished_at ?? job.started_at ?? job.created_at}</td>
+            // 狭幅では横に長い表になりがちなので、表だけを横スクロールできるようにする
+            <div className="scroll-x">
+              <table className="list">
+                <thead>
+                  <tr>
+                    <th>{T.endpoints.columns.status}</th>
+                    <th>{T.endpoints.columns.entrance}</th>
+                    <th>{T.endpoints.columns.args}</th>
+                    <th>{T.endpoints.columns.result}</th>
+                    <th>{T.endpoints.columns.time}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>{job.status}</td>
+                      <td>
+                        <code>{job.entrance}</code>
+                      </td>
+                      <td className="preview">{JSON.stringify(job.args)}</td>
+                      <td className="preview" title={job.error ?? JSON.stringify(job.result)}>
+                        {job.error ?? (job.result === null ? "" : JSON.stringify(job.result))}
+                      </td>
+                      <td className="hint">{job.finished_at ?? job.started_at ?? job.created_at}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

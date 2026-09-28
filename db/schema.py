@@ -847,6 +847,11 @@ WORLD_DIR = os.environ["DEM_WORLD_DIR"]
 NOVEL_DB_PATH = os.environ.get("DEM_NOVEL_DB_PATH", os.path.join(WORLD_DIR, "novel.db"))
 DB_PATH = os.environ.get("DEM_DB_PATH", NOVEL_DB_PATH)
 
+# RDS(Postgres)など、sqlite ファイルでなく URL で繋ぐ先があればこちらを優先する
+# (例: "postgresql+psycopg://user:pass@localhost:5433/novel"。ローカル・Claude Code セッションからは
+# ssh port-forward でその localhost:5433 まで通す前提)。未設定なら今まで通り DB_PATH の sqlite ファイル。
+DATABASE_URL = os.environ.get("DEM_DATABASE_URL")
+
 
 def create_db(path=DB_PATH):
     """台帳から何度でも組み直せるので、既にあれば消して作り直す。"""
@@ -870,8 +875,13 @@ def create_db(path=DB_PATH):
 TEST_DB_PATH = os.path.join(WORLD_DIR, "novel.test.db")
 
 
-def _make_engine(path):
+def _make_sqlite_engine(path):
     return create_engine(f"sqlite:///{os.path.abspath(path)}")
+
+
+def _make_engine(path):
+    # DATABASE_URL があれば path 引数によらずそちらへ繋ぐ(novel.db の代わりに RDS を指す)
+    return create_engine(DATABASE_URL) if DATABASE_URL else _make_sqlite_engine(path)
 
 
 engine = _make_engine(DB_PATH)
@@ -893,5 +903,8 @@ def get_novel_session():
 
 
 def get_test_session():
-    return Session(_fixed_engine(TEST_DB_PATH))
+    # DATABASE_URL があっても、テストは常に novel.test.db(sqlite)だけを読み書きする
+    if TEST_DB_PATH not in _fixed_engines:
+        _fixed_engines[TEST_DB_PATH] = _make_sqlite_engine(TEST_DB_PATH)
+    return Session(_fixed_engines[TEST_DB_PATH])
 

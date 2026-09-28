@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getMaps, type MapPlace, type MapsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
@@ -25,6 +25,15 @@ function Marker({ category, x, y, r, color, strokeWidth = 1 }: { category: strin
 }
 
 export default function MapsPage() {
+  // useSearchParams はビルド時の静的化のために Suspense 境界が要る
+  return (
+    <Suspense fallback={<div className="status info">{T.loading}</div>}>
+      <MapsPageInner />
+    </Suspense>
+  );
+}
+
+function MapsPageInner() {
   const openPage = useOpenPage();
   const search = useSearchParams();
   // 場所の詳細から飛んできたとき。その場所の星を選び、その場所を中心に置いて描く

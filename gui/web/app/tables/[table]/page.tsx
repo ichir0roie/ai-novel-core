@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
 import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { PageTitle, useTable } from "@/lib/meta";
@@ -16,6 +16,15 @@ const PAGE = 50;
 const RESERVED = new Set(["q", "limit", "offset", "sort", "order", "confirmed"]);
 
 export default function TablePage() {
+  // useSearchParams はビルド時の静的化のために Suspense 境界が要る
+  return (
+    <Suspense fallback={<div className="status info">{T.loading}</div>}>
+      <TablePageInner />
+    </Suspense>
+  );
+}
+
+function TablePageInner() {
   const openPage = useOpenPage();
   const { table } = useParams<{ table: string }>();
   const router = useRouter();
@@ -180,52 +189,55 @@ export default function TablePage() {
         </Link>
       </div>
       {error && <div className="status error">{error}</div>}
-      <table className="list">
-        <thead>
-          <tr>
-            {sortHeader("id", "id")}
-            {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
-            {columns.map((c) => sortHeader(c.key, c.label))}
-            {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {data?.items.map((item) => (
-            <tr
-              key={String(item.id)}
-              className="row"
-              tabIndex={0}
-              onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
-              }}
-            >
-              <td>{String(item.id)}</td>
-              <td className="name">{String(item.label ?? "")}</td>
-              {columns.map((c) => (
-                <td key={c.key}>
-                  {c.references && item[c.key] != null ? (
-                    // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
-                    <span
-                      className="ref"
-                      title={T.list.filterBy(c.label)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setParam(c.key, String(item[c.key]));
-                      }}
-                    >
-                      {cellText(c, item, data.labels)}
-                    </span>
-                  ) : (
-                    cellText(c, item, data.labels)
-                  )}
-                </td>
-              ))}
-              {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+      {/* 狭幅では横に長い表になりがちなので、表だけを横スクロールできるようにする */}
+      <div className="scroll-x">
+        <table className="list">
+          <thead>
+            <tr>
+              {sortHeader("id", "id")}
+              {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
+              {columns.map((c) => sortHeader(c.key, c.label))}
+              {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data?.items.map((item) => (
+              <tr
+                key={String(item.id)}
+                className="row"
+                tabIndex={0}
+                onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
+                }}
+              >
+                <td>{String(item.id)}</td>
+                <td className="name">{String(item.label ?? "")}</td>
+                {columns.map((c) => (
+                  <td key={c.key}>
+                    {c.references && item[c.key] != null ? (
+                      // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
+                      <span
+                        className="ref"
+                        title={T.list.filterBy(c.label)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setParam(c.key, String(item[c.key]));
+                        }}
+                      >
+                        {cellText(c, item, data.labels)}
+                      </span>
+                    ) : (
+                      cellText(c, item, data.labels)
+                    )}
+                  </td>
+                ))}
+                {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="pager">
         <button disabled={offset <= 0} onClick={() => setParam("offset", String(Math.max(0, offset - PAGE)))}>
           {T.list.prev}

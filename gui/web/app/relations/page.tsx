@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getRelations, type Relation, type RelationCharacter, type RelationsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
@@ -72,6 +72,15 @@ function edgePath(a: Pos, b: Pos, bend: number) {
 }
 
 export default function RelationsPage() {
+  // useSearchParams はビルド時の静的化のために Suspense 境界が要る
+  return (
+    <Suspense fallback={<div className="status info">{T.loading}</div>}>
+      <RelationsPageInner />
+    </Suspense>
+  );
+}
+
+function RelationsPageInner() {
   const openPage = useOpenPage();
   const search = useSearchParams();
   // 人物の詳細から飛んできたとき。その人物に関わる関係だけを描く

@@ -29,10 +29,16 @@ from tool.map.geometry import BEARINGS
 from tool.map.render_svg import COLORS, render_svg
 from tool.relation.collect import collect_relations
 
+import os
+
+# デプロイ先(Amplify Hosting のドメインなど)はカンマ区切りで NOVEL_CORS_ORIGINS に渡す。世界ごとに違うので
+# core にはローカル開発の既定値だけを持つ
+_extra_origins = [origin.strip() for origin in os.environ.get("NOVEL_CORS_ORIGINS", "").split(",") if origin.strip()]
+
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", *_extra_origins],
     allow_methods=["*"], allow_headers=["*"],
 )
 

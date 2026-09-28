@@ -6,14 +6,14 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from db.schema import Base, DB_PATH
+from db.schema import Base, DATABASE_URL, DB_PATH
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# db/schema.py の DB_PATH(DEM_DB_PATH 環境変数で上書き可)をそのまま使う。
-config.set_main_option("sqlalchemy.url", f"sqlite:///{os.path.abspath(DB_PATH)}")
+# DEM_DATABASE_URL(RDS など)があればそちら、無ければ db/schema.py の DB_PATH(DEM_DB_PATH 環境変数で上書き可)の sqlite ファイル。
+config.set_main_option("sqlalchemy.url", DATABASE_URL or f"sqlite:///{os.path.abspath(DB_PATH)}")
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
