@@ -60,7 +60,7 @@ db の触り方(入口越し・読み取り)は CLAUDE.md の「db への接続�
 | 「その時点の顔ぶれは?」             | `story.read_cast.ReadCast(story_id, time=None)`                              |
 | 「その場所・その時点の様子は?」     | `story.read_brief.ReadBrief(place_id, time)`                                 |
 | 「この人物の周りで何が起きている?」 | `story.read_surroundings.ReadSurroundings(character_id, time)`               |
-| 「この人物を本文用にそろえて」       | `story.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと期間を限らない値だけ)。期間ごとの行は `parameters` |
+| 「この人物を本文用にそろえて」       | `story.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと期間を限らない値だけ)。期間ごとの行は `parameters`。外見・口調の推敲はこれで足り、`character.text` の全文(来歴・meme 込み)まで読み直さなくてよい(来歴・行動原理を確かめたいときだけ `text` を読む) |
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話が残っていれば止まる           |
