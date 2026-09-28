@@ -34,5 +34,18 @@ export function useTreeOpen(name: string) {
 
   const isOpen = useCallback((key: string) => !closed.has(key), [closed]);
 
-  return { isOpen, setOpen };
+  const closeAll = useCallback(
+    (keys: string[]) => {
+      const next = new Set(keys);
+      setClosed(next);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify([...next]));
+      } catch {
+        // 保存できなくても、この画面の中では開閉を保つ
+      }
+    },
+    [storageKey],
+  );
+
+  return { isOpen, setOpen, closeAll };
 }

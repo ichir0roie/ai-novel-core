@@ -97,6 +97,9 @@ export const getEntrances = () => api<EntranceList>("/api/interface");
 export const runEntrance = (id: string, args: Rec, background = false) =>
   api<RunResult | JobInfo>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args, background }) });
 
+/** アイデアを消す(下位のアイデアが残っていると失敗する)。`randomizer.delete_idea.DeleteIdea` を呼ぶ。 */
+export const deleteIdea = (ideaId: number) => runEntrance("randomizer.delete_idea.DeleteIdea", { idea_id: ideaId });
+
 export const getJobs = () => api<components["schemas"]["JobList"]>("/api/jobs");
 
 export const getJob = (id: string) => api<JobInfo>(`/api/jobs/${id}`);

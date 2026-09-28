@@ -53,3 +53,16 @@ export function descendantIds(nodes: IdeaNode[], id: number): Set<number> {
   if (target) collect(target);
   return result;
 }
+
+/** 子を持つノード(caret を出す・開閉できるノード)の id をすべて集める。「すべて閉じる」で使う。 */
+export function collapsibleIds(nodes: IdeaNode[]): string[] {
+  const result: string[] = [];
+  const collect = (n: IdeaNode) => {
+    if (n.children.length > 0) {
+      result.push(String(n.id));
+      n.children.forEach(collect);
+    }
+  };
+  nodes.forEach(collect);
+  return result;
+}

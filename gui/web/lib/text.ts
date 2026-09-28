@@ -158,7 +158,7 @@ export const T = {
 
   ideaTree: {
     empty: "No ideas yet",
-    addChild: "+ Add child",
+    addChild: "Add child",
     move: "Move",
     cancelMove: "Cancel move",
     moveModeHint: (name: string) => `Moving "${name}" — click another idea to make it the new parent`,
@@ -166,6 +166,11 @@ export const T = {
     moveFailed: (error: string) => `Could not move: ${error}`,
     collapse: "Collapse",
     expand: "Expand",
+    collapseAll: "Collapse all",
+    delete: "Delete",
+    confirmDeleteWithChildren: (name: string, count: number) =>
+      `"${name}" has ${count} child idea${count === 1 ? "" : "s"}. They will be detached (moved to root) and then "${name}" will be deleted. Continue?`,
+    deleteFailed: (error: string) => `Could not delete: ${error}`,
   },
 
   treeSelect: {
