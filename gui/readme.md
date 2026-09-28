@@ -51,6 +51,10 @@ macOS だけは普段使いの Brave をそのまま開かず、`~/Applications/
 (bundle id を変えたコピー。無ければ `/Applications/Brave Browser.app` から初回だけ作る)を開く。
 Dock・メニューバーで普段の Brave と同じアプリとして重ならないようにするため。
 
+Linux では同じ目的で `~/.local/share/applications/brave_gui_debug.desktop` という専用のランチャーを
+(無ければ)自動で用意する。アプリ一覧・タスクバーで普段使いの Brave と見分けやすくするため
+(実際の起動はこのファイル経由ではなく、いつも通り直接プロセスを起こす)。
+
 別々に起こすなら次の二つ。
 
 ```

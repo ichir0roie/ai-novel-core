@@ -17,6 +17,9 @@ Brave が無ければ既定のブラウザで開く。
 macOS だけは、普段使いの Brave と Dock・メニューバーが同じアプリとして重なって邪魔になるのを避けるため、
 `~/Applications/Brave Browser (GUI Debug).app` という別アプリ(bundle id を変えたコピー)を用意し、
 そちらを開く(無ければ `/Applications/Brave Browser.app` から初回だけ作る)。
+
+Linux では `~/.local/share/applications/brave_gui_debug.desktop` という専用のランチャーを
+(無ければ)自動で用意する。アプリ一覧・タスクバーで普段使いの Brave と区別しやすくするため。
 """
 from __future__ import annotations
 
@@ -99,6 +102,39 @@ def _brave_profile_dir() -> str:
     return os.path.join(os.path.abspath(world_dir), BRAVE_PROFILE_DIR_NAME)
 
 
+LINUX_DESKTOP_ENTRY_NAME = "brave_gui_debug.desktop"
+
+
+def _linux_desktop_entry_path() -> str:
+    return os.path.join(os.path.expanduser("~/.local/share/applications"), LINUX_DESKTOP_ENTRY_NAME)
+
+
+def _ensure_linux_desktop_entry(brave: str, profile: str) -> None:
+    # アプリ一覧・タスクバーで普段使いの Brave と区別できるよう、専用のランチャーを用意する
+    # (`~/.local/share/applications` の他のプロファイル別ランチャーと同じやり方)。
+    # 実際の起動はこのファイル経由ではなく、いつも通り _popen で直接行う
+    path = _linux_desktop_entry_path()
+    content = (
+        "[Desktop Entry]\n"
+        "Version=1.0\n"
+        "Name=brave gui debug\n"
+        "Comment=novel-world の gui.dev 専用の Brave(通常の Brave とプロファイルを分ける)\n"
+        f"Exec={brave} --user-data-dir={profile} %U\n"
+        "StartupNotify=true\n"
+        "Terminal=false\n"
+        "Icon=brave-browser\n"
+        "Type=Application\n"
+        "Categories=Network;WebBrowser;\n"
+    )
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as f:
+            if f.read() == content:
+                return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
 def _open_browser(url: str) -> None:
     brave = _brave()
     if brave is None:
@@ -107,6 +143,8 @@ def _open_browser(url: str) -> None:
         return
     profile = _brave_profile_dir()
     os.makedirs(profile, exist_ok=True)
+    if sys.platform.startswith("linux"):
+        _ensure_linux_desktop_entry(brave, profile)
     print(f"[gui/dev] Brave をプロファイル {profile} で開く")
     # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
     _popen([brave, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
