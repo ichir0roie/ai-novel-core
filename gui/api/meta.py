@@ -21,7 +21,7 @@ _LABELS = {
     "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
     "character_id": "人物", "character_id_1": "人物 1", "character_id_2": "人物 2", "relation": "関係",
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
-    "place_id": "場所", "viewpoint": "視点", "place": "場所(自由記述)", "synced": "同期済み",
+    "place_id": "場所", "viewpoint_character_id": "視点", "synced": "同期済み",
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
     "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
     "letters": "字数", "character_ids": "当事者", "polygon": "領域(polygon)", "area": "広さ",
@@ -97,6 +97,10 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
         extras.append(ColumnMeta(key="character_ids", label=_LABELS["character_ids"], type="id_list",
                                  nullable=True, required=False, references="character",
                                  comment="居合わせた人物の id"))
+    if spec.name == "episode":
+        extras.append(ColumnMeta(key="character_ids", label=_LABELS["character_ids"], type="id_list",
+                                 nullable=True, required=False, references="character",
+                                 comment="登場人物の id"))
     return extras
 
 

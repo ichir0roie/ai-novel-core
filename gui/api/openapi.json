@@ -1575,6 +1575,17 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "born": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Born"
           }
         },
         "type": "object",

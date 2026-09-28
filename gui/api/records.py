@@ -10,7 +10,8 @@ from ai.claude_code.interface.randomizer.commit_event import CommitEvent
 from ai.time_keeper import idea_context
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, CharacterPlace, ConfirmStatusType, Episode, Event, EventCharacter, Location, Story,
+    Character, CharacterPlace, ConfirmStatusType, Episode, EpisodeCharacter, Event, EventCharacter,
+    Location, Story,
 )
 from db.schema_pydantic import to_dict
 from gui.api.models import Option, RecordList, RecordResponse
@@ -42,16 +43,19 @@ def _preview(spec: TableSpec, row) -> str:
     return ""
 
 
-def _participant_ids(session: Session, event_id: int) -> list[int]:
-    # `Event.event_characters` は noload なので、中間テーブルを直接引く
-    return list(session.scalars(select(EventCharacter.character_id)
-                                .where(EventCharacter.event_id == event_id).order_by(EventCharacter.id)))
+def _participant_ids(session: Session, junction_model, fk_name: str, record_id: int) -> list[int]:
+    # `event_characters`/`episode_characters` は noload なので、中間テーブルを直接引く
+    fk_column = getattr(junction_model, fk_name)
+    return list(session.scalars(select(junction_model.character_id)
+                                .where(fk_column == record_id).order_by(junction_model.id)))
 
 
 def record_dict(session: Session, spec: TableSpec, row) -> dict:
     data = to_dict(row)
     if spec.model is Event:
-        data["character_ids"] = _participant_ids(session, row.id)
+        data["character_ids"] = _participant_ids(session, EventCharacter, "event_id", row.id)
+    if spec.model is Episode:
+        data["character_ids"] = _participant_ids(session, EpisodeCharacter, "episode_id", row.id)
     return data
 
 
@@ -73,7 +77,7 @@ def reference_labels(session: Session, spec: TableSpec, records: list[dict]) -> 
             table = foreign_key.column.table.name
             ids = {record[column.key] for record in records if record.get(column.key) is not None}
             wanted.setdefault(table, {})[column.key] = ids
-    if spec.model is Event:
+    if spec.model in (Event, Episode):
         wanted.setdefault("character", {})["character_ids"] = {
             id_ for record in records for id_ in record.get("character_ids", [])}
     result: dict[str, dict[int, str]] = {}
@@ -144,7 +148,9 @@ def options(session: Session, spec: TableSpec, *, q: str | None, limit: int, ids
     rows = session.scalars(select(model).where(*conditions).order_by(model.id).limit(limit)).all()
     parent_column = spec.tree_parent_column
     return [Option(id=row.id, label=label_of(spec, row),
-                   parent_id=getattr(row, parent_column) if parent_column else None) for row in rows]
+                   parent_id=getattr(row, parent_column) if parent_column else None,
+                   born=str(row.start) if spec.model is Character and row.start is not None else None)
+            for row in rows]
 
 
 def _get(session: Session, spec: TableSpec, record_id: int):
@@ -154,18 +160,6 @@ def _get(session: Session, spec: TableSpec, record_id: int):
     return row
 
 
-def _place_ids_from_text(session: Session, text: str | None) -> set[int]:
-    """話の場所欄(自由記述)に名前が出てくる場所を拾い、その配下も含めて id を返す。"""
-    if not text:
-        return set()
-    names = session.execute(select(Location.id, Location.name).where(Location.name.isnot(None))).all()
-    matched = [location_id for location_id, name in names if name and name in text]
-    place_ids: set[int] = set()
-    for location_id in matched:
-        place_ids.update(common_query.descendant_place_ids(session, location_id))
-    return place_ids
-
-
 def _context_block(session: Session, table: str, rows) -> dict:
     spec = spec_of(table)
     items = [_summary_dict(session, spec, row) for row in rows]
@@ -173,12 +167,12 @@ def _context_block(session: Session, table: str, rows) -> dict:
 
 
 def _episode_context(session: Session, episode: Episode) -> dict:
-    """話の時期(start〜end)・場所(自由記述)に重なる出来事・人物・場所・作品。時期の無い話は出しようがない。"""
+    """話の時期(start〜end)・場所(place_id)に重なる出来事・人物・場所・作品。時期の無い話は出しようがない。"""
     since = episode.start
     if since is None:
         return {}
     until = episode.end or since
-    place_ids = _place_ids_from_text(session, episode.place)
+    place_ids = set(common_query.descendant_place_ids(session, episode.place_id)) if episode.place_id else set()
 
     event_conditions = [Event.time.between(since, until)]
     if place_ids:
@@ -241,12 +235,13 @@ def get_record(session: Session, spec: TableSpec, record_id: int) -> RecordRespo
                           labels=reference_labels(session, spec, [record]), related=related_of(session, spec, row))
 
 
-def _set_participants(session: Session, event_id: int, character_ids) -> None:
+def _set_participants(session: Session, junction_model, fk_name: str, record_id: int, character_ids) -> None:
     ids = [int(id_) for id_ in character_ids or []]
     for character_id in ids:
         CommitEvent.check_exists(session, Character, character_id, "character_ids")
-    session.execute(delete(EventCharacter).where(EventCharacter.event_id == event_id))
-    session.add_all([EventCharacter(event_id=event_id, character_id=character_id) for character_id in ids])
+    fk_column = getattr(junction_model, fk_name)
+    session.execute(delete(junction_model).where(fk_column == record_id))
+    session.add_all([junction_model(**{fk_name: record_id, "character_id": character_id}) for character_id in ids])
     session.flush()
 
 
@@ -261,14 +256,17 @@ def update_record(session: Session, spec: TableSpec, record_id: int, data: dict)
     _get(session, spec, record_id)
     payload = dict(data)
     payload.pop("id", None)
-    character_ids = payload.pop("character_ids", None) if spec.name == "event" else None
+    character_ids = payload.pop("character_ids", None) if spec.name in ("event", "episode") else None
     if spec.name == "character":
         payload.pop("place_id", None)  # 出自は足すときだけ。あとから直すのは CHILD_LISTS の places
     synced = payload.pop("synced", None) if spec.name == "episode" else None
     if payload:
         spec.updater({**payload, "id": record_id}).execute(session)
     if character_ids is not None:
-        _set_participants(session, record_id, character_ids)
+        if spec.name == "event":
+            _set_participants(session, EventCharacter, "event_id", record_id, character_ids)
+        elif spec.name == "episode":
+            _set_participants(session, EpisodeCharacter, "episode_id", record_id, character_ids)
     if synced is not None:
         # CommitEpisode は直すたびに synced を落とす(本文を手で直したら世界観へ戻し直すため)。
         # GUI で明示的に渡された値はユーザの判断なのでそれを勝たせる

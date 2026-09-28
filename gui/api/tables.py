@@ -57,7 +57,7 @@ class TableSpec:
 TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", "作品", Story, CommitStory, UpdateStory, "name", ("name", "text")),
     TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, "title", ("title", "key"),
-              sort="start", order="asc"),
+              extra_fields=("character_ids",), sort="start", order="asc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, "name", ("name", "text"),
               extra_fields=("place_id",), reviewable=True),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,

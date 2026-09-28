@@ -109,6 +109,8 @@ class Option(BaseModel):
     label: str
     # ツリー選択(場所・アイデアなど、自己参照で親子を持つテーブル)で親を辿るための列の値
     parent_id: int | None = None
+    # 誕生(`Character.start`。人物だけ)。話の登場人物モーダルで、その話の時点の年齢を出すのに使う
+    born: str | None = None
 
 
 class OptionList(BaseModel):
