@@ -156,6 +156,13 @@ export const T = {
     moveFailed: (error: string) => `Could not move: ${error}`,
   },
 
+  characterTree: {
+    characters: (n: number) => `${n} characters`,
+    openLocation: "Open location",
+    noCharacters: "No characters yet",
+    noLocation: "No location",
+  },
+
   ideaTree: {
     empty: "No ideas yet",
     addChild: "Add child",

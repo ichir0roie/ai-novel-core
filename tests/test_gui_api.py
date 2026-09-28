@@ -344,3 +344,24 @@ def test_maps_and_relations_are_served_as_json(client, session):
     assert [c["link"] for c in relations["characters"]] == [f"/tables/character/{a.id}", f"/tables/character/{b.id}"]
     assert relations["relations"] == [] and len(relations["colors"]) == 10
 
+
+def test_character_locations_picks_the_latest_place(client, session, world):
+    village = session.get(Location, world["village"])
+    town = Location(name="町", kind="町", text="", parent_id=village.parent_id)
+    session.add(town)
+    session.flush()
+    moved = Character(name="旅人", text="")
+    stayed = Character(name="村人", text="")
+    session.add_all([moved, stayed])
+    session.flush()
+    session.add_all([
+        CharacterPlace(character_id=moved.id, location_id=village.id, start=None, end=None),
+        CharacterPlace(character_id=moved.id, location_id=town.id, start="4340", end=None),
+        CharacterPlace(character_id=stayed.id, location_id=village.id, start=None, end=None),
+    ])
+    session.commit()
+
+    locations = client.get("/api/character_locations").json()["locations"]
+    assert locations[str(moved.id)] == town.id
+    assert locations[str(stayed.id)] == village.id
+

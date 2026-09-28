@@ -120,6 +120,10 @@ export type Relation = components["schemas"]["Relation"];
 export const getMaps = () => api<MapsResponse>("/api/maps");
 export const getRelations = () => api<RelationsResponse>("/api/relations");
 
+export type CharacterLocationsResponse = components["schemas"]["CharacterLocationsResponse"];
+
+export const getCharacterLocations = () => api<CharacterLocationsResponse>("/api/character_locations");
+
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {
   const items: Rec[] = [];

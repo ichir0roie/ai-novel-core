@@ -8,6 +8,7 @@ import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
+import CharacterTree from "@/components/CharacterTree";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
@@ -76,9 +77,11 @@ export default function TablePage() {
   const sort = params.get("sort") ?? meta.sort;
   const order = params.get("order") === "asc" ? "asc" : "desc";
 
-  // 作品(story)は場所の木、アイデア(idea)は parent_idea_id の木でツリー表示を持つ。既定はツリー(`?view=list` で表)
-  const hasTree = table === "story" || table === "idea";
-  const tree = hasTree && (search.get("view") ?? "tree") === "tree";
+  // 作品(story)は場所の木、アイデア(idea)は parent_idea_id の木、人物(character)は居場所の木でツリー表示を持つ。
+  // 作品・アイデアは既定がツリー(`?view=list` で表)。人物は逆に既定が表(`?view=tree` でツリー)
+  const hasTree = table === "story" || table === "idea" || table === "character";
+  const defaultView = table === "character" ? "list" : "tree";
+  const tree = hasTree && (search.get("view") ?? defaultView) === "tree";
   const viewSwitch = hasTree && (
     <span className="segment">
       <button type="button" className={tree ? "on" : ""} onClick={() => setParam("view", "tree")}>
@@ -104,7 +107,7 @@ export default function TablePage() {
             </button>
           </Link>
         </div>
-        {table === "story" ? <StoryTree /> : <IdeaTree />}
+        {table === "story" ? <StoryTree /> : table === "idea" ? <IdeaTree /> : <CharacterTree />}
       </>
     );
   }

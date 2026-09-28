@@ -786,10 +786,45 @@
           }
         }
       }
+    },
+    "/api/character_locations": {
+      "get": {
+        "summary": "Character Locations",
+        "description": "人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う",
+        "operationId": "character_locations_api_character_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterLocationsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CharacterLocationsResponse": {
+        "properties": {
+          "locations": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Locations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "locations"
+        ],
+        "title": "CharacterLocationsResponse"
+      },
       "ChildListMeta": {
         "properties": {
           "name": {

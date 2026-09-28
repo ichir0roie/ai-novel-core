@@ -214,6 +214,11 @@ class RelationsResponse(BaseModel):
     colors: list[str]
 
 
+class CharacterLocationsResponse(BaseModel):
+    # 人物 id をキーに、一番新しく設定された居場所(location の id)。居場所を持たない人物は出ない
+    locations: dict[int, int]
+
+
 class Health(BaseModel):
     world_dir: str
     db_path: str

@@ -19,10 +19,12 @@ from gui.api import generate, interface, meta, records, review
 from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_claude_code
 from gui.api.jobs import runner
 from gui.api.models import (
-    Created, Decision, EntranceList, GenerateRequest, Health, JobInfo, JobList, MapsResponse, OptionList, RecordList,
-    RecordResponse, RelationsResponse, ReviewNext, ReviewSummary, RunRequest, RunResult, TablesResponse,
+    CharacterLocationsResponse, Created, Decision, EntranceList, GenerateRequest, Health, JobInfo, JobList,
+    MapsResponse, OptionList, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary, RunRequest,
+    RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
+from tool.character_place.collect import collect_character_locations
 from tool.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from tool.map.collect import collect_planets
 from tool.map.geometry import BEARINGS
@@ -212,6 +214,12 @@ def map_svg(planet_id: int, session: Session = Depends(session_dep)) -> Response
 def relations(session: Session = Depends(session_dep)) -> RelationsResponse:
     """人物相関図の元データ。画面(`/relations`)が描く"""
     return RelationsResponse(**collect_relations(session), colors=list(COLORS))
+
+
+@app.get("/api/character_locations", response_model=CharacterLocationsResponse)
+def character_locations(session: Session = Depends(session_dep)) -> CharacterLocationsResponse:
+    """人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う"""
+    return CharacterLocationsResponse(locations=collect_character_locations(session))
 
 
 _ = Created  # OpenAPI に出す型として残す
