@@ -10,7 +10,8 @@ import { T } from "@/lib/text";
 
 /** 画面の上端に薄い帯だけを常に出し、そこへマウスを寄せる(hover)かクリックすると、
  * メニューが上から大きく降りてきて中身の上に重なって開く。
- * 開いたときは、メニューの外をクリックするか Esc かページを移ると閉じる。 */
+ * 開いたときは、カーソルがメニューから離れる、メニューの外をクリックする、Esc、リンクをクリックする、
+ * のいずれかで閉じる。 */
 export default function Nav() {
   const pathname = usePathname();
   const { tables } = useMeta();
@@ -21,6 +22,10 @@ export default function Nav() {
   useEffect(() => {
     getReviewSummary().then(setSummary).catch(() => setSummary(null));
     setOpen(false);
+    // クリックしたリンクにフォーカスが残ると CSS の :focus-within で開いたままになるため外す
+    if (ref.current && document.activeElement instanceof HTMLElement && ref.current.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -42,11 +47,19 @@ export default function Nav() {
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
-    <nav ref={ref} className={`nav ${open ? "open" : ""}`}>
+    <nav ref={ref} className={`nav ${open ? "open" : ""}`} onMouseLeave={() => setOpen(false)}>
       <div className="nav-bar">
         <button type="button" className="nav-handle" onClick={() => setOpen((v) => !v)} aria-label={T.nav.menu} aria-expanded={open} />
       </div>
-      <div className="nav-drawer">
+      <div
+        className="nav-drawer"
+        onClickCapture={(e) => {
+          if ((e.target as HTMLElement).closest("a")) {
+            setOpen(false);
+            (e.target as HTMLElement).blur();
+          }
+        }}
+      >
         <Link href="/" className={`brand ${isActive("/") ? "active" : ""}`}>{T.appName}</Link>
         <span className="group">
           {summary?.tables.map((row) => (

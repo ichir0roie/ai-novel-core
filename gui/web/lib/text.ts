@@ -153,12 +153,15 @@ export const T = {
     openLocation: "Open location",
     noStories: "No stories yet",
     noLocation: "No location",
+    moveFailed: (error: string) => `Could not move: ${error}`,
   },
 
   ideaTree: {
     empty: "No ideas yet",
     dropToRoot: "Drop here to make it a root idea (no parent)",
     moveFailed: (error: string) => `Could not move: ${error}`,
+    collapse: "Collapse",
+    expand: "Expand",
   },
 
   childList: {

@@ -5,9 +5,13 @@ import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
 import { buildIdeaTree, descendantIds, type IdeaNode } from "@/lib/ideaTree";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
+import { useTreeOpen } from "@/lib/treeOpen";
+
+type OpenState = ReturnType<typeof useTreeOpen>;
 
 type RowProps = {
   node: IdeaNode;
+  openState: OpenState;
   draggingId: number | null;
   blocked: Set<number>;
   dropTarget: number | null;
@@ -17,13 +21,14 @@ type RowProps = {
   onDropOnNode: (id: number) => void;
 };
 
-function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd, onDragOverNode, onDropOnNode }: RowProps) {
+function IdeaRow({ node, openState, draggingId, blocked, dropTarget, onDragStart, onDragEnd, onDragOverNode, onDropOnNode }: RowProps) {
   const openPage = useOpenPage();
   const isBlocked = draggingId !== null && (draggingId === node.id || blocked.has(node.id));
-  const classes = ["tree-idea-summary"];
+  const classes = ["tree-idea-summary", "tree-draggable"];
   if (draggingId === node.id) classes.push("dragging");
   if (dropTarget === node.id && !isBlocked) classes.push("drop-target");
   const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
+  const key = String(node.id);
 
   return (
     <li className="tree-place">
@@ -51,6 +56,20 @@ function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd
             if (!isBlocked) onDropOnNode(node.id);
           }}
         >
+          {node.children.length > 0 && (
+            <button
+              type="button"
+              className="tree-caret"
+              aria-label={openState.isOpen(key) ? T.ideaTree.collapse : T.ideaTree.expand}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                openState.setOpen(key, !openState.isOpen(key));
+              }}
+            >
+              {openState.isOpen(key) ? "▼" : "▶"}
+            </button>
+          )}
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
           {node.kind && <span className="tree-kind">{node.kind}</span>}
           {node.confirmed && node.confirmed !== "承認" && <span className="chip">{node.confirmed}</span>}
@@ -60,12 +79,13 @@ function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd
           </span>
         </summary>
         {node.preview && <p className="tree-text">{node.preview}</p>}
-        {node.children.length > 0 && (
+        {node.children.length > 0 && openState.isOpen(key) && (
           <ul className="tree">
             {node.children.map((child) => (
               <IdeaRow
                 key={child.id}
                 node={child}
+                openState={openState}
                 draggingId={draggingId}
                 blocked={blocked}
                 dropTarget={dropTarget}
@@ -92,6 +112,7 @@ export default function IdeaTree() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const openState = useTreeOpen("idea");
 
   const load = useCallback(async () => {
     try {
@@ -171,6 +192,7 @@ export default function IdeaTree() {
           <IdeaRow
             key={node.id}
             node={node}
+            openState={openState}
             draggingId={draggingId}
             blocked={blocked}
             dropTarget={dropTarget}
