@@ -208,6 +208,7 @@ button.ghost { background: transparent; }
   display: flex; align-items: center; justify-content: center; z-index: 30; padding: 1rem;
 }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
+.modal.wide { max-width: min(96vw, 1600px); }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .modal-head h2 { margin: 0; font-size: 1.05rem; }
 .modal-body { padding: 1rem; overflow: auto; }
@@ -218,6 +219,8 @@ button.ghost { background: transparent; }
 .multi label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 
 .related ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.related ul li.context-row { display: flex; align-items: center; gap: 0.6rem; list-style: none; margin-left: -1.2rem; padding: 0.15rem 0; }
+.related ul li.context-row button { margin-left: auto; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
 .jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }

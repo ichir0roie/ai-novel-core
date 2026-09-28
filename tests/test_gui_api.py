@@ -3,7 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db.schema import (
-    Character, CharacterParameter, ConfirmStatus, Episode, EventCharacter, Idea, Location, Meme, Story,
+    Character, CharacterParameter, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
+    Meme, Story,
 )
 from gui.api import app as app_module
 
@@ -168,6 +169,49 @@ def test_episodes_list_by_start_and_any_column_can_sort(client, session, world):
     assert [episode["label"] for episode in story["related"]["episodes"]] == ["一", "三", "空"]
     assert client.get("/api/tables/episode/records?sort=nope").status_code == 400
     assert client.get("/api/tables/episode/records?order=sideways").status_code == 422
+
+
+def test_episode_context_gathers_by_time_and_place(client, session, world):
+    river = Location(name="はずれの川", kind="川", text="", parent_id=world["village"])
+    session.add(river)
+    session.flush()
+
+    near, resident, stranger = (Character(name=n, text="") for n in ("近くの人", "住人", "無関係"))
+    session.add_all([near, resident, stranger])
+    session.flush()
+
+    in_range = Event(name="市場の喧嘩", text="", time="2100/04/01", location_id=river.id)
+    out_of_time = Event(name="後の出来事", text="", time="2100/05/01", location_id=river.id)
+    out_of_place = Event(name="別の場所", text="", time="2100/04/01", location_id=world["world"])
+    session.add_all([in_range, out_of_time, out_of_place])
+    session.flush()
+    session.add_all([
+        EventCharacter(event_id=in_range.id, character_id=near.id),
+        CharacterPlace(character_id=resident.id, location_id=river.id, start="2099", end="2101"),
+        CharacterPlace(character_id=stranger.id, location_id=world["world"], start="2099", end="2101"),
+    ])
+    overlapping = Story(name="重なる話", place_id=world["village"], text="", narration="", state="執筆中",
+                        start="2100", end="2101")
+    unrelated = Story(name="無関係な話", text="", narration="", state="執筆中")
+    session.add_all([overlapping, unrelated])
+    session.commit()
+
+    episode = client.post("/api/tables/episode/records", json={
+        "story_id": world["story"], "title": "市場にて", "key": "市場の喧嘩", "place": "村 はずれの川",
+        "start": "2100/04/01", "end": "2100/04/01"}).json()["record"]
+
+    context = client.get(f"/api/tables/episode/records/{episode['id']}").json()["related"]["context"]
+
+    assert {item["id"] for item in context["event"]["items"]} == {in_range.id}
+    assert {item["id"] for item in context["character"]["items"]} == {near.id, resident.id}
+    assert {item["id"] for item in context["location"]["items"]} == {world["village"], river.id}
+    assert {item["id"] for item in context["story"]["items"]} == {overlapping.id}
+    assert context["event"]["labels"]["location_id"][str(river.id)] == "はずれの川"
+
+    # 時期の無い話は、時期・場所で比べようがないので関連は空
+    frame = client.post("/api/tables/episode/records", json={
+        "story_id": world["story"], "title": "枠だけ", "key": "枠"}).json()["record"]
+    assert client.get(f"/api/tables/episode/records/{frame['id']}").json()["related"]["context"] == {}
 
 
 def test_event_participants(client, session, world):

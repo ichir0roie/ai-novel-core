@@ -8,12 +8,17 @@ from sqlalchemy.orm import Session
 from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
 from ai.claude_code.interface.randomizer.commit_event import CommitEvent
 from ai.time_keeper import idea_context
-from db.schema import Character, ConfirmStatusType, Episode, Event, EventCharacter
+from data_access_logic.query import common_query
+from db.schema import (
+    Character, CharacterPlace, ConfirmStatusType, Episode, Event, EventCharacter, Location, Story,
+)
 from db.schema_pydantic import to_dict
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
 
 _PREVIEW_LENGTH = 80
+# エピソード画面の「関連」に出す出来事・話の件数の上限(時期だけで絞ると際限なく広がりうるため)
+_CONTEXT_LIMIT = 100
 
 
 def label_of(spec: TableSpec, row) -> str:
@@ -147,6 +152,67 @@ def _get(session: Session, spec: TableSpec, record_id: int):
     return row
 
 
+def _place_ids_from_text(session: Session, text: str | None) -> set[int]:
+    """話の場所欄(自由記述)に名前が出てくる場所を拾い、その配下も含めて id を返す。"""
+    if not text:
+        return set()
+    names = session.execute(select(Location.id, Location.name).where(Location.name.isnot(None))).all()
+    matched = [location_id for location_id, name in names if name and name in text]
+    place_ids: set[int] = set()
+    for location_id in matched:
+        place_ids.update(common_query.descendant_place_ids(session, location_id))
+    return place_ids
+
+
+def _context_block(session: Session, table: str, rows) -> dict:
+    spec = spec_of(table)
+    items = [_summary_dict(session, spec, row) for row in rows]
+    return {"items": items, "labels": reference_labels(session, spec, items)}
+
+
+def _episode_context(session: Session, episode: Episode) -> dict:
+    """話の時期(start〜end)・場所(自由記述)に重なる出来事・人物・場所・作品。時期の無い話は出しようがない。"""
+    since = episode.start
+    if since is None:
+        return {}
+    until = episode.end or since
+    place_ids = _place_ids_from_text(session, episode.place)
+
+    event_conditions = [Event.time.between(since, until)]
+    if place_ids:
+        event_conditions.append(Event.location_id.in_(place_ids))
+    events = session.scalars(select(Event).where(*event_conditions)
+                            .order_by(Event.time, Event.id).limit(_CONTEXT_LIMIT)).all()
+
+    character_ids = set(session.scalars(
+        select(EventCharacter.character_id).where(EventCharacter.event_id.in_([e.id for e in events]))))
+    if place_ids:
+        character_ids.update(session.scalars(
+            select(CharacterPlace.character_id).where(
+                CharacterPlace.location_id.in_(place_ids),
+                or_(CharacterPlace.start.is_(None), CharacterPlace.start <= until),
+                or_(CharacterPlace.end.is_(None), CharacterPlace.end >= since))))
+    characters = (session.scalars(select(Character).where(Character.id.in_(character_ids))
+                                 .order_by(Character.id)).all() if character_ids else [])
+
+    location_ids = place_ids | {e.location_id for e in events if e.location_id is not None}
+    locations = (session.scalars(select(Location).where(Location.id.in_(location_ids))
+                                .order_by(Location.id)).all() if location_ids else [])
+
+    story_conditions = [Story.id != episode.story_id,
+                       or_(Story.start.is_(None), Story.start <= until),
+                       or_(Story.end.is_(None), Story.end >= since)]
+    if place_ids:
+        story_conditions.append(or_(Story.place_id.in_(place_ids), Story.world_id.in_(place_ids)))
+    stories = session.scalars(select(Story).where(*story_conditions)
+                             .order_by(Story.id).limit(_CONTEXT_LIMIT)).all()
+
+    return {"event": _context_block(session, "event", events),
+            "character": _context_block(session, "character", characters),
+            "location": _context_block(session, "location", locations),
+            "story": _context_block(session, "story", stories)}
+
+
 def related_of(session: Session, spec: TableSpec, row) -> dict:
     """フォームに載せない、表示だけの関連情報。"""
     related: dict = {}
@@ -161,6 +227,8 @@ def related_of(session: Session, spec: TableSpec, row) -> dict:
         related["episodes"] = [{"table": "episode", "id": episode.id, "label": label_of(spec_of("episode"), episode),
                              "synced": episode.synced, "letters": episode.letters}
                             for episode in episodes]
+    if spec.name == "episode":
+        related["context"] = _episode_context(session, row)
     return related
 
 

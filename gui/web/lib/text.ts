@@ -140,6 +140,11 @@ export const T = {
     unsynced: (n: number) => ` / ${n} unsynced`,
   },
 
+  episodeContext: {
+    title: "In this episode's time & place",
+    show: "Show",
+  },
+
   storyTree: {
     episodes: (n: number) => `${n} episodes`,
     stories: (n: number) => `${n} stories`,
