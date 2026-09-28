@@ -24,7 +24,7 @@ class _Writer(MockAIClient):
         if schema is episode_summary._SCHEMA:
             return {"summary": "要約した筋", "style": "短い地の文"}
         if schema is episode_generator._SCHEMA:
-            return {"title": " 地図の市 ", "viewpoint": "甲", "text": "甲は地図を買った。"}
+            return {"title": " 地図の市 ", "text": "甲は地図を買った。"}
         return decided
 
 
@@ -84,7 +84,8 @@ def test_episode_is_added_to_the_story_with_the_given_key_and_time(session, stor
     assert record.title == "地図の市"
     assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
     assert record.synced is True
-    assert record.viewpoint_character_id == first.id
+    # 視点・場所は id で渡さない限り AI に自由記述で決めさせない(渡さなければ NULL のまま)
+    assert record.viewpoint_character_id is None
     assert record.place_id is None
 
 
@@ -330,7 +331,10 @@ def test_given_slot_is_filled_instead_of_adding_an_episode(session, story):
     assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
     assert record.synced is True
     assert record.viewpoint_character_id == first.id and record.place_id == dock.id
-    assert "視点: 甲" in _writing_call(ai)["prompt"]
+    prompt = _writing_call(ai)["prompt"]
+    assert "視点: 甲" in prompt
+    # place_id を渡さなくても、枠(slot)自身の place_id を材料に使う(作品の立つ場所にフォールバックしない)
+    assert '"name": "波止場"' in prompt and "港町の説明" not in prompt
 
 
 def test_slot_key_is_used_when_no_key_is_given_and_ai_title_fills_an_empty_one(session, story):
@@ -428,6 +432,8 @@ def test_text_is_written_separately_into_the_frame(session, story):
     prompt = _writing_call(ai)["prompt"]
     assert f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {KEY}" in prompt
     assert '"title": "第1話"' in prompt and before.id != slot.id
+    # place_id を渡さなくても、枠自身の place_id を材料に使う(作品の立つ場所にフォールバックしない)
+    assert '"name": "波止場"' in prompt and "港町の説明" not in prompt
 
 
 def test_text_needs_a_frame_with_key_and_time(session, story):
