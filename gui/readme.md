@@ -38,6 +38,7 @@ export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 .venv/bin/python -m gui.dev              # API :8765 + 画面 :3000 を起こし、http://localhost:3000 を開く。Ctrl+C で両方止める
                                           # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
 .venv/bin/python -m gui.dev --no-browser # 開かない。--api-port / --web-port でポートを変える
+.venv/bin/python -m gui.dev --browser-only # API・画面はすでに起きている前提で、ブラウザだけ開く
 ```
 
 ポートが既に使われていれば(前回の起動の残りなど)、それを聞いている処理を止めてから起こす(Linux は `ss`、macOS は `lsof`、

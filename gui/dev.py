@@ -6,6 +6,7 @@
     .venv/bin/python -m gui.dev                 # http://localhost:3000 を開く
     .venv/bin/python -m gui.dev --no-browser    # 開かない
     .venv/bin/python -m gui.dev --api-port 8765 --web-port 3000
+    .venv/bin/python -m gui.dev --browser-only  # API・画面は起こさず、ブラウザだけ開く(すでに起きている前提)
 
 `gui/web/node_modules` が無ければ先に `npm install` を回す。
 ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
@@ -197,7 +198,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--web-port", type=int, default=3000)
     parser.add_argument("--no-browser", action="store_true", help="ブラウザを開かない")
     parser.add_argument("--no-reload", action="store_true", help="uvicorn の自動再読み込みを切る")
+    parser.add_argument("--browser-only", action="store_true",
+                         help="ブラウザだけ開く(API・画面はすでに起きている前提で、起こしも死活監視もしない)")
     args = parser.parse_args(argv)
+
+    if args.browser_only:
+        _open_browser(f"http://localhost:{args.web_port}/")
+        return 0
 
     for port, name in ((args.api_port, "API"), (args.web_port, "画面")):
         if _port_open(port) and not _free_port(port, name):
