@@ -160,18 +160,17 @@ def gather(session: Session, draft: str, ai: AIClient, place_id: int | None = No
     return resolve(session, idea_search.keywords_of(draft, ai, time), place_id, time)
 
 
-def prompt_section(ideas: list[Idea], called: dict[int, Idea] | None = None, time=None) -> str:
+def prompt_section(ideas: list[Idea], called: dict[int, Idea] | None = None) -> str:
     """清書のプロンプトに足す「関係する設定」の節。アイデアが無ければ空。
 
     `called`(`IdeaContext.called`)に呼び名があるアイデアは、その呼び名で出し、呼び名の本文を前に置く。
-    `time` を渡すと、その時刻に効く追記(`IdeaNote`)まで積み重ねた本文を使う。
     """
     if not ideas:
         return ""
     called = called or {}
     lines = []
     for idea in ideas:
-        text = idea_alias.text_of(idea, called, time)
+        text = idea_alias.text_of(idea, called)
         if len(text) > constants.IDEA_CONTEXT_LETTERS:
             text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
         lines.append(f"- {idea_alias.name_of(idea, called)}({idea.kind}): {text}")

@@ -15,7 +15,6 @@ class UpdateIdea(CommitDraft):
     def execute(self, session) -> dict:
         data = self.parse(self.idea)
         idea_id = self.require_id(data, "直す対象のアイデア")
-        notes = data.pop("notes", None)
         recognitions = data.pop("recognitions", None)
         self.check_columns(data)
 
@@ -29,8 +28,6 @@ class UpdateIdea(CommitDraft):
         if new_parent_id is not None:
             self._check_not_descendant(session, idea_id, new_parent_id)
 
-        if notes is not None:
-            load_children(record, "notes", notes)
         if recognitions is not None:
             load_children(record, "recognitions", recognitions)
         return self.apply(session, record, data)

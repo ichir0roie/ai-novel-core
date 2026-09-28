@@ -12,7 +12,7 @@ from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
 from data_access_logic.query import common_query, dictionary_query
-from db.schema import Idea, Session, resolve_idea_text
+from db.schema import Idea, Session
 from db.stamp import Stamp, StampError
 
 _SYSTEM_PROMPT = f"""\
@@ -166,15 +166,14 @@ def _spelled(term: dict) -> tuple[list[str], list[str]]:
     return keyword, list(dict.fromkeys(variants))
 
 
-def _score(idea: Idea, keyword: list[str], variants: list[str], time: Stamp | None = None) -> int:
+def _score(idea: Idea, keyword: list[str], variants: list[str]) -> int:
     # 場所・時代を問わず、作中の呼び名(idea_recognition)にも本質と同じ強さで当たる
     names = [idea.name, *(recognition.name for recognition in idea.recognitions)]
     if any(_contains(name, s) for name in names for s in keyword):
         return _NAME_SCORE
     if any(_contains(name, s) for name in names for s in variants):
         return _VARIANT_NAME_SCORE
-    texts = [resolve_idea_text(idea.text, idea.notes, time),
-             *(recognition.detail or "" for recognition in idea.recognitions)]
+    texts = [idea.text, *(recognition.detail or "" for recognition in idea.recognitions)]
     if any(_contains(text, s) for text in texts for s in keyword + variants):
         return _TEXT_SCORE
     return 0
@@ -194,7 +193,7 @@ def search_by_term(
         keyword, variants = _spelled(term)
         rows = session.scalars(dictionary_query.ideas_by_terms_select(
             keyword + variants, place_ids, time, confirmed_only=confirmed_only)).all()
-        found.append((term, [idea for idea in rows if _score(idea, keyword, variants, time)]))
+        found.append((term, [idea for idea in rows if _score(idea, keyword, variants)]))
     return found
 
 
@@ -212,7 +211,7 @@ def search(
         keyword, variants = _spelled(term)
         for idea in ideas:
             hit = hits.setdefault(idea.id, Hit(idea))
-            hit.score += _score(idea, keyword, variants, time)
+            hit.score += _score(idea, keyword, variants)
             hit.keywords.append(term["keyword"])
     ranked = sorted(hits.values(), key=lambda hit: (-hit.score, hit.idea.id))
     return ranked[:limit] if limit is not None else ranked

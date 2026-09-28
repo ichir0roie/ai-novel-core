@@ -9,7 +9,7 @@ from ai.claude_code.interface.randomizer.update_idea import UpdateIdea
 from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.world.search_ideas import SearchIdeas
 from ai.time_keeper import idea_alias, idea_context, idea_search
-from db.schema import Idea, IdeaNote, IdeaRecognition, Location
+from db.schema import Idea, IdeaRecognition, Location
 from db.stamp import Stamp
 
 
@@ -56,21 +56,6 @@ def test_recognition_matching_the_place_and_time_is_chosen(session, places, ener
     assert called == {energy.id: recognition}
     assert idea_alias.name_of(energy, called) == "魔力"
     assert idea_alias.text_of(energy, called) == "住人は魔法の力だと思っている 化学エネルギーとして溜める"
-
-
-def test_text_of_folds_in_the_essences_notes_covering_the_time(session, places, energy):
-    energy.notes = [IdeaNote(start=Stamp(2050), text="化学反応で生む方法も見つかった")]
-    session.commit()
-    recognition = _recognition(session, energy, "魔力", "住人は魔法の力だと思っている",
-                               location_id=places["world"].id, start=Stamp(2000))
-
-    called = idea_alias.called(session, [energy.id], places["village"].id, "2100")
-
-    assert called == {energy.id: recognition}
-    assert idea_alias.text_of(energy, called) == (
-        "住人は魔法の力だと思っている 化学エネルギーとして溜める")
-    assert idea_alias.text_of(energy, called, "2050") == (
-        "住人は魔法の力だと思っている 化学エネルギーとして溜める\n化学反応で生む方法も見つかった")
 
 
 def test_essence_name_is_used_when_no_recognition_matches(session, places, energy):

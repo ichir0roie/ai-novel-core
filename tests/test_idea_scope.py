@@ -2,7 +2,7 @@ import pytest
 
 from ai.claude_code.interface.story import _rows
 from data_access_logic.query import common_query
-from db.schema import Idea, IdeaNote, Location
+from db.schema import Idea, Location
 from db.stamp import Stamp
 
 
@@ -62,20 +62,6 @@ def test_idea_of_another_branch_is_left_out(session, places):
     session.commit()
 
     assert brief_names(session, places["planet"]) == []
-
-
-def test_brief_text_folds_in_the_note_covering_the_time(session, places):
-    idea = Idea(name="技術のアイデア", kind="概念", location_id=places["world"], text="基本の説明")
-    session.add(idea)
-    session.flush()
-    session.add(IdeaNote(idea_id=idea.id, start=Stamp(150), text="150年、実用化した"))
-    session.commit()
-
-    [before] = _rows.brief(session, places["planet"], "149/12/31")["ideas"]
-    assert before["text"] == "基本の説明"
-
-    [after] = _rows.brief(session, places["planet"], "150/01/01")["ideas"]
-    assert after["text"] == "基本の説明\n150年、実用化した"
 
 
 def test_idea_counts_from_start_until_before_end(session, places):

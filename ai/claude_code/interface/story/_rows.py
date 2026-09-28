@@ -149,7 +149,7 @@ def brief(session: Session, place_id: int, when=None, *, reach: int = 60,
         "open_events": visible(open_events(session, place_ids, until)),
         "recent_events": visible(recent),
         "ideas": [{"id": idea.id, "name": idea_alias.name_of(idea, called), "kind": idea.kind,
-                   "text": idea_alias.text_of(idea, called, until)} for idea in ideas],
+                   "text": idea_alias.text_of(idea, called)} for idea in ideas],
         "present_characters": [
             {"id": id_, "name": character_names.get(id_)} for id_ in character_ids],
     }

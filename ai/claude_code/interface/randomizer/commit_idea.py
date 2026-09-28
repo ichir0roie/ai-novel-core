@@ -18,7 +18,6 @@ class CommitIdea(CommitMemeSource):
     def execute(self, session) -> dict:
         data = self.parse(self.idea)
         data.pop("id", None)
-        notes = data.pop("notes", [])
         recognitions = data.pop("recognitions", [])
         self.check_columns(data)
         if not data.get("name"):
@@ -37,7 +36,6 @@ class CommitIdea(CommitMemeSource):
                 data["parent_idea_id"] = classification.id
 
         record = Idea(**data)
-        load_children(record, "notes", notes)
         load_children(record, "recognitions", recognitions)
         session.add(record)
         self.finalize(session, record)

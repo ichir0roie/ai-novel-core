@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from data_access_logic.query import common_query, dictionary_query
-from db.schema import Idea, IdeaRecognition, Session, resolve_idea_text
+from db.schema import Idea, IdeaRecognition, Session
 from db.stamp import Stamp
 
 
@@ -34,12 +34,8 @@ def name_of(idea: Idea, called: dict[int, IdeaRecognition]) -> str:
     return recognition.name if recognition is not None else idea.name
 
 
-def text_of(idea: Idea, called: dict[int, IdeaRecognition], time=None) -> str:
-    """認識の注釈(作中での受け止め方)を前に、本質の本文を後ろに並べる。
-
-    `time` を渡すと、その時刻に効く追記(`IdeaNote`)まで基本の本文に積み重ねた本文を使う。
-    """
+def text_of(idea: Idea, called: dict[int, IdeaRecognition]) -> str:
+    """認識の注釈(作中での受け止め方)を前に、本質の本文を後ろに並べる。"""
     recognition = called.get(idea.id)
-    parts = (recognition.detail if recognition is not None and recognition.detail else "",
-             resolve_idea_text(idea.text, idea.notes, time))
+    parts = (recognition.detail if recognition is not None and recognition.detail else "", idea.text)
     return " ".join(part for part in parts if part)

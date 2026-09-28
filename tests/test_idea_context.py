@@ -14,7 +14,7 @@ from ai.time_keeper import character_event_generator, episode_summary, idea_cont
 from ai.time_keeper import random_character_generator
 from db.schema import (
     ConfirmStatus,
-    Character, CharacterIdea, CharacterPlace, Episode, EpisodeIdea, Event, EventIdea, Idea, IdeaNote, Location, Story,
+    Character, CharacterIdea, CharacterPlace, Episode, EpisodeIdea, Event, EventIdea, Idea, Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -149,26 +149,6 @@ def test_search_ideas_entry_takes_keywords_with_variants(session, places):
     rows = SearchIdeas([{"keyword": "血の病", "variants": ["遺伝子"]}], place_id=places["village"].id).run()
 
     assert [(row["id"], row["score"], row["keywords"]) for row in rows] == [(idea.id, 2, ["血の病"])]
-
-
-def test_search_matches_a_note_within_its_period(session):
-    idea = _idea(session, "装置", "基本の説明")
-    idea.notes = [IdeaNote(start=Stamp(100), text="改良版には触媒を使う")]
-    session.commit()
-
-    assert idea_search.search(session, ["触媒"], time="50") == []
-    hits = idea_search.search(session, ["触媒"], time="150")
-    assert [hit.idea.id for hit in hits] == [idea.id]
-
-
-def test_search_ideas_entry_returns_text_resolved_at_the_time(session):
-    idea = _idea(session, "装置", "基本の説明", notes=[IdeaNote(start=Stamp(100), text="100年、実用化した")])
-
-    before = SearchIdeas("装置", time="50").run()
-    after = SearchIdeas("装置", time="150").run()
-
-    assert before[0]["text"] == "基本の説明"
-    assert after[0]["text"] == "基本の説明\n100年、実用化した"
 
 
 def test_terms_are_normalized_and_deduplicated():
@@ -343,14 +323,6 @@ def test_brief_leaves_out_ideas_not_in_effect_at_the_time(session, places):
     names = [idea["name"] for idea in _rows.brief(session, places["village"].id, "2100")["ideas"]]
 
     assert names == ["宿り"]
-
-
-def test_prompt_section_uses_the_time_covering_note(session):
-    idea = _idea(session, "魔力", "世界を巡る力", notes=[IdeaNote(start=Stamp(2050), text="教会が禁じた")])
-
-    assert "- 魔力(技術): 世界を巡る力" in idea_context.prompt_section([idea])
-    section = idea_context.prompt_section([idea], time=Stamp(2100))
-    assert "- 魔力(技術): 世界を巡る力\n教会が禁じた" in section
 
 
 def test_prompt_section_cuts_long_texts(session, monkeypatch):

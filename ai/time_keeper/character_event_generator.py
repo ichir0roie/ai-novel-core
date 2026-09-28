@@ -130,7 +130,7 @@ def _novelize(
         f"主役の直前の出来事: {_dump(previous_row)}",
         *([f"この時点より後に既に決まっている出来事: {_dump(later_events)}"] if later_events else []),
         f"この出来事の記録: {_dump({'name': record.name, 'text': record.text})}",
-        idea_context.prompt_section(ideas.related, ideas.called, record.time) if ideas else "",
+        idea_context.prompt_section(ideas.related, ideas.called) if ideas else "",
         f"この出来事を、{focus.name}を視点人物にした"
         f"{EVENT_NOVEL_TARGET_LETTERS[0]}〜{EVENT_NOVEL_TARGET_LETTERS[1]}字の小説の本文に書き起こしてください。",
     ])

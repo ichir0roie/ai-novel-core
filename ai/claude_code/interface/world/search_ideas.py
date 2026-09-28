@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from ai.claude_code.interface._base import SessionEntrypoint
 from ai.time_keeper import idea_alias, idea_search
-from db.schema import resolve_idea_text
 
 
 class SearchIdeas(SessionEntrypoint):
@@ -31,6 +30,6 @@ class SearchIdeas(SessionEntrypoint):
              "confirmed": hit.idea.confirmed,
              "parent_idea_id": hit.idea.parent_idea_id,
              "called": idea_alias.name_of(hit.idea, called),
-             "text": resolve_idea_text(hit.idea.text, hit.idea.notes, self.time),
+             "text": hit.idea.text,
              "score": hit.score, "keywords": hit.keywords}
             for hit in hits]

@@ -199,7 +199,7 @@ def write(
     if later_events:
         lines.append(f"この時点より後に既に決まっている出来事: {_dump(later_events)}")
     if context.related:
-        lines.append(idea_context.prompt_section(context.related, context.called, time))
+        lines.append(idea_context.prompt_section(context.related, context.called))
     if viewpoint:
         lines.append(f"視点: {viewpoint}")
     lines.append(f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {key}")
