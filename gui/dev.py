@@ -11,8 +11,11 @@
 `gui/web/node_modules` が無ければ先に `npm install` を回す。
 ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
 
-ブラウザは Brave があれば普段使いのままそれを開き(専用プロファイルなどは作らない)、
-無ければ既定のブラウザで開く。
+ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルート(`DEM_WORLD_DIR`)の
+`.brave-profile/` に作って開く(普段のプロファイルと分け、GUI 用のタブ・設定だけをそこに残す)。
+このディレクトリは Claude Code の SessionStart フック(`.claude/hooks/session-start.sh`)が
+セッション開始時に用意する(`gui.dev` 実行時にも無ければ作る)。
+Brave が無ければ既定のブラウザで開く。
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ import webbrowser
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BRAVE_PROFILE_DIR_NAME = ".brave-profile"
 
 
 def _npm() -> str:
@@ -55,15 +59,22 @@ def _brave() -> str | None:
     return None
 
 
+def _brave_profile_dir() -> str:
+    world_dir = os.environ.get("DEM_WORLD_DIR") or os.getcwd()
+    return os.path.join(os.path.abspath(world_dir), BRAVE_PROFILE_DIR_NAME)
+
+
 def _open_browser(url: str) -> None:
     brave = _brave()
     if brave is None:
         print("[gui/dev] Brave が見つからないので既定のブラウザで開く")
         webbrowser.open(url)
         return
-    print(f"[gui/dev] Brave で {url} を開く")
+    profile = _brave_profile_dir()
+    os.makedirs(profile, exist_ok=True)
+    print(f"[gui/dev] Brave をプロファイル {profile} で開く")
     # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
-    _popen([brave, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _popen([brave, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _port_open(port: int) -> bool:

@@ -44,8 +44,11 @@ export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 ポートが既に使われていれば(前回の起動の残りなど)、それを聞いている処理を止めてから起こす(Linux は `ss`、macOS は `lsof`、
 Windows は `netstat` で探す)。止められなければ終了コード 1 で止まる。
 
-ブラウザは Brave があれば普段使いのままそれを開く(専用プロファイルなどは作らない)。
-Brave が無ければ既定のブラウザで開く。
+ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルートの `.brave-profile/` に作って
+(`--user-data-dir`)開く。普段のプロファイルと分かれるので、GUI 用のタブ・設定だけがそこに残る。
+`.brave-profile/` は世界リポジトリの `.gitignore` に入れておく。Claude Code の SessionStart フック
+(`.claude/hooks/session-start.sh`)がセッション開始時にこのディレクトリを用意する
+(`gui.dev` 実行時にも無ければ作る)。Brave が無ければ既定のブラウザで開く。
 
 別々に起こすなら次の二つ。
 
