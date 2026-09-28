@@ -78,10 +78,9 @@ export default function TablePage() {
   const order = params.get("order") === "asc" ? "asc" : "desc";
 
   // 作品(story)は場所の木、アイデア(idea)は parent_idea_id の木、人物(character)は居場所の木でツリー表示を持つ。
-  // 作品・アイデアは既定がツリー(`?view=list` で表)。人物は逆に既定が表(`?view=tree` でツリー)
+  // 既定はどれもツリー(`?view=list` で表)
   const hasTree = table === "story" || table === "idea" || table === "character";
-  const defaultView = table === "character" ? "list" : "tree";
-  const tree = hasTree && (search.get("view") ?? defaultView) === "tree";
+  const tree = hasTree && (search.get("view") ?? "tree") === "tree";
   const viewSwitch = hasTree && (
     <span className="segment">
       <button type="button" className={tree ? "on" : ""} onClick={() => setParam("view", "tree")}>
