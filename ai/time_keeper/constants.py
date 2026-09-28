@@ -114,7 +114,7 @@ RECAP_TIMEOUT = 300.0
 # idea_search / idea_context
 IDEA_TERMS_TIMEOUT = 300.0
 # 清書に渡すアイデアの上限(直接当たったものと、その上位・下位を合わせて)。
-IDEA_CONTEXT_LIMIT = 10
+IDEA_CONTEXT_LIMIT = 100
 # 清書に渡すアイデア一件の本文の字数の上限。
 IDEA_CONTEXT_LETTERS = 400
 IDEA_POLISH_TIMEOUT = 300.0
