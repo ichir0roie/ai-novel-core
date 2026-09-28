@@ -142,7 +142,6 @@ export const T = {
 
   episodeContext: {
     title: "In this episode's time & place",
-    show: "Show",
   },
 
   storyTree: {

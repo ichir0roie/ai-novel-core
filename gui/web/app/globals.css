@@ -151,10 +151,11 @@ button.ghost { background: transparent; }
 .record-text { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 1rem; }
 .record-text .field.section { flex: 1; min-height: 0; }
 .record-text textarea.section, .record-text .markdown-preview { height: 100%; min-height: 6rem; resize: none; overflow: auto; }
-/* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使い、中だけスクロールする */
-.record-side .field.section.side { flex: 1; min-height: 0; }
+/* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使い、中だけスクロールする。
+   左の欄が埋まっていても潰れないよう、最低の高さは持たせる(足りなければ左の欄ごとスクロールする) */
+.record-side .field.section.side { flex: 1 0 14rem; min-height: 14rem; }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
-  height: 100%; min-height: 0; resize: none; overflow: auto;
+  flex: 1; height: auto; min-height: 0; resize: none; overflow: auto;
 }
 @media (max-width: 960px) {
   .record.split { grid-template-columns: minmax(0, 1fr); }
@@ -219,8 +220,8 @@ button.ghost { background: transparent; }
 .multi label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 
 .related ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
-.related ul li.context-row { display: flex; align-items: center; gap: 0.6rem; list-style: none; margin-left: -1.2rem; padding: 0.15rem 0; }
-.related ul li.context-row button { margin-left: auto; }
+.related.context-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
+.related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
 .jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }
@@ -258,7 +259,12 @@ button.ghost { background: transparent; }
   .viz-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40%; }
 }
 
-.page-fill > .panel.generate { flex-shrink: 0; margin-top: 0.75rem; margin-bottom: 0; padding: 0.7rem 1.1rem; }
+/* 「AI で作成」。指定の欄(登場人物・直前の話など)は横に並べ、フォームの高さを奪わないよう低く抑える */
+.page-fill > .panel.generate { flex-shrink: 0; max-height: 40%; overflow: auto; margin-top: 0.75rem; margin-bottom: 0; padding: 0.7rem 1.1rem; }
+.panel.generate .form { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem 1rem; }
+.panel.generate .multi { max-height: 6.5rem; }
+.generate-buttons { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; }
+.panel.generate .form .generate-buttons { grid-column: span 2; margin-top: 0; align-self: end; }
 
 /* 作品一覧のツリー(場所の木に作品をぶら下げる) */
 .tree { list-style: none; margin: 0; padding: 0; }

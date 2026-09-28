@@ -80,38 +80,36 @@ export default function GeneratePanel({ table, meta, draft, mode, onDone, disabl
     }
   };
 
+  const buttons = (
+    <div className="generate-buttons">
+      {generators.map((generator) => (
+        <button key={generator.key} className="primary" onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
+          {generator.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="panel generate">
-      <div className="hint">
-        {T.generate.description(mode)}
-      </div>
       {!claudeAvailable && <div className="status error">{T.generate.unavailable}</div>}
-      {params.size > 0 && (
-        <div className="form" style={{ marginTop: "0.5rem" }}>
+      {params.size > 0 ? (
+        <div className="form">
           {[...params.values()].map((param) => (
-            <div key={param.key} className={`field ${param.type === "id_list" ? "wide" : ""}`}>
+            <div key={param.key} className="field">
               <label title={param.comment ?? ""}>
                 {param.label}
                 <span className="key">{param.key}</span>
               </label>
               <FieldInput column={param} value={args[param.key]} onChange={(v) => setArgs({ ...args, [param.key]: v })} disabled={running} />
-              {param.comment && <span className="hint">{param.comment}</span>}
             </div>
           ))}
+          {buttons}
         </div>
+      ) : (
+        buttons
       )}
-      <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", marginTop: "0.6rem", flexWrap: "wrap" }}>
-        {generators.map((generator) => (
-          <button key={generator.key} className="primary" onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={generator.entrance}>
-            {generator.label}
-          </button>
-        ))}
-        {running && job && (
-          <span className="hint">
-            {T.generate.inProgress(job.id, job.status)}
-          </span>
-        )}
-      </div>
+      {running && job && <div className="hint">{T.generate.inProgress(job.id, job.status)}</div>}
       {error && <div className="status error">{error}</div>}
     </div>
   );

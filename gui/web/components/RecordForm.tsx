@@ -51,7 +51,6 @@ export default function RecordForm({ meta, value, onChange, mode, side, actions 
                 {column.required && <span className="hint">{T.required}</span>}
               </label>
               <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
-              {column.comment && column.comment !== column.label && <span className="hint">{column.comment}</span>}
             </div>
           ))}
         </div>

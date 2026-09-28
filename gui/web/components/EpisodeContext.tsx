@@ -13,7 +13,7 @@ type Context = Partial<Record<ContextTableKey, ContextBlock>>;
 
 const CATEGORY_KEYS: ContextTableKey[] = ["event", "character", "location", "story"];
 
-/** 話の時期・場所に重なる出来事・人物・場所・作品(`related.context`)。表示ボタンで、その一覧をモーダルの表で見る。 */
+/** 話の時期・場所に重なる出来事・人物・場所・作品(`related.context`)。種類ごとのボタンを横に並べ、押すとその一覧をモーダルの表で見る。 */
 export default function EpisodeContext({ context }: { context: Context }) {
   const { tables } = useMeta();
   const [open, setOpen] = useState<ContextTableKey | null>(null);
@@ -25,20 +25,13 @@ export default function EpisodeContext({ context }: { context: Context }) {
   const active = open ? context[open] : null;
 
   return (
-    <div className="panel related">
-      <h2>{T.episodeContext.title}</h2>
-      <ul>
-        {entries.map((key) => (
-          <li key={key} className="context-row">
-            <span>
-              {labelOfTable(key)} ({context[key]!.items.length})
-            </span>
-            <button type="button" onClick={() => setOpen(key)}>
-              {T.episodeContext.show}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <div className="panel related context-bar">
+      <span className="context-title">{T.episodeContext.title}</span>
+      {entries.map((key) => (
+        <button key={key} type="button" onClick={() => setOpen(key)}>
+          {labelOfTable(key)} ({context[key]!.items.length})
+        </button>
+      ))}
       {open && active && (
         <Modal title={`${labelOfTable(open)} (${active.items.length})`} onClose={() => setOpen(null)} wide>
           <ContextTable table={open} items={active.items} labels={active.labels} />
