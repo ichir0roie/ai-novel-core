@@ -8,8 +8,9 @@ import { HIDDEN_TABLES } from "@/lib/hidden";
 import { useMeta } from "@/lib/meta";
 import { T } from "@/lib/text";
 
-/** 画面の左端に細い帯だけ出し、帯にホバーするかクリックすると縦のメニューが中身の上に重なって開く。
- * クリックで開いたときは、メニューの外をクリックするか Esc かページを移ると閉じる。 */
+/** 画面の上端に薄い帯だけを常に出し、そこへマウスを寄せる(hover)かクリックすると、
+ * メニューが上から大きく降りてきて中身の上に重なって開く。
+ * 開いたときは、メニューの外をクリックするか Esc かページを移ると閉じる。 */
 export default function Nav() {
   const pathname = usePathname();
   const { tables } = useMeta();
@@ -42,28 +43,28 @@ export default function Nav() {
 
   return (
     <nav ref={ref} className={`nav ${open ? "open" : ""}`}>
-      <button type="button" className="nav-handle" onClick={() => setOpen(!open)} aria-label={T.nav.menu} aria-expanded={open}>
-        ☰
-      </button>
+      <div className="nav-bar">
+        <button type="button" className="nav-handle" onClick={() => setOpen((v) => !v)} aria-label={T.nav.menu} aria-expanded={open} />
+      </div>
       <div className="nav-drawer">
-      <Link href="/" className={`brand ${isActive("/") ? "active" : ""}`}>{T.appName}</Link>
-      <span className="group">
-        {summary?.tables.map((row) => (
-          <Link key={row.table} href={`/review/${row.table}`} className={isActive(`/review/${row.table}`) ? "active" : ""}>
-            {T.nav.review(row.label)}{row.pending > 0 && <span className="badge">{row.pending}</span>}
-          </Link>
-        ))}
-      </span>
-      <span className="group">
-        {tables.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (
-          <Link key={table.name} href={`/tables/${table.name}`} className={isActive(`/tables/${table.name}`) ? "active" : ""}>
-            {table.label}
-          </Link>
-        ))}
-      </span>
-      <span className="group">
-        <Link href="/interface" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
-      </span>
+        <Link href="/" className={`brand ${isActive("/") ? "active" : ""}`}>{T.appName}</Link>
+        <span className="group">
+          {summary?.tables.map((row) => (
+            <Link key={row.table} href={`/review/${row.table}`} className={isActive(`/review/${row.table}`) ? "active" : ""}>
+              {T.nav.review(row.label)}{row.pending > 0 && <span className="badge">{row.pending}</span>}
+            </Link>
+          ))}
+        </span>
+        <span className="group">
+          {tables.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (
+            <Link key={table.name} href={`/tables/${table.name}`} className={isActive(`/tables/${table.name}`) ? "active" : ""}>
+              {table.label}
+            </Link>
+          ))}
+        </span>
+        <span className="group">
+          <Link href="/interface" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
+        </span>
       </div>
     </nav>
   );
