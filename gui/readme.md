@@ -43,9 +43,9 @@ export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 ポートが既に使われていれば(前回の起動の残りなど)、それを聞いている処理を止めてから起こす(Linux は `ss`、macOS は `lsof`、
 Windows は `netstat` で探す)。止められなければ終了コード 1 で止まる。
 
-ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルートの `.brave-profile/` に作って
+ブラウザは Chrome があればそれを使い、プロファイルを世界リポジトリのルートの `.chrome-profile/` に作って
 (`--user-data-dir`)開く。普段のプロファイルと分かれるので、GUI 用のタブ・設定だけがそこに残る。
-`.brave-profile/` は世界リポジトリの `.gitignore` に入れておく。Brave が無ければ既定のブラウザで開く。
+`.chrome-profile/` は世界リポジトリの `.gitignore` に入れておく。Chrome が無ければ既定のブラウザで開く。
 
 別々に起こすなら次の二つ。
 
