@@ -77,7 +77,7 @@ def test_generate_runs_the_entrance_as_a_job_with_the_draft(client, monkeypatch)
         **{**entrance.__dict__, "target": lambda **kwargs: calls.append(kwargs) or {"id": 7, "text": "本文"}}))
 
     accepted = client.post("/api/tables/episode/generate/episode", json={
-        "draft": {"story_id": 3, "title": "", "key": None, "start": "", "viewpoint": None, "text": ""},
+        "draft": {"story_id": 3, "title": "", "key": None, "start": "", "viewpoint_character_id": None, "text": ""},
         "args": {"character_ids": [1, 2], "model": ""}})
     assert accepted.status_code == 202, accepted.text
     job = _wait(client, accepted.json()["id"])

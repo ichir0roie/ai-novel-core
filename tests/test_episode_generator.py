@@ -84,8 +84,8 @@ def test_episode_is_added_to_the_story_with_the_given_key_and_time(session, stor
     assert record.title == "地図の市"
     assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
     assert record.synced is True
-    assert record.viewpoint == "甲"
-    assert record.place is None
+    assert record.viewpoint_character_id == first.id
+    assert record.place_id is None
 
 
 def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
@@ -229,9 +229,9 @@ def test_given_place_and_viewpoint_are_kept_on_the_episode(session, story):
     ai = _Writer(seed=1)
 
     record = frame_generator.generate(session, ai, story.id, KEY, WHEN, [first.id, second.id],
-                                      place_id=market.id, viewpoint="乙")
+                                      place_id=market.id, viewpoint_character_id=second.id)
 
-    assert record.place == "魚市場" and record.viewpoint == "乙"
+    assert record.place_id == market.id and record.viewpoint_character_id == second.id
     prompt = _writing_call(ai)["prompt"]
     assert "魚市場の説明" in prompt and "港町の説明" not in prompt
     assert "視点: 乙" in prompt
@@ -306,9 +306,10 @@ def test_claude_writes_only_the_text_with_the_episode_model(session, story, monk
     assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)
 
 
-def _slot(session, story, *, title="枠の題", start=WHEN, key="", viewpoint="甲(十四歳)", place=None) -> Episode:
-    record = Episode(story_id=story.id, title=title, start=start, key=key,
-                     synced=False, viewpoint=viewpoint, place=place)
+def _slot(session, story, *, title="枠の題", start=WHEN, key="",
+         viewpoint_character_id=None, place_id=None) -> Episode:
+    record = Episode(story_id=story.id, title=title, start=start, key=key, synced=False,
+                     viewpoint_character_id=viewpoint_character_id, place_id=place_id)
     session.add(record)
     session.commit()
     return record
@@ -316,7 +317,10 @@ def _slot(session, story, *, title="枠の題", start=WHEN, key="", viewpoint="�
 
 def test_given_slot_is_filled_instead_of_adding_an_episode(session, story):
     first = _character(session, "甲")
-    slot = _slot(session, story, place="波止場")
+    dock = Location(name="波止場", kind="場所", text="")
+    session.add(dock)
+    session.commit()
+    slot = _slot(session, story, viewpoint_character_id=first.id, place_id=dock.id)
     ai = _Writer(seed=1)
 
     record = frame_generator.generate(session, ai, story.id, KEY, None, [first.id], episode_id=slot.id)
@@ -325,8 +329,8 @@ def test_given_slot_is_filled_instead_of_adding_an_episode(session, story):
     assert record.title == "枠の題" and record.start == WHEN and record.key == KEY
     assert record.text == "甲は地図を買った。" and record.letters == len(record.text)
     assert record.synced is True
-    assert record.viewpoint == "甲(十四歳)" and record.place == "波止場"
-    assert "視点: 甲(十四歳)" in _writing_call(ai)["prompt"]
+    assert record.viewpoint_character_id == first.id and record.place_id == dock.id
+    assert "視点: 甲" in _writing_call(ai)["prompt"]
 
 
 def test_slot_key_is_used_when_no_key_is_given_and_ai_title_fills_an_empty_one(session, story):
@@ -397,8 +401,7 @@ def test_claude_write_episode_main_takes_the_model_of_the_text(session, story, m
         story.id, KEY, WHEN, [first.id], model="claude-sonnet-5", effort="medium")
 
     assert _writing_call(ai)["options"] == {"model": "claude-sonnet-5", "effort": "medium"}
-    text = session.get(Episode, episode_id)
-    assert (text.model, text.effort) == ("claude-sonnet-5", "medium")
+    assert session.get(Episode, episode_id) is not None
 
 
 def test_other_generations_default_to_sonnet_medium():
@@ -409,15 +412,18 @@ def test_other_generations_default_to_sonnet_medium():
 def test_text_is_written_separately_into_the_frame(session, story):
     first = _character(session, "甲")
     before = _episode(session, story, 1)
-    slot = _slot(session, story, title="", key=KEY, place="波止場")
+    dock = Location(name="波止場", kind="場所", text="")
+    session.add(dock)
+    session.commit()
+    slot = _slot(session, story, title="", key=KEY, viewpoint_character_id=first.id, place_id=dock.id)
     ai = _Writer(seed=1)
 
     text = episode_generator.generate(session, ai, slot.id, [first.id], writer_options={"model": "m", "effort": "e"})
 
     session.refresh(slot)
     assert text.id == slot.id
-    assert (text.text, text.letters, text.model, text.effort) == ("甲は地図を買った。", 9, "m", "e")
-    assert slot.title == "地図の市" and slot.viewpoint == "甲(十四歳)" and slot.place == "波止場"
+    assert (text.text, text.letters) == ("甲は地図を買った。", 9)
+    assert slot.title == "地図の市" and slot.viewpoint_character_id == first.id and slot.place_id == dock.id
     assert slot.synced is True and session.query(Episode).count() == 2
     prompt = _writing_call(ai)["prompt"]
     assert f"この話の種(これを場面まで展開する。種に無い出来事を足さない): {KEY}" in prompt
@@ -459,6 +465,6 @@ def test_claude_fill_episode_main_writes_with_fable_high(session, story, monkeyp
     episode_id = claude_code_time_keeper.claude_fill_episode_main(slot.id, [first.id])
 
     session.refresh(slot)
-    text = session.get(Episode, episode_id)
-    assert text.id == slot.id and (text.model, text.effort) == ("claude-fable-5-1", "high")
+    assert episode_id == slot.id
+    assert _writing_call(ai)["options"] == {"model": "claude-fable-5-1", "effort": "high"}
     assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)

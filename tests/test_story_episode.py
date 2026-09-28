@@ -5,7 +5,7 @@ from ai.claude_code import ai_client
 from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.story.commit_episode import CommitEpisode
 from ai.claude_code.interface.story.commit_story import CommitStory
-from db.schema import Episode, EpisodeSummary, Location
+from db.schema import Character, Episode, EpisodeSummary, Location
 
 
 @pytest.fixture
@@ -76,14 +76,18 @@ def test_commit_episode_requires_story_id_for_new_episode(place):
         CommitEpisode({"title": "白い灯り", "text": "本文"}).run()
 
 
-def test_commit_episode_accepts_key_only(place):
+def test_commit_episode_accepts_key_only(session, place):
+    kashiru = Character(name="カシル", text="")
+    ministry = Location(name="エンピレオ 血統管理省", kind="施設", text="")
+    session.add_all([kashiru, ministry])
+    session.commit()
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     episode = CommitEpisode({"story_id": story["id"], "title": "白い灯り",
                              "key": "人工母体から娘が生まれる", "start": "11572/03/25 00:00:00",
-                             "viewpoint": "カシル", "place": "エンピレオ 血統管理省"}).run()
+                             "viewpoint_character_id": kashiru.id, "place_id": ministry.id}).run()
     assert episode["key"] == "人工母体から娘が生まれる"
     assert (episode["text"], episode["letters"]) == ("", 0)
-    assert (episode["viewpoint"], episode["place"]) == ("カシル", "エンピレオ 血統管理省")
+    assert (episode["viewpoint_character_id"], episode["place_id"]) == (kashiru.id, ministry.id)
     assert str(episode["start"]) == "11572/03/25 00:00:00"
 
 
@@ -91,3 +95,25 @@ def test_commit_episode_requires_key_or_text(place):
     story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
     with pytest.raises(ValueError):
         CommitEpisode({"story_id": story["id"], "title": "白い灯り"}).run()
+
+
+def test_commit_episode_writes_characters(session, place):
+    first = Character(name="甲", text="")
+    second = Character(name="乙", text="")
+    session.add_all([first, second])
+    session.commit()
+    story = CommitStory({"name": "遥かなる幻想郷まで", "place_id": place}).run()
+
+    episode = CommitEpisode({"story_id": story["id"], "title": "白い灯り", "key": "種",
+                             "character_ids": [first.id, second.id]}).run()
+    assert episode["character_ids"] == [first.id, second.id]
+
+    # character_ids を渡さない直しは、既存の登場人物を変えない
+    unchanged = CommitEpisode({"id": episode["id"], "title": "白い灯り(改)"}).run()
+    assert unchanged["character_ids"] == [first.id, second.id]
+
+    # character_ids を渡して直せば全置換、空リストなら全削除
+    replaced = CommitEpisode({"id": episode["id"], "character_ids": [second.id]}).run()
+    assert replaced["character_ids"] == [second.id]
+    cleared = CommitEpisode({"id": episode["id"], "character_ids": []}).run()
+    assert cleared["character_ids"] == []

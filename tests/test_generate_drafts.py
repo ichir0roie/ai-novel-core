@@ -8,7 +8,7 @@ from ai.claude_code.interface.story.generate_frame import GenerateFrame
 from ai.claude_code.interface.story.revise_episode import ReviseEpisode
 from ai.time_keeper import episode_generator, episode_reviser, frame_generator, random_character_generator
 from db.schema import (
-    Character, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Location, Story,
+    Character, CharacterPlace, ConfirmStatus, Episode, EpisodeCharacter, Event, EventCharacter, Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -305,6 +305,18 @@ def test_episode_draft_is_saved_before_the_body_is_written_so_a_failure_keeps_it
     assert saved.title == "港の朝" and saved.key == "地図を買う" and saved.start == WHEN and saved.text == ""
 
 
+def test_episode_generation_saves_the_cast_as_episode_characters(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    second = _character(session, place, "乙")
+
+    result = GenerateEpisode({"story_id": story.id, "key": "地図を買う", "start": str(WHEN)},
+                             character_ids=[first.id, second.id], ai=_Ai(seed=1)).run()
+
+    assert {row.character_id for row in session.query(EpisodeCharacter).filter_by(episode_id=result["id"])} \
+        == {first.id, second.id}
+
+
 def test_episode_needs_characters_when_there_is_no_main_character(session, place):
     story = session.query(Story).one()
     _character(session, place, "甲")
@@ -422,6 +434,22 @@ def test_episode_revise_draft_is_saved_before_the_ai_call_so_a_failure_keeps_it(
 
     session.refresh(episode)
     assert episode.title == "新題" and episode.key == "新key" and episode.text == "甲は市場を歩いた。"
+
+
+def test_episode_revise_replaces_the_episode_characters(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    second = _character(session, place, "乙")
+    episode = Episode(story_id=story.id, title="港にて", key="地図を買う", start=WHEN, text="甲は市場を歩いた。")
+    episode.episode_characters = [EpisodeCharacter(character_id=first.id)]
+    session.add(episode)
+    session.commit()
+
+    ReviseEpisode({"id": episode.id}, character_ids=[second.id], instruction="外見を厚く書く",
+                  ai=_Ai(seed=1)).run()
+
+    assert {row.character_id for row in session.query(EpisodeCharacter).filter_by(episode_id=episode.id)} \
+        == {second.id}
 
 
 def test_episode_revise_needs_instruction(session, place):

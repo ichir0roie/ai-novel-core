@@ -3,8 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db.schema import (
-    Character, CharacterParameter, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
-    Meme, Story,
+    Character, CharacterParameter, CharacterPlace, ConfirmStatus, Episode, EpisodeCharacter, Event, EventCharacter,
+    Idea, Location, Meme, Story,
 )
 from gui.api import app as app_module
 
@@ -48,6 +48,10 @@ def test_tables_meta_comes_from_schema(client, session):
     episode_columns = {column["key"]: column for column in tables["episode"]["columns"]}
     assert episode_columns["text"]["section"] is True and episode_columns["key"]["section"] is True
     assert episode_columns["letters"]["readonly"] is True
+    assert episode_columns["viewpoint_character_id"]["references"] == "character"
+    assert episode_columns["place_id"]["references"] == "location"
+    assert episode_columns["character_ids"]["type"] == "id_list" and episode_columns["character_ids"]["references"] == "character"
+    assert "model" not in episode_columns and "effort" not in episode_columns and "viewpoint" not in episode_columns
     assert [child["name"] for child in tables["character"]["child_lists"]] == ["parameters", "places", "histories"]
     child_columns_by_name = {child["name"]: {column["key"] for column in child["columns"]} for child in tables["character"]["child_lists"]}
     assert child_columns_by_name["parameters"] >= {"family_name", "tone"}
@@ -82,7 +86,7 @@ def test_list_searches_filters_and_labels_references(client, session, world):
     assert page["total"] == 3 and [item["name"] for item in page["items"]] == ["宿り"]
 
     options = client.get("/api/tables/location/options?q=村").json()["items"]
-    assert options == [{"id": world["village"], "label": "村", "parent_id": world["world"]}]
+    assert options == [{"id": world["village"], "label": "村", "parent_id": world["world"], "born": None}]
     assert client.get("/api/tables/nope/records").status_code == 404
 
 
@@ -106,6 +110,21 @@ def test_options_expose_parent_id_only_for_tree_tables(client, session, world):
 
     story_options = client.get("/api/tables/story/options").json()["items"]
     assert all(o.get("parent_id") is None for o in story_options)
+
+
+def test_character_options_expose_born_for_age_display(client, session):
+    """人物の選択肢だけ `born`(誕生)を持つ。episode の登場人物モーダルで年齢を出すのに使う。"""
+    born = Character(name="ノア", text="", start="2086/04/01")
+    unknown = Character(name="謎の人物", text="")
+    session.add_all([born, unknown])
+    session.commit()
+
+    options = {o["id"]: o for o in client.get("/api/tables/character/options").json()["items"]}
+    assert options[born.id]["born"] == "2086/04/01 00:00:00"
+    assert options[unknown.id]["born"] is None
+
+    location_options = client.get("/api/tables/location/options").json()["items"]
+    assert all(o.get("born") is None for o in location_options)
 
 
 def test_create_update_and_errors_go_through_the_entrances(client, session, world):
@@ -222,7 +241,7 @@ def test_episode_context_gathers_by_time_and_place(client, session, world):
     session.commit()
 
     episode = client.post("/api/tables/episode/records", json={
-        "story_id": world["story"], "title": "市場にて", "key": "市場の喧嘩", "place": "村 はずれの川",
+        "story_id": world["story"], "title": "市場にて", "key": "市場の喧嘩", "place_id": world["village"],
         "start": "2100/04/01", "end": "2100/04/01"}).json()["record"]
 
     context = client.get(f"/api/tables/episode/records/{episode['id']}").json()["related"]["context"]
@@ -256,6 +275,39 @@ def test_event_participants(client, session, world):
     assert updated.json()["record"]["character_ids"] == [b.id] and updated.json()["record"]["name"] == "峠越え(改)"
     assert [row.character_id for row in session.query(EventCharacter)] == [b.id]
     assert client.patch(f"/api/tables/event/records/{event_id}", json={"character_ids": [999]}).status_code == 404
+
+
+def test_episode_participants_and_viewpoint_place_references(client, session, world):
+    a = Character(name="甲", text="")
+    b = Character(name="乙", text="")
+    dock = Location(name="波止場", kind="場所", text="", parent_id=world["village"])
+    session.add_all([a, b, dock])
+    session.commit()
+
+    created = client.post("/api/tables/episode/records", json={
+        "story_id": world["story"], "title": "旅立ち", "key": "種",
+        "viewpoint_character_id": a.id, "place_id": dock.id, "character_ids": [a.id, b.id]})
+    assert created.status_code == 201, created.text
+    record = created.json()["record"]
+    assert record["viewpoint_character_id"] == a.id and record["place_id"] == dock.id
+    assert record["character_ids"] == [a.id, b.id]
+    assert created.json()["labels"]["character_ids"] == {str(a.id): "甲", str(b.id): "乙"}
+
+    episode_id = record["id"]
+    fetched = client.get(f"/api/tables/episode/records/{episode_id}").json()
+    assert fetched["record"]["character_ids"] == [a.id, b.id]
+    assert fetched["labels"]["viewpoint_character_id"][str(a.id)] == "甲"
+    assert fetched["labels"]["place_id"][str(dock.id)] == "波止場"
+
+    # character_ids を渡さない直しは既存の登場人物を変えない
+    unchanged = client.patch(f"/api/tables/episode/records/{episode_id}", json={"title": "旅立ち(改)"})
+    assert unchanged.json()["record"]["character_ids"] == [a.id, b.id]
+
+    # 渡せば全置換
+    updated = client.patch(f"/api/tables/episode/records/{episode_id}", json={"character_ids": [b.id]})
+    assert updated.json()["record"]["character_ids"] == [b.id]
+    assert [row.character_id for row in session.query(EpisodeCharacter)] == [b.id]
+    assert client.patch(f"/api/tables/episode/records/{episode_id}", json={"character_ids": [999]}).status_code == 404
 
 
 def test_meme_create_defaults_to_approved(client, session):

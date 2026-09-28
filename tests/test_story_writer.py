@@ -3,7 +3,7 @@ import pytest
 from ai.claude_code import story_writer
 from ai.time_keeper import episode_summary
 from data_access_logic.query import common_query
-from db.schema import Episode, EpisodeSummary, Location, Story, summary_source_hash
+from db.schema import Character, Episode, EpisodeSummary, Location, Story, summary_source_hash
 from db.stamp import Stamp
 
 
@@ -95,7 +95,6 @@ def test_written_episode_is_laid_out(session, story, monkeypatch):
 
     assert record.text == "朝が来た。\n窓が白い。\n\n\n夜。"
     assert record.letters == len(record.text)
-    assert (record.model, record.effort) == ("claude-fable-5-1", "high")
 
 
 def test_recap_is_kept_in_the_episode_summary_table(session, story, calls):
@@ -172,9 +171,13 @@ def test_system_prompt_tells_to_follow_the_recap():
 
 def test_seeded_episode_is_filled_in_place(session, story, calls):
     add_episodes(session, story, 2)
+    mirea = Character(name="ミレア", text="")
+    empireo = Location(name="エンピレオ", kind="場所", text="")
+    session.add_all([mirea, empireo])
+    session.flush()
     seeded = Episode(story_id=story.id, start=Stamp(2100, 4, 3), title="堕ちる翼",
                      key="## 場面\n1. 面会室 / ミレア",
-                     viewpoint="ミレア", place="エンピレオ", synced=False)
+                     viewpoint_character_id=mirea.id, place_id=empireo.id, synced=False)
     session.add(seeded)
     session.commit()
 
