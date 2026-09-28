@@ -181,7 +181,9 @@ button.ghost { background: transparent; }
 .record-text .field.section.auto { flex: none; min-height: 0; }
 .record-text .field.section.auto textarea.section,
 .record-text .field.section.auto .markdown-preview,
-.record-text .field.section.auto .plain-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; }
+.record-text .field.section.auto .plain-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
+/* textarea は overflow: visible を無視して auto 扱いにするブラウザの仕様があり、その結果 flex アイテムとしての
+   自動最小サイズが中身の高さではなく 0 相当になって、上の flex: none が無いと JS が付けた高さを無視して縮む */
 /* 「AI で作成」。押すと本文の右側で大半(9 割ほど)を使って開く。閉じているあいだは何も置かない(body が null) */
 .generate-right { flex: 9 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .generate-right > .panel.generate { flex: 1; min-height: 0; overflow: auto; margin: 0; }

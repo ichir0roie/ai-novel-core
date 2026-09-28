@@ -51,47 +51,16 @@ python・pytest・alembic は世界リポジトリのルートを cwd にし、`
 
 git のコマンドは世界リポジトリのルートで打つ。
 
-```
-# clone(サブモジュールごと)
-git clone --recurse-submodules https://github.com/ichir0roie/my-novel-world.git
-
-# clone 済みで core/ が空のとき
-git submodule update --init
-
-# コミットは両方のリポジトリに同じメッセージで。core/ 側を先にコミットしてから世界側で参照を更新する
-git -C core switch main   # サブモジュールは detached HEAD になっているため
-git -C core add -A
-git -C core commit -m "<メッセージ>"
-git -C core push
-git add -A
-git commit -m "<メッセージ>"
-git push
-```
 
 世界リポジトリの VS Code タスク `git push` は、この順で両方に同じメッセージ(日時)でコミットして push する。
 
 # テスト
 
-- `tests/` に pytest のテストがある。世界リポジトリのルートから `python -m pytest core/tests` で回す。
-- テストは `novel.test.db` だけを読み書きする(`tests/conftest.py` が `tool.test` を先に読んで固定する)。
-  本番の `novel.db` には触れない
+- プルリクを作る前に必ず、変更に対するテストケースを実装し、影響範囲のテストを回し、出たエラーを直す。
+- `tests/` に pytest のテストがある。
+- テストは `novel.test.db` だけを読み書きする(`tests/conftest.py` が `tool.test` を先に読んで固定する)。本番の `novel.db` には触れない
 - db・入口・生成器を変えたら、対応するテストを足すか直してから終える
-- ただしデータベースのマイグレーション(alembic のリビジョン)にはテストを書かない。
-  schema.py とリビジョンの食い違いは `alembic check` を手で打って確かめる
-- プルリクを作る前に必ず、変更に対するテストケースを実装し、影響範囲のテストを回し、
-  出たエラーを直してから作る
-
-# ユーザがデータを見る・直す窓口
-
-db が唯一の正。ユーザは `gui/` の GUI(FastAPI + Next.js。起動と API は `gui/readme.md`)で `novel.db` を
-見て直す。未確認のアイデア・ミームの承認/非承認、星ごとの地図・人物相関図もここで見る。md の写し(`worlds/`)と
-その同期(`SyncDb`)は廃止した。Claude は入口越しに db だけで作業を完結させ、報告も db を読んで行う。
-
-`ai/claude_code/interface/` の入口と常駐ループは `/api/interface/{id}` からも呼べる。`claude` コマンドを叩く
-入口は Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る(`gui/api/interface.py`)。
-
-`confirmed` は 未確認/承認/非承認 の三段(`db.schema.ConfirmStatus`)で、承認だけが検索・生成・
-人物へ引く対象になる。非承認は使わないが、同じ語をまた候補に足さないよう行は残す。
+- alembicのテスト、ダウングレードのテストはやらない。schema.py とリビジョンの食い違いは `alembic check` を手で打って確かめる
 
 # schema の確認方法
 
