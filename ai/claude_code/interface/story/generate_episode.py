@@ -24,13 +24,12 @@ class GenerateEpisode(StoryQuery):
     """
 
     def __init__(self, episode: dict, character_ids: list[int] | None = None,
-                 previous_episode_ids: list[int] | None = None, place_id: int | None = None,
+                 previous_episode_ids: list[int] | None = None,
                  model: str | None = None, effort: str | None = None, *,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.episode = dict(episode or {})
         self.character_ids = character_ids
         self.previous_episode_ids = previous_episode_ids
-        self.place_id = place_id
         self.model = model
         self.effort = effort
         self.shared_style_extra = shared_style_extra
@@ -83,9 +82,11 @@ class GenerateEpisode(StoryQuery):
 
         viewpoint_character_id = draft.get("viewpoint_character_id")
         viewpoint_character_id = int(viewpoint_character_id) if viewpoint_character_id not in (None, "") else None
+        place_id = draft.get("place_id")
+        place_id = int(place_id) if place_id not in (None, "") else None
         record = frame_generator.generate(
             session, self.ai, story_id, key, time, character_ids, self.previous_episode_ids,
-            place_id=self.place_id, viewpoint_character_id=viewpoint_character_id,
+            place_id=place_id, viewpoint_character_id=viewpoint_character_id,
             writer_options=self._writer_options(), episode_id=slot.id,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if record is None:

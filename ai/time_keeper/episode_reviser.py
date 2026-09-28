@@ -79,11 +79,8 @@ def revise(
     if not text:
         print(f"[time_keepr/episode_revise] {story.name}: 本文が得られなかった")
         return None
-    viewpoint_character = (session.get(Character, record.viewpoint_character_id)
-                           if record.viewpoint_character_id is not None else None)
     return episode_generator.Written(
-        title=(decided.get("title") or "").strip() or record.title,
-        viewpoint=viewpoint_character.name if viewpoint_character else None, text=text)
+        title=(decided.get("title") or "").strip() or record.title, text=text)
 
 
 def _append_instruction_to_key(key: str, instruction: str) -> str:
@@ -116,7 +113,8 @@ def generate(
 
     `character_ids` はこの話に出る人物(初登場・既出とも)。前の話の概要に出ていない人物は、
     その材料から AI が初登場と判断して外見・性格の描写を厚くする。本文が空の話は止まる
-    (先に `episode_generator.generate` で書く)。`shared_style_extra` / `style_extra` は `revise` に渡す。
+    (先に `episode_generator.generate` で書く)。`place_id` を省くとこの話(`record.place_id`)の場所を使う。
+    `shared_style_extra` / `style_extra` は `revise` に渡す。
     """
     record = session.get(Episode, episode_id)
     if record is None:
@@ -129,6 +127,8 @@ def generate(
         raise ValueError("instruction(直す指示)が空")
     story = common_query.get_story(session, record.story_id)
     characters = episode_generator.characters(session, character_ids)
+    if place_id is None:
+        place_id = record.place_id
     place = session.get(Location, place_id) if place_id is not None else None
     if place_id is not None and place is None:
         raise ValueError(f"場所 id={place_id} が見つからない")

@@ -15,7 +15,7 @@ from sqlalchemy import delete
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.style import layout_novel_text
-from ai.time_keeper import constants, episode_character_matching
+from ai.time_keeper import constants
 from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper import episode_summary, event_summary, idea_context
 from ai.time_keeper._ai import AIClient
@@ -35,7 +35,7 @@ def _system_prompt(*, shared_style_extra: str = "", style_extra: str = "") -> st
 「関係する設定」を渡したときは、それを踏まえて書いてください。
 {EVENT_AGE_INSTRUCTION}
 {style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}
-JSON で答えてください。キーは title(サブタイトル。短く)・viewpoint(視点人物の名前。視点を渡したときはそれ)・text(本文)の三つだけ。"""
+JSON で答えてください。キーは title(サブタイトル。短く)・text(本文)の二つだけ。"""
 
 
 # 文体の好み(舞台設定・既存の話から抽出した文体の癖など)を渡さない既定の文面。
@@ -45,10 +45,9 @@ _SCHEMA = {
     "type": "object",
     "properties": {
         "title": {"type": "string"},
-        "viewpoint": {"type": "string"},
         "text": {"type": "string"},
     },
-    "required": ["title", "viewpoint", "text"],
+    "required": ["title", "text"],
     "additionalProperties": False,
 }
 
@@ -156,7 +155,6 @@ def _cast(session: Session, characters: list[Character], time: Stamp, ai: AIClie
 @dataclass
 class Written:
     title: str
-    viewpoint: str | None
     text: str
     linked: list = field(default_factory=list)
 
@@ -215,20 +213,15 @@ def write(
     if not text:
         print(f"[time_keepr/episode] {story.name}: 本文が得られなかった")
         return None
-    return Written(title=(decided.get("title") or "").strip(),
-                   viewpoint=(decided.get("viewpoint") or "").strip() or None,
-                   text=text, linked=context.linked)
+    return Written(title=(decided.get("title") or "").strip(), text=text, linked=context.linked)
 
 
 def attach(session: Session, record: Episode, written: Written) -> Episode:
-    """書いた本文を話に付けて確定する。枠の空いている題・視点は本文を書いたときのもので埋める。
+    """書いた本文を話に付けて確定する。枠の空いている題は本文を書いたときのもので埋める。
 
     自動生成なので `synced` を立てる(`schema.py` の `Episode.synced` の注記どおり)。
     """
     record.title = (record.title or "").strip() or written.title
-    if record.viewpoint_character_id is None:
-        record.viewpoint_character_id = episode_character_matching.match_viewpoint_character_id(
-            session, written.viewpoint)
     record.synced = True
     record.text = written.text
     session.flush()
@@ -294,7 +287,8 @@ def generate(
     """枠(`episode_id` の話)の種・時刻・視点で本文を書いて付ける。
 
     `writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
-    `place_id` を渡すと枠の場所もその名前にする。本文が得られなければ枠を変えずに None を返す。
+    `place_id` を省くと枠(`record.place_id`)の場所を使う。渡すと枠の場所もその id にする。
+    本文が得られなければ枠を変えずに None を返す。
     `shared_style_extra` / `style_extra` は `write` に渡す(世界ごとの文体の好み)。
     """
     record = frame(session, episode_id)
@@ -305,6 +299,8 @@ def generate(
     if not character_ids:
         raise ValueError("character_ids(登場人物)が空")
     story = common_query.get_story(session, record.story_id)
+    if place_id is None:
+        place_id = record.place_id
     place = session.get(Location, place_id) if place_id is not None else None
     if place_id is not None and place is None:
         raise ValueError(f"場所 id={place_id} が見つからない")

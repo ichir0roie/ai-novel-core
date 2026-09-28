@@ -24,14 +24,13 @@ class ReviseEpisode(StoryQuery):
     """
 
     def __init__(self, episode: dict, instruction: str, character_ids: list[int] | None = None,
-                 previous_episode_ids: list[int] | None = None, place_id: int | None = None,
+                 previous_episode_ids: list[int] | None = None,
                  model: str | None = None, effort: str | None = None, *,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.episode = dict(episode or {})
         self.instruction = instruction
         self.character_ids = character_ids
         self.previous_episode_ids = previous_episode_ids
-        self.place_id = place_id
         self.model = model
         self.effort = effort
         self.shared_style_extra = shared_style_extra
@@ -70,7 +69,7 @@ class ReviseEpisode(StoryQuery):
             raise ValueError("character_ids(登場人物)が空で、その時刻に生きているメインキャラクターも居ない")
         revised = episode_reviser.generate(
             session, self.ai, int(episode_id), character_ids, self.instruction, self.previous_episode_ids,
-            place_id=self.place_id, writer_options=self._writer_options(),
+            writer_options=self._writer_options(),
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if revised is None:
             raise ValueError("本文が得られなかった")

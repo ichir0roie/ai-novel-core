@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from ai.time_keeper import episode_character_matching, episode_generator
+from ai.time_keeper import episode_generator
 from ai.time_keeper import event_progression_generator as progression
 from ai.time_keeper._ai import AIClient
 from ai.time_keeper._format import format_time
@@ -18,13 +18,14 @@ from db.stamp import StampError
 
 _FRAME_SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの構成を考える作家です。
-作品・直前の話・登場人物・作者の指定を渡すので、この作品の次の一話の枠(題・種・時刻・視点・場所)を決めて JSON で答えてください。
+作品・直前の話・登場人物・作者の指定を渡すので、この作品の次の一話の枠(題・種・時刻)を決めて JSON で答えてください。
 種(key)は本文を書く前の作者のメモです。300〜500 字を目安に、「## 場面」(番号付きの箇条書き。一行は「場所 / 出る人 / そこで変わること」)と「## 狙い」(この話で読者に伝えたいこと・変わること)の二つの節で書いてください。
+視点・場所を作者が指定したときは、それに沿う場面にしてください(視点・場所自体はここでは決めません)。
 直前の話は概要で渡します。その続きとして自然に立つ話にし、直前の話をなぞり直さないでください。
 「この時点より後に既に決まっている出来事」を渡したときは、それと矛盾させず、そこで起きることを先回りしないでください。
 作者の指定があるときは、それを核にして足りないところを補ってください。決まっていると書いた値は変えないでください。
 時刻(start)は「年/月/日」の形で、直前の話より後、作品の期間の中から選んでください。
-キーは title(サブタイトル。短く)・key(種)・start(時刻)・viewpoint(視点。誰に寄って語るか)・place(場所。自由記述)の五つだけ。"""
+キーは title(サブタイトル。短く)・key(種)・start(時刻)の三つだけ。"""
 
 _FRAME_SCHEMA = {
     "type": "object",
@@ -32,10 +33,8 @@ _FRAME_SCHEMA = {
         "title": {"type": "string"},
         "key": {"type": "string"},
         "start": {"type": "string"},
-        "viewpoint": {"type": "string"},
-        "place": {"type": "string"},
     },
-    "required": ["title", "key", "start", "viewpoint", "place"],
+    "required": ["title", "key", "start"],
     "additionalProperties": False,
 }
 
@@ -49,9 +48,9 @@ def generate(
 ) -> Episode | None:
     """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
 
-    `place_id` を省くと作品の立つ場所を材料に使い、話の `place_id` は空のまま残す。
-    `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・題・場所は、省けば枠のものを使う。
-    本文が得られなければ話を足さず(枠も変えず)に None を返す。
+    `episode_id` を渡すと話を足さずにその枠へ書く。種・時刻・視点・場所は、省けば枠(`slot`)のものを使う。
+    どちらも枠(既存の話)が無ければ空のままで、`place_id` が空なら作品の立つ場所を材料に使う
+    (話の `place_id` 自体は空のまま残す)。本文が得られなければ話を足さず(枠も変えず)に None を返す。
     `shared_style_extra` / `style_extra` は `episode_generator.write` に渡す(世界ごとの文体の好み)。
     """
     slot = episode_generator.frame(session, episode_id, story_id) if episode_id is not None else None
@@ -63,6 +62,8 @@ def generate(
         raise ValueError("time(話が立つ時刻)が空")
     if viewpoint_character_id is None and slot is not None:
         viewpoint_character_id = slot.viewpoint_character_id
+    if place_id is None and slot is not None:
+        place_id = slot.place_id
     if not character_ids:
         raise ValueError("character_ids(登場人物)が空")
     story = common_query.get_story(session, story_id)
@@ -124,8 +125,9 @@ def generate_frame(
 ) -> Episode:
     """作者の下書き(`hints`。GUI の欄の値)を核に、本文の無い話の枠を一つ決めて足す(`episode_id` を渡せばその枠へ書く)。
 
-    題・種・視点・場所は下書きを核に AI が組み立て直し、時刻は下書きにあればそれを、無ければ AI が直前の話の後から選ぶ。
-    本文は書かない(`episode_generator.generate` で別に書く)。
+    題・種は下書きを核に AI が組み立て直し、時刻は下書きにあればそれを、無ければ AI が直前の話の後から選ぶ。
+    視点(`viewpoint_character_id`)・場所(`place_id`)は AI には決めさせず、下書きにあればその id をそのまま使う
+    (無ければ NULL のまま)。本文は書かない(`episode_generator.generate` で別に書く)。
     """
     hints = dict(hints or {})
     story = common_query.get_story(session, story_id)
@@ -179,9 +181,12 @@ def generate_frame(
     record.key = key
     record.start = time
     record.end = Stamp.parse(hints.get("end")) or record.end
-    record.viewpoint_character_id = episode_character_matching.match_viewpoint_character_id(
-        session, decided.get("viewpoint"))
-    record.place_id = episode_character_matching.match_place_id(session, decided.get("place"))
+    viewpoint_character_id = hints.get("viewpoint_character_id")
+    if viewpoint_character_id not in (None, ""):
+        record.viewpoint_character_id = int(viewpoint_character_id)
+    place_id = hints.get("place_id")
+    if place_id not in (None, ""):
+        record.place_id = int(place_id)
     record.synced = False
     session.commit()
     print(f"[time_keepr/frame] {story.name}(id={story.id}) {format_time(time)}「{record.title}」 id={record.id} の枠を決めた")

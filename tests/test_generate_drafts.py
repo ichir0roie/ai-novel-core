@@ -27,7 +27,7 @@ class _Ai(MockAIClient):
             decided["start"] = "2100/06/01"
             decided["key"] = "## 場面\n1. 市場 / 甲 / 地図を買う\n## 狙い\n旅立ちの予感"
         if schema is episode_generator._SCHEMA:
-            decided = {"title": "地図の市", "viewpoint": "甲", "text": "甲は地図を買った。"}
+            decided = {"title": "地図の市", "text": "甲は地図を買った。"}
         if schema is episode_reviser._SCHEMA:
             decided = {"title": "", "text": "書き直した後の本文。"}
         return decided
@@ -234,6 +234,31 @@ def test_episode_frame_needs_a_story(session):
         GenerateFrame({}, ai=_Ai(seed=1)).run()
 
 
+def test_episode_frame_leaves_viewpoint_and_place_null_when_not_given(session, place):
+    """AI には題・種・時刻の三つしか決めさせない。視点・場所は渡さなければ NULL のまま。"""
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+
+    result = GenerateFrame({"story_id": story.id}, character_ids=[first.id], ai=_Ai(seed=1)).run()
+
+    record = session.get(Episode, result["id"])
+    assert record.viewpoint_character_id is None and record.place_id is None
+
+
+def test_episode_frame_keeps_the_given_viewpoint_and_place_without_letting_ai_decide(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    dock = Location(name="波止場", kind="場所", text="")
+    session.add(dock)
+    session.commit()
+
+    result = GenerateFrame({"story_id": story.id, "viewpoint_character_id": first.id, "place_id": dock.id},
+                           character_ids=[first.id], ai=_Ai(seed=1)).run()
+
+    record = session.get(Episode, result["id"])
+    assert record.viewpoint_character_id == first.id and record.place_id == dock.id
+
+
 # ---------------------------------------------------------------- 本文
 
 def test_episode_from_a_bare_draft_decides_the_frame_then_writes_the_body(session, place):
@@ -253,6 +278,21 @@ def test_episode_from_a_bare_draft_decides_the_frame_then_writes_the_body(sessio
     assert '"name": "乙"' not in _prompts(ai, episode_generator._SCHEMA)
 
 
+def test_episode_from_a_bare_draft_with_place_carries_it_to_the_body(session, place):
+    """枠決め(GenerateFrame と同じ生成)を経ても、下書きの place_id が本文の生成まで届く。"""
+    story = session.query(Story).one()
+    lead = _character(session, place, "甲", main_character=True)
+    dock = Location(name="波止場", kind="場所", text="波止場の説明")
+    session.add(dock)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    GenerateEpisode({"story_id": story.id, "place_id": dock.id}, ai=ai).run()
+
+    prompt = _prompts(ai, episode_generator._SCHEMA)
+    assert "波止場の説明" in prompt and "港町の説明" not in prompt
+
+
 def test_episode_with_key_and_time_skips_the_frame_step(session, place):
     story = session.query(Story).one()
     first = _character(session, place, "甲")
@@ -265,6 +305,21 @@ def test_episode_with_key_and_time_skips_the_frame_step(session, place):
     assert record.key == "地図を買う" and record.start == WHEN and record.title == "港の朝"
     assert record.text and result["letters"] == len(record.text)
     assert not any(call["schema"] is frame_generator._FRAME_SCHEMA for call in ai.calls)
+
+
+def test_episode_with_key_and_time_uses_the_drafted_place(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    dock = Location(name="波止場", kind="場所", text="波止場の説明")
+    session.add(dock)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    GenerateEpisode({"story_id": story.id, "key": "地図を買う", "start": str(WHEN), "place_id": dock.id},
+                    character_ids=[first.id], ai=ai).run()
+
+    prompt = _prompts(ai, episode_generator._SCHEMA)
+    assert "波止場の説明" in prompt and "港町の説明" not in prompt
 
 
 def test_episode_writes_into_an_existing_empty_frame(session, place):
@@ -349,6 +404,25 @@ def test_episode_revise_rewrites_the_existing_body(session, place):
     assert session.query(Episode).count() == 1  # 新しい行を足さず、この行を直す
     prompt = _prompts(ai, episode_reviser._SCHEMA)
     assert "甲は市場を歩いた。" in prompt and "外見を厚く書く" in prompt
+
+
+def test_episode_revise_uses_the_episodes_own_place(session, place):
+    """`place_id` を渡さなくても、話自身の `place_id` を材料に使う(作品の立つ場所にフォールバックしない)。"""
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    dock = Location(name="波止場", kind="場所", text="波止場の説明")
+    session.add(dock)
+    session.commit()
+    episode = Episode(story_id=story.id, title="港にて", key="地図を買う", start=WHEN, text="甲は市場を歩いた。",
+                      place_id=dock.id)
+    session.add(episode)
+    session.commit()
+    ai = _Ai(seed=1)
+
+    ReviseEpisode({"id": episode.id}, character_ids=[first.id], instruction="外見を厚く書く", ai=ai).run()
+
+    prompt = _prompts(ai, episode_reviser._SCHEMA)
+    assert "波止場の説明" in prompt and "港町の説明" not in prompt
 
 
 def test_episode_revise_appends_the_instruction_to_the_key_each_time(session, place):
