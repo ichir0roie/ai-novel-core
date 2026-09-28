@@ -78,7 +78,10 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   // 名前の欄は見出しで直し、id は見出しの横に出すので、フォームには並べない
   const titleColumn = columns.find((c) => c.key === meta.label_column && c.type === "string" && !c.section && !c.readonly);
-  const plain = columns.filter((c) => !c.section && c !== titleColumn && c.key !== "id");
+  // episode の登場人物(character_ids)は、通常のフォーム欄ではなく「time & place」の行のボタン
+  // (EpisodeCharacters。side の Related 経由)で編集するので、編集画面では二重に出さない
+  const plain = columns.filter((c) => !c.section && c !== titleColumn && c.key !== "id"
+    && !(mode === "edit" && meta.name === "episode" && c.key === "character_ids"));
   const sections = columns.filter((c) => c.section && !c.side);
   const sideSections = columns.filter((c) => c.section && c.side);
   // display が "flow" の子リスト(アイデアの呼び名など)は本文(section)の下に続けて出す。それ以外は左の欄に並べる

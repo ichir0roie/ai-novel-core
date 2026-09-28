@@ -6,7 +6,15 @@ type Appearance = { table: string; id: number; label: string; synced?: boolean; 
 
 type Owner = { table: string; id: number | string };
 
-export default function Related({ related, owner }: { related: Record<string, unknown>; owner?: Owner }) {
+type EpisodeCharactersProps = {
+  characterIds: number[];
+  onChangeCharacterIds: (ids: number[]) => void;
+  episodeStart: unknown;
+};
+
+export default function Related({
+  related, owner, characterIds, onChangeCharacterIds, episodeStart,
+}: { related: Record<string, unknown>; owner?: Owner } & Partial<EpisodeCharactersProps>) {
   const appearances = related.appearances as Appearance[] | undefined;
   const episodes = related.episodes as Appearance[] | undefined;
   const context = related.context as Parameters<typeof EpisodeContext>[0]["context"] | undefined;
@@ -14,7 +22,8 @@ export default function Related({ related, owner }: { related: Record<string, un
     : owner?.table === "location" ? { href: `/maps?location=${owner.id}`, ...T.related.mapCentered }
     : null;
   const hasContext = context && Object.values(context).some((block) => block.items.length > 0);
-  if (!appearances?.length && !episodes && !graph && !hasContext) return null;
+  const showCharacters = characterIds !== undefined && onChangeCharacterIds !== undefined;
+  if (!appearances?.length && !episodes && !graph && !hasContext && !showCharacters) return null;
   return (
     <>
       {(appearances || episodes || graph) && (
@@ -54,7 +63,14 @@ export default function Related({ related, owner }: { related: Record<string, un
           )}
         </div>
       )}
-      {hasContext && <EpisodeContext context={context!} />}
+      {(hasContext || showCharacters) && (
+        <EpisodeContext
+          context={context ?? {}}
+          characterIds={characterIds}
+          onChangeCharacterIds={onChangeCharacterIds}
+          episodeStart={episodeStart}
+        />
+      )}
     </>
   );
 }

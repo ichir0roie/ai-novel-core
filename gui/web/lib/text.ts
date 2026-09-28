@@ -147,6 +147,12 @@ export const T = {
     title: "In this episode's time & place",
   },
 
+  episodeCharacters: {
+    button: (n: number) => `Characters (${n})`,
+    modalTitle: "Characters in this episode",
+    none: "(no characters yet)",
+  },
+
   storyTree: {
     episodes: (n: number) => `${n} episodes`,
     stories: (n: number) => `${n} stories`,

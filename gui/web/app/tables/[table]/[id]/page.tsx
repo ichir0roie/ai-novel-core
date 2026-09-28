@@ -107,7 +107,19 @@ export default function RecordPage() {
             }
             generate={generatePanel?.body}
             revise={revisePanel?.body}
-            side={<Related related={loaded.related ?? {}} owner={{ table, id }} />}
+            side={
+              <Related
+                related={loaded.related ?? {}}
+                owner={{ table, id }}
+                {...(table === "episode"
+                  ? {
+                      characterIds: (value.character_ids as number[] | null) ?? [],
+                      onChangeCharacterIds: (ids: number[]) => setValue({ ...value, character_ids: ids }),
+                      episodeStart: value.start,
+                    }
+                  : {})}
+              />
+            }
             actions={
               <div className="actionbar">
                 <div className="inner">
