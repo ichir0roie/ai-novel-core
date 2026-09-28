@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getMaps, type MapPlace, type MapsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
-import { openInNewTab } from "@/lib/nav";
+import { useOpenPage } from "@/lib/nav";
 import {
   altDiffText, altText, angular, bearing, bearingName, distanceKm, distanceText, fitFrame, MARGIN, outerRing,
   placeLabels, polygonCenter, type Polygon,
@@ -25,6 +25,7 @@ function Marker({ category, x, y, r, color, strokeWidth = 1 }: { category: strin
 }
 
 export default function MapsPage() {
+  const openPage = useOpenPage();
   const search = useSearchParams();
   // 場所の詳細から飛んできたとき。その場所の星を選び、その場所を中心に置いて描く
   const focus = Number(search.get("location")) || null;
@@ -122,11 +123,11 @@ export default function MapsPage() {
         {focus != null && (
           <>
             {focusPlace && (
-              <button type="button" onClick={() => openInNewTab(focusPlace.link)}>
+              <button type="button" onClick={() => openPage(focusPlace.link)}>
                 {T.openRecord}
               </button>
             )}
-            <Link href="/maps" target="_blank" rel="noopener noreferrer" className="hint">
+            <Link href="/maps" className="hint">
               {T.maps.fullMap}
             </Link>
           </>
@@ -157,7 +158,7 @@ export default function MapsPage() {
       </div>
       {focus != null && !focusPlace && (
         <div className="status info">
-          {T.maps.cannotPlace(focus)}<Link href={`/tables/location/${focus}`} target="_blank" rel="noopener noreferrer">{T.openRecord}</Link>
+          {T.maps.cannotPlace(focus)}<Link href={`/tables/location/${focus}`}>{T.openRecord}</Link>
         </div>
       )}
       {!entry ? (
@@ -219,7 +220,7 @@ export default function MapsPage() {
                     key={`pt${p.id}`}
                     style={{ cursor: "pointer" }}
                     onClick={() => setOrigin(origin === p.id ? null : p.id)}
-                    onDoubleClick={() => openInNewTab(p.link)}
+                    onDoubleClick={() => openPage(p.link)}
                     onMouseMove={(e) =>
                       show(e, [
                         T.maps.nameKind(p.name, p.kind),
@@ -256,7 +257,7 @@ export default function MapsPage() {
                   <h2>
                     {originPoint.name} <span className="hint">({originPoint.kind} / {originPoint.parent_name ?? "-"})</span>
                   </h2>
-                  <button type="button" className="primary" onClick={() => openInNewTab(originPoint.link)}>
+                  <button type="button" className="primary" onClick={() => openPage(originPoint.link)}>
                     {T.openRecord}
                   </button>
                 </div>

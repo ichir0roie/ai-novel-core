@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getRelations, type Relation, type RelationCharacter, type RelationsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
-import { openInNewTab } from "@/lib/nav";
+import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 const R_NODE = 18;
@@ -72,6 +72,7 @@ function edgePath(a: Pos, b: Pos, bend: number) {
 }
 
 export default function RelationsPage() {
+  const openPage = useOpenPage();
   const search = useSearchParams();
   // 人物の詳細から飛んできたとき。その人物に関わる関係だけを描く
   const focus = Number(search.get("character")) || null;
@@ -218,7 +219,7 @@ export default function RelationsPage() {
             <h2>
               {c.name} <span className="hint">({c.kind ?? ""})</span>
             </h2>
-            <button type="button" className="primary" onClick={() => openInNewTab(c.link)}>
+            <button type="button" className="primary" onClick={() => openPage(c.link)}>
               {T.openRecord}
             </button>
           </div>
@@ -265,7 +266,7 @@ export default function RelationsPage() {
           <h2>
             {nameOf(r.character_id_1)} → {nameOf(r.character_id_2)}
           </h2>
-          <button type="button" className="primary" onClick={() => openInNewTab(`/tables/character_relation/${r.id}`)}>
+          <button type="button" className="primary" onClick={() => openPage(`/tables/character_relation/${r.id}`)}>
             {T.openRecord}
           </button>
         </div>
@@ -290,7 +291,7 @@ export default function RelationsPage() {
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>{focus == null ? T.relations.title : T.relations.of(byId.get(focus)?.name ?? T.relations.unknownId(focus))}</h1>
         {focus != null && (
-          <Link href="/relations" target="_blank" rel="noopener noreferrer" className="hint">
+          <Link href="/relations" className="hint">
             {T.relations.fullGraph}
           </Link>
         )}
@@ -362,7 +363,7 @@ export default function RelationsPage() {
                     style={{ cursor: "pointer" }}
                     opacity={dim ? 0.25 : 1}
                     onClick={() => pickRelation(r)}
-                    onDoubleClick={() => openInNewTab(`/tables/character_relation/${r.id}`)}
+                    onDoubleClick={() => openPage(`/tables/character_relation/${r.id}`)}
                     onMouseMove={(ev) => show(ev, [T.relations.arrow(nameOf(r.character_id_1), nameOf(r.character_id_2), r.relation), spanText(r) && T.relations.periodOf(spanText(r)), firstLine(r.text)])}
                     onMouseLeave={hide}
                   >
@@ -387,7 +388,7 @@ export default function RelationsPage() {
                       drag.current = { id: c.id, x: ev.clientX, y: ev.clientY, moved: false };
                       ev.preventDefault();
                     }}
-                    onDoubleClick={() => openInNewTab(c.link)}
+                    onDoubleClick={() => openPage(c.link)}
                     onMouseMove={(ev) => show(ev, [T.relations.nameKind(c.name, c.kind), c.sex && T.relations.sexOf(c.sex), spanText(c) && T.relations.periodOf(spanText(c))])}
                     onMouseLeave={hide}
                   >

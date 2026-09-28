@@ -9,7 +9,7 @@ import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
 import { diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
 import { PageTitle, useTable } from "@/lib/meta";
-import { openInNewTab } from "@/lib/nav";
+import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -25,6 +25,7 @@ function sortChildListsByStart(record: Rec): Rec {
 }
 
 export default function RecordPage() {
+  const openPage = useOpenPage();
   const { table, id } = useParams<{ table: string; id: string }>();
   const meta = useTable(table);
   const [loaded, setLoaded] = useState<RecordResponse | null>(null);
@@ -70,7 +71,7 @@ export default function RecordPage() {
       setValue(record);
       invalidateOptions(table);
       setSaved(T.record.saved(Object.keys(changes)));
-      if (thenBack) openInNewTab(`/tables/${table}`);
+      if (thenBack) openPage(`/tables/${table}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -82,7 +83,7 @@ export default function RecordPage() {
     <div className="page-fill">
       <PageTitle kind={meta.label} record={loaded?.label} />
       <div className="hint">
-        <Link href={`/tables/${table}`} target="_blank" rel="noopener noreferrer">{meta.label}</Link> / id={id}
+        <Link href={`/tables/${table}`}>{meta.label}</Link> / id={id}
       </div>
       <h1>{loaded?.label ?? "…"}</h1>
       {error && <div className="status error">{error}</div>}

@@ -21,24 +21,24 @@ export default function Nav() {
 
   return (
     <nav className="nav">
-      <Link href="/" target="_blank" rel="noopener noreferrer" className={`brand ${isActive("/") ? "active" : ""}`}>{T.appName}</Link>
+      <Link href="/" className={`brand ${isActive("/") ? "active" : ""}`}>{T.appName}</Link>
       <span className="group">
         {summary?.tables.map((row) => (
-          <Link key={row.table} href={`/review/${row.table}`} target="_blank" rel="noopener noreferrer" className={isActive(`/review/${row.table}`) ? "active" : ""}>
+          <Link key={row.table} href={`/review/${row.table}`} className={isActive(`/review/${row.table}`) ? "active" : ""}>
             {T.nav.review(row.label)}{row.pending > 0 && <span className="badge">{row.pending}</span>}
           </Link>
         ))}
       </span>
       <span className="group">
         {tables.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (
-          <Link key={table.name} href={`/tables/${table.name}`} target="_blank" rel="noopener noreferrer" className={isActive(`/tables/${table.name}`) ? "active" : ""}>
+          <Link key={table.name} href={`/tables/${table.name}`} className={isActive(`/tables/${table.name}`) ? "active" : ""}>
             {table.label}
           </Link>
         ))}
       </span>
       <span className="spacer" />
       <span className="group">
-        <Link href="/interface" target="_blank" rel="noopener noreferrer" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
+        <Link href="/interface" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
       </span>
     </nav>
   );

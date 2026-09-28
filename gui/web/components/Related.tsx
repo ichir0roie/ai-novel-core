@@ -20,7 +20,7 @@ export default function Related({ related, owner }: { related: Record<string, un
       {(appearances || episodes || graph) && (
         <div className="panel related">
           {graph && (
-            <Link href={graph.href} target="_blank" rel="noopener noreferrer" className="jump">
+            <Link href={graph.href} className="jump">
               <span className="jump-title">{graph.title}</span>
               <span className="jump-sub">{graph.sub}</span>
             </Link>
@@ -34,7 +34,7 @@ export default function Related({ related, owner }: { related: Record<string, un
                 <ul>
                   {appearances.map((a) => (
                     <li key={`${a.table}:${a.id}`}>
-                      <Link href={`/tables/${a.table}/${a.id}`} target="_blank" rel="noopener noreferrer">
+                      <Link href={`/tables/${a.table}/${a.id}`}>
                         {a.table}「{a.label}」(id={a.id})
                       </Link>
                     </li>
@@ -44,7 +44,7 @@ export default function Related({ related, owner }: { related: Record<string, un
             </>
           )}
           {episodes && owner?.table === "story" && (
-            <Link href={`/tables/episode?story_id=${owner.id}`} target="_blank" rel="noopener noreferrer" className="jump">
+            <Link href={`/tables/episode?story_id=${owner.id}`} className="jump">
               <span className="jump-title">{T.related.episodeList}</span>
               <span className="jump-sub">
                 {T.related.episodeSummary(episodes.length, episodes.reduce((sum, p) => sum + (p.letters ?? 0), 0))}

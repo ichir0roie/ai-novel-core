@@ -1,11 +1,12 @@
 import type { Labels, Rec } from "@/lib/api";
 import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { useTable } from "@/lib/meta";
-import { openInNewTab } from "@/lib/nav";
+import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 /** 他のテーブルの行を、一覧画面と同じ列組み立てで表に出す(エピソード画面の関連の中身など)。 */
 export default function ContextTable({ table, items, labels }: { table: string; items: Rec[]; labels: Labels }) {
+  const openPage = useOpenPage();
   const meta = useTable(table);
   if (!meta) return <div className="status info">{T.loading}</div>;
   const columns = listColumns(meta);
@@ -27,9 +28,9 @@ export default function ContextTable({ table, items, labels }: { table: string; 
             key={String(item.id)}
             className="row"
             tabIndex={0}
-            onClick={() => openInNewTab(`/tables/${table}/${item.id}`)}
+            onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") openInNewTab(`/tables/${table}/${item.id}`);
+              if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
             }}
           >
             <td>{String(item.id)}</td>

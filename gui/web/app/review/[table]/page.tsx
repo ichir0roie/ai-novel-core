@@ -105,15 +105,15 @@ export default function ReviewPage() {
       {done && !error && <div className="status ok">{done}</div>}
       {next && !next.record && (
         <div className="panel">
-          {T.review.noneLeft(meta.label)}<Link href={`/tables/${table}?confirmed=非承認`} target="_blank" rel="noopener noreferrer">{T.review.rejectedList}</Link> /{" "}
-          <Link href={`/tables/${table}`} target="_blank" rel="noopener noreferrer">{T.review.tableList(meta.label)}</Link>
+          {T.review.noneLeft(meta.label)}<Link href={`/tables/${table}?confirmed=非承認`}>{T.review.rejectedList}</Link> /{" "}
+          <Link href={`/tables/${table}`}>{T.review.tableList(meta.label)}</Link>
         </div>
       )}
       {next?.record && (
         <div className="panel fill">
           <div className="hint" style={{ marginBottom: "0.5rem" }}>
             id={String(next.record.id)}{" "}
-            <Link href={`/tables/${table}/${next.record.id}`} target="_blank" rel="noopener noreferrer">{T.openRecord}</Link>
+            <Link href={`/tables/${table}/${next.record.id}`}>{T.openRecord}</Link>
           </div>
           <RecordForm
             meta={meta}

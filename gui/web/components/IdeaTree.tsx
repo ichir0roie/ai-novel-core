@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
 import { buildIdeaTree, descendantIds, type IdeaNode } from "@/lib/ideaTree";
-import { openInNewTab } from "@/lib/nav";
+import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 type RowProps = {
@@ -18,6 +18,7 @@ type RowProps = {
 };
 
 function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd, onDragOverNode, onDropOnNode }: RowProps) {
+  const openPage = useOpenPage();
   const isBlocked = draggingId !== null && (draggingId === node.id || blocked.has(node.id));
   const classes = ["tree-idea-summary"];
   if (draggingId === node.id) classes.push("dragging");
@@ -32,7 +33,7 @@ function IdeaRow({ node, draggingId, blocked, dropTarget, onDragStart, onDragEnd
           draggable={draggingId === null}
           onClick={(e) => {
             e.preventDefault();
-            openInNewTab(`/tables/idea/${node.id}`);
+            openPage(`/tables/idea/${node.id}`, e);
           }}
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = "move";

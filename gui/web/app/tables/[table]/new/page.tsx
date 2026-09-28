@@ -7,10 +7,11 @@ import RecordForm, { emptyRecord } from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec } from "@/lib/api";
 import { PageTitle, useMeta, useTable } from "@/lib/meta";
-import { openInNewTab } from "@/lib/nav";
+import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 export default function NewRecordPage() {
+  const openPage = useOpenPage();
   const { table } = useParams<{ table: string }>();
   const meta = useTable(table);
   const { reload } = useMeta();
@@ -26,9 +27,9 @@ export default function NewRecordPage() {
     (id: number) => {
       invalidateOptions(table);
       void reload();
-      openInNewTab(`/tables/${table}/${id}`);
+      openPage(`/tables/${table}/${id}`);
     },
-    [table, reload],
+    [table, reload, openPage],
   );
 
   if (!meta || value === null) return <div className="status info">{T.loading}</div>;
@@ -44,7 +45,7 @@ export default function NewRecordPage() {
       const created = await createRecord(table, data);
       invalidateOptions(table);
       void reload();
-      openInNewTab(`/tables/${table}/${created.record.id}`);
+      openPage(`/tables/${table}/${created.record.id}`);
       setBusy(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -66,7 +67,7 @@ export default function NewRecordPage() {
           actions={
             <div className="actionbar">
               <div className="inner">
-                <button onClick={() => openInNewTab(`/tables/${table}`)} disabled={busy}>
+                <button onClick={() => openPage(`/tables/${table}`)} disabled={busy}>
                   {T.create.cancel}
                 </button>
                 <button className="primary" onClick={submit} disabled={busy}>
