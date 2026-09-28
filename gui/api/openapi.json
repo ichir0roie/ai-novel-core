@@ -1519,6 +1519,17 @@
           "label": {
             "type": "string",
             "title": "Label"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
           }
         },
         "type": "object",

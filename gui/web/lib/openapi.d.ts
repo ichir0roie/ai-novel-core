@@ -558,6 +558,8 @@ export interface components {
             id: number;
             /** Label */
             label: string;
+            /** Parent Id */
+            parent_id?: number | null;
         };
         /** OptionList */
         OptionList: {

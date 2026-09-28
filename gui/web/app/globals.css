@@ -374,3 +374,23 @@ button.ghost { background: transparent; }
   color: var(--muted); font-size: 0.85rem; text-align: center;
 }
 .tree-root-drop.drop-target { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* 場所・アイデアのプルダウンをツリーで選ばせる(ReferenceTreeSelect) */
+.tree-select { position: relative; display: inline-block; }
+.tree-select-toggle { min-width: 12rem; max-width: 100%; text-align: left; }
+.tree-select-popup {
+  position: absolute; z-index: 20; top: 100%; left: 0; margin-top: 0.2rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 0.5rem; width: 22rem; max-width: 90vw; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+.tree-select-popup input[type="text"] { width: 100%; }
+.tree-select-scroll { max-height: 16rem; overflow-y: auto; margin-top: 0.4rem; }
+.tree-select-row { display: flex; align-items: center; gap: 0.2rem; }
+.tree-select-label {
+  background: none; border: none; text-align: left; padding: 0.15rem 0.3rem; cursor: pointer;
+  width: 100%; border-radius: 4px; color: var(--ink); font: inherit;
+}
+.tree-select-label:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tree-select-label.selected { font-weight: 600; color: var(--accent); }
+.tree-select-none { color: var(--muted); margin-bottom: 0.2rem; }
+.tree-caret-spacer { display: inline-block; width: 1.1rem; }
