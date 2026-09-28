@@ -339,6 +339,23 @@ def test_episode_revise_rewrites_the_existing_body(session, place):
     assert "甲は市場を歩いた。" in prompt and "外見を厚く書く" in prompt
 
 
+def test_episode_revise_appends_the_instruction_to_the_key_each_time(session, place):
+    story = session.query(Story).one()
+    first = _character(session, place, "甲")
+    episode = Episode(story_id=story.id, title="港にて", key="地図を買う", start=WHEN, text="甲は市場を歩いた。")
+    session.add(episode)
+    session.commit()
+
+    ReviseEpisode({"id": episode.id}, character_ids=[first.id], instruction="外見を厚く書く", ai=_Ai(seed=1)).run()
+    session.refresh(episode)
+    assert episode.key == "地図を買う\n\n## 推敲\n\n- 外見を厚く書く\n"
+
+    ReviseEpisode({"id": episode.id}, character_ids=[first.id], instruction="口調を直す", ai=_Ai(seed=1)).run()
+    session.refresh(episode)
+    # 二回目は見出しを重ねず、既にある「## 推敲」の下に積む
+    assert episode.key == "地図を買う\n\n## 推敲\n\n- 外見を厚く書く\n- 口調を直す\n"
+
+
 def test_episode_revise_refuses_when_the_body_is_empty(session, place):
     story = session.query(Story).one()
     first = _character(session, place, "甲")
@@ -388,7 +405,8 @@ def test_episode_revise_also_saves_the_drafted_title_and_key(session, place):
 
     assert result["id"] == episode.id
     session.refresh(episode)
-    assert episode.title == "新題" and episode.key == "新key" and episode.text == "書き直した後の本文。"
+    assert episode.title == "新題" and episode.text == "書き直した後の本文。"
+    assert episode.key == "新key\n\n## 推敲\n\n- 外見を厚く書く\n"  # 推敲指示はキーテキストに積んで残す
 
 
 def test_episode_revise_draft_is_saved_before_the_ai_call_so_a_failure_keeps_it(session, place):

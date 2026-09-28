@@ -83,12 +83,23 @@ def revise(
         title=(decided.get("title") or "").strip() or record.title, viewpoint=record.viewpoint, text=text)
 
 
-def attach(session: Session, record: Episode, written: episode_generator.Written,
+def _append_instruction_to_key(key: str, instruction: str) -> str:
+    """推敲の指示をキーテキストの末尾に書き足す。あとで見返せるよう、指示を消さずに積む。"""
+    heading = "## 推敲"
+    bullet = f"- {instruction.strip()}"
+    if heading in key:
+        return f"{key.rstrip()}\n{bullet}\n"
+    sep = "\n\n" if key.strip() else ""
+    return f"{key.rstrip()}{sep}{heading}\n\n{bullet}\n"
+
+
+def attach(session: Session, record: Episode, written: episode_generator.Written, instruction: str,
           writer_options: dict | None = None) -> Episode:
     """書き直した本文を話に付ける。手直しなので `episode_generator.attach` と違い `synced` は変えない。"""
     options = writer_options or {}
     record.title = written.title or record.title
     record.text = written.text
+    record.key = _append_instruction_to_key(record.key, instruction)
     record.model, record.effort = options.get("model"), options.get("effort")
     session.commit()
     print(f"[time_keepr/episode_revise] {format_time(record.start)}「{record.title}」 "
@@ -126,4 +137,4 @@ def generate(
                      writer_options=writer_options, shared_style_extra=shared_style_extra, style_extra=style_extra)
     if written is None:
         return None
-    return attach(session, record, written, writer_options)
+    return attach(session, record, written, instruction, writer_options)
