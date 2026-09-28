@@ -5,7 +5,8 @@ from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.time_keeper import frame_generator, episode_summary, episode_generator, main
 from db.schema import (
-    Character, CharacterRelation, ConfirmStatus, Episode, EpisodeIdea, Event, EventCharacter, Idea, Location, Story,
+    Character, CharacterRelation, ConfirmStatus, Episode, EpisodeCharacter, EpisodeIdea, Event, EventCharacter, Idea,
+    Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -87,6 +88,8 @@ def test_episode_is_added_to_the_story_with_the_given_key_and_time(session, stor
     # 視点・場所は id で渡さない限り AI に自由記述で決めさせない(渡さなければ NULL のまま)
     assert record.viewpoint_character_id is None
     assert record.place_id is None
+    # 渡した登場人物は、足した話の episode_character としても残す
+    assert episode_generator.character_ids_of(session, record.id) == [first.id]
 
 
 def test_prompt_carries_the_story_key_characters_and_their_ages(session, story):
@@ -474,3 +477,43 @@ def test_claude_fill_episode_main_writes_with_fable_high(session, story, monkeyp
     assert episode_id == slot.id
     assert _writing_call(ai)["options"] == {"model": "claude-fable-5-1", "effort": "high"}
     assert all(call["options"] == {} for call in ai.calls if call["schema"] is not episode_generator._SCHEMA)
+
+
+def test_text_uses_only_the_frames_episode_characters_when_none_are_given(session, story):
+    """登場人物を省けば枠の episode_character。時刻・場所から人物を拾う既定は無い。"""
+    first = _character(session, "甲")
+    second = Character(name="乙", text="乙の説明", start=Stamp(2080), main_character=True,
+                       confirmed=ConfirmStatus.APPROVED)
+    session.add(second)
+    slot = _slot(session, story, key=KEY)
+    slot.episode_characters = [EpisodeCharacter(character_id=first.id)]
+    session.commit()
+    ai = _Writer(seed=1)
+
+    main.fill_episode(ai, slot.id)
+
+    prompt = _writing_call(ai)["prompt"]
+    assert '"name": "甲"' in prompt and '"name": "乙"' not in prompt
+
+
+def test_text_needs_the_frames_episode_characters_when_none_are_given(session, story):
+    session.add(Character(name="乙", text="", start=Stamp(2080), main_character=True,
+                          confirmed=ConfirmStatus.APPROVED))
+    slot = _slot(session, story, key=KEY)
+    ai = _Writer(seed=1)
+
+    with pytest.raises(ValueError):
+        episode_generator.generate(session, ai, slot.id)
+    assert ai.calls == []
+
+
+def test_given_characters_replace_the_frames_episode_characters(session, story):
+    first = _character(session, "甲")
+    second = _character(session, "乙")
+    slot = _slot(session, story, key=KEY)
+    slot.episode_characters = [EpisodeCharacter(character_id=first.id)]
+    session.commit()
+
+    episode_generator.generate(session, _Writer(seed=1), slot.id, [second.id])
+
+    assert episode_generator.character_ids_of(session, slot.id) == [second.id]

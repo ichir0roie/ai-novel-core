@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
@@ -267,6 +267,24 @@ def set_characters(session: Session, episode_id: int, character_ids: list[int]) 
     session.flush()
 
 
+def character_ids_of(session: Session, episode_id: int) -> list[int]:
+    """話の登場人物(`episode_character`)。話の生成・推敲に渡す人物はこのリレーションだけから取る。"""
+    return list(session.scalars(select(EpisodeCharacter.character_id)
+                                .where(EpisodeCharacter.episode_id == episode_id)
+                                .order_by(EpisodeCharacter.id)))
+
+
+def resolve_character_ids(session: Session, episode_id: int | None, character_ids: list[int] | None) -> list[int]:
+    """`character_ids` を省く(None)と、その話の登場人物(`episode_character`)を使う。
+    時刻・場所から人物を拾う既定は持たない。空なら止まる。
+    """
+    ids = list(character_ids) if character_ids is not None else (
+        character_ids_of(session, episode_id) if episode_id is not None else [])
+    if not ids:
+        raise ValueError("登場人物(episode_character)が空。話の登場人物を指定してから書く")
+    return ids
+
+
 def frame(session: Session, episode_id: int, story_id: int | None = None) -> Episode:
     """本文を書き込む枠。本文の入っている話は書き換えない。"""
     record = session.get(Episode, episode_id)
@@ -280,12 +298,13 @@ def frame(session: Session, episode_id: int, story_id: int | None = None) -> Epi
 
 
 def generate(
-    session: Session, ai: AIClient, episode_id: int, character_ids: list[int],
+    session: Session, ai: AIClient, episode_id: int, character_ids: list[int] | None = None,
     previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
-    """枠(`episode_id` の話)の種・時刻・視点で本文を書いて付ける。
+    """枠(`episode_id` の話)の種・時刻・視点・登場人物で本文を書いて付ける。
 
+    `character_ids` を省けば枠の登場人物(`episode_character`)。渡せばそれで枠の登場人物を置き換える。
     `writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。
     `place_id` を省くと枠(`record.place_id`)の場所を使う。渡すと枠の場所もその id にする。
     本文が得られなければ枠を変えずに None を返す。
@@ -296,8 +315,7 @@ def generate(
         raise ValueError(f"話 id={episode_id} の key(話の種)が空")
     if record.start is None:
         raise ValueError(f"話 id={episode_id} の start(話が立つ時刻)が空")
-    if not character_ids:
-        raise ValueError("character_ids(登場人物)が空")
+    character_ids = resolve_character_ids(session, record.id, character_ids)
     story = common_query.get_story(session, record.story_id)
     if place_id is None:
         place_id = record.place_id
@@ -316,4 +334,5 @@ def generate(
         return None
     if place is not None:
         record.place_id = place.id
+    set_characters(session, record.id, character_ids)
     return attach(session, record, written)

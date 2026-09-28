@@ -10,7 +10,7 @@ from ai.instructions import style
 from ai.instructions.style import layout_novel_text
 from ai.claude_code import ai_client
 from ai.claude_code.interface.story import _rows
-from ai.time_keeper import episode_summary, idea_context
+from ai.time_keeper import episode_generator, episode_summary, idea_context
 from data_access_logic.query import common_query
 from db.schema import Character, Episode, Location, Session, get_env_session
 
@@ -93,9 +93,18 @@ def _recap(session: Session, episodes: list[dict]) -> dict:
     return {"episodes": rows, "style": styles[-1] if styles else ""}
 
 
+def _cast(session: Session, record: Episode | None, until, *, count: int) -> list[dict]:
+    """顔ぶれは書く話の登場人物(`episode_character`)だけ。時刻・場所から人物を拾わない。"""
+    if record is None:
+        return []
+    characters = episode_generator.characters(session, episode_generator.character_ids_of(session, record.id))
+    return [_rows.character_sheet(session, character.id, until=until, count=count, text=False)
+            for character in characters]
+
+
 def _materials(
     session: Session, story_id: int, time, *,
-    rows: list[Episode], index: int, recap_count: int, count: int, reach: int, levels: int,
+    rows: list[Episode], index: int, recap_count: int, count: int, reach: int,
 ) -> dict:
     story = common_query.get_story(session, story_id)
     unsynced = _blocking_unsynced(rows, index)
@@ -111,22 +120,25 @@ def _materials(
     _, until = common_query.resolve_time(session, time, story)
     result["time"] = str(until)
     result["episodes"] = [_rows.episode_row(record) for record in rows[max(0, index - recap_count):index]]
-    result["cast"] = _rows.cast(session, story_id, until, count=count, levels=levels)
-    result["brief"] = _rows.brief(session, story.place_id, until, reach=reach)
+    result["cast"] = _cast(session, rows[index] if index < len(rows) else None, until, count=count)
+    brief = _rows.brief(session, story.place_id, until, reach=reach)
+    brief.pop("present_characters", None)
+    result["brief"] = brief
     return result
 
 
 def write_next_episode(
     session: Session, story_id: int, time=None, *, episode_id: int | None = None,
-    recap_count: int = RECAP_EPISODE_LIMIT, count: int = 5, reach: int = 60, levels: int = 1,
+    recap_count: int = RECAP_EPISODE_LIMIT, count: int = 5, reach: int = 60,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> Episode | None:
+    """顔ぶれは書く話の登場人物(`episode_character`)。末尾に新しい話を足すときは登場人物なしで書く。"""
     story_row = common_query.get_story(session, story_id)
     rows = _ordered(session, story_id)
     index = _target_index(rows, episode_id)
 
     materials = _materials(session, story_id, time, rows=rows, index=index,
-                           recap_count=recap_count, count=count, reach=reach, levels=levels)
+                           recap_count=recap_count, count=count, reach=reach)
     story = materials["story"]
     if materials["stopped"]:
         print(f"[claude_ai/story] {story['name']}: 未同期の話 {materials['unsynced']} が残っているので書かない")
