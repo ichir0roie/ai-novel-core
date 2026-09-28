@@ -777,17 +777,20 @@ class Episode(EventSeededMixin, TextBase):
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="話が立つ時刻。作品の中の話はこの順に並ぶ(空の話は後ろに id 順)", sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
-    viewpoint: Mapped[str | None] = mapped_column(
-        String, comment="視点。誰に寄って語るか(「ノア(十四歳)」「アウレア / ミレア」)", sort_order=270)
-    place: Mapped[str | None] = mapped_column(
-        String, comment="場所。自由記述(「ヴァレンツァ 外れの川」)", sort_order=280)
+    viewpoint_character_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), comment="視点。誰に寄って語るか", sort_order=270)
+    viewpoint_character: Mapped["Character | None"] = relationship(
+        foreign_keys="Episode.viewpoint_character_id", lazy="noload")
+    place_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("location.id"), comment="場所", sort_order=280)
+    place: Mapped[Location | None] = relationship(
+        foreign_keys="Episode.place_id", lazy="noload")
+
+    episode_characters: Mapped[list["EpisodeCharacter"]] = relationship(
+        back_populates="episode", lazy="noload", cascade="all, delete-orphan")
 
     letters: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=290)
-    model: Mapped[str | None] = mapped_column(
-        String, comment="本文を書いたモデル。空なら不明(手で書いた本文など)", sort_order=300)
-    effort: Mapped[str | None] = mapped_column(
-        String, comment="本文を書いたときの effort。空なら不明(手で書いた本文など)", sort_order=310)
 
     key: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
@@ -798,6 +801,16 @@ class Episode(EventSeededMixin, TextBase):
     def _letters_follow_text(self, _key, value):
         self.letters = len(value or "")
         return value
+
+
+class EpisodeCharacter(Base):
+    __tablename__ = "episode_character"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
+    character_id: Mapped[int] = mapped_column(Integer, ForeignKey("character.id"), index=True, sort_order=110)
+
+    episode: Mapped["Episode"] = relationship(back_populates="episode_characters", lazy="noload")
+    character: Mapped["Character"] = relationship(lazy="noload")
 
 
 class EpisodeSummary(Base):
