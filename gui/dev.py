@@ -118,11 +118,11 @@ def _port_open(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
-def _http_alive(port: int, timeout: float = 1.0) -> bool:
+def _http_alive(port: int, path: str = "/", timeout: float = 1.0) -> bool:
     # uvicorn --reload はワーカーの起動に失敗しても listen socket は監視役(reloader)側に
     # 残ったままなので、_port_open の TCP 接続だけでは死活が分からない。実際に応答が返るかで見る
     try:
-        urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=timeout)
+        urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=timeout)
         return True
     except urllib.error.HTTPError:
         return True
@@ -199,13 +199,13 @@ def _free_port(port: int, name: str) -> bool:
 STALL_TIMEOUT = 20.0
 
 
-def _wait_for(port: int, name: str, process: subprocess.Popen, timeout: float = 90.0) -> bool:
+def _wait_for(port: int, name: str, process: subprocess.Popen, path: str = "/", timeout: float = 90.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if process.poll() is not None:
             print(f"[gui/dev] {name} が終了コード {process.returncode} で止まった", file=sys.stderr)
             return False
-        if _http_alive(port):
+        if _http_alive(port, path):
             return True
         time.sleep(0.3)
     print(f"[gui/dev] {name} が {timeout:.0f} 秒で立ち上がらなかった", file=sys.stderr)
@@ -270,15 +270,15 @@ def main(argv: list[str] | None = None) -> int:
     web: subprocess.Popen | None = None
     down_since: dict[str, float | None] = {"API": None, "画面": None}
 
-    def watch(process: subprocess.Popen, port: int, name: str, spawn) -> subprocess.Popen:
+    def watch(process: subprocess.Popen, port: int, name: str, spawn, path: str = "/") -> subprocess.Popen:
         # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
         if process.poll() is not None:
             print(f"[gui/dev] {name} が止まった(終了コード {process.returncode})。再起動する", file=sys.stderr)
             process = spawn()
-            _wait_for(port, name, process)
+            _wait_for(port, name, process, path)
             down_since[name] = None
             return process
-        if _http_alive(port):
+        if _http_alive(port, path):
             down_since[name] = None
             return process
         since = down_since[name]
@@ -289,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
                   "(reload 先のコードにエラーが残っている?)。作り直す", file=sys.stderr)
             _terminate(process)
             process = spawn()
-            _wait_for(port, name, process)
+            _wait_for(port, name, process, path)
             down_since[name] = None
         return process
 
@@ -298,14 +298,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         api = spawn_api()
         web = spawn_web()
-        if not (_wait_for(args.api_port, "API", api) and _wait_for(args.web_port, "画面", web)):
+        if not (_wait_for(args.api_port, "API", api, "/api/health") and _wait_for(args.web_port, "画面", web)):
             return 1
         url = f"http://localhost:{args.web_port}/"
         print(f"[gui/dev] API http://127.0.0.1:{args.api_port}/docs / 画面 {url}(Ctrl+C で止める)")
         if not args.no_browser:
             _open_browser(url)
         while True:
-            api = watch(api, args.api_port, "API", spawn_api)
+            api = watch(api, args.api_port, "API", spawn_api, "/api/health")
             web = watch(web, args.web_port, "画面", spawn_web)
             time.sleep(1)
     except KeyboardInterrupt:
