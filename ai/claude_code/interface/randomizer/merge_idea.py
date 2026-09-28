@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """アイデア `source_id`(主に候補)を `target_id` へまとめる、claude が呼ぶ入口。
 
-`source_id` に結んであった出来事・話・人物と、`source_id` の呼び名は `target_id` へ付け替え、`source_id` は消す。
+`source_id` に結んであった出来事・話・人物と、`source_id` の認識(`idea_recognition`。作中での呼び名)は
+`target_id` へ付け替え、`source_id` は消す。
 """
 from __future__ import annotations
 
@@ -31,12 +32,9 @@ class MergeIdea(CommitDraft):
         if session.scalars(select(Idea.id).where(Idea.parent_idea_id == source.id)).first() is not None:
             raise ValueError(f"source_id={self.source_id} には下位のアイデアが残っている。先に繋ぎ直す")
 
-        aliases = session.scalars(select(Idea).where(Idea.alias_of_idea_id == source.id)).all()
-        if aliases and target.alias_of_idea_id is not None:
-            raise ValueError(f"source_id={self.source_id} には呼び名があり、target_id={self.target_id} は呼び名。"
-                             "本質のアイデアへまとめる")
-        for alias in aliases:
-            alias.alias_of_idea_id = target.id
+        for recognition in list(source.recognitions):
+            source.recognitions.remove(recognition)
+            target.recognitions.append(recognition)
         moved = idea_context.relink(session, source.id, target.id)
         data = {"merged": {"id": source.id, "name": source.name, "kind": source.kind},
                 "into": {"id": target.id, "name": target.name, "kind": target.kind},

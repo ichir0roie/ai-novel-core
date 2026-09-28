@@ -667,20 +667,19 @@ class Idea(MemeSeededMixin, TextBase):
 
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
-    alias_of_idea_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("idea.id"), index=True,
-        comment="作中での呼び名であるときの、本質のアイデア。呼び名は location_id・start・end の場所と時代で使い、"
-                "空の列はどこでも・いつでも使う。当てはまる呼び名が無ければ本質の name をそのまま使う",
-        sort_order=260)
 
     # 時代が進むにつれて分かった・変わった情報は text を書き換えず IdeaNote で積み足す。GUI では notes に並ぶ。
-    CHILD_LISTS = ("notes",)
+    # 場所・時代ごとの作中での呼び名は IdeaRecognition で積む。GUI では recognitions に並ぶ。
+    CHILD_LISTS = ("notes", "recognitions")
 
     def text_at(self, time=None) -> str:
         return resolve_idea_text(self.text, self.notes, time)
 
     notes: Mapped[list[IdeaNote]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaNote.id")
+    recognitions: Mapped[list["IdeaRecognition"]] = relationship(
+        back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
+        order_by="IdeaRecognition.start.desc()")
 
 
 class IdeaNote(Base):
@@ -708,6 +707,31 @@ class IdeaNote(Base):
         if time is None:
             return self.start is None and self.end is None
         return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
+
+
+class IdeaRecognition(Base):
+    """アイデアの作中での呼び名を、場所・時代ごとに一行で持つ。
+
+    `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
+    当てはまる行が無ければ本質の `name` をそのまま使う(`ai/time_keeper/idea_alias.py` の `called`)。
+    効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/idea_context.py`)。
+    """
+
+    __tablename__ = "idea_recognition"
+
+    idea_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
+    location_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("location.id"),
+        comment="効く場所。この場所とその配下で効く。空ならどこでも効く", sort_order=110)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="効き始める時刻。空なら始まりを限らない", sort_order=120)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=130)
+    name: Mapped[str] = mapped_column(String, nullable=False, comment="この場所・時代での作中の呼び名", sort_order=140)
+    detail: Mapped[str | None] = mapped_column(String, comment="呼び名についての注釈(作中での受け止め方)", sort_order=150)
+
+    idea: Mapped[Idea] = relationship(back_populates="recognitions", lazy="noload")
 
 
 def resolve_idea_notes(notes, time=None) -> list[IdeaNote]:

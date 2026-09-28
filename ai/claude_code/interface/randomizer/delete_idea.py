@@ -20,9 +20,6 @@ class DeleteIdea(CommitDraft):
             select(Idea.id).where(Idea.parent_idea_id == record.id)).first()
         if child is not None:
             raise ValueError(f"idea_id={self.idea_id} には下位のアイデアが残っている。先にそちらを消すか繋ぎ直す")
-        alias = session.scalars(select(Idea.id).where(Idea.alias_of_idea_id == record.id)).first()
-        if alias is not None:
-            raise ValueError(f"idea_id={self.idea_id} には呼び名(id={alias})が残っている。先にそちらを消すか繋ぎ直す")
 
         data = {"id": record.id, "name": record.name, "kind": record.kind}
         idea_context.relink(session, record.id, None)

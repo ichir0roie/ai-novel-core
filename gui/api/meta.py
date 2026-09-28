@@ -23,7 +23,7 @@ _LABELS = {
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
     "place_id": "場所", "viewpoint": "視点", "place": "場所(自由記述)", "synced": "同期済み",
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
-    "alias_of_idea_id": "呼び名の本質", "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
+    "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
     "letters": "字数", "character_ids": "当事者", "polygon": "領域(polygon)", "area": "広さ",
     "environment": "環境", "active_random_generation": "自動生成の対象",
 }
@@ -138,3 +138,4 @@ def all_tables(session: Session) -> list[TableMeta]:
 
 _LABELS["parameters"] = "期間ごとのパラメータ"
 _LABELS["places"] = "期間ごとの居場所"
+_LABELS["recognitions"] = "場所・時代ごとの呼び名"
