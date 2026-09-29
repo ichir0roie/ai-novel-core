@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""場所に居合わせる人物・対象から、当事者ごとの推測 → 候補をサイコロ → 記録、の順で出来事を一件起こす。"""
+"""場所に居合わせる人物・対象から、候補をサイコロ → 記録、の順で出来事を一件起こす。"""
 from __future__ import annotations
 
 import logging
@@ -16,8 +16,8 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
 from data_access_logic.event.progress_models import (
-    CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, JudgementDraft,
-    JudgementRequestSerialized, ParticipantJudgement, LocationSituationSerialized, RecordRequestSerialized,
+    CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, LocationSituationSerialized,
+    RecordRequestSerialized,
 )
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
@@ -39,21 +39,13 @@ _SITUATION_INSTRUCTION = """\
 - 「この時点より後に既に決まっている出来事」は、これと矛盾させず、先回りして起こさない。
 - 進めたい筋書きは、上位の場所のものから順につなげた作品の本文。"""
 
-_JUDGEMENT_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観の中で、ある一人の人物、または人物以外の一つの対象(国・組織・集団・物)の立場に立って考える設定作家です。
-場所の状況と「この当事者」を渡すので、この当事者のいまを、その種別・人物像・口調・方言・性格・立場から推測してください。
-人物なら性格と人間関係から、人物以外なら方針と力の及ぶ範囲から。
-{_SITUATION_INSTRUCTION}
-{EVENT_AGE_INSTRUCTION}
-他の当事者のことは決めない。この当事者自身のことだけを書く。"""
-
 _CANDIDATE_SYSTEM_PROMPT = f"""\
 あなたは、ある場所に起こる出来事を列挙する作家です。
-場所の状況と、当事者ごとの思考・感情・望み・恐れ・行動を渡すので、
-これらの行動が同じ場で重なった結果として、この時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。
+場所の状況を渡すので、居合わせる人物・対象それぞれの人物像・性格・関係・立場から、
+それぞれがいま取りそうな行動が同じ場で重なった結果として、この時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。
 日常の小さな、感情がぶつかる、偶発的な(事故・天候・病・思いがけない出会い)、居場所が変わる(旅立ち・帰還・避難)、
 笑いや祝い、取り決めや対立が動くなど、種類の違うものを混ぜてください。
-各候補は当事者の行動と矛盾しない範囲で立てる。
+各候補は当事者の人物像・性格と矛盾しない範囲で立てる。
 出来事の種(時代・場所を抜いた、別の物語から取ったアイデア)を渡したときは、候補は、この種のどれかをこの場所・この時点・この当事者に合わせて具体化したものか、直前・直近の出来事から連想したものにする。
 {_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
@@ -61,7 +53,7 @@ _CANDIDATE_SYSTEM_PROMPT = f"""\
 
 _RECORD_SYSTEM_PROMPT = f"""\
 あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家です。
-場所の状況、移動先の候補、当事者ごとの思考・感情・望み・恐れ・行動、サイコロで選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こしてください。
+場所の状況、移動先の候補、サイコロで選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こしてください。
 候補の名前は event_name にそのまま使うか、整えてもよい。
 {_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
@@ -73,7 +65,7 @@ location_founded の固有名詞は次の基準で名づける。
 {PLACE_NAMING_INSTRUCTION}
 
 event_text の書き方:
-選ばれた出来事の候補(名前と概要)を、当事者ごとの思考・感情・望み・恐れ・行動を土台にして記録に起こす。
+選ばれた出来事の候補(名前と概要)を、当事者それぞれの人物像・性格・関係を土台にして記録に起こす。
 候補の筋から外れない。event_text 内では id ではなく名前で書く。
 {EVENT_RECORD_INSTRUCTION}
 
@@ -120,26 +112,11 @@ def _situation(
     )
 
 
-def _judgements(ai: AIClient, situation: LocationSituationSerialized) -> list[ParticipantJudgement]:
-    judgements = []
-    for participant in situation.participants:
-        prompt = "\n".join([
-            JudgementRequestSerialized(situation=situation, participant=participant).model_dump_json(indent=2),
-            "この当事者のいまの思考・感情・望み・恐れ・行動を推測してください。",
-        ])
-        judgement = ai.generate(prompt, JudgementDraft, system=_JUDGEMENT_SYSTEM_PROMPT)
-        if judgement is None:
-            continue
-        judgements.append(ParticipantJudgement(character=participant.character, judgement=judgement))
-    return judgements
-
-
 def _rolled_candidate(
-    ai: AIClient, rng: random.Random, situation: LocationSituationSerialized,
-    judgements: list[ParticipantJudgement], seeds: list[str],
+    ai: AIClient, rng: random.Random, situation: LocationSituationSerialized, seeds: list[str],
 ) -> CandidateDraft | None:
     prompt = "\n".join([
-        CandidateRequestSerialized(situation=situation, judgements=judgements, seeds=seeds).model_dump_json(indent=2),
+        CandidateRequestSerialized(situation=situation, seeds=seeds).model_dump_json(indent=2),
         f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。",
     ])
     decided = ai.generate(prompt, CandidatesDraft, system=_CANDIDATE_SYSTEM_PROMPT)
@@ -180,10 +157,9 @@ def progress_location(
     scene: str | None = None,
     use_story: bool = False,
 ) -> Event | None:
-    """起こした出来事は `confirmed=未確認` で足す。本文は記録のままで、小説にするのは `novelist.novelize_event`。"""
+    """起こした出来事は `confirmed=未確認` で足す。"""
     situation = _situation(s, ai, location_id, characters, time, focus, scene, use_story)
-    judgements = _judgements(ai, situation)
-    candidate = _rolled_candidate(ai, rng, situation, judgements, seeds)
+    candidate = _rolled_candidate(ai, rng, situation, seeds)
     if candidate is None:
         return None
     destinations = _destinations(s, location_id, time)
@@ -195,9 +171,8 @@ def progress_location(
         hints.append("居合わせる人物・対象の人物像に筋書きが書かれていれば、その者個人について進めたい筋書きとして扱い、"
                      "そこへ向かう一歩になる出来事を優先する。")
     prompt = "\n".join([
-        RecordRequestSerialized(
-            situation=situation, judgements=judgements, destinations=destinations, candidate=candidate,
-        ).model_dump_json(indent=2),
+        RecordRequestSerialized(situation=situation, destinations=destinations, candidate=candidate)
+        .model_dump_json(indent=2),
         "この候補を、この場所にこの時点で起きた出来事として記録してください。",
         *hints,
     ])

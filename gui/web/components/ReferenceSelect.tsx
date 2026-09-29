@@ -1,14 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getOptions, type Option } from "@/lib/api";
 import { T } from "@/lib/text";
 
 const cache = new Map<string, Promise<Option[]>>();
+// 取り置きを捨てたとき、いま出ている選択欄にも読み直させる
+const listeners = new Set<(table: string | null) => void>();
 
-/** 参照先のテーブルの選択肢。テーブルごとに一度だけ読む。 */
+/** 参照先のテーブルの選択肢。テーブルごとに一度だけ読み、取り置きを捨てられたら読み直す。 */
 export function useOptions(table: string | null | undefined): Option[] {
   const [options, setOptions] = useState<Option[]>([]);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const listener = (changed: string | null) => {
+      if (changed === null || changed === table) setVersion((v) => v + 1);
+    };
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, [table]);
   useEffect(() => {
     if (!table) return;
     if (!cache.has(table)) cache.set(table, getOptions(table).then((r) => r.items));
@@ -17,12 +30,19 @@ export function useOptions(table: string | null | undefined): Option[] {
     return () => {
       alive = false;
     };
-  }, [table]);
+  }, [table, version]);
   return options;
 }
 
 export function invalidateOptions(table: string) {
   cache.delete(table);
+  for (const listener of listeners) listener(table);
+}
+
+/** AI の生成は他のテーブルにも行を足す(話のキー情報補完が人物・場所を作るなど)ので、全部の取り置きを捨てる。 */
+export function invalidateAllOptions() {
+  cache.clear();
+  for (const listener of listeners) listener(null);
 }
 
 type Props = {
@@ -61,7 +81,17 @@ export default function ReferenceSelect({ table, value, nullable, onChange, disa
           </option>
         ))}
       </select>
+      {value !== null && <RecordLink table={table} id={value} />}
     </div>
+  );
+}
+
+/** 選んだ行のページへ飛ぶリンク。選択欄の横に置く。 */
+export function RecordLink({ table, id, label }: { table: string; id: number; label?: string }) {
+  return (
+    <Link href={`/tables/${table}/${id}`} className="record-link" title={T.openRecord}>
+      {label ?? T.openRecord}
+    </Link>
   );
 }
 

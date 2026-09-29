@@ -12,12 +12,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# 一話ぶんの本文の目安。
-EPISODE_TARGET_LETTERS = (5000, 8000)
-
-# 話と同じ小説の形で書く出来事の本文(`GenerateEvent`)の目安。一話の三分の一。
-EVENT_NOVEL_TARGET_LETTERS = tuple(int(round(letters / 3, -2)) for letters in EPISODE_TARGET_LETTERS)
-
 # 生成のときに場面の切れ目へ置かせる行。`layout_novel_text` が空行二つに置き換える。
 SCENE_BREAK = "◇"
 
@@ -139,8 +133,7 @@ SHARED_STYLE_BASE = """\
 
 # --- 対象ごと --------------------------------------------------------------
 
-# 話と、話と同じ小説の形で書く出来事の本文とに共通する書き方。分量は `_scale_rule` で足す。
-NOVEL_STYLE_BASE = """\
+EPISODE_STYLE_BASE = f"""\
 本文は地の文と会話文を交ぜ、地の文に寄せすぎない。
 情景は視点人物が実際に見聞きした範囲で書き、説明のための地の文を挟まない。
 セリフは人物ごとの口調の差が読み分けられる長さで切る。
@@ -153,26 +146,11 @@ NOVEL_STYLE_BASE = """\
 気持ちは地の文で説明しきらず、動作・セリフに出す分と、書かずに読み手へ預ける分を分ける。
 締め方は、書いている出来事の中身が終わったかどうかで変える。
 中身が終わっていないときは、謎・伏線・この先への期待を残して切る。
-中身が終わったときは、余韻を残すか、気の利いた落ちを付けて締める。"""
-
-
-def _scale_rule(unit: str, letters: tuple[int, int] | None = None) -> str:
-    scale = f"{unit}は{letters[0]}〜{letters[1]}字。\n" if letters else ""
-    return f"""\
-{scale}場面の数と一場面の長さは決めず、中身に合わせる。場面が変わる(場所・時間・書く対象が変わる)ところにだけ、「{SCENE_BREAK}」だけの行を置く。
-字数は、実際に起きることで作る。修飾・言い換え・心情の反芻を足して伸ばさない。"""
-
-
-EPISODE_STYLE_BASE = f"""\
-{NOVEL_STYLE_BASE}
-{_scale_rule("一話")}
+中身が終わったときは、余韻を残すか、気の利いた落ちを付けて締める。
+場面の数と一場面の長さは決めず、中身に合わせる。場面が変わる(場所・時間・書く対象が変わる)ところにだけ、「{SCENE_BREAK}」だけの行を置く。
+字数は、実際に起きることで作る。修飾・言い換え・心情の反芻を足して伸ばさない。
 種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。
 種(key)にある出来事は、渡された作品・登場人物・場所・直前の話・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。"""
-
-# 話と同じ小説の形で書く出来事の本文(`GenerateEvent`)。文体の好み(extra)は呼び出し側から渡す。
-EVENT_NOVEL_STYLE_BASE = f"""\
-{NOVEL_STYLE_BASE}
-{_scale_rule("出来事一件", EVENT_NOVEL_TARGET_LETTERS)}"""
 
 STORY_STYLE_BASE = """\
 作品の筋書きは読ませる文ではなく、後から段階を測るための文として書く。
@@ -188,7 +166,6 @@ IDEA_STYLE_BASE = """\
 
 STYLE_BASES: dict[str, str] = {
     "episode": EPISODE_STYLE_BASE,
-    "event_novel": EVENT_NOVEL_STYLE_BASE,
     "story": STORY_STYLE_BASE,
     "event": EVENT_STYLE_BASE,
     "idea": IDEA_STYLE_BASE,

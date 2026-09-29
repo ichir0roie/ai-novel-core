@@ -53,69 +53,6 @@ class LocationSituationSerialized(LocationSituationMaterial):
         }
 
 
-class JudgementDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    thought: str = Field(description="思考。いまの状況をどう受け止め、何を考えているか。1〜2文")
-    emotion: str = Field(description="感情。何に対して怒り・喜び・悲しみ・退屈・不安などを抱いているか。感情の名前を含める。1〜2文")
-    wish: str = Field(description="望み。何を手に入れたい・何をしたいか。1〜2文")
-    fear: str = Field(description="恐れ。何を失いたくない・何が起きてほしくないか。1〜2文")
-    action: str = Field(description="行動。この時点で実際に何をするか。話す・動く・作る・出かける・黙るなど具体的な動作で。1〜2文")
-
-    @field_validator("thought", "emotion", "wish", "fear")
-    @classmethod
-    def _stripped(cls, value: str) -> str:
-        return value.strip()
-
-    @field_validator("action")
-    @classmethod
-    def _acted(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("行動が空")
-        return value
-
-
-class ParticipantJudgement(Material):
-    character: ParticipantCharacter
-    judgement: JudgementDraft
-
-
-def _judgements(judgements: list[ParticipantJudgement]) -> list[dict[str, Any]]:
-    return [
-        {
-            "人物id": judged.character.id,
-            "名前": judged.character.name,
-            "思考": judged.judgement.thought,
-            "感情": judged.judgement.emotion,
-            "望み": judged.judgement.wish,
-            "恐れ": judged.judgement.fear,
-            "行動": judged.judgement.action,
-        }
-        for judged in judgements
-    ]
-
-
-class JudgementRequest(Material):
-    situation: LocationSituationMaterial
-    participant: ParticipantMaterial
-
-
-class JudgementRequestSerialized(JudgementRequest):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    situation: LocationSituationSerialized
-    participant: ParticipantSerialized
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        return {
-            "場所の状況": self.situation.model_dump(),
-            "この当事者": self.participant.model_dump(),
-        }
-
-
 class CandidateDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -142,7 +79,6 @@ class CandidatesDraft(BaseModel):
 
 class CandidateRequest(Material):
     situation: LocationSituationMaterial
-    judgements: list[ParticipantJudgement]
     # 時代・場所を抜いた、別の物語から取ったアイデア
     seeds: list[str]
 
@@ -156,14 +92,12 @@ class CandidateRequestSerialized(CandidateRequest):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             "場所の状況": self.situation.model_dump(),
-            "当事者ごとの思考・感情・望み・恐れ・行動": _judgements(self.judgements),
             "出来事の種": self.seeds,
         }
 
 
 class RecordRequest(Material):
     situation: LocationSituationMaterial
-    judgements: list[ParticipantJudgement]
     destinations: list[LocationMaterial]
     candidate: CandidateDraft
 
@@ -180,7 +114,6 @@ class RecordRequestSerialized(RecordRequest):
             "移動先の候補": [
                 {"場所id": destination.id, "名前": destination.name, "種別": destination.kind}
                 for destination in self.destinations],
-            "当事者ごとの思考・感情・望み・恐れ・行動": _judgements(self.judgements),
             "サイコロで選ばれた出来事の候補": {"名前": self.candidate.name, "概要": self.candidate.summary},
         }
 

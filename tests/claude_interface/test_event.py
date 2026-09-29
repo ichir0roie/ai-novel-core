@@ -48,7 +48,7 @@ def test_generate_event(shown, world, mock_ai):
             name="生成の出来事", text="市で揉め事が起きる", time="1200/04/05 09:00:00", start="1200/04/05",
             end="1200/04/06", location_id=world.location_id, character_ids=world.character_ids, hidden=True,
             parent_event_id=world.event_id),
-        seed=3, shared_style_extra="共有の文体の好み", style_extra="出来事の文体の好み"))
+        seed=3))
 
     assert result["location_id"] == world.location_id
     assert result["time"] == "1200/04/05 09:00:00"

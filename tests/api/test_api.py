@@ -49,7 +49,7 @@ def test_tables(client, world, in_claude_code):
     tables = {table["name"]: table for table in body["tables"]}
     assert set(tables) == {"story", "episode", "character", "character_relation", "event", "location", "idea",
                            "meme", "oracle"}
-    assert [generator["key"] for generator in tables["episode"]["generators"]] == ["frame", "episode", "revise"]
+    assert [generator["key"] for generator in tables["episode"]["generators"]] == ["frame", "key", "episode", "revise"]
     assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
 
 
@@ -108,8 +108,9 @@ def test_generate_record(client, world, in_claude_code, mock_ai):
     response = client.post("/api/tables/episode/generate/episode", json={
         "draft": {"story_id": world.story_id, "title": "API の話", "key": "API から書く話",
                   "start": "1200/04/03 09:00:00", "end": "1200/04/03 12:00:00",
-                  "viewpoint_character_id": world.character_ids[1], "location_id": world.location_id, "character_ids": []},
-        "args": {"character_ids": world.character_ids, "model": "claude-haiku-4-5", "effort": "low"}})
+                  "viewpoint_character_id": world.character_ids[1], "location_id": world.location_id,
+                  "character_ids": world.character_ids},
+        "args": {"model": "claude-haiku-4-5", "effort": "low"}})
 
     assert response.status_code == 202
     job = _finished(client, response.json()["id"])

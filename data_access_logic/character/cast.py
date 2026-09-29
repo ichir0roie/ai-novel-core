@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.models import CastSerialized, EventCharacterAtSerialized, ParticipantSerialized
+from data_access_logic.character.models import CastSerialized, ParticipantSerialized
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.query import common_query
@@ -60,17 +60,3 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
         for character in characters
     ]
 
-
-def event_characters_at(
-    s: Session, ai: AIClient, characters: list[Character], time: Stamp,
-) -> list[EventCharacterAtSerialized]:
-    at = []
-    for character in characters:
-        previous = summarized_events(s, ai, common_query.latest_character_event_select(character.id, until=time))
-        at.append(EventCharacterAtSerialized(
-            character=character,
-            age=age_at(character, time),
-            parameters=parameters_at(character, time),
-            previous_event=previous[0] if previous else None,
-        ))
-    return at

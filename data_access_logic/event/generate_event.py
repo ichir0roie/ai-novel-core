@@ -5,13 +5,12 @@ import logging
 import random
 
 from ai.claude_code import ai_client
-from data_access_logic import world_style
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.event.form import EventForm
-from data_access_logic.event.novelist import novelize_event
 from data_access_logic.event.progress import progress_location
 from data_access_logic.event.record import EventRecord
+from data_access_logic.event.writer import write_event_text
 from data_access_logic.event_seed.extractor import draw as draw_seeds
 from data_access_logic.event_seed.extractor import refresh_and_consolidate
 from data_access_logic.query import common_query, world_creation_query
@@ -39,21 +38,17 @@ def _present_characters(s: Session, location_id: int, time: Stamp) -> list[Chara
 class GenerateEvent(SessionEntrypoint):
     """作者の下書き(GUI の欄の値。全部空でもよい)を核に、出来事を一件 AI に組み立てさせて足す。
 
-    候補を挙げてサイコロで選び、記録して小説の本文にする生成を、
+    候補を挙げてサイコロで選び、行動・言動を整理した記録にする生成を、
     下書きの名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。
     時刻を省けば世界の最新の出来事の時刻、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。
-    `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
 
-    `id` を渡せば、その出来事の本文(text)が空のときに限り、記録・当事者・関連する設定から AI に
-    小説の本文だけを書かせて埋める(名前・時刻・場所・当事者は変えない)。
+    `id` を渡せば、その出来事の本文(text)が空のときに限り、名前・場所・当事者から AI に
+    記録の本文だけを書かせて埋める(名前・時刻・場所・当事者は変えない)。
     """
 
-    def __init__(self, event: EventForm | None = None, seed: int | None = None,
-                 shared_style_extra: str | None = None, style_extra: str | None = None, ai: AIClient = ai_client):
+    def __init__(self, event: EventForm | None = None, seed: int | None = None, ai: AIClient = ai_client):
         self.event = event or EventForm()
         self.seed = seed
-        self.shared_style_extra = world_style.shared_style_extra(shared_style_extra)
-        self.style_extra = world_style.style_extra(style_extra)
         self.ai = ai
 
     def execute(self, s: Session) -> EventRecord:
@@ -61,8 +56,7 @@ class GenerateEvent(SessionEntrypoint):
             record = common_query.get_row(s, Event, self.event.id)
             if (record.text or "").strip():
                 raise ValueError("text はすでに埋まっている")
-            written = novelize_event(s, self.ai, record.id, scene=record.name or None,
-                                     shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
+            written = write_event_text(s, self.ai, record.id)
         else:
             written = self._generate(s, random.Random(self.seed))
         return record_of(s, EventRecord, written)
@@ -116,5 +110,4 @@ class GenerateEvent(SessionEntrypoint):
         if form.end is not None:
             record.end = form.end
         s.commit()
-        return novelize_event(s, self.ai, record.id, scene=scene,
-                              shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
+        return record

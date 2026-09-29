@@ -1,12 +1,18 @@
 """claude が CLI から `show()` で呼ぶ、話(`data_access_logic/episode/`)の入口。"""
+from ai.claude_code import ai_client
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm
 from data_access_logic.episode.generate_episode import GenerateEpisode
 from data_access_logic.episode.generate_frame import GenerateFrame
+from data_access_logic.episode.complete_key import CompleteKey
+from data_access_logic.episode.models import (
+    EpisodeCastingDraft, EpisodeCharacterCandidateDraft, EpisodeLocationCandidateDraft,
+)
 from data_access_logic.episode.list_unsynced_episodes import ListUnsyncedEpisodes
 from data_access_logic.episode.read_episodes import ReadEpisodes
 from data_access_logic.episode.revise_episode import ReviseEpisode
 from data_access_logic.episode.set_episode_synced import SetEpisodeSynced
+from db.schema import Character, ConfirmStatus, Location, get_env_session
 
 
 def test_commit_episode(shown, world, mock_ai):
@@ -33,8 +39,8 @@ def test_generate_episode(shown, world, mock_ai):
         episode=EpisodeForm(
             story_id=world.story_id, title="生成の話", key="市の翌朝", start="1200/04/02 08:00:00",
             end="1200/04/02 12:00:00", viewpoint_character_id=world.character_ids[0], location_id=world.location_id,
-            character_ids=[world.character_ids[0]]),
-        character_ids=world.character_ids, model="claude-haiku-4-5", effort="low",
+            character_ids=world.character_ids),
+        model="claude-haiku-4-5", effort="low",
         shared_style_extra="共有の文体の好み", style_extra="話の文体の好み"))
 
     assert result["story_id"] == world.story_id
@@ -61,6 +67,45 @@ def test_generate_frame(shown, world, mock_ai):
     assert result["character_ids"] == world.character_ids
     assert result["text"] == ""
     assert mock_ai.calls
+
+
+def test_complete_key(shown, world, mock_ai):
+    result = shown(CompleteKey(
+        episode=EpisodeForm(
+            story_id=world.story_id, key="宿での夜", start="1200/04/02 20:00:00", location_id=world.location_id,
+            character_ids=[world.character_ids[0]]),
+        order="雨の音を効かせて静かに"))
+
+    # 元の種は補完したあらすじで置き換える
+    assert result["key"] and "宿での夜" not in result["key"]
+    assert any('"作者の注文": "雨の音を効かせて静かに"' in call["prompt"] for call in mock_ai.calls)
+    assert result["location_id"] == world.location_id
+    assert result["character_ids"] == [world.character_ids[0]]
+    assert result["text"] == ""
+
+
+def test_complete_key_adds_missing(shown, world, mock_ai, monkeypatch):
+    # モックは null を取れる欄に null を返すので、足りない人物・舞台の候補だけは決まった値を返させる
+    def generate(prompt, output, system=None, timeout=120.0, model="", effort=""):
+        if output is EpisodeCastingDraft:
+            return EpisodeCastingDraft(
+                characters=[EpisodeCharacterCandidateDraft(called="宿の女将", text="市の外れの宿を切り盛りする")],
+                location=EpisodeLocationCandidateDraft(name="ミナト亭", kind="宿", text="市の外れの宿", environment=""))
+        return mock_ai.generate(prompt, output, system, timeout, model=model, effort=effort)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    result = shown(CompleteKey(
+        episode=EpisodeForm(
+            story_id=world.story_id, key="宿での夜", start="1200/04/02 20:00:00", location_id=world.location_id,
+            character_ids=[world.character_ids[0]])))
+
+    assert result["character_ids"][0] == world.character_ids[0]
+    assert len(result["character_ids"]) == 2
+    with get_env_session() as s:
+        added = s.get_one(Character, result["character_ids"][1])
+        assert added.confirmed == ConfirmStatus.APPROVED
+        location = s.get_one(Location, result["location_id"])
+        assert (location.name, location.parent_id) == ("ミナト亭", world.location_id)
 
 
 def test_list_unsynced_episodes(shown, world):

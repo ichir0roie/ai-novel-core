@@ -31,11 +31,13 @@ class Generator:
     # true なら「AI で作成」の小さなボタン列には出さず、左の欄の一番下に大きく開く専用パネル(GUI 側)で出す
     # (推敲は指示文を書き込みながら本文も見たいので、他の AI 生成とは別の場所に大きく開く)
     panel: bool = False
+    # true なら他の生成とボタン・欄を共にせず、自分だけの起動ボタンと欄で出す(同じ名前の欄(model など)を分けるため)
+    separate: bool = False
 
     def to_meta(self) -> GeneratorMeta:
         return GeneratorMeta(key=self.key, label=self.label, entrance=self.entrance, mode=self.mode,
                              when_empty=self.when_empty, when_not_empty=self.when_not_empty,
-                             params=list(self.params), panel=self.panel)
+                             params=list(self.params), panel=self.panel, separate=self.separate)
 
 
 _CHARACTER_IDS = field_meta("character_ids", EpisodeForm.model_fields["character_ids"])
@@ -47,6 +49,12 @@ _MODEL_PARAM = ColumnMeta(key="model", label="本文のモデル", type="string"
                           choices=list(ai_client.AVAILABLE_MODELS), default=ai_client.EPISODE_MODEL)
 _EFFORT_PARAM = ColumnMeta(key="effort", label="本文の effort", type="string", nullable=True, required=False,
                            choices=list(ai_client.AVAILABLE_EFFORTS), default=ai_client.EPISODE_EFFORT)
+_ORDER = ColumnMeta(key="order", label="注文", type="string", nullable=True, required=False, section=True,
+                    comment="今の種に加えて、新しい種に望むこと(展開・焦点・雰囲気など)")
+_KEY_MODEL_PARAM = ColumnMeta(key="model", label="補完のモデル", type="string", nullable=True, required=False,
+                              choices=list(ai_client.AVAILABLE_MODELS), default=ai_client.KEY_MODEL)
+_KEY_EFFORT_PARAM = ColumnMeta(key="effort", label="補完の effort", type="string", nullable=True, required=False,
+                               choices=list(ai_client.AVAILABLE_EFFORTS), default=ai_client.KEY_EFFORT)
 
 GENERATORS: tuple[Generator, ...] = (
     Generator("character", "ai", "AI で作成", "character.generate_character.GenerateCharacter", "character",
@@ -59,9 +67,13 @@ GENERATORS: tuple[Generator, ...] = (
               mode="edit", when_empty="text"),
     Generator("episode", "frame", "AI で枠を作る", "episode.generate_frame.GenerateFrame", "frame",
               params=(_CHARACTER_IDS,)),
+    # 本文とはモデル・effort を分けたいので、自分だけのボタン・欄で出す
+    Generator("episode", "key", "AI でキー情報補完", "episode.complete_key.CompleteKey", "episode",
+              mode="both", when_empty="text", separate=True,
+              params=(_ORDER, _KEY_MODEL_PARAM, _KEY_EFFORT_PARAM)),
+    # 登場人物は下書きの character_ids(この話の episode_character)
     Generator("episode", "episode", "AI で本文まで書く", "episode.generate_episode.GenerateEpisode", "episode",
-              mode="both", when_empty="text",
-              params=(_CHARACTER_IDS, _MODEL_PARAM, _EFFORT_PARAM)),
+              mode="both", when_empty="text", params=(_MODEL_PARAM, _EFFORT_PARAM)),
     # GUI の専用レイアウト(RevisePanel)は指示文・モデル・effort だけを出す
     Generator("episode", "revise", "AI で推敲する", "episode.revise_episode.ReviseEpisode", "episode",
               mode="edit", when_not_empty="text", panel=True,

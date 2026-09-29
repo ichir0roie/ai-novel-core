@@ -23,85 +23,123 @@ export type PanelParts = { toggle: ReactNode; body: ReactNode };
 
 /** 「AI で作成」。欄の値を核に AI が全欄を組み立て直して行を足す(claude を叩く裏の job)。
  * 呼ぶ側(save ボタンの並び)に置く小さなボタン(`toggle`)と、押すと開く欄(`body`。無ければ null)を分けて返す。
+ * 生成はまとめて一つのボタン・欄で出す。`separate` の生成だけは、同じ名前の欄(model など)を他と分けるため、
+ * 自分だけのボタン・欄で出す。開ける欄は一度に一つ。
  * 指定できる欄(params)が無ければボタン自体がその場で実行し、`body` は結果待ち・エラーの表示だけになる。
  * 大きな専用パネルで出す推敲(`panel: true`)は `useRevisePanel` の担当なので、ここでは出さない。 */
 export function useGeneratePanel({ table, meta, draft, mode, onDone, disabled }: Props): PanelParts | null {
   const { claudeAvailable } = useMeta();
-  const [open, setOpen] = useState(false);
-  const [args, setArgs] = useState<Rec>({});
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [args, setArgs] = useState<Record<string, Rec>>({});
   const { job, error, running, start, setError } = useGenerateJob((id) => {
-    setOpen(false);
+    setOpenGroup(null);
     onDone(id);
   });
 
   const generators = matchingGenerators(meta, draft, mode, false);
   if (generators.length === 0) return null;
 
-  const params = new Map<string, ColumnMeta>();
-  for (const generator of generators) for (const param of generator.params ?? []) params.set(param.key, param);
-  // 下書きにも同じ欄がある指定(episode の登場人物 character_ids)は、触るまで下書きの値を出して渡す
-  const valueOf = (key: string) => (key in args ? args[key] : draft[key]);
+  const groups = [generators.filter((g) => !g.separate), ...generators.filter((g) => g.separate).map((g) => [g])]
+    .filter((group) => group.length > 0)
+    .map((group) => {
+      const params = new Map<string, ColumnMeta>();
+      for (const generator of group) for (const param of generator.params ?? []) params.set(param.key, param);
+      return { key: group.map((g) => g.key).join("/"), generators: group, params: [...params.values()] };
+    });
 
-  const run = async (generator: GeneratorMeta) => {
+  // 下書きにも同じ欄がある指定は、触るまで下書きの値を出して渡す
+  const valueOf = (group: string, key: string) => {
+    const mine = args[group] ?? {};
+    return key in mine ? mine[key] : draft[key];
+  };
+
+  const run = async (group: string, generator: GeneratorMeta) => {
     setError(null);
     const mine: Rec = {};
-    for (const param of generator.params ?? []) if (!isEmpty(valueOf(param.key))) mine[param.key] = valueOf(param.key);
+    for (const param of generator.params ?? []) if (!isEmpty(valueOf(group, param.key))) mine[param.key] = valueOf(group, param.key);
     await start(() => generateRecord(table, generator.key, compactDraft(draft), mine));
   };
 
   const status = (running && job && <div className="hint">{T.generate.inProgress(job.id, job.status)}</div>) || (error && <div className="status error">{error}</div>);
 
-  // 指定できる欄が無い生成(character の「AI で補完」など)は、開閉を挟まずボタンがそのまま実行する
-  if (params.size === 0) {
-    return {
-      toggle: (
-        <>
-          {generators.map((generator) => (
-            <button key={generator.key} onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
+  const toggle = (
+    <>
+      {groups.map((group) =>
+        // 指定できる欄が無い生成(character の「AI で補完」など)は、開閉を挟まずボタンがそのまま実行する
+        group.params.length === 0 ? (
+          group.generators.map((generator) => (
+            <button key={generator.key} onClick={() => run(group.key, generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
               {generator.label}
             </button>
-          ))}
-        </>
-      ),
-      body: status ? <div className="panel generate">{status}</div> : null,
-    };
-  }
+          ))
+        ) : (
+          <button
+            key={group.key}
+            type="button"
+            className={openGroup === group.key ? "on" : ""}
+            onClick={() => setOpenGroup(openGroup === group.key ? null : group.key)}
+            disabled={disabled || !claudeAvailable}
+            title={claudeAvailable ? T.generate.description(mode) : T.generate.unavailable}
+          >
+            {group.generators.map((g) => g.label).join(" / ")}
+          </button>
+        ),
+      )}
+    </>
+  );
+
+  const opened = groups.find((group) => group.key === openGroup && group.params.length > 0);
+  if (!opened) return { toggle, body: status ? <div className="panel generate">{status}</div> : null };
+
+  const field = (param: ColumnMeta) => (
+    <div key={param.key} className={param.section ? "field section auto" : "field"}>
+      <label title={param.comment ?? ""}>
+        {param.label}
+        <span className="key">{param.key}</span>
+      </label>
+      <FieldInput
+        column={param}
+        value={valueOf(opened.key, param.key)}
+        onChange={(v) => setArgs({ ...args, [opened.key]: { ...(args[opened.key] ?? {}), [param.key]: v } })}
+        disabled={running}
+        autoHeight={param.section}
+      />
+    </div>
+  );
+  const buttons = (
+    <div className="generate-buttons">
+      {opened.generators.map((generator) => (
+        <button key={generator.key} className="primary" onClick={() => run(opened.key, generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
+          {generator.label}
+        </button>
+      ))}
+    </div>
+  );
+  // 注文のような長い文の欄(section)は幅いっぱいに置き、残りの欄と実行ボタンをその下の一行に並べる
+  const sections = opened.params.filter((param) => param.section);
+  const others = opened.params.filter((param) => !param.section);
 
   return {
-    toggle: (
-      <button
-        type="button"
-        className={open ? "on" : ""}
-        onClick={() => setOpen(!open)}
-        disabled={disabled || !claudeAvailable}
-        title={claudeAvailable ? T.generate.description(mode) : T.generate.unavailable}
-      >
-        {generators.map((g) => g.label).join(" / ")}
-      </button>
-    ),
-    body: open ? (
+    toggle,
+    body: (
       <div className="panel generate">
         {!claudeAvailable && <div className="status error">{T.generate.unavailable}</div>}
-        <div className="form">
-          {[...params.values()].map((param) => (
-            <div key={param.key} className="field">
-              <label title={param.comment ?? ""}>
-                {param.label}
-                <span className="key">{param.key}</span>
-              </label>
-              <FieldInput column={param} value={valueOf(param.key)} onChange={(v) => setArgs({ ...args, [param.key]: v })} disabled={running} />
+        {sections.length > 0 ? (
+          <div className="generate-stack">
+            {sections.map(field)}
+            <div className="generate-row">
+              {others.map(field)}
+              {buttons}
             </div>
-          ))}
-          <div className="generate-buttons">
-            {generators.map((generator) => (
-              <button key={generator.key} className="primary" onClick={() => run(generator)} disabled={disabled || running || !claudeAvailable} title={T.generate.description(mode)}>
-                {generator.label}
-              </button>
-            ))}
           </div>
-        </div>
+        ) : (
+          <div className="form">
+            {others.map(field)}
+            {buttons}
+          </div>
+        )}
         {status}
       </div>
-    ) : null,
+    ),
   };
 }

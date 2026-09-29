@@ -84,11 +84,6 @@ class ParticipantMaterial(CharacterAt):
     recent_events: list[EventBase]
 
 
-class EventCharacterAt(CharacterAt):
-    character: CharacterBase
-    previous_event: EventMaterial | None = None
-
-
 def _sheet(character: CharacterBase, at: CharacterAt) -> dict[str, Any]:
     parameters = at.parameters
     return {
@@ -158,17 +153,4 @@ class ParticipantSerialized(ParticipantMaterial):
             },
             "関係": _relations(self.relations),
             "直近の出来事(新しい順)": [event.name for event in self.recent_events],
-        }
-
-
-class EventCharacterAtSerialized(EventCharacterAt):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    previous_event: EventSerialized | None = None
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        return {
-            **_sheet(self.character, self),
-            "直前の出来事": self.previous_event.model_dump() if self.previous_event else None,
         }

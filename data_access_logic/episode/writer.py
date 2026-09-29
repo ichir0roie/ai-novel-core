@@ -37,7 +37,7 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 {style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}"""
 
 
-def _episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeMaterialSerialized:
+def episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeMaterialSerialized:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -90,7 +90,7 @@ def write_episode(
     style_extra: str = "",
 ) -> Episode | None:
     """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
-    material = _episode_material(s, ai, episode_id, past_episode_count)
+    material = episode_material(s, ai, episode_id, past_episode_count)
 
     prompt = "\n".join([
         material.model_dump_json(indent=2),

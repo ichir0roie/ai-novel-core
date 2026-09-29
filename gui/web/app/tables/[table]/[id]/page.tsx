@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useGeneratePanel } from "@/components/GeneratePanel";
 import RecordForm from "@/components/RecordForm";
 import { useRevisePanel } from "@/components/RevisePanel";
-import { invalidateOptions } from "@/components/ReferenceSelect";
+import { invalidateAllOptions, invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
 import { diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
 import { PageTitle, useTable } from "@/lib/meta";
@@ -52,10 +52,10 @@ export default function RecordPage() {
   }, [load]);
 
   const generated = useCallback(() => {
-    invalidateOptions(table);
+    invalidateAllOptions();
     setSaved(T.record.writtenByAi);
     void load();
-  }, [table, load]);
+  }, [load]);
 
   const generatePanel = useGeneratePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
   const revisePanel = useRevisePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });

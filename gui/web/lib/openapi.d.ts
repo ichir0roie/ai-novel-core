@@ -557,6 +557,11 @@ export interface components {
              * @default false
              */
             panel: boolean;
+            /**
+             * Separate
+             * @default false
+             */
+            separate: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {

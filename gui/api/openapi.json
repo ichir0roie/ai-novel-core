@@ -1379,6 +1379,11 @@
             "type": "boolean",
             "title": "Panel",
             "default": false
+          },
+          "separate": {
+            "type": "boolean",
+            "title": "Separate",
+            "default": false
           }
         },
         "type": "object",

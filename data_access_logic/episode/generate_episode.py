@@ -20,8 +20,7 @@ class GenerateEpisode(SessionEntrypoint):
 
     AI 呼び出し(数分〜十数分かかることがある)の前に、下書きを枠として一度保存する。途中で失敗しても、枠は db に残る。
     種(`key`)か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
-    登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`、それも無ければ枠の
-    `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
+    登場人物は下書きの `character_ids`、省けば枠の `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
     """
@@ -29,7 +28,6 @@ class GenerateEpisode(SessionEntrypoint):
     def __init__(
         self,
         episode: EpisodeForm,
-        character_ids: list[int] | None = None,
         shared_style_extra: str | None = None,
         style_extra: str | None = None,
         model: str | None = None,
@@ -37,7 +35,6 @@ class GenerateEpisode(SessionEntrypoint):
         ai: AIClient = ai_client
     ):
         self.episode = episode
-        self.character_ids = character_ids
         self.model = model
         self.effort = effort
         self.shared_style_extra = world_style.shared_style_extra(shared_style_extra)
@@ -45,10 +42,7 @@ class GenerateEpisode(SessionEntrypoint):
         self.ai = ai
 
     def execute(self, s: Session) -> EpisodeRecord:
-        form = self.episode.model_copy()
-        if self.character_ids is not None:
-            form.character_ids = self.character_ids
-        record = save_frame(s, form)
+        record = save_frame(s, self.episode)
         if not record.key.strip() or record.start is None:
             framer.frame_episode(s, self.ai, record.id)
         written = writer.write_episode(

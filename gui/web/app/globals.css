@@ -322,6 +322,9 @@ button.ghost { background: transparent; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
+/* 選択欄の横に置く、選んだ行のページへのリンク(RecordLink) */
+.record-link { align-self: center; white-space: nowrap; font-size: 0.85rem; }
+.tree-select > .record-link { margin-left: 0.4rem; }
 .jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }
 .jump-title { font-size: 1.6rem; font-weight: 700; }
@@ -364,6 +367,16 @@ button.ghost { background: transparent; }
 .panel.generate .multi { max-height: 16rem; }
 .generate-buttons { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; }
 .panel.generate .form .generate-buttons { grid-column: span 2; margin-top: 0; align-self: end; }
+.generate-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+.generate-row { display: flex; gap: 0.6rem 1rem; align-items: flex-end; flex-wrap: wrap; }
+.generate-row .field { flex: 1 1 10rem; }
+.generate-row .generate-buttons { margin-top: 0; }
+/* 生成パネルは本文側(.record-text)に出るので、本文の高さの指定を外して注文の欄を行数ぶんの高さにする */
+.panel.generate .field.section.auto { flex: none; min-height: 0; }
+.panel.generate .field.section.auto textarea.section,
+.panel.generate .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
+/* 注文は一行ずつ書くので、空行を挟まない改行もプレビューで改行のまま出す(マークダウンの既定では一段落につながる) */
+.panel.generate .field.section.auto .markdown-preview :is(p, li) { white-space: pre-line; }
 
 /* 作品一覧のツリー(場所の木に作品をぶら下げる) */
 .tree { list-style: none; margin: 0; padding: 0; }

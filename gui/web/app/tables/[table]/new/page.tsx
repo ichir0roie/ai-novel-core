@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useGeneratePanel } from "@/components/GeneratePanel";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
-import { invalidateOptions } from "@/components/ReferenceSelect";
+import { invalidateAllOptions, invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec } from "@/lib/api";
 import { useCopyFromLastEpisode } from "@/lib/lastEpisode";
 import { PageTitle, useMeta, useTable } from "@/lib/meta";
@@ -47,7 +47,7 @@ export default function NewRecordPage() {
 
   const generated = useCallback(
     (id: number) => {
-      invalidateOptions(table);
+      invalidateAllOptions();
       void reload();
       openPage(`/tables/${table}/${id}`);
     },

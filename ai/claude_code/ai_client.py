@@ -27,6 +27,9 @@ _EFFORT = "medium"
 # 話の本文(Episode)だけは質を優先する。要約・ミーム・出来事などはすべて上の既定のまま。
 EPISODE_MODEL = "claude-fable-5-1"
 EPISODE_EFFORT = "high"
+# キー情報補完(種の書き直しと、足りない人物・舞台の候補)は本文の下ごしらえなので、軽く速く回す。
+KEY_MODEL = _MODEL
+KEY_EFFORT = "low"
 
 # GUI の「本文のモデル」プルダウンに出す一覧(claude CLI の --model にそのまま渡せる名前)。
 # 一覧の更新は本ファイルの値だけを直せばよい(GUI 側は choices としてこの値をそのまま受け取る)。

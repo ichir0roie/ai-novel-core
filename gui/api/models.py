@@ -67,6 +67,8 @@ class GeneratorMeta(BaseModel):
     params: list[ColumnMeta] = Field(default_factory=list)
     # true なら「AI で作成」の小さなボタン列(GeneratePanel)には出さず、専用の大きなパネル(RevisePanel)で出す
     panel: bool = False
+    # true なら他の生成とボタン・欄を共にせず、自分だけの起動ボタンと欄で出す(同じ名前の欄(model など)を分けるため)
+    separate: bool = False
 
 
 class TableMeta(BaseModel):

@@ -26,9 +26,7 @@ DEFAULT_EVENT_DURATION_DAYS = 1
 # 多いと本文を書く段で候補の要約が薄くなる。
 CANDIDATE_COUNT = 6
 
-# data_access_logic/event/novelist
-# 本文を小説の形で書かせるので、記録の JSON より長く待つ秒数。
-EVENT_NOVEL_TIMEOUT = 300.0
+# data_access_logic/event/summary
 # 直前の出来事の本文を要約させるのを待つ秒数。
 EVENT_SUMMARY_TIMEOUT = 120.0
 
@@ -65,6 +63,10 @@ MEME_POSITIONS = {
 # data_access_logic/episode
 # 本文を一話ぶん書かせるので、断片の JSON より長く待つ秒数。
 EPISODE_TIMEOUT = 900.0
+# キー情報補完で、種を書き直させるのを待つ秒数。
+EPISODE_KEY_TIMEOUT = 300.0
+# 書き直した種から、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
+EPISODE_CASTING_TIMEOUT = 300.0
 # 前の話を名指ししないときに、作品の中から渡す直前の話の本数。
 EPISODE_PREVIOUS_LIMIT = 3
 # 登場人物一人ぶんに渡す、直近の出来事の件数。

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Modal from "@/components/Modal";
-import { useOptions } from "@/components/ReferenceSelect";
+import { RecordLink, useOptions } from "@/components/ReferenceSelect";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -45,7 +45,12 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
       </button>
       <span className="episode-characters-summary">
         {selected.length > 0
-          ? selected.map((o) => labelWithAge(o.label, o.born, episodeStart)).join(" / ")
+          ? selected.map((o, i) => (
+              <span key={o.id}>
+                {i > 0 && " / "}
+                <RecordLink table="character" id={o.id} label={labelWithAge(o.label, o.born, episodeStart)} />
+              </span>
+            ))
           : T.episodeCharacters.none}
       </span>
       {open && (

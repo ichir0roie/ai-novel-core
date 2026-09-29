@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useOptions } from "./ReferenceSelect";
+import { RecordLink, useOptions } from "./ReferenceSelect";
 import { buildOptionTree, type OptionNode } from "@/lib/optionTree";
 import { useTreeOpen } from "@/lib/treeOpen";
 import { T } from "@/lib/text";
@@ -116,6 +116,7 @@ export default function TreeReferenceSelect({ table, value, nullable, onChange, 
         {current ? `${current.id}: ${current.label}` : value !== null ? `id ${value}` : nullable ? T.none : T.select}
         {" ▾"}
       </button>
+      {value !== null && <RecordLink table={table} id={value} />}
       {open && (
         <div className="tree-select-popup">
           <input

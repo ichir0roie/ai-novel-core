@@ -143,6 +143,44 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
         }
 
 
+class EpisodeKeyRequest(Material):
+    material: EpisodeMaterial
+    # 今の種に加えて、作者が新しい種に望むこと
+    order: str | None = None
+
+
+class EpisodeKeyRequestSerialized(EpisodeKeyRequest):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    material: EpisodeMaterialSerialized
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return {**self.material.model_dump(), "作者の注文": self.order}
+
+
+class EpisodeCastingRequest(Material):
+    material: EpisodeMaterial
+    # 書き直した種。材料の「書く話」の種(書き直す前の種)と置き換わる
+    key: str
+    # 話の場所の直下にある場所
+    known_locations: list[LocationMaterial]
+
+
+class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    material: EpisodeMaterialSerialized
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return {
+            **self.material.model_dump(),
+            "新しい種": self.key,
+            "この場所の中の既知の場所": [_location([location]) for location in self.known_locations],
+        }
+
+
 class EpisodeRevisionMaterial(Material):
     story: StoryMaterial
     main_episode: RevisedEpisode
@@ -260,6 +298,55 @@ class EpisodeDraft(BaseModel):
     @classmethod
     def _text(cls, value: str) -> str:
         return _laid_out(value)
+
+
+class EpisodeKeyDraft(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(description="この話の新しい種。今の種とそっくり置き換わる")
+
+    @field_validator("key")
+    @classmethod
+    def _filled(cls, value: str) -> str:
+        return _not_empty(value)
+
+
+class EpisodeCharacterCandidateDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    called: str = Field(description="新しい種での呼び名")
+    text: str = Field(description="人物像と、この話での役どころ")
+
+    @field_validator("called", "text")
+    @classmethod
+    def _stripped(cls, value: str) -> str:
+        return value.strip()
+
+
+class EpisodeLocationCandidateDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="名前")
+    kind: str = Field(description="種別。店・屋敷・広場など")
+    text: str = Field(description="説明")
+    environment: str = Field(description="環境")
+
+    @field_validator("name", "kind")
+    @classmethod
+    def _filled(cls, value: str) -> str:
+        return _not_empty(value)
+
+
+class EpisodeCastingDraft(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
+
+    characters: list[EpisodeCharacterCandidateDraft] | None = Field(
+        description="新しい種に出てくるのに、登場人物にいない人物。いなければ null")
+    location: EpisodeLocationCandidateDraft | None = Field(
+        description="新しい種の主な舞台が、書く話の場所より細かく、この場所の中の既知の場所にも無いときの、その舞台。"
+                    "それ以外は null")
 
 
 class EpisodeRevisionDraft(BaseModel):
