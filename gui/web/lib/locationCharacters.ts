@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getLocationCharacters } from "./api";
 
-/** フォームの場所(`location_id`)に時刻(`start`)にいる人物の id。話の人物の候補を絞るのに使う。
+/** フォームの場所(`location_id`)か、その上位の場所に時刻(`start`)にいる人物の id。話の人物の候補を絞るのに使う。
  * `enabled` が偽のとき、場所・時刻が空か読めないときは null(絞らない)。 */
 export function useLocationCharacterIds(locationId: unknown, start: unknown, enabled: boolean): number[] | null {
   const [ids, setIds] = useState<number[] | null>(null);

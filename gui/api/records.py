@@ -168,7 +168,9 @@ def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[in
                                 for name in spec.search_columns)))
     if ids:
         conditions.append(model.id.in_(ids))
-    rows = s.scalars(select(model).where(*conditions).order_by(model.id).limit(limit)).all()
+    # 人物はメインキャラクターを先に並べる(話の登場人物・視点で選ぶことが多い)
+    ordering = (Character.main_character.desc(), model.id) if model is Character else (model.id,)
+    rows = s.scalars(select(model).where(*conditions).order_by(*ordering).limit(limit)).all()
     parent_column = spec.tree_parent_column
     return [Option(id=row.id, label=label_of(model, row),
                    parent_id=getattr(row, parent_column) if parent_column else None,

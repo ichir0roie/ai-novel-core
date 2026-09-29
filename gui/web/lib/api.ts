@@ -129,6 +129,11 @@ export type LocationCharactersResponse = components["schemas"]["LocationCharacte
 export const getLocationCharacters = (locationId: number, time: string) =>
   api<LocationCharactersResponse>(`/api/location_characters?${new URLSearchParams({ location_id: String(locationId), time })}`);
 
+export type EpisodeRecord = components["schemas"]["EpisodeRecord"];
+
+export const getLastEpisode = (storyId: number) =>
+  api<EpisodeRecord | null>(`/api/last_episode?${new URLSearchParams({ story_id: String(storyId) })}`);
+
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {
   const items: Rec[] = [];

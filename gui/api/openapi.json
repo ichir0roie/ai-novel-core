@@ -809,7 +809,7 @@
     "/api/location_characters": {
       "get": {
         "summary": "Location Characters",
-        "description": "`time` に `location_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う",
+        "description": "`time` に `location_id` の場所か、その上位の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う",
         "operationId": "location_characters_api_location_characters_get",
         "parameters": [
           {
@@ -838,6 +838,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LocationCharactersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/last_episode": {
+      "get": {
+        "summary": "Last Episode",
+        "description": "作品の最後の話。話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う",
+        "operationId": "last_episode_api_last_episode_get",
+        "parameters": [
+          {
+            "name": "story_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Story Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/EpisodeRecord"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Last Episode Api Last Episode Get"
                 }
               }
             }
@@ -1144,6 +1192,120 @@
           "required"
         ],
         "title": "EntranceParam"
+      },
+      "EpisodeCharacterLink": {
+        "properties": {
+          "character_id": {
+            "type": "integer",
+            "title": "Character Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "character_id"
+        ],
+        "title": "EpisodeCharacterLink"
+      },
+      "EpisodeRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "synced": {
+            "type": "boolean",
+            "title": "Synced"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "viewpoint_character_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewpoint Character Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "letters": {
+            "type": "integer",
+            "title": "Letters"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "event_seeded": {
+            "type": "boolean",
+            "title": "Event Seeded"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "character_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Character Ids",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "story_id",
+          "title",
+          "synced",
+          "letters",
+          "key",
+          "event_seeded",
+          "text",
+          "character_ids"
+        ],
+        "title": "EpisodeRecord"
       },
       "GenerateRequest": {
         "properties": {

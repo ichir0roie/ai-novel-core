@@ -323,9 +323,29 @@ export interface paths {
         };
         /**
          * Location Characters
-         * @description `time` に `location_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う
+         * @description `time` に `location_id` の場所か、その上位の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う
          */
         get: operations["location_characters_api_location_characters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/last_episode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Last Episode
+         * @description 作品の最後の話。話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う
+         */
+        get: operations["last_episode_api_last_episode_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -464,6 +484,40 @@ export interface components {
              * @default
              */
             annotation: string;
+        };
+        /** EpisodeCharacterLink */
+        EpisodeCharacterLink: {
+            /** Character Id */
+            character_id: number;
+        };
+        /** EpisodeRecord */
+        EpisodeRecord: {
+            /** Id */
+            id: number;
+            /** Story Id */
+            story_id: number;
+            /** Title */
+            title: string;
+            /** Synced */
+            synced: boolean;
+            /** Start */
+            start?: string | null;
+            /** End */
+            end?: string | null;
+            /** Viewpoint Character Id */
+            viewpoint_character_id?: number | null;
+            /** Location Id */
+            location_id?: number | null;
+            /** Letters */
+            letters: number;
+            /** Key */
+            key: string;
+            /** Event Seeded */
+            event_seeded: boolean;
+            /** Text */
+            text: string;
+            /** Character Ids */
+            readonly character_ids: number[];
         };
         /** GenerateRequest */
         GenerateRequest: {
@@ -1406,6 +1460,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationCharactersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    last_episode_api_last_episode_get: {
+        parameters: {
+            query: {
+                story_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeRecord"] | null;
                 };
             };
             /** @description Validation Error */

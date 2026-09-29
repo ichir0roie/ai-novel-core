@@ -18,6 +18,8 @@ from data_access_logic.character.latest_locations import latest_location_ids
 from data_access_logic.character.location_characters import location_character_ids
 from data_access_logic.character.relation_graph import relation_graph
 from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.episode import reading as episode_reading
+from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.logs import configure_logging
 from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from data_access_logic.map.collect import planet_maps
@@ -233,11 +235,17 @@ def character_locations(s: Session = Depends(session_dep)) -> CharacterLocations
 
 @app.get("/api/location_characters", response_model=LocationCharactersResponse)
 def location_characters(location_id: int, time: str, s: Session = Depends(session_dep)) -> LocationCharactersResponse:
-    """`time` に `location_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う"""
+    """`time` に `location_id` の場所か、その上位の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う"""
     at = Stamp.parse(time)
     if at is None:
         raise ValueError("時刻が空")
     return LocationCharactersResponse(character_ids=location_character_ids(s, location_id, at))
+
+
+@app.get("/api/last_episode", response_model=EpisodeRecord | None)
+def last_episode(story_id: int, s: Session = Depends(session_dep)) -> EpisodeRecord | None:
+    """作品の最後の話。話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う"""
+    return episode_reading.last_episode(s, story_id)
 
 
 _ = Created  # OpenAPI に出す型として残す

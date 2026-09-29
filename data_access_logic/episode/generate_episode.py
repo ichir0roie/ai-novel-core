@@ -26,9 +26,16 @@ class GenerateEpisode(SessionEntrypoint):
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
     """
 
-    def __init__(self, episode: EpisodeForm, character_ids: list[int] | None = None,
-                 model: str | None = None, effort: str | None = None,
-                 shared_style_extra: str | None = None, style_extra: str | None = None, ai: AIClient = ai_client):
+    def __init__(
+        self,
+        episode: EpisodeForm,
+        character_ids: list[int] | None = None,
+        shared_style_extra: str | None = None,
+        style_extra: str | None = None,
+        model: str | None = None,
+        effort: str | None = None,
+        ai: AIClient = ai_client
+    ):
         self.episode = episode
         self.character_ids = character_ids
         self.model = model

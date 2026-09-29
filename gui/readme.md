@@ -87,6 +87,8 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
 話(`episode`)は枠(`key`)と本文(`text`)を一緒に扱う。出来事は `character_ids`(当事者)、
 人物は足すときだけ `location_id`(出自)を受け取る。
+話を足す画面は、作品が決まるとその作品の最後の話(`/api/last_episode`)から場所・視点・登場人物を空の欄にだけ写す。
+人物の選択肢(`/api/tables/character/options`)はメインキャラクターを先に並べる。
 
 型を変えたら OpenAPI と TS の型を作り直す。
 
