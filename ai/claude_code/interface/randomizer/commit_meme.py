@@ -4,26 +4,19 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
-from db.schema import MEME_CATEGORIES, ConfirmStatus, Meme
-from db.schema_pydantic import to_dict
+from data_access_logic.meme.form import MemeCreateForm
+from data_access_logic.meme.record import MemeRecord
+from db.schema import Meme
 
 
 class CommitMeme(CommitDraft):
     model = Meme
 
-    def __init__(self, meme: str | dict):
+    def __init__(self, meme: MemeCreateForm):
         self.meme = meme
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.meme)
-        data.pop("id", None)
-        self.check_columns(data)
-        if not (data.get("text") or "").strip():
-            raise ValueError("text は必須")
-        if data.get("category") not in (None, *MEME_CATEGORIES):
-            raise ValueError(f"category は {'/'.join(MEME_CATEGORIES)} のいずれか: {data['category']}")
-        data.setdefault("confirmed", ConfirmStatus.APPROVED)
-        record = Meme(**data)
+    def execute(self, session) -> MemeRecord:
+        record = Meme(**self.meme.column_values(Meme))
         session.add(record)
         self.finalize(session, record)
-        return to_dict(record)
+        return MemeRecord.model_validate(record)

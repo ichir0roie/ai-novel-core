@@ -26,8 +26,7 @@ class ReadEvents(StoryQuery):
         self.limit = limit
         self.until = until
 
-    def execute(self, session) -> list[dict]:
+    def execute(self, session) -> list[_rows.EventRowHead]:
         if self.key == "time":
             return _rows.events_at(session, self.value, limit=self.limit)
-        return _rows.events_of(session, _SELECTS[self.key], int(self.value),
-                               until=self.until, limit=self.limit)
+        return _rows.events_of(session, _SELECTS[self.key], self.value, until=self.until, limit=self.limit)

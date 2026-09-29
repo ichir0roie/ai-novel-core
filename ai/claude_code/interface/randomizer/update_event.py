@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import selectinload
+
+from ai.claude_code.interface._base import reloaded
 from ai.claude_code.interface.randomizer._base import CommitAndRefresh
+from data_access_logic.event.form import EventUpdateForm
+from data_access_logic.event.record import EventRecord
 from db.schema import Event, Location
 
 
 class UpdateEvent(CommitAndRefresh):
     model = Event
 
-    def __init__(self, event: str | dict):
+    def __init__(self, event: EventUpdateForm):
         self.event = event
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.event)
-        event_id = self.require_id(data, "直す対象の出来事")
-        self.check_columns(data)
+    def execute(self, session) -> EventRecord:
+        record = self.get_or_raise(session, self.event.id, "出来事")
+        if self.event.parent_event_id == self.event.id:
+            raise ValueError(f"parent_event_id={self.event.id} が自分自身を指している")
+        self.check_exists(session, Event, self.event.parent_event_id, "parent_event_id")
+        self.check_exists(session, Location, self.event.location_id, "location_id")
 
-        record = self.get_or_raise(session, event_id, "出来事")
-
-        if data.get("parent_event_id") == event_id:
-            raise ValueError(f"parent_event_id={event_id} が自分自身を指している")
-        self.check_exists(session, Event, data.get("parent_event_id"), "parent_event_id")
-        self.check_exists(session, Location, data.get("location_id"), "location_id")
-
-        return self.apply(session, record, data)
+        self.apply(session, record, self.event.changed_column_values(Event))
+        return EventRecord.model_validate(reloaded(session, record, selectinload(Event.event_characters)))

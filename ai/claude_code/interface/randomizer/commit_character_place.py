@@ -3,33 +3,26 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
+from data_access_logic.character.form import CharacterPlaceCreateForm
+from data_access_logic.character.record import CharacterPlaceRecord
 from data_access_logic.query import world_createion_query
 from db.schema import Character, CharacterPlace, Location
-from db.schema_pydantic import to_dict
 
 
 class CommitCharacterPlace(CommitDraft):
     model = CharacterPlace
 
-    def __init__(self, place: str | dict):
+    def __init__(self, place: CharacterPlaceCreateForm):
         self.place = place
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.place)
-        data.pop("id", None)
-        self.check_columns(data)
-        if data.get("character_id") is None:
-            raise ValueError("character_id は必須")
-        if data.get("location_id") is None:
-            raise ValueError("location_id は必須")
-
-        self.check_exists(session, Character, data["character_id"], "character_id")
-        self.check_exists(session, Location, data["location_id"], "location_id")
-        place = session.get(Location, data["location_id"])
+    def execute(self, session) -> CharacterPlaceRecord:
+        self.check_exists(session, Character, self.place.character_id, "character_id")
+        self.check_exists(session, Location, self.place.location_id, "location_id")
+        location = session.get_one(Location, self.place.location_id)
         world_createion_query.check_within_parent_span(
-            place, data.get("start"), data.get("end"), "character_place")
+            location, self.place.start, self.place.end, "character_place")
 
-        record = CharacterPlace(**data)
+        record = CharacterPlace(**self.place.column_values(CharacterPlace))
         session.add(record)
         self.finalize(session, record)
-        return to_dict(record)
+        return CharacterPlaceRecord.model_validate(record)

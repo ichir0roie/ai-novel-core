@@ -1,7 +1,7 @@
 import unicodedata
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from ai.time_keeper import constants
 from data_access_logic.material import Material
@@ -43,7 +43,7 @@ def _stamp_or_none(value: Any) -> Stamp | None:
 
 
 class IdeaTerm(Material):
-    """アイデアと照らす語。claude が渡した語(`"語"` か辞書)も、AI が挙げた語も、この形にそろえる。"""
+    """アイデアと照らす語。claude が渡す語も、AI が挙げた語(`IdeaTermDraft`)も、この形にそろえる。"""
 
     keyword: str
     variants: list[str] = []
@@ -96,18 +96,12 @@ class IdeaTerm(Material):
         return self
 
 
-def terms_of(keywords: Any) -> list[IdeaTerm]:
-    """`"語"` / 辞書 / それらのリストを、そろえた語のリストにする。keyword の空いたもの・重なったものは捨てる。"""
-    if isinstance(keywords, (str, dict, BaseModel)):
-        keywords = [keywords]
-    terms: dict[str, IdeaTerm] = {}
-    for item in keywords or []:
-        try:
-            term = IdeaTerm.model_validate({"keyword": item} if isinstance(item, str) else item)
-        except ValidationError:
-            continue
-        terms.setdefault(term.keyword, term)
-    return list(terms.values())
+def unique_terms(terms: list[IdeaTerm]) -> list[IdeaTerm]:
+    """同じ keyword の語は、先に挙げたものだけを残す。"""
+    found: dict[str, IdeaTerm] = {}
+    for term in terms:
+        found.setdefault(term.keyword, term)
+    return list(found.values())
 
 
 class IdeaTermDraft(BaseModel):

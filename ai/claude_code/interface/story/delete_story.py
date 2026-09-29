@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from ai.claude_code.interface.story._base import StoryCommit
+from data_access_logic.story.record import DeletedStory
 from db.schema import Episode, Story
 
 
@@ -13,8 +14,8 @@ class DeleteStory(StoryCommit):
     def __init__(self, story_id: int):
         self.story_id = story_id
 
-    def execute(self, session) -> dict:
-        record = self.get_or_raise(session, int(self.story_id), "作品")
+    def execute(self, session) -> DeletedStory:
+        record = self.get_or_raise(session, self.story_id, "作品")
 
         episode_id = session.scalar(
             select(Episode.id).where(Episode.story_id == record.id).limit(1))
@@ -22,7 +23,6 @@ class DeleteStory(StoryCommit):
             raise ValueError(
                 f"story_id={record.id} にはまだ話が残っている。先に話を消してから削除する")
 
-        data = {"id": record.id, "name": record.name, "place_id": record.place_id,
-                "text": record.text}
+        deleted = DeletedStory.model_validate(record)
         session.delete(record)
-        return data
+        return deleted

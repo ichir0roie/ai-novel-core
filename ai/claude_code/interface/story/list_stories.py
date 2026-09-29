@@ -6,5 +6,5 @@ from ai.claude_code.interface.story._base import StoryQuery
 
 
 class ListStories(StoryQuery):
-    def execute(self, session) -> list[dict]:
+    def execute(self, session) -> list[_rows.StoryDigest]:
         return _rows.stories(session)

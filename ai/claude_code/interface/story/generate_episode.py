@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import selectinload
+
 from ai.claude_code import ai_client
 from ai.claude_code.claude_code_time_keeper import _writer_options
-from ai.claude_code.interface.story import _rows
+from ai.claude_code.interface._base import reloaded
 from ai.claude_code.interface.story._base import StoryQuery
 from data_access_logic.episode import framer, writer
 from data_access_logic.episode.form import EpisodeForm, save_frame
+from data_access_logic.episode.record import EpisodeRecord
+from db.schema import Episode
 
 
 class GenerateEpisode(StoryQuery):
@@ -21,10 +25,10 @@ class GenerateEpisode(StoryQuery):
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
     """
 
-    def __init__(self, episode: dict, character_ids: list[int] | None = None,
+    def __init__(self, episode: EpisodeForm, character_ids: list[int] | None = None,
                  model: str | None = None, effort: str | None = None,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
-        self.episode = dict(episode or {})
+        self.episode = episode
         self.character_ids = character_ids
         self.model = model
         self.effort = effort
@@ -38,8 +42,8 @@ class GenerateEpisode(StoryQuery):
         options = {key: value for key, value in (("model", self.model), ("effort", self.effort)) if value}
         return options or None
 
-    def execute(self, session) -> dict:
-        form = EpisodeForm.model_validate(self.episode)
+    def execute(self, session) -> EpisodeRecord:
+        form = self.episode.model_copy()
         if self.character_ids is not None:
             form.character_ids = self.character_ids
         record = save_frame(session, form)
@@ -50,4 +54,4 @@ class GenerateEpisode(StoryQuery):
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if written is None:
             raise ValueError("本文が得られなかった")
-        return _rows.episode_row(written)
+        return EpisodeRecord.model_validate(reloaded(session, written, selectinload(Episode.episode_characters)))

@@ -11,6 +11,5 @@ class ReadCharacter(StoryQuery):
         self.time = time
         self.count = count
 
-    def execute(self, session) -> dict:
-        return _rows.character_sheet(session, int(self.character_id),
-                                     until=self.time, count=int(self.count))
+    def execute(self, session) -> _rows.CharacterSheet:
+        return _rows.character_sheet(session, self.character_id, until=self.time, count=self.count)

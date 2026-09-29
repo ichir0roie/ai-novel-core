@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.world._base import WorldQuery
+from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.query import common_query
 
 
@@ -12,7 +13,5 @@ class ListCharacterRelations(WorldQuery):
     def select(self):
         return common_query.character_relations_select(self.character_id)
 
-    def row(self, row) -> dict:
-        return {"id": row.id, "character_id_1": row.character_id_1,
-                "character_id_2": row.character_id_2,
-                "relation": row.relation, "text": row.text}
+    def row(self, row) -> CharacterRelationRecord:
+        return CharacterRelationRecord.model_validate(row)

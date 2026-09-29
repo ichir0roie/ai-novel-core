@@ -1,9 +1,10 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from data_access_logic.material import Form, Timestamp
 from db.schema import Episode, EpisodeCharacter
 from db.stamp import Stamp
 
@@ -34,6 +35,30 @@ class EpisodeForm(BaseModel):
     @classmethod
     def _stamp(cls, value: Any) -> Stamp | None:
         return Stamp.parse(value)
+
+
+class EpisodeCommitForm(Form):
+    """`id` を渡せばその話の渡した欄だけを直し、省けば `story_id` の作品に新しい話を足す。"""
+
+    id: int | None = None
+    story_id: int | None = None
+    title: str | None = None
+    key: str | None = None
+    # 改行を整えてから入れる(`layout_novel_text`)
+    text: str | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    viewpoint_character_id: int | None = None
+    place_id: int | None = None
+    event_seeded: bool | None = None
+    # 渡すと登場人物(`episode_character`)をまるごと置き換える
+    character_ids: list[int] | None = None
+
+    @model_validator(mode="after")
+    def _story_of_new_episode(self) -> "EpisodeCommitForm":
+        if self.id is None and self.story_id is None:
+            raise ValueError("story_id は必須(id を渡さず新しい話を足すとき)")
+        return self
 
 
 def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> None:

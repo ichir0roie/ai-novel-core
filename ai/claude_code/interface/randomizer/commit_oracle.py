@@ -2,25 +2,20 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitMemeSource
+from data_access_logic.oracle.form import OracleCreateForm
+from data_access_logic.oracle.record import OracleRecord
 from db.schema import Oracle
-from db.schema_pydantic import to_dict
 
 
 class CommitOracle(CommitMemeSource):
     model = Oracle
 
-    def __init__(self, oracle: str | dict, fact_check: bool = True):
+    def __init__(self, oracle: OracleCreateForm, fact_check: bool = True):
         self.oracle = oracle
         self.fact_check = fact_check
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.oracle)
-        data.pop("id", None)
-        self.check_columns(data)
-        if not data.get("text"):
-            raise ValueError("text は必須")
-
-        record = Oracle(**data)
+    def execute(self, session) -> OracleRecord:
+        record = Oracle(**self.oracle.column_values(Oracle))
         session.add(record)
         self.finalize(session, record)
-        return to_dict(record)
+        return OracleRecord.model_validate(record)

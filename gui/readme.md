@@ -94,10 +94,12 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 ## 入口と claude コマンド
 
 `POST /api/interface/{id}` は、クラスの入口なら組み立てて `run()` を、常駐ループ側なら `claude_*_main` をそのまま呼ぶ。
-どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `run()` を上書きしている入口、
+`args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに読み込んでから渡す(読み込めなければ 400)。
+どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `result()` を上書きしている入口、
 AI を引数に取る入口、`time_keeper.*`)。それらは
 
-- Claude Code の環境(シェルに `CLAUDECODE=1` がある。Claude Code のセッションから起こした API)でだけ通す。外なら 403
+- `CLAUDECODE=1` のある環境で起こした API でだけ通す。外なら 403。Claude Code のシェルは `CLAUDECODE=1` を持ち、
+  `gui.dev` はどこから起こしても API に渡す(uvicorn を直に起こしたときだけ、自分で渡さなければ止まる)
 - 数分〜十数分掛かるので、必ず裏の job にして 202 で id を返す。結果は `/api/jobs/{id}` で引く。job は一度に一つずつ走る
 - `shared_style_extra` / `style_extra` を渡さなければ、世界リポジトリの `instructions/style.py`(`SHARED_EXTRA` / `EPISODE_STYLE_EXTRA`)があればそこから埋める
 

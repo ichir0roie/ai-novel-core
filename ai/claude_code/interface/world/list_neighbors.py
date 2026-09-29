@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from typing import Any
+
+from pydantic import BaseModel, model_serializer
+
 from ai.claude_code.interface._base import SessionEntrypoint
 from data_access_logic.query import common_query
 from db.schema import Location
@@ -10,35 +14,86 @@ from tool.map.geometry import (
 )
 
 
+class MapPoint(BaseModel):
+    """地図の点(`tool/map/collect.py` の `point_dict`)。"""
+
+    id: int
+    name: str | None = None
+    kind: str | None = None
+    category: str
+    parent_id: int | None = None
+    parent_name: str | None = None
+    parent_kind: str | None = None
+    lon: float | None = None
+    lat: float | None = None
+    alt: float | None = None
+    polygon: dict | None = None
+    environment: str | None = None
+    sample_region: str | None = None
+    sample_culture: str | None = None
+    sample_era: str | None = None
+    start: str | None = None
+    end: str | None = None
+    link: str
+
+
+class Planet(BaseModel):
+    id: int
+    name: str | None = None
+    area: float | None = None
+    radius_km: float | None = None
+
+
+class Neighbor(BaseModel):
+    """地図の点の欄に、起点からの方角・距離・高低差を同じ段に並べて出す。"""
+
+    point: MapPoint
+    distance_deg: float
+    distance_km: int | None = None
+    bearing_deg: int
+    bearing: str
+    altitude_diff_m: float | None = None
+    summary: str
+
+    @model_serializer(mode="wrap")
+    def _flat(self, handler: Any) -> dict:
+        data = handler(self)
+        return {**data.pop("point"), **data}
+
+
+class Neighbors(BaseModel):
+    place: MapPoint
+    planet: Planet
+    neighbors: list[Neighbor]
+
+
 class ListNeighbors(SessionEntrypoint):
     def __init__(self, place_id: int, kind: str | None = None, limit: int | None = None):
-        self.place_id = int(place_id)
+        self.place_id = place_id
         self.kind = kind
         self.limit = limit
 
-    def execute(self, session) -> dict:
+    def execute(self, session) -> Neighbors:
         origin = session.get(Location, self.place_id)
         if origin is None:
             raise common_query.NotFoundError(f"id={self.place_id} の場所が無い")
         if origin.location_longitude is None or origin.location_latitude is None:
             raise ValueError(f"{origin.name}(id={origin.id})は経緯度を持たない(面の場所か、座標が未記入)")
-        planet = session.get(Location, origin.location_planet) if origin.location_planet is not None else None
-        if planet is None:
+        planet_row = session.get(Location, origin.location_planet) if origin.location_planet is not None else None
+        if planet_row is None:
             raise ValueError(f"{origin.name}(id={origin.id})は星(location_planet)が決まっていない")
 
-        radius = planet_dict(planet)["radius_km"]
-        rows = []
-        for place in session.scalars(common_query.places_on_planet_select(planet.id)).all():
-            if place.id == origin.id or (self.kind is not None and place.kind != self.kind):
-                continue
-            rows.append(self._row(session, origin, place, radius))
-        rows.sort(key=lambda r: (r["distance_deg"], r["id"]))
+        planet = Planet.model_validate(planet_dict(planet_row))
+        neighbors = [self._neighbor(session, origin, place, planet.radius_km)
+                     for place in session.scalars(common_query.places_on_planet_select(planet.id)).all()
+                     if place.id != origin.id and (self.kind is None or place.kind == self.kind)]
+        neighbors.sort(key=lambda neighbor: (neighbor.distance_deg, neighbor.point.id))
         if self.limit is not None:
-            rows = rows[: int(self.limit)]
-        return {"place": point_dict(session, origin), "planet": planet_dict(planet), "neighbors": rows}
+            neighbors = neighbors[: self.limit]
+        return Neighbors(place=MapPoint.model_validate(point_dict(session, origin)), planet=planet, neighbors=neighbors)
 
     @staticmethod
-    def _row(session, origin, place, radius) -> dict:
+    def _neighbor(session, origin: Location, place: Location, radius: float | None) -> Neighbor:
         lon1, lat1 = origin.location_longitude, origin.location_latitude
         lon2, lat2 = place.location_longitude, place.location_latitude
         deg = angular_distance_deg(lon1, lat1, lon2, lat2)
@@ -46,15 +101,11 @@ class ListNeighbors(SessionEntrypoint):
         bearing = bearing_deg(lon1, lat1, lon2, lat2)
         diff = (float(place.location_altitude) - float(origin.location_altitude)
                 if place.location_altitude is not None and origin.location_altitude is not None else None)
-        row = point_dict(session, place)
-        row.update({
-            "distance_deg": round(deg, 2),
-            "distance_km": None if km is None else round(km),
-            "bearing_deg": round(bearing),
-            "bearing": "同じ経緯度" if deg < 0.01 else bearing_name(bearing),
-            "altitude_diff_m": diff,
-        })
-        parent = f"・{row['parent_name']}" if row["parent_name"] else ""
-        where = "同じ経緯度" if deg < 0.01 else f"{row['bearing']} {distance_text(km, deg)}"
-        row["summary"] = f"{row['name']}({row['kind'] or '種別なし'}{parent}): {where}、{altitude_diff_text(diff)}"
-        return row
+        point = MapPoint.model_validate(point_dict(session, place))
+        direction = "同じ経緯度" if deg < 0.01 else bearing_name(bearing)
+        parent = f"・{point.parent_name}" if point.parent_name else ""
+        where = "同じ経緯度" if deg < 0.01 else f"{direction} {distance_text(km, deg)}"
+        return Neighbor(
+            point=point, distance_deg=round(deg, 2), distance_km=None if km is None else round(km),
+            bearing_deg=round(bearing), bearing=direction, altitude_diff_m=diff,
+            summary=f"{point.name}({point.kind or '種別なし'}{parent}): {where}、{altitude_diff_text(diff)}")

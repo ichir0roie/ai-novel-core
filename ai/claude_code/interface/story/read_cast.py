@@ -12,6 +12,5 @@ class ReadCast(StoryQuery):
         self.count = count
         self.levels = levels
 
-    def execute(self, session) -> dict:
-        return _rows.cast(session, int(self.story_id), self.time,
-                          count=int(self.count), levels=int(self.levels))
+    def execute(self, session) -> _rows.Cast:
+        return _rows.cast(session, self.story_id, self.time, count=self.count, levels=self.levels)

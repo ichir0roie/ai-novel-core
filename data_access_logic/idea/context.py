@@ -4,7 +4,6 @@
 どのアイデアにも当たらなかった固有の語(`coined`)は、未確認のアイデアとして足す(候補)。
 候補は確かめる(`confirmed` を 承認 にする)まで検索・清書には出ない。退けた(非承認)語は候補にも足さない。
 """
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,7 +12,7 @@ from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, terms_of
+from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms
 from data_access_logic.idea.search import keywords_of, search, spellings
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query, dictionary_query
@@ -85,12 +84,12 @@ def _related(s: Session, hits: list[IdeaMaterial], place_id: int | None, time: S
     return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]
 
 
-def resolve_ideas(s: Session, keywords: Any, place_id: int | None, time: Stamp | None) -> IdeaContextMaterial:
-    """洗い出した語(`terms_of` が受け取る形)をアイデアと照らし、当たらなかった固有の語を候補として足す。
+def resolve_ideas(s: Session, keywords: list[IdeaTerm], place_id: int | None, time: Stamp | None) -> IdeaContextMaterial:
+    """洗い出した語をアイデアと照らし、当たらなかった固有の語を候補として足す。
 
     足す候補の効く期間は語の `start` / `end`(時期のはっきりしない語は None のまま)。
     """
-    terms = terms_of(keywords)
+    terms = unique_terms(keywords)
     hits = search(s, terms, place_id, time)
 
     matched = {keyword for hit in hits for keyword in hit.keywords}

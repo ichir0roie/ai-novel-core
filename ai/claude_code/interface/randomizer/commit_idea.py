@@ -3,40 +3,32 @@ from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitMemeSource
 from data_access_logic.idea.classification import find_or_create_classification
+from data_access_logic.idea.form import IdeaCreateForm
+from data_access_logic.idea.record import IdeaRecord
 from db.child_lists import load_children
 from db.schema import Idea, Location
-from db.schema_pydantic import to_dict
 
 
 class CommitIdea(CommitMemeSource):
     model = Idea
 
-    def __init__(self, idea: str | dict, fact_check: bool = True):
+    def __init__(self, idea: IdeaCreateForm, fact_check: bool = True):
         self.idea = idea
         self.fact_check = fact_check
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.idea)
-        data.pop("id", None)
-        recognitions = data.pop("recognitions", [])
-        self.check_columns(data)
-        if not data.get("name"):
-            raise ValueError("name は必須")
-        if not data.get("kind"):
-            raise ValueError("kind は必須")
-        data.setdefault("text", "")
+    def execute(self, session) -> IdeaRecord:
+        form = self.idea
+        self.check_exists(session, Location, form.location_id, "location_id")
+        self.check_exists(session, Idea, form.parent_idea_id, "parent_idea_id")
 
-        self.check_exists(session, Location, data.get("location_id"), "location_id")
-        self.check_exists(session, Idea, data.get("parent_idea_id"), "parent_idea_id")
+        record = Idea(**form.column_values(Idea))
         # 親を渡されていなければ、kind の分類アイデアを場所から探し、無ければ作って親にする。
         # ただし、いま作っているのがまさにその分類自身(name == kind)なら、自分自身の親を探しに行かない
-        if data.get("parent_idea_id") is None and data.get("name") != data.get("kind"):
-            classification = find_or_create_classification(session, data["kind"], data.get("location_id"))
+        if form.parent_idea_id is None and form.name != form.kind:
+            classification = find_or_create_classification(session, form.kind, form.location_id)
             if classification is not None:
-                data["parent_idea_id"] = classification.id
-
-        record = Idea(**data)
-        load_children(record, "recognitions", recognitions)
+                record.parent_idea_id = classification.id
+        load_children(record, "recognitions", [row.model_dump() for row in form.recognitions])
         session.add(record)
         self.finalize(session, record)
-        return to_dict(record)
+        return IdeaRecord.model_validate(record)

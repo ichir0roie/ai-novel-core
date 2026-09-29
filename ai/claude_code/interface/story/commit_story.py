@@ -2,30 +2,22 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitAndRefresh
+from data_access_logic.story.form import StoryCreateForm
+from data_access_logic.story.record import StoryRecord
 from db.schema import Location, Story
-from db.schema_pydantic import to_dict
 
 
 class CommitStory(CommitAndRefresh):
     model = Story
 
-    def __init__(self, story: str | dict):
+    def __init__(self, story: StoryCreateForm):
         self.story = story
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.story)
-        data.pop("id", None)
-        self.check_columns(data)
-        if not data.get("name"):
-            raise ValueError("name は必須")
-        data.setdefault("text", "")
-        data.setdefault("narration", "")
-        data.setdefault("state", "")
+    def execute(self, session) -> StoryRecord:
+        self.check_exists(session, Location, self.story.world_id, "world_id")
+        self.check_exists(session, Location, self.story.place_id, "place_id")
 
-        self.check_exists(session, Location, data.get("world_id"), "world_id")
-        self.check_exists(session, Location, data.get("place_id"), "place_id")
-
-        record = Story(**data)
+        record = Story(**self.story.column_values(Story))
         session.add(record)
         self.finalize(session, record)
-        return to_dict(record)
+        return StoryRecord.model_validate(record)

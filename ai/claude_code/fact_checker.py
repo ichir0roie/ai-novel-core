@@ -82,6 +82,12 @@ class FactChecksDraft(BaseModel):
 
     results: list[FactCheckDraft] = Field(description="番号ごとの検めた結果")
 
+
+class FactChecked(BaseModel):
+    checked: int
+    memes_added: int
+
+
 MODELS = {"idea": Idea, "oracle": Oracle, "meme": Meme}
 
 
@@ -152,12 +158,12 @@ def check_new_memes(session: Session, last_id: int) -> int:
     return check(session, "meme", ids=ids) if ids else 0
 
 
-def check_and_extract(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> dict:
+def check_and_extract(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> FactChecked:
     """検めたあと、ミームの元(アイデア・oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
     checked = check(session, table, ids, limit)
     if table == "meme":
-        return {"checked": checked, "memes_added": 0}
+        return FactChecked(checked=checked, memes_added=0)
     last_id = last_meme_id(session)
     added = refresh_memes(session, ai_client)
     check_new_memes(session, last_id)
-    return {"checked": checked, "memes_added": added}
+    return FactChecked(checked=checked, memes_added=added)

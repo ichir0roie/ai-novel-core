@@ -10,6 +10,6 @@ __all__ = ["RefreshGeneratedContent"]
 
 
 class RefreshGeneratedContent(Entrypoint):
-    def run(self) -> dict:
+    def result(self) -> generated_content.RefreshedAll:
         with get_env_session() as session:
             return generated_content.refresh_all(session, ai_client)

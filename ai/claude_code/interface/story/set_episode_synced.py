@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from ai.claude_code.interface._base import UnknownRecordError
+from sqlalchemy.orm import selectinload
+
+from ai.claude_code.interface._base import reloaded
 from ai.claude_code.interface.story._base import StoryCommit
+from data_access_logic.episode.record import EpisodeRecord
 from db.schema import Episode
-from db.schema_pydantic import to_dict
 
 
 class SetEpisodeSynced(StoryCommit):
@@ -14,9 +16,8 @@ class SetEpisodeSynced(StoryCommit):
         self.episode_id = episode_id
         self.synced = synced
 
-    def execute(self, session) -> dict:
-        record = session.get(Episode, int(self.episode_id))
-        if record is None:
-            raise UnknownRecordError(f"id={self.episode_id} という話が見つからない")
-        record.synced = bool(self.synced)
-        return to_dict(record)
+    def execute(self, session) -> EpisodeRecord:
+        record = self.get_or_raise(session, self.episode_id, "話")
+        record.synced = self.synced
+        session.flush()
+        return EpisodeRecord.model_validate(reloaded(session, record, selectinload(Episode.episode_characters)))

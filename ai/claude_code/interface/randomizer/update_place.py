@@ -4,33 +4,27 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
-from db.polygon import parse_polygon
+from data_access_logic.location.form import LocationUpdateForm
+from data_access_logic.location.record import LocationRecord
 from db.schema import Location
 
 
 class UpdatePlace(CommitDraft):
     model = Location
 
-    def __init__(self, place: str | dict):
+    def __init__(self, place: LocationUpdateForm):
         self.place = place
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.place)
-        place_id = self.require_id(data, "直す対象の場所")
-        self.check_columns(data)
-
-        record = self.get_or_raise(session, place_id, "場所")
-
-        if "area" in data:
-            self._check_area(session, record, data["area"])
-        if "polygon" in data:
-            data["polygon"] = parse_polygon(data["polygon"])
-
-        return self.apply(session, record, data)
+    def execute(self, session) -> LocationRecord:
+        record = self.get_or_raise(session, self.place.id, "場所")
+        if self.place.area is not None:
+            self._check_area(session, record, self.place.area)
+        self.apply(session, record, self.place.changed_column_values(Location))
+        return LocationRecord.model_validate(record)
 
     @staticmethod
-    def _check_area(session, record: Location, area) -> None:
-        if area is None or record.parent_id is None:
+    def _check_area(session, record: Location, area: float) -> None:
+        if record.parent_id is None:
             return
         parent = session.get(Location, record.parent_id)
         if parent is None or parent.area is None:

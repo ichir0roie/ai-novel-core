@@ -15,8 +15,6 @@ from db.schema import (
 from data_access_logic.query import dictionary_query
 from db.stamp import Stamp, StampError
 
-EVENT_RELATIONS = {"location": "place_name"}
-
 EVENT_LOAD_OPTIONS = (
     selectinload(Event.location),
     selectinload(Event.event_characters).selectinload(EventCharacter.character),

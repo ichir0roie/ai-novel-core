@@ -230,11 +230,16 @@ def _set_participants(session: Session, junction_model, fk_name: str, record_id:
     session.flush()
 
 
+# 画面の欄には出るが、入口の引数にしない列。字数は本文から数え、同期フラグは入口が落とす(GUI で渡された値は後で書く)
+_DERIVED_COLUMNS = {"episode": ("letters", "synced")}
+
+
 def create_record(session: Session, spec: TableSpec, data: dict) -> int:
     payload = dict(data)
     payload.pop("id", None)
-    result = spec.creator(payload).execute(session)
-    return int(result["id"])
+    for column in _DERIVED_COLUMNS.get(spec.name, ()):
+        payload.pop(column, None)
+    return spec.creator(spec.create_form.model_validate(payload)).execute(session).id
 
 
 def update_record(session: Session, spec: TableSpec, record_id: int, data: dict) -> None:
@@ -245,8 +250,10 @@ def update_record(session: Session, spec: TableSpec, record_id: int, data: dict)
     if spec.name == "character":
         payload.pop("place_id", None)  # 出自は足すときだけ。あとから直すのは CHILD_LISTS の places
     synced = payload.pop("synced", None) if spec.name == "episode" else None
+    for column in _DERIVED_COLUMNS.get(spec.name, ()):
+        payload.pop(column, None)
     if payload:
-        spec.updater({**payload, "id": record_id}).execute(session)
+        spec.updater(spec.update_form.model_validate({**payload, "id": record_id})).execute(session)
     if character_ids is not None:
         if spec.name == "event":
             _set_participants(session, EventCharacter, "event_id", record_id, character_ids)

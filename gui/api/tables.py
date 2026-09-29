@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 from ai.claude_code.interface.randomizer.commit_character import CommitCharacter
 from ai.claude_code.interface.randomizer.commit_character_relation import CommitCharacterRelation
 from ai.claude_code.interface.randomizer.commit_event import CommitEvent
@@ -26,6 +28,16 @@ from ai.claude_code.interface.randomizer.update_place import UpdatePlace
 from ai.claude_code.interface.story.commit_episode import CommitEpisode
 from ai.claude_code.interface.story.commit_story import CommitStory
 from ai.claude_code.interface.story.update_story import UpdateStory
+from data_access_logic.character.form import (
+    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
+)
+from data_access_logic.episode.form import EpisodeCommitForm
+from data_access_logic.event.form import EventCreateForm, EventUpdateForm
+from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
+from data_access_logic.location.form import LocationCreateForm, LocationUpdateForm
+from data_access_logic.meme.form import MemeCreateForm, MemeUpdateForm
+from data_access_logic.oracle.form import OracleCreateForm, OracleUpdateForm
+from data_access_logic.story.form import StoryCreateForm, StoryUpdateForm
 from db.schema import (
     Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story,
 )
@@ -38,6 +50,9 @@ class TableSpec:
     model: type
     creator: type
     updater: type
+    # 入口の引数。GUI から来た dict をこれに読み込んで渡す
+    create_form: type[BaseModel]
+    update_form: type[BaseModel]
     # 一覧・選択肢で行を呼ぶ名前にする列。空なら text の先頭
     label_column: str | None
     # 一覧の検索(部分一致)で見る列
@@ -55,21 +70,22 @@ class TableSpec:
 
 
 TABLES: tuple[TableSpec, ...] = (
-    TableSpec("story", "作品", Story, CommitStory, UpdateStory, "name", ("name", "text")),
-    TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, "title", ("title", "key"),
+    TableSpec("story", "作品", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, "name", ("name", "text")),
+    TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCommitForm, EpisodeCommitForm, "title", ("title", "key"),
               extra_fields=("character_ids",), sort="start", order="asc"),
-    TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, "name", ("name", "text"),
+    TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
+              CharacterUpdateForm, "name", ("name", "text"),
               extra_fields=("place_id",), reviewable=True),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,
-              UpdateCharacterRelation, "relation", ("relation", "text")),
-    TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, "name", ("name", "text"),
+              UpdateCharacterRelation, CharacterRelationCreateForm, CharacterRelationUpdateForm, "relation", ("relation", "text")),
+    TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, "name", ("name", "text"),
               extra_fields=("character_ids",), reviewable=True),
-    TableSpec("location", "場所", Location, CommitPlace, UpdatePlace, "name", ("name", "text"),
+    TableSpec("location", "場所", Location, CommitPlace, UpdatePlace, LocationCreateForm, LocationUpdateForm, "name", ("name", "text"),
               tree_parent_column="parent_id"),
-    TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, "name", ("name", "text"), reviewable=True,
+    TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, IdeaCreateForm, IdeaUpdateForm, "name", ("name", "text"), reviewable=True,
               tree_parent_column="parent_idea_id"),
-    TableSpec("meme", "ミーム", Meme, CommitMeme, UpdateMeme, None, ("text",), reviewable=True),
-    TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, "title", ("title", "text")),
+    TableSpec("meme", "ミーム", Meme, CommitMeme, UpdateMeme, MemeCreateForm, MemeUpdateForm, None, ("text",), reviewable=True),
+    TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, OracleCreateForm, OracleUpdateForm, "title", ("title", "text")),
 )
 
 TABLE_BY_NAME: dict[str, TableSpec] = {spec.name: spec for spec in TABLES}

@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import random
 
-from ai.claude_code import ai_client
-from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from ai.claude_code.interface._base import SessionEntrypoint, UnknownRecordError
+from ai.claude_code import ai_client
+from ai.claude_code.interface._base import SessionEntrypoint, UnknownRecordError, reloaded
 from ai.time_keeper import place_event_generator
 from data_access_logic.event.form import EventForm
-from db.schema import Event, EventCharacter
-from db.schema_pydantic import to_dict
+from data_access_logic.event.record import EventRecord
+from db.schema import Event
 
 
 class GenerateEvent(SessionEntrypoint):
@@ -25,35 +25,24 @@ class GenerateEvent(SessionEntrypoint):
     小説の本文だけを書かせて埋める(名前・時刻・場所・当事者は変えない)。
     """
 
-    def __init__(self, event: dict | None = None, seed: int | None = None,
+    def __init__(self, event: EventForm | None = None, seed: int | None = None,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
-        self.event = dict(event or {})
+        self.event = event or EventForm()
         self.seed = seed
         self.shared_style_extra = shared_style_extra
         self.style_extra = style_extra
         self.ai = ai
 
-    def execute(self, session) -> dict:
-        draft = dict(self.event)
-        event_id = draft.pop("id", None)
-        if event_id is not None:
-            return self._complete(session, event_id)
-        record = place_event_generator.generate_from_draft(
-            session, self.ai, EventForm.model_validate(draft), random.Random(self.seed),
-            shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
-        session.refresh(record)
-        # `Event.event_characters` は noload なので、中間テーブルを直接引く
-        character_ids = list(session.scalars(select(EventCharacter.character_id)
-                                             .where(EventCharacter.event_id == record.id).order_by(EventCharacter.id)))
-        return {**to_dict(record), "character_ids": character_ids}
-
-    def _complete(self, session, event_id: int) -> dict:
-        record = session.get(Event, event_id)
-        if record is None:
-            raise UnknownRecordError(f"id={event_id} という出来事が見つからない")
-        place_event_generator.complete_text(
-            session, self.ai, record,
-            shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
-        character_ids = list(session.scalars(select(EventCharacter.character_id)
-                                             .where(EventCharacter.event_id == record.id).order_by(EventCharacter.id)))
-        return {**to_dict(record), "character_ids": character_ids}
+    def execute(self, session) -> EventRecord:
+        if self.event.id is not None:
+            record = session.get(Event, self.event.id)
+            if record is None:
+                raise UnknownRecordError(f"id={self.event.id} という出来事が見つからない")
+            place_event_generator.complete_text(
+                session, self.ai, record,
+                shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
+        else:
+            record = place_event_generator.generate_from_draft(
+                session, self.ai, self.event, random.Random(self.seed),
+                shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
+        return EventRecord.model_validate(reloaded(session, record, selectinload(Event.event_characters)))

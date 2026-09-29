@@ -62,10 +62,7 @@ def active_story_count_select(time) -> Select:
                    or_(Story.end.is_(None), Story.end > time)))
 
 
-def check_within_parent_span(parent: Location, child_start, child_end, label: str) -> None:
-    # 入口からは JSON 由来の文字列で来るので、比較の前に Stamp にそろえる。
-    child_start = Stamp.parse(child_start)
-    child_end = Stamp.parse(child_end)
+def check_within_parent_span(parent: Location, child_start: Stamp | None, child_end: Stamp | None, label: str) -> None:
     if parent.start is not None:
         if child_start is not None and child_start < parent.start:
             raise ValueError(

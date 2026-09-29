@@ -5,15 +5,13 @@
 """
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
-from data_access_logic.idea.models import IdeaHit, IdeaTerm, IdeaTermsDraft, normalized, terms_of
+from data_access_logic.idea.models import IdeaHit, IdeaTerm, IdeaTermsDraft, normalized, unique_terms
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Idea
 from db.stamp import Stamp
@@ -45,9 +43,16 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
         f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げてください。",
         IdeaTermsDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.IDEA_TERMS_TIMEOUT)
     try:
-        return terms_of(IdeaTermsDraft.model_validate(decided).terms)
+        drafts = IdeaTermsDraft.model_validate(decided).terms
     except ValidationError:
         return []
+    terms = []
+    for draft in drafts:
+        try:
+            terms.append(IdeaTerm.model_validate(draft))
+        except ValidationError:  # keyword が空
+            continue
+    return unique_terms(terms)
 
 
 def _kana_swapped(text: str) -> str:
@@ -93,10 +98,10 @@ def _score(idea: Idea, keyword: list[str], variants: list[str]) -> int:
 
 
 def search(
-    s: Session, keywords: Any, place_id: int | None = None, time: Stamp | None = None,
+    s: Session, keywords: list[IdeaTerm], place_id: int | None = None, time: Stamp | None = None,
     limit: int | None = None, confirmed_only: bool = True,
 ) -> list[IdeaHit]:
-    """キーワードと言い換えで引いたアイデアを、当たり方の強い順に返す。`keywords` は `terms_of` が受け取る形。
+    """キーワードと言い換えで引いたアイデアを、当たり方の強い順に返す。
 
     名前にキーワードが入っていれば 3、言い換えが入っていれば 2、本文にだけ入っていれば 1 を、キーワードごとに足す。
     `place_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。
@@ -104,7 +109,7 @@ def search(
     """
     place_ids = common_query.idea_scope_ids(s, place_id) if place_id is not None else None
     scores: dict[int, tuple[Idea, int, list[str]]] = {}
-    for term in terms_of(keywords):
+    for term in unique_terms(keywords):
         keyword, variants = _spelled(term)
         for idea in s.scalars(dictionary_query.ideas_by_terms_select(
                 keyword + variants, place_ids, time, confirmed_only=confirmed_only)).all():

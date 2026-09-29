@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
+from data_access_logic.idea.form import IdeaUpdateForm
+from data_access_logic.idea.record import IdeaRecord
 from db.child_lists import load_children
 from db.schema import Idea, Location
 
@@ -9,28 +11,24 @@ from db.schema import Idea, Location
 class UpdateIdea(CommitDraft):
     model = Idea
 
-    def __init__(self, idea: str | dict):
+    def __init__(self, idea: IdeaUpdateForm):
         self.idea = idea
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.idea)
-        idea_id = self.require_id(data, "直す対象のアイデア")
-        recognitions = data.pop("recognitions", None)
-        self.check_columns(data)
+    def execute(self, session) -> IdeaRecord:
+        form = self.idea
+        record = self.get_or_raise(session, form.id, "アイデア")
 
-        record = self.get_or_raise(session, idea_id, "アイデア")
+        self.check_exists(session, Location, form.location_id, "location_id")
+        if form.parent_idea_id == form.id:
+            raise ValueError(f"parent_idea_id={form.id} が自分自身を指している")
+        self.check_exists(session, Idea, form.parent_idea_id, "parent_idea_id")
+        if form.parent_idea_id is not None:
+            self._check_not_descendant(session, form.id, form.parent_idea_id)
 
-        self.check_exists(session, Location, data.get("location_id"), "location_id")
-        new_parent_id = data.get("parent_idea_id")
-        if new_parent_id == idea_id:
-            raise ValueError(f"parent_idea_id={idea_id} が自分自身を指している")
-        self.check_exists(session, Idea, new_parent_id, "parent_idea_id")
-        if new_parent_id is not None:
-            self._check_not_descendant(session, idea_id, new_parent_id)
-
-        if recognitions is not None:
-            load_children(record, "recognitions", recognitions)
-        return self.apply(session, record, data)
+        if form.recognitions is not None:
+            load_children(record, "recognitions", [row.model_dump() for row in form.recognitions])
+        self.apply(session, record, form.changed_column_values(Idea))
+        return IdeaRecord.model_validate(record)
 
     @staticmethod
     def _check_not_descendant(session, idea_id: int, new_parent_id: int) -> None:

@@ -12,6 +12,5 @@ class ReadBrief(StoryQuery):
         self.reach = reach
         self.full = full
 
-    def execute(self, session) -> dict:
-        return _rows.brief(session, int(self.place_id), self.time,
-                           reach=int(self.reach), full=self.full)
+    def execute(self, session) -> _rows.Brief:
+        return _rows.brief(session, self.place_id, self.time, reach=self.reach, full=self.full)

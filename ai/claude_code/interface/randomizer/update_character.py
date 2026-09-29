@@ -2,40 +2,33 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
+from data_access_logic.character.form import CharacterUpdateForm
+from data_access_logic.character.record import CharacterRecord
 from db.child_lists import load_children
 from db.schema import Character
-
-
-_UNSET = object()
 
 
 class UpdateCharacter(CommitDraft):
     model = Character
 
-    def __init__(self, character: str | dict):
+    def __init__(self, character: CharacterUpdateForm):
         self.character = character
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.character)
-        character_id = self.require_id(data, "直す対象の人物")
-        parameters = data.pop("parameters", None)
-        places = data.pop("places", None)
-        histories = data.pop("histories", None)
+    def execute(self, session) -> CharacterRecord:
+        form = self.character
+        record = self.get_or_raise(session, form.id, "人物")
+
+        if form.parameters is not None:
+            load_children(record, "parameters", [row.model_dump() for row in form.parameters])
+        if form.places is not None:
+            load_children(record, "places", [row.model_dump() for row in form.places])
+        if form.histories is not None:
+            load_children(record, "histories", [row.model_dump() for row in form.histories])
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
-        born = data.pop("start", _UNSET)
-        died = data.pop("end", _UNSET)
-        self.check_columns(data)
-
-        record = self.get_or_raise(session, character_id, "人物")
-
-        if parameters is not None:
-            load_children(record, "parameters", parameters)
-        if places is not None:
-            load_children(record, "places", places)
-        if histories is not None:
-            load_children(record, "histories", histories)
-        if born is not _UNSET:
-            record.start = born
-        if died is not _UNSET:
-            record.end = died
-        return self.apply(session, record, data)
+        # 空にするときは null を渡すので、値ではなく渡されたかで決める
+        if "start" in form.model_fields_set:
+            record.start = form.start
+        if "end" in form.model_fields_set:
+            record.end = form.end
+        self.apply(session, record, form.changed_column_values(Character))
+        return CharacterRecord.model_validate(record)

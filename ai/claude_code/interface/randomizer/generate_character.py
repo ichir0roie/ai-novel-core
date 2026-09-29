@@ -7,9 +7,9 @@ from ai.claude_code import ai_client
 from ai.claude_code.interface._base import SessionEntrypoint, UnknownRecordError
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator import complete_text, generate_character
+from data_access_logic.character.record import CharacterRecord
 from data_access_logic.query import common_query
 from db.schema import CHARACTER_KIND_PERSON, Location, Stamp
-from db.schema_pydantic import to_dict
 
 
 class GenerateCharacter(SessionEntrypoint):
@@ -23,18 +23,18 @@ class GenerateCharacter(SessionEntrypoint):
     本文だけを書かせて埋める(性別・体格・口調・性格・種別・生年・没年・名前は変えない)。
     """
 
-    def __init__(self, character: dict | None = None, time: Stamp | str | None = None,
+    def __init__(self, character: CharacterForm | None = None, time: Stamp | str | None = None,
                  seed: int | None = None, ai=ai_client):
-        self.character = dict(character or {})
+        self.character = character or CharacterForm()
         self.time = time
         self.seed = seed
         self.ai = ai
 
-    def execute(self, session) -> dict:
-        form = CharacterForm.model_validate(self.character)
+    def execute(self, session) -> CharacterRecord:
+        form = self.character
         rng = random.Random(self.seed)
         if form.id is not None:
-            return to_dict(complete_text(session, self.ai, rng, form.id))
+            return CharacterRecord.model_validate(complete_text(session, self.ai, rng, form.id))
         if form.place_id is not None and session.get(Location, form.place_id) is None:
             raise UnknownRecordError(f"place_id={form.place_id} という id の location が見つからない")
         time = Stamp.parse(self.time) or session.scalar(common_query.latest_time_select())
@@ -44,4 +44,4 @@ class GenerateCharacter(SessionEntrypoint):
         record = generate_character(session, self.ai, rng, form.place_id, time, person, form)
         if record is None:
             raise ValueError("人物の中身が得られなかった")
-        return {**to_dict(record), "place_id": form.place_id}
+        return CharacterRecord.model_validate(record)

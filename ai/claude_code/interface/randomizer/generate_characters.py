@@ -6,6 +6,7 @@ import random
 from ai.claude_code import ai_client
 from ai.claude_code.interface._base import SessionEntrypoint
 from data_access_logic.character.generator import generate_character
+from data_access_logic.character.record import GeneratedCharacter
 from data_access_logic.query import world_createion_query
 from db.schema import Location, Stamp
 
@@ -20,7 +21,7 @@ class GenerateCharacters(SessionEntrypoint):
         self.seed = seed
         self.ai = ai
 
-    def execute(self, session) -> list[dict]:
+    def execute(self, session) -> list[GeneratedCharacter]:
         places = []
         for place_id in self.place_ids:
             place = session.get(Location, place_id)
@@ -36,5 +37,5 @@ class GenerateCharacters(SessionEntrypoint):
             for _ in range(rng.randint(*self.count)):
                 record = generate_character(session, self.ai, rng, place.id, self.time, self.person)
                 if record is not None:
-                    created.append({"id": record.id, "name": record.name, "place_id": place.id})
+                    created.append(GeneratedCharacter(id=record.id, name=record.name, place_id=place.id))
         return created

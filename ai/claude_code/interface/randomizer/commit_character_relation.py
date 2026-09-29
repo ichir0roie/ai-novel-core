@@ -2,31 +2,22 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
+from data_access_logic.character.form import CharacterRelationCreateForm
+from data_access_logic.character.record import CharacterRelationRecord
 from db.schema import Character, CharacterRelation
-from db.schema_pydantic import to_dict
 
 
 class CommitCharacterRelation(CommitDraft):
     model = CharacterRelation
 
-    def __init__(self, relation: str | dict):
+    def __init__(self, relation: CharacterRelationCreateForm):
         self.relation = relation
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.relation)
-        data.pop("id", None)
-        self.check_columns(data)
-        for key in ("character_id_1", "character_id_2", "relation"):
-            if data.get(key) in (None, ""):
-                raise ValueError(f"{key} は必須")
-        if data["character_id_1"] == data["character_id_2"]:
-            raise ValueError("character_id_1 と character_id_2 は別の人物")
-        data.setdefault("text", "")
+    def execute(self, session) -> CharacterRelationRecord:
+        self.check_exists(session, Character, self.relation.character_id_1, "character_id_1")
+        self.check_exists(session, Character, self.relation.character_id_2, "character_id_2")
 
-        self.check_exists(session, Character, data["character_id_1"], "character_id_1")
-        self.check_exists(session, Character, data["character_id_2"], "character_id_2")
-
-        record = CharacterRelation(**data)
+        record = CharacterRelation(**self.relation.column_values(CharacterRelation))
         session.add(record)
         self.finalize(session, record)
-        return to_dict(record)
+        return CharacterRelationRecord.model_validate(record)

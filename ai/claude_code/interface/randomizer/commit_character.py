@@ -2,57 +2,39 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitDraft
+from data_access_logic.character.form import CharacterCreateForm
+from data_access_logic.character.record import CharacterRecord
 from data_access_logic.query import world_createion_query
 from db.child_lists import load_children
 from db.schema import Character, CharacterPlace, Location
-from db.schema_pydantic import to_dict
 
 
 class CommitCharacter(CommitDraft):
     model = Character
 
-    def __init__(self, character: str | dict):
+    def __init__(self, character: CharacterCreateForm):
         self.character = character
 
-    def execute(self, session) -> dict:
-        data = self.parse(self.character)
-        data.pop("id", None)
-        place_id = data.pop("place_id", None)
-        parameters = data.pop("parameters", [])
-        histories = data.pop("histories", [])
+    def execute(self, session) -> CharacterRecord:
+        form = self.character
+        self.check_exists(session, Location, form.place_id, "place_id")
+        if form.place_id is not None:
+            place = session.get_one(Location, form.place_id)
+            world_createion_query.check_within_parent_span(place, form.start, form.end, "character")
+            world_createion_query.check_has_story(session, form.place_id, "character")
+
+        record = Character(**form.column_values(Character))
+        load_children(record, "parameters", [row.model_dump() for row in form.parameters])
+        load_children(record, "histories", [row.model_dump() for row in form.histories])
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
-        born = data.pop("start", None)
-        died = data.pop("end", None)
-        self.check_columns(data)
-
-        self.check_exists(session, Location, place_id, "place_id")
-        self._check_span(session, place_id, born, died)
-        self._check_story(session, place_id)
-
-        record = Character(**data)
-        load_children(record, "parameters", parameters)
-        load_children(record, "histories", histories)
-        if born is not None:
-            record.start = born
-        if died is not None:
-            record.end = died
+        if form.start is not None:
+            record.start = form.start
+        if form.end is not None:
+            record.end = form.end
         session.add(record)
         session.flush()  # CharacterPlace の character_id に使う id を先に確定させる
-        if place_id is not None:
+        if form.place_id is not None:
             session.add(CharacterPlace(
-                character_id=record.id, location_id=place_id, start=born, end=died))
+                character_id=record.id, location_id=form.place_id, start=form.start, end=form.end))
         self.finalize(session, record)
-        return to_dict(record)
-
-    @staticmethod
-    def _check_span(session, place_id: int | None, born, died) -> None:
-        if place_id is None:
-            return
-        place = session.get(Location, place_id)
-        world_createion_query.check_within_parent_span(place, born, died, "character")
-
-    @staticmethod
-    def _check_story(session, place_id: int | None) -> None:
-        if place_id is None:
-            return
-        world_createion_query.check_has_story(session, place_id, "character")
+        return CharacterRecord.model_validate(record)

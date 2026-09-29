@@ -2,22 +2,46 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 from db.schema import get_env_session
-from db.schema_pydantic import to_dict
+
+
+def dumped(result: BaseModel | Sequence[BaseModel]) -> dict | list[dict]:
+    """一覧を返す入口は、モデルのリストを返す。"""
+    if isinstance(result, BaseModel):
+        return result.model_dump(mode="json")
+    return [item.model_dump(mode="json") for item in result]
+
+
+def reloaded(session, record, *options):
+    """noload のリレーションを読み直す。同じセッションに行が残っていると eager load が効かないので `populate_existing` を付ける。"""
+    model = type(record)
+    return session.scalars(select(model).where(model.id == record.id).options(*options)
+                           .execution_options(populate_existing=True)).one()
 
 
 class Entrypoint:
-    def run(self):
+    def run(self) -> dict | list[dict]:
+        return dumped(self.result())
+
+    def show(self) -> None:
+        """claude が CLI から呼ぶとき用。結果を続けて python で使うなら `run()` を呼ぶ。"""
+        print(json.dumps(self.run(), ensure_ascii=False, indent=2))
+
+    def result(self) -> BaseModel | Sequence[BaseModel]:
         raise NotImplementedError
 
 
 class SessionEntrypoint(Entrypoint):
-    def run(self):
+    def result(self) -> BaseModel | Sequence[BaseModel]:
         with get_env_session() as session:
             return self.execute(session)
 
-    def execute(self, session):
+    def execute(self, session) -> BaseModel | Sequence[BaseModel]:
         raise NotImplementedError
 
 
@@ -36,14 +60,9 @@ class CommitEntrypoint(SessionEntrypoint):
 
     model: type
 
-    def run(self):
-        with get_env_session() as session:
-            with session.begin():
-                return self.execute(session)
-
-    @staticmethod
-    def parse(payload: str | dict) -> dict:
-        return json.loads(payload) if isinstance(payload, str) else dict(payload)
+    def result(self) -> BaseModel | Sequence[BaseModel]:
+        with get_env_session() as session, session.begin():
+            return self.execute(session)
 
     @staticmethod
     def check_exists(session, model, id_: int | None, label: str) -> None:
@@ -54,29 +73,12 @@ class CommitEntrypoint(SessionEntrypoint):
     @staticmethod
     def finalize(session, record):
         """`StampType` のような列は bind するとき(`process_bind_param`)にしか
-        型変換が掛からない。`flush` しただけでは record の属性は渡した生の値
-        (例: 文字列の `"1"`)のまま残るので、`to_dict` に渡す前に `refresh` で
-        db に書いた値を読み直し、`process_result_value` を通した本来の型
-        (`Stamp` 等)に揃える。
+        型変換が掛からない。`flush` しただけでは record の属性は渡した生の値のまま残るので、
+        レスポンスのモデルに詰める前に `refresh` で db に書いた値を読み直し、
+        `process_result_value` を通した本来の型(`Stamp` 等)に揃える。
         """
         session.flush()
         session.refresh(record)
-
-    def check_columns(self, data: dict, model: type | None = None) -> None:
-        model = model or self.model
-        columns = {column.key for column in model.__table__.columns} - {"id"}
-        unknown = set(data) - columns
-        if unknown:
-            raise UnknownFieldError(
-                f"{model.__name__} のスキーマに無い欄: {sorted(unknown)}")
-
-    @staticmethod
-    def require_id(data: dict, label: str) -> int:
-        """更新・確定の対象を指す `id` を data から取り出す。無ければ入力ミス。"""
-        id_ = data.pop("id", None)
-        if id_ is None:
-            raise ValueError(f"id は必須({label})")
-        return id_
 
     def get_or_raise(self, session, id_, label: str, model: type | None = None):
         """自分自身の id で行を引く。見つからなければ 404 相当の `UnknownRecordError`。"""
@@ -86,9 +88,7 @@ class CommitEntrypoint(SessionEntrypoint):
             raise UnknownRecordError(f"id={id_} という{label}が見つからない")
         return record
 
-    def apply(self, session, record, data: dict) -> dict:
-        """残った列を setattr してから `finalize` し、`to_dict` で返す。"""
-        for key, value in data.items():
+    def apply(self, session, record, values: dict) -> None:
+        for key, value in values.items():
             setattr(record, key, value)
         self.finalize(session, record)
-        return to_dict(record)

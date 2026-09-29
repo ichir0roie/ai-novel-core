@@ -10,8 +10,11 @@ from __future__ import annotations
 import importlib
 import inspect
 import os
+import typing
 from dataclasses import dataclass
 from typing import Any, Callable
+
+from pydantic import BaseModel, TypeAdapter
 
 from ai.claude_code import claude_code_time_keeper
 from ai.claude_code.interface._base import CommitEntrypoint, Entrypoint, SessionEntrypoint
@@ -19,8 +22,8 @@ import ai.claude_code.interface as interface_package
 from ai.claude_code.interface.randomizer._base import RandomDraft
 from db.schema import Stamp
 
-# `run()` を上書きしていない(= 確定のあとに AI を回さない)基底
-_PLAIN_RUNS = {SessionEntrypoint.run, CommitEntrypoint.run, RandomDraft.run}
+# `result()` を上書きしていない(= 確定のあとに AI を回さない)基底
+_PLAIN_RESULTS = {SessionEntrypoint.result, CommitEntrypoint.result, RandomDraft.result}
 
 # 常駐ループ側。世界ごとの文体(`instructions/style.py`)は、渡されなければ `_style_defaults` で埋める
 _TIME_KEEPER: dict[str, Callable] = {
@@ -88,7 +91,7 @@ def _doc(obj) -> str:
 
 
 def _uses_claude(cls: type) -> bool:
-    if cls.run not in _PLAIN_RUNS:
+    if cls.result not in _PLAIN_RESULTS:
         return True
     return "ai" in inspect.signature(cls.__init__).parameters
 
@@ -167,19 +170,35 @@ def to_jsonable(value: Any) -> Any:
     return repr(value)
 
 
+def _has_model(annotation: Any) -> bool:
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return True
+    return any(_has_model(argument) for argument in typing.get_args(annotation))
+
+
+def _modeled(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
+    """JSON で来た dict を、入口の引数の型(pydantic のモデル)に読み込む。モデルでない引数はそのまま渡す。"""
+    target = entrance.target
+    hints = typing.get_type_hints(target.__init__ if inspect.isclass(target) else target)
+    return {name: TypeAdapter(hints[name]).validate_python(value) if name in hints and _has_model(hints[name]) else value
+            for name, value in args.items()}
+
+
 def check_args(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
-    """引数を入口の signature に当てる。食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)"""
+    """引数を入口の signature に当てる。食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)。
+    job には JSON のまま残すので、モデルへの読み込みは確かめるだけにして、呼ぶときに読み込み直す。"""
     args = _style_defaults(args, entrance.params)
     try:
         inspect.signature(entrance.target).bind(**args)
     except TypeError as error:
         raise ValueError(f"{entrance.id} の引数が合わない: {error}") from error
+    _modeled(entrance, args)
     return args
 
 
 def invoke(entrance: Entrance, args: dict[str, Any]) -> Any:
     """入口を呼ぶ。クラスなら組み立てて `run()`、関数ならそのまま。"""
-    args = check_args(entrance, args)
+    args = _modeled(entrance, check_args(entrance, args))
     target = entrance.target
     result = target(**args).run() if inspect.isclass(target) else target(**args)
     return to_jsonable(result)

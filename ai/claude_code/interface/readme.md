@@ -1,14 +1,50 @@
 claude が db を触るときに呼ぶ入口を置く場所。**操作前にこの readme を引く。**
 
 各ファイルは**一つの呼び出しクラスだけ**を持つ。呼び出し側(claude)は、
-そのクラスをインスタンス化して `run()` を呼ぶだけでよい
+そのクラスをインスタンス化して `show()` を呼ぶだけでよい。結果を JSON で print する
 (CLI 引数のパースはしない。`if __name__ == "__main__"` も置かない)。
+結果を同じ python の中で続けて使うときは、print せずに返す `run()` を呼ぶ。
 
     from ai.claude_code.interface.world.list_places import ListPlaces
-    ListPlaces(kind="村").run()
+    ListPlaces(kind="村").show()
 
 db の触り方(入口越し・読み取り)は 世界リポジトリの `.claude/docs/db.md` を見る。ユーザが見て直す窓口は `gui/`。
 ここの入口は GUI の API(`POST /api/interface/<領域>.<ファイル>.<クラス>`)からも同じ引数で呼べる(`gui/readme.md`)。
+
+## 引数とレスポンス
+
+行の中身を渡す引数は、dict や JSON の文字列ではなく pydantic のモデルで渡す。モデルは領域ごとの
+`data_access_logic/<領域>/form.py` にあり、スキーマに無い欄が混ざっていたらそこで止まる(`extra="forbid"`)。
+修正の入口(`Update*`)は `id` 必須で、渡した欄だけを直す(省いた欄と、`None` を明示した欄は区別する)。
+
+    from ai.claude_code.interface.randomizer.commit_place import CommitPlace
+    from data_access_logic.location.form import LocationCreateForm
+    CommitPlace(LocationCreateForm(name="霧の村", kind="村", parent_id=2)).show()
+
+| 入口 | 引数のモデル |
+| --- | --- |
+| `CommitPlace` / `UpdatePlace` | `location.form.LocationCreateForm` / `LocationUpdateForm` |
+| `CommitCharacter` / `UpdateCharacter` | `character.form.CharacterCreateForm` / `CharacterUpdateForm`(子の行は `character.record.CharacterParameterRow` / `CharacterPlaceRow` / `CharacterHistoryRow`) |
+| `CommitCharacterPlace` / `UpdateCharacterPlace` | `character.form.CharacterPlaceCreateForm` / `CharacterPlaceUpdateForm` |
+| `CommitCharacterRelation` / `UpdateCharacterRelation` | `character.form.CharacterRelationCreateForm` / `CharacterRelationUpdateForm` |
+| `CommitEvent` / `UpdateEvent` | `event.form.EventCreateForm` / `EventUpdateForm` |
+| `CommitIdea` / `UpdateIdea` | `idea.form.IdeaCreateForm` / `IdeaUpdateForm`(呼び名の行は `idea.record.IdeaRecognitionRow`) |
+| `CommitMeme` / `UpdateMeme` | `meme.form.MemeCreateForm` / `MemeUpdateForm` |
+| `CommitOracle` / `UpdateOracle` | `oracle.form.OracleCreateForm` / `OracleUpdateForm` |
+| `UpdateEventSeed` | `event_seed.form.EventSeedUpdateForm` |
+| `CommitStory` / `UpdateStory` | `story.form.StoryCreateForm` / `StoryUpdateForm` |
+| `CommitEpisode` | `episode.form.EpisodeCommitForm` |
+| `GenerateEpisode` / `GenerateFrame` / `ReviseEpisode` | `episode.form.EpisodeForm`(下書き。空の欄は指定なし) |
+| `GenerateCharacter` | `character.form.CharacterForm`(下書き) |
+| `GenerateEvent` | `event.form.EventForm`(下書き) |
+| `SearchIdeas` / `ResolveTerms` | `idea.models.IdeaTerm` のリスト |
+
+(モジュールはどれも `data_access_logic.` を頭に付ける)
+
+`run()` は、入口が組んだレスポンスのモデルを `model_dump(mode="json")` した dict(一覧はそのリスト)を返す。
+時刻は `"11579/03/02 00:00:00"` の文字列、`confirmed` は値の文字列になる。レスポンスのモデルは、行を写したものが
+`data_access_logic/<領域>/record.py`(`*Record` など)、読む入口の組み立ては `story/_rows.py`、入口だけのものはその入口のファイルにある。
+GUI の API は JSON の dict を受け取り、入口の引数の型注釈に沿ってモデルに読み込んでから呼ぶ(`gui/api/interface.py`)。
 
 ## 依頼内容 → 呼ぶコード
 
@@ -21,8 +57,8 @@ db の触り方(入口越し・読み取り)は 世界リポジトリの `.claud
 | 「人物の一覧」「誰がいる?」         | `world.list_characters.ListCharacters()`                                     |
 | 「人物同士の関係は?」               | `world.list_character_relations.ListCharacterRelations(character_id=None)`   |
 | 「出来事の一覧」                     | `world.list_events.ListEvents()`(全件)。絞るなら `story.read_events.ReadEvents(time=…)` か、`ReadEvents(place_id=…)` / `ReadEvents(character_id=…)` / `ReadEvents(event_id=…)`(どの表の id かを名前で渡す) |
-| 「このアイデアは何?」「アイデアを調べて」 | `world.search_ideas.SearchIdeas(keywords, place_id=None, limit=None, time=None)`。名前・本文(基本の本文と追記の両方)の部分一致のあいまい検索。`keywords` は語一つか、`{"keyword", "variants"}`(言い換え)のリスト。当たり方の強い順に返す。自動生成の候補も返す。`place_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名。`text` は `time` の時点に効く追記(下の「アイデアの追記」)まで積み重ねた本文 |
-| 「この下書きに関わる設定は?」(中間段を自分で回す) | `idea.resolve_terms.ResolveTerms(terms, place_id=None, time=None)`。下書きから洗い出した語(`{"keyword", "variants", "description", "kind", "start", "end"}`)をアイデアと照らし、当たったものと上位・下位を返す。当たらなかった語は候補として足す(下の「中間段」)。候補の効く期間は語の `start` / `end`。`start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け(言えなければ省いて None)、`end` は分かるときだけ付ける。`time` は出来事の時刻。`time` を渡すと `start` が空(時期が未定)のアイデアは `ideas` に入れない。呼び名に当たったら本質のアイデアにそろえ、作中の呼び名を `called` に付ける |
+| 「このアイデアは何?」「アイデアを調べて」 | `world.search_ideas.SearchIdeas(keywords, place_id=None, limit=None, time=None)`。名前・本文(基本の本文と追記の両方)の部分一致のあいまい検索。`keywords` は `IdeaTerm(keyword=…, variants=[…])`(`variants` は言い換え)のリスト。当たり方の強い順に返す。自動生成の候補も返す。`place_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名。`text` は `time` の時点に効く追記(下の「アイデアの追記」)まで積み重ねた本文 |
+| 「この下書きに関わる設定は?」(中間段を自分で回す) | `idea.resolve_terms.ResolveTerms(terms, place_id=None, time=None)`。下書きから洗い出した語(`IdeaTerm`。`keyword` / `variants` / `description` / `kind` / `start` / `end`)をアイデアと照らし、当たったものと上位・下位を返す。当たらなかった語は候補として足す(下の「中間段」)。候補の効く期間は語の `start` / `end`。`start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け(言えなければ省いて None)、`end` は分かるときだけ付ける。`time` は出来事の時刻。`time` を渡すと `start` が空(時期が未定)のアイデアは `ideas` に入れない。呼び名に当たったら本質のアイデアにそろえ、作中の呼び名を `called` に付ける |
 | 「この本文が踏まえたアイデアを結んで」 | `idea.link_ideas.LinkIdeas(idea_ids, event_id=None, episode_id=None, character_id=None)`。三つのうち一つだけ渡す |
 | 「この候補をあのアイデアにまとめて」 | `randomizer.merge_idea.MergeIdea(source_id, target_id)`。結んだ本文と source の認識(呼び名)を付け替えてから source を消す |
 | 「判断待ちの一覧」「週次レビュー」   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO。Todoist へ載せる手順はスキル `weekly-review` |
@@ -30,16 +66,16 @@ db の触り方(入口越し・読み取り)は 世界リポジトリの `.claud
 | 「人物を足して」                     | `randomizer.create_random_character.CreateRandomCharacter()` → `randomizer.commit_character.CommitCharacter(character)`。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。`# 来歴` 節には節目を歳付きで書く(下の「人物の来歴」) |
 | 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `randomizer.generate_characters.GenerateCharacters(place_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る。`confirmed=未確認` で足す(下の「出来事・人物の承認フラグ」) |
 | 「出来事を足して」                   | `randomizer.create_random_event.CreateRandomEvent()` → `randomizer.commit_event.CommitEvent(event)` |
-| 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `randomizer.generate_character.GenerateCharacter(character={...}, time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
-| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `randomizer.generate_event.GenerateEvent(event={...}, seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
+| 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `randomizer.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
+| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `randomizer.generate_event.GenerateEvent(event=EventForm(...), seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
 | 「この人物の出自・居場所を足して」   | `randomizer.commit_character_place.CommitCharacterPlace(place)`              |
 | 「この二人の相関を足して」           | `randomizer.commit_character_relation.CommitCharacterRelation(relation)`     |
-| 「アイデアを足して」                 | `randomizer.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を `location_id` から自動で探して親にする(無ければ作る)。時代ごとの追記は `notes`(下の「アイデアの追記」)、場所・時代ごとの作中の呼び名は `recognitions`(下の「アイデアの認識(呼び名)」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める。`fact_check=False` で検めずに本文からだけ抜き出す |
+| 「アイデアを足して」                 | `randomizer.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を `location_id` から自動で探して親にする(無ければ作る)。時代ごとの追記は `notes`(下の「アイデアの追記」)、場所・時代ごとの作中の呼び名は `recognitions`(下の「アイデアの認識(呼び名)」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し、足したミームも検める。`{"record": 確定したアイデア, "memes_added": 足したミームの件数}` を返す。`fact_check=False` で検めずに本文からだけ抜き出す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `randomizer.commit_idea.CommitIdea(idea)` / `randomizer.update_idea.UpdateIdea(idea)` に `recognitions`(下の「アイデアの認識(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「アイデア・oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"idea"` / `"oracle"` / `"meme"`。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、`fact_check` 欄へ入れる。`ids` を省くと `fact_check` が空のものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。アイデア・oracle は検めたあと本文と検証結果からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `randomizer.update_place.UpdatePlace(place)`                                 |
-| 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `randomizer.update_character.UpdateCharacter({"id": …, "parameters": [...]})`。期間ごとの行の配列をまるごと渡す(下の「期間ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
-| 「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」 | `randomizer.update_character.UpdateCharacter({"id": …, "histories": [...]})`。期間ごとの行の配列をまるごと渡す(下の「期間ごとの説明の変化(character_history)」) |
+| 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `randomizer.update_character.UpdateCharacter(CharacterUpdateForm(id=…, parameters=[...]))`。期間ごとの行の配列をまるごと渡す(下の「期間ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
+| 「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」 | `randomizer.update_character.UpdateCharacter(CharacterUpdateForm(id=…, histories=[...]))`。期間ごとの行の配列をまるごと渡す(下の「期間ごとの説明の変化(character_history)」) |
 | 「人物を直して」                     | `randomizer.update_character.UpdateCharacter(character)`。名字・体格・口調・性格は `parameters` に、説明の期間ごとの変化は `histories` に入れる(渡さなければ触らない)。出自・居場所は `randomizer.update_character_place.UpdateCharacterPlace(place)`、相関は `randomizer.update_character_relation.UpdateCharacterRelation(relation)` |
 | 「場所を消して」                     | `randomizer.delete_place.DeletePlace(place_id)`                              |
 | 「出来事を直して」                   | `randomizer.update_event.UpdateEvent(event)`。`id` 必須、渡した欄だけ直す。当事者は変えない。直したあと要約(`event_summary`)を作り直す |
@@ -52,7 +88,7 @@ db の触り方(入口越し・読み取り)は 世界リポジトリの `.claud
 | 「ミームを直して」「ミームの分類を直して」 | `randomizer.update_meme.UpdateMeme(meme)`。`id` 必須、渡した欄だけ直す。`category` は 信条/欲求/境遇/集団/理 のいずれか |
 | 「ミームを消して」                   | `randomizer.delete_meme.DeleteMeme(meme_id)`                                 |
 | 「出来事の種を直して」               | `randomizer.update_event_seed.UpdateEventSeed(seed)`。`id` 必須、渡した欄だけ直す。語の置き換えなどは db を読んで id を拾ってから呼ぶ |
-| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。アイデア・oracle(著者の覚え書き)の本文と検証結果(`fact_check`。別々の元として渡す)・人物の筋書き(`# plot`)・出来事の本文から抜き出し、分類を振って `confirmed=未確認` で `meme` テーブルへ足す。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振る。足したミームは AI が Dラボのナレッジとネット検索で検め、`fact_check` 欄へ書く(`ExtractMemes(fact_check=False)` で飛ばす)。足した件数を返す。抜き出しただけでは `DrawMemes` に出ず、ユーザが GUI で承認するまで、人物へ引く・書き込む文脈には使われない(「判断待ちの一覧」に候補として出る) |
+| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。アイデア・oracle(著者の覚え書き)の本文と検証結果(`fact_check`。別々の元として渡す)・人物の筋書き(`# plot`)・出来事の本文から抜き出し、分類を振って `confirmed=未確認` で `meme` テーブルへ足す。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振る。足したミームは AI が Dラボのナレッジとネット検索で検め、`fact_check` 欄へ書く(`ExtractMemes(fact_check=False)` で飛ばす)。足した件数を `{"memes_added"}` で返す。抜き出しただけでは `DrawMemes` に出ず、ユーザが GUI で承認するまで、人物へ引く・書き込む文脈には使われない(「判断待ちの一覧」に候補として出る) |
 | 「ミームを引いて」                   | `meme.draw_memes.DrawMemes(person=True, seed=None)`。ユーザが確かめた(`confirmed=承認`)ミームだけから、分類ごとに 0〜2 件引き、それぞれに古今表裏を割り振って返す。db には書かない |
 | 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、まだ要約の無い出来事・話もすべて見て `event_summary` / `episode_summary` を作る。`CommitEvent` / `CommitStory` / `CommitEpisode` は確定した一件だけを見るので、GUI から直した分などの取りこぼしを拾うのはこちら |
 | 「作品の一覧」                       | `story.list_stories.ListStories()`                                           |
@@ -65,9 +101,9 @@ db の触り方(入口越し・読み取り)は 世界リポジトリの `.claud
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話が残っていれば止まる           |
-| 「この下書きから話の枠を AI に決めさせて」「GUI の AI で枠を作る」 | `story.generate_frame.GenerateFrame(frame={"story_id": …, "viewpoint_character_id": …, "place_id": …, "character_ids": […], …}, character_ids=None)`。下書きを枠として保存してから、題・種(`## 場面` / `## 狙い` の形)・時刻を下書きを核に AI が決める(`id` を渡せばその本文の無い枠を決め直す)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ。視点(`viewpoint_character_id`。Character への FK)・場所(`place_id`。Location への FK)は AI には決めさせず、下書きにあればその id をそのまま使う(無ければ NULL のまま)。登場人物は `character_ids`(省けば下書きの `character_ids`、それも無ければ枠の `episode_character`)で、足した枠の `episode_character` にも残す |
-| 「この下書きから一話ぶん AI に書かせて」「GUI の AI で本文まで書く」 | `story.generate_episode.GenerateEpisode(episode={"story_id": …, "viewpoint_character_id": …, "place_id": …, "character_ids": […], …}, character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。種と時刻が揃っていれば常駐ループの `write_episode` と同じ生成で本文を書き、どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決める。`id` を渡せばその本文の無い枠へ書く。登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければ枠の `episode_character` で、空なら AI を呼ぶ前に止まる(時刻・場所から人物を拾う既定は無い)。視点・場所は下書きの `viewpoint_character_id` / `place_id`(どちらも Episode の列。省けば NULL のまま、既存の枠を書くときは枠のものを使う)。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない(`episode.model` / `episode.effort` 列は廃止した)。使う登場人物は AI 呼び出しの前に、その話の登場人物リレーション(`episode_character`)として保存される |
-| 「この話を推敲して」「初登場キャラの描写を厚くして」 | `story.revise_episode.ReviseEpisode(episode={"id": …, "character_ids": […]}, instruction="…", character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。すでに本文のある話を、`instruction`(直す指示。必須)に沿って AI に書き直させる。筋は変えず指示にある観点だけを直す。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、省けば下書きの `character_ids`、それも無ければこの話の `episode_character` で、空なら止まる。前の話の概要に出ていない人物は、AI が初登場と判断して外見・性格の描写を厚くする。場所はこの話自身の `place_id`(無ければ作品の立つ場所)を使う。本文が無い話は先に `GenerateEpisode` で書く。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない。使った登場人物は、この話の `episode_character` としても保存される(既存の関連を全置換)。
+| 「この下書きから話の枠を AI に決めさせて」「GUI の AI で枠を作る」 | `story.generate_frame.GenerateFrame(frame=EpisodeForm(story_id=…, viewpoint_character_id=…, place_id=…, character_ids=[…], …), character_ids=None)`。下書きを枠として保存してから、題・種(`## 場面` / `## 狙い` の形)・時刻を下書きを核に AI が決める(`id` を渡せばその本文の無い枠を決め直す)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ。視点(`viewpoint_character_id`。Character への FK)・場所(`place_id`。Location への FK)は AI には決めさせず、下書きにあればその id をそのまま使う(無ければ NULL のまま)。登場人物は `character_ids`(省けば下書きの `character_ids`、それも無ければ枠の `episode_character`)で、足した枠の `episode_character` にも残す |
+| 「この下書きから一話ぶん AI に書かせて」「GUI の AI で本文まで書く」 | `story.generate_episode.GenerateEpisode(episode=EpisodeForm(story_id=…, viewpoint_character_id=…, place_id=…, character_ids=[…], …), character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。種と時刻が揃っていれば常駐ループの `write_episode` と同じ生成で本文を書き、どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決める。`id` を渡せばその本文の無い枠へ書く。登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければ枠の `episode_character` で、空なら AI を呼ぶ前に止まる(時刻・場所から人物を拾う既定は無い)。視点・場所は下書きの `viewpoint_character_id` / `place_id`(どちらも Episode の列。省けば NULL のまま、既存の枠を書くときは枠のものを使う)。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない(`episode.model` / `episode.effort` 列は廃止した)。使う登場人物は AI 呼び出しの前に、その話の登場人物リレーション(`episode_character`)として保存される |
+| 「この話を推敲して」「初登場キャラの描写を厚くして」 | `story.revise_episode.ReviseEpisode(episode=EpisodeForm(id=…, character_ids=[…]), instruction="…", character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。すでに本文のある話を、`instruction`(直す指示。必須)に沿って AI に書き直させる。筋は変えず指示にある観点だけを直す。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、省けば下書きの `character_ids`、それも無ければこの話の `episode_character` で、空なら止まる。前の話の概要に出ていない人物は、AI が初登場と判断して外見・性格の描写を厚くする。場所はこの話自身の `place_id`(無ければ作品の立つ場所)を使う。本文が無い話は先に `GenerateEpisode` で書く。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない。使った登場人物は、この話の `episode_character` としても保存される(既存の関連を全置換)。
 `instruction` はキーテキスト(`episode.key`)の末尾に「## 推敲」の節として自動で積まれる(二回目以降は見出しを重ねず箇条書きを足す) |
 | 「本文を確定する」「話の種を入れる」 | `story.commit_episode.CommitEpisode(episode)`。`id` を渡せばその話を直し(渡した欄だけ)、省けば `story_id` の作品に新しい話を足す。`key`(種)か `text`(本文)のどちらかがあればよい。`text` は `ai/instructions/style.py` の `layout_novel_text` で改行を整えてから入れる(地の文は一文一行、「◇」の行は空行二つ)。話に番号は無く、作品の中では `start` の順に並ぶ(`start` の無い話は後ろに id 順)。あいだに話を足すときは、前後の話のあいだの `start` を付ける |
 | 「未同期の話は残ってる?」           | `story.list_unsynced_episodes.ListUnsyncedEpisodes(story_id=None)`           |
@@ -364,12 +400,14 @@ Claude のモデルの既定は `claude-sonnet-5` の `medium`(`ai_client.py` �
 - `fact_check/` — アイデア・oracle・ミームを AI に Dラボのナレッジとネット検索で検めさせ、妥当性と補足を書く(`ai/claude_code/fact_checker.py`)
 
 - **「作る」と「確定する」を別ファイルに分ける。** 「作る」側(`create_random_*`)は
-  db に一切触れず、素の辞書 / JSON を返すだけ。db を触るのは「確定する」側だけ
-- 辞書 / JSON で受け渡しするのは、Bash 呼び出しをまたいでも(＝プロセスが
+  db に一切触れず、確定する側の引数のモデルに読み込める形の下書きを返すだけ。db を触るのは「確定する」側だけ
+- `run()` が dump した dict を返すのは、Bash 呼び出しをまたいでも(＝プロセスが
   切り替わっても)中身を運べるようにするため。SQLAlchemy のオブジェクトや
   session を返すと、次の呼び出しでは中身が失われる
+- 入口の `execute(session)`(`Entrypoint` を直接継ぐ入口は `result()`)はレスポンスのモデルを返し、
+  `run()` がそれを dump する。GUI の表の書き込み(`gui/api/records.py`)は `execute(session)` のモデルを直接使う
 - 実在レコードを指す欄(id)は、確定する側が呼び出し時に db に居るか確かめる
-  (`check_exists`)。スキーマに無い欄が混ざっていたらそこで止める(`check_columns`)
+  (`check_exists`)。スキーマに無い欄は、引数のモデルが読み込むときに止める
 
 各領域に共通する処理はクラスへ寄せ、その領域の入口の**上位**(`<領域>/_base.py`)
 に置く。さらに四領域をまたいで共通する部分(db セッションを開いて渡す・
@@ -393,7 +431,7 @@ Entrypoint(interface/_base.py)
 ```
 
 (`meme.extract_memes.ExtractMemes`・`fact_check.check_facts.CheckFacts` は、`execute(session)` の外で
-db セッションを開き直したいので `Entrypoint` を直接継ぐ)
+db セッションを開き直したいので `Entrypoint` を直接継ぎ、`result()` を書く)
 
 ## 引き方は query 側にある
 

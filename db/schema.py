@@ -257,7 +257,7 @@ class Event(EventSeededMixin, MemeSeededMixin, TextBase):
     # event_character(中間テーブル、多対多)が持つ。空なら
     # 誰の行動でもない「ただ起きたこと」。
     event_characters: Mapped[list["EventCharacter"]] = relationship(
-        back_populates="event", lazy="noload", cascade="all, delete-orphan")
+        back_populates="event", lazy="noload", cascade="all, delete-orphan", order_by="EventCharacter.id")
 
     start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
@@ -788,7 +788,7 @@ class Episode(EventSeededMixin, TextBase):
         foreign_keys="Episode.place_id", lazy="noload")
 
     episode_characters: Mapped[list["EpisodeCharacter"]] = relationship(
-        back_populates="episode", lazy="noload", cascade="all, delete-orphan")
+        back_populates="episode", lazy="noload", cascade="all, delete-orphan", order_by="EpisodeCharacter.id")
     summary: Mapped["EpisodeSummary | None"] = relationship(lazy="noload", viewonly=True)
 
     letters: Mapped[int] = mapped_column(

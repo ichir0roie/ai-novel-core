@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import selectinload
+
 from ai.claude_code import ai_client
-from ai.claude_code.interface.story import _rows
+from ai.claude_code.interface._base import reloaded
 from ai.claude_code.interface.story._base import StoryQuery
 from data_access_logic.episode import framer
 from data_access_logic.episode.form import EpisodeForm, save_frame
+from data_access_logic.episode.record import EpisodeRecord
+from db.schema import Episode
 
 
 class GenerateFrame(StoryQuery):
@@ -17,14 +21,15 @@ class GenerateFrame(StoryQuery):
     `episode_character` として残す。どちらも無ければ枠の `episode_character`(空なら作品と直前の話だけを材料にする)。
     """
 
-    def __init__(self, frame: dict, character_ids: list[int] | None = None, ai=ai_client):
-        self.frame = dict(frame or {})
+    def __init__(self, frame: EpisodeForm, character_ids: list[int] | None = None, ai=ai_client):
+        self.frame = frame
         self.character_ids = character_ids
         self.ai = ai
 
-    def execute(self, session) -> dict:
-        form = EpisodeForm.model_validate(self.frame)
+    def execute(self, session) -> EpisodeRecord:
+        form = self.frame.model_copy()
         if self.character_ids is not None:
             form.character_ids = self.character_ids
         record = save_frame(session, form)
-        return _rows.episode_row(framer.frame_episode(session, self.ai, record.id))
+        framed = framer.frame_episode(session, self.ai, record.id)
+        return EpisodeRecord.model_validate(reloaded(session, framed, selectinload(Episode.episode_characters)))

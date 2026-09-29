@@ -1,7 +1,10 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterPlaceRow
+from data_access_logic.material import Form, Timestamp
+from db.schema import CHARACTER_KIND_PERSON, ConfirmStatus
 from db.stamp import Stamp
 
 
@@ -73,3 +76,76 @@ class CharacterForm(BaseModel):
         if value is None:
             return []
         return [value] if isinstance(value, dict) else value
+
+
+class CharacterCreateForm(Form):
+    name: str | None = None
+    text: str | None = None
+    kind: str = CHARACTER_KIND_PERSON
+    confirmed: ConfirmStatus = ConfirmStatus.APPROVED
+    main_character: bool = False
+    event_seeded: bool = False
+    meme_seeded: bool = False
+    # 出自。`character_place` の行として、誕生から死亡までの期間で足す
+    place_id: int | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    parameters: list[CharacterParameterRow] = []
+    histories: list[CharacterHistoryRow] = []
+
+
+class CharacterUpdateForm(Form):
+    id: int
+    name: str | None = None
+    text: str | None = None
+    kind: str | None = None
+    confirmed: ConfirmStatus | None = None
+    main_character: bool | None = None
+    event_seeded: bool | None = None
+    meme_seeded: bool | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    # 渡すと配列をまるごと置き換える
+    parameters: list[CharacterParameterRow] | None = None
+    places: list[CharacterPlaceRow] | None = None
+    histories: list[CharacterHistoryRow] | None = None
+
+
+class CharacterPlaceCreateForm(Form):
+    character_id: int
+    location_id: int
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+
+
+class CharacterPlaceUpdateForm(Form):
+    id: int
+    character_id: int | None = None
+    location_id: int | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+
+
+class CharacterRelationCreateForm(Form):
+    character_id_1: int
+    character_id_2: int
+    relation: str = Field(min_length=1)
+    text: str = ""
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+
+    @model_validator(mode="after")
+    def _two_characters(self) -> "CharacterRelationCreateForm":
+        if self.character_id_1 == self.character_id_2:
+            raise ValueError("character_id_1 と character_id_2 は別の人物")
+        return self
+
+
+class CharacterRelationUpdateForm(Form):
+    id: int
+    character_id_1: int | None = None
+    character_id_2: int | None = None
+    relation: str | None = None
+    text: str | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None

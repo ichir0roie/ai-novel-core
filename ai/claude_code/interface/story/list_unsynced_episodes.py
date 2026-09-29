@@ -9,6 +9,5 @@ class ListUnsyncedEpisodes(StoryQuery):
     def __init__(self, story_id: int | None = None):
         self.story_id = story_id
 
-    def execute(self, session) -> list[dict]:
-        return _rows.unsynced_episodes(
-            session, None if self.story_id is None else int(self.story_id))
+    def execute(self, session) -> list[_rows.UnsyncedEpisode]:
+        return _rows.unsynced_episodes(session, self.story_id)
