@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { Rec, TableMeta } from "@/lib/api";
 import ChildListEditor, { type ExtraColumn } from "./ChildListEditor";
 import FieldInput from "./FieldInput";
+import { usePlaceCharacterIds } from "@/lib/placeCharacters";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -87,6 +88,8 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
   // display が "flow" の子リスト(アイデアの呼び名など)は本文(section)の下に続けて出す。それ以外は左の欄に並べる
   const sideChildLists = meta.child_lists.filter((c) => c.display !== "flow");
   const flowChildLists = meta.child_lists.filter((c) => c.display === "flow");
+  // episode の視点の人物は、絞り込み欄が空ならフォームの場所・時刻にいる人物だけを候補に出す
+  const placeCharacterIds = usePlaceCharacterIds(value.place_id, value.start, meta.name === "episode");
 
   return (
     <div className={`record ${sections.length ? "split" : ""}`}>
@@ -112,7 +115,8 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 <span className="key">{column.key}</span>
                 {column.required && <span className="hint">{T.required}</span>}
               </label>
-              <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
+              <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
+                defaultIds={column.key === "viewpoint_character_id" ? placeCharacterIds : null} />
             </div>
           ))}
         </div>

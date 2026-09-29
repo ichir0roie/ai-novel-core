@@ -31,21 +31,24 @@ type Props = {
   nullable: boolean;
   onChange: (value: number | null) => void;
   disabled?: boolean;
+  // 絞り込み欄が空のときに出す選択肢の id。null・省略なら全部出す
+  defaultIds?: number[] | null;
 };
 
-export default function ReferenceSelect({ table, value, nullable, onChange, disabled }: Props) {
+export default function ReferenceSelect({ table, value, nullable, onChange, disabled, defaultIds }: Props) {
   const options = useOptions(table);
   const [filter, setFilter] = useState("");
   const shown = useMemo(() => {
     const q = filter.trim();
-    const list = q ? options.filter((o) => o.label.includes(q) || String(o.id) === q) : options;
+    const list = q ? options.filter((o) => o.label.includes(q) || String(o.id) === q)
+      : defaultIds ? options.filter((o) => defaultIds.includes(o.id)) : options;
     // 今の値が絞り込みで消えないようにする
     if (value !== null && !list.some((o) => o.id === value)) {
       const current = options.find((o) => o.id === value);
       if (current) return [current, ...list];
     }
     return list;
-  }, [options, filter, value]);
+  }, [options, filter, value, defaultIds]);
 
   return (
     <div style={{ display: "flex", gap: "0.3rem" }}>

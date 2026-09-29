@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Modal from "@/components/Modal";
 import { useOptions } from "@/components/ReferenceSelect";
-import { getPlaceCharacters } from "@/lib/api";
+import { usePlaceCharacterIds } from "@/lib/placeCharacters";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -28,21 +28,7 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
-  const [placeCharacterIds, setPlaceCharacterIds] = useState<number[] | null>(null);
-
-  const placeId = typeof episodePlaceId === "number" ? episodePlaceId : null;
-  const start = typeof episodeStart === "string" && episodeStart.trim() ? episodeStart : null;
-  useEffect(() => {
-    setPlaceCharacterIds(null);
-    if (!open || placeId === null || start === null) return;
-    let alive = true;
-    getPlaceCharacters(placeId, start)
-      .then((r) => alive && setPlaceCharacterIds(r.character_ids))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [open, placeId, start]);
+  const placeCharacterIds = usePlaceCharacterIds(episodePlaceId, episodeStart, open);
 
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const selected = characterIds.map((id) => byId.get(id)).filter((o): o is NonNullable<typeof o> => o != null);

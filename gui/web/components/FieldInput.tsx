@@ -58,6 +58,8 @@ type Props = {
   /** 本文(section)欄の高さを、枠いっぱい(既定)ではなく中身の行数ぶんにする。
    * すぐ下に続けて出す一覧(アイデアの呼び名など)のために空間を残したいときに使う。 */
   autoHeight?: boolean;
+  // 参照の欄で、絞り込み欄が空のときに出す選択肢の id(ReferenceSelect へ渡す)
+  defaultIds?: number[] | null;
 };
 
 const STATUS_CLASS: Record<string, string> = { 承認: "approve", 非承認: "reject", 未確認: "pending" };
@@ -92,7 +94,7 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   );
 }
 
-export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight }: Props) {
+export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, defaultIds }: Props) {
   const readonly = disabled || column.readonly;
   if (readonly) {
     return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
@@ -105,7 +107,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
     return <TreeReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} />;
   }
   if (column.references) {
-    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} />;
+    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} />;
   }
   if (column.type === "confirm") {
     return (
