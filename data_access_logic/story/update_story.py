@@ -19,7 +19,7 @@ class UpdateStory(CommitEntrypoint):
     def execute(self, s: Session) -> StoryRecord:
         record = common_query.get_row(s, Story, self.story.id)
         self.check_exists(s, Location, self.story.world_id, "world_id")
-        self.check_exists(s, Location, self.story.place_id, "place_id")
+        self.check_exists(s, Location, self.story.location_id, "location_id")
 
         self.story.write_changes_to(record)
         self.finalize(s, record)

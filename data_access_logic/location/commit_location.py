@@ -10,22 +10,22 @@ from data_access_logic.query import world_creation_query
 from db.schema import Location
 
 
-class CommitPlace(CommitEntrypoint):
+class CommitLocation(CommitEntrypoint):
     model = Location
 
-    def __init__(self, place: LocationCreateForm):
-        self.place = place
+    def __init__(self, location: LocationCreateForm):
+        self.location = location
 
     def execute(self, s: Session) -> LocationRecord:
-        self.check_exists(s, Location, self.place.parent_id, "parent_id")
-        if self.place.parent_id is not None:
-            parent = s.get_one(Location, self.place.parent_id)
-            self._check_area(s, parent, self.place.area)
+        self.check_exists(s, Location, self.location.parent_id, "parent_id")
+        if self.location.parent_id is not None:
+            parent = s.get_one(Location, self.location.parent_id)
+            self._check_area(s, parent, self.location.area)
             world_creation_query.check_within_parent_span(
-                parent, self.place.start, self.place.end, "location")
+                parent, self.location.start, self.location.end, "location")
 
         record = Location()
-        self.place.write_to(record)
+        self.location.write_to(record)
         s.add(record)
         self.finalize(s, record)
         return LocationRecord.model_validate(record)

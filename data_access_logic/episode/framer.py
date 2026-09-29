@@ -38,7 +38,7 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
         .where(Episode.id == episode_id)
         .options(
             joinedload(Episode.story),
-            joinedload(Episode.place),
+            joinedload(Episode.location),
             joinedload(Episode.viewpoint_character),
             selectinload(Episode.episode_characters).joinedload(EpisodeCharacter.character),
         )
@@ -49,7 +49,7 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
     # 要約の commit で読み込んだ関連が期限切れになるので、AI を呼ぶ前にマテリアルへ写しておく
     main_episode = FrameEpisode.model_validate(episode)
     story = StoryMaterial.model_validate(episode.story)
-    place_id = episode.story.place_id
+    location_id = episode.story.location_id
     characters = [link.character for link in episode.episode_characters]
 
     previous = past_episodes(s, ai, episode, past_episode_count)
@@ -59,13 +59,13 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
         story=story,
         main_episode=main_episode,
         past_episodes=previous,
-        locations=common_query.place_path(s, place_id)
-        if place_id is not None else [],
+        locations=common_query.location_path(s, location_id)
+        if location_id is not None else [],
         cast=cast_at(s, ai, characters, time),
         later_events=summarized_events(
             s, ai,
             common_query.events_after_select(
-                place_id, [character.id for character in characters], time, limit=constants.LATER_EVENT_LIMIT)),
+                location_id, [character.id for character in characters], time, limit=constants.LATER_EVENT_LIMIT)),
     )
 
 

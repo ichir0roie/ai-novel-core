@@ -83,7 +83,7 @@ type Box = [number, number, number, number];
 const overlaps = (a: Box, b: Box) => !(a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]);
 
 /** 印のそばで他のラベルと重ならない位置を選ぶ。同じ点に重なる印は呼ぶ側で y をずらして渡す。 */
-export function placeLabels(items: [number, number, string][], px = 11): [number, number, Anchor][] {
+export function locationLabels(items: [number, number, string][], px = 11): [number, number, Anchor][] {
   const placed: Box[] = [];
   return items.map(([x, y, text]) => {
     const w = textWidth(text, px);

@@ -2,10 +2,10 @@
 """SVG(Python)と HTML(JS)で同じ決め方をする。"""
 from __future__ import annotations
 
-from data_access_logic.map.collect import MapPlace
+from data_access_logic.map.collect import MapLocation
 from db.polygon import outer_ring
 
-__all__ = ["Frame", "fit_frame", "text_width", "place_labels"]
+__all__ = ["Frame", "fit_frame", "text_width", "location_labels"]
 
 PAD_DEG = 10
 GRID_DEG = 10
@@ -47,7 +47,7 @@ def _ceil(v: float, step: int) -> int:
     return -_floor(-v, step)
 
 
-def fit_frame(points: list[MapPlace], shapes: list[MapPlace] = ()) -> Frame:
+def fit_frame(points: list[MapLocation], shapes: list[MapLocation] = ()) -> Frame:
     lons = [p.lon for p in points]
     lats = [p.lat for p in points]
     for shape in shapes:
@@ -78,7 +78,7 @@ def _overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float
     return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
 
 
-def place_labels(items: list[tuple[float, float, str]], font_px: float = 11) -> list[tuple[float, float, str]]:
+def location_labels(items: list[tuple[float, float, str]], font_px: float = 11) -> list[tuple[float, float, str]]:
     """同じ点に重なる印は呼ぶ側で `y` をずらして渡す。"""
     placed = []
     result = []

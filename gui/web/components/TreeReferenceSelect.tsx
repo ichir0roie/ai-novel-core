@@ -66,8 +66,13 @@ function NodeRow({
   );
 }
 
+/** 絞り込みに一致した行を、子孫ごと残す。一致した行の子孫にある一致は、その枝の中に出るので根には並べない。 */
+function matchedSubtrees(nodes: OptionNode[], matches: (node: OptionNode) => boolean): OptionNode[] {
+  return nodes.flatMap((node) => (matches(node) ? [node] : matchedSubtrees(node.children, matches)));
+}
+
 /** 場所・アイデアのように親子を持つテーブルの参照選択。ポップアップに親子のツリーを表示し、
- * クリックした行を選ぶ。絞り込み文字列があるあいだはツリーを外して一致した行だけを並べる。 */
+ * クリックした行を選ぶ。絞り込み文字列があるあいだは、一致した行とその子孫だけのツリーにする。 */
 export default function TreeReferenceSelect({ table, value, nullable, onChange, disabled }: Props) {
   const options = useOptions(table);
   const [open, setOpen] = useState(false);
@@ -94,9 +99,9 @@ export default function TreeReferenceSelect({ table, value, nullable, onChange, 
   const tree = useMemo(() => buildOptionTree(options), [options]);
   const current = options.find((o) => o.id === value);
   const q = filter.trim();
-  const flatMatches = useMemo(
-    () => (q ? options.filter((o) => o.label.includes(q) || String(o.id) === q) : []),
-    [options, q],
+  const shown = useMemo(
+    () => (q ? matchedSubtrees(tree, (node) => node.label.includes(q) || String(node.id) === q) : tree),
+    [tree, q],
   );
 
   const pick = (id: number | null) => {
@@ -126,24 +131,12 @@ export default function TreeReferenceSelect({ table, value, nullable, onChange, 
             </button>
           )}
           <div className="tree-select-scroll">
-            {q ? (
-              <ul className="tree">
-                {flatMatches.map((o) => (
-                  <li key={o.id}>
-                    <button type="button" className={`tree-select-label ${o.id === value ? "selected" : ""}`} onClick={() => pick(o.id)}>
-                      {o.id}: {o.label}
-                    </button>
-                  </li>
-                ))}
-                {flatMatches.length === 0 && <span className="hint">{T.noCandidates}</span>}
-              </ul>
-            ) : (
-              <ul className="tree tree-root">
-                {tree.map((node) => (
-                  <NodeRow key={node.id} node={node} depth={0} selectedId={value} openState={openState} onPick={pick} />
-                ))}
-              </ul>
-            )}
+            <ul className="tree tree-root">
+              {shown.map((node) => (
+                <NodeRow key={node.id} node={node} depth={0} selectedId={value} openState={openState} onPick={pick} />
+              ))}
+              {q && shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
+            </ul>
           </div>
         </div>
       )}

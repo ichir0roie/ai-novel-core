@@ -17,9 +17,9 @@ from data_access_logic.query import common_query
 from db.stamp import Stamp
 
 
-class PlaceAt(Material):
-    place_id: int
-    place_name: str | None = None
+class LocationAt(Material):
+    location_id: int
+    location_name: str | None = None
     start: Timestamp | None = None
 
 
@@ -28,7 +28,7 @@ class CharacterSheet(Material):
 
     character: SerializeAsAny[CharacterHead]
     parameters_at: CharacterParameterValues
-    place: PlaceAt | None = None
+    location: LocationAt | None = None
     recent_events: list[SerializeAsAny[EventRowHead]]
 
     @model_serializer(mode="wrap")
@@ -37,17 +37,17 @@ class CharacterSheet(Material):
         return {**data.pop("character"), **data.pop("parameters_at"), **data}
 
 
-def residents(s: Session, place_ids: Collection[int], until: Stamp) -> list[int]:
+def residents(s: Session, location_ids: Collection[int], until: Stamp) -> list[int]:
     character_ids = s.scalars(
-        common_query.resident_character_ids_select(place_ids, until)).all()
+        common_query.resident_character_ids_select(location_ids, until)).all()
     return [id_ for id_ in character_ids if id_ is not None]
 
 
-def _place_at(s: Session, character_id: int, until: Stamp) -> PlaceAt | None:
-    row = s.scalars(common_query.character_place_select(character_id, until)).first()
+def _location_at(s: Session, character_id: int, until: Stamp) -> LocationAt | None:
+    row = s.scalars(common_query.character_location_select(character_id, until)).first()
     if row is None:
         return None
-    return PlaceAt(place_id=row.location_id, place_name=row.place.name if row.place else None, start=row.start)
+    return LocationAt(location_id=row.location_id, location_name=row.location.name if row.location else None, start=row.start)
 
 
 def character_sheet(s: Session, character_id: int, until: Stamp | str | None = None,
@@ -61,7 +61,7 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
         character=(CharacterRecord if text else CharacterHead).model_validate(character),
         # 時刻を渡さないときは、期間を限らない値だけを重ねる
         parameters_at=parameters_at(character, None if until is None else at),
-        place=_place_at(s, character_id, at),
+        location=_location_at(s, character_id, at),
         recent_events=events_of(
             s, common_query.events_of_character_select, character_id, until=None if until is None else at,
             limit=count, text=text),

@@ -62,7 +62,7 @@ class TargetEpisode(UnwrittenEpisode):
 class FrameEpisode(UnwrittenEpisode):
     start: Stamp | None = None
     end: Stamp | None = None
-    place: LocationMaterial | None = None
+    location: LocationMaterial | None = None
     viewpoint_character: CharacterMaterial | None = None
 
 
@@ -89,7 +89,7 @@ def _style(past_episodes: list[PastEpisode]) -> str | None:
     return past_episodes[0].summary.style if past_episodes else None
 
 
-def _place(locations: list[LocationMaterial]) -> str | None:
+def _location(locations: list[LocationMaterial]) -> str | None:
     return " > ".join(
         f"{location.name}({location.kind})" if location.kind else location.name
         for location in locations if location.name) or None
@@ -108,7 +108,7 @@ class EpisodeMaterial(Material):
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
     # 古い順
-    place_events: list[EventMaterial]
+    location_events: list[EventMaterial]
     later_events: list[EventMaterial]
     ideas: IdeaContextMaterial
 
@@ -117,7 +117,7 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     cast: list[CastSerialized]
-    place_events: list[EventSerialized]
+    location_events: list[EventSerialized]
     later_events: list[EventSerialized]
     ideas: IdeaContextSerialized
 
@@ -130,13 +130,13 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
             "揃える文体": _style(self.past_episodes),
             "書く話": {
                 "時刻": str(episode.start),
-                "場所": _place(self.locations),
+                "場所": _location(self.locations),
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
                 "登場人物": [member.model_dump() for member in self.cast],
                 "種": episode.key,
             },
             "この場所の直近の出来事(古い順)": [
-                event.model_dump() for event in self.place_events],
+                event.model_dump() for event in self.location_events],
             "この時点より後に既に決まっている出来事": [
                 event.model_dump() for event in self.later_events],
             "関係する設定": self.ideas.model_dump(),
@@ -167,7 +167,7 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
             "揃える文体": _style(self.past_episodes),
             "直す話": {
                 "時刻": str(episode.start),
-                "場所": _place(self.locations),
+                "場所": _location(self.locations),
                 "登場人物": [member.model_dump() for member in self.cast],
                 "今の題": episode.title,
                 "今の本文": episode.text,
@@ -200,7 +200,7 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
                 **_story(self.story),
                 "始まり": str(self.story.start) if self.story.start else None,
                 "終わり": str(self.story.end) if self.story.end else None,
-                "立つ場所": _place(self.locations),
+                "立つ場所": _location(self.locations),
             },
             "直前の話(新しい順)": _past_episodes(self.past_episodes),
             "登場人物": [member.model_dump() for member in self.cast],
@@ -212,7 +212,7 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
                 "時刻": str(episode.start) if episode.start else None,
                 "終わり": str(episode.end) if episode.end else None,
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
-                "場所": episode.place.name if episode.place else None,
+                "場所": episode.location.name if episode.location else None,
             },
         }
 

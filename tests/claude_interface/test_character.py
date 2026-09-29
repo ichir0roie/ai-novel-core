@@ -1,10 +1,10 @@
 """claude が CLI から `show()` で呼ぶ、人物(`data_access_logic/character/`)の入口。"""
 from data_access_logic.character.commit_character import CommitCharacter
-from data_access_logic.character.commit_character_place import CommitCharacterPlace
+from data_access_logic.character.commit_character_location import CommitCharacterLocation
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.create_random_character import CreateRandomCharacter
 from data_access_logic.character.form import (
-    CharacterCreateForm, CharacterForm, CharacterParameterForm, CharacterPlaceCreateForm, CharacterPlaceUpdateForm,
+    CharacterCreateForm, CharacterForm, CharacterParameterForm, CharacterLocationCreateForm, CharacterLocationUpdateForm,
     CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
 )
 from data_access_logic.character.generate_character import GenerateCharacter
@@ -13,9 +13,9 @@ from data_access_logic.character.list_character_relations import ListCharacterRe
 from data_access_logic.character.list_characters import ListCharacters
 from data_access_logic.character.read_character import ReadCharacter
 from data_access_logic.character.read_surroundings import ReadSurroundings
-from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterPlaceRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
 from data_access_logic.character.update_character import UpdateCharacter
-from data_access_logic.character.update_character_place import UpdateCharacterPlace
+from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from db.schema import ConfirmStatus, PersonalityLevel
 
@@ -38,7 +38,7 @@ def _parameter_row(start: str, end: str | None) -> CharacterParameterRow:
 def test_commit_character(shown, world):
     result = shown(CommitCharacter(CharacterCreateForm(
         name="北原ミツ", text="市の香辛料売り", kind="人物", confirmed=ConfirmStatus.PENDING, main_character=True,
-        event_seeded=True, meme_seeded=True, place_id=world.place_id, start="1180/05/06", end="1250/01/01",
+        event_seeded=True, meme_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
         parameters=[_parameter_row("1180/05/06", "1250/01/01")],
         histories=[CharacterHistoryRow(start="1195/01/01", end="1210/01/01", description="市で店を開く")])))
 
@@ -50,13 +50,13 @@ def test_commit_character(shown, world):
     assert result["end"] == "1250/01/01 00:00:00"
     assert result["parameters"][0]["family_name"] == "北原"
     assert result["parameters"][0]["imagination"] == "並"
-    assert result["places"] == [{"location_id": world.place_id, "start": "1180/05/06 00:00:00",
+    assert result["locations"] == [{"location_id": world.location_id, "start": "1180/05/06 00:00:00",
                                  "end": "1250/01/01 00:00:00"}]
     assert result["histories"][0]["description"] == "市で店を開く"
 
 
-def test_commit_character_place(shown, world):
-    result = shown(CommitCharacterPlace(CharacterPlaceCreateForm(
+def test_commit_character_location(shown, world):
+    result = shown(CommitCharacterLocation(CharacterLocationCreateForm(
         character_id=world.character_ids[0], location_id=world.neighbor_id, start="1201/01/01", end="1202/01/01")))
 
     assert result["character_id"] == world.character_ids[0]
@@ -66,10 +66,10 @@ def test_commit_character_place(shown, world):
 
 def test_commit_character_relation(shown, world):
     result = shown(CommitCharacterRelation(CharacterRelationCreateForm(
-        character_id_1=world.character_ids[1], character_id_2=world.character_ids[0], relation="商売敵",
+        character_1_id=world.character_ids[1], character_2_id=world.character_ids[0], relation="商売敵",
         text="市で客を取り合う", start="1200/04/01", end="1210/01/01")))
 
-    assert (result["character_id_1"], result["character_id_2"]) == (world.character_ids[1], world.character_ids[0])
+    assert (result["character_1_id"], result["character_2_id"]) == (world.character_ids[1], world.character_ids[0])
     assert result["relation"] == "商売敵"
     assert result["text"] == "市で客を取り合う"
     assert (result["start"], result["end"]) == ("1200/04/01 00:00:00", "1210/01/01 00:00:00")
@@ -89,14 +89,14 @@ def test_generate_character(shown, world, mock_ai):
     result = shown(GenerateCharacter(
         character=CharacterForm(
             name="生成の人", text="市に流れ着いた楽師", kind="人物", main_character=True, start="1180/01/01",
-            end="1260/01/01", place_id=world.place_id,
+            end="1260/01/01", location_id=world.location_id,
             parameters=[CharacterParameterForm(
                 family_name="南条", sex="男", build="大柄", first_person="俺", second_person="お前",
                 third_person="奴", tone="荒い", dialect="港言葉", **_LEVELS)]),
         time="1200/04/01", seed=1))
 
     assert result["main_character"] is True
-    assert result["places"][0]["location_id"] == world.place_id
+    assert result["locations"][0]["location_id"] == world.location_id
     parameter = result["parameters"][0]
     assert (parameter["sex"], parameter["build"], parameter["tone"]) == ("男", "大柄", "荒い")
     assert parameter["sincerity"] == "高"
@@ -105,10 +105,10 @@ def test_generate_character(shown, world, mock_ai):
 
 def test_generate_characters(shown, world, mock_ai):
     result = shown(GenerateCharacters(
-        place_ids=[world.place_id], time="1200/04/01", count=(2, 2), person=True, seed=2))
+        location_ids=[world.location_id], time="1200/04/01", count=(2, 2), person=True, seed=2))
 
     assert len(result) == 2
-    assert {row["place_id"] for row in result} == {world.place_id}
+    assert {row["location_id"] for row in result} == {world.location_id}
     assert mock_ai.calls
 
 
@@ -145,7 +145,7 @@ def test_update_character(shown, world):
         id=world.character_ids[1], name="テスト花代", text="改名した", kind="人物", confirmed=ConfirmStatus.REJECTED,
         main_character=True, event_seeded=False, meme_seeded=False, start="1171/02/03", end="1261/04/05",
         parameters=[_parameter_row("1171/02/03", "1261/04/05")],
-        places=[CharacterPlaceRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
+        locations=[CharacterLocationRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
         histories=[CharacterHistoryRow(start="1200/01/01", end=None, description="改名して村へ移った")])))
 
     assert result["name"] == "テスト花代"
@@ -155,25 +155,25 @@ def test_update_character(shown, world):
     assert (result["event_seeded"], result["meme_seeded"]) == (False, False)
     assert (result["start"], result["end"]) == ("1171/02/03 00:00:00", "1261/04/05 00:00:00")
     assert result["parameters"][0]["dialect"] == "西の訛り"
-    assert [place["location_id"] for place in result["places"]] == [world.neighbor_id]
+    assert [location["location_id"] for location in result["locations"]] == [world.neighbor_id]
     assert [history["description"] for history in result["histories"]] == ["改名して村へ移った"]
 
 
-def test_update_character_place(shown, world):
-    result = shown(UpdateCharacterPlace(CharacterPlaceUpdateForm(
-        id=world.character_place_id, character_id=world.character_ids[0], location_id=world.neighbor_id,
+def test_update_character_location(shown, world):
+    result = shown(UpdateCharacterLocation(CharacterLocationUpdateForm(
+        id=world.character_location_id, character_id=world.character_ids[0], location_id=world.neighbor_id,
         start="1190/01/01", end="1199/12/31")))
 
-    assert result["id"] == world.character_place_id
+    assert result["id"] == world.character_location_id
     assert result["location_id"] == world.neighbor_id
     assert (result["start"], result["end"]) == ("1190/01/01 00:00:00", "1199/12/31 00:00:00")
 
 
 def test_update_character_relation(shown, world):
     result = shown(UpdateCharacterRelation(CharacterRelationUpdateForm(
-        id=world.relation_id, character_id_1=world.character_ids[1], character_id_2=world.character_ids[0],
+        id=world.relation_id, character_1_id=world.character_ids[1], character_2_id=world.character_ids[0],
         relation="許嫁", text="親が決めた", start="1190/01/01", end="1205/01/01")))
 
-    assert (result["character_id_1"], result["character_id_2"]) == (world.character_ids[1], world.character_ids[0])
+    assert (result["character_1_id"], result["character_2_id"]) == (world.character_ids[1], world.character_ids[0])
     assert (result["relation"], result["text"]) == ("許嫁", "親が決めた")
     assert (result["start"], result["end"]) == ("1190/01/01 00:00:00", "1205/01/01 00:00:00")

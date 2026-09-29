@@ -32,10 +32,10 @@ export function buildCharacterTree(
 ): CharacterTree {
   const known = new Set(locations.map((l) => Number(l.id)));
   const children = new Map<number | null, Rec[]>();
-  for (const place of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
-    const parent = num(place.parent_id);
+  for (const location of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
+    const parent = num(location.parent_id);
     const key = parent !== null && known.has(parent) ? parent : null;
-    children.set(key, [...(children.get(key) ?? []), place]);
+    children.set(key, [...(children.get(key) ?? []), location]);
   }
 
   const charactersAt = new Map<number, TreeCharacter[]>();
@@ -51,13 +51,13 @@ export function buildCharacterTree(
     else charactersAt.set(at, [...(charactersAt.get(at) ?? []), entry]);
   }
 
-  const node = (place: Rec): TreeNode | null => {
-    const id = Number(place.id);
+  const node = (location: Rec): TreeNode | null => {
+    const id = Number(location.id);
     const subtree = (children.get(id) ?? []).map(node).filter((n): n is TreeNode => n !== null);
     const own = charactersAt.get(id) ?? [];
     if (subtree.length === 0 && own.length === 0) return null;
     return {
-      id, name: str(place.name), kind: str(place.kind), characters: own, children: subtree,
+      id, name: str(location.name), kind: str(location.kind), characters: own, children: subtree,
       total: own.length + subtree.reduce((sum, child) => sum + child.total, 0),
     };
   };

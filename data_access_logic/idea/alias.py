@@ -13,7 +13,7 @@ from db.schema import IdeaRecognition
 from db.stamp import Stamp
 
 
-def called(s: Session, idea_ids: list[int], place_id: int | None = None,
+def called(s: Session, idea_ids: list[int], location_id: int | None = None,
            time: Stamp | None = None) -> dict[int, IdeaRecognition]:
     """アイデアの id ごとに、その場所・時代で使う認識(呼び名)。当てはまる認識が無い id は入らない。
 
@@ -22,9 +22,9 @@ def called(s: Session, idea_ids: list[int], place_id: int | None = None,
     ids = list(dict.fromkeys(idea_ids))
     if not ids:
         return {}
-    place_ids = common_query.idea_scope_ids(s, place_id) if place_id is not None else None
-    rows = s.scalars(dictionary_query.recognitions_select(ids, place_ids, time)).all()
-    nearness = {id_: rank for rank, id_ in enumerate(place_ids or [])}
+    location_ids = common_query.idea_scope_ids(s, location_id) if location_id is not None else None
+    rows = s.scalars(dictionary_query.recognitions_select(ids, location_ids, time)).all()
+    nearness = {id_: rank for rank, id_ in enumerate(location_ids or [])}
     chosen: dict[int, IdeaRecognition] = {}
     for recognition in sorted(rows, key=lambda recognition: nearness.get(recognition.location_id, len(nearness))):
         chosen.setdefault(recognition.idea_id, recognition)

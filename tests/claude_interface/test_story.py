@@ -11,11 +11,11 @@ from data_access_logic.story.update_story import UpdateStory
 
 def test_commit_story(shown, world, mock_ai):
     result = shown(CommitStory(StoryCreateForm(
-        name="テスト続編", text="続編の構想", world_id=world.planet_id, place_id=world.neighbor_id, narration="一人称",
+        name="テスト続編", text="続編の構想", world_id=world.planet_id, location_id=world.neighbor_id, narration="一人称",
         state="構想中", start="1210/01/01", end="1220/01/01", event_seeded=True)))
 
     assert (result["name"], result["text"]) == ("テスト続編", "続編の構想")
-    assert (result["world_id"], result["place_id"]) == (world.planet_id, world.neighbor_id)
+    assert (result["world_id"], result["location_id"]) == (world.planet_id, world.neighbor_id)
     assert (result["narration"], result["state"]) == ("一人称", "構想中")
     assert (result["start"], result["end"]) == ("1210/01/01 00:00:00", "1220/01/01 00:00:00")
     assert result["event_seeded"] is True
@@ -23,11 +23,11 @@ def test_commit_story(shown, world, mock_ai):
 
 def test_delete_story(shown, world):
     # 話を持つ作品は消せないので、話の無い作品を足してから消す
-    story_id = CommitStory(StoryCreateForm(name="消す作品", text="消す", place_id=world.place_id)).result().id
+    story_id = CommitStory(StoryCreateForm(name="消す作品", text="消す", location_id=world.location_id)).result().id
 
     result = shown(DeleteStory(story_id=story_id))
 
-    assert result == {"id": story_id, "name": "消す作品", "place_id": world.place_id, "text": "消す"}
+    assert result == {"id": story_id, "name": "消す作品", "location_id": world.location_id, "text": "消す"}
 
 
 def test_list_stories(shown, world):
@@ -37,7 +37,7 @@ def test_list_stories(shown, world):
 
 
 def test_read_brief(shown, world):
-    result = shown(ReadBrief(place_id=world.place_id, time="1200/04/02", reach=30, full=True))
+    result = shown(ReadBrief(location_id=world.location_id, time="1200/04/02", reach=30, full=True))
 
     assert result
 
@@ -61,11 +61,11 @@ def test_start_story(shown, world):
 
 def test_update_story(shown, world):
     result = shown(UpdateStory(StoryUpdateForm(
-        id=world.story_id, name="テスト作品改", text="改めた構想", world_id=world.planet_id, place_id=world.neighbor_id,
+        id=world.story_id, name="テスト作品改", text="改めた構想", world_id=world.planet_id, location_id=world.neighbor_id,
         narration="二人称", state="完結", start="1201/01/01", end="1299/01/01", event_seeded=False)))
 
     assert (result["name"], result["text"]) == ("テスト作品改", "改めた構想")
-    assert (result["world_id"], result["place_id"]) == (world.planet_id, world.neighbor_id)
+    assert (result["world_id"], result["location_id"]) == (world.planet_id, world.neighbor_id)
     assert (result["narration"], result["state"]) == ("二人称", "完結")
     assert (result["start"], result["end"]) == ("1201/01/01 00:00:00", "1299/01/01 00:00:00")
     assert result["event_seeded"] is False

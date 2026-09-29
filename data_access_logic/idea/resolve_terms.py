@@ -3,7 +3,7 @@
 
     ResolveTerms([IdeaTerm(keyword="虫憑き", variants=["寄生", "宿り"], description="…", kind="呼称",
                            start="1190")],
-                 place_id=61, time="1200/04/01").show()
+                 location_id=61, time="1200/04/01").show()
 
 `time` は出来事の時刻。その時刻に効くアイデアだけを引く。
 当たったアイデアとその上位・下位を `ideas` に返す。作中の呼び名(`idea_recognition`)に当たっても本質の
@@ -49,13 +49,13 @@ def _resolved(idea: IdeaMaterial, recognition: IdeaRecognitionMaterial | None = 
 class ResolveTerms(CommitEntrypoint):
     model = Idea
 
-    def __init__(self, terms: list[IdeaTerm], place_id: int | None = None, time: Stamp | str | None = None):
+    def __init__(self, terms: list[IdeaTerm], location_id: int | None = None, time: Stamp | str | None = None):
         self.terms = terms
-        self.place_id = place_id
+        self.location_id = location_id
         self.time = Stamp.parse(time)
 
     def execute(self, s: Session) -> ResolvedTerms:
-        context = resolve_ideas(s, self.terms, self.place_id, self.time)
+        context = resolve_ideas(s, self.terms, self.location_id, self.time)
         return ResolvedTerms(ideas=[_resolved(related.idea, related.recognition) for related in context.related],
                              hits=[idea.id for idea in context.hits],
                              candidates=[_resolved(idea) for idea in context.candidates])

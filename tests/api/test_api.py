@@ -50,13 +50,13 @@ def test_tables(client, world, in_claude_code):
     assert set(tables) == {"story", "episode", "character", "character_relation", "event", "location", "idea",
                            "meme", "oracle"}
     assert [generator["key"] for generator in tables["episode"]["generators"]] == ["frame", "episode", "revise"]
-    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "places", "histories"}
+    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
 
 
 def test_list_records(client, world):
     response = client.get("/api/tables/episode/records", params={
         "q": "テスト第一話", "limit": 10, "offset": 0, "sort": "start", "order": "desc",
-        "story_id": world.story_id, "synced": "true", "place_id": world.place_id})
+        "story_id": world.story_id, "synced": "true", "location_id": world.location_id})
 
     assert response.status_code == 200
     body = response.json()
@@ -83,7 +83,7 @@ def test_list_options(client, world):
 def test_create_record(client, world):
     response = client.post("/api/tables/character/records", json={
         "name": "API の人", "text": "API から足した人物", "kind": "人物", "confirmed": "未確認", "main_character": True,
-        "event_seeded": True, "meme_seeded": True, "place_id": world.place_id, "start": "1181/02/03",
+        "event_seeded": True, "meme_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
         "end": "1255/06/07",
         "parameters": [{"start": "1181/02/03", "end": "1255/06/07", "family_name": "東雲", "sex": "女", "height": 162.5,
                         "build": "中背", "first_person": "わたくし", "second_person": "貴方", "third_person": "彼の方",
@@ -99,7 +99,7 @@ def test_create_record(client, world):
     assert (record["name"], record["text"], record["confirmed"]) == ("API の人", "API から足した人物", "未確認")
     assert (record["start"], record["end"]) == ("1181/02/03 00:00:00", "1255/06/07 00:00:00")
     assert record["parameters"][0]["curiosity"] == "必"
-    assert record["places"][0]["location_id"] == world.place_id
+    assert record["locations"][0]["location_id"] == world.location_id
     assert record["histories"][0]["description"] == "都の役所に勤める"
     assert body["label"] == "API の人"
 
@@ -108,7 +108,7 @@ def test_generate_record(client, world, in_claude_code, mock_ai):
     response = client.post("/api/tables/episode/generate/episode", json={
         "draft": {"story_id": world.story_id, "title": "API の話", "key": "API から書く話",
                   "start": "1200/04/03 09:00:00", "end": "1200/04/03 12:00:00",
-                  "viewpoint_character_id": world.character_ids[1], "place_id": world.place_id, "character_ids": []},
+                  "viewpoint_character_id": world.character_ids[1], "location_id": world.location_id, "character_ids": []},
         "args": {"character_ids": world.character_ids, "model": "claude-haiku-4-5", "effort": "low"}})
 
     assert response.status_code == 202
@@ -238,13 +238,13 @@ def test_list_jobs(client, world):
 
 def test_get_job(client, world):
     submitted = client.post("/api/interface/event.read_events.ReadEvents", json={
-        "args": {"place_id": world.place_id, "limit": 5, "until": "1200/12/31"}, "background": True})
+        "args": {"location_id": world.location_id, "limit": 5, "until": "1200/12/31"}, "background": True})
     assert submitted.status_code == 202
 
     job = _finished(client, submitted.json()["id"])
 
     assert job["status"] == "done", job["error"]
-    assert job["args"] == {"place_id": world.place_id, "limit": 5, "until": "1200/12/31"}
+    assert job["args"] == {"location_id": world.location_id, "limit": 5, "until": "1200/12/31"}
     assert job["started_at"] is not None and job["finished_at"] is not None
     assert {world.event_id, world.child_event_id} <= {event["id"] for event in job["result"]}
 
@@ -255,7 +255,7 @@ def test_maps(client, world):
     assert response.status_code == 200
     body = response.json()
     planet_map = next(planet_map for planet_map in body["planets"] if planet_map["planet"]["id"] == world.planet_id)
-    assert {point["id"] for point in planet_map["points"]} == {world.place_id, world.neighbor_id}
+    assert {point["id"] for point in planet_map["points"]} == {world.location_id, world.neighbor_id}
     assert [shape["id"] for shape in planet_map["shapes"]] == [world.neighbor_id]
     assert body["categories"]
     assert body["bearings"]
@@ -288,4 +288,4 @@ def test_character_locations(client, world):
 
     assert response.status_code == 200
     locations = response.json()["locations"]
-    assert all(locations[str(character_id)] == world.place_id for character_id in world.character_ids)
+    assert all(locations[str(character_id)] == world.location_id for character_id in world.character_ids)

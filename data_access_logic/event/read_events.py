@@ -9,7 +9,7 @@ from data_access_logic.query import common_query
 from db.stamp import Stamp
 
 _SELECTS = {
-    "place_id": common_query.events_of_place_select,
+    "location_id": common_query.events_of_location_select,
     "character_id": common_query.events_of_character_select,
     "event_id": common_query.events_under_select,
 }
@@ -18,12 +18,12 @@ _SELECTS = {
 class ReadEvents(SessionEntrypoint):
     """場所・人物・出来事の id は別々の表の連番で重なるので、どの表の id かを引数の名前で渡す。"""
 
-    def __init__(self, time: Stamp | str | None = None, place_id: int | None = None, character_id: int | None = None,
+    def __init__(self, time: Stamp | str | None = None, location_id: int | None = None, character_id: int | None = None,
                  event_id: int | None = None, limit: int | None = None, until: Stamp | str | None = None):
-        keys = {"time": time, "place_id": place_id, "character_id": character_id, "event_id": event_id}
+        keys = {"time": time, "location_id": location_id, "character_id": character_id, "event_id": event_id}
         given = [key for key, value in keys.items() if value is not None]
         if len(given) != 1:
-            raise ValueError("time・place_id・character_id・event_id のどれか一つだけを渡す")
+            raise ValueError("time・location_id・character_id・event_id のどれか一つだけを渡す")
         self.key = given[0]
         self.value = keys[self.key]
         self.limit = limit

@@ -368,8 +368,8 @@ button.ghost { background: transparent; }
 /* 作品一覧のツリー(場所の木に作品をぶら下げる) */
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree .tree { margin-left: 0.6rem; padding-left: 0.9rem; border-left: 1px solid var(--line); }
-.tree-place > details > summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; padding: 0.25rem 0; }
-.tree-place > details > summary::marker { color: var(--muted); }
+.tree-location > details > summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; padding: 0.25rem 0; }
+.tree-location > details > summary::marker { color: var(--muted); }
 .tree-name { font-weight: 600; }
 .tree-kind, .tree-count, .tree-meta { color: var(--muted); font-size: 0.85rem; }
 .tree-link { font-size: 0.8rem; margin-left: auto; }
@@ -396,7 +396,7 @@ button.ghost { background: transparent; }
 }
 .tree-caret:hover { color: var(--fg); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* 作品ツリー(StoryTree): 見出し行のドラッグ&ドロップで place_id を差し替える */
+/* 作品ツリー(StoryTree): 見出し行のドラッグ&ドロップで location_id を差し替える */
 .tree-draggable[draggable="true"] { cursor: grab; }
 .tree-draggable.dragging { opacity: 0.4; }
 .drop-target { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }

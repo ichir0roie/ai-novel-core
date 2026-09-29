@@ -47,10 +47,10 @@ function StoryRow({ story, drag }: { story: TreeStory; drag: DragState }) {
   );
 }
 
-function PlaceNode({ node, openState, drag }: { node: TreeNode; openState: OpenState; drag: DragState }) {
+function LocationNode({ node, openState, drag }: { node: TreeNode; openState: OpenState; drag: DragState }) {
   const key = String(node.id);
   return (
-    <li className="tree-place">
+    <li className="tree-location">
       <details open={openState.isOpen(key)} onToggle={(e) => openState.setOpen(key, e.currentTarget.open)}>
         <summary
           className={drag.dropTarget === node.id ? "drop-target" : ""}
@@ -77,7 +77,7 @@ function PlaceNode({ node, openState, drag }: { node: TreeNode; openState: OpenS
             <StoryRow key={story.id} story={story} drag={drag} />
           ))}
           {node.children.map((child) => (
-            <PlaceNode key={child.id} node={child} openState={openState} drag={drag} />
+            <LocationNode key={child.id} node={child} openState={openState} drag={drag} />
           ))}
         </ul>
       </details>
@@ -88,7 +88,7 @@ function PlaceNode({ node, openState, drag }: { node: TreeNode; openState: OpenS
 type Source = { locations: Rec[]; stories: Rec[]; episodes: Rec[] };
 
 /** 場所・作品・話の一覧をそのまま引いて、木はブラウザで組む。タブに戻ったときに引き直す。
- *  作品(StoryRow)の見出し行はドラッグ&ドロップで `place_id` を差し替える。 */
+ *  作品(StoryRow)の見出し行はドラッグ&ドロップで `location_id` を差し替える。 */
 export default function StoryTree() {
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,10 +120,10 @@ export default function StoryTree() {
   const tree = useMemo(() => (source ? buildStoryTree(source.locations, source.stories, source.episodes) : null), [source]);
 
   const moveTo = useCallback(
-    async (id: number, placeId: number | null) => {
+    async (id: number, locationId: number | null) => {
       setSaveError(null);
       try {
-        await updateRecord("story", id, { place_id: placeId });
+        await updateRecord("story", id, { location_id: locationId });
         await load();
       } catch (e) {
         setSaveError(T.storyTree.moveFailed(e instanceof Error ? e.message : String(e)));
@@ -159,9 +159,9 @@ export default function StoryTree() {
       {saveError && <div className="status error">{saveError}</div>}
       <ul className="tree tree-root">
         {tree.nodes.map((node) => (
-          <PlaceNode key={node.id} node={node} openState={openState} drag={drag} />
+          <LocationNode key={node.id} node={node} openState={openState} drag={drag} />
         ))}
-        <li className="tree-place">
+        <li className="tree-location">
           <details open={openState.isOpen(UNPLACED)} onToggle={(e) => openState.setOpen(UNPLACED, e.currentTarget.open)}>
             <summary
               className={dropTarget === UNPLACED ? "drop-target" : ""}

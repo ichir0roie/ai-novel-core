@@ -21,10 +21,10 @@ function CharacterRow({ character }: { character: TreeCharacter }) {
   );
 }
 
-function PlaceNode({ node, openState }: { node: TreeNode; openState: OpenState }) {
+function LocationNode({ node, openState }: { node: TreeNode; openState: OpenState }) {
   const key = String(node.id);
   return (
-    <li className="tree-place">
+    <li className="tree-location">
       <details open={openState.isOpen(key)} onToggle={(e) => openState.setOpen(key, e.currentTarget.open)}>
         <summary>
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
@@ -39,7 +39,7 @@ function PlaceNode({ node, openState }: { node: TreeNode; openState: OpenState }
             <CharacterRow key={character.id} character={character} />
           ))}
           {node.children.map((child) => (
-            <PlaceNode key={child.id} node={child} openState={openState} />
+            <LocationNode key={child.id} node={child} openState={openState} />
           ))}
         </ul>
       </details>
@@ -91,9 +91,9 @@ export default function CharacterTree() {
       </button>
       <ul className="tree tree-root">
         {tree.nodes.map((node) => (
-          <PlaceNode key={node.id} node={node} openState={openState} />
+          <LocationNode key={node.id} node={node} openState={openState} />
         ))}
-        <li className="tree-place">
+        <li className="tree-location">
           <details open={openState.isOpen(UNPLACED)} onToggle={(e) => openState.setOpen(UNPLACED, e.currentTarget.open)}>
             <summary>
               <span className="tree-name">{T.characterTree.noLocation}</span>

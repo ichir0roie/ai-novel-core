@@ -52,15 +52,15 @@ def _revision_material(
     # 要約の commit で読み込んだ関連が期限切れになるので、AI を呼ぶ前にマテリアルへ写しておく
     main_episode = RevisedEpisode.model_validate(episode)
     story = StoryMaterial.model_validate(episode.story)
-    place_id = episode.place_id or episode.story.place_id
+    location_id = episode.location_id or episode.story.location_id
     characters = [link.character for link in episode.episode_characters]
 
     return EpisodeRevisionMaterialSerialized(
         story=story,
         main_episode=main_episode,
         past_episodes=past_episodes(s, ai, episode, past_episode_count),
-        locations=common_query.place_path(s, place_id)
-        if place_id is not None else [],
+        locations=common_query.location_path(s, location_id)
+        if location_id is not None else [],
         cast=cast_at(s, ai, characters, main_episode.start),
     )
 

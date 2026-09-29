@@ -7,5 +7,5 @@ class LocationMaterial(Material):
     kind: str | None = None
 
 
-class PlaceMaterial(LocationMaterial):
+class LocationTextMaterial(LocationMaterial):
     text: str

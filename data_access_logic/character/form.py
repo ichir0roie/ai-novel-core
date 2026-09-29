@@ -2,7 +2,7 @@ from typing import Annotated, Any
 
 from pydantic import Field, field_validator, model_validator
 
-from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterPlaceRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, ConfirmStatus, PersonalityLevel
 
@@ -42,7 +42,7 @@ class CharacterForm(Draft):
     main_character: bool | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     # GUI は期間ごとの行の配列で渡す。生まれるときの値なので先頭の行だけを使う
     parameters: list[CharacterParameterForm] = []
 
@@ -60,9 +60,9 @@ class CharacterCreateForm(Form):
     main_character: bool = False
     event_seeded: bool = False
     meme_seeded: bool = False
-    # `character_place` の行として、誕生から死亡までの期間で足す
-    place_id: Annotated[int | None, References("location")] = Field(
-        default=None, title="出自(場所)", description="足すときの出自。CharacterPlace の一番古い行になる")
+    # `character_location` の行として、誕生から死亡までの期間で足す
+    location_id: Annotated[int | None, References("location")] = Field(
+        default=None, title="出自(場所)", description="足すときの出自。CharacterLocation の一番古い行になる")
     start: Timestamp | None = None
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow] = []
@@ -82,18 +82,18 @@ class CharacterUpdateForm(Form):
     end: Timestamp | None = None
     # 渡すと配列をまるごと置き換える
     parameters: list[CharacterParameterRow] | None = None
-    places: list[CharacterPlaceRow] | None = None
+    locations: list[CharacterLocationRow] | None = None
     histories: list[CharacterHistoryRow] | None = None
 
 
-class CharacterPlaceCreateForm(Form):
+class CharacterLocationCreateForm(Form):
     character_id: int
     location_id: int
     start: Timestamp | None = None
     end: Timestamp | None = None
 
 
-class CharacterPlaceUpdateForm(Form):
+class CharacterLocationUpdateForm(Form):
     id: int
     character_id: int | None = None
     location_id: int | None = None
@@ -102,8 +102,8 @@ class CharacterPlaceUpdateForm(Form):
 
 
 class CharacterRelationCreateForm(Form):
-    character_id_1: int
-    character_id_2: int
+    character_1_id: int
+    character_2_id: int
     relation: str = Field(min_length=1)
     text: str = ""
     start: Timestamp | None = None
@@ -111,15 +111,15 @@ class CharacterRelationCreateForm(Form):
 
     @model_validator(mode="after")
     def _two_characters(self) -> "CharacterRelationCreateForm":
-        if self.character_id_1 == self.character_id_2:
-            raise ValueError("character_id_1 と character_id_2 は別の人物")
+        if self.character_1_id == self.character_2_id:
+            raise ValueError("character_1_id と character_2_id は別の人物")
         return self
 
 
 class CharacterRelationUpdateForm(Form):
     id: int
-    character_id_1: int | None = None
-    character_id_2: int | None = None
+    character_1_id: int | None = None
+    character_2_id: int | None = None
     relation: str | None = None
     text: str | None = None
     start: Timestamp | None = None

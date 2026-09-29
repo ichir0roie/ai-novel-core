@@ -116,7 +116,7 @@ export default function RecordPage() {
                       characterIds: (value.character_ids as number[] | null) ?? [],
                       onChangeCharacterIds: (ids: number[]) => setValue({ ...value, character_ids: ids }),
                       episodeStart: value.start,
-                      episodePlaceId: value.place_id,
+                      episodeLocationId: value.location_id,
                     }
                   : {})}
               />

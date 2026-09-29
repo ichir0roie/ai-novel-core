@@ -22,7 +22,7 @@ class CommitEpisode(CommitAndRefresh):
         form = self.episode
         self.check_exists(s, Story, form.story_id, "story_id")
         self.check_exists(s, Character, form.viewpoint_character_id, "viewpoint_character_id")
-        self.check_exists(s, Location, form.place_id, "place_id")
+        self.check_exists(s, Location, form.location_id, "location_id")
         for character_id in form.character_ids or []:
             self.check_exists(s, Character, character_id, "character_ids")
 

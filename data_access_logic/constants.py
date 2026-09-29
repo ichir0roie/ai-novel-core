@@ -3,7 +3,7 @@ from __future__ import annotations
 
 # data_access_logic/character/generator
 GENERATION_CHARACTER_AGE_RANGE = (0, 40)
-# 命名時の重複回避に渡す「既にいる人物・対象」の上限。born_place とその祖先
+# 命名時の重複回避に渡す「既にいる人物・対象」の上限。born_location とその祖先
 # (国・大陸まで)全体の居住者を対象にするため、世界が育つほど際限なく
 # 増える。上限が無いとプロンプトが肥大化し続ける。
 NEARBY_CHARACTER_LIMIT = 20

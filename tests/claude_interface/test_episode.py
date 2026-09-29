@@ -13,7 +13,7 @@ def test_commit_episode(shown, world, mock_ai):
     result = shown(CommitEpisode(EpisodeCommitForm(
         story_id=world.story_id, title="テスト第二話", key="取引の夜", text="夜になった。\n取引がまとまった。",
         start="1200/04/01 15:00:00", end="1200/04/01 20:00:00", viewpoint_character_id=world.character_ids[1],
-        place_id=world.place_id, event_seeded=True, synced=True, character_ids=world.character_ids)))
+        location_id=world.location_id, event_seeded=True, synced=True, character_ids=world.character_ids)))
 
     assert result["story_id"] == world.story_id
     assert (result["title"], result["key"]) == ("テスト第二話", "取引の夜")
@@ -21,7 +21,7 @@ def test_commit_episode(shown, world, mock_ai):
     assert result["letters"] == len(result["text"])
     assert (result["start"], result["end"]) == ("1200/04/01 15:00:00", "1200/04/01 20:00:00")
     assert result["viewpoint_character_id"] == world.character_ids[1]
-    assert result["place_id"] == world.place_id
+    assert result["location_id"] == world.location_id
     assert (result["event_seeded"], result["synced"]) == (True, True)
     assert result["character_ids"] == world.character_ids
     # 確定のあとに要約・ミームを AI に作らせる
@@ -32,7 +32,7 @@ def test_generate_episode(shown, world, mock_ai):
     result = shown(GenerateEpisode(
         episode=EpisodeForm(
             story_id=world.story_id, title="生成の話", key="市の翌朝", start="1200/04/02 08:00:00",
-            end="1200/04/02 12:00:00", viewpoint_character_id=world.character_ids[0], place_id=world.place_id,
+            end="1200/04/02 12:00:00", viewpoint_character_id=world.character_ids[0], location_id=world.location_id,
             character_ids=[world.character_ids[0]]),
         character_ids=world.character_ids, model="claude-haiku-4-5", effort="low",
         shared_style_extra="共有の文体の好み", style_extra="話の文体の好み"))
@@ -41,7 +41,7 @@ def test_generate_episode(shown, world, mock_ai):
     assert result["key"] == "市の翌朝"
     assert result["start"] == "1200/04/02 08:00:00"
     assert result["viewpoint_character_id"] == world.character_ids[0]
-    assert result["place_id"] == world.place_id
+    assert result["location_id"] == world.location_id
     assert result["character_ids"] == world.character_ids
     assert result["text"]
     assert any(call["prompt"] and "話の文体の好み" in (call["system"] or "") + call["prompt"] for call in mock_ai.calls)
@@ -51,13 +51,13 @@ def test_generate_frame(shown, world, mock_ai):
     result = shown(GenerateFrame(
         frame=EpisodeForm(
             story_id=world.story_id, title="枠の話", key="市のあと", start="1200/04/03", end="1200/04/04",
-            viewpoint_character_id=world.character_ids[1], place_id=world.neighbor_id,
+            viewpoint_character_id=world.character_ids[1], location_id=world.neighbor_id,
             character_ids=[world.character_ids[1]]),
         character_ids=world.character_ids))
 
     assert result["story_id"] == world.story_id
     assert result["viewpoint_character_id"] == world.character_ids[1]
-    assert result["place_id"] == world.neighbor_id
+    assert result["location_id"] == world.neighbor_id
     assert result["character_ids"] == world.character_ids
     assert result["text"] == ""
     assert mock_ai.calls

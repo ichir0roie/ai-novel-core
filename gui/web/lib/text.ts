@@ -248,7 +248,7 @@ export const T = {
     noCharacter: (id: number) => `No character with id=${id}.`,
     hintClick: "Click a character to show their relations, or an arrow to show the relation text. Double-click to open the record. Drag characters to move them.",
     hintCounts: (chars: number, rels: number, year: number | null) =>
-      `${chars} characters, ${rels} relations${year == null ? "" : ` (active in year ${year})`}. Arrows point from character_id_1 to character_id_2.`,
+      `${chars} characters, ${rels} relations${year == null ? "" : ` (active in year ${year})`}. Arrows point from character_1_id to character_2_id.`,
     columns: { subject: "Subject", relation: "Relation", target: "Target", period: "Period" },
     sex: "Sex",
     period: "Period",

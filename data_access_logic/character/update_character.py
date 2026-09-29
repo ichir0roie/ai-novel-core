@@ -8,7 +8,7 @@ from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
 from db.child_lists import replaced_rows
-from db.schema import Character, CharacterHistory, CharacterParameter, CharacterPlace
+from db.schema import Character, CharacterHistory, CharacterParameter, CharacterLocation
 
 
 class UpdateCharacter(CommitEntrypoint):
@@ -23,8 +23,8 @@ class UpdateCharacter(CommitEntrypoint):
 
         if form.parameters is not None:
             record.parameters = replaced_rows(record.parameters, form.parameters, CharacterParameter)
-        if form.places is not None:
-            record.places = replaced_rows(record.places, form.places, CharacterPlace)
+        if form.locations is not None:
+            record.locations = replaced_rows(record.locations, form.locations, CharacterLocation)
         if form.histories is not None:
             record.histories = replaced_rows(record.histories, form.histories, CharacterHistory)
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。

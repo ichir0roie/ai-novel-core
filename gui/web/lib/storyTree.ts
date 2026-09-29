@@ -1,6 +1,6 @@
 import type { Rec } from "./api";
 
-/** 作品一覧のツリー。場所(location)を `parent_id` で木にし、作品は `place_id`(無ければ `world_id`)の場所の下に置く。
+/** 作品一覧のツリー。場所(location)を `parent_id` で木にし、作品は `location_id`(無ければ `world_id`)の場所の下に置く。
  *  作品を一つも含まない枝は落とし、どちらも無い作品は `unplaced` に出す。 */
 
 export type TreeStory = {
@@ -40,10 +40,10 @@ function byStart(a: Rec, b: Rec): number {
 export function buildStoryTree(locations: Rec[], stories: Rec[], episodes: Rec[]): StoryTree {
   const known = new Set(locations.map((l) => Number(l.id)));
   const children = new Map<number | null, Rec[]>();
-  for (const place of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
-    const parent = num(place.parent_id);
+  for (const location of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
+    const parent = num(location.parent_id);
     const key = parent !== null && known.has(parent) ? parent : null;
-    children.set(key, [...(children.get(key) ?? []), place]);
+    children.set(key, [...(children.get(key) ?? []), location]);
   }
 
   const episodeCount = new Map<number, number>();
@@ -60,19 +60,19 @@ export function buildStoryTree(locations: Rec[], stories: Rec[], episodes: Rec[]
       id, name: String(story.name ?? story.label ?? ""), state: str(story.state),
       start: str(story.start), end: str(story.end), episodes: episodeCount.get(id) ?? 0,
     };
-    const place = num(story.place_id), world = num(story.world_id);
-    const at = place !== null && known.has(place) ? place : world !== null && known.has(world) ? world : null;
+    const location = num(story.location_id), world = num(story.world_id);
+    const at = location !== null && known.has(location) ? location : world !== null && known.has(world) ? world : null;
     if (at === null) unplaced.push(entry);
     else storiesAt.set(at, [...(storiesAt.get(at) ?? []), entry]);
   }
 
-  const node = (place: Rec): TreeNode | null => {
-    const id = Number(place.id);
+  const node = (location: Rec): TreeNode | null => {
+    const id = Number(location.id);
     const subtree = (children.get(id) ?? []).map(node).filter((n): n is TreeNode => n !== null);
     const own = storiesAt.get(id) ?? [];
     if (subtree.length === 0 && own.length === 0) return null;
     return {
-      id, name: str(place.name), kind: str(place.kind), stories: own, children: subtree,
+      id, name: str(location.name), kind: str(location.kind), stories: own, children: subtree,
       total: own.length + subtree.reduce((sum, child) => sum + child.total, 0),
     };
   };

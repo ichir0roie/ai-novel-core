@@ -10,7 +10,7 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.event.form import EventForm
 from data_access_logic.event.novelist import novelize_event
-from data_access_logic.event.progress import progress_place
+from data_access_logic.event.progress import progress_location
 from data_access_logic.event.record import EventRecord
 from data_access_logic.event_seed.extractor import draw as draw_seeds
 from data_access_logic.event_seed.extractor import refresh_and_consolidate
@@ -20,12 +20,12 @@ from db.schema import Character, Event, Location, Session, Stamp, get_env_sessio
 logger = logging.getLogger(__name__)
 
 
-def _current_place_id(s: Session, character: Character, time: Stamp) -> int | None:
-    place = s.scalars(common_query.character_place_select(character.id, time)).first()
-    return place.location_id if place else None
+def _current_location_id(s: Session, character: Character, time: Stamp) -> int | None:
+    character_location = s.scalars(common_query.character_location_select(character.id, time)).first()
+    return character_location.location_id if character_location else None
 
 
-def _present_characters(s: Session, place_id: int, time: Stamp) -> list[Character]:
+def _present_characters(s: Session, location_id: int, time: Stamp) -> list[Character]:
     """その場所・時刻に居合わせて手の空いたサブキャラクター。場所を名指しされるので、
     ランダム生成の対象か(active_random_generation)は見ない。"""
     busy_ids = set(s.scalars(world_creation_query.busy_character_ids_select(time)).all())
@@ -33,7 +33,7 @@ def _present_characters(s: Session, place_id: int, time: Stamp) -> list[Characte
         world_creation_query.alive_characters_select(time)
         .where(world_creation_query.character_active_condition()).order_by(Character.id)).all()
     return [character for character in characters
-            if character.id not in busy_ids and _current_place_id(s, character, time) == place_id]
+            if character.id not in busy_ids and _current_location_id(s, character, time) == location_id]
 
 
 class GenerateEvent(SessionEntrypoint):
@@ -76,13 +76,13 @@ class GenerateEvent(SessionEntrypoint):
             refresh_and_consolidate(s, self.ai)
         return generated
 
-    def _members(self, s: Session, place_id: int | None, time: Stamp) -> list[Character]:
+    def _members(self, s: Session, location_id: int | None, time: Stamp) -> list[Character]:
         """当事者を名指しされたらその人物(メインキャラクター・手のふさがった者も含む)、
         されなければその場所・時刻に居合わせて手の空いたサブキャラクター。"""
         if not self.event.character_ids:
-            if place_id is None:
+            if location_id is None:
                 raise ValueError("location_id(場所)か character_ids(当事者)のどちらかは必須")
-            return _present_characters(s, place_id, time)
+            return _present_characters(s, location_id, time)
         return [s.get_one(Character, character_id) for character_id in dict.fromkeys(self.event.character_ids)]
 
     def _generate(self, s: Session, rng: random.Random) -> Event:
@@ -93,22 +93,22 @@ class GenerateEvent(SessionEntrypoint):
         if time is None:
             raise ValueError("time(時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
         members = self._members(s, form.location_id, time)
-        place_id = form.location_id
-        if place_id is None:
-            place_id = _current_place_id(s, members[0], time)
-            if place_id is None:
+        location_id = form.location_id
+        if location_id is None:
+            location_id = _current_location_id(s, members[0], time)
+            if location_id is None:
                 raise ValueError(f"人物 id={members[0].id} の {time} の居場所が分からないので location_id(場所)を渡す")
-        place = common_query.get_row(s, Location, place_id)
+        location = common_query.get_row(s, Location, location_id)
         if not members:
-            raise ValueError(f"{place.name}(id={place_id})に {time} に居合わせて手の空いたサブキャラクターがいない")
+            raise ValueError(f"{location.name}(id={location_id})に {time} に居合わせて手の空いたサブキャラクターがいない")
         if form.parent_event_id is not None:
             s.get_one(Event, form.parent_event_id)
 
         scene = form.scene
-        logger.info(f"{place.name}(id={place_id}) {time} の出来事(下書き「{scene or '(指定なし)'}」): "
+        logger.info(f"{location.name}(id={location_id}) {time} の出来事(下書き「{scene or '(指定なし)'}」): "
               f"当事者の候補 {', '.join(c.name or '?' for c in members)}")
         seeds = draw_seeds(s, rng)
-        record = progress_place(s, self.ai, rng, place_id, members, time, seeds, scene=scene)
+        record = progress_location(s, self.ai, rng, location_id, members, time, seeds, scene=scene)
         if record is None:
             raise ValueError("出来事の候補が得られなかった")
         record.hidden = form.hidden

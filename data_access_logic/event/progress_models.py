@@ -6,15 +6,15 @@ from ai.instructions.event_writing import EVENT_DURATION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.character.models import ParticipantCharacter, ParticipantMaterial, ParticipantSerialized
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
-from data_access_logic.location.models import LocationMaterial, PlaceMaterial
+from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
 from data_access_logic.story.models import StoryPlotMaterial
 from db.stamp import Stamp
 
 
-class PlaceSituationMaterial(Material):
+class LocationSituationMaterial(Material):
     time: Stamp
-    place: PlaceMaterial
+    location: LocationTextMaterial
     participants: list[ParticipantMaterial]
     # 新しい順
     recent_events: list[EventBase]
@@ -29,7 +29,7 @@ class PlaceSituationMaterial(Material):
     scene: str | None = None
 
 
-class PlaceSituationSerialized(PlaceSituationMaterial):
+class LocationSituationSerialized(LocationSituationMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     participants: list[ParticipantSerialized]
@@ -38,10 +38,10 @@ class PlaceSituationSerialized(PlaceSituationMaterial):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        place, focus = self.place, self.focus_character
+        location, focus = self.location, self.focus_character
         return {
             "現在の時刻": str(self.time),
-            "場所": {"名前": place.name, "種別": place.kind, "説明": place.text},
+            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text},
             "居合わせる人物・対象": [participant.model_dump() for participant in self.participants],
             "この場所の直近の出来事(新しい順)": [event.name for event in self.recent_events],
             "この時点より後に既に決まっている出来事": [event.model_dump() for event in self.later_events],
@@ -98,14 +98,14 @@ def _judgements(judgements: list[ParticipantJudgement]) -> list[dict[str, Any]]:
 
 
 class JudgementRequest(Material):
-    situation: PlaceSituationMaterial
+    situation: LocationSituationMaterial
     participant: ParticipantMaterial
 
 
 class JudgementRequestSerialized(JudgementRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
-    situation: PlaceSituationSerialized
+    situation: LocationSituationSerialized
     participant: ParticipantSerialized
 
     @model_serializer
@@ -141,7 +141,7 @@ class CandidatesDraft(BaseModel):
 
 
 class CandidateRequest(Material):
-    situation: PlaceSituationMaterial
+    situation: LocationSituationMaterial
     judgements: list[ParticipantJudgement]
     # 時代・場所を抜いた、別の物語から取ったアイデア
     seeds: list[str]
@@ -150,7 +150,7 @@ class CandidateRequest(Material):
 class CandidateRequestSerialized(CandidateRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
-    situation: PlaceSituationSerialized
+    situation: LocationSituationSerialized
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -162,7 +162,7 @@ class CandidateRequestSerialized(CandidateRequest):
 
 
 class RecordRequest(Material):
-    situation: PlaceSituationMaterial
+    situation: LocationSituationMaterial
     judgements: list[ParticipantJudgement]
     destinations: list[LocationMaterial]
     candidate: CandidateDraft
@@ -171,7 +171,7 @@ class RecordRequest(Material):
 class RecordRequestSerialized(RecordRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
-    situation: PlaceSituationSerialized
+    situation: LocationSituationSerialized
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:

@@ -34,18 +34,18 @@ def test_check_facts(shown, world, mock_ai, monkeypatch):
 
 def test_commit_idea(shown, world, mock_ai):
     result = shown(CommitIdea(IdeaCreateForm(
-        name="テスト飛空艇", kind="技術", text="空を渡る船", confirmed=ConfirmStatus.PENDING, location_id=world.place_id,
+        name="テスト飛空艇", kind="技術", text="空を渡る船", confirmed=ConfirmStatus.PENDING, location_id=world.location_id,
         start="1190/01/01", end="1290/01/01", parent_idea_id=world.idea_id, meme_seeded=False,
-        recognitions=[IdeaRecognitionRow(location_id=world.place_id, start="1195/01/01", end="1250/01/01",
+        recognitions=[IdeaRecognitionRow(location_id=world.location_id, start="1195/01/01", end="1250/01/01",
                                          name="空舟", detail="都の俗称")]),
         fact_check=True))
 
     record = result["record"]
     assert (record["name"], record["kind"], record["confirmed"]) == ("テスト飛空艇", "技術", "未確認")
     assert record["text"].startswith("空を渡る船")
-    assert (record["location_id"], record["parent_idea_id"]) == (world.place_id, world.idea_id)
+    assert (record["location_id"], record["parent_idea_id"]) == (world.location_id, world.idea_id)
     assert (record["start"], record["end"]) == ("1190/01/01 00:00:00", "1290/01/01 00:00:00")
-    assert record["recognitions"] == [{"location_id": world.place_id, "start": "1195/01/01 00:00:00",
+    assert record["recognitions"] == [{"location_id": world.location_id, "start": "1195/01/01 00:00:00",
                                        "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称"}]
     assert isinstance(result["memes_added"], int)
     assert mock_ai.calls
@@ -77,7 +77,7 @@ def test_resolve_terms(shown, world):
                         start="1100"),
                IdeaTerm(keyword="テスト新語", variants=["テスト新語法"], description="まだ無い語", coined=True, kind="概念",
                         start="1200", end="1300")],
-        place_id=world.place_id, time="1200/04/01"))
+        location_id=world.location_id, time="1200/04/01"))
 
     assert world.idea_id in result["hits"]
     assert [candidate["name"] for candidate in result["candidates"]] == ["テスト新語"]
@@ -87,7 +87,7 @@ def test_resolve_terms(shown, world):
 def test_search_ideas(shown, world):
     result = shown(SearchIdeas(
         keywords=[IdeaTerm(keyword="テスト魔導", variants=["テスト術", "魔導炉"], description="都の技術", kind="技術")],
-        place_id=world.place_id, limit=5, time="1200/04/01"))
+        location_id=world.location_id, limit=5, time="1200/04/01"))
 
     found = {idea["id"]: idea for idea in result}
     assert world.idea_id in found

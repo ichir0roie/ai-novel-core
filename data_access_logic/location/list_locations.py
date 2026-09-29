@@ -9,7 +9,7 @@ from data_access_logic.query import common_query
 from db.schema import Location
 
 
-class PlaceListing(Material):
+class LocationListing(Material):
     id: int
     name: str | None = None
     kind: str | None = None
@@ -19,12 +19,12 @@ class PlaceListing(Material):
     sample_era: str | None = None
 
 
-class ListPlaces(ListEntrypoint):
+class ListLocations(ListEntrypoint):
     def __init__(self, kind: str | None = None):
         self.kind = kind
 
     def select(self) -> Select:
-        return common_query.places_select(kind=self.kind)
+        return common_query.locations_select(kind=self.kind)
 
-    def row(self, row: Location) -> PlaceListing:
-        return PlaceListing.model_validate(row)
+    def row(self, row: Location) -> LocationListing:
+        return LocationListing.model_validate(row)

@@ -10,23 +10,23 @@ from db.schema import ConfirmStatus, Idea, IdeaRecognition
 from db.stamp import Stamp
 
 
-def idea_in_scope(place_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
-    """`place_ids` は現在地から最上位までの場所(`common_query.idea_scope_ids`)。"""
+def idea_in_scope(location_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
+    """`location_ids` は現在地から最上位までの場所(`common_query.idea_scope_ids`)。"""
     conditions = []
-    if place_ids is not None:
-        conditions.append(Idea.location_id.in_(list(place_ids)))
+    if location_ids is not None:
+        conditions.append(Idea.location_id.in_(list(location_ids)))
     if time is not None:
         conditions.append(alive_at(Idea, time))
     return and_(true(), *conditions)
 
 
-def recognition_in_scope(place_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
+def recognition_in_scope(location_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
     """認識(呼び名)は、場所・時代の列が空ならどこでも・いつでも使う。
-    `place_ids` / `time` を渡さなければ、その列が空の認識だけに当たる。
+    `location_ids` / `time` を渡さなければ、その列が空の認識だけに当たる。
     """
     location = IdeaRecognition.location_id.is_(None)
-    if place_ids is not None:
-        location = or_(location, IdeaRecognition.location_id.in_(list(place_ids)))
+    if location_ids is not None:
+        location = or_(location, IdeaRecognition.location_id.in_(list(location_ids)))
     if time is None:
         period = and_(IdeaRecognition.start.is_(None), IdeaRecognition.end.is_(None))
     else:
@@ -34,15 +34,15 @@ def recognition_in_scope(place_ids: Collection[int] | None = None, time: Stamp |
     return and_(location, period)
 
 
-def recognitions_select(essence_ids: Collection[int], place_ids: Collection[int] | None = None,
+def recognitions_select(essence_ids: Collection[int], location_ids: Collection[int] | None = None,
                         time: Stamp | None = None) -> Select:
-    conditions = [IdeaRecognition.idea_id.in_(list(essence_ids)), recognition_in_scope(place_ids, time)]
+    conditions = [IdeaRecognition.idea_id.in_(list(essence_ids)), recognition_in_scope(location_ids, time)]
     return (select(IdeaRecognition)
             .where(*conditions)
             .order_by(IdeaRecognition.start.desc().nulls_last(), IdeaRecognition.id))
 
 
-def ideas_by_terms_select(terms: Collection[str], place_ids: Collection[int] | None = None, time: Stamp | None = None,
+def ideas_by_terms_select(terms: Collection[str], location_ids: Collection[int] | None = None, time: Stamp | None = None,
                           confirmed_only: bool = True) -> Select:
     """名前か本文(基本の本文、その場所・時代の作中の呼び名 `IdeaRecognition`)に
     `terms` のどれかを含むアイデア。呼び名を左外部結合するので、呼び名の無いアイデアも
@@ -54,11 +54,11 @@ def ideas_by_terms_select(terms: Collection[str], place_ids: Collection[int] | N
     essence_hit = and_(
         or_(*(Idea.name.contains(term, autoescape=True) for term in terms),
            *(Idea.text.contains(term, autoescape=True) for term in terms)),
-        idea_in_scope(place_ids, time))
+        idea_in_scope(location_ids, time))
     recognition_hit = and_(
         or_(*(IdeaRecognition.name.contains(term, autoescape=True) for term in terms),
            *(IdeaRecognition.detail.contains(term, autoescape=True) for term in terms)),
-        recognition_in_scope(place_ids, time))
+        recognition_in_scope(location_ids, time))
     conditions = [or_(essence_hit, recognition_hit)]
     if confirmed_only:
         conditions.append(Idea.confirmed == ConfirmStatus.APPROVED)
@@ -69,17 +69,17 @@ def ideas_by_terms_select(terms: Collection[str], place_ids: Collection[int] | N
             .order_by(Idea.id))
 
 
-def ideas_by_parent_select(parent_ids: Collection[int], place_ids: Collection[int] | None = None, time: Stamp | None = None,
+def ideas_by_parent_select(parent_ids: Collection[int], location_ids: Collection[int] | None = None, time: Stamp | None = None,
                            confirmed_only: bool = True) -> Select:
-    conditions = [Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(place_ids, time)]
+    conditions = [Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(location_ids, time)]
     if confirmed_only:
         conditions.append(Idea.confirmed == ConfirmStatus.APPROVED)
     return select(Idea).where(*conditions).order_by(Idea.id)
 
 
-def later_ideas_select(place_ids: Collection[int], time: Stamp) -> Select:
-    """`time` より後に始まる、`place_ids` の場所で効く確定済みのアイデア。"""
+def later_ideas_select(location_ids: Collection[int], time: Stamp) -> Select:
+    """`time` より後に始まる、`location_ids` の場所で効く確定済みのアイデア。"""
     return (select(Idea)
-            .where(Idea.location_id.in_(list(place_ids)),
+            .where(Idea.location_id.in_(list(location_ids)),
                    Idea.start > time, Idea.confirmed == ConfirmStatus.APPROVED)
             .order_by(Idea.start, Idea.id))

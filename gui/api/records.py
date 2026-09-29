@@ -183,25 +183,25 @@ def _context_block(s: Session, table: str, rows: Sequence[Base]) -> ContextBlock
 
 
 def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:
-    """話の時期(start〜end)・場所(place_id)に重なる出来事・作品。
+    """話の時期(start〜end)・場所(location_id)に重なる出来事・作品。
 
-    人物・場所はここでは拾わない(話の人物は `episode_character`、場所は `place_id` がそのまま持つ)。
+    人物・場所はここでは拾わない(話の人物は `episode_character`、場所は `location_id` がそのまま持つ)。
     """
     since = episode.start
     until = episode.end or since
-    place_ids = set(common_query.descendant_place_ids(s, episode.place_id)) if episode.place_id else set()
+    location_ids = set(common_query.descendant_location_ids(s, episode.location_id)) if episode.location_id else set()
 
     event_conditions = [Event.time.between(since, until)]
-    if place_ids:
-        event_conditions.append(Event.location_id.in_(place_ids))
+    if location_ids:
+        event_conditions.append(Event.location_id.in_(location_ids))
     events = s.scalars(loading(select(Event).where(*event_conditions)
                                .order_by(Event.time, Event.id).limit(_CONTEXT_LIMIT), EventRecord)).all()
 
     story_conditions = [Story.id != episode.story_id,
                         or_(Story.start.is_(None), Story.start <= until),
                         or_(Story.end.is_(None), Story.end >= since)]
-    if place_ids:
-        story_conditions.append(or_(Story.place_id.in_(place_ids), Story.world_id.in_(place_ids)))
+    if location_ids:
+        story_conditions.append(or_(Story.location_id.in_(location_ids), Story.world_id.in_(location_ids)))
     stories = s.scalars(select(Story).where(*story_conditions)
                         .order_by(Story.id).limit(_CONTEXT_LIMIT)).all()
 

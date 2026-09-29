@@ -34,7 +34,7 @@ class Param:
 
 @dataclass(frozen=True)
 class Entrance:
-    id: str          # 例: location.list_places.ListPlaces
+    id: str          # 例: location.list_locations.ListLocations
     area: str
     name: str
     doc: str

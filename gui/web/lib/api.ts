@@ -112,7 +112,7 @@ export const generateRecord = (table: string, generator: string, draft: Rec, arg
 
 export type MapsResponse = components["schemas"]["MapsResponse"];
 export type PlanetMap = components["schemas"]["PlanetMap"];
-export type MapPlace = components["schemas"]["MapPlace"];
+export type MapLocation = components["schemas"]["MapLocation"];
 export type RelationsResponse = components["schemas"]["RelationsResponse"];
 export type RelationCharacter = components["schemas"]["RelationCharacter"];
 export type Relation = components["schemas"]["Relation"];
@@ -124,10 +124,10 @@ export type CharacterLocationsResponse = components["schemas"]["CharacterLocatio
 
 export const getCharacterLocations = () => api<CharacterLocationsResponse>("/api/character_locations");
 
-export type PlaceCharactersResponse = components["schemas"]["PlaceCharactersResponse"];
+export type LocationCharactersResponse = components["schemas"]["LocationCharactersResponse"];
 
-export const getPlaceCharacters = (placeId: number, time: string) =>
-  api<PlaceCharactersResponse>(`/api/place_characters?${new URLSearchParams({ place_id: String(placeId), time })}`);
+export const getLocationCharacters = (locationId: number, time: string) =>
+  api<LocationCharactersResponse>(`/api/location_characters?${new URLSearchParams({ location_id: String(locationId), time })}`);
 
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {

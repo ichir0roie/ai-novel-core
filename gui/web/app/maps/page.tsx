@@ -4,17 +4,17 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
-import { getMaps, type MapPlace, type MapsResponse } from "@/lib/api";
+import { getMaps, type MapLocation, type MapsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import {
   altDiffText, altText, angular, bearing, bearingName, distanceKm, distanceText, fitFrame, MARGIN, outerRing,
-  placeLabels, polygonCenter, type Polygon,
+  locationLabels, polygonCenter, type Polygon,
 } from "@/lib/map";
 import { T } from "@/lib/text";
 
-type Point = MapPlace & { lon: number; lat: number };
-type Shape = MapPlace & { polygon: Polygon };
+type Point = MapLocation & { lon: number; lat: number };
+type Shape = MapLocation & { polygon: Polygon };
 
 function Marker({ category, x, y, r, color, strokeWidth = 1 }: { category: string; x: number; y: number; r: number; color: string; strokeWidth?: number }) {
   const common = { fill: color, stroke: "#fff", strokeWidth };
@@ -63,15 +63,15 @@ export default function MapsPage() {
     const [lon, lat] = polygonCenter(shape.polygon);
     return { lon, lat };
   }, [focus, points, shapes]);
-  const focusPlace = focus == null ? null : [...points, ...shapes].find((p) => p.id === focus) ?? null;
+  const focusLocation = focus == null ? null : [...points, ...shapes].find((p) => p.id === focus) ?? null;
   const frame = useMemo(() => fitFrame(points, shapes, zoom, center), [points, shapes, zoom, center]);
 
   if (error) return <div className="status error">{error}</div>;
   if (!data) return <div className="status info">{T.loading}</div>;
 
   const { categories, category_colors: colors, shape_opacity: opacity, bearings } = data;
-  const order = (p: MapPlace) => categories.indexOf(p.category);
-  const byOrder = (a: MapPlace, b: MapPlace) => order(a) - order(b) || a.id - b.id;
+  const order = (p: MapLocation) => categories.indexOf(p.category);
+  const byOrder = (a: MapLocation, b: MapLocation) => order(a) - order(b) || a.id - b.id;
   const selectPlanet = (i: number) => {
     setPlanetIndex(i);
     setHidden(new Set());
@@ -102,7 +102,7 @@ export default function MapsPage() {
   }
   const drawn: [Point, number, number, number][] = [];
   for (const members of groups.values()) members.forEach((p, i) => drawn.push([p, X(p.lon), Y(p.lat), i]));
-  const labels = placeLabels(drawn.map(([p, x, y, i]) => [x, y + 12 * i, (p.name ?? "") + altText(p.alt)]));
+  const labels = locationLabels(drawn.map(([p, x, y, i]) => [x, y + 12 * i, (p.name ?? "") + altText(p.alt)]));
   const radius = entry?.planet.radius_km ?? null;
 
   const rows = originPoint
@@ -117,13 +117,13 @@ export default function MapsPage() {
 
   return (
     <div className="page-fill viz">
-      <PageTitle kind={T.maps.title} record={focusPlace?.name} />
+      <PageTitle kind={T.maps.title} record={focusLocation?.name} />
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>{focusPlace ? T.maps.centeredOn(focusPlace.name ?? "") : T.maps.title}</h1>
+        <h1 style={{ margin: 0 }}>{focusLocation ? T.maps.centeredOn(focusLocation.name ?? "") : T.maps.title}</h1>
         {focus != null && (
           <>
-            {focusPlace && (
-              <button type="button" onClick={() => openPage(focusPlace.link)}>
+            {focusLocation && (
+              <button type="button" onClick={() => openPage(focusLocation.link)}>
                 {T.openRecord}
               </button>
             )}
@@ -156,7 +156,7 @@ export default function MapsPage() {
           {T.zoom} <input type="range" min="0.5" max="4" step="0.25" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {zoom}×
         </label>
       </div>
-      {focus != null && !focusPlace && (
+      {focus != null && !focusLocation && (
         <div className="status info">
           {T.maps.cannotPlace(focus)}<Link href={`/tables/location/${focus}`}>{T.openRecord}</Link>
         </div>

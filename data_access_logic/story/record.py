@@ -5,7 +5,7 @@ class StoryRecord(Material):
     id: int
     name: str
     world_id: int | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     narration: str
     state: str
     start: Timestamp | None = None
@@ -17,5 +17,5 @@ class StoryRecord(Material):
 class DeletedStory(Material):
     id: int
     name: str
-    place_id: int | None = None
+    location_id: int | None = None
     text: str

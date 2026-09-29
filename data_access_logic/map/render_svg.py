@@ -5,8 +5,8 @@ from collections import defaultdict
 from xml.sax.saxutils import escape
 
 from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
-from data_access_logic.map.collect import MapPlace, Planet
-from data_access_logic.map.layout import Frame, fit_frame, place_labels
+from data_access_logic.map.collect import MapLocation, Planet
+from data_access_logic.map.layout import Frame, fit_frame, location_labels
 from db.polygon import polygon_center
 
 __all__ = ["COLORS", "marker", "shape_path", "alt_text", "render_svg"]
@@ -65,7 +65,7 @@ def _grid(frame: Frame) -> list[str]:
     return out
 
 
-def render_svg(planet: Planet, points: list[MapPlace], shapes: list[MapPlace] = ()) -> str:
+def render_svg(planet: Planet, points: list[MapLocation], shapes: list[MapLocation] = ()) -> str:
     frame = fit_frame(points, shapes)
     width = frame.left + frame.plot_width + _MARGIN_RIGHT
     height = frame.top + frame.plot_height + _MARGIN_BOTTOM
@@ -100,7 +100,7 @@ def render_svg(planet: Planet, points: list[MapPlace], shapes: list[MapPlace] = 
         out.append("</g>")
 
     # 同じ経緯度に重なる点(地上の国の真上・真下にある天上・地下の国など)は印を大きくし、ラベルを下へ積む
-    groups: dict[tuple[float, float], list[MapPlace]] = defaultdict(list)
+    groups: dict[tuple[float, float], list[MapLocation]] = defaultdict(list)
     for p in sorted(points, key=lambda p: (order[p.category], p.id)):
         groups[(p.lon, p.lat)].append(p)
 
@@ -108,7 +108,7 @@ def render_svg(planet: Planet, points: list[MapPlace], shapes: list[MapPlace] = 
     for (lon, lat), members in groups.items():
         for i, p in enumerate(members):
             drawn.append((p, frame.x(lon), frame.y(lat), i))
-    labels = place_labels([(x, y + 12 * i, (p.name or "") + alt_text(p.alt)) for p, x, y, i in drawn])
+    labels = location_labels([(x, y + 12 * i, (p.name or "") + alt_text(p.alt)) for p, x, y, i in drawn])
 
     for (p, x, y, i), (lx, ly, anchor) in zip(drawn, labels):
         color = CATEGORY_COLORS[p.category]

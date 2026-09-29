@@ -180,7 +180,7 @@ class Location(TextBase):
 
     active_random_generation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    # 自分の親(一つ上の場所)。木をのぼって道筋(place_path)を組むのに使う。
+    # 自分の親(一つ上の場所)。木をのぼって道筋(location_path)を組むのに使う。
     # 書き込みは常に parent_id を直に触るので、どちらも読み取り専用にしておく
     # (viewonly を外すと、同じ外部キーを double-write しようとして SQLAlchemy が警告する)。
     parent: Mapped["Location | None"] = relationship(
@@ -405,13 +405,13 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
         "出来事・筋書きのランダム生成は、この列が false(サブキャラクター)の人物・対象だけを対象にする",
         sort_order=240)
 
-    # 出自(生まれの場所)は別列を持たず、CharacterPlace の一番古い行として表す。
-    # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterPlace が持ち、
-    # 入口では `parameters` / `places` の配列で出し入れする。誕生・死亡も専用の列を持たず、
+    # 出自(生まれの場所)は別列を持たず、CharacterLocation の一番古い行として表す。
+    # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
+    # 入口では `parameters` / `locations` の配列で出し入れする。誕生・死亡も専用の列を持たず、
     # `parameters` の一番早く始まる行の start・一番後に始まる行の end として表す(下の `start` / `end`)。
     # 人物の説明の変化は期間ごとに CharacterHistory が持ち、入口では `histories` の配列で出し入れする
     # (Idea の `recognitions` と同じ扱い)。
-    CHILD_LISTS = ("parameters", "places", "histories")
+    CHILD_LISTS = ("parameters", "locations", "histories")
     def _last_parameter(self) -> "CharacterParameter | None":
         if not self.parameters:
             return None
@@ -450,9 +450,9 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     parameters: Mapped[list[CharacterParameter]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterParameter.id")
-    places: Mapped[list[CharacterPlace]] = relationship(
+    locations: Mapped[list[CharacterLocation]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterPlace.start.desc()"
+        order_by="CharacterLocation.start.desc()"
     )
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
@@ -534,9 +534,9 @@ class CharacterParameter(Base):
         return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
 
 
-class CharacterPlace(Base):
+class CharacterLocation(Base):
 
-    __tablename__ = "character_place"
+    __tablename__ = "character_location"
 
     character_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("character.id"), sort_order=100)
     location_id: Mapped[int] = mapped_column(Integer, ForeignKey("location.id"), sort_order=110)
@@ -544,19 +544,19 @@ class CharacterPlace(Base):
     start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=120)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=130)
 
-    character: Mapped[Character | None] = relationship(back_populates="places", lazy="noload")
-    place: Mapped[Location] = relationship(lazy="noload")
+    character: Mapped[Character | None] = relationship(back_populates="locations", lazy="noload")
+    location: Mapped[Location] = relationship(lazy="noload")
 
 
 class CharacterRelation(TextBase):
-    """`character_id_1` から見た `character_id_2` との関係を一行で持つ。"""
+    """`character_1_id` から見た `character_2_id` との関係を一行で持つ。"""
 
     __tablename__ = "character_relation"
 
-    character_id_1: Mapped[int] = mapped_column(
+    character_1_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True,
         comment="関係の主体となる人物", sort_order=100)
-    character_id_2: Mapped[int] = mapped_column(
+    character_2_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True,
         comment="関係の相手となる人物", sort_order=110)
     relation: Mapped[str] = mapped_column(
@@ -568,9 +568,9 @@ class CharacterRelation(TextBase):
         StampType, comment="この関係が終わる時。空なら続いている", sort_order=140)
 
     character_1: Mapped["Character"] = relationship(
-        foreign_keys="CharacterRelation.character_id_1", lazy="noload")
+        foreign_keys="CharacterRelation.character_1_id", lazy="noload")
     character_2: Mapped["Character"] = relationship(
-        foreign_keys="CharacterRelation.character_id_2", lazy="noload")
+        foreign_keys="CharacterRelation.character_2_id", lazy="noload")
 
 
 class CharacterHistory(Base):
@@ -659,10 +659,10 @@ class Story(EventSeededMixin, TextBase):
         Integer, ForeignKey("location.id"), comment="使用する世界線", sort_order=210)
     world: Mapped[Location | None] = relationship(
         foreign_keys="Story.world_id", lazy="noload")
-    place_id: Mapped[int | None] = mapped_column(
+    location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"), comment="立つ場所。断面を取るのに使う", sort_order=220)
-    place: Mapped[Location | None] = relationship(
-        foreign_keys="Story.place_id", lazy="noload")
+    location: Mapped[Location | None] = relationship(
+        foreign_keys="Story.location_id", lazy="noload")
     narration: Mapped[str] = mapped_column(String,  comment="語り", sort_order=230)
     state: Mapped[str] = mapped_column(String,  comment="状態", sort_order=240)
 
@@ -703,10 +703,10 @@ class Episode(EventSeededMixin, TextBase):
         Integer, ForeignKey("character.id"), comment="視点。誰に寄って語るか", sort_order=270)
     viewpoint_character: Mapped["Character | None"] = relationship(
         foreign_keys="Episode.viewpoint_character_id", lazy="noload")
-    place_id: Mapped[int | None] = mapped_column(
+    location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"), comment="場所", sort_order=280)
-    place: Mapped[Location | None] = relationship(
-        foreign_keys="Episode.place_id", lazy="noload")
+    location: Mapped[Location | None] = relationship(
+        foreign_keys="Episode.location_id", lazy="noload")
 
     episode_characters: Mapped[list["EpisodeCharacter"]] = relationship(
         back_populates="episode", lazy="noload", cascade="all, delete-orphan", order_by="EpisodeCharacter.id")

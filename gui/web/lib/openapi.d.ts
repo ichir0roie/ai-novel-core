@@ -314,7 +314,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/place_characters": {
+    "/api/location_characters": {
         parameters: {
             query?: never;
             header?: never;
@@ -322,10 +322,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Place Characters
-         * @description `time` に `place_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う
+         * Location Characters
+         * @description `time` に `location_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う
          */
-        get: operations["place_characters_api_place_characters_get"];
+        get: operations["location_characters_api_location_characters_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -547,8 +547,13 @@ export interface components {
             /** Jobs */
             jobs: components["schemas"]["JobInfo"][];
         };
-        /** MapPlace */
-        MapPlace: {
+        /** LocationCharactersResponse */
+        LocationCharactersResponse: {
+            /** Character Ids */
+            character_ids: number[];
+        };
+        /** MapLocation */
+        MapLocation: {
             /** Id */
             id: number;
             /** Name */
@@ -621,11 +626,6 @@ export interface components {
             /** Items */
             items: components["schemas"]["Option"][];
         };
-        /** PlaceCharactersResponse */
-        PlaceCharactersResponse: {
-            /** Character Ids */
-            character_ids: number[];
-        };
         /** Planet */
         Planet: {
             /** Id */
@@ -641,9 +641,9 @@ export interface components {
         PlanetMap: {
             planet: components["schemas"]["Planet"];
             /** Points */
-            points: components["schemas"]["MapPlace"][];
+            points: components["schemas"]["MapLocation"][];
             /** Shapes */
-            shapes: components["schemas"]["MapPlace"][];
+            shapes: components["schemas"]["MapLocation"][];
         };
         /** RecordList */
         RecordList: {
@@ -687,10 +687,10 @@ export interface components {
         Relation: {
             /** Id */
             id: number;
-            /** Character Id 1 */
-            character_id_1: number;
-            /** Character Id 2 */
-            character_id_2: number;
+            /** Character 1 Id */
+            character_1_id: number;
+            /** Character 2 Id */
+            character_2_id: number;
             /** Relation */
             relation: string | null;
             /** Start */
@@ -1387,10 +1387,10 @@ export interface operations {
             };
         };
     };
-    place_characters_api_place_characters_get: {
+    location_characters_api_location_characters_get: {
         parameters: {
             query: {
-                place_id: number;
+                location_id: number;
                 time: string;
             };
             header?: never;
@@ -1405,7 +1405,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlaceCharactersResponse"];
+                    "application/json": components["schemas"]["LocationCharactersResponse"];
                 };
             };
             /** @description Validation Error */

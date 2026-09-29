@@ -36,7 +36,7 @@ class CharacterParameterRow(_ChildRow):
     imagination: PersonalityLevel | None = None
 
 
-class CharacterPlaceRow(_ChildRow):
+class CharacterLocationRow(_ChildRow):
     location_id: int
     start: Timestamp | None = None
     end: Timestamp | None = None
@@ -60,7 +60,7 @@ class CharacterHead(Material):
     start: Timestamp | None = None
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow]
-    places: list[CharacterPlaceRow]
+    locations: list[CharacterLocationRow]
     histories: list[CharacterHistoryRow]
 
 
@@ -68,7 +68,7 @@ class CharacterRecord(CharacterHead):
     text: str | None = None
 
 
-class CharacterPlaceRecord(Material):
+class CharacterLocationRecord(Material):
     id: int
     character_id: int | None = None
     location_id: int
@@ -78,8 +78,8 @@ class CharacterPlaceRecord(Material):
 
 class CharacterRelationRecord(Material):
     id: int
-    character_id_1: int
-    character_id_2: int
+    character_1_id: int
+    character_2_id: int
     relation: str
     start: Timestamp | None = None
     end: Timestamp | None = None
@@ -89,4 +89,4 @@ class CharacterRelationRecord(Material):
 class GeneratedCharacter(Material):
     id: int
     name: str | None = None
-    place_id: int
+    location_id: int

@@ -18,14 +18,14 @@ type CharactersProps = {
   characterIds: number[];
   onChangeCharacterIds: (ids: number[]) => void;
   episodeStart: unknown;
-  episodePlaceId: unknown;
+  episodeLocationId: unknown;
 };
 
 /** 話の時期・場所に重なる出来事・作品(`related.context`、閲覧専用)。種類ごとのボタンを横に並べ、
  * 押すとその一覧をモーダルの表で見る。episode のときだけ、同じ行に編集できる登場人物のボタンも並べる
  * (`characterIds`/`onChangeCharacterIds`/`episodeStart` を渡したときだけ出す)。 */
 export default function EpisodeContext({
-  context, characterIds, onChangeCharacterIds, episodeStart, episodePlaceId,
+  context, characterIds, onChangeCharacterIds, episodeStart, episodeLocationId,
 }: { context: Context } & Partial<CharactersProps>) {
   const { tables } = useMeta();
   const [open, setOpen] = useState<ContextTableKey | null>(null);
@@ -50,7 +50,7 @@ export default function EpisodeContext({
           characterIds={characterIds!}
           onChange={onChangeCharacterIds!}
           episodeStart={episodeStart}
-          episodePlaceId={episodePlaceId}
+          episodeLocationId={episodeLocationId}
         />
       )}
       {open && active && (

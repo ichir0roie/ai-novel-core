@@ -7,7 +7,7 @@ class StoryCreateForm(Form):
     name: str = Field(min_length=1)
     text: str = ""
     world_id: int | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     narration: str = ""
     state: str = ""
     start: Timestamp | None = None
@@ -20,7 +20,7 @@ class StoryUpdateForm(Form):
     name: str | None = None
     text: str | None = None
     world_id: int | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     narration: str | None = None
     state: str | None = None
     start: Timestamp | None = None

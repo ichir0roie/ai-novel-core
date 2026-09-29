@@ -18,11 +18,11 @@ class UpdateCharacterRelation(CommitEntrypoint):
 
     def execute(self, s: Session) -> CharacterRelationRecord:
         record = common_query.get_row(s, CharacterRelation, self.relation.id)
-        self.check_exists(s, Character, self.relation.character_id_1, "character_id_1")
-        self.check_exists(s, Character, self.relation.character_id_2, "character_id_2")
+        self.check_exists(s, Character, self.relation.character_1_id, "character_1_id")
+        self.check_exists(s, Character, self.relation.character_2_id, "character_2_id")
 
         self.relation.write_changes_to(record)
-        if record.character_id_1 == record.character_id_2:
-            raise ValueError("character_id_1 と character_id_2 は別の人物")
+        if record.character_1_id == record.character_2_id:
+            raise ValueError("character_1_id と character_2_id は別の人物")
         self.finalize(s, record)
         return CharacterRelationRecord.model_validate(record)

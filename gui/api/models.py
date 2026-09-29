@@ -32,7 +32,7 @@ class ColumnMeta(BaseModel):
     # 他のテーブルの id を指すなら、そのテーブル名
     references: str | None = None
     readonly: bool = False
-    # 足すときにだけ渡せる欄(人物の place_id など)
+    # 足すときにだけ渡せる欄(人物の location_id など)
     create_only: bool = False
     comment: str | None = None
 
@@ -164,7 +164,7 @@ class CharacterLocationsResponse(BaseModel):
     locations: dict[int, int]
 
 
-class PlaceCharactersResponse(BaseModel):
+class LocationCharactersResponse(BaseModel):
     character_ids: list[int]
 
 

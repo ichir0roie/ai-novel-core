@@ -5,5 +5,5 @@ from data_access_logic.entrypoint import RandomDraft
 from randomizer.random_location_generator import build_location
 
 
-class CreateRandomPlace(RandomDraft):
+class CreateRandomLocation(RandomDraft):
     builder = staticmethod(build_location)

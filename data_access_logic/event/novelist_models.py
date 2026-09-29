@@ -6,13 +6,13 @@ from ai.instructions.style import layout_novel_text
 from data_access_logic.character.models import CharacterBase, EventCharacterAt, EventCharacterAtSerialized
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized
-from data_access_logic.location.models import PlaceMaterial
+from data_access_logic.location.models import LocationTextMaterial
 from data_access_logic.material import Material
 
 
 class RecordedEvent(EventBase):
     text: str
-    location: PlaceMaterial | None = None
+    location: LocationTextMaterial | None = None
 
 
 class EventNovelMaterial(Material):
@@ -35,9 +35,9 @@ class EventNovelMaterialSerialized(EventNovelMaterial):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        event, place = self.main_event, self.main_event.location
+        event, location = self.main_event, self.main_event.location
         return {
-            "場所": {"名前": place.name, "種別": place.kind, "説明": place.text} if place else None,
+            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text} if location else None,
             "時刻": str(event.start or event.time),
             "終わり": str(event.end) if event.end else None,
             "場面の指定": self.scene,

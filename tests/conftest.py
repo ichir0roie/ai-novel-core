@@ -9,7 +9,7 @@ import pytest
 from tool.test import copy_novel_db  # schema より先に読む(db を novel.test.db に固定)
 from tool.test.mock_ai_client import MockAIClient  # noqa: E402
 from db.schema import (  # noqa: E402
-    Character, CharacterHistory, CharacterParameter, CharacterPlace, CharacterRelation, ConfirmStatus, Episode,
+    Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterRelation, ConfirmStatus, Episode,
     EpisodeCharacter, Event, EventCharacter, EventSeed, Idea, IdeaRecognition, Location, Meme, MemeCategory, Oracle,
     Story, engine, get_env_session,
 )
@@ -44,11 +44,11 @@ def shown(capsys: pytest.CaptureFixture[str]) -> Callable[[Entrypoint], Any]:
 @dataclass
 class World:
     planet_id: int
-    place_id: int
+    location_id: int
     neighbor_id: int
     story_id: int
     character_ids: list[int]
-    character_place_id: int
+    character_location_id: int
     relation_id: int
     event_id: int
     child_event_id: int
@@ -77,12 +77,12 @@ def world() -> Iterator[World]:
         planet = Location(name="テスト星", kind="星", text="テスト用の星", area=500000000, start="1000", end="3000")
         s.add(planet)
         s.flush()
-        place = Location(
+        location = Location(
             name="テスト都", kind="都市", text="テスト用の都", parent_id=planet.id, location_world=1,
             location_planet=planet.id, location_longitude=135.5, location_latitude=35.0, location_altitude=50,
             area=1000, environment="温帯", sample_region="地中海沿岸", sample_culture="都市国家",
             sample_era="中世", start="1100", end="2900", active_random_generation=True)
-        s.add(place)
+        s.add(location)
         s.flush()
         neighbor = Location(
             name="テスト村", kind="村", text="テスト用の村", parent_id=planet.id, location_world=1,
@@ -91,7 +91,7 @@ def world() -> Iterator[World]:
             area=100, environment="山地", start="1150")
         s.add(neighbor)
         s.flush()
-        story = Story(name="テスト作品", text="テスト用の作品", world_id=planet.id, place_id=place.id,
+        story = Story(name="テスト作品", text="テスト用の作品", world_id=planet.id, location_id=location.id,
                       narration="三人称", state="執筆中", start="1200/01/01", end="1300/01/01", event_seeded=True)
         s.add(story)
         characters = [
@@ -102,44 +102,44 @@ def world() -> Iterator[World]:
             for name, sex, main in (("テスト太郎", "男", True), ("テスト花子", "女", False))]
         s.add_all(characters)
         s.flush()
-        character_places = [CharacterPlace(character_id=character.id, location_id=place.id, start="1170/01/01")
+        character_locations = [CharacterLocation(character_id=character.id, location_id=location.id, start="1170/01/01")
                             for character in characters]
-        s.add_all(character_places)
-        relation = CharacterRelation(character_id_1=characters[0].id, character_id_2=characters[1].id,
+        s.add_all(character_locations)
+        relation = CharacterRelation(character_1_id=characters[0].id, character_2_id=characters[1].id,
                                      relation="幼なじみ", text="同じ通りで育った", start="1175/01/01")
         s.add(relation)
         event = Event(name="テスト市", text="市が立った", hidden=False, confirmed=ConfirmStatus.APPROVED,
-                      time="1200/04/01 12:00:00", location_id=place.id, start="1200/04/01", end="1200/04/02",
+                      time="1200/04/01 12:00:00", location_id=location.id, start="1200/04/01", end="1200/04/02",
                       event_seeded=True, meme_seeded=True,
                       event_characters=[EventCharacter(character_id=character.id) for character in characters])
         s.add(event)
         s.flush()
         child_event = Event(name="テスト取引", text="取引がまとまった", confirmed=ConfirmStatus.APPROVED,
-                            time="1200/04/01 15:00:00", location_id=place.id, parent_event_id=event.id,
+                            time="1200/04/01 15:00:00", location_id=location.id, parent_event_id=event.id,
                             event_seeded=True, meme_seeded=True)
         s.add(child_event)
         episode = Episode(story_id=story.id, title="テスト第一話", key="市で出会う", text="市で二人が出会った。",
                           synced=True, start="1200/04/01 12:00:00", end="1200/04/01 18:00:00",
-                          viewpoint_character_id=characters[0].id, place_id=place.id, event_seeded=True)
+                          viewpoint_character_id=characters[0].id, location_id=location.id, event_seeded=True)
         s.add(episode)
         s.flush()
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
         idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術", confirmed=ConfirmStatus.APPROVED,
-                    location_id=place.id, start="1100/01/01", meme_seeded=True,
-                    recognitions=[IdeaRecognition(location_id=place.id, start="1150/01/01", name="テスト術",
+                    location_id=location.id, start="1100/01/01", meme_seeded=True,
+                    recognitions=[IdeaRecognition(location_id=location.id, start="1150/01/01", name="テスト術",
                                                   detail="都での呼び名")])
         s.add(idea)
         s.flush()
         child_idea = Idea(name="テスト魔導炉", kind="技術", text="テスト魔導の炉", confirmed=ConfirmStatus.PENDING,
-                          location_id=place.id, parent_idea_id=idea.id, meme_seeded=True)
+                          location_id=location.id, parent_idea_id=idea.id, meme_seeded=True)
         meme = Meme(text="テストの信条", category=MemeCategory.BELIEF, confirmed=ConfirmStatus.PENDING)
         oracle = Oracle(title="テストの覚え書き", text="テスト用の覚え書き", meme_seeded=True)
         event_seed = EventSeed(text="テストの種", consolidated=False)
         s.add_all([child_idea, meme, oracle, event_seed])
         s.commit()
         yield World(
-            planet_id=planet.id, place_id=place.id, neighbor_id=neighbor.id, story_id=story.id,
-            character_ids=[character.id for character in characters], character_place_id=character_places[0].id,
+            planet_id=planet.id, location_id=location.id, neighbor_id=neighbor.id, story_id=story.id,
+            character_ids=[character.id for character in characters], character_location_id=character_locations[0].id,
             relation_id=relation.id, event_id=event.id, child_event_id=child_event.id, episode_id=episode.id,
             idea_id=idea.id, child_idea_id=child_idea.id, meme_id=meme.id, oracle_id=oracle.id,
             event_seed_id=event_seed.id)

@@ -20,9 +20,9 @@ from db.schema import Character, Event, Idea, IdeaRecognition, Location, Story
 from db.stamp import Stamp
 
 
-class _StoryWithPlaces(StoryRecord):
+class _StoryWithLocations(StoryRecord):
     world: Named | None = Field(default=None, exclude=True)
-    place: Named | None = Field(default=None, exclude=True)
+    location: Named | None = Field(default=None, exclude=True)
 
     @computed_field
     @property
@@ -31,14 +31,14 @@ class _StoryWithPlaces(StoryRecord):
 
     @computed_field
     @property
-    def place_name(self) -> str | None:
-        return None if self.place is None else self.place.name
+    def location_name(self) -> str | None:
+        return None if self.location is None else self.location.name
 
 
 class StoryDigest(Material):
     """作品の列に、話の数・最後の話・未同期の話を同じ段に並べて出す。"""
 
-    story: _StoryWithPlaces
+    story: _StoryWithLocations
     episode_count: int
     last_episode: EpisodeTitle | None = None
     unsynced: list[EpisodeTitle]
@@ -57,7 +57,7 @@ class BriefIdea(Material):
 
 
 class Brief(Material):
-    place: LocationRecord
+    location: LocationRecord
     path: list[LocationMaterial]
     time: Timestamp
     reach: int
@@ -81,7 +81,7 @@ class Cast(Material):
 def story_digest(s: Session, story: Story) -> StoryDigest:
     episodes = s.scalars(common_query.story_episodes_select(story.id)).all()
     return StoryDigest(
-        story=_StoryWithPlaces.model_validate(story),
+        story=_StoryWithLocations.model_validate(story),
         episode_count=len(episodes),
         last_episode=EpisodeTitle.model_validate(episodes[-1]) if episodes else None,
         unsynced=[EpisodeTitle.model_validate(episode) for episode in episodes if not episode.synced],
@@ -93,38 +93,38 @@ def stories(s: Session) -> list[StoryDigest]:
     return [story_digest(s, story) for story in rows]
 
 
-def brief(s: Session, place_id: int, when: Stamp | str | None = None, reach: int = 60, full: bool = False) -> Brief:
-    location = common_query.get_row(s, Location, place_id)
+def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: int = 60, full: bool = False) -> Brief:
+    location = common_query.get_row(s, Location, location_id)
     if when is None:
         raise ValueError("時刻が決まらない(when を渡す)")
     since, until = common_query.span(when)
-    place_ids = common_query.descendant_place_ids(s, place_id)
+    location_ids = common_query.descendant_location_ids(s, location_id)
 
     def visible(events: list[Event]) -> list[EventRow]:
         return [EventRow.model_validate(event) for event in events if full or not event.hidden]
 
     recent_query = (select(Event)
                     .options(*common_query.EVENT_LOAD_OPTIONS)
-                    .where(Event.location_id.in_(place_ids),
+                    .where(Event.location_id.in_(location_ids),
                            Event.time <= until,
                            Event.time >= Stamp(max(1, since.year - reach)))
                     .order_by(Event.time.desc(), Event.id.desc()))
     recent = list(s.scalars(recent_query).all())
 
-    character_ids = residents(s, place_ids, until)
+    character_ids = residents(s, location_ids, until)
     ideas = s.scalars(
-        common_query.ideas_select(common_query.idea_scope_ids(s, place_id), until)).all()
-    recognitions = called(s, [idea.id for idea in ideas], place_id, until)
+        common_query.ideas_select(common_query.idea_scope_ids(s, location_id), until)).all()
+    recognitions = called(s, [idea.id for idea in ideas], location_id, until)
 
     characters = s.scalars(select(Character).where(Character.id.in_(character_ids))).all() if character_ids else []
     character_names = {character.id: character.name for character in characters}
 
     return Brief(
-        place=LocationRecord.model_validate(location),
-        path=common_query.place_path(s, place_id),
+        location=LocationRecord.model_validate(location),
+        path=common_query.location_path(s, location_id),
         time=until,
         reach=reach,
-        open_events=visible(list(s.scalars(common_query.open_events_select(place_ids, until)).all())),
+        open_events=visible(list(s.scalars(common_query.open_events_select(location_ids, until)).all())),
         recent_events=visible(recent),
         ideas=[_brief_idea(idea, recognitions.get(idea.id)) for idea in ideas],
         present_characters=[Named(id=id_, name=character_names[id_]) for id_ in character_ids],
@@ -141,16 +141,16 @@ def _brief_idea(idea: Idea, recognition: IdeaRecognition | None) -> BriefIdea:
 
 def cast(s: Session, story_id: int, when: Stamp | str | None = None, count: int = 5, levels: int = 1) -> Cast:
     story = common_query.get_row(s, Story, story_id)
-    if story.place_id is None:
-        raise ValueError(f"作品 {story.name} に立つ場所(place_id)が無い")
+    if story.location_id is None:
+        raise ValueError(f"作品 {story.name} に立つ場所(location_id)が無い")
     _, until = common_query.resolve_time(s, when, story)
-    root_id = common_query.place_up(s, story.place_id, levels)
+    root_id = common_query.location_up(s, story.location_id, levels)
     root = s.get_one(Location, root_id)
-    place_ids = common_query.descendant_place_ids(s, root_id)
-    character_ids = residents(s, place_ids, until)
+    location_ids = common_query.descendant_location_ids(s, root_id)
+    character_ids = residents(s, location_ids, until)
     return Cast(
         story=Named.model_validate(story),
         time=until,
-        scope=CastScope(id=root.id, name=root.name, path=common_query.place_path(s, root_id)),
+        scope=CastScope(id=root.id, name=root.name, path=common_query.location_path(s, root_id)),
         characters=[character_sheet(s, id_, until=until, count=count, text=False) for id_ in character_ids],
     )

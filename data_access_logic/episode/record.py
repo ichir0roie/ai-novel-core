@@ -15,7 +15,7 @@ class EpisodeHead(Material):
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     letters: int
     key: str
     event_seeded: bool

@@ -8,7 +8,7 @@ from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import world_creation_query
 from db.child_lists import replaced_rows
-from db.schema import Character, CharacterHistory, CharacterParameter, CharacterPlace, Location
+from db.schema import Character, CharacterHistory, CharacterParameter, CharacterLocation, Location
 
 
 class CommitCharacter(CommitEntrypoint):
@@ -19,11 +19,11 @@ class CommitCharacter(CommitEntrypoint):
 
     def execute(self, s: Session) -> CharacterRecord:
         form = self.character
-        self.check_exists(s, Location, form.place_id, "place_id")
-        if form.place_id is not None:
-            place = s.get_one(Location, form.place_id)
-            world_creation_query.check_within_parent_span(place, form.start, form.end, "character")
-            world_creation_query.check_has_story(s, form.place_id, "character")
+        self.check_exists(s, Location, form.location_id, "location_id")
+        if form.location_id is not None:
+            location = s.get_one(Location, form.location_id)
+            world_creation_query.check_within_parent_span(location, form.start, form.end, "character")
+            world_creation_query.check_has_story(s, form.location_id, "character")
 
         record = Character()
         form.write_to(record)
@@ -35,9 +35,9 @@ class CommitCharacter(CommitEntrypoint):
         if form.end is not None:
             record.end = form.end
         s.add(record)
-        s.flush()  # CharacterPlace の character_id に使う id を先に確定させる
-        if form.place_id is not None:
-            s.add(CharacterPlace(
-                character_id=record.id, location_id=form.place_id, start=form.start, end=form.end))
+        s.flush()  # CharacterLocation の character_id に使う id を先に確定させる
+        if form.location_id is not None:
+            s.add(CharacterLocation(
+                character_id=record.id, location_id=form.location_id, start=form.start, end=form.end))
         self.finalize(s, record)
         return CharacterRecord.model_validate(record)

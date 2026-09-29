@@ -10,11 +10,11 @@ type EpisodeCharactersProps = {
   characterIds: number[];
   onChangeCharacterIds: (ids: number[]) => void;
   episodeStart: unknown;
-  episodePlaceId: unknown;
+  episodeLocationId: unknown;
 };
 
 export default function Related({
-  related, owner, characterIds, onChangeCharacterIds, episodeStart, episodePlaceId,
+  related, owner, characterIds, onChangeCharacterIds, episodeStart, episodeLocationId,
 }: { related: Record<string, unknown>; owner?: Owner } & Partial<EpisodeCharactersProps>) {
   const appearances = related.appearances as Appearance[] | undefined;
   const episodes = related.episodes as Appearance[] | undefined;
@@ -70,7 +70,7 @@ export default function Related({
           characterIds={characterIds}
           onChangeCharacterIds={onChangeCharacterIds}
           episodeStart={episodeStart}
-          episodePlaceId={episodePlaceId}
+          episodeLocationId={episodeLocationId}
         />
       )}
     </>

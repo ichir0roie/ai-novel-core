@@ -56,7 +56,7 @@ def _novel_material(
     focus = next((character for character in characters if character.id == focus_character_id), None)
     focus_character = CharacterBase.model_validate(focus) if focus is not None else None
     time = main_event.start or main_event.time
-    place_id = event.location_id
+    location_id = event.location_id
 
     return EventNovelMaterialSerialized(
         main_event=main_event,
@@ -66,8 +66,8 @@ def _novel_material(
         later_events=summarized_events(
             s, ai,
             common_query.events_after_select(
-                place_id, [character.id for character in characters], time, limit=constants.LATER_EVENT_LIMIT)),
-        ideas=gather_ideas(s, f"{main_event.name}\n{main_event.text}", ai, place_id, main_event.time),
+                location_id, [character.id for character in characters], time, limit=constants.LATER_EVENT_LIMIT)),
+        ideas=gather_ideas(s, f"{main_event.name}\n{main_event.text}", ai, location_id, main_event.time),
     )
 
 

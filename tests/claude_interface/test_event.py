@@ -15,14 +15,14 @@ from db.schema import ConfirmStatus
 def test_commit_event(shown, world, mock_ai):
     result = shown(CommitEvent(EventCreateForm(
         name="テスト祭", time="1200/05/01 10:00:00", text="祭が開かれた", hidden=True,
-        confirmed=ConfirmStatus.PENDING, parent_event_id=world.event_id, location_id=world.place_id,
+        confirmed=ConfirmStatus.PENDING, parent_event_id=world.event_id, location_id=world.location_id,
         start="1200/05/01", end="1200/05/03", event_seeded=True, meme_seeded=True,
         character_ids=world.character_ids)))
 
     assert (result["name"], result["text"]) == ("テスト祭", "祭が開かれた")
     assert result["time"] == "1200/05/01 10:00:00"
     assert (result["hidden"], result["confirmed"]) == (True, "未確認")
-    assert (result["parent_event_id"], result["location_id"]) == (world.event_id, world.place_id)
+    assert (result["parent_event_id"], result["location_id"]) == (world.event_id, world.location_id)
     assert (result["start"], result["end"]) == ("1200/05/01 00:00:00", "1200/05/03 00:00:00")
     assert (result["event_seeded"], result["meme_seeded"]) == (True, True)
     assert result["character_ids"] == world.character_ids
@@ -46,11 +46,11 @@ def test_generate_event(shown, world, mock_ai):
     result = shown(GenerateEvent(
         event=EventForm(
             name="生成の出来事", text="市で揉め事が起きる", time="1200/04/05 09:00:00", start="1200/04/05",
-            end="1200/04/06", location_id=world.place_id, character_ids=world.character_ids, hidden=True,
+            end="1200/04/06", location_id=world.location_id, character_ids=world.character_ids, hidden=True,
             parent_event_id=world.event_id),
         seed=3, shared_style_extra="共有の文体の好み", style_extra="出来事の文体の好み"))
 
-    assert result["location_id"] == world.place_id
+    assert result["location_id"] == world.location_id
     assert result["time"] == "1200/04/05 09:00:00"
     assert (result["hidden"], result["parent_event_id"]) == (True, world.event_id)
     assert result["end"] == "1200/04/06 00:00:00"

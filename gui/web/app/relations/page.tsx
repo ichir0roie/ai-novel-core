@@ -28,7 +28,7 @@ function layout(characters: RelationCharacter[], relations: Relation[]): Positio
   characters.forEach((c, i) => {
     pos[c.id] = { x: cx + r * Math.cos((2 * Math.PI * i) / n - Math.PI / 2), y: cy + r * Math.sin((2 * Math.PI * i) / n - Math.PI / 2) };
   });
-  const linked = new Set(relations.map((e) => `${e.character_id_1}:${e.character_id_2}`));
+  const linked = new Set(relations.map((e) => `${e.character_1_id}:${e.character_2_id}`));
   const isLinked = (a: number, b: number) => linked.has(`${a}:${b}`) || linked.has(`${b}:${a}`);
   for (let step = 0; step < 300; step++) {
     const force: Positions = {};
@@ -58,8 +58,8 @@ function layout(characters: RelationCharacter[], relations: Relation[]): Positio
 
 /** 一人の人物に絞る。その人物と、関係で直接つながる相手、その間の関係だけを残す。 */
 function scopeTo(data: RelationsResponse, focus: number): RelationsResponse {
-  const relations = data.relations.filter((r) => r.character_id_1 === focus || r.character_id_2 === focus);
-  const ids = new Set([focus, ...relations.flatMap((r) => [r.character_id_1, r.character_id_2])]);
+  const relations = data.relations.filter((r) => r.character_1_id === focus || r.character_2_id === focus);
+  const ids = new Set([focus, ...relations.flatMap((r) => [r.character_1_id, r.character_2_id])]);
   return { ...data, characters: data.characters.filter((c) => ids.has(c.id)), relations };
 }
 
@@ -140,10 +140,10 @@ export default function RelationsPage() {
   const colorOf = Object.fromEntries(kinds.map((k, i) => [k, data.colors[i % data.colors.length]]));
   const chars = data.characters.filter((c) => !hidden.has(c.kind ?? "") && inYear(c, year));
   const shownIds = new Set(chars.map((c) => c.id));
-  const rels = data.relations.filter((r) => shownIds.has(r.character_id_1) && shownIds.has(r.character_id_2) && inYear(r, year));
+  const rels = data.relations.filter((r) => shownIds.has(r.character_1_id) && shownIds.has(r.character_2_id) && inYear(r, year));
   const selectedRelation = selected?.type === "relation" ? data.relations.find((r) => r.id === selected.id) ?? null : null;
   const related = new Set<number>();
-  if (selected?.type === "character") for (const r of rels) if (r.character_id_1 === selected.id || r.character_id_2 === selected.id) related.add(r.id);
+  if (selected?.type === "character") for (const r of rels) if (r.character_1_id === selected.id || r.character_2_id === selected.id) related.add(r.id);
 
   const toggle = (k: string) => {
     const next = new Set(hidden);
@@ -154,24 +154,24 @@ export default function RelationsPage() {
   const pickRelation = (r: Relation) => setSelected((s) => (s?.type === "relation" && s.id === r.id ? null : { type: "relation", id: r.id }));
 
   const z = zoom, W = BASE * z, H = BASE * z;
-  const pairKey = (r: Relation) => [r.character_id_1, r.character_id_2].sort((a, b) => a - b).join(":");
+  const pairKey = (r: Relation) => [r.character_1_id, r.character_2_id].sort((a, b) => a - b).join(":");
   const pairCount = new Map<string, number>();
   for (const r of rels) pairCount.set(pairKey(r), (pairCount.get(pairKey(r)) ?? 0) + 1);
   const seen = new Map<string, number>();
 
   const relationRow = (r: Relation, from: number | null) => {
-    const other = from == null ? null : r.character_id_1 === from ? r.character_id_2 : r.character_id_1;
+    const other = from == null ? null : r.character_1_id === from ? r.character_2_id : r.character_1_id;
     return (
       <tr key={r.id} className="row" onClick={() => setSelected({ type: "relation", id: r.id })}>
         {from == null ? (
           <>
-            <td>{nameOf(r.character_id_1)}</td>
+            <td>{nameOf(r.character_1_id)}</td>
             <td>{r.relation} →</td>
-            <td>{nameOf(r.character_id_2)}</td>
+            <td>{nameOf(r.character_2_id)}</td>
           </>
         ) : (
           <>
-            <td>{r.character_id_1 === from ? "→" : "←"}</td>
+            <td>{r.character_1_id === from ? "→" : "←"}</td>
             <td>{nameOf(other!)}</td>
             <td>{r.relation}</td>
           </>
@@ -211,7 +211,7 @@ export default function RelationsPage() {
     if (selected.type === "character") {
       const c = byId.get(selected.id);
       if (!c) return null;
-      const mine = rels.filter((r) => r.character_id_1 === c.id || r.character_id_2 === c.id);
+      const mine = rels.filter((r) => r.character_1_id === c.id || r.character_2_id === c.id);
       return (
         <>
           <div className="viz-head">
@@ -263,7 +263,7 @@ export default function RelationsPage() {
       <>
         <div className="viz-head">
           <h2>
-            {nameOf(r.character_id_1)} → {nameOf(r.character_id_2)}
+            {nameOf(r.character_1_id)} → {nameOf(r.character_2_id)}
           </h2>
           <button type="button" className="primary" onClick={() => openPage(`/tables/character_relation/${r.id}`)}>
             {T.openRecord}
@@ -346,13 +346,13 @@ export default function RelationsPage() {
               </defs>
               <rect width={W} height={H} fill="#fdfcf8" />
               {rels.map((r) => {
-                const a = pos[r.character_id_1], b = pos[r.character_id_2];
+                const a = pos[r.character_1_id], b = pos[r.character_2_id];
                 if (!a || !b) return null;
                 const k = pairKey(r);
                 const i = seen.get(k) ?? 0;
                 seen.set(k, i + 1);
                 const total = pairCount.get(k) ?? 1;
-                const bend = (i - (total - 1) / 2) * 40 * (r.character_id_1 < r.character_id_2 ? 1 : -1);
+                const bend = (i - (total - 1) / 2) * 40 * (r.character_1_id < r.character_2_id ? 1 : -1);
                 const e = edgePath({ x: a.x * z, y: a.y * z }, { x: b.x * z, y: b.y * z }, bend * z);
                 const on = selected?.type === "relation" ? selected.id === r.id : related.has(r.id);
                 const dim = selected && !on;
@@ -363,7 +363,7 @@ export default function RelationsPage() {
                     opacity={dim ? 0.25 : 1}
                     onClick={() => pickRelation(r)}
                     onDoubleClick={() => openPage(`/tables/character_relation/${r.id}`)}
-                    onMouseMove={(ev) => show(ev, [T.relations.arrow(nameOf(r.character_id_1), nameOf(r.character_id_2), r.relation), spanText(r) && T.relations.periodOf(spanText(r)), firstLine(r.text)])}
+                    onMouseMove={(ev) => show(ev, [T.relations.arrow(nameOf(r.character_1_id), nameOf(r.character_2_id), r.relation), spanText(r) && T.relations.periodOf(spanText(r)), firstLine(r.text)])}
                     onMouseLeave={hide}
                   >
                     <path d={e.d} fill="none" stroke="transparent" strokeWidth={12} />
@@ -378,7 +378,7 @@ export default function RelationsPage() {
                 const p = pos[c.id];
                 if (!p) return null;
                 const on = selected?.type === "character" && selected.id === c.id;
-                const touched = selectedRelation != null && (selectedRelation.character_id_1 === c.id || selectedRelation.character_id_2 === c.id);
+                const touched = selectedRelation != null && (selectedRelation.character_1_id === c.id || selectedRelation.character_2_id === c.id);
                 return (
                   <g
                     key={`chr${c.id}`}

@@ -18,7 +18,7 @@ class EpisodeForm(Draft):
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     character_ids: Annotated[list[int] | None, References("character")] = Field(
         default=None, title="登場人物",
         description="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
@@ -36,7 +36,7 @@ class EpisodeCommitForm(Form):
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
-    place_id: int | None = None
+    location_id: int | None = None
     event_seeded: bool | None = None
     # 渡さなければ、手で直した話として同期していない扱いにする
     synced: bool | None = None
@@ -85,8 +85,8 @@ def save_frame(s: Session, form: EpisodeForm) -> Episode:
         record.end = form.end
     if form.viewpoint_character_id is not None:
         record.viewpoint_character_id = form.viewpoint_character_id
-    if form.place_id is not None:
-        record.place_id = form.place_id
+    if form.location_id is not None:
+        record.location_id = form.location_id
     s.flush()
     if form.character_ids is not None:
         set_characters(s, record.id, form.character_ids)

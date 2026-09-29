@@ -17,12 +17,12 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
 from data_access_logic.event.progress_models import (
     CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, JudgementDraft,
-    JudgementRequestSerialized, ParticipantJudgement, PlaceSituationSerialized, RecordRequestSerialized,
+    JudgementRequestSerialized, ParticipantJudgement, LocationSituationSerialized, RecordRequestSerialized,
 )
 from data_access_logic.event.summary import summarized_events
-from data_access_logic.location.models import LocationMaterial, PlaceMaterial
+from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.query import common_query, story_creation_query, world_creation_query
-from db.schema import Character, CharacterPlace, ConfirmStatus, Event, EventCharacter, Location
+from db.schema import Character, CharacterLocation, ConfirmStatus, Event, EventCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -82,36 +82,36 @@ character_updates の text の書き方:
 
 
 def _situation(
-    s: Session, ai: AIClient, place_id: int, characters: list[Character], time: Stamp,
+    s: Session, ai: AIClient, location_id: int, characters: list[Character], time: Stamp,
     focus: Character | None, scene: str | None, use_story: bool,
-) -> PlaceSituationSerialized:
-    place = PlaceMaterial.model_validate(s.get_one(Location, place_id))
-    stories = story_creation_query.load_location_story(s, place_id, time) if use_story else []
+) -> LocationSituationSerialized:
+    location = LocationTextMaterial.model_validate(s.get_one(Location, location_id))
+    stories = story_creation_query.load_location_story(s, location_id, time) if use_story else []
     story_recent_events = []
     if stories:
         # 横(兄弟の場所)の出来事は含めない。作品の配下全体を渡すと、他の国の展開まで持ち込まれて
         # 場所ごとの差が消えるため(2026-09 に観測)
-        place_ids = []
-        for step in reversed(common_query.place_path(s, place_id)):
-            place_ids.append(step.id)
-            if step.id == stories[0].place_id:
+        location_ids = []
+        for step in reversed(common_query.location_path(s, location_id)):
+            location_ids.append(step.id)
+            if step.id == stories[0].location_id:
                 break
         story_recent_events = s.scalars(
-            common_query.events_in_locations_select(place_ids, until=time, limit=RECENT_EVENT_LIMIT)).all()
+            common_query.events_in_locations_select(location_ids, until=time, limit=RECENT_EVENT_LIMIT)).all()
     focus_previous = (
         summarized_events(s, ai, common_query.latest_character_event_select(focus.id, until=time))
         if focus is not None else [])
 
-    return PlaceSituationSerialized(
+    return LocationSituationSerialized(
         time=time,
-        place=place,
+        location=location,
         participants=participants_at(s, characters[:_PARTICIPANT_LIMIT], time),
         recent_events=s.scalars(
-            common_query.events_of_place_select(place_id, until=time, limit=RECENT_EVENT_LIMIT)).all(),
+            common_query.events_of_location_select(location_id, until=time, limit=RECENT_EVENT_LIMIT)).all(),
         later_events=summarized_events(
             s, ai,
             common_query.events_after_select(
-                place_id, [character.id for character in characters], time, limit=constants.LATER_EVENT_LIMIT)),
+                location_id, [character.id for character in characters], time, limit=constants.LATER_EVENT_LIMIT)),
         stories=stories,
         story_recent_events=story_recent_events,
         focus_character=focus,
@@ -120,7 +120,7 @@ def _situation(
     )
 
 
-def _judgements(ai: AIClient, situation: PlaceSituationSerialized) -> list[ParticipantJudgement]:
+def _judgements(ai: AIClient, situation: LocationSituationSerialized) -> list[ParticipantJudgement]:
     judgements = []
     for participant in situation.participants:
         prompt = "\n".join([
@@ -135,7 +135,7 @@ def _judgements(ai: AIClient, situation: PlaceSituationSerialized) -> list[Parti
 
 
 def _rolled_candidate(
-    ai: AIClient, rng: random.Random, situation: PlaceSituationSerialized,
+    ai: AIClient, rng: random.Random, situation: LocationSituationSerialized,
     judgements: list[ParticipantJudgement], seeds: list[str],
 ) -> CandidateDraft | None:
     prompt = "\n".join([
@@ -151,11 +151,11 @@ def _rolled_candidate(
     return chosen
 
 
-def _destinations(s: Session, place_id: int, time: Stamp) -> list[LocationMaterial]:
-    root_id = common_query.place_up(s, place_id, constants.REACH_LEVELS)
-    nearby_ids = set(common_query.descendant_place_ids(s, root_id)) - {place_id, root_id}
-    places = s.scalars(world_creation_query.active_locations_select(time, nearby_ids)).all()
-    return [LocationMaterial.model_validate(place) for place in places[:constants.MOVE_DESTINATION_LIMIT]]
+def _destinations(s: Session, location_id: int, time: Stamp) -> list[LocationMaterial]:
+    root_id = common_query.location_up(s, location_id, constants.REACH_LEVELS)
+    nearby_ids = set(common_query.descendant_location_ids(s, root_id)) - {location_id, root_id}
+    locations = s.scalars(world_creation_query.active_locations_select(time, nearby_ids)).all()
+    return [LocationMaterial.model_validate(location) for location in locations[:constants.MOVE_DESTINATION_LIMIT]]
 
 
 def _append_note(record: Character, note: str) -> None:
@@ -168,11 +168,11 @@ def _append_note(record: Character, note: str) -> None:
     record.text = CHARACTER_NOTE_SEPARATOR.join([base, *notes])
 
 
-def progress_place(
+def progress_location(
     s: Session,
     ai: AIClient,
     rng: random.Random,
-    place_id: int,
+    location_id: int,
     characters: list[Character],
     time: Stamp,
     seeds: list[str],
@@ -181,12 +181,12 @@ def progress_place(
     use_story: bool = False,
 ) -> Event | None:
     """起こした出来事は `confirmed=未確認` で足す。本文は記録のままで、小説にするのは `novelist.novelize_event`。"""
-    situation = _situation(s, ai, place_id, characters, time, focus, scene, use_story)
+    situation = _situation(s, ai, location_id, characters, time, focus, scene, use_story)
     judgements = _judgements(ai, situation)
     candidate = _rolled_candidate(ai, rng, situation, judgements, seeds)
     if candidate is None:
         return None
-    destinations = _destinations(s, place_id, time)
+    destinations = _destinations(s, location_id, time)
 
     hints = []
     if situation.stories:
@@ -203,7 +203,7 @@ def progress_place(
     ])
     draft = ai.generate(prompt, EventRecordDraft, system=_RECORD_SYSTEM_PROMPT)
     if draft is None:
-        logger.warning(f"場所id={place_id}: 記録が得られなかった")
+        logger.warning(f"場所id={location_id}: 記録が得られなかった")
         return None
 
     by_id = {character.id: character for character in characters}
@@ -218,9 +218,9 @@ def progress_place(
         destination = destination_by_id.get(move.location_id)
         if character is None or destination is None:
             continue
-        for current in s.scalars(common_query.character_place_select(character.id, time)).all():
+        for current in s.scalars(common_query.character_location_select(character.id, time)).all():
             current.end = time
-        s.add(CharacterPlace(character_id=character.id, location_id=destination.id, start=time, end=character.end))
+        s.add(CharacterLocation(character_id=character.id, location_id=destination.id, start=time, end=character.end))
         if character.id not in involved_ids:
             involved_ids.append(character.id)
         move_notes.append(f"{character.name} → {destination.name}")
@@ -230,7 +230,7 @@ def progress_place(
         name=draft.event_name,
         text=draft.event_text,
         time=time,
-        location_id=place_id,
+        location_id=location_id,
         start=time,
         end=end,
         confirmed=ConfirmStatus.PENDING,
@@ -247,21 +247,21 @@ def progress_place(
         _append_note(character, note)
         update_notes.append(f"{character.name}: text+={note}")
 
-    place = s.get_one(Location, place_id)
+    location = s.get_one(Location, location_id)
     location_notes = []
-    if draft.location_abolished and place.end is None:
-        place.end = time
-        location_notes.append(f"{place.name}(id={place_id}): 消滅")
+    if draft.location_abolished and location.end is None:
+        location.end = time
+        location_notes.append(f"{location.name}(id={location_id}): 消滅")
     founded = draft.location_founded
     if founded is not None and founded.name.strip():
         new_location = Location(
-            parent_id=place_id,
+            parent_id=location_id,
             name=founded.name,
             kind=founded.kind or "集落",
             text=founded.text,
-            environment=founded.environment or place.environment,
+            environment=founded.environment or location.environment,
             start=time,
-            active_random_generation=place.active_random_generation,
+            active_random_generation=location.active_random_generation,
         )
         s.add(new_location)
         s.flush()
@@ -269,7 +269,7 @@ def progress_place(
 
     s.commit()
     involved_names = [name for name in (by_id[character_id].name for character_id in involved_ids) if name]
-    logger.info(f"{time} 場所id={place_id}: {record.name}"
+    logger.info(f"{time} 場所id={location_id}: {record.name}"
           f" / 継続: {draft.event_duration_days}日({time}〜{end})"
           + (f" / 関わった: {', '.join(involved_names)}" if involved_names else "")
           + (f" / 移動: {'; '.join(move_notes)}" if move_notes else "")

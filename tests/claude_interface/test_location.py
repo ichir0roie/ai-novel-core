@@ -1,17 +1,17 @@
 """claude が CLI から `show()` で呼ぶ、場所(`data_access_logic/location/`)の入口。"""
-from data_access_logic.location.commit_place import CommitPlace
-from data_access_logic.location.create_random_place import CreateRandomPlace
-from data_access_logic.location.delete_place import DeletePlace
+from data_access_logic.location.commit_location import CommitLocation
+from data_access_logic.location.create_random_location import CreateRandomLocation
+from data_access_logic.location.delete_location import DeleteLocation
 from data_access_logic.location.form import LocationCreateForm, LocationUpdateForm
 from data_access_logic.location.list_neighbors import ListNeighbors
-from data_access_logic.location.list_places import ListPlaces
-from data_access_logic.location.update_place import UpdatePlace
+from data_access_logic.location.list_locations import ListLocations
+from data_access_logic.location.update_location import UpdateLocation
 
 _POLYGON = {"type": "Polygon", "coordinates": [[[135.0, 34.0], [135.2, 34.0], [135.2, 34.2], [135.0, 34.0]]]}
 
 
-def test_commit_place(shown, world):
-    result = shown(CommitPlace(LocationCreateForm(
+def test_commit_location(shown, world):
+    result = shown(CommitLocation(LocationCreateForm(
         name="テスト港", kind="港", text="テスト用の港", active_random_generation=True, parent_id=world.planet_id,
         location_world=1, location_planet=world.planet_id, location_longitude=135.1, location_latitude=34.1,
         location_altitude=2, polygon=_POLYGON, area=50, environment="海辺", sample_region="北欧",
@@ -27,37 +27,37 @@ def test_commit_place(shown, world):
     assert (result["start"], result["end"]) == ("1200/01/01 00:00:00", "2000/01/01 00:00:00")
 
 
-def test_create_random_place(shown):
-    result = shown(CreateRandomPlace(name="乱数の場所", kind="町", text="乱数で作った場所"))
+def test_create_random_location(shown):
+    result = shown(CreateRandomLocation(name="乱数の場所", kind="町", text="乱数で作った場所"))
 
     assert (result["name"], result["kind"], result["text"]) == ("乱数の場所", "町", "乱数で作った場所")
     LocationCreateForm.model_validate(result)
 
 
-def test_delete_place(shown, world):
-    result = shown(DeletePlace(place_id=world.neighbor_id))
+def test_delete_location(shown, world):
+    result = shown(DeleteLocation(location_id=world.neighbor_id))
 
     assert result == {"id": world.neighbor_id, "name": "テスト村", "kind": "村"}
 
 
 def test_list_neighbors(shown, world):
-    result = shown(ListNeighbors(place_id=world.place_id, kind="村", limit=3))
+    result = shown(ListNeighbors(location_id=world.location_id, kind="村", limit=3))
 
-    assert result["place"]["id"] == world.place_id
+    assert result["location"]["id"] == world.location_id
     assert result["planet"]["id"] == world.planet_id
     assert [neighbor["id"] for neighbor in result["neighbors"]] == [world.neighbor_id]
     assert result["neighbors"][0]["altitude_diff_m"] == 250
 
 
-def test_list_places(shown, world):
-    result = shown(ListPlaces(kind="都市"))
+def test_list_locations(shown, world):
+    result = shown(ListLocations(kind="都市"))
 
-    assert world.place_id in [place["id"] for place in result]
-    assert {place["kind"] for place in result} == {"都市"}
+    assert world.location_id in [location["id"] for location in result]
+    assert {location["kind"] for location in result} == {"都市"}
 
 
-def test_update_place(shown, world):
-    result = shown(UpdatePlace(LocationUpdateForm(
+def test_update_location(shown, world):
+    result = shown(UpdateLocation(LocationUpdateForm(
         id=world.neighbor_id, name="テスト山村", kind="山村", text="山あいの村", active_random_generation=True,
         parent_id=world.planet_id, location_world=2, location_planet=world.planet_id, location_longitude=136.2,
         location_latitude=35.7, location_altitude=600, polygon=_POLYGON, area=200, environment="高地",

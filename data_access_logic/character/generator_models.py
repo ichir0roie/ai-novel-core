@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 from data_access_logic import constants
 from data_access_logic.character.models import CharacterBase, CharacterParameterValues
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
-from data_access_logic.location.models import LocationMaterial, PlaceMaterial
+from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
 from data_access_logic.meme.models import DrawnMeme
 from data_access_logic.story.models import StoryPlotMaterial
@@ -14,7 +14,7 @@ from db.stamp import Stamp
 _AGE_RANGE = constants.GENERATION_CHARACTER_AGE_RANGE
 
 
-class BirthPlaceMaterial(PlaceMaterial):
+class BirthLocationMaterial(LocationTextMaterial):
     sample_region: str | None = None
     sample_culture: str | None = None
     sample_era: str | None = None
@@ -24,7 +24,7 @@ class BirthPlaceMaterial(PlaceMaterial):
 class CharacterBirthMaterial(Material):
     time: Stamp
     person: bool
-    born_place: BirthPlaceMaterial | None = None
+    born_location: BirthLocationMaterial | None = None
     # 上位の場所のものから順
     stories: list[StoryPlotMaterial]
     # この時刻より後に始まる、まだ世に無い設定
@@ -44,18 +44,18 @@ class CharacterBirthMaterial(Material):
     hint_text: str | None = None
 
 
-def _born_place(born_place: BirthPlaceMaterial | None) -> dict[str, Any] | None:
-    if born_place is None:
+def _born_location(born_location: BirthLocationMaterial | None) -> dict[str, Any] | None:
+    if born_location is None:
         return None
     return {
-        "名前": born_place.name,
-        "種別": born_place.kind,
-        "説明": born_place.text,
-        "参考地域": born_place.sample_region,
-        "参考文化": born_place.sample_culture,
-        "参考時代": born_place.sample_era,
-        "所属する地域": (f"{born_place.parent.name}({born_place.parent.kind})"
-                         if born_place.parent else None),
+        "名前": born_location.name,
+        "種別": born_location.kind,
+        "説明": born_location.text,
+        "参考地域": born_location.sample_region,
+        "参考文化": born_location.sample_culture,
+        "参考時代": born_location.sample_era,
+        "所属する地域": (f"{born_location.parent.name}({born_location.parent.kind})"
+                         if born_location.parent else None),
     }
 
 
@@ -89,7 +89,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
         parameters = self.parameters
         return {
             "現在の時刻": str(self.time),
-            "出身": _born_place(self.born_place),
+            "出身": _born_location(self.born_location),
             "この場所・時刻に関連する筋書き": "\n\n".join(story.text for story in self.stories if story.text) or None,
             "この時刻より後に始まる設定(まだ無い)": [
                 {"名前": idea.name, "種類": idea.kind, "始まる年": idea.start.year if idea.start else None,
@@ -121,7 +121,7 @@ class CharacterNameMaterial(Material):
     text: str
     age: int
     parameters: CharacterParameterValues | None = None
-    born_place: BirthPlaceMaterial | None = None
+    born_location: BirthLocationMaterial | None = None
     nearby_characters: list[CharacterBase]
     hint_name: str | None = None
 
@@ -144,7 +144,7 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
             "三人称": parameters.third_person if parameters else None,
             "口調": parameters.tone if parameters else None,
             "方言": parameters.dialect if parameters else None,
-            "居場所": _born_place(self.born_place),
+            "居場所": _born_location(self.born_location),
             "既にいる人物・対象の名": [character.name for character in self.nearby_characters],
             "作者が付けたい名": self.hint_name,
         }

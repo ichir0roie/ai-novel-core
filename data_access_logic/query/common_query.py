@@ -12,7 +12,7 @@ from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
 from data_access_logic.query.period import alive_at
 from db.schema import (
-    Base, Character, CharacterPlace, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
+    Base, Character, CharacterLocation, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
     Story,
 )
 from db.stamp import Stamp, StampError
@@ -65,11 +65,11 @@ def latest_time_select() -> Select:
 
 # ---------------------------------------------------------------- 場所の木
 
-def descendant_place_ids(s: Session, place_id: int) -> list[int]:
+def descendant_location_ids(s: Session, location_id: int) -> list[int]:
     """何段あるか分からないので一段ずつたどる。"""
-    get_row(s, Location, place_id)
-    found = [place_id]
-    frontier = [place_id]
+    get_row(s, Location, location_id)
+    found = [location_id]
+    frontier = [location_id]
     while frontier:
         children = s.scalars(
             select(Location.id).where(Location.parent_id.in_(frontier))).all()
@@ -79,17 +79,17 @@ def descendant_place_ids(s: Session, place_id: int) -> list[int]:
     return found
 
 
-def idea_scope_ids(s: Session, place_id: int) -> list[int]:
+def idea_scope_ids(s: Session, location_id: int) -> list[int]:
     """アイデアの `location_id` は、そこから配下で効く。現在地から最上位までをたどる。"""
-    get_row(s, Location, place_id)
-    return [step.id for step in reversed(place_path(s, place_id))]
+    get_row(s, Location, location_id)
+    return [step.id for step in reversed(location_path(s, location_id))]
 
 
-def place_path(s: Session, place_id: int) -> list[LocationMaterial]:
-    """最上位の場所から `place_id` までの道筋。"""
+def location_path(s: Session, location_id: int) -> list[LocationMaterial]:
+    """最上位の場所から `location_id` までの道筋。"""
     chain: list[LocationMaterial] = []
     seen: set[int] = set()
-    current = s.get(Location, place_id)
+    current = s.get(Location, location_id)
     while current is not None and current.id not in seen:
         seen.add(current.id)
         chain.append(LocationMaterial.model_validate(current))
@@ -97,8 +97,8 @@ def place_path(s: Session, place_id: int) -> list[LocationMaterial]:
     return list(reversed(chain))
 
 
-def place_up(s: Session, place_id: int, levels: int) -> int:
-    current = get_row(s, Location, place_id)
+def location_up(s: Session, location_id: int, levels: int) -> int:
+    current = get_row(s, Location, location_id)
     for _ in range(max(0, levels)):
         if current.parent_id is None:
             break
@@ -111,7 +111,7 @@ def place_up(s: Session, place_id: int, levels: int) -> int:
 
 # ---------------------------------------------------------------- 場所
 
-def places_select(kind: str | None = None) -> Select:
+def locations_select(kind: str | None = None) -> Select:
     query = select(Location)
     if kind is not None:
         query = query.where(Location.kind == kind)
@@ -122,7 +122,7 @@ def planets_select() -> Select:
     return select(Location).where(Location.kind == "星").order_by(Location.id.asc())
 
 
-def places_on_planet_select(planet_id: int) -> Select:
+def locations_on_planet_select(planet_id: int) -> Select:
     return (
         select(Location)
         .where(Location.location_planet == planet_id)
@@ -143,24 +143,24 @@ def shapes_on_planet_select(planet_id: int) -> Select:
 
 # ---------------------------------------------------------------- 出来事
 
-def events_at_select(when: Stamp | str, place_ids: Collection[int] | None = None, limit: int | None = None) -> Select:
+def events_at_select(when: Stamp | str, location_ids: Collection[int] | None = None, limit: int | None = None) -> Select:
     since, until = span(when)
     query = (select(Event)
              .options(*EVENT_LOAD_OPTIONS)
              .where(_in_span(Event.time, since, until)))
-    if place_ids is not None:
-        query = query.where(Event.location_id.in_(list(place_ids)))
+    if location_ids is not None:
+        query = query.where(Event.location_id.in_(list(location_ids)))
     query = query.order_by(Event.time.desc(), Event.id.desc())
     if limit:
         query = query.limit(limit)
     return query
 
 
-def events_in_locations_select(place_ids: Collection[int] | None, until: Stamp | str | None = None,
+def events_in_locations_select(location_ids: Collection[int] | None, until: Stamp | str | None = None,
                                limit: int | None = None) -> Select:
     query = select(Event).options(*EVENT_LOAD_OPTIONS)
-    if place_ids:
-        query = query.where(Event.location_id.in_(list(place_ids)))
+    if location_ids:
+        query = query.where(Event.location_id.in_(list(location_ids)))
     if until is not None:
         query = query.where(Event.time <= span(until)[1])
     query = query.order_by(Event.time.desc(), Event.id.desc())
@@ -179,8 +179,8 @@ def _events_where(condition: ColumnElement[bool], until: Stamp | str | None, lim
     return query
 
 
-def events_of_place_select(place_id: int, until: Stamp | str | None = None, limit: int | None = 5) -> Select:
-    return _events_where(Event.location_id == place_id, until, limit)
+def events_of_location_select(location_id: int, until: Stamp | str | None = None, limit: int | None = 5) -> Select:
+    return _events_where(Event.location_id == location_id, until, limit)
 
 
 def events_of_character_select(character_id: int, until: Stamp | str | None = None, limit: int | None = 5) -> Select:
@@ -192,12 +192,12 @@ def events_under_select(event_id: int, until: Stamp | str | None = None, limit: 
     return _events_where(Event.parent_event_id == event_id, until, limit)
 
 
-def events_after_select(place_id: int | None, character_ids: Collection[int], after: Stamp, limit: int = 5) -> Select:
+def events_after_select(location_id: int | None, character_ids: Collection[int], after: Stamp, limit: int = 5) -> Select:
     """人物ごとに時を刻むので、ある人物の出来事を起こす時点より後に、別の人物の出来事が既にあることがある。
-    `place_id` が None なら当事者の出来事だけ(場所の無い出来事まで拾わない)。"""
+    `location_id` が None なら当事者の出来事だけ(場所の無い出来事まで拾わない)。"""
     conditions = [Event.event_characters.any(EventCharacter.character_id.in_(list(character_ids)))]
-    if place_id is not None:
-        conditions.append(Event.location_id == place_id)
+    if location_id is not None:
+        conditions.append(Event.location_id == location_id)
     return (select(Event)
             .options(*EVENT_LOAD_OPTIONS)
             .where(Event.time > after, or_(*conditions))
@@ -211,10 +211,10 @@ def events_select() -> Select:
             .order_by(Event.time.desc(), Event.id.desc()))
 
 
-def open_events_select(place_ids: Collection[int], until: Stamp) -> Select:
+def open_events_select(location_ids: Collection[int], until: Stamp) -> Select:
     return (select(Event)
             .options(*EVENT_LOAD_OPTIONS)
-            .where(Event.location_id.in_(list(place_ids)),
+            .where(Event.location_id.in_(list(location_ids)),
                    Event.time <= until,
                    or_(Event.end.is_(None), Event.end > until),
                    ~Event.event_characters.any())
@@ -223,11 +223,12 @@ def open_events_select(place_ids: Collection[int], until: Stamp) -> Select:
 
 # ---------------------------------------------------------------- 人物
 
-def character_place_select(character_id: int, until: Stamp) -> Select:
-    return (select(CharacterPlace)
-            .options(selectinload(CharacterPlace.place))
-            .where(CharacterPlace.character_id == character_id, alive_at(CharacterPlace, until))
-            .order_by(CharacterPlace.start.desc(), CharacterPlace.id.desc()))
+def character_location_select(character_id: int, until: Stamp) -> Select:
+    return (select(CharacterLocation)
+            .options(selectinload(CharacterLocation.location))
+            .where(CharacterLocation.character_id == character_id, alive_at(CharacterLocation, until))
+            .order_by(CharacterLocation.start.desc(), CharacterLocation.id.desc())
+            .execution_options(populate_existing=True))
 
 
 def latest_character_event_select(character_id: int, until: Stamp | None = None) -> Select:
@@ -242,11 +243,11 @@ def latest_character_event_select(character_id: int, until: Stamp | None = None)
 
 
 
-def resident_character_ids_select(place_ids: Collection[int], until: Stamp) -> Select:
+def resident_character_ids_select(location_ids: Collection[int], until: Stamp) -> Select:
     """話・断面に出す顔ぶれなので、ユーザが確かめた(`confirmed=承認`)人物・対象だけに絞る。"""
-    return (select(CharacterPlace.character_id).distinct()
-            .join(Character, Character.id == CharacterPlace.character_id)
-            .where(CharacterPlace.location_id.in_(list(place_ids)), alive_at(CharacterPlace, until),
+    return (select(CharacterLocation.character_id).distinct()
+            .join(Character, Character.id == CharacterLocation.character_id)
+            .where(CharacterLocation.location_id.in_(list(location_ids)), alive_at(CharacterLocation, until),
                    Character.confirmed == ConfirmStatus.APPROVED))
 
 
@@ -256,7 +257,7 @@ def character_select(character_id: int) -> Select:
 
 def characters_select() -> Select:
     return (select(Character)
-            .options(selectinload(Character.places))
+            .options(selectinload(Character.locations))
             .order_by(Character.id.asc()))
 
 
@@ -264,7 +265,7 @@ def characters_select() -> Select:
 
 def stories_select() -> Select:
     return (select(Story)
-            .options(selectinload(Story.world), selectinload(Story.place))
+            .options(selectinload(Story.world), selectinload(Story.location))
             .order_by(Story.id))
 
 
@@ -301,16 +302,16 @@ def unsynced_episodes_select(story_id: int | None = None) -> Select:
 
 # ---------------------------------------------------------------- 断面
 
-def ideas_select(place_ids: Collection[int] | None, time: Stamp | None = None) -> Select:
+def ideas_select(location_ids: Collection[int] | None, time: Stamp | None = None) -> Select:
     return (select(Idea)
-            .where(dictionary_query.idea_in_scope(place_ids, time), Idea.confirmed == ConfirmStatus.APPROVED)
+            .where(dictionary_query.idea_in_scope(location_ids, time), Idea.confirmed == ConfirmStatus.APPROVED)
             .order_by(Idea.id))
 
 
 def character_relations_at_select(character_id: int, time: Stamp) -> Select:
     return (select(CharacterRelation)
-            .where(or_(CharacterRelation.character_id_1 == character_id,
-                       CharacterRelation.character_id_2 == character_id),
+            .where(or_(CharacterRelation.character_1_id == character_id,
+                       CharacterRelation.character_2_id == character_id),
                    alive_at(CharacterRelation, time))
             .order_by(CharacterRelation.id))
 
@@ -318,6 +319,6 @@ def character_relations_at_select(character_id: int, time: Stamp) -> Select:
 def character_relations_select(character_id: int | None = None) -> Select:
     query = select(CharacterRelation)
     if character_id is not None:
-        query = query.where(or_(CharacterRelation.character_id_1 == character_id,
-                                CharacterRelation.character_id_2 == character_id))
+        query = query.where(or_(CharacterRelation.character_1_id == character_id,
+                                CharacterRelation.character_2_id == character_id))
     return query.order_by(CharacterRelation.id)

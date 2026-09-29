@@ -8,7 +8,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from db.schema import (
     CHARACTER_KIND_PERSON,
-    Base, Character, CharacterParameter, CharacterPlace, Episode, Event, EventCharacter,
+    Base, Character, CharacterParameter, CharacterLocation, Episode, Event, EventCharacter,
     Idea, Location, Story,
 )
 from db.stamp import Stamp
@@ -193,9 +193,9 @@ class EventCharacterFactory(_ModelFactory):
     character_id = _pool(Character, "CharacterFactory")
 
 
-class CharacterPlaceFactory(_ModelFactory):
+class CharacterLocationFactory(_ModelFactory):
     class Meta:
-        model = CharacterPlace
+        model = CharacterLocation
 
     character_id = _pool(Character, "CharacterFactory")
     location_id = _pool(Location, "LocationFactory")
@@ -223,7 +223,7 @@ class StoryFactory(_ModelFactory):
     name = factory.Sequence(lambda n: f"作品{n}")
     text = _text()
     world_id = _pool(Location, "LocationFactory", p_none=0.1)
-    place_id = _pool(Location, "LocationFactory", p_none=0.1)
+    location_id = _pool(Location, "LocationFactory", p_none=0.1)
     narration = factory.Faker("random_element", elements=_NARRATIONS)
     state = factory.Faker("random_element", elements=_STATES)
     start = _optional_stamp()
@@ -241,8 +241,8 @@ class EpisodeFactory(_ModelFactory):
     synced = factory.Faker("pybool")
     start = _optional_stamp()
     end = _end_after_start()
-    viewpoint = factory.Faker("name", locale=_LOCALE)
-    place = factory.Faker("city", locale=_LOCALE)
+    viewpoint_character_id = _pool(Character, "CharacterFactory", p_none=0.3)
+    location_id = _pool(Location, "LocationFactory", p_none=0.1)
 
 
 # 外部キーの参照先が先に埋まる順
@@ -252,7 +252,7 @@ ALL_FACTORIES = (
     CharacterParameterFactory,
     EventFactory,
     EventCharacterFactory,
-    CharacterPlaceFactory,
+    CharacterLocationFactory,
     IdeaFactory,
     StoryFactory,
     EpisodeFactory,

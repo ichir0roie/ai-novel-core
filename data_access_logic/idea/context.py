@@ -30,7 +30,7 @@ def _dated(ideas: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
     return [idea for idea in ideas if idea.start is not None]
 
 
-def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
+def _candidate(s: Session, term: IdeaTerm, location_id: int | None) -> Idea | None:
     existing = s.scalar(
         select(Idea)
         .where(
@@ -47,9 +47,9 @@ def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
             or s.scalar(select(Location.id).where(Location.name == term.keyword).limit(1)) is not None):
         return None
 
-    classification = find_or_create_classification(s, term.kind, place_id)
-    locations = (common_query.place_path(s, place_id)
-                 if place_id is not None else [])
+    classification = find_or_create_classification(s, term.kind, location_id)
+    locations = (common_query.location_path(s, location_id)
+                 if location_id is not None else [])
     candidate = Idea(
         name=term.keyword,
         kind=term.kind,
@@ -66,7 +66,7 @@ def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
     return candidate
 
 
-def _related(s: Session, hits: list[IdeaMaterial], place_id: int | None, time: Stamp | None) -> list[IdeaMaterial]:
+def _related(s: Session, hits: list[IdeaMaterial], location_id: int | None, time: Stamp | None) -> list[IdeaMaterial]:
     related = {idea.id: idea for idea in hits}
     for idea in hits:
         parent_id = idea.parent_idea_id
@@ -78,9 +78,9 @@ def _related(s: Session, hits: list[IdeaMaterial], place_id: int | None, time: S
             parent_id = parent.parent_idea_id
 
     if hits:
-        place_ids = common_query.idea_scope_ids(s, place_id) if place_id is not None else None
+        location_ids = common_query.idea_scope_ids(s, location_id) if location_id is not None else None
         children = s.scalars(
-            dictionary_query.ideas_by_parent_select([idea.id for idea in hits], place_ids, time)
+            dictionary_query.ideas_by_parent_select([idea.id for idea in hits], location_ids, time)
         ).all()
         for child in children:
             related.setdefault(child.id, IdeaMaterial.model_validate(child))
@@ -88,27 +88,27 @@ def _related(s: Session, hits: list[IdeaMaterial], place_id: int | None, time: S
 
 
 def resolve_ideas(
-    s: Session, keywords: list[IdeaTerm], place_id: int | None, time: Stamp | None,
+    s: Session, keywords: list[IdeaTerm], location_id: int | None, time: Stamp | None,
 ) -> IdeaContextSerialized:
     """洗い出した語をアイデアと照らし、当たらなかった固有の語を候補として足す。
 
     足す候補の効く期間は語の `start` / `end`(時期のはっきりしない語は None のまま)。
     """
     terms = unique_terms(keywords)
-    hits = search(s, terms, place_id, time)
+    hits = search(s, terms, location_id, time)
 
     matched = {keyword for hit in hits for keyword in hit.keywords}
     candidates: dict[int, Idea] = {}
     for term in terms:
         if term.keyword in matched or not term.coined:
             continue
-        candidate = _candidate(s, term, place_id)
+        candidate = _candidate(s, term, location_id)
         if candidate is not None:
             candidates.setdefault(candidate.id, candidate)
 
     hit_ideas = [hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]]
-    related = _related(s, _dated(hit_ideas, time), place_id, time)
-    recognitions = called(s, [idea.id for idea in related], place_id, time)
+    related = _related(s, _dated(hit_ideas, time), location_id, time)
+    recognitions = called(s, [idea.id for idea in related], location_id, time)
 
     return IdeaContextSerialized(
         hits=hit_ideas,
@@ -117,8 +117,8 @@ def resolve_ideas(
     )
 
 
-def gather_ideas(s: Session, draft: str, ai: AIClient, place_id: int | None, time: Stamp | None) -> IdeaContextSerialized:
+def gather_ideas(s: Session, draft: str, ai: AIClient, location_id: int | None, time: Stamp | None) -> IdeaContextSerialized:
     """AI が洗い出した語から足した候補は、この後の生成が失敗しても残すよう、その場で確定する。"""
-    context = resolve_ideas(s, keywords_of(draft, ai, time), place_id, time)
+    context = resolve_ideas(s, keywords_of(draft, ai, time), location_id, time)
     s.commit()
     return context

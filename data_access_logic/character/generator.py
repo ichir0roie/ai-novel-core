@@ -19,7 +19,7 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator_models import (
-    BirthPlaceMaterial, CharacterBirthMaterialSerialized, CharacterNameMaterialSerialized, HistoryItemDraft,
+    BirthLocationMaterial, CharacterBirthMaterialSerialized, CharacterNameMaterialSerialized, HistoryItemDraft,
     NameDraft, NonPersonContentDraft, PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized,
     StoryElementsDraft, StoryElementsRequestSerialized,
 )
@@ -31,7 +31,7 @@ from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.meme.extractor import draw, position_legend
 from data_access_logic.meme.models import DrawnMeme
 from data_access_logic.query import common_query, dictionary_query, story_creation_query
-from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location
+from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterLocation, ConfirmStatus, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -130,37 +130,37 @@ def _element(ai: AIClient, rng: random.Random, request: StoryElementsRequestSeri
     return rng.choice(decided.elements)
 
 
-def _nearby_characters(s: Session, born_place_id: int | None, time: Stamp) -> list[Character]:
+def _nearby_characters(s: Session, born_location_id: int | None, time: Stamp) -> list[Character]:
     """件数は `constants.NEARBY_CHARACTER_LIMIT` まで(祖先をたどるほど無際限に増えるため)。"""
-    if born_place_id is None:
+    if born_location_id is None:
         return []
-    place_ids = [step.id for step in common_query.place_path(s, born_place_id)]
-    ids = s.scalars(common_query.resident_character_ids_select(place_ids, time)).all()[:constants.NEARBY_CHARACTER_LIMIT]
+    location_ids = [step.id for step in common_query.location_path(s, born_location_id)]
+    ids = s.scalars(common_query.resident_character_ids_select(location_ids, time)).all()[:constants.NEARBY_CHARACTER_LIMIT]
     return list(s.scalars(select(Character).where(Character.id.in_(ids))).all()) if ids else []
 
 
 def _birth_material(
-    s: Session, ai: AIClient, rng: random.Random, born_place_id: int | None, time: Stamp, person: bool,
+    s: Session, ai: AIClient, rng: random.Random, born_location_id: int | None, time: Stamp, person: bool,
     parameters: CharacterParameterValues | None, name: str | None, kind: str | None, age: int | None,
     form: CharacterForm | None,
 ) -> CharacterBirthMaterialSerialized:
-    born_place = (s.scalar(
-        select(Location).where(Location.id == born_place_id)
+    born_location = (s.scalar(
+        select(Location).where(Location.id == born_location_id)
         .options(joinedload(Location.parent)).execution_options(populate_existing=True))
-        if born_place_id is not None else None)
-    stories = story_creation_query.load_location_story(s, born_place_id, time) if born_place_id is not None else []
+        if born_location_id is not None else None)
+    stories = story_creation_query.load_location_story(s, born_location_id, time) if born_location_id is not None else []
     later_ideas = (s.scalars(dictionary_query.later_ideas_select(
-        common_query.idea_scope_ids(s, born_place_id), time)).all() if born_place_id is not None else [])
+        common_query.idea_scope_ids(s, born_location_id), time)).all() if born_location_id is not None else [])
     elements_request = StoryElementsRequestSerialized(time=time, stories=stories, later_ideas=later_ideas)
     return CharacterBirthMaterialSerialized(
         time=time,
         person=person,
-        born_place=BirthPlaceMaterial.model_validate(born_place) if born_place is not None else None,
+        born_location=BirthLocationMaterial.model_validate(born_location) if born_location is not None else None,
         stories=elements_request.stories,
         later_ideas=elements_request.later_ideas,
         element=_element(ai, rng, elements_request),
         memes=draw(s, rng, constants.MEME_PERSON_CATEGORIES if person else constants.MEME_NON_PERSON_CATEGORIES),
-        nearby_characters=_nearby_characters(s, born_place_id, time),
+        nearby_characters=_nearby_characters(s, born_location_id, time),
         parameters=parameters,
         name=name,
         kind=kind,
@@ -184,9 +184,9 @@ def _content(
     return decided
 
 
-def _polished(s: Session, ai: AIClient, draft: str, born_place_id: int | None, time: Stamp) -> tuple[str, list[IdeaMaterial]]:
+def _polished(s: Session, ai: AIClient, draft: str, born_location_id: int | None, time: Stamp) -> tuple[str, list[IdeaMaterial]]:
     """下書きに関係する設定があれば、それを踏まえて清書する。結ぶアイデアも返す。"""
-    ideas = gather_ideas(s, draft, ai, born_place_id, time)
+    ideas = gather_ideas(s, draft, ai, born_location_id, time)
     if not ideas.related:
         return draft, ideas.linked
     decided = ai.generate(
@@ -238,7 +238,7 @@ def generate_character(
     s: Session,
     ai: AIClient,
     rng: random.Random,
-    born_place_id: int | None,
+    born_location_id: int | None,
     time: Stamp,
     person: bool,
     form: CharacterForm | None = None,
@@ -249,7 +249,7 @@ def generate_character(
     fixed_kind = form.kind if form and form.kind in constants.NON_PERSON_KINDS else None
     fixed_age = max(0, time.year - form.start.year) if form and form.start is not None else None
     material = _birth_material(
-        s, ai, rng, born_place_id, time, person, parameters if person else None,
+        s, ai, rng, born_location_id, time, person, parameters if person else None,
         None, None if person else fixed_kind, fixed_age, form)
     subject = "人物" if person else "対象"
     content = _content(ai, material, f"この場所に自然な{subject}を1件、決めてください。")
@@ -269,12 +269,12 @@ def generate_character(
         kind = fixed_kind or (content.kind if content.kind in constants.NON_PERSON_KINDS
                               else rng.choice(constants.NON_PERSON_KINDS))
     age = fixed_age if fixed_age is not None else content.age
-    text, ideas = _polished(s, ai, content.text, born_place_id, time)
+    text, ideas = _polished(s, ai, content.text, born_location_id, time)
     text = _composed(text, content, material.memes, time, age)
 
     named = _name(ai, CharacterNameMaterialSerialized(
         kind=kind, text=text, age=age, parameters=parameters if person else None,
-        born_place=material.born_place, nearby_characters=material.nearby_characters,
+        born_location=material.born_location, nearby_characters=material.nearby_characters,
         hint_name=form.name if form else None,
     ), person)
     name = named.name if named is not None else (form.name if form and form.name else subject)
@@ -293,14 +293,14 @@ def generate_character(
     )
     s.add(record)
     s.flush()
-    if born_place_id is not None:
-        s.add(CharacterPlace(character_id=record.id, location_id=born_place_id, start=record.start, end=record.end))
+    if born_location_id is not None:
+        s.add(CharacterLocation(character_id=record.id, location_id=born_location_id, start=record.start, end=record.end))
     link(s, record, ideas)
     s.commit()
 
-    place_label = (f"{material.born_place.name}(id={material.born_place.id})" if material.born_place else "不明")
+    location_label = (f"{material.born_location.name}(id={material.born_location.id})" if material.born_location else "不明")
     logger.info(f"{time} 生成: {record.name} id={record.id} 種別={record.kind}"
-          f" 出自={place_label} 年齢={age}\n"
+          f" 出自={location_label} 年齢={age}\n"
           f"    筋書きの要素: {material.element or '(無し)'}\n"
           + "".join(f"    ミーム: {drawn.position}: {drawn.text}\n" for drawn in material.memes)
           + f"    説明: {record.text}")
@@ -317,19 +317,19 @@ def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: in
     if time is None:
         raise ValueError("time が決められない(世界にまだ出来事が無く、record.start も空)")
     person = record.kind == CHARACTER_KIND_PERSON
-    # places は新しい順なので、末尾が生まれた場所
-    born_place_id = record.places[-1].location_id if record.places else None
+    # locations は新しい順なので、末尾が生まれた場所
+    born_location_id = record.locations[-1].location_id if record.locations else None
     age = max(0, time.year - record.start.year) if record.start is not None else None
     parameters = parameters_at(record, time) if person else None
     name = record.name
     material = _birth_material(
-        s, ai, rng, born_place_id, time, person, parameters, name, None if person else record.kind, age, None)
+        s, ai, rng, born_location_id, time, person, parameters, name, None if person else record.kind, age, None)
     subject = "人物" if person else "対象"
     content = _content(ai, material, f"この{subject}の本文(説明)を決めてください。")
     if content is None:
         raise ValueError("本文が得られなかった")
 
-    text, ideas = _polished(s, ai, content.text, born_place_id, time)
+    text, ideas = _polished(s, ai, content.text, born_location_id, time)
     text = _composed(text, content, material.memes, time, age)
     record = s.get_one(Character, character_id)
     record.text = fill_name_placeholder(text, name or "")

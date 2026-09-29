@@ -11,17 +11,17 @@ from data_access_logic.query import common_query
 from db.schema import Location
 
 
-class UpdatePlace(CommitEntrypoint):
+class UpdateLocation(CommitEntrypoint):
     model = Location
 
-    def __init__(self, place: LocationUpdateForm):
-        self.place = place
+    def __init__(self, location: LocationUpdateForm):
+        self.location = location
 
     def execute(self, s: Session) -> LocationRecord:
-        record = common_query.get_row(s, Location, self.place.id)
-        if self.place.area is not None:
-            self._check_area(s, record, self.place.area)
-        self.place.write_changes_to(record)
+        record = common_query.get_row(s, Location, self.location.id)
+        if self.location.area is not None:
+            self._check_area(s, record, self.location.area)
+        self.location.write_changes_to(record)
         self.finalize(s, record)
         return LocationRecord.model_validate(record)
 

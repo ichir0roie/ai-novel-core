@@ -55,27 +55,27 @@ def _episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_co
     # 要約・候補のアイデアの commit で読み込んだ関連が期限切れになるので、AI を呼ぶ前にマテリアルへ写しておく
     main_episode = TargetEpisode.model_validate(episode)
     story = StoryMaterial.model_validate(episode.story)
-    place_id = episode.place_id or episode.story.place_id
+    location_id = episode.location_id or episode.story.location_id
     characters = [link.character for link in episode.episode_characters]
 
     return EpisodeMaterialSerialized(
         story=story,
         main_episode=main_episode,
         past_episodes=past_episodes(s, ai, episode, past_episode_count),
-        locations=common_query.place_path(s, place_id)
-        if place_id is not None else [],
+        locations=common_query.location_path(s, location_id)
+        if location_id is not None else [],
         cast=cast_at(s, ai, characters, main_episode.start),
-        place_events=list(reversed(summarized_events(
+        location_events=list(reversed(summarized_events(
             s, ai,
-            common_query.events_of_place_select(
-                place_id, until=main_episode.start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
-            .where(Event.confirmed == ConfirmStatus.APPROVED)))) if place_id is not None else [],
+            common_query.events_of_location_select(
+                location_id, until=main_episode.start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
+            .where(Event.confirmed == ConfirmStatus.APPROVED)))) if location_id is not None else [],
         later_events=summarized_events(
             s, ai,
             common_query.events_after_select(
-                place_id, [character.id for character in characters], main_episode.start,
+                location_id, [character.id for character in characters], main_episode.start,
                 limit=constants.LATER_EVENT_LIMIT)),
-        ideas=gather_ideas(s, main_episode.key, ai, place_id, main_episode.start),
+        ideas=gather_ideas(s, main_episode.key, ai, location_id, main_episode.start),
     )
 
 

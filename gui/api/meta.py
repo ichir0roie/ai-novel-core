@@ -23,9 +23,9 @@ _LABELS = {
     "id": "id", "name": "名前", "kind": "種別", "text": "本文", "start": "開始", "end": "終了",
     "title": "題", "key": "種(キーテキスト)", "category": "分類", "confirmed": "確認",
     "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
-    "character_id": "人物", "character_id_1": "人物 1", "character_id_2": "人物 2", "relation": "関係",
+    "character_id": "人物", "character_1_id": "人物 1", "character_2_id": "人物 2", "relation": "関係",
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
-    "place_id": "場所", "viewpoint_character_id": "視点", "synced": "同期済み",
+    "viewpoint_character_id": "視点", "synced": "同期済み",
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
     "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
     "letters": "字数", "polygon": "領域(polygon)", "area": "広さ",
@@ -36,7 +36,7 @@ _LABELS = {
 # CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
-    "character": {"parameters": "periodic", "places": "periodic", "histories": "flow"},
+    "character": {"parameters": "periodic", "locations": "periodic", "histories": "flow"},
     "idea": {"recognitions": "flow"},
 }
 
@@ -156,6 +156,6 @@ def all_tables(s: Session) -> list[TableMeta]:
 
 
 _LABELS["parameters"] = "期間ごとのパラメータ"
-_LABELS["places"] = "期間ごとの居場所"
+_LABELS["locations"] = "期間ごとの居場所"
 _LABELS["histories"] = "期間ごとの説明"
 _LABELS["recognitions"] = "場所・時代ごとの呼び名"

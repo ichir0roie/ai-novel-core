@@ -89,21 +89,21 @@ def _score(idea: Idea, keyword: list[str], variants: list[str]) -> int:
 
 
 def search(
-    s: Session, keywords: list[IdeaTerm], place_id: int | None = None, time: Stamp | None = None,
+    s: Session, keywords: list[IdeaTerm], location_id: int | None = None, time: Stamp | None = None,
     limit: int | None = None, confirmed_only: bool = True,
 ) -> list[IdeaHit]:
     """キーワードと言い換えで引いたアイデアを、当たり方の強い順に返す。
 
     名前にキーワードが入っていれば 3、言い換えが入っていれば 2、本文にだけ入っていれば 1 を、キーワードごとに足す。
-    `place_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。
+    `location_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。
     `confirmed_only` を false にすると、まだ確かめていない候補(未確認・非承認)も含める。
     """
-    place_ids = common_query.idea_scope_ids(s, place_id) if place_id is not None else None
+    location_ids = common_query.idea_scope_ids(s, location_id) if location_id is not None else None
     scores: dict[int, tuple[Idea, int, list[str]]] = {}
     for term in unique_terms(keywords):
         keyword, variants = _spelled(term)
         for idea in s.scalars(dictionary_query.ideas_by_terms_select(
-                keyword + variants, place_ids, time, confirmed_only=confirmed_only)).all():
+                keyword + variants, location_ids, time, confirmed_only=confirmed_only)).all():
             score = _score(idea, keyword, variants)
             if not score:
                 continue

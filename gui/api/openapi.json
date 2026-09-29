@@ -806,19 +806,19 @@
         }
       }
     },
-    "/api/place_characters": {
+    "/api/location_characters": {
       "get": {
-        "summary": "Place Characters",
-        "description": "`time` に `place_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う",
-        "operationId": "place_characters_api_place_characters_get",
+        "summary": "Location Characters",
+        "description": "`time` に `location_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う",
+        "operationId": "location_characters_api_location_characters_get",
         "parameters": [
           {
-            "name": "place_id",
+            "name": "location_id",
             "in": "query",
             "required": true,
             "schema": {
               "type": "integer",
-              "title": "Place Id"
+              "title": "Location Id"
             }
           },
           {
@@ -837,7 +837,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlaceCharactersResponse"
+                  "$ref": "#/components/schemas/LocationCharactersResponse"
                 }
               }
             }
@@ -1352,7 +1352,23 @@
         ],
         "title": "JobList"
       },
-      "MapPlace": {
+      "LocationCharactersResponse": {
+        "properties": {
+          "character_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Character Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "character_ids"
+        ],
+        "title": "LocationCharactersResponse"
+      },
+      "MapLocation": {
         "properties": {
           "id": {
             "type": "integer",
@@ -1554,7 +1570,7 @@
           "end",
           "link"
         ],
-        "title": "MapPlace"
+        "title": "MapLocation"
       },
       "MapsResponse": {
         "properties": {
@@ -1660,22 +1676,6 @@
         ],
         "title": "OptionList"
       },
-      "PlaceCharactersResponse": {
-        "properties": {
-          "character_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Character Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_ids"
-        ],
-        "title": "PlaceCharactersResponse"
-      },
       "Planet": {
         "properties": {
           "id": {
@@ -1732,14 +1732,14 @@
           },
           "points": {
             "items": {
-              "$ref": "#/components/schemas/MapPlace"
+              "$ref": "#/components/schemas/MapLocation"
             },
             "type": "array",
             "title": "Points"
           },
           "shapes": {
             "items": {
-              "$ref": "#/components/schemas/MapPlace"
+              "$ref": "#/components/schemas/MapLocation"
             },
             "type": "array",
             "title": "Shapes"
@@ -1835,13 +1835,13 @@
             "type": "integer",
             "title": "Id"
           },
-          "character_id_1": {
+          "character_1_id": {
             "type": "integer",
-            "title": "Character Id 1"
+            "title": "Character 1 Id"
           },
-          "character_id_2": {
+          "character_2_id": {
             "type": "integer",
-            "title": "Character Id 2"
+            "title": "Character 2 Id"
           },
           "relation": {
             "anyOf": [
@@ -1884,8 +1884,8 @@
         "type": "object",
         "required": [
           "id",
-          "character_id_1",
-          "character_id_2",
+          "character_1_id",
+          "character_2_id",
           "relation",
           "start",
           "end",

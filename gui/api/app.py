@@ -14,8 +14,8 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
-from data_access_logic.character.latest_places import latest_place_ids
-from data_access_logic.character.place_characters import place_character_ids
+from data_access_logic.character.latest_locations import latest_location_ids
+from data_access_logic.character.location_characters import location_character_ids
 from data_access_logic.character.relation_graph import relation_graph
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.logs import configure_logging
@@ -30,7 +30,7 @@ from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_c
 from gui.api.jobs import runner
 from gui.api.models import (
     CharacterLocationsResponse, Created, Decision, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
-    JobList, MapsResponse, OptionList, PlaceCharactersResponse, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary,
+    JobList, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary,
     RunRequest, RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
@@ -228,16 +228,16 @@ def relations(s: Session = Depends(session_dep)) -> RelationsResponse:
 @app.get("/api/character_locations", response_model=CharacterLocationsResponse)
 def character_locations(s: Session = Depends(session_dep)) -> CharacterLocationsResponse:
     """人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う"""
-    return CharacterLocationsResponse(locations=latest_place_ids(s))
+    return CharacterLocationsResponse(locations=latest_location_ids(s))
 
 
-@app.get("/api/place_characters", response_model=PlaceCharactersResponse)
-def place_characters(place_id: int, time: str, s: Session = Depends(session_dep)) -> PlaceCharactersResponse:
-    """`time` に `place_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う"""
+@app.get("/api/location_characters", response_model=LocationCharactersResponse)
+def location_characters(location_id: int, time: str, s: Session = Depends(session_dep)) -> LocationCharactersResponse:
+    """`time` に `location_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う"""
     at = Stamp.parse(time)
     if at is None:
         raise ValueError("時刻が空")
-    return PlaceCharactersResponse(character_ids=place_character_ids(s, place_id, at))
+    return LocationCharactersResponse(character_ids=location_character_ids(s, location_id, at))
 
 
 _ = Created  # OpenAPI に出す型として残す

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Modal from "@/components/Modal";
 import { useOptions } from "@/components/ReferenceSelect";
-import { usePlaceCharacterIds } from "@/lib/placeCharacters";
+import { useLocationCharacterIds } from "@/lib/locationCharacters";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -17,25 +17,25 @@ type Props = {
   characterIds: number[];
   onChange: (ids: number[]) => void;
   episodeStart: unknown;
-  episodePlaceId: unknown;
+  episodeLocationId: unknown;
 };
 
 /** 話の登場人物(`episode_character`)。「time & place」の行に並ぶボタンで、押すとモーダルで追加削除する。
  * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。
- * 候補は、検索欄が空ならフォームの場所(`place_id`)に時刻(`start`)にいる人物だけ、検索語を入れたら全人物から探す
+ * 候補は、検索欄が空ならフォームの場所(`location_id`)に時刻(`start`)にいる人物だけ、検索語を入れたら全人物から探す
  * (選んだ人物はいつも出す)。場所・時刻が空か読めないときは絞らない。 */
-export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodePlaceId }: Props) {
+export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeLocationId }: Props) {
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
-  const placeCharacterIds = usePlaceCharacterIds(episodePlaceId, episodeStart, open);
+  const locationCharacterIds = useLocationCharacterIds(episodeLocationId, episodeStart, open);
 
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const selected = characterIds.map((id) => byId.get(id)).filter((o): o is NonNullable<typeof o> => o != null);
 
   const q = filter.trim();
   const shown = options.filter((o) =>
-    characterIds.includes(o.id) || (q ? o.label.includes(q) : placeCharacterIds === null || placeCharacterIds.includes(o.id)));
+    characterIds.includes(o.id) || (q ? o.label.includes(q) : locationCharacterIds === null || locationCharacterIds.includes(o.id)));
   const toggle = (id: number) => onChange(characterIds.includes(id) ? characterIds.filter((v) => v !== id) : [...characterIds, id]);
 
   return (

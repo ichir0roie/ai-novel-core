@@ -16,8 +16,8 @@ class CommitCharacterRelation(CommitEntrypoint):
         self.relation = relation
 
     def execute(self, s: Session) -> CharacterRelationRecord:
-        self.check_exists(s, Character, self.relation.character_id_1, "character_id_1")
-        self.check_exists(s, Character, self.relation.character_id_2, "character_id_2")
+        self.check_exists(s, Character, self.relation.character_1_id, "character_1_id")
+        self.check_exists(s, Character, self.relation.character_2_id, "character_2_id")
 
         record = CharacterRelation()
         self.relation.write_to(record)

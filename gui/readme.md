@@ -4,7 +4,7 @@
 
 - 未確認のアイデア・ミームを一件ずつ出し、直しながら「承認」「非承認」を付けて次へ進むレビュー画面
 - 本文を持つテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き)の一覧・表示・修正・追加
-- 作品の一覧(`/tables/story`)は既定で、場所の木(`parent_id`)に作品(`place_id`、無ければ `world_id`)をぶら下げたツリー。
+- 作品の一覧(`/tables/story`)は既定で、場所の木(`parent_id`)に作品(`location_id`、無ければ `world_id`)をぶら下げたツリー。
   場所・作品・話の一覧 API を引いてブラウザ側で組む(`gui/web/lib/storyTree.ts`)。`?view=list` で表に切り替える。
   枝の開閉はブラウザの localStorage に覚える(`gui/web/lib/treeOpen.ts`。既定は開いた状態)
 - 星ごとの地図(`/maps`)と人物相関図(`/relations`)。元データは `/api/maps` `/api/relations`。ナビには出さず、
@@ -77,7 +77,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
 | GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、この API が Claude Code の環境かどうか |
-| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_places.ListPlaces` のような「領域.ファイル.クラス」。`claude` を叩く入口と `background` は job の id を 202 で返す |
+| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_locations.ListLocations` のような「領域.ファイル.クラス」。`claude` を叩く入口と `background` は job の id を 202 で返す |
 | POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」「AI で補完」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す(下書きに `id` があれば、その行の空の本文だけを埋める)入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。`key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |
 | GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー(API を起こしているあいだだけ持つ) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
@@ -86,7 +86,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
 話(`episode`)は枠(`key`)と本文(`text`)を一緒に扱う。出来事は `character_ids`(当事者)、
-人物は足すときだけ `place_id`(出自)を受け取る。
+人物は足すときだけ `location_id`(出自)を受け取る。
 
 型を変えたら OpenAPI と TS の型を作り直す。
 
@@ -121,7 +121,7 @@ id を渡し、AI がその行の本文だけを書いて埋める(本文以外�
 
 | テーブル | ボタン | 入口 | 足す画面 | 詳細画面(本文が空のときだけ) |
 | --- | --- | --- | --- | --- |
-| 人物 | AI で作成 / AI で補完 | `character.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`place_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 | 決まっている名前・属性・出自を核に本文だけを書く |
+| 人物 | AI で作成 / AI で補完 | `character.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`location_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 | 決まっている名前・属性・出自を核に本文だけを書く |
 | 出来事 | AI で作成 / AI で補完 | `event.generate_event.GenerateEvent` | 名前・本文は場面の指定。時刻・場所・当事者は決まった値(省けば世界の最新・当事者の現在地・居合わせるサブキャラクター) | 記録・当事者・関連する設定から小説の本文だけを書く |
 | 話 | AI で枠を作る | `episode.generate_frame.GenerateFrame` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。登場人物はパネルの `character_ids`(初めは欄の値)。本文は書かない | (出ない。枠のみで足す画面専用) |
 | 話 | AI で本文まで書く | `episode.generate_episode.GenerateEpisode` | 種と時刻が揃っていればそのまま本文を書く。どちらかが空なら先に枠を決める。登場人物はパネルの `character_ids`(初めは欄の値。空なら止まる) | 本文の無い話のページに出る(その枠へ書く)。登場人物はパネルの `character_ids`(初めはこの話の `episode_character`。空なら止まる) |

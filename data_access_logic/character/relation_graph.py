@@ -23,8 +23,8 @@ class RelationCharacter(BaseModel):
 
 class Relation(BaseModel):
     id: int
-    character_id_1: int
-    character_id_2: int
+    character_1_id: int
+    character_2_id: int
     relation: str | None
     start: int | None
     end: int | None
@@ -48,7 +48,7 @@ def relation_character_of(character: Character) -> RelationCharacter:
 
 
 def relation_of(relation: CharacterRelation) -> Relation:
-    return Relation(id=relation.id, character_id_1=relation.character_id_1, character_id_2=relation.character_id_2,
+    return Relation(id=relation.id, character_1_id=relation.character_1_id, character_2_id=relation.character_2_id,
                     relation=relation.relation, start=_year(relation.start), end=_year(relation.end),
                     text=relation.text or "")
 

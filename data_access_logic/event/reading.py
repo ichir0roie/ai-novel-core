@@ -25,7 +25,7 @@ class EventRowHead(EventColumns):
 
     @computed_field
     @property
-    def place_name(self) -> str | None:
+    def location_name(self) -> str | None:
         return None if self.location is None else self.location.name
 
     @computed_field
@@ -43,10 +43,10 @@ def event_row(event: Event, text: bool = True) -> EventRowHead:
     return (EventRow if text else EventRowHead).model_validate(event)
 
 
-def events_at(s: Session, when: Stamp | str, place_ids: Collection[int] | None = None, limit: int | None = None,
+def events_at(s: Session, when: Stamp | str, location_ids: Collection[int] | None = None, limit: int | None = None,
               text: bool = True) -> list[EventRowHead]:
     rows = s.scalars(
-        common_query.events_at_select(when, place_ids=place_ids, limit=limit)).all()
+        common_query.events_at_select(when, location_ids=location_ids, limit=limit)).all()
     return [event_row(row, text=text) for row in rows]
 
 

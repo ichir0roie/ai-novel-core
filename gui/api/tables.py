@@ -30,10 +30,10 @@ from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
 from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.idea.update_idea import UpdateIdea
-from data_access_logic.location.commit_place import CommitPlace
+from data_access_logic.location.commit_location import CommitLocation
 from data_access_logic.location.form import LocationCreateForm, LocationUpdateForm
 from data_access_logic.location.record import LocationRecord
-from data_access_logic.location.update_place import UpdatePlace
+from data_access_logic.location.update_location import UpdateLocation
 from data_access_logic.material import Material
 from data_access_logic.meme.commit_meme import CommitMeme
 from data_access_logic.meme.form import MemeCreateForm, MemeUpdateForm
@@ -86,7 +86,7 @@ TABLES: tuple[TableSpec, ...] = (
               CharacterRelationRecord, ("relation", "text")),
     TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, EventRecord,
               ("name", "text"), reviewable=True),
-    TableSpec("location", "場所", Location, CommitPlace, UpdatePlace, LocationCreateForm, LocationUpdateForm,
+    TableSpec("location", "場所", Location, CommitLocation, UpdateLocation, LocationCreateForm, LocationUpdateForm,
               LocationRecord, ("name", "text"), tree_parent_column="parent_id"),
     TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, IdeaCreateForm, IdeaUpdateForm, IdeaRecord,
               ("name", "text"), reviewable=True, tree_parent_column="parent_idea_id"),
