@@ -17,7 +17,8 @@ class CommitCharacterRelation(CommitDraft):
         self.check_exists(session, Character, self.relation.character_id_1, "character_id_1")
         self.check_exists(session, Character, self.relation.character_id_2, "character_id_2")
 
-        record = CharacterRelation(**self.relation.column_values(CharacterRelation))
+        record = CharacterRelation()
+        self.relation.write_to(record)
         session.add(record)
         self.finalize(session, record)
         return CharacterRelationRecord.model_validate(record)

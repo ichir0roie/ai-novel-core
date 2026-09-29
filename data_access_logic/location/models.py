@@ -3,7 +3,7 @@ from data_access_logic.material import Material
 
 class LocationMaterial(Material):
     id: int
-    name: str
+    name: str | None = None
     kind: str | None = None
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 import enum
 import hashlib
 import os
-from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger, Boolean, Integer, String, DECIMAL, JSON, TypeDecorator,
@@ -354,7 +353,6 @@ class PersonalityLevel(enum.StrEnum):
 
 
 PERSONALITY_LEVELS = tuple(level.value for level in PersonalityLevel)
-PERSONALITY_DEFAULT = PersonalityLevel.NORMAL.value
 
 # マスターテーブル `personality_level` の行の id(1始まり、上の宣言順)。
 # マイグレーションはこの順で行を挿入するので、ここでの並びを変えたら移行も合わせて直す。
@@ -404,16 +402,6 @@ PERSONALITY_COLUMNS = (
 PERSON_PARAMETER_COLUMNS = (
     "family_name", "sex", "height", "build", "first_person", "second_person", "third_person", "tone", "dialect",
 )
-PARAMETER_COLUMNS = (*PERSON_PARAMETER_COLUMNS, *PERSONALITY_COLUMNS)
-
-
-def check_personality(data) -> None:
-    """空(None)は「この期間では決めない」として通す。"""
-    bad = {column: data[column] for column in PERSONALITY_COLUMNS
-           if data.get(column) is not None and data[column] not in PERSONALITY_LEVELS}
-    if bad:
-        raise ValueError(
-            f"性格は {'/'.join(PERSONALITY_LEVELS)} のいずれか: {bad}")
 
 
 class Character(EventSeededMixin, MemeSeededMixin, TextBase):
@@ -450,12 +438,6 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     # 人物の説明の変化は期間ごとに CharacterHistory が持ち、入口では `histories` の配列で出し入れする
     # (Idea の `recognitions` と同じ扱い)。
     CHILD_LISTS = ("parameters", "places", "histories")
-    # to_dict がこの名前で `start` / `end` プロパティも書き出す(実列と違い mapper.columns に出ないため)。
-    COMPUTED_COLUMNS = ("start", "end")
-
-    def parameters_at(self, time=None) -> dict:
-        return resolve_parameters(self.parameters, time)
-
     def _last_parameter(self) -> "CharacterParameter | None":
         if not self.parameters:
             return None
@@ -511,7 +493,7 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
 class CharacterParameter(Base):
     """人物の名字・体格・口調・性格を、期間ごとに一行で持つ。
 
-    空の列は「この期間では決めない」。ある時刻の値は `resolve_parameters` が、その時刻に掛かる行を
+    空の列は「この期間では決めない」。ある時刻の値は `data_access_logic/character/parameters.py` の `parameters_at` が、その時刻に掛かる行を
     期間を限らない行から順に重ねて決める。名字・体格・口調は人物だけが持ち、人物以外の対象は空のまま。
     """
 
@@ -543,7 +525,7 @@ class CharacterParameter(Base):
 
     # --- 性格 -----------------------------------------------------------
     # 各列は personality_level への FK(Python 側は PersonalityLevel の値、無/低/並/高/必のまま扱える)。
-    # どの行でも決めていない軸は PERSONALITY_DEFAULT。
+    # どの行でも決めていない軸は「並」(`data_access_logic/character/parameters.py`)。
     sincerity: Mapped[str | None] = mapped_column(
         PersonalityLevelType, ForeignKey("personality_level.id"), comment="誠実性", sort_order=390)
     curiosity: Mapped[str | None] = mapped_column(
@@ -571,46 +553,11 @@ class CharacterParameter(Base):
 
     character: Mapped[Character] = relationship(back_populates="parameters", lazy="noload")
 
-    @staticmethod
-    def validate(data) -> None:
-        check_personality(data)
-
     def covers(self, time: Stamp | None) -> bool:
         """時刻が空なら、期間を限らない行だけが掛かる。"""
         if time is None:
             return self.start is None and self.end is None
         return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
-
-
-def _bounds(row: CharacterParameter) -> int:
-    return (row.start is not None) + (row.end is not None)
-
-
-def _parameter_order(row: CharacterParameter) -> tuple:
-    # 期間を限る端が多い行ほど後に重ねて勝たせる。同じなら始まりの遅い行、後に足した行が勝つ
-    return _bounds(row), row.start.to_int() if row.start is not None else -1, row.id or 0
-
-
-def resolve_parameters(rows, time=None) -> dict:
-    time = Stamp.parse(time)
-    values: dict = {column: None for column in PERSON_PARAMETER_COLUMNS}
-    values.update({column: PERSONALITY_DEFAULT for column in PERSONALITY_COLUMNS})
-    rows = list(rows)
-    if time is None:
-        # 一番早く始まる行の start は誕生(`Character.start`)を、一番後に始まる行の end は
-        # 死亡(`Character.end`)を兼ねるので、`covers(None)`(期間を限らない行だけ)に絞ると、
-        # 誕生・死亡を持つだけの行(たいていは唯一の行)まで丸ごと外れてしまう。
-        # 代わりに、一番限る端が少ない(＝一番土台になる)行を採る。
-        least = min((_bounds(row) for row in rows), default=None)
-        selected = [row for row in rows if _bounds(row) == least]
-    else:
-        selected = [row for row in rows if row.covers(time)]
-    for row in sorted(selected, key=_parameter_order):
-        for column in PARAMETER_COLUMNS:
-            value = getattr(row, column)
-            if value is not None:
-                values[column] = float(value) if isinstance(value, Decimal) else value
-    return values
 
 
 class CharacterPlace(Base):

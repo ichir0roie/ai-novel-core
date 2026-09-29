@@ -18,8 +18,7 @@ class UpdateCharacterRelation(CommitDraft):
         self.check_exists(session, Character, self.relation.character_id_1, "character_id_1")
         self.check_exists(session, Character, self.relation.character_id_2, "character_id_2")
 
-        for key, value in self.relation.changed_column_values(CharacterRelation).items():
-            setattr(record, key, value)
+        self.relation.write_changes_to(record)
         if record.character_id_1 == record.character_id_2:
             raise ValueError("character_id_1 と character_id_2 は別の人物")
         self.finalize(session, record)

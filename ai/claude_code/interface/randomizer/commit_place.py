@@ -22,7 +22,8 @@ class CommitPlace(CommitDraft):
             world_createion_query.check_within_parent_span(
                 parent, self.place.start, self.place.end, "location")
 
-        record = Location(**self.place.column_values(Location))
+        record = Location()
+        self.place.write_to(record)
         session.add(record)
         self.finalize(session, record)
         return LocationRecord.model_validate(record)

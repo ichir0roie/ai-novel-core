@@ -30,10 +30,10 @@ class CommitEpisode(CommitAndRefresh):
             session.add(record)
         else:
             record = self.get_or_raise(session, form.id, "話")
-        for key, value in form.changed_column_values(Episode).items():
-            setattr(record, key, value)
-        # 手で直した話は、世界観へ戻し直すまで同期していない扱いにする
-        record.synced = False
+        form.write_changes_to(record)
+        # 手で直した話は、世界観へ戻し直すまで同期していない扱いにする(GUI で同期フラグを渡されたらそれに従う)
+        if form.synced is None:
+            record.synced = False
         if form.text is not None:
             record.text = layout_novel_text(form.text)
         self.finalize(session, record)

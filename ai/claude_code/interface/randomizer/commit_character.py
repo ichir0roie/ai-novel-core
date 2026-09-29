@@ -5,8 +5,8 @@ from ai.claude_code.interface.randomizer._base import CommitDraft
 from data_access_logic.character.form import CharacterCreateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.query import world_createion_query
-from db.child_lists import load_children
-from db.schema import Character, CharacterPlace, Location
+from db.child_lists import replaced_rows
+from db.schema import Character, CharacterHistory, CharacterParameter, CharacterPlace, Location
 
 
 class CommitCharacter(CommitDraft):
@@ -23,9 +23,10 @@ class CommitCharacter(CommitDraft):
             world_createion_query.check_within_parent_span(place, form.start, form.end, "character")
             world_createion_query.check_has_story(session, form.place_id, "character")
 
-        record = Character(**form.column_values(Character))
-        load_children(record, "parameters", [row.model_dump() for row in form.parameters])
-        load_children(record, "histories", [row.model_dump() for row in form.histories])
+        record = Character()
+        form.write_to(record)
+        record.parameters = replaced_rows([], form.parameters, CharacterParameter)
+        record.histories = replaced_rows([], form.histories, CharacterHistory)
         # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
         if form.start is not None:
             record.start = form.start

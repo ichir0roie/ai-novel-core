@@ -18,5 +18,6 @@ class UpdateCharacterPlace(CommitDraft):
         self.check_exists(session, Character, self.place.character_id, "character_id")
         self.check_exists(session, Location, self.place.location_id, "location_id")
         record = self.get_or_raise(session, self.place.id, "居場所")
-        self.apply(session, record, self.place.changed_column_values(CharacterPlace))
+        self.place.write_changes_to(record)
+        self.finalize(session, record)
         return CharacterPlaceRecord.model_validate(record)

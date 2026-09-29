@@ -4,7 +4,7 @@ from pydantic import field_validator, model_serializer
 
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.material import Material
-from db.schema import ConfirmStatus
+from db.schema import ConfirmStatus, PersonalityLevel
 
 
 class CharacterBase(Material):
@@ -30,7 +30,7 @@ class ParticipantCharacter(CharacterBase):
 
 
 class CharacterParameterValues(Material):
-    """`Character.parameters_at` が期間を重ねて決めた、ある時刻の値。"""
+    """期間ごとの行を重ねて決めた、ある時刻の値(`data_access_logic/character/parameters.py`)。"""
 
     family_name: str | None = None
     sex: str | None = None
@@ -41,18 +41,18 @@ class CharacterParameterValues(Material):
     third_person: str | None = None
     tone: str | None = None
     dialect: str | None = None
-    sincerity: str
-    curiosity: str
-    proactivity: str
-    cooperativeness: str
-    sociability: str
-    emotional_expression: str
-    self_esteem: str
-    self_efficacy: str
-    stress_resilience: str
-    flexibility_of_values: str
-    sensitivity: str
-    imagination: str
+    sincerity: PersonalityLevel = PersonalityLevel.NORMAL
+    curiosity: PersonalityLevel = PersonalityLevel.NORMAL
+    proactivity: PersonalityLevel = PersonalityLevel.NORMAL
+    cooperativeness: PersonalityLevel = PersonalityLevel.NORMAL
+    sociability: PersonalityLevel = PersonalityLevel.NORMAL
+    emotional_expression: PersonalityLevel = PersonalityLevel.NORMAL
+    self_esteem: PersonalityLevel = PersonalityLevel.NORMAL
+    self_efficacy: PersonalityLevel = PersonalityLevel.NORMAL
+    stress_resilience: PersonalityLevel = PersonalityLevel.NORMAL
+    flexibility_of_values: PersonalityLevel = PersonalityLevel.NORMAL
+    sensitivity: PersonalityLevel = PersonalityLevel.NORMAL
+    imagination: PersonalityLevel = PersonalityLevel.NORMAL
 
 
 class CharacterRelationMaterial(Material):

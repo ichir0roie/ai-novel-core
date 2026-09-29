@@ -25,7 +25,8 @@ class CommitEvent(CommitAndRefresh):
         for character_id in self.event.character_ids:
             self.check_exists(session, Character, character_id, "character_ids")
 
-        record = Event(**self.event.column_values(Event))
+        record = Event()
+        self.event.write_to(record)
         record.event_characters = [
             EventCharacter(character_id=character_id) for character_id in self.event.character_ids]
         session.add(record)

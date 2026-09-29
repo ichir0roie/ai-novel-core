@@ -92,7 +92,7 @@ def _style(past_episodes: list[PastEpisode]) -> str | None:
 def _place(locations: list[LocationMaterial]) -> str | None:
     return " > ".join(
         f"{location.name}({location.kind})" if location.kind else location.name
-        for location in locations) or None
+        for location in locations if location.name) or None
 
 
 def _story(story: StoryMaterial) -> dict[str, Any]:

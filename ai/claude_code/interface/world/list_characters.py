@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.world._base import WorldQuery
-from data_access_logic.character.models import CharacterParameterValues
+from data_access_logic.character.parameters import parameters_at
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.schema import Character
@@ -26,7 +26,7 @@ class ListCharacters(WorldQuery):
         return common_query.characters_select()
 
     def row(self, row: Character) -> CharacterListing:
-        parameters = CharacterParameterValues.model_validate(row.parameters_at())
+        parameters = parameters_at(row, None)
         return CharacterListing(
             id=row.id, name=row.name, family_name=parameters.family_name, kind=row.kind, text=row.text,
             sex=parameters.sex, tone=parameters.tone, dialect=parameters.dialect,

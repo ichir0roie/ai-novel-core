@@ -51,6 +51,8 @@ class EpisodeCommitForm(Form):
     viewpoint_character_id: int | None = None
     place_id: int | None = None
     event_seeded: bool | None = None
+    # 渡さなければ、手で直した話として同期していない扱いにする
+    synced: bool | None = None
     # 渡すと登場人物(`episode_character`)をまるごと置き換える
     character_ids: list[int] | None = None
 

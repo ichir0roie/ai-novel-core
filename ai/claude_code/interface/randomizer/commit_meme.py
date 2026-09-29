@@ -16,7 +16,8 @@ class CommitMeme(CommitDraft):
         self.meme = meme
 
     def execute(self, session) -> MemeRecord:
-        record = Meme(**self.meme.column_values(Meme))
+        record = Meme()
+        self.meme.write_to(record)
         session.add(record)
         self.finalize(session, record)
         return MemeRecord.model_validate(record)

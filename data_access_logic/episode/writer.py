@@ -19,7 +19,6 @@ from data_access_logic.episode.summary import past_episodes
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.links import link
-from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query
 from db.schema import ConfirmStatus, Episode, EpisodeCharacter, Event
 
@@ -62,7 +61,7 @@ def _episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_co
         story=story,
         main_episode=main_episode,
         past_episodes=past_episodes(s, ai, episode, past_episode_count),
-        locations=[LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]
+        locations=common_query.place_path(s, place_id)
         if place_id is not None else [],
         cast=cast_at(s, ai, characters, main_episode.start),
         place_events=list(reversed(summarized_events(

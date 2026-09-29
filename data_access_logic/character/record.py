@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
 from data_access_logic.material import Form, Material, Timestamp
-from db.schema import ConfirmStatus
+from db.schema import ConfirmStatus, PersonalityLevel
 
 
 class _ChildRow(Form):
@@ -22,18 +22,18 @@ class CharacterParameterRow(_ChildRow):
     third_person: str | None = None
     tone: str | None = None
     dialect: str | None = None
-    sincerity: str | None = None
-    curiosity: str | None = None
-    proactivity: str | None = None
-    cooperativeness: str | None = None
-    sociability: str | None = None
-    emotional_expression: str | None = None
-    self_esteem: str | None = None
-    self_efficacy: str | None = None
-    stress_resilience: str | None = None
-    flexibility_of_values: str | None = None
-    sensitivity: str | None = None
-    imagination: str | None = None
+    sincerity: PersonalityLevel | None = None
+    curiosity: PersonalityLevel | None = None
+    proactivity: PersonalityLevel | None = None
+    cooperativeness: PersonalityLevel | None = None
+    sociability: PersonalityLevel | None = None
+    emotional_expression: PersonalityLevel | None = None
+    self_esteem: PersonalityLevel | None = None
+    self_efficacy: PersonalityLevel | None = None
+    stress_resilience: PersonalityLevel | None = None
+    flexibility_of_values: PersonalityLevel | None = None
+    sensitivity: PersonalityLevel | None = None
+    imagination: PersonalityLevel | None = None
 
 
 class CharacterPlaceRow(_ChildRow):

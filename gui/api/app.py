@@ -19,9 +19,9 @@ from gui.api import generate, interface, meta, records, review
 from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_claude_code
 from gui.api.jobs import runner
 from gui.api.models import (
-    CharacterLocationsResponse, Created, Decision, EntranceList, GenerateRequest, Health, JobInfo, JobList,
-    MapsResponse, OptionList, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary, RunRequest,
-    RunResult, TablesResponse,
+    CharacterLocationsResponse, Created, Decision, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
+    JobList, MapsResponse, OptionList, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary,
+    RunRequest, RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
 from tool.character_place.collect import collect_character_locations
@@ -125,7 +125,7 @@ def generate_record(table: str, generator: str, request: GenerateRequest) -> Job
     require_claude_code(entrance.id)
     args = interface.check_args(entrance, generate.build_args(spec, request.draft, request.args))
     job = runner.submit(entrance.id, args, lambda: interface.invoke(entrance, args))
-    return JobInfo(**job.to_dict())
+    return JobInfo.model_validate(job)
 
 
 @app.get("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
@@ -164,7 +164,7 @@ def review_decide(table: str, record_id: int, decision: Decision,
 @app.get("/api/interface", response_model=EntranceList)
 def list_entrances() -> EntranceList:
     """入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る"""
-    return EntranceList(entrances=[e.to_dict() for e in interface.ENTRANCES.values()],
+    return EntranceList(entrances=[EntranceMeta.model_validate(entrance) for entrance in interface.ENTRANCES.values()],
                         claude_available=in_claude_code())
 
 
@@ -177,13 +177,13 @@ def run_entrance(entrance_id: str, request: RunRequest, response: Response):
     if entrance.claude or request.background:
         job = runner.submit(entrance.id, request.args, lambda: interface.invoke(entrance, request.args))
         response.status_code = 202
-        return JobInfo(**job.to_dict())
+        return JobInfo.model_validate(job)
     return RunResult(entrance=entrance.id, result=interface.invoke(entrance, request.args))
 
 
 @app.get("/api/jobs", response_model=JobList)
 def list_jobs() -> JobList:
-    return JobList(jobs=[JobInfo(**job.to_dict()) for job in runner.list()])
+    return JobList(jobs=[JobInfo.model_validate(job) for job in runner.list()])
 
 
 @app.get("/api/jobs/{job_id}", response_model=JobInfo)
@@ -191,7 +191,7 @@ def get_job(job_id: str) -> JobInfo:
     job = runner.get(job_id)
     if job is None:
         raise UnknownRecordError(f"job が無い: {job_id}")
-    return JobInfo(**job.to_dict())
+    return JobInfo.model_validate(job)
 
 
 @app.get("/api/maps", response_model=MapsResponse)

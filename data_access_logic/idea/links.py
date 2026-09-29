@@ -11,7 +11,7 @@ from db.schema import Base, Character, CharacterIdea, Episode, EpisodeIdea, Even
 class _Link:
     # 列はクラス変数に書くとディスクリプタとして int に読まれてしまうので、インスタンス変数に持つ
     def __init__(
-        self, owner: type[Base], table: type[Base], owner_id: InstrumentedAttribute[int],
+        self, owner: type[Event] | type[Episode] | type[Character], table: type[Base], owner_id: InstrumentedAttribute[int],
         idea_id: InstrumentedAttribute[int], row: Callable[[int, int], Base],
     ):
         self.owner = owner
@@ -50,14 +50,11 @@ def link(s: Session, record: Event | Episode | Character, ideas: list[Idea] | li
     return added
 
 
-def linked_records(s: Session, idea_id: int) -> dict[str, list]:
-    """アイデアを結んでいる出来事・話・人物を、テーブル名ごとに。"""
-    return {
-        table.owner.__tablename__: list(s.scalars(
-            select(table.owner).join(table.table, table.owner_id == table.owner.id)
-            .where(table.idea_id == idea_id).order_by(table.owner.id)).all())
-        for table in _LINKS
-    }
+def linked_records(s: Session, idea_id: int) -> list[Event | Episode | Character]:
+    """アイデアを結んでいる出来事・話・人物。テーブルごとに id 順で並べる(出来事・話・人物の順)。"""
+    return [record for table in _LINKS for record in s.scalars(
+        select(table.owner).join(table.table, table.owner_id == table.owner.id)
+        .where(table.idea_id == idea_id).order_by(table.owner.id)).all()]
 
 
 def relink(s: Session, source_id: int, target_id: int | None) -> int:

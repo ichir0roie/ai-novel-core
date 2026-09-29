@@ -94,7 +94,7 @@ def _situation(
         # 横(兄弟の場所)の出来事は含めない。作品の配下全体を渡すと、他の国の展開まで持ち込まれて
         # 場所ごとの差が消えるため(2026-09 に観測)
         place_ids = []
-        for step in reversed([LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]):
+        for step in reversed(common_query.place_path(s, place_id)):
             place_ids.append(step.id)
             if step.id == stories[0].place_id:
                 break

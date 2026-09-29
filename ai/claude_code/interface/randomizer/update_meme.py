@@ -15,5 +15,6 @@ class UpdateMeme(CommitDraft):
 
     def execute(self, session) -> MemeRecord:
         record = self.get_or_raise(session, self.meme.id, "ミーム")
-        self.apply(session, record, self.meme.changed_column_values(Meme))
+        self.meme.write_changes_to(record)
+        self.finalize(session, record)
         return MemeRecord.model_validate(record)

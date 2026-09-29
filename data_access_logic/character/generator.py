@@ -26,19 +26,17 @@ from data_access_logic.character.generator_models import (
     StoryElementsRequest, StoryElementsRequestSerialized,
 )
 from data_access_logic.character.models import CharacterParameterValues
+from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
 from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.links import link
 from data_access_logic.idea.models import IdeaMaterial
-from data_access_logic.location.models import LocationMaterial
 from data_access_logic.meme.extractor import draw, position_legend
 from data_access_logic.meme.models import DrawnMeme
 from data_access_logic.query import common_query, dictionary_query, story_createion_query
 from db.schema import (
-    CHARACTER_KIND_PERSON, PERSON_PARAMETER_COLUMNS, PERSONALITY_LEVELS,
-    Character, CharacterParameter, CharacterPlace, ConfirmStatus, Location,
+    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location,
 )
 from db.stamp import Stamp
-from randomizer.random_character_generator import build_parameter
 
 _PLACEHOLDER_INSTRUCTION = (
     f"この一件の名前はまだ決まっていない。説明の中でこの一件を指すときは必ず「{NAME_PLACEHOLDER}」と書き、名前を考案して書き込まない。"
@@ -142,7 +140,7 @@ def _nearby_characters(s: Session, born_place_id: int | None, time: Stamp) -> li
     """件数は `constants.NEARBY_CHARACTER_LIMIT` まで(祖先をたどるほど無際限に増えるため)。"""
     if born_place_id is None:
         return []
-    place_ids = [LocationMaterial.model_validate(step).id for step in common_query.place_path(s, born_place_id)]
+    place_ids = [step.id for step in common_query.place_path(s, born_place_id)]
     ids = s.scalars(common_query.resident_character_ids_select(place_ids, time)).all()[:constants.NEARBY_CHARACTER_LIMIT]
     return list(s.scalars(select(Character).where(Character.id.in_(ids))).all()) if ids else []
 
@@ -241,14 +239,12 @@ def _name(ai: AIClient, material: CharacterNameMaterial, person: bool) -> Person
         return None
 
 
-def _starting_parameters(person: bool, form: CharacterForm | None) -> CharacterParameterValues:
+def _starting_parameters(rng: random.Random, person: bool, form: CharacterForm | None) -> CharacterParameterValues:
     """性格はサイコロで決め、作者が決めた値はサイコロや AI の決定より優先する。人物以外は名字・体格・口調を持たない。"""
-    parameters = CharacterParameterValues.model_validate(build_parameter())
+    parameters = rolled(rng)
     if form is not None and form.parameters:
-        parameters = parameters.model_copy(update=form.parameters[0].model_dump(exclude_none=True))
-    if not person:
-        parameters = parameters.model_copy(update=dict.fromkeys(PERSON_PARAMETER_COLUMNS))
-    return parameters
+        overlay(parameters, form.parameters[0])
+    return parameters if person else without_person_values(parameters)
 
 
 def generate_character(
@@ -262,7 +258,7 @@ def generate_character(
 ) -> Character | None:
     """`form` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性格・種別・生年・没年・
     メインキャラクターかは決まった値として使う。中身が得られなければ足さずに None を返す。"""
-    parameters = _starting_parameters(person, form)
+    parameters = _starting_parameters(rng, person, form)
     fixed_kind = form.kind if form and form.kind in constants.NON_PERSON_KINDS else None
     fixed_age = max(0, time.year - form.start.year) if form and form.start is not None else None
     material = _birth_material(
@@ -306,7 +302,7 @@ def generate_character(
         main_character=bool(form.main_character) if form and form.main_character is not None else False,
         confirmed=ConfirmStatus.PENDING,
         # 生まれた時点で決める値なので、期間を限らない一行だけを持つ。死亡していなければ end は空
-        parameters=[CharacterParameter(**parameters.model_dump(), start=birth, end=form.end if form else None)],
+        parameters=[parameter_row(parameters, birth, form.end if form else None)],
     )
     s.add(record)
     s.flush()
@@ -337,7 +333,7 @@ def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: in
     # places は新しい順なので、末尾が生まれた場所
     born_place_id = record.places[-1].location_id if record.places else None
     age = max(0, time.year - record.start.year) if record.start is not None else None
-    parameters = CharacterParameterValues.model_validate(record.parameters_at(time)) if person else None
+    parameters = parameters_at(record, time) if person else None
     name = record.name
     material = _birth_material(
         s, ai, rng, born_place_id, time, person, parameters, name, None if person else record.kind, age, None)

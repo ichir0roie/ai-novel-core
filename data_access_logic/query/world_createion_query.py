@@ -80,7 +80,7 @@ def check_within_parent_span(parent: Location, child_start: Stamp | None, child_
 
 
 def location_has_story(session: Session, place_id: int) -> bool:
-    ancestor_ids = [node["id"] for node in common_query.place_path(session, place_id)]
+    ancestor_ids = [step.id for step in common_query.place_path(session, place_id)]
     return session.scalar(
         select(Story.id)
         .where(Story.place_id.in_(ancestor_ids))

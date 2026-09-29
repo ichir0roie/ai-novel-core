@@ -4,6 +4,7 @@ from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
 from data_access_logic.character.models import CastMaterial, EventCharacterAt, ParticipantMaterial
+from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.query import common_query
 from db.schema import Character, CharacterRelation, ConfirmStatus, Event
@@ -38,7 +39,7 @@ def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) 
         cast.append(CastMaterial(
             character=character,
             age=age_at(character, time),
-            parameters=character.parameters_at(time),
+            parameters=parameters_at(character, time),
             relations=_relations(s, character, time),
             recent_events=list(reversed(recent_events)),
         ))
@@ -50,7 +51,7 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
         ParticipantMaterial(
             character=character,
             age=age_at(character, time),
-            parameters=character.parameters_at(time),
+            parameters=parameters_at(character, time),
             relations=_relations(s, character, time),
             recent_events=s.scalars(
                 common_query.events_of_character_select(character.id, until=time, limit=RECENT_EVENT_LIMIT)
@@ -67,7 +68,7 @@ def event_characters_at(s: Session, ai: AIClient, characters: list[Character], t
         at.append(EventCharacterAt(
             character=character,
             age=age_at(character, time),
-            parameters=character.parameters_at(time),
+            parameters=parameters_at(character, time),
             previous_event=previous[0] if previous else None,
         ))
     return at

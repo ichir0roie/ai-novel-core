@@ -2,6 +2,8 @@
 """未確認のアイデア・ミームを一件ずつ出し、承認・非承認を付けて次へ進む。"""
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -34,23 +36,23 @@ def summary(session: Session) -> ReviewSummary:
         for spec in REVIEW_TABLES])
 
 
-def next_pending(session: Session, spec: TableSpec, *, after: int = 0) -> ReviewNext:
+def next_pending(session: Session, spec: TableSpec, after: int = 0) -> ReviewNext:
     """`after` より後ろの id で最初の未確認。飛ばした(スキップした)ものは次に回るので、`after` に飛ばした id を渡す。"""
     model = spec.model
     remaining = _count(session, spec, ConfirmStatus.PENDING)
-    row = session.scalar(select(model).where(model.confirmed == ConfirmStatus.PENDING, model.id > after)
-                         .order_by(model.id).limit(1))
+    row = session.scalar(records.loaded(spec, select(model).where(model.confirmed == ConfirmStatus.PENDING, model.id > after)
+                                        .order_by(model.id).limit(1)))
     if row is None and after:
         # 末尾まで飛ばしたら先頭に戻る
-        row = session.scalar(select(model).where(model.confirmed == ConfirmStatus.PENDING)
-                             .order_by(model.id).limit(1))
+        row = session.scalar(records.loaded(spec, select(model).where(model.confirmed == ConfirmStatus.PENDING)
+                                            .order_by(model.id).limit(1)))
     if row is None:
         return ReviewNext(record=None, label=None, remaining=remaining)
-    record = records.record_dict(session, spec, row)
-    return ReviewNext(record=record, label=records.label_of(spec, row), remaining=remaining,
+    record = records.record_of(spec, row)
+    return ReviewNext(record=record.model_dump(mode="json"), label=records.label_of(spec, row), remaining=remaining,
                       labels=records.reference_labels(session, spec, [record]),
-                      related=records.related_of(session, spec, row))
+                      related=records.related_of(session, spec, row).model_dump(mode="json"))
 
 
-def decide(session: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus, changes: dict) -> None:
-    records.update_record(session, spec, record_id, {**changes, "confirmed": decision.value})
+def decide(session: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus, changes: dict[str, Any]) -> None:
+    records.update_record(session, spec, record_id, {**changes, "confirmed": decision})

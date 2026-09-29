@@ -15,5 +15,6 @@ class UpdateEventSeed(CommitDraft):
 
     def execute(self, session) -> EventSeedRecord:
         record = self.get_or_raise(session, self.seed.id, "出来事の種")
-        self.apply(session, record, self.seed.changed_column_values(EventSeed))
+        self.seed.write_changes_to(record)
+        self.finalize(session, record)
         return EventSeedRecord.model_validate(record)

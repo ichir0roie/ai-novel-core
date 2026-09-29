@@ -12,6 +12,7 @@ from db.schema import (
     Event, EventCharacter, Idea, Location,
     Story,
 )
+from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
 from db.stamp import Stamp, StampError
 
@@ -49,7 +50,7 @@ def resolve_time(session: Session, when, story: Story | None) -> tuple[Stamp, St
     raise ValueError("時刻が決まらない(作品に立つ年が無いので time を渡す)")
 
 
-def _get(session: Session, model, id_: int, label: str):
+def get_row(session: Session, model, id_: int, label: str):
     row = session.get(model, id_)
     if row is None:
         raise NotFoundError(f"{label}={id_} という id の {model.__tablename__} が見つからない")
@@ -57,7 +58,7 @@ def _get(session: Session, model, id_: int, label: str):
 
 
 def get_story(session: Session, story_id: int) -> Story:
-    return _get(session, Story, int(story_id), "story_id")
+    return get_row(session, Story, story_id, "story_id")
 
 
 def _in_span(column, since: Stamp, until: Stamp):
@@ -78,7 +79,7 @@ def latest_time_select() -> Select:
 
 def descendant_place_ids(session: Session, place_id: int) -> list[int]:
     """何段あるか分からないので一段ずつたどる。"""
-    _get(session, Location, place_id, "place_id")
+    get_row(session, Location, place_id, "place_id")
     found = [place_id]
     frontier = [place_id]
     while frontier:
@@ -92,7 +93,7 @@ def descendant_place_ids(session: Session, place_id: int) -> list[int]:
 
 def idea_scope_ids(session: Session, place_id: int) -> list[int]:
     """アイデアの `location_id` は、そこから配下で効く。現在地から最上位までをたどる。"""
-    found = [_get(session, Location, place_id, "place_id").id]
+    found = [get_row(session, Location, place_id, "place_id").id]
     current = session.get(Location, place_id)
     while current is not None and current.parent_id and current.parent_id not in found:
         current = session.get(Location, current.parent_id)
@@ -102,19 +103,20 @@ def idea_scope_ids(session: Session, place_id: int) -> list[int]:
     return found
 
 
-def place_path(session: Session, place_id: int) -> list[dict]:
-    chain: list[dict] = []
+def place_path(session: Session, place_id: int) -> list[LocationMaterial]:
+    """最上位の場所から `place_id` までの道筋。"""
+    chain: list[LocationMaterial] = []
     seen: set[int] = set()
     current = session.get(Location, place_id)
     while current is not None and current.id not in seen:
         seen.add(current.id)
-        chain.append({"id": current.id, "name": current.name, "kind": current.kind})
+        chain.append(LocationMaterial.model_validate(current))
         current = session.get(Location, current.parent_id) if current.parent_id else None
     return list(reversed(chain))
 
 
 def place_up(session: Session, place_id: int, levels: int) -> int:
-    current = _get(session, Location, place_id, "place_id")
+    current = get_row(session, Location, place_id, "place_id")
     for _ in range(max(0, levels)):
         if current.parent_id is None:
             break
@@ -159,7 +161,7 @@ def shapes_on_planet_select(planet_id: int) -> Select:
 
 # ---------------------------------------------------------------- 出来事
 
-def events_at_select(when, *, place_ids=None, limit=None) -> Select:
+def events_at_select(when, place_ids=None, limit=None) -> Select:
     since, until = span(when)
     query = (select(Event)
              .options(*EVENT_LOAD_OPTIONS)
@@ -172,7 +174,7 @@ def events_at_select(when, *, place_ids=None, limit=None) -> Select:
     return query
 
 
-def events_in_locations_select(place_ids, *, until=None, limit=None) -> Select:
+def events_in_locations_select(place_ids, until=None, limit=None) -> Select:
     query = select(Event).options(*EVENT_LOAD_OPTIONS)
     if place_ids:
         query = query.where(Event.location_id.in_(list(place_ids)))
@@ -194,20 +196,20 @@ def _events_where(condition, until, limit) -> Select:
     return query
 
 
-def events_of_place_select(place_id: int, *, until=None, limit=5) -> Select:
+def events_of_place_select(place_id: int, until=None, limit=5) -> Select:
     return _events_where(Event.location_id == place_id, until, limit)
 
 
-def events_of_character_select(character_id: int, *, until=None, limit=5) -> Select:
+def events_of_character_select(character_id: int, until=None, limit=5) -> Select:
     return _events_where(
         Event.event_characters.any(EventCharacter.character_id == character_id), until, limit)
 
 
-def events_under_select(event_id: int, *, until=None, limit=5) -> Select:
+def events_under_select(event_id: int, until=None, limit=5) -> Select:
     return _events_where(Event.parent_event_id == event_id, until, limit)
 
 
-def events_after_select(place_id: int | None, character_ids, after: Stamp, *, limit=5) -> Select:
+def events_after_select(place_id: int | None, character_ids, after: Stamp, limit=5) -> Select:
     """人物ごとに時を刻むので、ある人物の出来事を起こす時点より後に、別の人物の出来事が既にあることがある。
     `place_id` が None なら当事者の出来事だけ(場所の無い出来事まで拾わない)。"""
     conditions = [Event.event_characters.any(EventCharacter.character_id.in_(list(character_ids)))]
@@ -245,7 +247,7 @@ def character_place_select(character_id: int, until: Stamp) -> Select:
             .order_by(CharacterPlace.start.desc(), CharacterPlace.id.desc()))
 
 
-def latest_character_event_select(character_id: int, *, until: Stamp | None = None) -> Select:
+def latest_character_event_select(character_id: int, until: Stamp | None = None) -> Select:
     finished = func.coalesce(Event.end, Event.start, Event.time)
     query = (select(Event)
              .options(*EVENT_LOAD_OPTIONS)
@@ -307,7 +309,7 @@ def story_episodes_select(story_id: int) -> Select:
             .order_by(*episode_order()))
 
 
-def episodes_select(story_id: int, *, count: int = 10, before=None) -> Select:
+def episodes_select(story_id: int, count: int = 10, before=None) -> Select:
     """呼び出し側は取り出した後に `reversed()` して古い順に並べ直す
     (新しい順に `limit` するため、select 自体は新しい順のまま返す)。
     `before` は時刻。start がそれより前の話だけに絞る(start の無い話は外れる)。

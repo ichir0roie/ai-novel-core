@@ -19,7 +19,8 @@ class UpdatePlace(CommitDraft):
         record = self.get_or_raise(session, self.place.id, "場所")
         if self.place.area is not None:
             self._check_area(session, record, self.place.area)
-        self.apply(session, record, self.place.changed_column_values(Location))
+        self.place.write_changes_to(record)
+        self.finalize(session, record)
         return LocationRecord.model_validate(record)
 
     @staticmethod

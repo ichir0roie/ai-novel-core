@@ -14,7 +14,6 @@ from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms
 from data_access_logic.idea.search import keywords_of, search, spellings
-from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, ConfirmStatus, Idea, Location
 from db.stamp import Stamp
@@ -45,7 +44,7 @@ def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
         return None
 
     classification = find_or_create_classification(s, term.kind, place_id)
-    locations = ([LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]
+    locations = (common_query.place_path(s, place_id)
                  if place_id is not None else [])
     candidate = Idea(
         name=term.keyword,

@@ -63,8 +63,8 @@ def _column_type(column) -> str:
     return "string"
 
 
-def column_meta(table: str, model: type, column, *, section: bool = False, markdown: bool = True,
-                 readonly: bool = False) -> ColumnMeta:
+def column_meta(table: str, model: type, column, section: bool = False, markdown: bool = True,
+                 readonly: bool = False, side: bool = False) -> ColumnMeta:
     kind = _column_type(column)
     is_personality = isinstance(column.type, PersonalityLevelType)
     choices = (list(CONFIRM_STATUSES) if kind == "confirm"
@@ -80,7 +80,7 @@ def column_meta(table: str, model: type, column, *, section: bool = False, markd
                 and column.server_default is None and not section)
     return ColumnMeta(
         key=column.key, label=_label(column.key, column.comment), type=kind, nullable=column.nullable,
-        required=required, section=section, markdown=markdown, choices=choices, references=references,
+        required=required, section=section, markdown=markdown, side=side, choices=choices, references=references,
         readonly=readonly or column.primary_key, comment=column.comment)
 
 
@@ -117,9 +117,7 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     for column in model.__table__.columns:
         meta = column_meta(spec.name, model, column, section=column.key in sections,
                            readonly=column.key in readonly_columns,
-                           markdown=column.key not in plain_text_columns)
-        if column.key in side_columns:
-            meta = meta.model_copy(update={"side": True})
+                           markdown=column.key not in plain_text_columns, side=column.key in side_columns)
         (long if meta.section else plain).append(meta)
     extras = _extra_columns(spec)
     return plain + [meta for meta in extras if not meta.section] + long + [meta for meta in extras if meta.section]

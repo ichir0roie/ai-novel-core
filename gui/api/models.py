@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from db.schema import ConfirmStatus
 
@@ -231,6 +231,8 @@ class Created(BaseModel):
 
 
 class EntranceParam(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     name: str
     required: bool
     default: Any = None
@@ -238,6 +240,8 @@ class EntranceParam(BaseModel):
 
 
 class EntranceMeta(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     area: str
     name: str
@@ -273,6 +277,8 @@ class RunResult(BaseModel):
 
 
 class JobInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     entrance: str
     args: dict[str, Any]

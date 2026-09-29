@@ -17,7 +17,8 @@ class CommitStory(CommitAndRefresh):
         self.check_exists(session, Location, self.story.world_id, "world_id")
         self.check_exists(session, Location, self.story.place_id, "place_id")
 
-        record = Story(**self.story.column_values(Story))
+        record = Story()
+        self.story.write_to(record)
         session.add(record)
         self.finalize(session, record)
         return StoryRecord.model_validate(record)

@@ -8,10 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.models import CharacterParameterValues
+from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character.record import CharacterHead, CharacterRecord
 from data_access_logic.episode.record import EpisodeHead, EpisodeRow
 from data_access_logic.event.record import EventColumns
 from data_access_logic.idea.alias import called
+from data_access_logic.location.models import LocationMaterial
 from data_access_logic.location.record import LocationRecord
 from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
@@ -23,12 +25,6 @@ from db.stamp import Stamp
 class Named(Material):
     id: int
     name: str | None = None
-
-
-class PathStep(Material):
-    id: int
-    name: str | None = None
-    kind: str | None = None
 
 
 class _EventCharacter(Material):
@@ -130,7 +126,7 @@ class BriefIdea(Material):
 
 class Brief(Material):
     place: LocationRecord
-    path: list[PathStep]
+    path: list[LocationMaterial]
     time: Timestamp
     reach: int
     open_events: list[EventRow]
@@ -140,7 +136,7 @@ class Brief(Material):
 
 
 class CastScope(Named):
-    path: list[PathStep]
+    path: list[LocationMaterial]
 
 
 class Cast(Material):
@@ -172,10 +168,6 @@ def residents(session: Session, place_ids, until: Stamp) -> list[int]:
     return [id_ for id_ in character_ids if id_ is not None]
 
 
-def path_of(session: Session, place_id: int) -> list[PathStep]:
-    return [PathStep.model_validate(step) for step in common_query.place_path(session, place_id)]
-
-
 def _place_at(session: Session, character_id: int, until: Stamp) -> PlaceAt | None:
     row = session.scalars(common_query.character_place_select(character_id, until)).first()
     if row is None:
@@ -193,7 +185,7 @@ def character_sheet(session: Session, character_id: int, until=None,
     return CharacterSheet(
         character=(CharacterRecord if text else CharacterHead).model_validate(character),
         # 時刻を渡さないときは、期間を限らない値だけを重ねる
-        parameters_at=CharacterParameterValues.model_validate(character.parameters_at(None if until is None else at)),
+        parameters_at=parameters_at(character, None if until is None else at),
         place=_place_at(session, character_id, at),
         recent_events=events_of(
             session, common_query.events_of_character_select, character_id, until=None if until is None else at,
@@ -218,7 +210,7 @@ def stories(session: Session) -> list[StoryDigest]:
 
 def episodes(session: Session, story_id: int, count: int = 10, before=None,
              text: bool = True) -> list[EpisodeHead]:
-    common_query._get(session, Story, story_id, "story_id")
+    common_query.get_row(session, Story, story_id, "story_id")
     rows = session.scalars(
         common_query.episodes_select(story_id, count=count, before=before)).all()
     return [(EpisodeRow if text else EpisodeHead).model_validate(episode) for episode in reversed(rows)]
@@ -230,7 +222,7 @@ def unsynced_episodes(session: Session, story_id: int | None = None) -> list[Uns
 
 
 def brief(session: Session, place_id: int, when=None, reach: int = 60, full: bool = False) -> Brief:
-    location = common_query._get(session, Location, place_id, "place_id")
+    location = common_query.get_row(session, Location, place_id, "place_id")
     if when is None:
         raise ValueError("時刻が決まらない(when を渡す)")
     since, until = common_query.span(when)
@@ -257,7 +249,7 @@ def brief(session: Session, place_id: int, when=None, reach: int = 60, full: boo
 
     return Brief(
         place=LocationRecord.model_validate(location),
-        path=path_of(session, place_id),
+        path=common_query.place_path(session, place_id),
         time=until,
         reach=reach,
         open_events=visible(list(session.scalars(common_query.open_events_select(place_ids, until)).all())),
@@ -276,7 +268,7 @@ def _brief_idea(idea: Idea, recognition: IdeaRecognition | None) -> BriefIdea:
 
 
 def cast(session: Session, story_id: int, when=None, count: int = 5, levels: int = 1) -> Cast:
-    story = common_query._get(session, Story, story_id, "story_id")
+    story = common_query.get_row(session, Story, story_id, "story_id")
     if story.place_id is None:
         raise ValueError(f"作品 {story.name} に立つ場所(place_id)が無い")
     _, until = common_query.resolve_time(session, when, story)
@@ -287,6 +279,6 @@ def cast(session: Session, story_id: int, when=None, count: int = 5, levels: int
     return Cast(
         story=Named.model_validate(story),
         time=until,
-        scope=CastScope(id=root.id, name=root.name, path=path_of(session, root_id)),
+        scope=CastScope(id=root.id, name=root.name, path=common_query.place_path(session, root_id)),
         characters=[character_sheet(session, id_, until=until, count=count, text=False) for id_ in character_ids],
     )

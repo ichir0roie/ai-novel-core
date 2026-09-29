@@ -16,6 +16,8 @@
 - AI の出力も pydantic のモデルで受ける。json schema は `model_json_schema()` で作り、整形・検証はバリデータに置く。
   このモデルの docstring は schema の description として AI に渡るので書かない
 - dict の `.get` や文字列キーでの取り出しは極力使わない。既存の関数が dict を返すなら、境目でモデルに読み込んでから属性で扱う
+- dict への変換と二重の変換は残さない。関数は最初からモデルを返し(呼ぶ側で `model_validate` し直さない)、フォームは ORM の行へ属性で書く
+  (`Model(**form.model_dump())` や `model_copy(update=dict)` にしない)。dict にするのは API・CLI へ返す最後の `model_dump(mode="json")` だけ
 - 既存のメソッド(`common_query` など)で済むものは自前で書かない
 - claude の入口(`ai/claude_code/interface/`)の引数は、`str | dict` にせず pydantic のモデル(`data_access_logic/<領域>/form.py`)で受ける。
   レスポンスもモデル(`data_access_logic/<領域>/record.py` など)で組み、`run()` が `model_dump(mode="json")` した結果を返す

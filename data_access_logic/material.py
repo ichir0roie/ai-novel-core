@@ -14,15 +14,19 @@ class Form(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    def column_values(self, model: Any) -> dict[str, Any]:
-        """欄のうち `model` のテーブルの列に当たるもの。親子の配列・誕生没年などの列でない欄は、呼ぶ側が別に書く。"""
-        columns = model.__table__.columns
-        return {name: getattr(self, name) for name in type(self).model_fields if name != "id" and name in columns}
+    def write_to(self, record: Any) -> None:
+        """欄のうち `record` のテーブルの列に当たるものを書く。親子の配列・誕生没年などの列でない欄は、呼ぶ側が別に書く。"""
+        columns = type(record).__table__.columns
+        for name, value in self:
+            if name != "id" and name in columns:
+                setattr(record, name, value)
 
-    def changed_column_values(self, model: Any) -> dict[str, Any]:
-        """`column_values` のうち、渡された欄だけ(修正の入口は渡した欄だけを直す)。"""
-        columns = model.__table__.columns
-        return {name: getattr(self, name) for name in self.model_fields_set if name != "id" and name in columns}
+    def write_changes_to(self, record: Any) -> None:
+        """`write_to` のうち、渡された欄だけを書く(修正の入口は渡した欄だけを直す)。"""
+        columns = type(record).__table__.columns
+        for name in self.model_fields_set:
+            if name != "id" and name in columns:
+                setattr(record, name, getattr(self, name))
 
 
 def _stamp(value: Any) -> Stamp:

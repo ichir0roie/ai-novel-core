@@ -15,5 +15,6 @@ class UpdateOracle(CommitDraft):
 
     def execute(self, session) -> OracleRecord:
         record = self.get_or_raise(session, self.oracle.id, "oracle")
-        self.apply(session, record, self.oracle.changed_column_values(Oracle))
+        self.oracle.write_changes_to(record)
+        self.finalize(session, record)
         return OracleRecord.model_validate(record)

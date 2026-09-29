@@ -15,7 +15,6 @@ from data_access_logic.episode.models import (
 )
 from data_access_logic.episode.summary import past_episodes
 from data_access_logic.event.summary import summarized_events
-from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query
 from db.schema import Episode, EpisodeCharacter
 from db.stamp import Stamp, StampError
@@ -58,7 +57,7 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
         story=story,
         main_episode=main_episode,
         past_episodes=previous,
-        locations=[LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]
+        locations=common_query.place_path(s, place_id)
         if place_id is not None else [],
         cast=cast_at(s, ai, characters, time),
         later_events=summarized_events(

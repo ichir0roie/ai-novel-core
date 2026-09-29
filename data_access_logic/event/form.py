@@ -63,8 +63,6 @@ class EventCreateForm(Form):
 
 
 class EventUpdateForm(Form):
-    """当事者は変えない。"""
-
     id: int
     name: str | None = None
     time: Timestamp | None = None
@@ -77,3 +75,5 @@ class EventUpdateForm(Form):
     end: Timestamp | None = None
     event_seeded: bool | None = None
     meme_seeded: bool | None = None
+    # 渡すと当事者(`event_character`)をまるごと置き換える
+    character_ids: list[int] | None = None

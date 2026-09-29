@@ -15,7 +15,8 @@ class CommitOracle(CommitMemeSource):
         self.fact_check = fact_check
 
     def execute(self, session) -> OracleRecord:
-        record = Oracle(**self.oracle.column_values(Oracle))
+        record = Oracle()
+        self.oracle.write_to(record)
         session.add(record)
         self.finalize(session, record)
         return OracleRecord.model_validate(record)

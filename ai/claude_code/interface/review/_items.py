@@ -31,9 +31,7 @@ def _label(record) -> str:
 
 
 def _appearances(session: Session, idea: Idea) -> str:
-    places = []
-    for table, records in linked_records(session, idea.id).items():
-        places += [f"{table}「{_label(record)}」(id={record.id})" for record in records]
+    places = [f"{record.__tablename__}「{_label(record)}」(id={record.id})" for record in linked_records(session, idea.id)]
     return "、".join(places) or "(結んだ本文なし)"
 
 

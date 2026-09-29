@@ -55,10 +55,6 @@ class Entrance:
     writes: bool     # db に書く
     target: Callable
 
-    def to_dict(self) -> dict:
-        return {"id": self.id, "area": self.area, "name": self.name, "doc": self.doc,
-                "params": [p.__dict__ for p in self.params], "claude": self.claude, "writes": self.writes}
-
 
 def _jsonable_default(value: Any) -> Any:
     if value is inspect.Parameter.empty:

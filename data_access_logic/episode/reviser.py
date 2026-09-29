@@ -15,7 +15,6 @@ from data_access_logic.episode.models import (
     EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeRevisionMaterialSerialized, RevisedEpisode, StoryMaterial,
 )
 from data_access_logic.episode.summary import past_episodes
-from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query
 from db.schema import Episode, EpisodeCharacter
 
@@ -57,7 +56,7 @@ def _revision_material(
         story=story,
         main_episode=main_episode,
         past_episodes=past_episodes(s, ai, episode, past_episode_count),
-        locations=[LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]
+        locations=common_query.place_path(s, place_id)
         if place_id is not None else [],
         cast=cast_at(s, ai, characters, main_episode.start),
     )

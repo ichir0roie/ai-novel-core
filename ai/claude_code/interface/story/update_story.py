@@ -18,5 +18,6 @@ class UpdateStory(StoryCommit):
         self.check_exists(session, Location, self.story.world_id, "world_id")
         self.check_exists(session, Location, self.story.place_id, "place_id")
 
-        self.apply(session, record, self.story.changed_column_values(Story))
+        self.story.write_changes_to(record)
+        self.finalize(session, record)
         return StoryRecord.model_validate(record)

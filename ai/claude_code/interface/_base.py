@@ -87,8 +87,3 @@ class CommitEntrypoint(SessionEntrypoint):
         if record is None:
             raise UnknownRecordError(f"id={id_} という{label}が見つからない")
         return record
-
-    def apply(self, session, record, values: dict) -> None:
-        for key, value in values.items():
-            setattr(record, key, value)
-        self.finalize(session, record)

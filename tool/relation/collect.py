@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from data_access_logic.character.parameters import parameters_at
 from db.schema import Character, CharacterRelation
 
 __all__ = ["character_dict", "relation_dict", "collect_relations"]
@@ -15,7 +16,7 @@ def _year(stamp) -> int | None:
 def character_dict(character) -> dict:
     return {
         "id": character.id, "name": character.name, "kind": character.kind,
-        "sex": character.parameters_at()["sex"],
+        "sex": parameters_at(character, None).sex,
         "start": _year(character.start), "end": _year(character.end),
         "link": f"/tables/character/{character.id}",
     }

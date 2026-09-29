@@ -30,11 +30,6 @@ class Job:
     started_at: str | None = None
     finished_at: str | None = None
 
-    def to_dict(self) -> dict:
-        return {"id": self.id, "entrance": self.entrance, "args": self.args, "status": self.status,
-                "result": self.result, "error": self.error, "created_at": self.created_at,
-                "started_at": self.started_at, "finished_at": self.finished_at}
-
 
 class JobRunner:
     def __init__(self, workers: int = 1):

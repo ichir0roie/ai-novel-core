@@ -1,7 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query
 from db.schema import ConfirmStatus, Idea
 
@@ -10,7 +9,7 @@ def _anchor(s: Session, place_id: int | None) -> Idea | None:
     """場所の道筋を末端から遡り、その場所自身を表すアイデア(通常は「星」)が見つかった一番深いもの。"""
     if place_id is None:
         return None
-    for step in reversed([LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]):
+    for step in reversed(common_query.place_path(s, place_id)):
         idea = s.scalar(select(Idea).where(Idea.kind == step.kind, Idea.location_id == step.id).order_by(Idea.id))
         if idea is not None:
             return idea

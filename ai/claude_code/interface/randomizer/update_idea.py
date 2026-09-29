@@ -4,8 +4,8 @@ from __future__ import annotations
 from ai.claude_code.interface.randomizer._base import CommitDraft
 from data_access_logic.idea.form import IdeaUpdateForm
 from data_access_logic.idea.record import IdeaRecord
-from db.child_lists import load_children
-from db.schema import Idea, Location
+from db.child_lists import replaced_rows
+from db.schema import Idea, IdeaRecognition, Location
 
 
 class UpdateIdea(CommitDraft):
@@ -26,8 +26,9 @@ class UpdateIdea(CommitDraft):
             self._check_not_descendant(session, form.id, form.parent_idea_id)
 
         if form.recognitions is not None:
-            load_children(record, "recognitions", [row.model_dump() for row in form.recognitions])
-        self.apply(session, record, form.changed_column_values(Idea))
+            record.recognitions = replaced_rows(record.recognitions, form.recognitions, IdeaRecognition)
+        form.write_changes_to(record)
+        self.finalize(session, record)
         return IdeaRecord.model_validate(record)
 
     @staticmethod
