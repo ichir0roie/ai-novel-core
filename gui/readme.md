@@ -45,6 +45,8 @@ export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 
 ポートが既に使われていれば(前回の起動の残りなど)、それを聞いている処理を止めてから起こす(Linux は `ss`、macOS は `lsof`、
 Windows は `netstat` で探す)。止められなければ終了コード 1 で止まる。
+`next dev` はビルド先(`gui/web/.next`)ごとに 1 つしか動かせないので、2 つ目を起こすときは環境変数 `NOVEL_WEB_DIST_DIR`
+でビルド先を分ける(テスト用は `.next-test`)。
 
 ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルートの `.brave-profile/` に作って
 (`--user-data-dir`)開く。普段のプロファイルと分かれるので、GUI 用のタブ・設定だけがそこに残る。

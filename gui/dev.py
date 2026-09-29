@@ -275,6 +275,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Ctrl+C(SIGINT)だけでなく、タスクの停止などの SIGTERM でも finally を通して両方止める
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+    # 非対話の bash が `&` で裏に起こすと SIGINT を無視する設定を引き継ぎ、Python は KeyboardInterrupt を出さなくなる
+    signal.signal(signal.SIGINT, signal.default_int_handler)
     try:
         api = spawn_api()
         web = spawn_web()
