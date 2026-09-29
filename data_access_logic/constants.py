@@ -66,7 +66,7 @@ EPISODE_KEY_TIMEOUT = 300.0
 # 書き直した種から、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
 EPISODE_CASTING_TIMEOUT = 300.0
 # 本文をまるごと渡す直前の話の本数。それより前の話は、作品の中のすべてを概要で渡す。
-EPISODE_FULL_TEXT_COUNT = 3
+EPISODE_FULL_TEXT_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。

@@ -68,7 +68,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | メソッド | パス | 中身 |
 | --- | --- | --- |
 | GET | `/api/tables` | 扱うテーブルと列の情報(型・必須・選択肢・参照先・子の行) |
-| GET | `/api/tables/{table}/records?q=&limit=&offset=&sort=&order=&<列>=<値>` | 一覧。`q` は名前・本文の部分一致、列名の query は等値(`null` で空)。`sort` は並べる列(空の行は後ろ)、`order` は `asc`/`desc`。省くとテーブルの既定(`TableMeta.sort`/`order`。話は開始の昇順、ほかは id の降順) |
+| GET | `/api/tables/{table}/records?q=&limit=&offset=&sort=&order=&<列>=<値>` | 一覧。`q` は名前・本文の部分一致、列名の query は等値(`null` で空)。`sort` は並べる列(空の行は後ろ)、`order` は `asc`/`desc`。省くとテーブルの既定(`TableMeta.sort`/`order`。話は開始の降順、ほかは id の降順) |
 | GET | `/api/tables/{table}/records/{id}` | 一件。参照先の名前(`labels`)と表示用の関連(`related`)付き |
 | POST | `/api/tables/{table}/records` | 追加。確定の入口(`CommitIdea` など)の `execute` を通す |
 | PATCH | `/api/tables/{table}/records/{id}` | 修正。渡した欄だけ直す(`UpdateIdea` などの `execute`) |
@@ -144,7 +144,7 @@ claude を叩くので裏の job になり、画面は job を待って、終わ
 `panel=True`)。直す指示(`instruction`)を必須で受け取り、指示の箇所だけでなく、指示と材料を総合的に判断して本文を大幅に書き直してよい(話の大筋は保つ)。
 登場人物(`character_ids`)は聞かない。登場人物はこの話の `episode_character`
 (ページの登場人物のボタンで編集中の値)を使い、空なら止まる。前の話は、この話の時刻より前の話を自動で使う
-(直前の三話は本文、それより前は概要)。
+(直前の五話は本文、それより前は概要)。
 
 上の「AI で作成 / AI で補完」の小さなボタン列(`GeneratePanel`)とは別に、本文を見ながら大きな指示文を
 書けるよう専用のパネル(`RevisePanel`)で出す。開くボタンは save の隣(actionbar)に置き、押すと左の欄の

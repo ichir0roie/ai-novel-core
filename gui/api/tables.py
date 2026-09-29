@@ -78,7 +78,7 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", "作品", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, StoryRecord,
               ("name", "text")),
     TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
-              EpisodeRecord, ("title", "key"), sort="start", order="asc"),
+              EpisodeRecord, ("title", "key"), sort="start", order="desc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
               CharacterUpdateForm, CharacterRecord, ("name", "text"), reviewable=True),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,
