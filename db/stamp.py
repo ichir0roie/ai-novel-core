@@ -24,6 +24,22 @@ _PARTS = (("month", 2, 1), ("day", 2, 1),
 _UNDER = sum(width for _, width, _ in _PARTS)
 
 
+# 月ごとの日数(平年)と、グレゴリオ暦の四百年の日数
+_MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+_DAYS_IN_400_YEARS = 146097
+
+
+def _days_in_month(year: int, month: int) -> int:
+    if month == 2 and year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
+        return 29
+    return _MONTH_DAYS[month - 1]
+
+
+def _days_before_year(year: int) -> int:
+    y = year - 1
+    return 365 * y + y // 4 - y // 100 + y // 400
+
+
 class StampError(ValueError):
     pass
 
@@ -102,6 +118,24 @@ class Stamp:
 
     def __repr__(self) -> str:
         return f"Stamp({self})"
+
+    # --- 進める ---------------------------------------------------------
+
+    def plus_days(self, days: int) -> "Stamp":
+        """`days` 日後。月末・閏年をまたいで数え、時・分・秒はそのまま。"""
+        ordinal = (_days_before_year(self.year) + sum(_days_in_month(self.year, m) for m in range(1, self.month))
+                   + self.day + days)
+        year = ordinal * 400 // _DAYS_IN_400_YEARS + 1
+        while _days_before_year(year) >= ordinal:
+            year -= 1
+        while _days_before_year(year + 1) < ordinal:
+            year += 1
+        day = ordinal - _days_before_year(year)
+        month = 1
+        while day > _days_in_month(year, month):
+            day -= _days_in_month(year, month)
+            month += 1
+        return Stamp(year, month, day, self.hour, self.minute, self.second)
 
     # --- 比べる ---------------------------------------------------------
 

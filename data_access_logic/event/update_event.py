@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic.ai_entrypoint import CommitAndRefresh
 from data_access_logic.entrypoint import record_of, reloaded
@@ -17,7 +17,7 @@ class UpdateEvent(CommitAndRefresh):
     def __init__(self, event: EventUpdateForm):
         self.event = event
 
-    def execute(self, session) -> EventRecord:
+    def execute(self, session: Session) -> EventRecord:
         form = self.event
         record = reloaded(session, common_query.get_row(session, Event, form.id), selectinload(Event.event_characters))
         if form.parent_event_id == form.id:

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.location.form import LocationCreateForm
 from data_access_logic.location.record import LocationRecord
@@ -14,7 +16,7 @@ class CommitPlace(CommitEntrypoint):
     def __init__(self, place: LocationCreateForm):
         self.place = place
 
-    def execute(self, session) -> LocationRecord:
+    def execute(self, session: Session) -> LocationRecord:
         self.check_exists(session, Location, self.place.parent_id, "parent_id")
         if self.place.parent_id is not None:
             parent = session.get_one(Location, self.place.parent_id)
@@ -29,7 +31,7 @@ class CommitPlace(CommitEntrypoint):
         return LocationRecord.model_validate(record)
 
     @staticmethod
-    def _check_area(session, parent: Location, area: float | None) -> None:
+    def _check_area(session: Session, parent: Location, area: float | None) -> None:
         if area is None or parent.area is None:
             return
         if not area < parent.area:

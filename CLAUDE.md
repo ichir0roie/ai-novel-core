@@ -19,3 +19,4 @@
 コードを読んで内容を理解すること。
 コードを読んでも分からない理由のみコメントにする。
 途中経過や失敗の知らせは `logging`(モジュールごとの `logger`)で出す。`print` は `show()` のように、標準出力に出すものが結果そのものの所だけに使う。
+python を直したら、core のルートで `uvx ruff check .` と `npx pyright --pythonpath ../.venv/bin/python` を回す(設定は `ruff.toml` / `pyrightconfig.json`)。

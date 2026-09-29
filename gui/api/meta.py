@@ -7,7 +7,7 @@ import typing
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
-from sqlalchemy import JSON, Boolean, Integer, Numeric, func, select
+from sqlalchemy import Boolean, Column, Integer, JSON, Numeric, func, select
 from sqlalchemy.orm import Session
 
 from data_access_logic.label import LABEL_COLUMNS
@@ -49,7 +49,7 @@ def _label(key: str, comment: str | None) -> str:
     return key
 
 
-def _column_type(column) -> str:
+def _column_type(column: Column) -> str:
     kind = column.type
     if isinstance(kind, StampType):
         return "stamp"
@@ -66,7 +66,7 @@ def _column_type(column) -> str:
     return "string"
 
 
-def column_meta(column, field: FieldInfo | None, section: bool = False, markdown: bool = True,
+def column_meta(column: Column, field: FieldInfo | None, section: bool = False, markdown: bool = True,
                 readonly: bool = False, side: bool = False) -> ColumnMeta:
     """`field` は、その列に当たる入口の引数の欄(無ければ None)。選択肢と必須かどうかは、検証する欄のものを使う。"""
     choices = choices_of(field) if field is not None else None

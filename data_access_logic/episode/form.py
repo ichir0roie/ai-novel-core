@@ -1,12 +1,11 @@
-from typing import Annotated, Any
+from typing import Annotated
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import Episode, EpisodeCharacter
-from db.stamp import Stamp
 
 
 class EpisodeForm(Draft):
@@ -16,18 +15,13 @@ class EpisodeForm(Draft):
     story_id: int | None = None
     title: str | None = None
     key: str | None = None
-    start: Stamp | None = None
-    end: Stamp | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
     viewpoint_character_id: int | None = None
     place_id: int | None = None
     character_ids: Annotated[list[int] | None, References("character")] = Field(
         default=None, title="登場人物",
         description="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
-
-    @field_validator("start", "end", mode="before")
-    @classmethod
-    def _stamp(cls, value: Any) -> Stamp | None:
-        return Stamp.parse(value)
 
 
 class EpisodeCommitForm(Form):

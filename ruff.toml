@@ -1,0 +1,14 @@
+# ruff(python の lint)の設定。`uvx ruff check` で回す。
+
+[lint]
+# 見るのは、実行時の誤り(構文・未定義の名前・使っていない import など)だけ
+select = ["E4", "E7", "E9", "F"]
+# 表と SQLAlchemy の名前は `import *` でまとめて受け渡す(`db/schema.py` → `query/base.py` → 各 query)
+ignore = ["F403", "F405"]
+
+[lint.per-file-ignores]
+# `import *` で先へ渡すための import なので、使っていないように見えても消さない
+"db/schema.py" = ["F401"]
+"data_access_logic/query/base.py" = ["F401"]
+# マイグレーションは、その版を作ったときのまま残す
+"db/alembic/**" = ["E", "F"]

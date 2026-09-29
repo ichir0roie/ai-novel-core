@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.idea.alias import called
@@ -33,13 +34,13 @@ class FoundIdea(BaseModel):
 
 
 class SearchIdeas(SessionEntrypoint):
-    def __init__(self, keywords: list[IdeaTerm], place_id: int | None = None, limit: int | None = None, time=None):
+    def __init__(self, keywords: list[IdeaTerm], place_id: int | None = None, limit: int | None = None, time: Stamp | str | None = None):
         self.keywords = keywords
         self.place_id = place_id
         self.limit = limit
         self.time = Stamp.parse(time)
 
-    def execute(self, session) -> list[FoundIdea]:
+    def execute(self, session: Session) -> list[FoundIdea]:
         hits = search(session, self.keywords, self.place_id, self.time, limit=self.limit, confirmed_only=False)
         recognitions = called(session, [hit.idea.id for hit in hits], self.place_id, self.time)
         return [

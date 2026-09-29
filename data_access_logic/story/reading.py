@@ -93,7 +93,7 @@ def stories(session: Session) -> list[StoryDigest]:
     return [story_digest(session, story) for story in rows]
 
 
-def brief(session: Session, place_id: int, when=None, reach: int = 60, full: bool = False) -> Brief:
+def brief(session: Session, place_id: int, when: Stamp | str | None = None, reach: int = 60, full: bool = False) -> Brief:
     location = common_query.get_row(session, Location, place_id)
     if when is None:
         raise ValueError("時刻が決まらない(when を渡す)")
@@ -139,7 +139,7 @@ def _brief_idea(idea: Idea, recognition: IdeaRecognition | None) -> BriefIdea:
                      text=" ".join(part for part in (recognition.detail, idea.text) if part))
 
 
-def cast(session: Session, story_id: int, when=None, count: int = 5, levels: int = 1) -> Cast:
+def cast(session: Session, story_id: int, when: Stamp | str | None = None, count: int = 5, levels: int = 1) -> Cast:
     story = common_query.get_row(session, Story, story_id)
     if story.place_id is None:
         raise ValueError(f"作品 {story.name} に立つ場所(place_id)が無い")

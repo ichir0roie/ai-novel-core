@@ -31,9 +31,6 @@ logger = logging.getLogger(__name__)
 # 一度に居合わせる人物として渡す上限
 _PARTICIPANT_LIMIT = 20
 
-_MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-_DAYS_IN_400_YEARS = 146097
-
 _SITUATION_INSTRUCTION = """\
 場所の状況は日本語の見出しを付けた JSON で渡す。
 - 居合わせる人物・対象の種別が「人物」以外なら、国・組織・集団・物。年齢は人物なら歳、それ以外は成立からの年数。
@@ -83,34 +80,6 @@ event_text の書き方:
 
 character_updates の text の書き方:
 {CHARACTER_TEXT_UPDATE_INSTRUCTION}"""
-
-
-def _days_in_month(year: int, month: int) -> int:
-    if month == 2 and year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
-        return 29
-    return _MONTH_DAYS[month - 1]
-
-
-def _days_before_year(year: int) -> int:
-    y = year - 1
-    return 365 * y + y // 4 - y // 100 + y // 400
-
-
-def _add_days(time: Stamp, days: int) -> Stamp:
-    """出来事の終わり(始まりから続いた日数ぶん後)。月末・閏年をまたいで数える。"""
-    ordinal = _days_before_year(time.year) + sum(_days_in_month(time.year, m) for m in range(1, time.month)) + time.day
-    ordinal += days
-    year = ordinal * 400 // _DAYS_IN_400_YEARS + 1
-    while _days_before_year(year) >= ordinal:
-        year -= 1
-    while _days_before_year(year + 1) < ordinal:
-        year += 1
-    day = ordinal - _days_before_year(year)
-    month = 1
-    while day > _days_in_month(year, month):
-        day -= _days_in_month(year, month)
-        month += 1
-    return Stamp(year, month, day, time.hour, time.minute, time.second)
 
 
 def _situation(
@@ -260,7 +229,7 @@ def progress_place(
             involved_ids.append(character.id)
         move_notes.append(f"{character.name} → {destination.name}")
 
-    end = _add_days(time, draft.event_duration_days)
+    end = time.plus_days(draft.event_duration_days)
     record = Event(
         name=draft.event_name,
         text=draft.event_text,

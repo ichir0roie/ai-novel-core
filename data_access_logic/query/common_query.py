@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Collection
 import re
 
-from sqlalchemy import Select, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import ColumnElement, Select, func, or_, select
+from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.location.models import LocationMaterial
@@ -13,6 +14,7 @@ from db.schema import (
     Character, CharacterPlace, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
     Story,
 )
+from db.schema import Base
 from db.stamp import Stamp, StampError
 
 EVENT_LOAD_OPTIONS = (
@@ -23,7 +25,7 @@ EVENT_LOAD_OPTIONS = (
 
 # ---------------------------------------------------------------- 時刻
 
-def span(when) -> tuple[Stamp, Stamp]:
+def span(when: Stamp | str | int) -> tuple[Stamp, Stamp]:
     text = str(when).strip()
     at = Stamp.parse(text)
     if at is None:
@@ -37,7 +39,7 @@ def span(when) -> tuple[Stamp, Stamp]:
     return at, Stamp(*parts)
 
 
-def resolve_time(session: Session, when, story: Story | None) -> tuple[Stamp, Stamp]:
+def resolve_time(session: Session, when: Stamp | str | None, story: Story | None) -> tuple[Stamp, Stamp]:
     if when is not None:
         return span(when)
     if story is not None and story.start is not None:
@@ -45,19 +47,19 @@ def resolve_time(session: Session, when, story: Story | None) -> tuple[Stamp, St
     raise ValueError("時刻が決まらない(作品に立つ年が無いので time を渡す)")
 
 
-def get_row(session: Session, model, id_: int):
+def get_row[M: Base](session: Session, model: type[M], id_: int) -> M:
     row = session.get(model, id_)
     if row is None:
         raise UnknownRecordError(f"id={id_} の {model.__tablename__} が見つからない")
     return row
 
 
-def _in_span(column, since: Stamp, until: Stamp):
+def _in_span(column: InstrumentedAttribute[Stamp], since: Stamp, until: Stamp) -> ColumnElement[bool]:
     # 列は `StampType` なので、`Stamp` のまま渡す(整数を渡すと年として読まれる)
     return column.between(since, until)
 
 
-def _alive(model, until: Stamp):
+def _alive(model: type[CharacterPlace], until: Stamp) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
     return (or_(model.start.is_(None), model.start <= until),
             or_(model.end.is_(None), model.end > until))
 
@@ -152,7 +154,7 @@ def shapes_on_planet_select(planet_id: int) -> Select:
 
 # ---------------------------------------------------------------- 出来事
 
-def events_at_select(when, place_ids=None, limit=None) -> Select:
+def events_at_select(when: Stamp | str, place_ids: Collection[int] | None = None, limit: int | None = None) -> Select:
     since, until = span(when)
     query = (select(Event)
              .options(*EVENT_LOAD_OPTIONS)
@@ -165,7 +167,8 @@ def events_at_select(when, place_ids=None, limit=None) -> Select:
     return query
 
 
-def events_in_locations_select(place_ids, until=None, limit=None) -> Select:
+def events_in_locations_select(place_ids: Collection[int] | None, until: Stamp | str | None = None,
+                               limit: int | None = None) -> Select:
     query = select(Event).options(*EVENT_LOAD_OPTIONS)
     if place_ids:
         query = query.where(Event.location_id.in_(list(place_ids)))
@@ -177,7 +180,7 @@ def events_in_locations_select(place_ids, until=None, limit=None) -> Select:
     return query
 
 
-def _events_where(condition, until, limit) -> Select:
+def _events_where(condition: ColumnElement[bool], until: Stamp | str | None, limit: int | None) -> Select:
     query = select(Event).options(*EVENT_LOAD_OPTIONS).where(condition)
     if until is not None:
         query = query.where(Event.time <= span(until)[1])
@@ -187,20 +190,20 @@ def _events_where(condition, until, limit) -> Select:
     return query
 
 
-def events_of_place_select(place_id: int, until=None, limit=5) -> Select:
+def events_of_place_select(place_id: int, until: Stamp | str | None = None, limit: int | None = 5) -> Select:
     return _events_where(Event.location_id == place_id, until, limit)
 
 
-def events_of_character_select(character_id: int, until=None, limit=5) -> Select:
+def events_of_character_select(character_id: int, until: Stamp | str | None = None, limit: int | None = 5) -> Select:
     return _events_where(
         Event.event_characters.any(EventCharacter.character_id == character_id), until, limit)
 
 
-def events_under_select(event_id: int, until=None, limit=5) -> Select:
+def events_under_select(event_id: int, until: Stamp | str | None = None, limit: int | None = 5) -> Select:
     return _events_where(Event.parent_event_id == event_id, until, limit)
 
 
-def events_after_select(place_id: int | None, character_ids, after: Stamp, limit=5) -> Select:
+def events_after_select(place_id: int | None, character_ids: Collection[int], after: Stamp, limit: int = 5) -> Select:
     """人物ごとに時を刻むので、ある人物の出来事を起こす時点より後に、別の人物の出来事が既にあることがある。
     `place_id` が None なら当事者の出来事だけ(場所の無い出来事まで拾わない)。"""
     conditions = [Event.event_characters.any(EventCharacter.character_id.in_(list(character_ids)))]
@@ -219,7 +222,7 @@ def events_select() -> Select:
             .order_by(Event.time.desc(), Event.id.desc()))
 
 
-def open_events_select(place_ids, until: Stamp) -> Select:
+def open_events_select(place_ids: Collection[int], until: Stamp) -> Select:
     return (select(Event)
             .options(*EVENT_LOAD_OPTIONS)
             .where(Event.location_id.in_(list(place_ids)),
@@ -250,7 +253,7 @@ def latest_character_event_select(character_id: int, until: Stamp | None = None)
 
 
 
-def resident_character_ids_select(place_ids, until: Stamp) -> Select:
+def resident_character_ids_select(place_ids: Collection[int], until: Stamp) -> Select:
     """話・断面に出す顔ぶれなので、ユーザが確かめた(`confirmed=承認`)人物・対象だけに絞る。"""
     return (select(CharacterPlace.character_id).distinct()
             .join(Character, Character.id == CharacterPlace.character_id)
@@ -287,7 +290,7 @@ def story_episodes_select(story_id: int) -> Select:
             .order_by(*episode_order()))
 
 
-def episodes_select(story_id: int, count: int = 10, before=None) -> Select:
+def episodes_select(story_id: int, count: int = 10, before: Stamp | str | None = None) -> Select:
     """呼び出し側は取り出した後に `reversed()` して古い順に並べ直す
     (新しい順に `limit` するため、select 自体は新しい順のまま返す)。
     `before` は時刻。start がそれより前の話だけに絞る(start の無い話は外れる)。
@@ -309,7 +312,7 @@ def unsynced_episodes_select(story_id: int | None = None) -> Select:
 
 # ---------------------------------------------------------------- 断面
 
-def ideas_select(place_ids, time: Stamp | None = None) -> Select:
+def ideas_select(place_ids: Collection[int] | None, time: Stamp | None = None) -> Select:
     return (select(Idea)
             .where(dictionary_query.idea_in_scope(place_ids, time), Idea.confirmed == ConfirmStatus.APPROVED)
             .order_by(Idea.id))

@@ -4,7 +4,6 @@ from pydantic import Field, field_validator
 
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import ConfirmStatus
-from db.stamp import Stamp
 
 
 class EventForm(Draft):
@@ -14,18 +13,13 @@ class EventForm(Draft):
     id: int | None = None
     name: str | None = None
     text: str | None = None
-    time: Stamp | None = None
-    start: Stamp | None = None
-    end: Stamp | None = None
+    time: Timestamp | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
     location_id: int | None = None
     character_ids: list[int] | None = None
     hidden: bool = False
     parent_event_id: int | None = None
-
-    @field_validator("time", "start", "end", mode="before")
-    @classmethod
-    def _stamp(cls, value: Any) -> Stamp | None:
-        return Stamp.parse(value)
 
     @field_validator("hidden", mode="before")
     @classmethod

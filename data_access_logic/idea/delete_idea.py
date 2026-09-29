@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.links import relink
@@ -16,7 +17,7 @@ class DeleteIdea(CommitEntrypoint):
     def __init__(self, idea_id: int):
         self.idea_id = idea_id
 
-    def execute(self, session) -> IdeaName:
+    def execute(self, session: Session) -> IdeaName:
         record = common_query.get_row(session, Idea, self.idea_id)
         child = session.scalars(
             select(Idea.id).where(Idea.parent_idea_id == record.id)).first()

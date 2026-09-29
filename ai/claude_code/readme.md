@@ -8,7 +8,7 @@ AI を `ai` 引数(`data_access_logic/ai_client.py` の `AIClient`)で受け取�
 ai/claude_code/
   ai_client.py            `generate(prompt, 出力のモデル, ...)`。出力のモデルの json schema を渡して
                           `claude -p --output-format json --json-schema …` を subprocess で呼び、そのモデルで返す(得られなければ None)
-  fact_checker.py         アイデア・oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く(local_ai に無い)
+  fact_checker.py         アイデア・oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く
 ```
 
 ## 仕組み
@@ -26,6 +26,6 @@ ai/claude_code/
 | 変数                    | 意味                                                                                                 |
 | ----------------------- | ---------------------------------------------------------------------------------------------------- |
 | `DEM_CLAUDE_AI_COMMAND` | 実行する CLI。既定 `claude`                                                                          |
-| `DEM_CLAUDE_AI_TIMEOUT` | 一回の呼び出しを待つ秒数の下限。既定 600(CLI の起動ぶん、Ollama 向けの 120 秒では足りないことがある) |
+| `DEM_CLAUDE_AI_TIMEOUT` | 一回の呼び出しを待つ秒数の下限。既定 600(CLI の起動と思考のぶん、呼び出し側の timeout では足りないことがある) |
 | `DEM_CLAUDE_AI_DLAB_TOOLS` | 検める(`fact_checker.py`)ときに許す Dラボの道具。カンマ区切りの許可ルール、既定 `mcp__d-lab`。`claude mcp list` の Dラボのサーバー名に合わせて `mcp__<サーバー名>` にする。空にすると Dラボを使わない |
 | `DEM_CLAUDE_AI_MCP_CONFIG` | MCP の道具を使わせる呼び出しで `--mcp-config` に渡すファイル。Dラボを claude.ai のコネクタ以外で繋ぐときに使う。既定なし |

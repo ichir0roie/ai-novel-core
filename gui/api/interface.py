@@ -69,7 +69,7 @@ def _params(callable_: Callable) -> tuple[Param, ...]:
     return tuple(params)
 
 
-def _doc(obj) -> str:
+def _doc(obj: object) -> str:
     doc = inspect.getdoc(obj) or ""
     return doc.strip().splitlines()[0] if doc.strip() else ""
 
@@ -116,24 +116,6 @@ def entrance_of(entrance_id: str) -> Entrance:
     return entrance
 
 
-def _style_defaults(args: dict[str, Any], params: tuple[Param, ...]) -> dict[str, Any]:
-    """世界リポジトリの `instructions/style.py` があれば、渡されていない文体の引数をそこから埋める。
-    `core` は汎用の仕組みなので値は持たない(無ければ空のまま)。"""
-    names = {param.name for param in params}
-    wanted = {"shared_style_extra": "SHARED_EXTRA", "style_extra": "EPISODE_STYLE_EXTRA"}
-    if not any(name in names and name not in args for name in wanted):
-        return args
-    try:
-        style = importlib.import_module("instructions.style")
-    except ImportError:
-        return args
-    filled = dict(args)
-    for name, constant in wanted.items():
-        if name in names and name not in filled and hasattr(style, constant):
-            filled[name] = getattr(style, constant)
-    return filled
-
-
 def _has_model(annotation: Any) -> bool:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return True
@@ -143,7 +125,6 @@ def _has_model(annotation: Any) -> bool:
 def prepare(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
     """JSON で来た引数を入口の signature に当て、型が pydantic のモデルの引数はモデルに読み込む。
     食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)。"""
-    args = _style_defaults(args, entrance.params)
     target = entrance.target
     try:
         inspect.signature(target).bind(**args)

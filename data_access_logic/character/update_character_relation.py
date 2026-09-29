@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.character.form import CharacterRelationUpdateForm
 from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -14,7 +16,7 @@ class UpdateCharacterRelation(CommitEntrypoint):
     def __init__(self, relation: CharacterRelationUpdateForm):
         self.relation = relation
 
-    def execute(self, session) -> CharacterRelationRecord:
+    def execute(self, session: Session) -> CharacterRelationRecord:
         record = common_query.get_row(session, CharacterRelation, self.relation.id)
         self.check_exists(session, Character, self.relation.character_id_1, "character_id_1")
         self.check_exists(session, Character, self.relation.character_id_2, "character_id_2")

@@ -7,6 +7,7 @@ AI の段は `run()` / `show()` のときだけ回る。GUI の API が呼ぶ `e
 from __future__ import annotations
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from ai.claude_code import ai_client, fact_checker
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -26,7 +27,7 @@ class CommitAndRefresh(CommitEntrypoint):
     追いかける基底(AI が答えなくても確定自体は残るよう、別のセッションで行う)。
     """
 
-    def execute(self, session) -> EventRecord | EpisodeRecord | StoryRecord:
+    def execute(self, session: Session) -> EventRecord | EpisodeRecord | StoryRecord:
         raise NotImplementedError
 
     def result(self) -> EventRecord | EpisodeRecord | StoryRecord:
@@ -42,7 +43,7 @@ class CommitAndRefresh(CommitEntrypoint):
             self.follow_up(session)
         return committed
 
-    def follow_up(self, session) -> None:
+    def follow_up(self, session: Session) -> None:
         """入口ごとに足す、確定したあとの AI の段。"""
 
 
@@ -64,7 +65,7 @@ class CommitMemeSource(CommitEntrypoint):
 
     fact_check = True
 
-    def execute(self, session) -> IdeaRecord | OracleRecord:
+    def execute(self, session: Session) -> IdeaRecord | OracleRecord:
         raise NotImplementedError
 
     def result(self) -> MemeSourceCommitted:

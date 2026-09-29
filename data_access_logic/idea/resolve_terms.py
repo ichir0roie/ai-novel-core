@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.context import resolve_ideas
@@ -48,12 +49,12 @@ def _resolved(idea: IdeaMaterial, recognition: IdeaRecognitionMaterial | None = 
 class ResolveTerms(CommitEntrypoint):
     model = Idea
 
-    def __init__(self, terms: list[IdeaTerm], place_id: int | None = None, time=None):
+    def __init__(self, terms: list[IdeaTerm], place_id: int | None = None, time: Stamp | str | None = None):
         self.terms = terms
         self.place_id = place_id
         self.time = Stamp.parse(time)
 
-    def execute(self, session) -> ResolvedTerms:
+    def execute(self, session: Session) -> ResolvedTerms:
         context = resolve_ideas(session, self.terms, self.place_id, self.time)
         return ResolvedTerms(ideas=[_resolved(related.idea, related.recognition) for related in context.related],
                              hits=[idea.id for idea in context.hits],

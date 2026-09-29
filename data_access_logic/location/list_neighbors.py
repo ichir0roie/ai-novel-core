@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel, model_serializer
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.map.collect import MapPlace, Planet, map_place_of, planet_of
@@ -43,7 +44,7 @@ class ListNeighbors(SessionEntrypoint):
         self.kind = kind
         self.limit = limit
 
-    def execute(self, session) -> Neighbors:
+    def execute(self, session: Session) -> Neighbors:
         origin = common_query.get_row(session, Location, self.place_id)
         if origin.location_longitude is None or origin.location_latitude is None:
             raise ValueError(f"{origin.name}(id={origin.id})は経緯度を持たない(面の場所か、座標が未記入)")
@@ -61,7 +62,7 @@ class ListNeighbors(SessionEntrypoint):
         return Neighbors(place=map_place_of(session, origin), planet=planet, neighbors=neighbors)
 
     @staticmethod
-    def _neighbor(session, origin: Location, place: Location, radius: float | None) -> Neighbor:
+    def _neighbor(session: Session, origin: Location, place: Location, radius: float | None) -> Neighbor:
         lon1, lat1 = origin.location_longitude, origin.location_latitude
         lon2, lat2 = place.location_longitude, place.location_latitude
         deg = angular_distance_deg(lon1, lat1, lon2, lat2)

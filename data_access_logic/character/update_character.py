@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.character.form import CharacterUpdateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -15,7 +17,7 @@ class UpdateCharacter(CommitEntrypoint):
     def __init__(self, character: CharacterUpdateForm):
         self.character = character
 
-    def execute(self, session) -> CharacterRecord:
+    def execute(self, session: Session) -> CharacterRecord:
         form = self.character
         record = common_query.get_row(session, Character, form.id)
 

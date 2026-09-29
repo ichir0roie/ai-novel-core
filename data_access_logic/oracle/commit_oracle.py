@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.ai_entrypoint import CommitMemeSource
 from data_access_logic.oracle.form import OracleCreateForm
 from data_access_logic.oracle.record import OracleRecord
@@ -14,7 +16,7 @@ class CommitOracle(CommitMemeSource):
         self.oracle = oracle
         self.fact_check = fact_check
 
-    def execute(self, session) -> OracleRecord:
+    def execute(self, session: Session) -> OracleRecord:
         record = Oracle()
         self.oracle.write_to(record)
         session.add(record)

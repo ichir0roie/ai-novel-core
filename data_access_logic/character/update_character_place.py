@@ -2,6 +2,8 @@
 """移った日に前の居場所の `end` を下ろすのに使う。"""
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.character.form import CharacterPlaceUpdateForm
 from data_access_logic.character.record import CharacterPlaceRecord
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -15,7 +17,7 @@ class UpdateCharacterPlace(CommitEntrypoint):
     def __init__(self, place: CharacterPlaceUpdateForm):
         self.place = place
 
-    def execute(self, session) -> CharacterPlaceRecord:
+    def execute(self, session: Session) -> CharacterPlaceRecord:
         self.check_exists(session, Character, self.place.character_id, "character_id")
         self.check_exists(session, Location, self.place.location_id, "location_id")
         record = common_query.get_row(session, CharacterPlace, self.place.id)

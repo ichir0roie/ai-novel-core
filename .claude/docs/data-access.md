@@ -22,6 +22,8 @@
 - 既存のメソッド(`common_query` など)で済むものは自前で書かない
 - 入口(`data_access_logic/<領域>/<動詞_対象>.py`。claude は `show()`、GUI の API は `execute(session)` を呼ぶ)の引数は、`str | dict` にせず pydantic のモデル(`data_access_logic/<領域>/form.py`)で受ける。
   レスポンスもモデル(`data_access_logic/<領域>/record.py` など)で組み、`run()` が `model_dump(mode="json")` した結果を返す
+  すべての引数に型を書く(AI は `ai: AIClient`)。時刻だけは、呼ぶ側が import を足さずに書けるよう `Stamp | str | None` で文字列も受ける。
+  読み取りの入口の時刻は文字列の精度が期間の幅になる(`"1200"` なら 1200 年の一年。`common_query.span`)ので、入口では `Stamp` に読み替えずにそのまま渡す
 - 確定(commit)の境目: AI を呼んで得た結果(要約・記録・本文・候補のアイデア・ミーム・種など)は、得たその場で commit する。
   長い AI 呼び出しの前にも、それまでの保存分(話の枠など)を commit する。途中で AI が落ちても、それまでに得た結果は残す。
   db だけの処理(`CommitEntrypoint` の `execute`)は入口のトランザクション(`session.begin()`)に任せ、中で commit しない。

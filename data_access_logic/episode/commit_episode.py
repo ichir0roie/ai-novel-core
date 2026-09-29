@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from ai.instructions.style import layout_novel_text
 from data_access_logic.ai_entrypoint import CommitAndRefresh
 from data_access_logic.entrypoint import record_of
@@ -16,7 +18,7 @@ class CommitEpisode(CommitAndRefresh):
     def __init__(self, episode: EpisodeCommitForm):
         self.episode = episode
 
-    def execute(self, session) -> EpisodeRecord:
+    def execute(self, session: Session) -> EpisodeRecord:
         form = self.episode
         self.check_exists(session, Story, form.story_id, "story_id")
         self.check_exists(session, Character, form.viewpoint_character_id, "viewpoint_character_id")

@@ -2,6 +2,8 @@
 """`commit_character` は出自の一件しか書けないので、出自を後から付ける・移った先を足すときに使う。"""
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.character.form import CharacterPlaceCreateForm
 from data_access_logic.character.record import CharacterPlaceRecord
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -15,7 +17,7 @@ class CommitCharacterPlace(CommitEntrypoint):
     def __init__(self, place: CharacterPlaceCreateForm):
         self.place = place
 
-    def execute(self, session) -> CharacterPlaceRecord:
+    def execute(self, session: Session) -> CharacterPlaceRecord:
         self.check_exists(session, Character, self.place.character_id, "character_id")
         self.check_exists(session, Location, self.place.location_id, "location_id")
         location = session.get_one(Location, self.place.location_id)

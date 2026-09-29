@@ -12,9 +12,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# 文体の特徴を抽出する材料にする、直近の話の本数。
-STYLE_SOURCE_EPISODE_LIMIT = 10
-
 # 一話ぶんの本文の目安。
 EPISODE_TARGET_LETTERS = (5000, 8000)
 
@@ -198,7 +195,7 @@ STYLE_BASES: dict[str, str] = {
 }
 
 
-def style_instruction(target: str, *, shared_extra: str = "", extra: str = "") -> str:
+def style_instruction(target: str, shared_extra: str = "", extra: str = "") -> str:
     """文体の指示を組み立てる。
 
     ここに定数で置くのは、共通(SHARED_STYLE_BASE)と対象ごと(STYLE_BASES)の固定の文面だけ。

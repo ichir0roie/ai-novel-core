@@ -10,7 +10,7 @@ Claude が `CommitEvent` の `text` を書くときも、`GenerateEvent` が
 決めない。出来事が持つのは、物事がどう変わったか・人物が何を感じたか・誰と
 どの組織が何をしたか、という後から引ける中身だけ。
 ただし AI に起こさせた出来事(`GenerateEvent`)だけは、記録として
-起こしたあと、`EVENT_NOVEL_INSTRUCTION` で話と同じ小説の形に書き直す(`data_access_logic/event/novelist.py`)。
+起こしたあと、`event_novel_instruction()` の文面で話と同じ小説の形に書き直す(`data_access_logic/event/novelist.py`)。
 **ルールの文面を変えるときはここだけを直す。**
 """
 from __future__ import annotations
@@ -65,15 +65,12 @@ text は、渡された出来事の記録を、話(episode)と同じ小説の本
 見出し・番号・出来事の名前の写しは入れない。"""
 
 
-def event_novel_instruction(*, shared_style_extra: str = "", style_extra: str = "") -> str:
+def event_novel_instruction(shared_style_extra: str = "", style_extra: str = "") -> str:
     """出来事の本文(`GenerateEvent` の小説化)の指示。文体の好み(`shared_style_extra` / `style_extra`。
     世界の舞台設定・既存の話から抽出した文体の癖など)は呼び出し側(親リポジトリ側)から渡す。"""
     return (f"{_EVENT_NOVEL_BODY}\n"
             f"{style.style_instruction('event_novel', shared_extra=shared_style_extra, extra=style_extra)}")
 
-
-# 文体の好みを渡さない既定の文面(そのまま使う呼び出し・テスト用)。
-EVENT_NOVEL_INSTRUCTION = event_novel_instruction()
 
 # 人物の text は生涯を通した説明なので、来歴に書かれた後年の役職・出来事まで含む。
 # 歳を渡すだけではそれを先取りした出来事になる(2026-09 の観測。十一歳の人物が関所の役人として勤めていた)。

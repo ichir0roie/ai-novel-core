@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, SerializeAsAny
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.episode import reading as episode_reading
@@ -10,6 +11,7 @@ from data_access_logic.material import Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.story import reading as story_reading
 from db.schema import Story
+from db.stamp import Stamp
 
 _STOPPED_MESSAGE = ("未同期の話が残っている。モード 3(世界観更新)を先に通して、"
                     "SetEpisodeSynced で同期フラグを立ててから書き始める")
@@ -30,7 +32,7 @@ class StoryStart(BaseModel):
 
 
 class StartStory(SessionEntrypoint):
-    def __init__(self, story_id: int, time=None, episodes: int = 10, count: int = 5,
+    def __init__(self, story_id: int, time: Stamp | str | None = None, episodes: int = 10, count: int = 5,
                  reach: int = 60, levels: int = 1, skip_sync: bool = False):
         self.story_id = story_id
         self.time = time
@@ -40,7 +42,7 @@ class StartStory(SessionEntrypoint):
         self.levels = levels
         self.skip_sync = skip_sync
 
-    def execute(self, session) -> StoryStart:
+    def execute(self, session: Session) -> StoryStart:
         story = common_query.get_row(session, Story, self.story_id)
         unsynced = episode_reading.unsynced_episodes(session, self.story_id)
         if unsynced and not self.skip_sync:

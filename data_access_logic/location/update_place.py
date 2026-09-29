@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.location.form import LocationUpdateForm
@@ -16,7 +17,7 @@ class UpdatePlace(CommitEntrypoint):
     def __init__(self, place: LocationUpdateForm):
         self.place = place
 
-    def execute(self, session) -> LocationRecord:
+    def execute(self, session: Session) -> LocationRecord:
         record = common_query.get_row(session, Location, self.place.id)
         if self.place.area is not None:
             self._check_area(session, record, self.place.area)
@@ -25,7 +26,7 @@ class UpdatePlace(CommitEntrypoint):
         return LocationRecord.model_validate(record)
 
     @staticmethod
-    def _check_area(session, record: Location, area: float) -> None:
+    def _check_area(session: Session, record: Location, area: float) -> None:
         if record.parent_id is None:
             return
         parent = session.get(Location, record.parent_id)

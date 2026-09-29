@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.location.record import DeletedLocation
@@ -15,7 +16,7 @@ class DeletePlace(CommitEntrypoint):
     def __init__(self, place_id: int):
         self.place_id = place_id
 
-    def execute(self, session) -> DeletedLocation:
+    def execute(self, session: Session) -> DeletedLocation:
         record = common_query.get_row(session, Location, self.place_id)
         child = session.scalars(
             select(Location.id).where(Location.parent_id == record.id)).first()

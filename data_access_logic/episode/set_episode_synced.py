@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.query import common_query
@@ -14,7 +16,7 @@ class SetEpisodeSynced(CommitEntrypoint):
         self.episode_id = episode_id
         self.synced = synced
 
-    def execute(self, session) -> EpisodeRecord:
+    def execute(self, session: Session) -> EpisodeRecord:
         record = common_query.get_row(session, Episode, self.episode_id)
         record.synced = self.synced
         session.flush()

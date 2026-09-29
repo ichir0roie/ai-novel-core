@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.links import link
@@ -32,7 +33,7 @@ class LinkIdeas(CommitEntrypoint):
         self.episode_id = episode_id
         self.character_id = character_id
 
-    def execute(self, session) -> LinkedIdeas:
+    def execute(self, session: Session) -> LinkedIdeas:
         owners = [(model, owner_id) for model, owner_id in
                   ((Event, self.event_id), (Episode, self.episode_id), (Character, self.character_id))
                   if owner_id is not None]

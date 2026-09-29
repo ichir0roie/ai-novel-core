@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.character.form import CharacterCreateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -15,7 +17,7 @@ class CommitCharacter(CommitEntrypoint):
     def __init__(self, character: CharacterCreateForm):
         self.character = character
 
-    def execute(self, session) -> CharacterRecord:
+    def execute(self, session: Session) -> CharacterRecord:
         form = self.character
         self.check_exists(session, Location, form.place_id, "place_id")
         if form.place_id is not None:

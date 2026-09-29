@@ -35,7 +35,6 @@ data_access_logic/  **db を読み書きする処理と入口。db に触れる�
 randomizer/         db に触れない下書き作り(factory)と乱数
 ai/                 AI に渡す文面と client
   instructions/     プロンプトに埋め込む基準の定数(Python)
-  local_ai/         ローカル AI(Ollama)の client
   claude_code/      Claude Code(`claude -p`)の client と、検証(fact_checker)
 gui/                データ編集 GUI。api/(FastAPI)と web/(Next.js)
 tool/               危険操作(danger/)、テスト用の道具(test/。必ず novel.test.db を使う。

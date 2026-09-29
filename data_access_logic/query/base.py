@@ -8,7 +8,7 @@ def location_time_condition(time: Stamp):
         or_(Location.start.is_(None), Location.start <= time),
         or_(
             Location.end > time,
-            Location.end == None
+            Location.end.is_(None)
         )
     )
 
@@ -29,7 +29,7 @@ def character_time_condition(time: Stamp):
         or_(CharacterPlace.start.is_(None), CharacterPlace.start <= time),
         or_(
             CharacterPlace.end > time,
-            CharacterPlace.end == None
+            CharacterPlace.end.is_(None)
         )
     )
 

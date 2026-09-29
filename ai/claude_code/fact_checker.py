@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""`local_ai`(Ollama)はネットを引けないので、ここだけは claude_ai 固有。
-
-Dラボの MCP のサーバー名は環境ごとに違う(`claude mcp list` で見る)ので、許可ルールを
+"""Dラボの MCP のサーバー名は環境ごとに違う(`claude mcp list` で見る)ので、許可ルールを
 `DEM_CLAUDE_AI_DLAB_TOOLS` で差し替えられるようにしている。繋がっていなければ AI はネット検索だけで検める。
 """
 from __future__ import annotations

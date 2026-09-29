@@ -5,7 +5,6 @@ from pydantic import Field, field_validator, model_validator
 from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterPlaceRow
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, ConfirmStatus, PersonalityLevel
-from db.stamp import Stamp
 
 
 class CharacterParameterForm(Draft):
@@ -41,16 +40,11 @@ class CharacterForm(Draft):
     text: str | None = None
     kind: str | None = None
     main_character: bool | None = None
-    start: Stamp | None = None
-    end: Stamp | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
     place_id: int | None = None
     # GUI は期間ごとの行の配列で渡す。生まれるときの値なので先頭の行だけを使う
     parameters: list[CharacterParameterForm] = []
-
-    @field_validator("start", "end", mode="before")
-    @classmethod
-    def _stamp(cls, value: Any) -> Stamp | None:
-        return Stamp.parse(value)
 
     @field_validator("parameters", mode="before")
     @classmethod

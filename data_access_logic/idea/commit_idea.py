@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.ai_entrypoint import CommitMemeSource
 from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.form import IdeaCreateForm
@@ -16,7 +18,7 @@ class CommitIdea(CommitMemeSource):
         self.idea = idea
         self.fact_check = fact_check
 
-    def execute(self, session) -> IdeaRecord:
+    def execute(self, session: Session) -> IdeaRecord:
         form = self.idea
         self.check_exists(session, Location, form.location_id, "location_id")
         self.check_exists(session, Idea, form.parent_idea_id, "parent_idea_id")

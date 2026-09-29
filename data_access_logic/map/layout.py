@@ -14,7 +14,8 @@ TARGET_WIDTH = 1400.0
 
 
 class Frame:
-    def __init__(self, lon_min, lon_max, lat_min, lat_max, scale, left=60, top=40):
+    def __init__(self, lon_min: float, lon_max: float, lat_min: float, lat_max: float, scale: float,
+                 left: float = 60, top: float = 40) -> None:
         self.lon_min, self.lon_max = lon_min, lon_max
         self.lat_min, self.lat_max = lat_min, lat_max
         self.scale, self.left, self.top = scale, left, top
@@ -27,10 +28,10 @@ class Frame:
     def plot_height(self) -> float:
         return (self.lat_max - self.lat_min) * self.scale
 
-    def x(self, lon) -> float:
+    def x(self, lon: float) -> float:
         return self.left + (float(lon) - self.lon_min) * self.scale
 
-    def y(self, lat) -> float:
+    def y(self, lat: float) -> float:
         return self.top + (self.lat_max - float(lat)) * self.scale
 
     def grid_step(self) -> int:
@@ -38,11 +39,11 @@ class Frame:
         return 30 if span > 180 else (10 if span > 60 else 5)
 
 
-def _floor(v, step):
+def _floor(v: float, step: int) -> int:
     return int(v // step) * step
 
 
-def _ceil(v, step):
+def _ceil(v: float, step: int) -> int:
     return -_floor(-v, step)
 
 
@@ -73,7 +74,7 @@ _CANDIDATES = (
 )
 
 
-def _overlaps(a, b) -> bool:
+def _overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
     return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
 
 

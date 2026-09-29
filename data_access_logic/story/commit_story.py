@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.ai_entrypoint import CommitAndRefresh
 from data_access_logic.story.form import StoryCreateForm
 from data_access_logic.story.record import StoryRecord
@@ -13,7 +15,7 @@ class CommitStory(CommitAndRefresh):
     def __init__(self, story: StoryCreateForm):
         self.story = story
 
-    def execute(self, session) -> StoryRecord:
+    def execute(self, session: Session) -> StoryRecord:
         self.check_exists(session, Location, self.story.world_id, "world_id")
         self.check_exists(session, Location, self.story.place_id, "place_id")
 

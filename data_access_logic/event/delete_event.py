@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.event.record import DeletedEvent
@@ -15,7 +16,7 @@ class DeleteEvent(CommitEntrypoint):
     def __init__(self, event_id: int):
         self.event_id = event_id
 
-    def execute(self, session) -> DeletedEvent:
+    def execute(self, session: Session) -> DeletedEvent:
         record = common_query.get_row(session, Event, self.event_id)
         child = session.scalars(
             select(Event.id).where(Event.parent_event_id == record.id)).first()

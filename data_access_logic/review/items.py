@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.idea.links import appearances
 from data_access_logic.label import label_of
 from data_access_logic.query import review_query
-from db.schema import Idea, Meme, Story
+from db.schema import Base, Idea, Meme, Story
 
 
 class PendingReview(BaseModel):
@@ -18,7 +18,7 @@ class PendingReview(BaseModel):
     detail: str
 
 
-def gui_path(record) -> str:
+def gui_path(record: Base) -> str:
     """GUI(`gui/`)で開く場所"""
     return f"gui: /tables/{type(record).__tablename__}/{record.id}"
 

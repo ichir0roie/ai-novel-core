@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.links import relink
@@ -29,7 +30,7 @@ class MergeIdea(CommitEntrypoint):
         self.source_id = source_id
         self.target_id = target_id
 
-    def execute(self, session) -> MergedIdea:
+    def execute(self, session: Session) -> MergedIdea:
         if self.source_id == self.target_id:
             raise ValueError("source_id と target_id が同じ")
         source = common_query.get_row(session, Idea, self.source_id)

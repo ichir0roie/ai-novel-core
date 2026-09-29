@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import random
 
+from sqlalchemy.orm import Session
+
 from ai.claude_code import ai_client
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator import complete_text, generate_character
 from data_access_logic.character.record import CharacterRecord
@@ -24,13 +27,13 @@ class GenerateCharacter(SessionEntrypoint):
     """
 
     def __init__(self, character: CharacterForm | None = None, time: Stamp | str | None = None,
-                 seed: int | None = None, ai=ai_client):
+                 seed: int | None = None, ai: AIClient = ai_client):
         self.character = character or CharacterForm()
         self.time = time
         self.seed = seed
         self.ai = ai
 
-    def execute(self, session) -> CharacterRecord:
+    def execute(self, session: Session) -> CharacterRecord:
         form = self.character
         rng = random.Random(self.seed)
         if form.id is not None:

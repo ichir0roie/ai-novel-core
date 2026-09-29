@@ -2,7 +2,7 @@
 """一覧・参照先・レビューで行を呼ぶ名前。"""
 from __future__ import annotations
 
-from db.schema import Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story
+from db.schema import Base, Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story
 
 PREVIEW_LENGTH = 80
 
@@ -17,7 +17,7 @@ def clipped(text: str) -> str:
     return text[:PREVIEW_LENGTH] + ("…" if len(text) > PREVIEW_LENGTH else "")
 
 
-def label_of(model: type, row) -> str:
+def label_of(model: type, row: Base) -> str:
     """`row` は `model` の ORM の行か、同じ名前の欄を持つレコードのモデル。"""
     column = LABEL_COLUMNS.get(model)
     if column:

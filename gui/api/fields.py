@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 import typing
+from typing import Any
 
 from pydantic.fields import FieldInfo
 
@@ -11,7 +12,7 @@ from data_access_logic.material import References
 from gui.api.models import ColumnMeta
 
 
-def _members(annotation) -> tuple:
+def _members(annotation: Any) -> tuple:
     """`X | None` や `list[X]` を開いた中身。"""
     return (annotation, *typing.get_args(annotation))
 

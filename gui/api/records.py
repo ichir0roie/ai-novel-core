@@ -5,11 +5,12 @@
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, Field, SerializeAsAny, model_serializer
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Column, ColumnElement, func, or_, select
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from data_access_logic.entrypoint import UnknownFieldError, loading, record_of
 from data_access_logic.episode.record import EpisodeRecord
@@ -20,7 +21,7 @@ from data_access_logic.label import clipped, label_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
-from db.schema import Character, ConfirmStatusType, Episode, Event, Story
+from db.schema import Base, Character, ConfirmStatusType, Episode, Event, Story
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
 
@@ -77,7 +78,7 @@ class EpisodeRelated(Related):
     context: EpisodeContext
 
 
-def _preview(spec: TableSpec, row) -> str:
+def _preview(spec: TableSpec, row: Base) -> str:
     for name in spec.model.TEXT_COLUMNS:
         value = (getattr(row, name) or "").strip()
         if value:
@@ -85,7 +86,7 @@ def _preview(spec: TableSpec, row) -> str:
     return ""
 
 
-def summary_of(spec: TableSpec, row) -> RecordSummary:
+def summary_of(spec: TableSpec, row: Base) -> RecordSummary:
     """`row` は `loading` で読んだ行。"""
     return RecordSummary(record=spec.record_model.model_validate(row), text_columns=(*spec.model.TEXT_COLUMNS, "text"),
                          label=label_of(spec.model, row), preview=_preview(spec, row))
@@ -114,7 +115,7 @@ def reference_labels(session: Session, spec: TableSpec, records: list[Material])
     return labels
 
 
-def _filter_value(column, value: str):
+def _filter_value(column: Column, value: str) -> Any:
     if value == "null":
         return None
     if isinstance(column.type, ConfirmStatusType):
@@ -127,7 +128,7 @@ def _filter_value(column, value: str):
     return value
 
 
-def _ordering(model, sort: str, order: str):
+def _ordering(model: type[Base], sort: str, order: str) -> list[ColumnElement[Any] | InstrumentedAttribute[Any]]:
     column = model.__table__.columns.get(sort)
     if column is None:
         raise UnknownFieldError(f"{model.__tablename__} に列 {sort} は無い")
@@ -175,7 +176,7 @@ def options(session: Session, spec: TableSpec, q: str | None, limit: int, ids: l
             for row in rows]
 
 
-def _context_block(session: Session, table: str, rows) -> ContextBlock:
+def _context_block(session: Session, table: str, rows: Sequence[Base]) -> ContextBlock:
     spec = spec_of(table)
     summaries = [summary_of(spec, row) for row in rows]
     return ContextBlock(items=summaries, labels=reference_labels(session, spec, [summary.record for summary in summaries]))

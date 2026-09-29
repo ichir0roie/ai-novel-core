@@ -4,6 +4,7 @@ from __future__ import annotations
 from data_access_logic.entrypoint import ListEntrypoint
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
+from db.schema import Location
 
 
 class PlaceListing(Material):
@@ -23,5 +24,5 @@ class ListPlaces(ListEntrypoint):
     def select(self):
         return common_query.places_select(kind=self.kind)
 
-    def row(self, row) -> PlaceListing:
+    def row(self, row: Location) -> PlaceListing:
         return PlaceListing.model_validate(row)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
@@ -15,7 +16,7 @@ class DeleteStory(CommitEntrypoint):
     def __init__(self, story_id: int):
         self.story_id = story_id
 
-    def execute(self, session) -> DeletedStory:
+    def execute(self, session: Session) -> DeletedStory:
         record = common_query.get_row(session, Story, self.story_id)
 
         episode_id = session.scalar(

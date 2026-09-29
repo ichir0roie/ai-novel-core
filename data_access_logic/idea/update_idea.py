@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.form import IdeaUpdateForm
 from data_access_logic.idea.record import IdeaRecord
@@ -15,7 +17,7 @@ class UpdateIdea(CommitEntrypoint):
     def __init__(self, idea: IdeaUpdateForm):
         self.idea = idea
 
-    def execute(self, session) -> IdeaRecord:
+    def execute(self, session: Session) -> IdeaRecord:
         form = self.idea
         record = common_query.get_row(session, Idea, form.id)
 
@@ -33,7 +35,7 @@ class UpdateIdea(CommitEntrypoint):
         return IdeaRecord.model_validate(record)
 
     @staticmethod
-    def _check_not_descendant(session, idea_id: int, new_parent_id: int) -> None:
+    def _check_not_descendant(session: Session, idea_id: int, new_parent_id: int) -> None:
         """new_parent_id が idea_id の下位(子孫)なら、親にすると木が循環するので弾く。"""
         seen: set[int] = set()
         ancestor_id: int | None = new_parent_id

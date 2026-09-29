@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from ai.claude_code import ai_client
 from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL
+from data_access_logic import world_style
+from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import framer, writer
 from data_access_logic.episode import summary as episode_summary
@@ -19,21 +23,21 @@ class GenerateEpisode(SessionEntrypoint):
     登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`、それも無ければ枠の
     `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
-    `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
+    `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
     """
 
     def __init__(self, episode: EpisodeForm, character_ids: list[int] | None = None,
                  model: str | None = None, effort: str | None = None,
-                 shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
+                 shared_style_extra: str | None = None, style_extra: str | None = None, ai: AIClient = ai_client):
         self.episode = episode
         self.character_ids = character_ids
         self.model = model
         self.effort = effort
-        self.shared_style_extra = shared_style_extra
-        self.style_extra = style_extra
+        self.shared_style_extra = world_style.shared_style_extra(shared_style_extra)
+        self.style_extra = world_style.style_extra(style_extra)
         self.ai = ai
 
-    def execute(self, session) -> EpisodeRecord:
+    def execute(self, session: Session) -> EpisodeRecord:
         form = self.episode.model_copy()
         if self.character_ids is not None:
             form.character_ids = self.character_ids

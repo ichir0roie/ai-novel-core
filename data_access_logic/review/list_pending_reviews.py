@@ -8,12 +8,14 @@
 """
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.review import items
 
 
 class ListPendingReviews(SessionEntrypoint):
-    def execute(self, session) -> list[items.PendingReview]:
+    def execute(self, session: Session) -> list[items.PendingReview]:
         return [*items.candidate_items(session),
                 *items.unconfirmed_meme_items(session),
                 *items.unsynced_episode_items(session),

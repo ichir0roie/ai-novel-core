@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import random
 
+from sqlalchemy.orm import Session
+
 from data_access_logic import constants
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.meme.extractor import draw
@@ -16,6 +18,6 @@ class DrawMemes(SessionEntrypoint):
         self.person = person
         self.seed = seed
 
-    def execute(self, session) -> list[DrawnMeme]:
+    def execute(self, session: Session) -> list[DrawnMeme]:
         categories = constants.MEME_PERSON_CATEGORIES if self.person else constants.MEME_NON_PERSON_CATEGORIES
         return draw(session, random.Random(self.seed), categories)

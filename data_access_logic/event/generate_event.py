@@ -5,6 +5,8 @@ import logging
 import random
 
 from ai.claude_code import ai_client
+from data_access_logic import world_style
+from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.event.form import EventForm
 from data_access_logic.event.novelist import novelize_event
@@ -41,21 +43,21 @@ class GenerateEvent(SessionEntrypoint):
     候補を挙げてサイコロで選び、記録して小説の本文にする生成を、
     下書きの名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。
     時刻を省けば世界の最新の出来事の時刻、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。
-    `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
+    `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
 
     `id` を渡せば、その出来事の本文(text)が空のときに限り、記録・当事者・関連する設定から AI に
     小説の本文だけを書かせて埋める(名前・時刻・場所・当事者は変えない)。
     """
 
     def __init__(self, event: EventForm | None = None, seed: int | None = None,
-                 shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
+                 shared_style_extra: str | None = None, style_extra: str | None = None, ai: AIClient = ai_client):
         self.event = event or EventForm()
         self.seed = seed
-        self.shared_style_extra = shared_style_extra
-        self.style_extra = style_extra
+        self.shared_style_extra = world_style.shared_style_extra(shared_style_extra)
+        self.style_extra = world_style.style_extra(style_extra)
         self.ai = ai
 
-    def execute(self, session) -> EventRecord:
+    def execute(self, session: Session) -> EventRecord:
         if self.event.id is not None:
             record = common_query.get_row(session, Event, self.event.id)
             if (record.text or "").strip():

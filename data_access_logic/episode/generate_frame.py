@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from ai.claude_code import ai_client
+from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import framer
 from data_access_logic.episode.form import EpisodeForm, save_frame
@@ -17,12 +20,12 @@ class GenerateFrame(SessionEntrypoint):
     `episode_character` として残す。どちらも無ければ枠の `episode_character`(空なら作品と直前の話だけを材料にする)。
     """
 
-    def __init__(self, frame: EpisodeForm, character_ids: list[int] | None = None, ai=ai_client):
+    def __init__(self, frame: EpisodeForm, character_ids: list[int] | None = None, ai: AIClient = ai_client):
         self.frame = frame
         self.character_ids = character_ids
         self.ai = ai
 
-    def execute(self, session) -> EpisodeRecord:
+    def execute(self, session: Session) -> EpisodeRecord:
         form = self.frame.model_copy()
         if self.character_ids is not None:
             form.character_ids = self.character_ids

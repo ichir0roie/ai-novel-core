@@ -8,6 +8,7 @@ from data_access_logic.episode.record import EpisodeHead, EpisodeRow
 from data_access_logic.material import Material, Named, Timestamp
 from data_access_logic.query import common_query
 from db.schema import Story
+from db.stamp import Stamp
 
 
 class EpisodeTitle(Material):
@@ -26,7 +27,7 @@ class UnsyncedEpisode(EpisodeTitle):
         return None if self.story is None else self.story.name
 
 
-def episodes(session: Session, story_id: int, count: int = 10, before=None,
+def episodes(session: Session, story_id: int, count: int = 10, before: Stamp | str | None = None,
              text: bool = True) -> list[EpisodeHead]:
     common_query.get_row(session, Story, story_id)
     rows = session.scalars(

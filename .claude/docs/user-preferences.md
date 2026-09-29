@@ -12,6 +12,6 @@
   入口の `GenerateEpisode` / `ReviseEpisode` / `GenerateEvent` など)の引数として渡す。
   `core` は「引数を渡さなければ空でよい(システム固有の値だけで成り立つ)」設計にする
 
-例: `ai/instructions/style.py` の `shared_extra` / `extra`、`main.py` 以下の `shared_style_extra` /
-`style_extra`。呼び出し元(世界リポジトリの `instructions/` や、Claude Code のスキル)がこれらの引数に
-自分の値を渡す。
+例: `ai/instructions/style.py` の `shared_extra` / `extra`、入口の `shared_style_extra` /
+`style_extra`。入口はこれらを省かれると、世界リポジトリの `instructions/style.py`(`SHARED_EXTRA` /
+`EPISODE_STYLE_EXTRA`)があればそこから読む(`data_access_logic/world_style.py`)。無ければ空のまま動く。

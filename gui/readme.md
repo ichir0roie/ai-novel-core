@@ -104,7 +104,7 @@ AI を引数に取る入口)。それらは
 - `CLAUDECODE=1` のある環境で起こした API でだけ通す。外なら 403。Claude Code のシェルは `CLAUDECODE=1` を持ち、
   `gui.dev` はどこから起こしても API に渡す(uvicorn を直に起こしたときだけ、自分で渡さなければ止まる)
 - 数分〜十数分掛かるので、必ず裏の job にして 202 で id を返す。結果は `/api/jobs/{id}` で引く。job は一度に一つずつ走る
-- `shared_style_extra` / `style_extra` を渡さなければ、世界リポジトリの `instructions/style.py`(`SHARED_EXTRA` / `EPISODE_STYLE_EXTRA`)があればそこから埋める
+- `shared_style_extra` / `style_extra` は渡さない。入口が世界リポジトリの `instructions/style.py` から読む(`data_access_logic/world_style.py`)
 
 ## AI で作成 / AI で補完
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from data_access_logic.character.parameters import parameters_at
 from db.schema import Character, CharacterRelation
+from db.stamp import Stamp
 
 
 class RelationCharacter(BaseModel):
@@ -34,7 +36,7 @@ class RelationGraph(BaseModel):
     relations: list[Relation]
 
 
-def _year(stamp) -> int | None:
+def _year(stamp: Stamp | None) -> int | None:
     return None if stamp is None else stamp.year
 
 
@@ -51,7 +53,7 @@ def relation_of(relation: CharacterRelation) -> Relation:
                     text=relation.text or "")
 
 
-def relation_graph(session) -> RelationGraph:
+def relation_graph(session: Session) -> RelationGraph:
     characters = session.scalars(select(Character).order_by(Character.id)).all()
     relations = session.scalars(select(CharacterRelation).order_by(CharacterRelation.id)).all()
     return RelationGraph(characters=[relation_character_of(character) for character in characters],

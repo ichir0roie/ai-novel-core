@@ -14,7 +14,7 @@ def siblings_area_sum_select(parent_id: int) -> Select:
             .where(Location.parent_id == parent_id))
 
 
-def busy_character_ids_select(time) -> Select:
+def busy_character_ids_select(time: Stamp) -> Select:
     return (
         select(EventCharacter.character_id).distinct()
         .join(Event, Event.id == EventCharacter.event_id)
@@ -25,7 +25,7 @@ def busy_character_ids_select(time) -> Select:
     )
 
 
-def alive_locations_select(time) -> Select:
+def alive_locations_select(time: Stamp) -> Select:
     return (
         select(Location)
         .where(
@@ -34,7 +34,7 @@ def alive_locations_select(time) -> Select:
     )
 
 
-def alive_characters_select(time) -> Select:
+def alive_characters_select(time: Stamp) -> Select:
     """誕生・死亡は列を持たず `character_parameter` の行で表す(`Character.start` / `.end` を見る)。
 
     誕生 = 一番早く始まる行の start(`Character.start` と同じ計算)。

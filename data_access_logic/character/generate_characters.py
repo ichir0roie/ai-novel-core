@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import random
 
+from sqlalchemy.orm import Session
+
 from ai.claude_code import ai_client
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator import generate_character
 from data_access_logic.character.record import GeneratedCharacter
 from data_access_logic.entrypoint import SessionEntrypoint
@@ -12,8 +15,8 @@ from db.schema import Location, Stamp
 
 
 class GenerateCharacters(SessionEntrypoint):
-    def __init__(self, place_ids: list[int], time, count: tuple[int, int] = (2, 4),
-                 person: bool = True, seed: int | None = None, ai=ai_client):
+    def __init__(self, place_ids: list[int], time: Stamp | str, count: tuple[int, int] = (2, 4),
+                 person: bool = True, seed: int | None = None, ai: AIClient = ai_client):
         self.place_ids = place_ids
         self.time = Stamp.parse(time)
         self.count = count
@@ -21,7 +24,7 @@ class GenerateCharacters(SessionEntrypoint):
         self.seed = seed
         self.ai = ai
 
-    def execute(self, session) -> list[GeneratedCharacter]:
+    def execute(self, session: Session) -> list[GeneratedCharacter]:
         places = []
         for place_id in self.place_ids:
             place = session.get(Location, place_id)

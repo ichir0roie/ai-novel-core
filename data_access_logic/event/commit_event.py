@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
 from ai.claude_code import ai_client
 from data_access_logic.ai_entrypoint import CommitAndRefresh
 from data_access_logic.entrypoint import record_of
@@ -19,7 +21,7 @@ class CommitEvent(CommitAndRefresh):
     def __init__(self, event: EventCreateForm):
         self.event = event
 
-    def execute(self, session) -> EventRecord:
+    def execute(self, session: Session) -> EventRecord:
         self.check_exists(session, Event, self.event.parent_event_id, "parent_event_id")
         self.check_exists(session, Location, self.event.location_id, "location_id")
         for character_id in self.event.character_ids:
@@ -33,6 +35,6 @@ class CommitEvent(CommitAndRefresh):
         session.flush()
         return record_of(session, EventRecord, record)
 
-    def follow_up(self, session) -> None:
+    def follow_up(self, session: Session) -> None:
         # 足した出来事自身の本文も種の元になる
         refresh_and_consolidate(session, ai_client)

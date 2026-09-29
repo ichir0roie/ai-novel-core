@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from data_access_logic.map.category import category_of
 from data_access_logic.map.geometry import planet_radius_km
@@ -49,7 +50,7 @@ class PlanetMap(BaseModel):
     shapes: list[MapPlace]
 
 
-def _num(value) -> float | None:
+def _num(value: float | None) -> float | None:
     return None if value is None else float(value)
 
 
@@ -57,7 +58,7 @@ def planet_of(planet: Location) -> Planet:
     return Planet(id=planet.id, name=planet.name, area=_num(planet.area), radius_km=planet_radius_km(planet.area))
 
 
-def map_place_of(session, place: Location) -> MapPlace:
+def map_place_of(session: Session, place: Location) -> MapPlace:
     # `Location.parent` は noload なので、識別マップに先に載った行では None のまま。id で引き直す
     parent = session.get(Location, place.parent_id) if place.parent_id is not None else None
     return MapPlace(
@@ -77,7 +78,7 @@ def map_place_of(session, place: Location) -> MapPlace:
     )
 
 
-def planet_maps(session) -> list[PlanetMap]:
+def planet_maps(session: Session) -> list[PlanetMap]:
     result = []
     for planet in session.scalars(common_query.planets_select()).all():
         places = session.scalars(common_query.places_on_planet_select(planet.id)).all()

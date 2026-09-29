@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 from pydantic import SerializeAsAny, model_serializer
@@ -36,7 +37,7 @@ class CharacterSheet(Material):
         return {**data.pop("character"), **data.pop("parameters_at"), **data}
 
 
-def residents(session: Session, place_ids, until: Stamp) -> list[int]:
+def residents(session: Session, place_ids: Collection[int], until: Stamp) -> list[int]:
     character_ids = session.scalars(
         common_query.resident_character_ids_select(place_ids, until)).all()
     return [id_ for id_ in character_ids if id_ is not None]
@@ -49,7 +50,7 @@ def _place_at(session: Session, character_id: int, until: Stamp) -> PlaceAt | No
     return PlaceAt(place_id=row.location_id, place_name=row.place.name if row.place else None, start=row.start)
 
 
-def character_sheet(session: Session, character_id: int, until=None,
+def character_sheet(session: Session, character_id: int, until: Stamp | str | None = None,
                     count: int = 5, text: bool = True) -> CharacterSheet:
     character = session.scalars(common_query.character_select(character_id)).first()
     if character is None:

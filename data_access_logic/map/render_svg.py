@@ -6,7 +6,7 @@ from xml.sax.saxutils import escape
 
 from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from data_access_logic.map.collect import MapPlace, Planet
-from data_access_logic.map.layout import fit_frame, place_labels
+from data_access_logic.map.layout import Frame, fit_frame, place_labels
 from db.polygon import polygon_center
 
 __all__ = ["COLORS", "marker", "shape_path", "alt_text", "render_svg"]
@@ -32,7 +32,7 @@ def marker(category: str, x: float, y: float, r: float, color: str, extra: str =
     return f'<path d="{d}" {attrs}/>'
 
 
-def shape_path(frame, polygon: dict) -> str:
+def shape_path(frame: Frame, polygon: dict) -> str:
     parts = []
     for ring in polygon["coordinates"]:
         parts.append(" ".join(f"{'M' if i == 0 else 'L'}{frame.x(lon):.1f},{frame.y(lat):.1f}"
@@ -40,13 +40,13 @@ def shape_path(frame, polygon: dict) -> str:
     return " ".join(parts)
 
 
-def alt_text(alt) -> str:
+def alt_text(alt: float | None) -> str:
     if alt is None:
         return ""
     return f" ({alt:+,.0f} m)"
 
 
-def _grid(frame) -> list[str]:
+def _grid(frame: Frame) -> list[str]:
     out = []
     step = frame.grid_step()
     x0, x1, y0, y1 = frame.x(frame.lon_min), frame.x(frame.lon_max), frame.y(frame.lat_max), frame.y(frame.lat_min)

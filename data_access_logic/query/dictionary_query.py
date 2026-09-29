@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Collection
+
 from sqlalchemy import ColumnElement, Select, and_, false, or_, select, true
 
 from db.schema import ConfirmStatus, Idea, IdeaRecognition
 from db.stamp import Stamp
 
 
-def idea_in_scope(place_ids=None, time: Stamp | None = None) -> ColumnElement[bool]:
+def idea_in_scope(place_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
     """`place_ids` は現在地から最上位までの場所(`common_query.idea_scope_ids`)。"""
     conditions = []
     if place_ids is not None:
@@ -18,7 +20,7 @@ def idea_in_scope(place_ids=None, time: Stamp | None = None) -> ColumnElement[bo
     return and_(true(), *conditions)
 
 
-def recognition_in_scope(place_ids=None, time: Stamp | None = None) -> ColumnElement[bool]:
+def recognition_in_scope(place_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
     """認識(呼び名)は、場所・時代の列が空ならどこでも・いつでも使う。
     `place_ids` / `time` を渡さなければ、その列が空の認識だけに当たる。
     """
@@ -33,14 +35,15 @@ def recognition_in_scope(place_ids=None, time: Stamp | None = None) -> ColumnEle
     return and_(location, period)
 
 
-def recognitions_select(essence_ids, place_ids=None, time: Stamp | None = None) -> Select:
+def recognitions_select(essence_ids: Collection[int], place_ids: Collection[int] | None = None,
+                        time: Stamp | None = None) -> Select:
     conditions = [IdeaRecognition.idea_id.in_(list(essence_ids)), recognition_in_scope(place_ids, time)]
     return (select(IdeaRecognition)
             .where(*conditions)
             .order_by(IdeaRecognition.start.desc().nulls_last(), IdeaRecognition.id))
 
 
-def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None,
+def ideas_by_terms_select(terms: Collection[str], place_ids: Collection[int] | None = None, time: Stamp | None = None,
                           confirmed_only: bool = True) -> Select:
     """名前か本文(基本の本文、その場所・時代の作中の呼び名 `IdeaRecognition`)に
     `terms` のどれかを含むアイデア。呼び名を左外部結合するので、呼び名の無いアイデアも
@@ -67,7 +70,7 @@ def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None,
             .order_by(Idea.id))
 
 
-def ideas_by_parent_select(parent_ids, place_ids=None, time: Stamp | None = None,
+def ideas_by_parent_select(parent_ids: Collection[int], place_ids: Collection[int] | None = None, time: Stamp | None = None,
                            confirmed_only: bool = True) -> Select:
     conditions = [Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(place_ids, time)]
     if confirmed_only:
@@ -75,7 +78,7 @@ def ideas_by_parent_select(parent_ids, place_ids=None, time: Stamp | None = None
     return select(Idea).where(*conditions).order_by(Idea.id)
 
 
-def later_ideas_select(place_ids, time: Stamp) -> Select:
+def later_ideas_select(place_ids: Collection[int], time: Stamp) -> Select:
     """`time` より後に始まる、`place_ids` の場所で効く確定済みのアイデア。"""
     return (select(Idea)
             .where(Idea.location_id.in_(list(place_ids)),
