@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy import Select, func, or_, select
+from collections.abc import Collection
+
+from sqlalchemy import ColumnElement, Select, func, or_, select
 
 from data_access_logic.query import common_query
+from data_access_logic.query.period import alive_at
 from db.schema import (
     Character, CharacterParameter, Event, EventCharacter, Location, Session, Stamp, Story,
 )
@@ -25,13 +28,15 @@ def busy_character_ids_select(time: Stamp) -> Select:
     )
 
 
-def alive_locations_select(time: Stamp) -> Select:
-    return (
-        select(Location)
-        .where(
-            or_(Location.start.is_(None), Location.start <= time),
-            or_(Location.end.is_(None), Location.end > time))
-    )
+def active_locations_select(time: Stamp, place_ids: Collection[int]) -> Select:
+    """`place_ids` のうち、その時刻にあって、ランダム生成の対象(`active_random_generation`)の場所。"""
+    return select(Location).where(
+        Location.id.in_(list(place_ids)), alive_at(Location, time), Location.active_random_generation.is_(True))
+
+
+def character_active_condition() -> ColumnElement[bool]:
+    """ランダム生成の対象になる人物(サブキャラクター)。"""
+    return Character.main_character.is_(False)
 
 
 def alive_characters_select(time: Stamp) -> Select:
@@ -75,17 +80,17 @@ def check_within_parent_span(parent: Location, child_start: Stamp | None, child_
                 f"end={parent.end} を超える")
 
 
-def location_has_story(session: Session, place_id: int) -> bool:
-    ancestor_ids = [step.id for step in common_query.place_path(session, place_id)]
-    return session.scalar(
+def location_has_story(s: Session, place_id: int) -> bool:
+    ancestor_ids = [step.id for step in common_query.place_path(s, place_id)]
+    return s.scalar(
         select(Story.id)
         .where(Story.place_id.in_(ancestor_ids))
         .limit(1)
     ) is not None
 
 
-def check_has_story(session: Session, place_id: int, label: str) -> None:
-    if not location_has_story(session, place_id):
+def check_has_story(s: Session, place_id: int, label: str) -> None:
+    if not location_has_story(s, place_id):
         raise ValueError(
             f"{label}: place_id={place_id} には作品が無い。"
             "先に CommitStory でその場所(か祖先)へ作品を置いてから確定する")

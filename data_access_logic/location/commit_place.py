@@ -16,29 +16,29 @@ class CommitPlace(CommitEntrypoint):
     def __init__(self, place: LocationCreateForm):
         self.place = place
 
-    def execute(self, session: Session) -> LocationRecord:
-        self.check_exists(session, Location, self.place.parent_id, "parent_id")
+    def execute(self, s: Session) -> LocationRecord:
+        self.check_exists(s, Location, self.place.parent_id, "parent_id")
         if self.place.parent_id is not None:
-            parent = session.get_one(Location, self.place.parent_id)
-            self._check_area(session, parent, self.place.area)
+            parent = s.get_one(Location, self.place.parent_id)
+            self._check_area(s, parent, self.place.area)
             world_creation_query.check_within_parent_span(
                 parent, self.place.start, self.place.end, "location")
 
         record = Location()
         self.place.write_to(record)
-        session.add(record)
-        self.finalize(session, record)
+        s.add(record)
+        self.finalize(s, record)
         return LocationRecord.model_validate(record)
 
     @staticmethod
-    def _check_area(session: Session, parent: Location, area: float | None) -> None:
+    def _check_area(s: Session, parent: Location, area: float | None) -> None:
         if area is None or parent.area is None:
             return
         if not area < parent.area:
             raise ValueError(
                 f"area={area} が親(id={parent.id})の広さ {parent.area} 未満でない")
 
-        siblings_area = session.scalar(
+        siblings_area = s.scalar(
             world_creation_query.siblings_area_sum_select(parent.id))
         if float(siblings_area) + area > float(parent.area):  # DECIMAL 列の合計は Decimal で返る
             raise ValueError(

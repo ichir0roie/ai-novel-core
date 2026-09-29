@@ -14,5 +14,5 @@ class ReadCharacter(SessionEntrypoint):
         self.time = time
         self.count = count
 
-    def execute(self, session: Session) -> character_reading.CharacterSheet:
-        return character_reading.character_sheet(session, self.character_id, until=self.time, count=self.count)
+    def execute(self, s: Session) -> character_reading.CharacterSheet:
+        return character_reading.character_sheet(s, self.character_id, until=self.time, count=self.count)

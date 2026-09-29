@@ -5,6 +5,7 @@ from collections.abc import Collection
 
 from sqlalchemy import ColumnElement, Select, and_, false, or_, select, true
 
+from data_access_logic.query.period import alive_at
 from db.schema import ConfirmStatus, Idea, IdeaRecognition
 from db.stamp import Stamp
 
@@ -15,8 +16,7 @@ def idea_in_scope(place_ids: Collection[int] | None = None, time: Stamp | None =
     if place_ids is not None:
         conditions.append(Idea.location_id.in_(list(place_ids)))
     if time is not None:
-        conditions += [or_(Idea.start.is_(None), Idea.start <= time),
-                       or_(Idea.end.is_(None), Idea.end > time)]
+        conditions.append(alive_at(Idea, time))
     return and_(true(), *conditions)
 
 
@@ -30,8 +30,7 @@ def recognition_in_scope(place_ids: Collection[int] | None = None, time: Stamp |
     if time is None:
         period = and_(IdeaRecognition.start.is_(None), IdeaRecognition.end.is_(None))
     else:
-        period = and_(or_(IdeaRecognition.start.is_(None), IdeaRecognition.start <= time),
-                      or_(IdeaRecognition.end.is_(None), IdeaRecognition.end > time))
+        period = alive_at(IdeaRecognition, time)
     return and_(location, period)
 
 

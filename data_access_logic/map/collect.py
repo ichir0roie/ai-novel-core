@@ -58,9 +58,9 @@ def planet_of(planet: Location) -> Planet:
     return Planet(id=planet.id, name=planet.name, area=_num(planet.area), radius_km=planet_radius_km(planet.area))
 
 
-def map_place_of(session: Session, place: Location) -> MapPlace:
+def map_place_of(s: Session, place: Location) -> MapPlace:
     # `Location.parent` は noload なので、識別マップに先に載った行では None のまま。id で引き直す
-    parent = session.get(Location, place.parent_id) if place.parent_id is not None else None
+    parent = s.get(Location, place.parent_id) if place.parent_id is not None else None
     return MapPlace(
         id=place.id, name=place.name, kind=place.kind, category=category_of(place.kind),
         parent_id=place.parent_id,
@@ -78,14 +78,14 @@ def map_place_of(session: Session, place: Location) -> MapPlace:
     )
 
 
-def planet_maps(session: Session) -> list[PlanetMap]:
+def planet_maps(s: Session) -> list[PlanetMap]:
     result = []
-    for planet in session.scalars(common_query.planets_select()).all():
-        places = session.scalars(common_query.places_on_planet_select(planet.id)).all()
-        shapes = session.scalars(common_query.shapes_on_planet_select(planet.id)).all()
+    for planet in s.scalars(common_query.planets_select()).all():
+        places = s.scalars(common_query.places_on_planet_select(planet.id)).all()
+        shapes = s.scalars(common_query.shapes_on_planet_select(planet.id)).all()
         if not places and not shapes:
             continue
         result.append(PlanetMap(planet=planet_of(planet),
-                                points=[map_place_of(session, place) for place in places],
-                                shapes=[map_place_of(session, place) for place in shapes]))
+                                points=[map_place_of(s, place) for place in places],
+                                shapes=[map_place_of(s, place) for place in shapes]))
     return result

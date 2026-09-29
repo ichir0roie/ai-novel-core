@@ -16,8 +16,8 @@ class UpdateOracle(CommitEntrypoint):
     def __init__(self, oracle: OracleUpdateForm):
         self.oracle = oracle
 
-    def execute(self, session: Session) -> OracleRecord:
-        record = common_query.get_row(session, Oracle, self.oracle.id)
+    def execute(self, s: Session) -> OracleRecord:
+        record = common_query.get_row(s, Oracle, self.oracle.id)
         self.oracle.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return OracleRecord.model_validate(record)

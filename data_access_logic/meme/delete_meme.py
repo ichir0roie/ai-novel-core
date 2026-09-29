@@ -15,8 +15,8 @@ class DeleteMeme(CommitEntrypoint):
     def __init__(self, meme_id: int):
         self.meme_id = meme_id
 
-    def execute(self, session: Session) -> MemeRecord:
-        record = common_query.get_row(session, Meme, self.meme_id)
+    def execute(self, s: Session) -> MemeRecord:
+        record = common_query.get_row(s, Meme, self.meme_id)
         deleted = MemeRecord.model_validate(record)
-        session.delete(record)
+        s.delete(record)
         return deleted

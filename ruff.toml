@@ -9,6 +9,5 @@ ignore = ["F403", "F405"]
 [lint.per-file-ignores]
 # `import *` で先へ渡すための import なので、使っていないように見えても消さない
 "db/schema.py" = ["F401"]
-"data_access_logic/query/base.py" = ["F401"]
 # マイグレーションは、その版を作ったときのまま残す
 "db/alembic/**" = ["E", "F"]

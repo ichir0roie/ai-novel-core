@@ -17,9 +17,9 @@ class CommitMeme(CommitEntrypoint):
     def __init__(self, meme: MemeCreateForm):
         self.meme = meme
 
-    def execute(self, session: Session) -> MemeRecord:
+    def execute(self, s: Session) -> MemeRecord:
         record = Meme()
         self.meme.write_to(record)
-        session.add(record)
-        self.finalize(session, record)
+        s.add(record)
+        self.finalize(s, record)
         return MemeRecord.model_validate(record)

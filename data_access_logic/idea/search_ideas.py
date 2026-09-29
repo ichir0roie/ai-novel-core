@@ -40,9 +40,9 @@ class SearchIdeas(SessionEntrypoint):
         self.limit = limit
         self.time = Stamp.parse(time)
 
-    def execute(self, session: Session) -> list[FoundIdea]:
-        hits = search(session, self.keywords, self.place_id, self.time, limit=self.limit, confirmed_only=False)
-        recognitions = called(session, [hit.idea.id for hit in hits], self.place_id, self.time)
+    def execute(self, s: Session) -> list[FoundIdea]:
+        hits = search(s, self.keywords, self.place_id, self.time, limit=self.limit, confirmed_only=False)
+        recognitions = called(s, [hit.idea.id for hit in hits], self.place_id, self.time)
         return [
             FoundIdea(id=hit.idea.id, name=hit.idea.name, kind=hit.idea.kind, confirmed=hit.idea.confirmed,
                       parent_idea_id=hit.idea.parent_idea_id,

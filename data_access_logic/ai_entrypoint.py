@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """確定したあとに AI(`claude -p`)を回す入口の基底。
 
-AI の段は `run()` / `show()` のときだけ回る。GUI の API が呼ぶ `execute(session)` は確定だけを行い、
+AI の段は `run()` / `show()` のときだけ回る。GUI の API が呼ぶ `execute(s)` は確定だけを行い、
 取りこぼした分は `RefreshGeneratedContent` が後でまとめて拾う。
 """
 from __future__ import annotations
@@ -27,23 +27,23 @@ class CommitAndRefresh(CommitEntrypoint):
     追いかける基底(AI が答えなくても確定自体は残るよう、別のセッションで行う)。
     """
 
-    def execute(self, session: Session) -> EventRecord | EpisodeRecord | StoryRecord:
+    def execute(self, s: Session) -> EventRecord | EpisodeRecord | StoryRecord:
         raise NotImplementedError
 
     def result(self) -> EventRecord | EpisodeRecord | StoryRecord:
-        with get_env_session() as session, session.begin():
-            committed = self.execute(session)
-        with get_env_session() as session:
-            refresh(session, ai_client)
-            row = session.get_one(self.model, committed.id)
+        with get_env_session() as s, s.begin():
+            committed = self.execute(s)
+        with get_env_session() as s:
+            refresh(s, ai_client)
+            row = s.get_one(self.model, committed.id)
             if isinstance(row, Event):
-                event_summary.summarize(session, ai_client, row)
+                event_summary.summarize(s, ai_client, row)
             elif isinstance(row, Episode):
-                episode_summary.summarize(session, ai_client, row)
-            self.follow_up(session)
+                episode_summary.summarize(s, ai_client, row)
+            self.follow_up(s)
         return committed
 
-    def follow_up(self, session: Session) -> None:
+    def follow_up(self, s: Session) -> None:
         """入口ごとに足す、確定したあとの AI の段。"""
 
 
@@ -65,19 +65,19 @@ class CommitMemeSource(CommitEntrypoint):
 
     fact_check = True
 
-    def execute(self, session: Session) -> IdeaRecord | OracleRecord:
+    def execute(self, s: Session) -> IdeaRecord | OracleRecord:
         raise NotImplementedError
 
     def result(self) -> MemeSourceCommitted:
-        with get_env_session() as session, session.begin():
-            committed = self.execute(session)
-        with get_env_session() as session:
+        with get_env_session() as s, s.begin():
+            committed = self.execute(s)
+        with get_env_session() as s:
             if self.fact_check and committed.text.strip():
-                fact_checker.check(session, self.model.__tablename__, ids=[committed.id])
-            last_id = fact_checker.last_meme_id(session)
-            memes_added = refresh(session, ai_client)
+                fact_checker.check(s, self.model.__tablename__, ids=[committed.id])
+            last_id = fact_checker.last_meme_id(s)
+            memes_added = refresh(s, ai_client)
             if self.fact_check:
-                fact_checker.check_new_memes(session, last_id)
+                fact_checker.check_new_memes(s, last_id)
             # 検めた結果は本文の末尾に足されるので、読み直して返す
-            record = type(committed).model_validate(session.get_one(self.model, committed.id))
+            record = type(committed).model_validate(s.get_one(self.model, committed.id))
         return MemeSourceCommitted(record=record, memes_added=memes_added)

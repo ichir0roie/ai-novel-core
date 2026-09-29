@@ -24,13 +24,13 @@ class GenerateCharacters(SessionEntrypoint):
         self.seed = seed
         self.ai = ai
 
-    def execute(self, session: Session) -> list[GeneratedCharacter]:
+    def execute(self, s: Session) -> list[GeneratedCharacter]:
         places = []
         for place_id in self.place_ids:
-            place = session.get(Location, place_id)
+            place = s.get(Location, place_id)
             if place is None:
                 raise ValueError(f"place_id={place_id} という id の location が見つからない")
-            world_creation_query.check_has_story(session, place_id, "character")
+            world_creation_query.check_has_story(s, place_id, "character")
             places.append(place)
 
         rng = random.Random(self.seed)
@@ -38,7 +38,7 @@ class GenerateCharacters(SessionEntrypoint):
         # generate_character は一人ごとに commit するので、途中で止まっても作った人物は残る
         for place in places:
             for _ in range(rng.randint(*self.count)):
-                record = generate_character(session, self.ai, rng, place.id, self.time, self.person)
+                record = generate_character(s, self.ai, rng, place.id, self.time, self.person)
                 if record is not None:
                     created.append(GeneratedCharacter(id=record.id, name=record.name, place_id=place.id))
         return created

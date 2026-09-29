@@ -28,10 +28,10 @@ class ReadSurroundings(SessionEntrypoint):
         self.time = time
         self.reach = reach
 
-    def execute(self, session: Session) -> Surroundings:
+    def execute(self, s: Session) -> Surroundings:
         _, until = common_query.span(self.time)
         characters, events = character_simulation_query.character_around_event(
-            session, self.character_id, until, reach=self.reach)
+            s, self.character_id, until, reach=self.reach)
         return Surroundings(
             character_id=self.character_id, time=until, reach=self.reach,
             characters=[CharacterHead.model_validate(character) for character in characters],

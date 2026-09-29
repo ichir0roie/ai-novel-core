@@ -143,16 +143,16 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
     return result
 
 
-def table_meta(session: Session, spec: TableSpec) -> TableMeta:
-    count = session.scalar(select(func.count()).select_from(spec.model)) or 0
+def table_meta(s: Session, spec: TableSpec) -> TableMeta:
+    count = s.scalar(select(func.count()).select_from(spec.model)) or 0
     return TableMeta(name=spec.name, label=spec.label, label_column=LABEL_COLUMNS[spec.model],
                      columns=table_columns(spec), child_lists=child_lists(spec),
                      reviewable=spec.reviewable, count=count, sort=spec.sort, order=spec.order,
                      generators=[generator.to_meta() for generator in generate.generators_of(spec.name)])
 
 
-def all_tables(session: Session) -> list[TableMeta]:
-    return [table_meta(session, spec) for spec in TABLES]
+def all_tables(s: Session) -> list[TableMeta]:
+    return [table_meta(s, spec) for spec in TABLES]
 
 
 _LABELS["parameters"] = "期間ごとのパラメータ"

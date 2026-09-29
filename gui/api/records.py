@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""行の一覧・一件・追加・修正。読むのは select で直接、書くのは入口の `execute(session)` 越し。
+"""行の一覧・一件・追加・修正。読むのは select で直接、書くのは入口の `execute(s)` 越し。
 
 行は表ごとの `record_model`(入口のレスポンスと同じモデル)に詰め、API の型(`gui/api/models.py`)に渡すときに dump する。
 """
@@ -92,7 +92,7 @@ def summary_of(spec: TableSpec, row: Base) -> RecordSummary:
                          label=label_of(spec.model, row), preview=_preview(spec, row))
 
 
-def reference_labels(session: Session, spec: TableSpec, records: list[Material]) -> Labels:
+def reference_labels(s: Session, spec: TableSpec, records: list[Material]) -> Labels:
     """参照先(`*_id` の列と、出来事の当事者・話の登場人物)の名前を、参照先のテーブルごとに一回の select で引く。"""
     wanted: dict[str, dict[str, set[int]]] = {}
     for column in spec.model.__table__.columns:
@@ -108,7 +108,7 @@ def reference_labels(session: Session, spec: TableSpec, records: list[Material])
         ids = set().union(*columns.values())
         if target is None or not ids:
             continue
-        rows = session.scalars(select(target.model).where(target.model.id.in_(ids))).all()
+        rows = s.scalars(select(target.model).where(target.model.id.in_(ids))).all()
         names = {row.id: label_of(target.model, row) for row in rows}
         for key, column_ids in columns.items():
             labels[key] = {id_: names[id_] for id_ in column_ids if id_ in names}
@@ -138,7 +138,7 @@ def _ordering(model: type[Base], sort: str, order: str) -> list[ColumnElement[An
     return [key.is_(None), key.desc() if desc else key, model.id.desc() if desc else model.id]
 
 
-def list_records(session: Session, spec: TableSpec, q: str | None, limit: int, offset: int,
+def list_records(s: Session, spec: TableSpec, q: str | None, limit: int, offset: int,
                  sort: str, order: str, filters: dict[str, str]) -> RecordList:
     model = spec.model
     conditions = []
@@ -151,16 +151,16 @@ def list_records(session: Session, spec: TableSpec, q: str | None, limit: int, o
             continue
         parsed = _filter_value(column, value)
         conditions.append(getattr(model, key).is_(None) if parsed is None else getattr(model, key) == parsed)
-    total = session.scalar(select(func.count()).select_from(model).where(*conditions)) or 0
-    rows = session.scalars(loading(select(model).where(*conditions).order_by(*_ordering(model, sort, order))
-                                   .limit(limit).offset(offset), spec.record_model)).all()
+    total = s.scalar(select(func.count()).select_from(model).where(*conditions)) or 0
+    rows = s.scalars(loading(select(model).where(*conditions).order_by(*_ordering(model, sort, order))
+                             .limit(limit).offset(offset), spec.record_model)).all()
     summaries = [summary_of(spec, row) for row in rows]
     return RecordList(total=total, limit=limit, offset=offset,
                       items=[summary.model_dump(mode="json") for summary in summaries],
-                      labels=reference_labels(session, spec, [summary.record for summary in summaries]))
+                      labels=reference_labels(s, spec, [summary.record for summary in summaries]))
 
 
-def options(session: Session, spec: TableSpec, q: str | None, limit: int, ids: list[int] | None = None) -> list[Option]:
+def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[int] | None = None) -> list[Option]:
     model = spec.model
     conditions = []
     if q:
@@ -168,7 +168,7 @@ def options(session: Session, spec: TableSpec, q: str | None, limit: int, ids: l
                                 for name in spec.search_columns)))
     if ids:
         conditions.append(model.id.in_(ids))
-    rows = session.scalars(select(model).where(*conditions).order_by(model.id).limit(limit)).all()
+    rows = s.scalars(select(model).where(*conditions).order_by(model.id).limit(limit)).all()
     parent_column = spec.tree_parent_column
     return [Option(id=row.id, label=label_of(model, row),
                    parent_id=getattr(row, parent_column) if parent_column else None,
@@ -176,68 +176,68 @@ def options(session: Session, spec: TableSpec, q: str | None, limit: int, ids: l
             for row in rows]
 
 
-def _context_block(session: Session, table: str, rows: Sequence[Base]) -> ContextBlock:
+def _context_block(s: Session, table: str, rows: Sequence[Base]) -> ContextBlock:
     spec = spec_of(table)
     summaries = [summary_of(spec, row) for row in rows]
-    return ContextBlock(items=summaries, labels=reference_labels(session, spec, [summary.record for summary in summaries]))
+    return ContextBlock(items=summaries, labels=reference_labels(s, spec, [summary.record for summary in summaries]))
 
 
-def _episode_context(session: Session, episode: EpisodeRecord) -> EpisodeContext:
+def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:
     """話の時期(start〜end)・場所(place_id)に重なる出来事・作品。
 
     人物・場所はここでは拾わない(話の人物は `episode_character`、場所は `place_id` がそのまま持つ)。
     """
     since = episode.start
     until = episode.end or since
-    place_ids = set(common_query.descendant_place_ids(session, episode.place_id)) if episode.place_id else set()
+    place_ids = set(common_query.descendant_place_ids(s, episode.place_id)) if episode.place_id else set()
 
     event_conditions = [Event.time.between(since, until)]
     if place_ids:
         event_conditions.append(Event.location_id.in_(place_ids))
-    events = session.scalars(loading(select(Event).where(*event_conditions)
-                                     .order_by(Event.time, Event.id).limit(_CONTEXT_LIMIT), EventRecord)).all()
+    events = s.scalars(loading(select(Event).where(*event_conditions)
+                               .order_by(Event.time, Event.id).limit(_CONTEXT_LIMIT), EventRecord)).all()
 
     story_conditions = [Story.id != episode.story_id,
                         or_(Story.start.is_(None), Story.start <= until),
                         or_(Story.end.is_(None), Story.end >= since)]
     if place_ids:
         story_conditions.append(or_(Story.place_id.in_(place_ids), Story.world_id.in_(place_ids)))
-    stories = session.scalars(select(Story).where(*story_conditions)
-                              .order_by(Story.id).limit(_CONTEXT_LIMIT)).all()
+    stories = s.scalars(select(Story).where(*story_conditions)
+                        .order_by(Story.id).limit(_CONTEXT_LIMIT)).all()
 
-    return EpisodeContext(event=_context_block(session, "event", events),
-                          story=_context_block(session, "story", stories))
+    return EpisodeContext(event=_context_block(s, "event", events),
+                          story=_context_block(s, "story", stories))
 
 
-def related_of(session: Session, record: Material) -> Related:
+def related_of(s: Session, record: Material) -> Related:
     if isinstance(record, IdeaRecord):
-        return IdeaRelated(appearances=appearances(session, record.id))
+        return IdeaRelated(appearances=appearances(s, record.id))
     if isinstance(record, StoryRecord):
-        episodes = session.scalars(common_query.story_episodes_select(record.id)).all()
+        episodes = s.scalars(common_query.story_episodes_select(record.id)).all()
         return StoryRelated(episodes=[
             EpisodeLink(table=Episode.__tablename__, id=episode.id, label=label_of(Episode, episode),
                         synced=episode.synced, letters=episode.letters)
             for episode in episodes])
     # 時期の無い話は、重なる出来事・作品を出しようがない
     if isinstance(record, EpisodeRecord) and record.start is not None:
-        return EpisodeRelated(context=_episode_context(session, record))
+        return EpisodeRelated(context=_episode_context(s, record))
     return Related()
 
 
-def response_of(session: Session, spec: TableSpec, record: Material) -> RecordResponse:
+def response_of(s: Session, spec: TableSpec, record: Material) -> RecordResponse:
     return RecordResponse(record=record.model_dump(mode="json"), label=label_of(spec.model, record),
-                          labels=reference_labels(session, spec, [record]),
-                          related=related_of(session, record).model_dump(mode="json"))
+                          labels=reference_labels(s, spec, [record]),
+                          related=related_of(s, record).model_dump(mode="json"))
 
 
-def get_record(session: Session, spec: TableSpec, record_id: int) -> RecordResponse:
-    row = common_query.get_row(session, spec.model, record_id)
-    return response_of(session, spec, record_of(session, spec.record_model, row))
+def get_record(s: Session, spec: TableSpec, record_id: int) -> RecordResponse:
+    row = common_query.get_row(s, spec.model, record_id)
+    return response_of(s, spec, record_of(s, spec.record_model, row))
 
 
-def create_record(session: Session, spec: TableSpec, data: dict[str, Any]) -> Material:
-    return spec.creator(spec.create_form.model_validate(data)).execute(session)
+def create_record(s: Session, spec: TableSpec, data: dict[str, Any]) -> Material:
+    return spec.creator(spec.create_form.model_validate(data)).execute(s)
 
 
-def update_record(session: Session, spec: TableSpec, record_id: int, data: dict[str, Any]) -> Material:
-    return spec.updater(spec.update_form(id=record_id, **data)).execute(session)
+def update_record(s: Session, spec: TableSpec, record_id: int, data: dict[str, Any]) -> Material:
+    return spec.updater(spec.update_form(id=record_id, **data)).execute(s)

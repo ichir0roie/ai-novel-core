@@ -20,9 +20,9 @@ class ExtractMemes(Entrypoint):
         self.fact_check = fact_check
 
     def result(self) -> ExtractedMemes:
-        with get_env_session() as session:
-            last_id = fact_checker.last_meme_id(session)
-            added = refresh(session, ai_client)
+        with get_env_session() as s:
+            last_id = fact_checker.last_meme_id(s)
+            added = refresh(s, ai_client)
             if self.fact_check:
-                fact_checker.check_new_memes(session, last_id)
+                fact_checker.check_new_memes(s, last_id)
             return ExtractedMemes(memes_added=added)

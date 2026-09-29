@@ -17,15 +17,15 @@ class CommitCharacterPlace(CommitEntrypoint):
     def __init__(self, place: CharacterPlaceCreateForm):
         self.place = place
 
-    def execute(self, session: Session) -> CharacterPlaceRecord:
-        self.check_exists(session, Character, self.place.character_id, "character_id")
-        self.check_exists(session, Location, self.place.location_id, "location_id")
-        location = session.get_one(Location, self.place.location_id)
+    def execute(self, s: Session) -> CharacterPlaceRecord:
+        self.check_exists(s, Character, self.place.character_id, "character_id")
+        self.check_exists(s, Location, self.place.location_id, "location_id")
+        location = s.get_one(Location, self.place.location_id)
         world_creation_query.check_within_parent_span(
             location, self.place.start, self.place.end, "character_place")
 
         record = CharacterPlace()
         self.place.write_to(record)
-        session.add(record)
-        self.finalize(session, record)
+        s.add(record)
+        self.finalize(s, record)
         return CharacterPlaceRecord.model_validate(record)

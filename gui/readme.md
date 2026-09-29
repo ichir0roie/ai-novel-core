@@ -18,15 +18,15 @@
 列の定義(`db/schema.py`)、値の型(`Stamp`・`confirmed`)、確定・修正のときの検証(実在確認・別名の制約・
 子の行の扱い)はすべて python 側にある。Next.js から SQLite を直接開くと、その全部を
 TypeScript にもう一度書くことになり、正が二つになる。そのため API は FastAPI で python 側に置き、
-書き込みは `data_access_logic/` の入口(`execute(session)`)を通す。画面は列の情報を
+書き込みは `data_access_logic/` の入口(`execute(s)`)を通す。画面は列の情報を
 `GET /api/tables` から受け取って組み立てるので、列を足しても画面のコードは変えなくてよい。
 型は FastAPI の OpenAPI(`gui/api/openapi.json`)から `gui/web/lib/openapi.d.ts` を生成して合わせる。
 画面に出す文言(ボタン・見出し・状態表示など、英語)は `gui/web/lib/text.ts` の `T` に集め、ページ・コンポーネントには直書きしない。
 db の値(承認/非承認/未確認、場所の category など)と API から来るテーブル名・列名のラベルは文言ではないので、`T` には置かない。
 
-入口の `run()` ではなく `execute(session)` を呼ぶのは、`run()` が確定のあとに AI(`claude -p`)で
+入口の `run()` ではなく `execute(s)` を呼ぶのは、`run()` が確定のあとに AI(`claude -p`)で
 要約・ミーム・検証を作る段を持ち、GUI の一回の操作で待てる長さではないため。その分は
-`RefreshGeneratedContent` が後でまとめて拾う。追加・修正の応答は、`execute(session)` が返したレスポンスのモデル
+`RefreshGeneratedContent` が後でまとめて拾う。追加・修正の応答は、`execute(s)` が返したレスポンスのモデル
 (`*Record`)をそのまま使い、行を読み直さない。行を引く・名前で呼ぶ・当事者を読むといった処理も `data_access_logic` のもの
 (`common_query.get_row`・`label.label_of`・`entrypoint.loading`)を使い、API の側には写しを持たない。
 

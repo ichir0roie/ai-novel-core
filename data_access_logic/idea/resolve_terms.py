@@ -54,8 +54,8 @@ class ResolveTerms(CommitEntrypoint):
         self.place_id = place_id
         self.time = Stamp.parse(time)
 
-    def execute(self, session: Session) -> ResolvedTerms:
-        context = resolve_ideas(session, self.terms, self.place_id, self.time)
+    def execute(self, s: Session) -> ResolvedTerms:
+        context = resolve_ideas(s, self.terms, self.place_id, self.time)
         return ResolvedTerms(ideas=[_resolved(related.idea, related.recognition) for related in context.related],
                              hits=[idea.id for idea in context.hits],
                              candidates=[_resolved(idea) for idea in context.candidates])

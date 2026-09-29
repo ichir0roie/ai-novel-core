@@ -40,18 +40,18 @@ class ReviseEpisode(SessionEntrypoint):
         self.style_extra = world_style.style_extra(style_extra)
         self.ai = ai
 
-    def execute(self, session: Session) -> EpisodeRecord:
+    def execute(self, s: Session) -> EpisodeRecord:
         form = self.episode.model_copy()
         if form.id is None:
             raise ValueError("episode.id は必須")
         if self.character_ids is not None:
             form.character_ids = self.character_ids
-        save_frame(session, form)
+        save_frame(s, form)
         revised = reviser.revise_episode(
-            session, self.ai, form.id, self.instruction, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
+            s, self.ai, form.id, self.instruction, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if revised is None:
             raise ValueError("本文が得られなかった")
         # 書いた本文から概要を作り直す(本文が変わっていなければそのまま)
-        episode_summary.summarize(session, self.ai, revised)
-        return record_of(session, EpisodeRecord, revised)
+        episode_summary.summarize(s, self.ai, revised)
+        return record_of(s, EpisodeRecord, revised)

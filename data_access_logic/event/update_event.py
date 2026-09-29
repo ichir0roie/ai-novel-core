@@ -17,18 +17,18 @@ class UpdateEvent(CommitAndRefresh):
     def __init__(self, event: EventUpdateForm):
         self.event = event
 
-    def execute(self, session: Session) -> EventRecord:
+    def execute(self, s: Session) -> EventRecord:
         form = self.event
-        record = reloaded(session, common_query.get_row(session, Event, form.id), selectinload(Event.event_characters))
+        record = reloaded(s, common_query.get_row(s, Event, form.id), selectinload(Event.event_characters))
         if form.parent_event_id == form.id:
             raise ValueError(f"parent_event_id={form.id} が自分自身を指している")
-        self.check_exists(session, Event, form.parent_event_id, "parent_event_id")
-        self.check_exists(session, Location, form.location_id, "location_id")
+        self.check_exists(s, Event, form.parent_event_id, "parent_event_id")
+        self.check_exists(s, Location, form.location_id, "location_id")
         for character_id in form.character_ids or []:
-            self.check_exists(session, Character, character_id, "character_ids")
+            self.check_exists(s, Character, character_id, "character_ids")
 
         form.write_changes_to(record)
         if form.character_ids is not None:
             record.event_characters = [EventCharacter(character_id=character_id) for character_id in form.character_ids]
-        self.finalize(session, record)
-        return record_of(session, EventRecord, record)
+        self.finalize(s, record)
+        return record_of(s, EventRecord, record)

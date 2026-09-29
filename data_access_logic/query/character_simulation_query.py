@@ -1,4 +1,14 @@
-from data_access_logic.query.base import *
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from sqlalchemy import and_, or_, select
+from sqlalchemy.orm import Session, selectinload
+
+from data_access_logic.query import common_query
+from data_access_logic.query.period import alive_at
+from db.schema import Character, CharacterPlace, ConfirmStatus, Event, Location
+from db.stamp import Stamp
 
 
 def character_around_event(
@@ -6,7 +16,7 @@ def character_around_event(
 ) -> tuple[Sequence[Character], Sequence[Event]]:
     """話の材料(周りの人物・出来事)なので、ユーザが確かめた(`confirmed=承認`)ものだけに絞る。"""
     character_location_ids = select(CharacterPlace.location_id).where(
-        CharacterPlace.character_id == character_id, character_time_condition(time))
+        CharacterPlace.character_id == character_id, alive_at(CharacterPlace, time))
 
     parent_locations = s.scalars(
         select(Location)
@@ -21,7 +31,7 @@ def character_around_event(
         select(Character).join(CharacterPlace, and_(
             CharacterPlace.character_id == Character.id,
             CharacterPlace.location_id.in_(location_ids),
-            character_time_condition(time)))
+            alive_at(CharacterPlace, time)))
         .where(Character.confirmed == ConfirmStatus.APPROVED)
     ).all()
     since = Stamp(max(1, time.year - reach))

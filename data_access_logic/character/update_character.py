@@ -17,9 +17,9 @@ class UpdateCharacter(CommitEntrypoint):
     def __init__(self, character: CharacterUpdateForm):
         self.character = character
 
-    def execute(self, session: Session) -> CharacterRecord:
+    def execute(self, s: Session) -> CharacterRecord:
         form = self.character
-        record = common_query.get_row(session, Character, form.id)
+        record = common_query.get_row(s, Character, form.id)
 
         if form.parameters is not None:
             record.parameters = replaced_rows(record.parameters, form.parameters, CharacterParameter)
@@ -34,5 +34,5 @@ class UpdateCharacter(CommitEntrypoint):
         if "end" in form.model_fields_set:
             record.end = form.end
         form.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return CharacterRecord.model_validate(record)

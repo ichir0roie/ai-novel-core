@@ -29,7 +29,7 @@ class ReadEvents(SessionEntrypoint):
         self.limit = limit
         self.until = until
 
-    def execute(self, session: Session) -> list[event_reading.EventRowHead]:
+    def execute(self, s: Session) -> list[event_reading.EventRowHead]:
         if self.key == "time":
-            return event_reading.events_at(session, self.value, limit=self.limit)
-        return event_reading.events_of(session, _SELECTS[self.key], self.value, until=self.until, limit=self.limit)
+            return event_reading.events_at(s, self.value, limit=self.limit)
+        return event_reading.events_of(s, _SELECTS[self.key], self.value, until=self.until, limit=self.limit)

@@ -110,7 +110,7 @@ def _source(record: _Checked) -> SourceText[_Checked]:
     return SourceText(row=record, label=f"ミーム(分類: {record.category or '未分類'})", text=text)
 
 
-def targets(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> list:
+def targets(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> list:
     model = MODELS[table]
     query = select(model).order_by(model.id)
     if ids is not None:
@@ -119,11 +119,11 @@ def targets(session: Session, table: str, ids: list[int] | None = None, limit: i
         query = query.where(~model.text.contains(FACT_CHECK_HEADING), model.text != "")
     if limit is not None:
         query = query.limit(limit)
-    return list(session.scalars(query).all())
+    return list(s.scalars(query).all())
 
 
-def check(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> int:
-    records = targets(session, table, ids, limit)
+def check(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> int:
+    records = targets(s, table, ids, limit)
     written = 0
     for batch in batches([_source(record) for record in records], BATCH_LETTERS):
         decided = ai_client.generate(
@@ -141,28 +141,28 @@ def check(session: Session, table: str, ids: list[int] | None = None, limit: int
             if not isinstance(record, Meme):
                 record.meme_seeded = False
             written += 1
-        session.commit()
+        s.commit()
     if records:
         logger.info(f"{table} {len(records)}件のうち、{written}件を検めた")
     return written
 
 
-def last_meme_id(session: Session) -> int:
-    return session.scalar(select(func.max(Meme.id))) or 0
+def last_meme_id(s: Session) -> int:
+    return s.scalar(select(func.max(Meme.id))) or 0
 
 
-def check_new_memes(session: Session, last_id: int) -> int:
+def check_new_memes(s: Session, last_id: int) -> int:
     """`last_id` より後に足したミームだけを検める(既にあるミームの後埋めは `check` を名指しなしで呼ぶ)。"""
-    ids = list(session.scalars(select(Meme.id).where(Meme.id > last_id)).all())
-    return check(session, "meme", ids=ids) if ids else 0
+    ids = list(s.scalars(select(Meme.id).where(Meme.id > last_id)).all())
+    return check(s, "meme", ids=ids) if ids else 0
 
 
-def check_and_extract(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> FactChecked:
+def check_and_extract(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> FactChecked:
     """検めたあと、ミームの元(アイデア・oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
-    checked = check(session, table, ids, limit)
+    checked = check(s, table, ids, limit)
     if table == "meme":
         return FactChecked(checked=checked, memes_added=0)
-    last_id = last_meme_id(session)
-    added = refresh_memes(session, ai_client)
-    check_new_memes(session, last_id)
+    last_id = last_meme_id(s)
+    added = refresh_memes(s, ai_client)
+    check_new_memes(s, last_id)
     return FactChecked(checked=checked, memes_added=added)

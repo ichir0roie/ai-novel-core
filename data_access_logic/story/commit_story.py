@@ -15,12 +15,12 @@ class CommitStory(CommitAndRefresh):
     def __init__(self, story: StoryCreateForm):
         self.story = story
 
-    def execute(self, session: Session) -> StoryRecord:
-        self.check_exists(session, Location, self.story.world_id, "world_id")
-        self.check_exists(session, Location, self.story.place_id, "place_id")
+    def execute(self, s: Session) -> StoryRecord:
+        self.check_exists(s, Location, self.story.world_id, "world_id")
+        self.check_exists(s, Location, self.story.place_id, "place_id")
 
         record = Story()
         self.story.write_to(record)
-        session.add(record)
-        self.finalize(session, record)
+        s.add(record)
+        self.finalize(s, record)
         return StoryRecord.model_validate(record)

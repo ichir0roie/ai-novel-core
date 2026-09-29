@@ -17,31 +17,31 @@ class UpdateIdea(CommitEntrypoint):
     def __init__(self, idea: IdeaUpdateForm):
         self.idea = idea
 
-    def execute(self, session: Session) -> IdeaRecord:
+    def execute(self, s: Session) -> IdeaRecord:
         form = self.idea
-        record = common_query.get_row(session, Idea, form.id)
+        record = common_query.get_row(s, Idea, form.id)
 
-        self.check_exists(session, Location, form.location_id, "location_id")
+        self.check_exists(s, Location, form.location_id, "location_id")
         if form.parent_idea_id == form.id:
             raise ValueError(f"parent_idea_id={form.id} が自分自身を指している")
-        self.check_exists(session, Idea, form.parent_idea_id, "parent_idea_id")
+        self.check_exists(s, Idea, form.parent_idea_id, "parent_idea_id")
         if form.parent_idea_id is not None:
-            self._check_not_descendant(session, form.id, form.parent_idea_id)
+            self._check_not_descendant(s, form.id, form.parent_idea_id)
 
         if form.recognitions is not None:
             record.recognitions = replaced_rows(record.recognitions, form.recognitions, IdeaRecognition)
         form.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return IdeaRecord.model_validate(record)
 
     @staticmethod
-    def _check_not_descendant(session: Session, idea_id: int, new_parent_id: int) -> None:
+    def _check_not_descendant(s: Session, idea_id: int, new_parent_id: int) -> None:
         """new_parent_id が idea_id の下位(子孫)なら、親にすると木が循環するので弾く。"""
         seen: set[int] = set()
         ancestor_id: int | None = new_parent_id
         while ancestor_id is not None and ancestor_id not in seen:
             seen.add(ancestor_id)
-            ancestor = session.get(Idea, ancestor_id)
+            ancestor = s.get(Idea, ancestor_id)
             if ancestor is None or ancestor.parent_idea_id is None:
                 return
             if ancestor.parent_idea_id == idea_id:

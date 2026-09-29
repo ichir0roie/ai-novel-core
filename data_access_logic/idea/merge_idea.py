@@ -30,18 +30,18 @@ class MergeIdea(CommitEntrypoint):
         self.source_id = source_id
         self.target_id = target_id
 
-    def execute(self, session: Session) -> MergedIdea:
+    def execute(self, s: Session) -> MergedIdea:
         if self.source_id == self.target_id:
             raise ValueError("source_id と target_id が同じ")
-        source = common_query.get_row(session, Idea, self.source_id)
-        target = common_query.get_row(session, Idea, self.target_id)
-        if session.scalars(select(Idea.id).where(Idea.parent_idea_id == source.id)).first() is not None:
+        source = common_query.get_row(s, Idea, self.source_id)
+        target = common_query.get_row(s, Idea, self.target_id)
+        if s.scalars(select(Idea.id).where(Idea.parent_idea_id == source.id)).first() is not None:
             raise ValueError(f"source_id={self.source_id} には下位のアイデアが残っている。先に繋ぎ直す")
 
         for recognition in list(source.recognitions):
             source.recognitions.remove(recognition)
             target.recognitions.append(recognition)
         merged = MergedIdea(merged=IdeaName.model_validate(source), into=IdeaName.model_validate(target),
-                            links_moved=relink(session, source.id, target.id))
-        session.delete(source)
+                            links_moved=relink(s, source.id, target.id))
+        s.delete(source)
         return merged

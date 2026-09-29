@@ -26,5 +26,5 @@ class CheckFacts(Entrypoint):
         self.limit = limit
 
     def result(self) -> fact_checker.FactChecked:
-        with get_env_session() as session:
-            return fact_checker.check_and_extract(session, self.table, self.ids, self.limit)
+        with get_env_session() as s:
+            return fact_checker.check_and_extract(s, self.table, self.ids, self.limit)

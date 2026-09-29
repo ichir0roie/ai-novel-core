@@ -17,13 +17,13 @@ class CommitCharacter(CommitEntrypoint):
     def __init__(self, character: CharacterCreateForm):
         self.character = character
 
-    def execute(self, session: Session) -> CharacterRecord:
+    def execute(self, s: Session) -> CharacterRecord:
         form = self.character
-        self.check_exists(session, Location, form.place_id, "place_id")
+        self.check_exists(s, Location, form.place_id, "place_id")
         if form.place_id is not None:
-            place = session.get_one(Location, form.place_id)
+            place = s.get_one(Location, form.place_id)
             world_creation_query.check_within_parent_span(place, form.start, form.end, "character")
-            world_creation_query.check_has_story(session, form.place_id, "character")
+            world_creation_query.check_has_story(s, form.place_id, "character")
 
         record = Character()
         form.write_to(record)
@@ -34,10 +34,10 @@ class CommitCharacter(CommitEntrypoint):
             record.start = form.start
         if form.end is not None:
             record.end = form.end
-        session.add(record)
-        session.flush()  # CharacterPlace の character_id に使う id を先に確定させる
+        s.add(record)
+        s.flush()  # CharacterPlace の character_id に使う id を先に確定させる
         if form.place_id is not None:
-            session.add(CharacterPlace(
+            s.add(CharacterPlace(
                 character_id=record.id, location_id=form.place_id, start=form.start, end=form.end))
-        self.finalize(session, record)
+        self.finalize(s, record)
         return CharacterRecord.model_validate(record)

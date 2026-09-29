@@ -44,25 +44,25 @@ class ListNeighbors(SessionEntrypoint):
         self.kind = kind
         self.limit = limit
 
-    def execute(self, session: Session) -> Neighbors:
-        origin = common_query.get_row(session, Location, self.place_id)
+    def execute(self, s: Session) -> Neighbors:
+        origin = common_query.get_row(s, Location, self.place_id)
         if origin.location_longitude is None or origin.location_latitude is None:
             raise ValueError(f"{origin.name}(id={origin.id})は経緯度を持たない(面の場所か、座標が未記入)")
-        planet_row = session.get(Location, origin.location_planet) if origin.location_planet is not None else None
+        planet_row = s.get(Location, origin.location_planet) if origin.location_planet is not None else None
         if planet_row is None:
             raise ValueError(f"{origin.name}(id={origin.id})は星(location_planet)が決まっていない")
 
         planet = planet_of(planet_row)
-        neighbors = [self._neighbor(session, origin, place, planet.radius_km)
-                     for place in session.scalars(common_query.places_on_planet_select(planet.id)).all()
+        neighbors = [self._neighbor(s, origin, place, planet.radius_km)
+                     for place in s.scalars(common_query.places_on_planet_select(planet.id)).all()
                      if place.id != origin.id and (self.kind is None or place.kind == self.kind)]
         neighbors.sort(key=lambda neighbor: (neighbor.distance_deg, neighbor.point.id))
         if self.limit is not None:
             neighbors = neighbors[: self.limit]
-        return Neighbors(place=map_place_of(session, origin), planet=planet, neighbors=neighbors)
+        return Neighbors(place=map_place_of(s, origin), planet=planet, neighbors=neighbors)
 
     @staticmethod
-    def _neighbor(session: Session, origin: Location, place: Location, radius: float | None) -> Neighbor:
+    def _neighbor(s: Session, origin: Location, place: Location, radius: float | None) -> Neighbor:
         lon1, lat1 = origin.location_longitude, origin.location_latitude
         lon2, lat2 = place.location_longitude, place.location_latitude
         deg = angular_distance_deg(lon1, lat1, lon2, lat2)
@@ -70,7 +70,7 @@ class ListNeighbors(SessionEntrypoint):
         bearing = bearing_deg(lon1, lat1, lon2, lat2)
         diff = (float(place.location_altitude) - float(origin.location_altitude)
                 if place.location_altitude is not None and origin.location_altitude is not None else None)
-        point = map_place_of(session, place)
+        point = map_place_of(s, place)
         direction = "同じ経緯度" if deg < 0.01 else bearing_name(bearing)
         parent = f"・{point.parent_name}" if point.parent_name else ""
         where = "同じ経緯度" if deg < 0.01 else f"{direction} {distance_text(km, deg)}"

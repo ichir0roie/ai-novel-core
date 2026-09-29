@@ -21,20 +21,20 @@ class CommitEvent(CommitAndRefresh):
     def __init__(self, event: EventCreateForm):
         self.event = event
 
-    def execute(self, session: Session) -> EventRecord:
-        self.check_exists(session, Event, self.event.parent_event_id, "parent_event_id")
-        self.check_exists(session, Location, self.event.location_id, "location_id")
+    def execute(self, s: Session) -> EventRecord:
+        self.check_exists(s, Event, self.event.parent_event_id, "parent_event_id")
+        self.check_exists(s, Location, self.event.location_id, "location_id")
         for character_id in self.event.character_ids:
-            self.check_exists(session, Character, character_id, "character_ids")
+            self.check_exists(s, Character, character_id, "character_ids")
 
         record = Event()
         self.event.write_to(record)
         record.event_characters = [
             EventCharacter(character_id=character_id) for character_id in self.event.character_ids]
-        session.add(record)
-        session.flush()
-        return record_of(session, EventRecord, record)
+        s.add(record)
+        s.flush()
+        return record_of(s, EventRecord, record)
 
-    def follow_up(self, session: Session) -> None:
+    def follow_up(self, s: Session) -> None:
         # 足した出来事自身の本文も種の元になる
-        refresh_and_consolidate(session, ai_client)
+        refresh_and_consolidate(s, ai_client)

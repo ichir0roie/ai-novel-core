@@ -17,14 +17,14 @@ class DeleteIdea(CommitEntrypoint):
     def __init__(self, idea_id: int):
         self.idea_id = idea_id
 
-    def execute(self, session: Session) -> IdeaName:
-        record = common_query.get_row(session, Idea, self.idea_id)
-        child = session.scalars(
+    def execute(self, s: Session) -> IdeaName:
+        record = common_query.get_row(s, Idea, self.idea_id)
+        child = s.scalars(
             select(Idea.id).where(Idea.parent_idea_id == record.id)).first()
         if child is not None:
             raise ValueError(f"idea_id={self.idea_id} には下位のアイデアが残っている。先にそちらを消すか繋ぎ直す")
 
         deleted = IdeaName.model_validate(record)
-        relink(session, record.id, None)
-        session.delete(record)
+        relink(s, record.id, None)
+        s.delete(record)
         return deleted

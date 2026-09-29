@@ -22,7 +22,6 @@ from data_access_logic.event.progress_models import (
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.location.models import LocationMaterial, PlaceMaterial
 from data_access_logic.query import common_query, story_creation_query, world_creation_query
-from data_access_logic.query.base import location_active_condition
 from db.schema import Character, CharacterPlace, ConfirmStatus, Event, EventCharacter, Location
 from db.stamp import Stamp
 
@@ -155,10 +154,7 @@ def _rolled_candidate(
 def _destinations(s: Session, place_id: int, time: Stamp) -> list[LocationMaterial]:
     root_id = common_query.place_up(s, place_id, constants.REACH_LEVELS)
     nearby_ids = set(common_query.descendant_place_ids(s, root_id)) - {place_id, root_id}
-    places = s.scalars(
-        world_creation_query.alive_locations_select(time)
-        .where(Location.id.in_(nearby_ids), location_active_condition(time))
-    ).all()
+    places = s.scalars(world_creation_query.active_locations_select(time, nearby_ids)).all()
     return [LocationMaterial.model_validate(place) for place in places[:constants.MOVE_DESTINATION_LIMIT]]
 
 

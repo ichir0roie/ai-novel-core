@@ -15,12 +15,12 @@ class CommitCharacterRelation(CommitEntrypoint):
     def __init__(self, relation: CharacterRelationCreateForm):
         self.relation = relation
 
-    def execute(self, session: Session) -> CharacterRelationRecord:
-        self.check_exists(session, Character, self.relation.character_id_1, "character_id_1")
-        self.check_exists(session, Character, self.relation.character_id_2, "character_id_2")
+    def execute(self, s: Session) -> CharacterRelationRecord:
+        self.check_exists(s, Character, self.relation.character_id_1, "character_id_1")
+        self.check_exists(s, Character, self.relation.character_id_2, "character_id_2")
 
         record = CharacterRelation()
         self.relation.write_to(record)
-        session.add(record)
-        self.finalize(session, record)
+        s.add(record)
+        self.finalize(s, record)
         return CharacterRelationRecord.model_validate(record)

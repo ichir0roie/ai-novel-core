@@ -15,8 +15,8 @@ from data_access_logic.review import items
 
 
 class ListPendingReviews(SessionEntrypoint):
-    def execute(self, session: Session) -> list[items.PendingReview]:
-        return [*items.candidate_items(session),
-                *items.unconfirmed_meme_items(session),
-                *items.unsynced_episode_items(session),
-                *items.todo_items(session)]
+    def execute(self, s: Session) -> list[items.PendingReview]:
+        return [*items.candidate_items(s),
+                *items.unconfirmed_meme_items(s),
+                *items.unsynced_episode_items(s),
+                *items.todo_items(s)]

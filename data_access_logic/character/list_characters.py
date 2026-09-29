@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy import Select
+
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.entrypoint import ListEntrypoint
 from data_access_logic.material import Material
@@ -22,7 +24,7 @@ class CharacterListing(Material):
 
 
 class ListCharacters(ListEntrypoint):
-    def select(self):
+    def select(self) -> Select:
         return common_query.characters_select()
 
     def row(self, row: Character) -> CharacterListing:

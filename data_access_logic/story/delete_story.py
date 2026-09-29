@@ -16,15 +16,15 @@ class DeleteStory(CommitEntrypoint):
     def __init__(self, story_id: int):
         self.story_id = story_id
 
-    def execute(self, session: Session) -> DeletedStory:
-        record = common_query.get_row(session, Story, self.story_id)
+    def execute(self, s: Session) -> DeletedStory:
+        record = common_query.get_row(s, Story, self.story_id)
 
-        episode_id = session.scalar(
+        episode_id = s.scalar(
             select(Episode.id).where(Episode.story_id == record.id).limit(1))
         if episode_id is not None:
             raise ValueError(
                 f"story_id={record.id} にはまだ話が残っている。先に話を消してから削除する")
 
         deleted = DeletedStory.model_validate(record)
-        session.delete(record)
+        s.delete(record)
         return deleted

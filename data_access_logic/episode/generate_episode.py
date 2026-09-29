@@ -37,18 +37,18 @@ class GenerateEpisode(SessionEntrypoint):
         self.style_extra = world_style.style_extra(style_extra)
         self.ai = ai
 
-    def execute(self, session: Session) -> EpisodeRecord:
+    def execute(self, s: Session) -> EpisodeRecord:
         form = self.episode.model_copy()
         if self.character_ids is not None:
             form.character_ids = self.character_ids
-        record = save_frame(session, form)
+        record = save_frame(s, form)
         if not record.key.strip() or record.start is None:
-            framer.frame_episode(session, self.ai, record.id)
+            framer.frame_episode(s, self.ai, record.id)
         written = writer.write_episode(
-            session, self.ai, record.id, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
+            s, self.ai, record.id, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if written is None:
             raise ValueError("本文が得られなかった")
         # 書いた本文から概要を作り直す(本文が変わっていなければそのまま)
-        episode_summary.summarize(session, self.ai, written)
-        return record_of(session, EpisodeRecord, written)
+        episode_summary.summarize(s, self.ai, written)
+        return record_of(s, EpisodeRecord, written)

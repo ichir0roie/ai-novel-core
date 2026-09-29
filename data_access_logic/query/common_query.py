@@ -10,11 +10,11 @@ from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
+from data_access_logic.query.period import alive_at
 from db.schema import (
-    Character, CharacterPlace, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
+    Base, Character, CharacterPlace, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
     Story,
 )
-from db.schema import Base
 from db.stamp import Stamp, StampError
 
 EVENT_LOAD_OPTIONS = (
@@ -39,7 +39,7 @@ def span(when: Stamp | str | int) -> tuple[Stamp, Stamp]:
     return at, Stamp(*parts)
 
 
-def resolve_time(session: Session, when: Stamp | str | None, story: Story | None) -> tuple[Stamp, Stamp]:
+def resolve_time(s: Session, when: Stamp | str | None, story: Story | None) -> tuple[Stamp, Stamp]:
     if when is not None:
         return span(when)
     if story is not None and story.start is not None:
@@ -47,8 +47,8 @@ def resolve_time(session: Session, when: Stamp | str | None, story: Story | None
     raise ValueError("時刻が決まらない(作品に立つ年が無いので time を渡す)")
 
 
-def get_row[M: Base](session: Session, model: type[M], id_: int) -> M:
-    row = session.get(model, id_)
+def get_row[M: Base](s: Session, model: type[M], id_: int) -> M:
+    row = s.get(model, id_)
     if row is None:
         raise UnknownRecordError(f"id={id_} の {model.__tablename__} が見つからない")
     return row
@@ -59,24 +59,19 @@ def _in_span(column: InstrumentedAttribute[Stamp], since: Stamp, until: Stamp) -
     return column.between(since, until)
 
 
-def _alive(model: type[CharacterPlace], until: Stamp) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
-    return (or_(model.start.is_(None), model.start <= until),
-            or_(model.end.is_(None), model.end > until))
-
-
 def latest_time_select() -> Select:
     return select(func.max(Event.time))
 
 
 # ---------------------------------------------------------------- 場所の木
 
-def descendant_place_ids(session: Session, place_id: int) -> list[int]:
+def descendant_place_ids(s: Session, place_id: int) -> list[int]:
     """何段あるか分からないので一段ずつたどる。"""
-    get_row(session, Location, place_id)
+    get_row(s, Location, place_id)
     found = [place_id]
     frontier = [place_id]
     while frontier:
-        children = session.scalars(
+        children = s.scalars(
             select(Location.id).where(Location.parent_id.in_(frontier))).all()
         children = [child for child in children if child not in found]
         found.extend(children)
@@ -84,36 +79,30 @@ def descendant_place_ids(session: Session, place_id: int) -> list[int]:
     return found
 
 
-def idea_scope_ids(session: Session, place_id: int) -> list[int]:
+def idea_scope_ids(s: Session, place_id: int) -> list[int]:
     """アイデアの `location_id` は、そこから配下で効く。現在地から最上位までをたどる。"""
-    found = [get_row(session, Location, place_id).id]
-    current = session.get(Location, place_id)
-    while current is not None and current.parent_id and current.parent_id not in found:
-        current = session.get(Location, current.parent_id)
-        if current is None:
-            break
-        found.append(current.id)
-    return found
+    get_row(s, Location, place_id)
+    return [step.id for step in reversed(place_path(s, place_id))]
 
 
-def place_path(session: Session, place_id: int) -> list[LocationMaterial]:
+def place_path(s: Session, place_id: int) -> list[LocationMaterial]:
     """最上位の場所から `place_id` までの道筋。"""
     chain: list[LocationMaterial] = []
     seen: set[int] = set()
-    current = session.get(Location, place_id)
+    current = s.get(Location, place_id)
     while current is not None and current.id not in seen:
         seen.add(current.id)
         chain.append(LocationMaterial.model_validate(current))
-        current = session.get(Location, current.parent_id) if current.parent_id else None
+        current = s.get(Location, current.parent_id) if current.parent_id else None
     return list(reversed(chain))
 
 
-def place_up(session: Session, place_id: int, levels: int) -> int:
-    current = get_row(session, Location, place_id)
+def place_up(s: Session, place_id: int, levels: int) -> int:
+    current = get_row(s, Location, place_id)
     for _ in range(max(0, levels)):
         if current.parent_id is None:
             break
-        parent = session.get(Location, current.parent_id)
+        parent = s.get(Location, current.parent_id)
         if parent is None:
             break
         current = parent
@@ -237,7 +226,7 @@ def open_events_select(place_ids: Collection[int], until: Stamp) -> Select:
 def character_place_select(character_id: int, until: Stamp) -> Select:
     return (select(CharacterPlace)
             .options(selectinload(CharacterPlace.place))
-            .where(CharacterPlace.character_id == character_id, *_alive(CharacterPlace, until))
+            .where(CharacterPlace.character_id == character_id, alive_at(CharacterPlace, until))
             .order_by(CharacterPlace.start.desc(), CharacterPlace.id.desc()))
 
 
@@ -257,7 +246,7 @@ def resident_character_ids_select(place_ids: Collection[int], until: Stamp) -> S
     """話・断面に出す顔ぶれなので、ユーザが確かめた(`confirmed=承認`)人物・対象だけに絞る。"""
     return (select(CharacterPlace.character_id).distinct()
             .join(Character, Character.id == CharacterPlace.character_id)
-            .where(CharacterPlace.location_id.in_(list(place_ids)), *_alive(CharacterPlace, until),
+            .where(CharacterPlace.location_id.in_(list(place_ids)), alive_at(CharacterPlace, until),
                    Character.confirmed == ConfirmStatus.APPROVED))
 
 
@@ -322,8 +311,7 @@ def character_relations_at_select(character_id: int, time: Stamp) -> Select:
     return (select(CharacterRelation)
             .where(or_(CharacterRelation.character_id_1 == character_id,
                        CharacterRelation.character_id_2 == character_id),
-                   or_(CharacterRelation.start.is_(None), CharacterRelation.start <= time),
-                   or_(CharacterRelation.end.is_(None), CharacterRelation.end > time))
+                   alive_at(CharacterRelation, time))
             .order_by(CharacterRelation.id))
 
 

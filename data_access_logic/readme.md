@@ -6,7 +6,7 @@ db を読み書きする処理と、それを呼ぶ入口を置く場所。claud
 - claude が CLI から: インスタンス化して `show()` を呼ぶ。結果を JSON で print する
   (CLI 引数のパースはしない。`if __name__ == "__main__"` も置かない)
 - 結果を同じ python の中で続けて使う: print せずに返す `run()` を呼ぶ
-- GUI の API: 自分の開いたセッションで `execute(session)` を呼び、レスポンスのモデルをそのまま使う
+- GUI の API: 自分の開いたセッションで `execute(s)` を呼び、レスポンスのモデルをそのまま使う
 
     from data_access_logic.location.list_places import ListPlaces
     ListPlaces(kind="村").show()
@@ -338,7 +338,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 (`data_access_logic/event_seed/extractor.py` の `refresh`。`event_seeded` が false の元だけから抜き出して true にする。
 似た種は `consolidate` でまとめる)。抜き出しは、出来事を足す入口(`CommitEvent` / `GenerateEvent`)が、足したあとに
 確定とは別のセッションで行う(足した出来事自身の本文も元になる。AI が答えなくても出来事は残る)。
-GUI の表から足したとき(`execute(session)`)は抜き出さず、次に入口から出来事を足したときにまとめて拾う。
+GUI の表から足したとき(`execute(s)`)は抜き出さず、次に入口から出来事を足したときにまとめて拾う。
 その場所か当事者に掛かる「この時点より後に既に決まっている出来事」は、要約を添えて記録を決める段にも小説に書き起こす段にも渡し、矛盾させない。
 起こした出来事は `confirmed=未確認` で足す。
 
@@ -390,8 +390,8 @@ GUI の API(`gui/api/interface.py`)は、領域のディレクトリ直下のフ
 - `run()` が dump した dict を返すのは、Bash 呼び出しをまたいでも(＝プロセスが
   切り替わっても)中身を運べるようにするため。SQLAlchemy のオブジェクトや
   session を返すと、次の呼び出しでは中身が失われる
-- 入口の `execute(session)`(`Entrypoint` を直接継ぐ入口は `result()`)はレスポンスのモデルを返し、
-  `run()` がそれを dump する。GUI の表の書き込み(`gui/api/records.py`)は `execute(session)` のモデルを直接使う
+- 入口の `execute(s)`(`Entrypoint` を直接継ぐ入口は `result()`)はレスポンスのモデルを返し、
+  `run()` がそれを dump する。GUI の表の書き込み(`gui/api/records.py`)は `execute(s)` のモデルを直接使う
 - 行を id で引くのは `common_query.get_row`(無ければ `UnknownRecordError`。GUI の API は 404 にする)。
   実在レコードを指す欄(id)は、確定する側が呼び出し時に db に居るか確かめる
   (`check_exists`)。スキーマに無い欄は、引数のモデルが読み込むときに止める
@@ -406,8 +406,8 @@ GUI の API(`gui/api/interface.py`)は、領域のディレクトリ直下のフ
 
 ```
 Entrypoint(entrypoint.py)
-├─ SessionEntrypoint            db セッションを開いて execute(session) へ渡す
-│   ├─ CommitEntrypoint         「確定する」系。execute(session) を session.begin() に包む。GUI の API も execute(session) を呼ぶ
+├─ SessionEntrypoint            db セッションを開いて execute(s) へ渡す
+│   ├─ CommitEntrypoint         「確定する」系。execute(s) を s.begin() に包む。GUI の API も execute(s) を呼ぶ
 │   │   ├─ commit_*.py / update_*.py / delete_*.py / merge_idea.py / set_episode_synced.py
 │   │   ├─ idea.resolve_terms.ResolveTerms / idea.link_ideas.LinkIdeas(候補を足す・結ぶので確定側)
 │   │   ├─ CommitAndRefresh(ai_entrypoint.py)  確定のあと要約・ミームを作る → CommitEvent / UpdateEvent / CommitStory / CommitEpisode
@@ -418,7 +418,7 @@ Entrypoint(entrypoint.py)
 ```
 
 (`meme.extract_memes.ExtractMemes`・`meme.refresh_generated_content.RefreshGeneratedContent`・`fact_check.check_facts.CheckFacts` は、
-`execute(session)` の外で db セッションを開き直したいので `Entrypoint` を直接継ぎ、`result()` を書く)
+`execute(s)` の外で db セッションを開き直したいので `Entrypoint` を直接継ぎ、`result()` を書く)
 
 ## 引き方は query 側にある
 
@@ -427,6 +427,7 @@ Entrypoint(entrypoint.py)
 | モジュール                     | 何のため                                                     |
 | ------------------------------ | ------------------------------------------------------------ |
 | `common_query.py`              | 時刻の扱い・断面・顔ぶれ・場所の道筋                         |
+| `period.py`                    | その時刻に期間(`start` 〜 `end`)が掛かる行の条件(`alive_at`) |
 | `character_simulation_query.py` | 人物を軸に周辺を読む(`read_surroundings`)                   |
 | `dictionary_query.py`          | アイデア(辞書)の検索。名前・本文(`idea_note` を左外部結合した追記も含む)の部分一致、場所・時刻の範囲、自動生成の候補 |
 | `story_creation_query.py`      | 場所に掛かる作品(`story`)の読み出し                          |

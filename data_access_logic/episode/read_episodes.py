@@ -16,5 +16,5 @@ class ReadEpisodes(SessionEntrypoint):
         self.before = before
         self.text = text
 
-    def execute(self, session: Session) -> list[EpisodeHead]:
-        return episode_reading.episodes(session, self.story_id, count=self.count, before=self.before, text=self.text)
+    def execute(self, s: Session) -> list[EpisodeHead]:
+        return episode_reading.episodes(s, self.story_id, count=self.count, before=self.before, text=self.text)

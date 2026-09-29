@@ -18,6 +18,6 @@ class DrawMemes(SessionEntrypoint):
         self.person = person
         self.seed = seed
 
-    def execute(self, session: Session) -> list[DrawnMeme]:
+    def execute(self, s: Session) -> list[DrawnMeme]:
         categories = constants.MEME_PERSON_CATEGORIES if self.person else constants.MEME_NON_PERSON_CATEGORIES
-        return draw(session, random.Random(self.seed), categories)
+        return draw(s, random.Random(self.seed), categories)

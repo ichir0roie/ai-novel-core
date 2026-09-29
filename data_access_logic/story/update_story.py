@@ -16,11 +16,11 @@ class UpdateStory(CommitEntrypoint):
     def __init__(self, story: StoryUpdateForm):
         self.story = story
 
-    def execute(self, session: Session) -> StoryRecord:
-        record = common_query.get_row(session, Story, self.story.id)
-        self.check_exists(session, Location, self.story.world_id, "world_id")
-        self.check_exists(session, Location, self.story.place_id, "place_id")
+    def execute(self, s: Session) -> StoryRecord:
+        record = common_query.get_row(s, Story, self.story.id)
+        self.check_exists(s, Location, self.story.world_id, "world_id")
+        self.check_exists(s, Location, self.story.place_id, "place_id")
 
         self.story.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return StoryRecord.model_validate(record)

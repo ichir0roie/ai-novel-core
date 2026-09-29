@@ -16,8 +16,8 @@ class SetEpisodeSynced(CommitEntrypoint):
         self.episode_id = episode_id
         self.synced = synced
 
-    def execute(self, session: Session) -> EpisodeRecord:
-        record = common_query.get_row(session, Episode, self.episode_id)
+    def execute(self, s: Session) -> EpisodeRecord:
+        record = common_query.get_row(s, Episode, self.episode_id)
         record.synced = self.synced
-        session.flush()
-        return record_of(session, EpisodeRecord, record)
+        s.flush()
+        return record_of(s, EpisodeRecord, record)

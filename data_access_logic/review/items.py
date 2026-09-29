@@ -23,21 +23,21 @@ def gui_path(record: Base) -> str:
     return f"gui: /tables/{type(record).__tablename__}/{record.id}"
 
 
-def _appearances(session: Session, idea: Idea) -> str:
-    places = [f"{place.table}「{place.label}」(id={place.id})" for place in appearances(session, idea.id)]
+def _appearances(s: Session, idea: Idea) -> str:
+    places = [f"{place.table}「{place.label}」(id={place.id})" for place in appearances(s, idea.id)]
     return "、".join(places) or "(結んだ本文なし)"
 
 
-def candidate_items(session: Session) -> list[PendingReview]:
+def candidate_items(s: Session) -> list[PendingReview]:
     items = []
-    for idea in session.scalars(review_query.pending_select(Idea)).all():
+    for idea in s.scalars(review_query.pending_select(Idea)).all():
         items.append(PendingReview(
             key=f"idea:{idea.id}",
             kind="候補",
             title=f"アイデア候補「{idea.name}」を確定・統合・削除する",
             detail="\n".join([
                 idea.text or "(説明なし)",
-                f"出てきた所: {_appearances(session, idea)}",
+                f"出てきた所: {_appearances(s, idea)}",
                 gui_path(idea),
                 f"種別: {idea.kind}",
                 f"確定: GUI のレビュー画面で承認する / 退ける: 非承認にする / "
@@ -47,9 +47,9 @@ def candidate_items(session: Session) -> list[PendingReview]:
     return items
 
 
-def unconfirmed_meme_items(session: Session) -> list[PendingReview]:
+def unconfirmed_meme_items(s: Session) -> list[PendingReview]:
     items = []
-    for meme in session.scalars(review_query.pending_select(Meme)).all():
+    for meme in s.scalars(review_query.pending_select(Meme)).all():
         items.append(PendingReview(
             key=f"meme:{meme.id}",
             kind="候補",
@@ -65,10 +65,10 @@ def unconfirmed_meme_items(session: Session) -> list[PendingReview]:
     return items
 
 
-def unsynced_episode_items(session: Session) -> list[PendingReview]:
+def unsynced_episode_items(s: Session) -> list[PendingReview]:
     items = []
-    for episode in session.scalars(review_query.written_unsynced_episodes_select()).all():
-        story = session.get(Story, episode.story_id)
+    for episode in s.scalars(review_query.written_unsynced_episodes_select()).all():
+        story = s.get(Story, episode.story_id)
         story_name = story.name if story else f"作品 id={episode.story_id}"
         items.append(PendingReview(
             key=f"episode:{episode.id}",
@@ -83,10 +83,10 @@ def unsynced_episode_items(session: Session) -> list[PendingReview]:
     return items
 
 
-def todo_items(session: Session) -> list[PendingReview]:
+def todo_items(s: Session) -> list[PendingReview]:
     items = []
     for model in review_query.text_models():
-        for record in session.scalars(review_query.todo_select(model)).all():
+        for record in s.scalars(review_query.todo_select(model)).all():
             lines = [line.strip() for name in model.TEXT_COLUMNS
                      for line in (getattr(record, name) or "").splitlines()
                      if review_query.TODO_MARK in line]

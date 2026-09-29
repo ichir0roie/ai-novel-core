@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """GUI が扱うテーブル。本文を持つテーブル(`TextBase`)を、確定・修正の入口と組にして持つ。
 
-GUI からの書き込みは、入口の `execute(session)`(検証と db への書き込みだけ)を呼ぶ。
+GUI からの書き込みは、入口の `execute(s)`(検証と db への書き込みだけ)を呼ぶ。
 `run()` は呼ばない。`run()` は確定のあとに AI(`claude -p`)で要約・ミーム・検証を作る段を持ち、
 GUI の一回の操作で待てる長さではないため。その分は `RefreshGeneratedContent` が後でまとめて拾う。
 """

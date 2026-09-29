@@ -27,14 +27,14 @@ class UnsyncedEpisode(EpisodeTitle):
         return None if self.story is None else self.story.name
 
 
-def episodes(session: Session, story_id: int, count: int = 10, before: Stamp | str | None = None,
+def episodes(s: Session, story_id: int, count: int = 10, before: Stamp | str | None = None,
              text: bool = True) -> list[EpisodeHead]:
-    common_query.get_row(session, Story, story_id)
-    rows = session.scalars(
+    common_query.get_row(s, Story, story_id)
+    rows = s.scalars(
         common_query.episodes_select(story_id, count=count, before=before)).all()
     return [(EpisodeRow if text else EpisodeHead).model_validate(episode) for episode in reversed(rows)]
 
 
-def unsynced_episodes(session: Session, story_id: int | None = None) -> list[UnsyncedEpisode]:
-    rows = session.scalars(common_query.unsynced_episodes_select(story_id)).all()
+def unsynced_episodes(s: Session, story_id: int | None = None) -> list[UnsyncedEpisode]:
+    rows = s.scalars(common_query.unsynced_episodes_select(story_id)).all()
     return [UnsyncedEpisode.model_validate(episode) for episode in rows]

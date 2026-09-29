@@ -42,17 +42,17 @@ class StartStory(SessionEntrypoint):
         self.levels = levels
         self.skip_sync = skip_sync
 
-    def execute(self, session: Session) -> StoryStart:
-        story = common_query.get_row(session, Story, self.story_id)
-        unsynced = episode_reading.unsynced_episodes(session, self.story_id)
+    def execute(self, s: Session) -> StoryStart:
+        story = common_query.get_row(s, Story, self.story_id)
+        unsynced = episode_reading.unsynced_episodes(s, self.story_id)
         if unsynced and not self.skip_sync:
-            return StoryStart(story=story_reading.story_digest(session, story), unsynced=unsynced, stopped=True,
+            return StoryStart(story=story_reading.story_digest(s, story), unsynced=unsynced, stopped=True,
                               message=_STOPPED_MESSAGE)
 
-        _, until = common_query.resolve_time(session, self.time, story)
-        start = StoryStart(story=story_reading.story_digest(session, story), unsynced=unsynced, stopped=False, time=until,
-                           episodes=episode_reading.episodes(session, self.story_id, count=self.episodes))
+        _, until = common_query.resolve_time(s, self.time, story)
+        start = StoryStart(story=story_reading.story_digest(s, story), unsynced=unsynced, stopped=False, time=until,
+                           episodes=episode_reading.episodes(s, self.story_id, count=self.episodes))
         if story.place_id is not None:
-            start.cast = story_reading.cast(session, self.story_id, until, count=self.count, levels=self.levels)
-            start.brief = story_reading.brief(session, story.place_id, until, reach=self.reach)
+            start.cast = story_reading.cast(s, self.story_id, until, count=self.count, levels=self.levels)
+            start.brief = story_reading.brief(s, story.place_id, until, reach=self.reach)
         return start

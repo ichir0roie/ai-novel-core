@@ -17,10 +17,10 @@ class UpdateCharacterPlace(CommitEntrypoint):
     def __init__(self, place: CharacterPlaceUpdateForm):
         self.place = place
 
-    def execute(self, session: Session) -> CharacterPlaceRecord:
-        self.check_exists(session, Character, self.place.character_id, "character_id")
-        self.check_exists(session, Location, self.place.location_id, "location_id")
-        record = common_query.get_row(session, CharacterPlace, self.place.id)
+    def execute(self, s: Session) -> CharacterPlaceRecord:
+        self.check_exists(s, Character, self.place.character_id, "character_id")
+        self.check_exists(s, Location, self.place.location_id, "location_id")
+        record = common_query.get_row(s, CharacterPlace, self.place.id)
         self.place.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return CharacterPlaceRecord.model_validate(record)

@@ -801,10 +801,10 @@ def create_db(path=DB_PATH):
         # テーブルが空のうちしか効かないので create_all の前に打つ。
         conn.execute(text("PRAGMA encoding='UTF-8'"))
     Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        session.add_all(PersonalityLevelOption(id=id_, name=name)
+    with Session(engine) as s:
+        s.add_all(PersonalityLevelOption(id=id_, name=name)
                          for name, id_ in _PERSONALITY_LEVEL_IDS.items())
-        session.commit()
+        s.commit()
     return engine
 
 

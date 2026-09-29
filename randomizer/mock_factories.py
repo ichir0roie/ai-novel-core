@@ -8,7 +8,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from db.schema import (
     CHARACTER_KIND_PERSON,
-    Character, CharacterParameter, CharacterPlace, Episode, Event, EventCharacter,
+    Base, Character, CharacterParameter, CharacterPlace, Episode, Event, EventCharacter,
     Idea, Location, Story,
 )
 from db.stamp import Stamp
@@ -55,7 +55,7 @@ def _random_stamp(after: Stamp | None = None) -> Stamp:
                  randgen.randint(0, 23), randgen.randint(0, 59), randgen.randint(0, 59))
 
 
-def _pick_id(model, factory_class=None, p_none: float = 0.0):
+def _pick_id(model: type[Base], factory_class: type[factory.Factory] | None = None, p_none: float = 0.0) -> int | None:
     if p_none and randgen.random() < p_none:
         return None
     ids = _session().execute(select(model.id)).scalars().all()
@@ -66,28 +66,28 @@ def _pick_id(model, factory_class=None, p_none: float = 0.0):
     return factory_class().id
 
 
-def _pool(model, factory_name: str | None = None, p_none: float = 0.0):
+def _pool(model: type[Base], factory_name: str | None = None, p_none: float = 0.0) -> factory.LazyFunction:
     # 参照先のファクトリはこの後で定義されるので、名前で持って呼ぶときに引く
     return factory.LazyFunction(
         lambda: _pick_id(model, globals()[factory_name] if factory_name else None, p_none))
 
 
-def _stamp():
+def _stamp() -> factory.LazyFunction:
     return factory.LazyFunction(_random_stamp)
 
 
-def _optional_stamp(p_none: float = 0.3):
+def _optional_stamp(p_none: float = 0.3) -> factory.LazyFunction:
     return factory.LazyFunction(
         lambda: None if randgen.random() < p_none else _random_stamp())
 
 
-def _end_after_start(p_none: float = 0.5):
+def _end_after_start(p_none: float = 0.5) -> factory.LazyAttribute:
     return factory.LazyAttribute(
         lambda o: None if o.start is None or randgen.random() < p_none
         else _random_stamp(after=o.start))
 
 
-def _text():
+def _text() -> factory.Faker:
     return factory.Faker("text", max_nb_chars=200, locale=_LOCALE)
 
 

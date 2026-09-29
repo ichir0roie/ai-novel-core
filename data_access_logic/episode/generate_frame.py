@@ -25,10 +25,10 @@ class GenerateFrame(SessionEntrypoint):
         self.character_ids = character_ids
         self.ai = ai
 
-    def execute(self, session: Session) -> EpisodeRecord:
+    def execute(self, s: Session) -> EpisodeRecord:
         form = self.frame.model_copy()
         if self.character_ids is not None:
             form.character_ids = self.character_ids
-        record = save_frame(session, form)
-        framed = framer.frame_episode(session, self.ai, record.id)
-        return record_of(session, EpisodeRecord, framed)
+        record = save_frame(s, form)
+        framed = framer.frame_episode(s, self.ai, record.id)
+        return record_of(s, EpisodeRecord, framed)

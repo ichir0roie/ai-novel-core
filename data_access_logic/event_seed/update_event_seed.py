@@ -16,8 +16,8 @@ class UpdateEventSeed(CommitEntrypoint):
     def __init__(self, seed: EventSeedUpdateForm):
         self.seed = seed
 
-    def execute(self, session: Session) -> EventSeedRecord:
-        record = common_query.get_row(session, EventSeed, self.seed.id)
+    def execute(self, s: Session) -> EventSeedRecord:
+        record = common_query.get_row(s, EventSeed, self.seed.id)
         self.seed.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return EventSeedRecord.model_validate(record)

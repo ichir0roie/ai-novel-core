@@ -3,6 +3,7 @@ from typing import Annotated, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, PlainSerializer, PlainValidator, WithJsonSchema, model_validator
 
+from db.schema import Base
 from db.stamp import Stamp
 
 
@@ -49,14 +50,14 @@ class Form(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    def write_to(self, record: Any) -> None:
+    def write_to(self, record: Base) -> None:
         """欄のうち `record` のテーブルの列に当たるものを書く。親子の配列・誕生没年などの列でない欄は、呼ぶ側が別に書く。"""
         columns = type(record).__table__.columns
         for name, value in self:
             if name != "id" and name in columns:
                 setattr(record, name, value)
 
-    def write_changes_to(self, record: Any) -> None:
+    def write_changes_to(self, record: Base) -> None:
         """`write_to` のうち、渡された欄だけを書く(修正の入口は渡した欄だけを直す)。"""
         columns = type(record).__table__.columns
         for name in self.model_fields_set:

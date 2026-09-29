@@ -15,5 +15,5 @@ class ReadCast(SessionEntrypoint):
         self.count = count
         self.levels = levels
 
-    def execute(self, session: Session) -> story_reading.Cast:
-        return story_reading.cast(session, self.story_id, self.time, count=self.count, levels=self.levels)
+    def execute(self, s: Session) -> story_reading.Cast:
+        return story_reading.cast(s, self.story_id, self.time, count=self.count, levels=self.levels)

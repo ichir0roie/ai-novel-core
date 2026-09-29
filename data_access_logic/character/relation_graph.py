@@ -53,8 +53,8 @@ def relation_of(relation: CharacterRelation) -> Relation:
                     text=relation.text or "")
 
 
-def relation_graph(session: Session) -> RelationGraph:
-    characters = session.scalars(select(Character).order_by(Character.id)).all()
-    relations = session.scalars(select(CharacterRelation).order_by(CharacterRelation.id)).all()
+def relation_graph(s: Session) -> RelationGraph:
+    characters = s.scalars(select(Character).order_by(Character.id)).all()
+    relations = s.scalars(select(CharacterRelation).order_by(CharacterRelation.id)).all()
     return RelationGraph(characters=[relation_character_of(character) for character in characters],
                          relations=[relation_of(relation) for relation in relations])

@@ -15,5 +15,5 @@ class ReadBrief(SessionEntrypoint):
         self.reach = reach
         self.full = full
 
-    def execute(self, session: Session) -> story_reading.Brief:
-        return story_reading.brief(session, self.place_id, self.time, reach=self.reach, full=self.full)
+    def execute(self, s: Session) -> story_reading.Brief:
+        return story_reading.brief(s, self.place_id, self.time, reach=self.reach, full=self.full)

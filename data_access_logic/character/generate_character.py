@@ -33,18 +33,18 @@ class GenerateCharacter(SessionEntrypoint):
         self.seed = seed
         self.ai = ai
 
-    def execute(self, session: Session) -> CharacterRecord:
+    def execute(self, s: Session) -> CharacterRecord:
         form = self.character
         rng = random.Random(self.seed)
         if form.id is not None:
-            return CharacterRecord.model_validate(complete_text(session, self.ai, rng, form.id))
+            return CharacterRecord.model_validate(complete_text(s, self.ai, rng, form.id))
         if form.place_id is not None:
-            common_query.get_row(session, Location, form.place_id)
-        time = Stamp.parse(self.time) or session.scalar(common_query.latest_time_select())
+            common_query.get_row(s, Location, form.place_id)
+        time = Stamp.parse(self.time) or s.scalar(common_query.latest_time_select())
         if time is None:
             raise ValueError("time(現在の時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
         person = (form.kind or CHARACTER_KIND_PERSON) == CHARACTER_KIND_PERSON
-        record = generate_character(session, self.ai, rng, form.place_id, time, person, form)
+        record = generate_character(s, self.ai, rng, form.place_id, time, person, form)
         if record is None:
             raise ValueError("人物の中身が得られなかった")
         return CharacterRecord.model_validate(record)

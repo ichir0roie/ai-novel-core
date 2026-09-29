@@ -26,37 +26,37 @@ def review_spec(table: str) -> TableSpec:
     raise KeyError(f"レビューの対象でないテーブル: {table}")
 
 
-def _count(session: Session, spec: TableSpec, status: ConfirmStatus) -> int:
-    return session.scalar(
+def _count(s: Session, spec: TableSpec, status: ConfirmStatus) -> int:
+    return s.scalar(
         select(func.count()).select_from(spec.model).where(spec.model.confirmed == status)) or 0
 
 
-def summary(session: Session) -> ReviewSummary:
+def summary(s: Session) -> ReviewSummary:
     return ReviewSummary(tables=[
         ReviewTable(table=spec.name, label=spec.label,
-                    pending=_count(session, spec, ConfirmStatus.PENDING),
-                    approved=_count(session, spec, ConfirmStatus.APPROVED),
-                    rejected=_count(session, spec, ConfirmStatus.REJECTED))
+                    pending=_count(s, spec, ConfirmStatus.PENDING),
+                    approved=_count(s, spec, ConfirmStatus.APPROVED),
+                    rejected=_count(s, spec, ConfirmStatus.REJECTED))
         for spec in REVIEW_TABLES])
 
 
-def next_pending(session: Session, spec: TableSpec, after: int = 0) -> ReviewNext:
+def next_pending(s: Session, spec: TableSpec, after: int = 0) -> ReviewNext:
     """`after` より後ろの id で最初の未確認。飛ばした(スキップした)ものは次に回るので、`after` に飛ばした id を渡す。"""
     model = spec.model
-    remaining = _count(session, spec, ConfirmStatus.PENDING)
-    row = session.scalar(loading(review_query.pending_select(model).where(model.id > after).limit(1), spec.record_model))
+    remaining = _count(s, spec, ConfirmStatus.PENDING)
+    row = s.scalar(loading(review_query.pending_select(model).where(model.id > after).limit(1), spec.record_model))
     if row is None and after:
         # 末尾まで飛ばしたら先頭に戻る
-        row = session.scalar(loading(review_query.pending_select(model).limit(1), spec.record_model))
+        row = s.scalar(loading(review_query.pending_select(model).limit(1), spec.record_model))
     if row is None:
         return ReviewNext(record=None, label=None, remaining=remaining)
     record = spec.record_model.model_validate(row)
     return ReviewNext(record=record.model_dump(mode="json"), label=label_of(model, row), remaining=remaining,
-                      labels=records.reference_labels(session, spec, [record]),
-                      related=records.related_of(session, record).model_dump(mode="json"))
+                      labels=records.reference_labels(s, spec, [record]),
+                      related=records.related_of(s, record).model_dump(mode="json"))
 
 
-def decide(session: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus,
+def decide(s: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus,
            changes: dict[str, Any]) -> Material:
     # 画面は直しの欄から確認(confirmed)を外して送り、ボタンで選んだ判定を別に渡す
-    return spec.updater(spec.update_form(id=record_id, confirmed=decision, **changes)).execute(session)
+    return spec.updater(spec.update_form(id=record_id, confirmed=decision, **changes)).execute(s)

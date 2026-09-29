@@ -33,16 +33,16 @@ class LinkIdeas(CommitEntrypoint):
         self.episode_id = episode_id
         self.character_id = character_id
 
-    def execute(self, session: Session) -> LinkedIdeas:
+    def execute(self, s: Session) -> LinkedIdeas:
         owners = [(model, owner_id) for model, owner_id in
                   ((Event, self.event_id), (Episode, self.episode_id), (Character, self.character_id))
                   if owner_id is not None]
         if len(owners) != 1:
             raise ValueError("event_id / episode_id / character_id のどれか一つだけを渡す")
         model, owner_id = owners[0]
-        self.check_exists(session, model, owner_id, f"{model.__tablename__}_id")
+        self.check_exists(s, model, owner_id, f"{model.__tablename__}_id")
         for idea_id in self.idea_ids:
-            self.check_exists(session, Idea, idea_id, "idea_ids")
-        added = link(session, session.get_one(model, owner_id), [session.get_one(Idea, id_) for id_ in self.idea_ids])
+            self.check_exists(s, Idea, idea_id, "idea_ids")
+        added = link(s, s.get_one(model, owner_id), [s.get_one(Idea, id_) for id_ in self.idea_ids])
         return LinkedIdeas(event_id=self.event_id, episode_id=self.episode_id, character_id=self.character_id,
                            linked=added)

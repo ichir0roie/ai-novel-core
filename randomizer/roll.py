@@ -7,7 +7,7 @@ import random
 TABLES = os.path.join(os.path.dirname(__file__), "tables.json")
 
 
-def main():
+def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--table", action="append", help="引くテーブル名(複数可)")
     p.add_argument("--prefix", help="この接頭辞で始まるテーブルだけ引く")

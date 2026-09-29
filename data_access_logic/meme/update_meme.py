@@ -16,8 +16,8 @@ class UpdateMeme(CommitEntrypoint):
     def __init__(self, meme: MemeUpdateForm):
         self.meme = meme
 
-    def execute(self, session: Session) -> MemeRecord:
-        record = common_query.get_row(session, Meme, self.meme.id)
+    def execute(self, s: Session) -> MemeRecord:
+        record = common_query.get_row(s, Meme, self.meme.id)
         self.meme.write_changes_to(record)
-        self.finalize(session, record)
+        self.finalize(s, record)
         return MemeRecord.model_validate(record)

@@ -8,5 +8,5 @@ from data_access_logic.story import reading as story_reading
 
 
 class ListStories(SessionEntrypoint):
-    def execute(self, session: Session) -> list[story_reading.StoryDigest]:
-        return story_reading.stories(session)
+    def execute(self, s: Session) -> list[story_reading.StoryDigest]:
+        return story_reading.stories(s)

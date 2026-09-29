@@ -11,5 +11,5 @@ class ListUnsyncedEpisodes(SessionEntrypoint):
     def __init__(self, story_id: int | None = None):
         self.story_id = story_id
 
-    def execute(self, session: Session) -> list[episode_reading.UnsyncedEpisode]:
-        return episode_reading.unsynced_episodes(session, self.story_id)
+    def execute(self, s: Session) -> list[episode_reading.UnsyncedEpisode]:
+        return episode_reading.unsynced_episodes(s, self.story_id)

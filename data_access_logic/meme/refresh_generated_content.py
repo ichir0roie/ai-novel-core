@@ -22,13 +22,13 @@ class RefreshedAll(BaseModel):
 
 class RefreshGeneratedContent(Entrypoint):
     def result(self) -> RefreshedAll:
-        with get_env_session() as session:
-            memes_added = refresh_memes(session, ai_client)
+        with get_env_session() as s:
+            memes_added = refresh_memes(s, ai_client)
             events_summarized = sum(
-                1 for event in session.scalars(select(Event)).all()
-                if event_summary.summarize(session, ai_client, event) is not None)
+                1 for event in s.scalars(select(Event)).all()
+                if event_summary.summarize(s, ai_client, event) is not None)
             episodes_summarized = sum(
-                1 for episode in session.scalars(select(Episode)).all()
-                if episode_summary.summarize(session, ai_client, episode) is not None)
+                1 for episode in s.scalars(select(Episode)).all()
+                if episode_summary.summarize(s, ai_client, episode) is not None)
             return RefreshedAll(memes_added=memes_added, events_summarized=events_summarized,
                                 episodes_summarized=episodes_summarized)

@@ -8,7 +8,7 @@ from data_access_logic.character.record import CharacterParameterRow
 from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS
 
 
-def _personality():
+def _personality() -> factory.Faker:
     return factory.Faker("random_element", elements=PERSONALITY_LEVELS)
 
 
