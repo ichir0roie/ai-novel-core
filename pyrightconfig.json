@@ -1,5 +1,6 @@
 {
   "reportPrivateImportUsage": false,
   "reportIncompatibleVariableOverride": false,
-  "reportAssignmentType": false
+  "reportAssignmentType": false,
+  "reportArgumentType": false
 }

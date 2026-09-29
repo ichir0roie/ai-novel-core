@@ -788,6 +788,7 @@ class Episode(EventSeededMixin, TextBase):
 
     episode_characters: Mapped[list["EpisodeCharacter"]] = relationship(
         back_populates="episode", lazy="noload", cascade="all, delete-orphan")
+    summary: Mapped["EpisodeSummary | None"] = relationship(lazy="noload", viewonly=True)
 
     letters: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=290)
