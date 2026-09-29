@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized
+from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material
 from db.schema import ConfirmStatus
 from db.stamp import Stamp
@@ -13,11 +14,6 @@ class StoryMaterial(Material):
     name: str
     text: str
     narration: str
-
-
-class LocationMaterial(Material):
-    name: str
-    kind: str | None = None
 
 
 class CharacterMaterial(Material):

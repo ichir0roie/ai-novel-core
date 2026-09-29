@@ -22,15 +22,31 @@ class IdeaRecognitionMaterial(Material):
     detail: str | None = None
 
 
+class IdeaTerm(Material):
+    """`idea_search.terms_of` がそろえた語。"""
+
+    keyword: str
+    variants: list[str]
+    description: str
+    coined: bool
+    kind: str
+    start: Stamp | None = None
+    end: Stamp | None = None
+
+
+class RelatedIdeaMaterial(Material):
+    idea: IdeaMaterial
+    # その場所・時代で使う呼び名(`idea_alias.called` が選んだ行)。無ければ本質の名前で呼ぶ
+    recognition: IdeaRecognitionMaterial | None = None
+
+
 class IdeaContextMaterial(Material):
     # 下書きの語が当たったアイデア
     hits: list[IdeaMaterial]
     # どのアイデアにも当たらなかった造語から足した、未確認のアイデア
     candidates: list[IdeaMaterial]
     # 清書に渡す。hits(時期の決まったもの)とその上位・下位
-    related: list[IdeaMaterial]
-    # related の、その場所・時代で使う呼び名(`idea_alias.called` が選んだ行)
-    recognitions: list[IdeaRecognitionMaterial]
+    related: list[RelatedIdeaMaterial]
 
     @property
     def linked(self) -> list[IdeaMaterial]:
@@ -42,10 +58,9 @@ class IdeaContextSerialized(IdeaContextMaterial):
 
     @model_serializer
     def _for_prompt(self) -> list[dict[str, Any]]:
-        recognitions = {recognition.idea_id: recognition for recognition in self.recognitions}
         rows = []
-        for idea in self.related:
-            recognition = recognitions.get(idea.id)
+        for related in self.related:
+            idea, recognition = related.idea, related.recognition
             text = idea.text or ""
             if len(text) > constants.IDEA_CONTEXT_LETTERS:
                 text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"

@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from ai.time_keeper import constants, idea_alias, idea_search
 from ai.time_keeper._ai import AIClient
 from ai.time_keeper.idea_context import find_or_create_classification
-from data_access_logic.idea.models import IdeaContextMaterial
+from data_access_logic.idea.models import IdeaContextMaterial, IdeaTerm, RelatedIdeaMaterial
+from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, ConfirmStatus, Idea, Location
 from db.stamp import Stamp
@@ -17,12 +18,12 @@ def _dated(ideas: list[Idea], time: Stamp | None) -> list[Idea]:
     return [idea for idea in ideas if idea.start is not None]
 
 
-def _candidate(s: Session, term: dict, place_id: int | None) -> Idea | None:
+def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
     existing = s.scalar(
         select(Idea)
         .where(
             Idea.confirmed != ConfirmStatus.APPROVED,
-            Idea.name.in_(idea_search.spellings(term["keyword"])),
+            Idea.name.in_(idea_search.spellings(term.keyword)),
         )
         .order_by(Idea.id)
     )
@@ -30,21 +31,21 @@ def _candidate(s: Session, term: dict, place_id: int | None) -> Idea | None:
         # 退けた語(非承認)は設定ではないと決めたものなので、候補に戻さず結びもしない
         return None if existing.confirmed == ConfirmStatus.REJECTED else existing
 
-    keyword = term["keyword"]
-    if (s.scalar(select(Character.id).where(Character.name == keyword).limit(1)) is not None
-            or s.scalar(select(Location.id).where(Location.name == keyword).limit(1)) is not None):
+    if (s.scalar(select(Character.id).where(Character.name == term.keyword).limit(1)) is not None
+            or s.scalar(select(Location.id).where(Location.name == term.keyword).limit(1)) is not None):
         return None
 
-    classification = find_or_create_classification(s, term["kind"], place_id)
-    path = common_query.place_path(s, place_id) if place_id is not None else []
+    classification = find_or_create_classification(s, term.kind, place_id)
+    locations = ([LocationMaterial.model_validate(step) for step in common_query.place_path(s, place_id)]
+                 if place_id is not None else [])
     candidate = Idea(
-        name=keyword,
-        kind=term["kind"],
+        name=term.keyword,
+        kind=term.kind,
         confirmed=ConfirmStatus.PENDING,
-        text=term["description"],
-        location_id=path[0]["id"] if path else None,
-        start=term["start"],
-        end=term["end"],
+        text=term.description,
+        location_id=locations[0].id if locations else None,
+        start=term.start,
+        end=term.end,
         parent_idea_id=classification.id if classification is not None else None,
     )
     s.add(candidate)
@@ -81,13 +82,14 @@ def gather_ideas(
     place_id: int | None,
     time: Stamp | None,
 ) -> IdeaContextMaterial:
-    terms = idea_search.keywords_of(draft, ai, time)
-    hits = idea_search.search(s, terms, place_id, time)
+    raw_terms = idea_search.keywords_of(draft, ai, time)
+    hits = idea_search.search(s, raw_terms, place_id, time)
+    terms = [IdeaTerm.model_validate(term) for term in raw_terms]
 
     matched = {keyword for hit in hits for keyword in hit.keywords}
     candidates: dict[int, Idea] = {}
     for term in terms:
-        if term["keyword"] in matched or not term["coined"]:
+        if term.keyword in matched or not term.coined:
             continue
         candidate = _candidate(s, term, place_id)
         if candidate is not None:
@@ -95,11 +97,10 @@ def gather_ideas(
 
     hit_ideas = [hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]]
     related = _related(s, _dated(hit_ideas, time), place_id, time)
-    recognitions = idea_alias.called(s, [idea.id for idea in related], place_id, time)
+    called = idea_alias.called(s, [idea.id for idea in related], place_id, time)
 
     return IdeaContextMaterial(
         hits=hit_ideas,
         candidates=list(candidates.values()),
-        related=related,
-        recognitions=list(recognitions.values()),
+        related=[RelatedIdeaMaterial(idea=idea, recognition=called.get(idea.id)) for idea in related],
     )

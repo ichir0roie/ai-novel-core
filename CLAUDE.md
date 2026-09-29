@@ -30,6 +30,26 @@
 `style_extra`。呼び出し元(世界リポジトリの `instructions/` や、Claude Code のスキル)がこれらの引数に
 自分の値を渡す。
 
+## db の読み取りと AI とのやり取り(pydantic)
+
+`data_access_logic/episode/` と `data_access_logic/idea/` がこの形の見本。既存の処理を直すときも、この形へ寄せる。
+
+- 既存の処理をなぞらず、その処理に要るものからゼロベースで組む。書く対象の行が持つ値(時刻・作品など)は引数にせず行から取り、
+  引数名は何の数・何の範囲かが分かる具体的な名前にする(`count` ではなく `past_episode_count`)。理由の言えない構文(キーワード専用の `*` など)は付けない
+- select の結果は pydantic のモデル(マテリアル。基底は `data_access_logic/material.py` の `Material`)に、ORM のままを渡して詰める。
+  型チェッカーの `reportArgumentType` はプロジェクト設定(`pyrightconfig.json`)で切ってあるので、`Model(story=story_row)` のように渡してよい
+- マテリアルは ORM の列とリレーションに忠実に写す。リレーションは同じ名前のフィールドに、関係先のモデルを入れ子にして持つ
+  (`AliasPath` などで平らにしない)。共通の列は基底のモデルに置き、継承先にはそのとき読むリレーションだけを書く
+- リレーションは要るものだけを `joinedload` / `selectinload` で読み、`execution_options(populate_existing=True)` を付ける
+  (同じセッションに行が残っていると eager load が効かず、黙って空になる)。問い合わせの回数が増えても、シンプルに持てる方を選ぶ。
+  `execute` はなるべく使わず `scalars` / `scalar` で ORM を取る。リレーションが足りなければ `schema.py` に読み取り専用(`viewonly=True`)で足す
+- マテリアルには見出し(エイリアス)を付けない。AI に渡す形はマテリアルを継承した `*Serialized` の `model_serializer` で組む。
+  AI が誤解しないよう見出しを日本語にし、管理用の値(id・`confirmed` など)を外し、要るものだけを抜き出す。値が null・空でも消さずに渡す
+- AI の出力も pydantic のモデルで受ける。json schema は `model_json_schema()` で作り、整形・検証はバリデータに置く。
+  このモデルの docstring は schema の description として AI に渡るので書かない
+- dict の `.get` や文字列キーでの取り出しは極力使わない。既存の関数が dict を返すなら、境目でモデルに読み込んでから属性で扱う
+- 既存のメソッド(`common_query` など)で済むものは自前で書かない
+
 # 文字コード
 
 - リポジトリのテキスト(`.py` `.md` `.json` `.yaml` など)はすべて UTF-8(BOM 無し)。
