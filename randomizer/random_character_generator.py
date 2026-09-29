@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import factory
 
+from data_access_logic.character.form import CharacterCreateForm
+from data_access_logic.character.record import CharacterParameterRow
 from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS
 
 
@@ -10,12 +12,13 @@ def _personality():
     return factory.Faker("random_element", elements=PERSONALITY_LEVELS)
 
 
-class ParameterFactory(factory.DictFactory):
+class ParameterFactory(factory.Factory):
     """期間を限らない(start・end が空の)一行。"""
 
     class Meta:
+        model = CharacterParameterRow
         # `build` は CharacterParameter の列名(体格)と `Factory.build()` が衝突するので、
-        # 下の `build_` で宣言して辞書の `build` キーへ流し込む。
+        # 下の `build_` で宣言して `build` の欄へ流し込む。
         rename = {"build_": "build"}
 
     start = None
@@ -49,8 +52,11 @@ class ParameterFactory(factory.DictFactory):
     imagination = _personality()
 
 
-class CharacterFactory(factory.DictFactory):
+class CharacterFactory(factory.Factory):
     """誕生・死亡は列を持たず、下の `parameters`(期間を限らない一行)の start / end で表す。"""
+
+    class Meta:
+        model = CharacterCreateForm
 
     name = factory.Sequence(lambda n: f"仮名{n}")
     text = ""
@@ -59,9 +65,9 @@ class CharacterFactory(factory.DictFactory):
     parameters = factory.LazyFunction(lambda: [ParameterFactory.build()])
 
 
-def build_parameter(**overrides) -> dict:
+def build_parameter(**overrides) -> CharacterParameterRow:
     return ParameterFactory.build(**overrides)
 
 
-def build_character(**overrides) -> dict:
+def build_character(**overrides) -> CharacterCreateForm:
     return CharacterFactory.build(**overrides)

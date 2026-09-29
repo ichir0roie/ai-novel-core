@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from data_access_logic.character import reading as character_reading
 from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.story import reading
 
 
 class ReadCharacter(SessionEntrypoint):
@@ -11,5 +11,5 @@ class ReadCharacter(SessionEntrypoint):
         self.time = time
         self.count = count
 
-    def execute(self, session) -> reading.CharacterSheet:
-        return reading.character_sheet(session, self.character_id, until=self.time, count=self.count)
+    def execute(self, session) -> character_reading.CharacterSheet:
+        return character_reading.character_sheet(session, self.character_id, until=self.time, count=self.count)

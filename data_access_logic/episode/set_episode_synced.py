@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.query import common_query

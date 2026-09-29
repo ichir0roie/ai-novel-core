@@ -21,3 +21,7 @@
 - 既存のメソッド(`common_query` など)で済むものは自前で書かない
 - 入口(`data_access_logic/<領域>/<動詞_対象>.py`。claude は `show()`、GUI の API は `execute(session)` を呼ぶ)の引数は、`str | dict` にせず pydantic のモデル(`data_access_logic/<領域>/form.py`)で受ける。
   レスポンスもモデル(`data_access_logic/<領域>/record.py` など)で組み、`run()` が `model_dump(mode="json")` した結果を返す
+- 確定(commit)の境目: AI を呼んで得た結果(要約・記録・本文・候補のアイデア・ミーム・種など)は、得たその場で commit する。
+  長い AI 呼び出しの前にも、それまでの保存分(話の枠など)を commit する。途中で AI が落ちても、それまでに得た結果は残す。
+  db だけの処理(`CommitEntrypoint` の `execute`)は入口のトランザクション(`session.begin()`)に任せ、中で commit しない。
+  commit すると読み込んだ関連が期限切れになるので、commit の後で ORM の行を使うときは読み直すか、先にマテリアルへ写しておく

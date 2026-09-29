@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-
 from ai.claude_code import ai_client
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import framer

@@ -10,7 +10,7 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_at
 from data_access_logic.episode.models import (
-    EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeFrameMaterialSerialized, FrameEpisode, StoryMaterial,
+    EpisodeFrameDraft, EpisodeFrameMaterialSerialized, FrameEpisode, StoryMaterial,
 )
 from data_access_logic.episode.summary import past_episodes
 from data_access_logic.event.summary import summarized_events
@@ -29,7 +29,7 @@ _SYSTEM_PROMPT = """\
 時刻は「年/月/日」の形で、直前の話より後、作品の期間の中から選んでください。"""
 
 
-def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeFrameMaterial:
+def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeFrameMaterialSerialized:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -52,7 +52,7 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
     previous = past_episodes(s, ai, episode, past_episode_count)
     # 時刻が決まっていなければ、直前の話の時点の人物・出来事を材料にする
     time = main_episode.start or (previous[0].start if previous else None) or story.start or Stamp(1)
-    return EpisodeFrameMaterial(
+    return EpisodeFrameMaterialSerialized(
         story=story,
         main_episode=main_episode,
         past_episodes=previous,
@@ -73,7 +73,7 @@ def frame_episode(
     material = _frame_material(s, ai, episode_id, past_episode_count)
 
     prompt = "\n".join([
-        EpisodeFrameMaterialSerialized.model_validate(material).model_dump_json(indent=2),
+        material.model_dump_json(indent=2),
         "この作品の次の一話の枠を決めてください。",
     ])
     decided = ai.try_generate_json(prompt, EpisodeFrameDraft.model_json_schema(), system=_SYSTEM_PROMPT)

@@ -20,7 +20,7 @@ from data_access_logic.character.record import CharacterRecord, CharacterRelatio
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.episode.commit_episode import CommitEpisode
-from data_access_logic.episode.form import EpisodeCommitForm
+from data_access_logic.episode.form import EpisodeCommitForm, EpisodeCreateForm
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.commit_event import CommitEvent
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
@@ -77,7 +77,7 @@ class TableSpec:
 TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", "作品", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, StoryRecord,
               ("name", "text")),
-    TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCommitForm, EpisodeCommitForm,
+    TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
               EpisodeRecord, ("title", "key"), sort="start", order="asc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
               CharacterUpdateForm, CharacterRecord, ("name", "text"), reviewable=True),

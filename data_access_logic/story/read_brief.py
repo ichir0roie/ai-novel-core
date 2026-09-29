@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.story import reading
+from data_access_logic.story import reading as story_reading
 
 
 class ReadBrief(SessionEntrypoint):
@@ -12,5 +12,5 @@ class ReadBrief(SessionEntrypoint):
         self.reach = reach
         self.full = full
 
-    def execute(self, session) -> reading.Brief:
-        return reading.brief(session, self.place_id, self.time, reach=self.reach, full=self.full)
+    def execute(self, session) -> story_reading.Brief:
+        return story_reading.brief(session, self.place_id, self.time, reach=self.reach, full=self.full)

@@ -19,10 +19,9 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator_models import (
-    BirthPlaceMaterial, CharacterBirthMaterial, CharacterBirthMaterialSerialized, CharacterNameMaterial,
-    CharacterNameMaterialSerialized, HistoryItemDraft, NameDraft, NonPersonContentDraft,
-    PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequest, PolishRequestSerialized, StoryElementsDraft,
-    StoryElementsRequest, StoryElementsRequestSerialized,
+    BirthPlaceMaterial, CharacterBirthMaterialSerialized, CharacterNameMaterialSerialized, HistoryItemDraft,
+    NameDraft, NonPersonContentDraft, PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized,
+    StoryElementsDraft, StoryElementsRequestSerialized,
 )
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
@@ -32,9 +31,7 @@ from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.meme.extractor import draw, position_legend
 from data_access_logic.meme.models import DrawnMeme
 from data_access_logic.query import common_query, dictionary_query, story_createion_query
-from db.schema import (
-    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location,
-)
+from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location
 from db.stamp import Stamp
 
 _PLACEHOLDER_INSTRUCTION = (
@@ -120,13 +117,13 @@ _ELEMENT_SYSTEM_PROMPT = """\
 筋書きは時の流れをまたいで書かれている。渡す現在の時刻にまだ始まっていない立場(筋書きの中で後の年に起きる出来事や、「この時刻より後に始まる設定(まだ無い)」を前提にする立場)は抜き出さないでください。"""
 
 
-def _element(ai: AIClient, rng: random.Random, request: StoryElementsRequest) -> str | None:
+def _element(ai: AIClient, rng: random.Random, request: StoryElementsRequestSerialized) -> str | None:
     """抜き出しと選択(`rng.choice`)を分けることで、複数の立場を持つ筋書きでも生成のたびランダムに割り振られるようにし、
     モデルが生成時に自由選択して同じ立場へ偏るのを防ぐ。"""
     if not request.stories:
         return None
     decided = ai.try_generate_json(
-        StoryElementsRequestSerialized.model_validate(request).model_dump_json(indent=2),
+        request.model_dump_json(indent=2),
         StoryElementsDraft.model_json_schema(), system=_ELEMENT_SYSTEM_PROMPT)
     try:
         elements = StoryElementsDraft.model_validate(decided).elements
@@ -148,7 +145,7 @@ def _birth_material(
     s: Session, ai: AIClient, rng: random.Random, born_place_id: int | None, time: Stamp, person: bool,
     parameters: CharacterParameterValues | None, name: str | None, kind: str | None, age: int | None,
     form: CharacterForm | None,
-) -> CharacterBirthMaterial:
+) -> CharacterBirthMaterialSerialized:
     born_place = (s.scalar(
         select(Location).where(Location.id == born_place_id)
         .options(joinedload(Location.parent)).execution_options(populate_existing=True))
@@ -156,8 +153,8 @@ def _birth_material(
     stories = story_createion_query.load_location_story(s, born_place_id, time) if born_place_id is not None else []
     later_ideas = (s.scalars(dictionary_query.later_ideas_select(
         common_query.idea_scope_ids(s, born_place_id), time)).all() if born_place_id is not None else [])
-    elements_request = StoryElementsRequest(time=time, stories=stories, later_ideas=later_ideas)
-    return CharacterBirthMaterial(
+    elements_request = StoryElementsRequestSerialized(time=time, stories=stories, later_ideas=later_ideas)
+    return CharacterBirthMaterialSerialized(
         time=time,
         person=person,
         born_place=BirthPlaceMaterial.model_validate(born_place) if born_place is not None else None,
@@ -176,12 +173,12 @@ def _birth_material(
 
 
 def _content(
-    ai: AIClient, material: CharacterBirthMaterial, request: str,
+    ai: AIClient, material: CharacterBirthMaterialSerialized, request: str,
 ) -> PersonContentDraft | NonPersonContentDraft | None:
     draft_model: type[PersonContentDraft] | type[NonPersonContentDraft] = (
         PersonContentDraft if material.person else NonPersonContentDraft)
     decided = ai.try_generate_json(
-        "\n".join([CharacterBirthMaterialSerialized.model_validate(material).model_dump_json(indent=2), request]),
+        "\n".join([material.model_dump_json(indent=2), request]),
         draft_model.model_json_schema(),
         system=_PERSON_CONTENT_SYSTEM_PROMPT if material.person else _NON_PERSON_CONTENT_SYSTEM_PROMPT)
     try:
@@ -197,7 +194,7 @@ def _polished(s: Session, ai: AIClient, draft: str, born_place_id: int | None, t
     if not ideas.related:
         return draft, ideas.linked
     decided = ai.try_generate_json(
-        "\n".join([PolishRequestSerialized.model_validate(PolishRequest(draft=draft, ideas=ideas)).model_dump_json(indent=2),
+        "\n".join([PolishRequestSerialized(draft=draft, ideas=ideas).model_dump_json(indent=2),
                    "この説明を清書してください。"]),
         PolishDraft.model_json_schema(), system=_POLISH_SYSTEM_PROMPT, timeout=constants.IDEA_POLISH_TIMEOUT)
     try:
@@ -225,10 +222,10 @@ def _composed(
     return text
 
 
-def _name(ai: AIClient, material: CharacterNameMaterial, person: bool) -> PersonNameDraft | NameDraft | None:
+def _name(ai: AIClient, material: CharacterNameMaterialSerialized, person: bool) -> PersonNameDraft | NameDraft | None:
     draft_model: type[PersonNameDraft] | type[NameDraft] = PersonNameDraft if person else NameDraft
     decided = ai.try_generate_json(
-        "\n".join([CharacterNameMaterialSerialized.model_validate(material).model_dump_json(indent=2),
+        "\n".join([material.model_dump_json(indent=2),
                    "この一件に似合う名前を決めてください。"]),
         draft_model.model_json_schema(),
         system=_PERSON_NAME_SYSTEM_PROMPT if person else _NON_PERSON_NAME_SYSTEM_PROMPT)
@@ -284,7 +281,7 @@ def generate_character(
     text, ideas = _polished(s, ai, content.text, born_place_id, time)
     text = _composed(text, content, material.memes, time, age)
 
-    named = _name(ai, CharacterNameMaterial(
+    named = _name(ai, CharacterNameMaterialSerialized(
         kind=kind, text=text, age=age, parameters=parameters if person else None,
         born_place=material.born_place, nearby_characters=material.nearby_characters,
         hint_name=form.name if form else None,

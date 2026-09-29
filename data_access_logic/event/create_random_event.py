@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from data_access_logic.entrypoint import RandomDraft
-from data_access_logic.event.form import EventForm
 from randomizer.random_event_generator import build_event
 
 
 class CreateRandomEvent(RandomDraft):
     builder = staticmethod(build_event)
-    draft_model = EventForm

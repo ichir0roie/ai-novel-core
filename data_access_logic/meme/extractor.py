@@ -13,11 +13,11 @@ from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.meme.models import (
-    ClassifyDraft, ClassifyRequest, ClassifyRequestSerialized, DedupeDraft, DedupeRequest, DedupeRequestSerialized,
+    ClassifyDraft, ClassifyRequestSerialized, DedupeDraft, DedupeRequestSerialized,
     DrawnMeme, MemeDraft, MemesDraft, MemeText,
 )
 from data_access_logic.query import meme_query
-from data_access_logic.source_text import SourceBatch, SourceBatchSerialized, SourceText, batches, plot_section
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section
 from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
 
 CATEGORY_DESCRIPTIONS = {
@@ -94,10 +94,10 @@ def _without_duplicates(s: Session, ai: AIClient, candidates: list[MemeDraft]) -
     for chunk in batches(existing_sources, constants.MEME_DEDUPE_LETTERS) or [[]]:
         if not fresh or (not chunk and len(fresh) < 2):
             break
-        request = DedupeRequest(fresh=[candidate.text for candidate in fresh],
-                                existing=[MemeText(text=source.text) for source in chunk])
+        request = DedupeRequestSerialized(fresh=[candidate.text for candidate in fresh],
+                                          existing=[MemeText(text=source.text) for source in chunk])
         decided = ai.try_generate_json(
-            "\n".join([DedupeRequestSerialized.model_validate(request).model_dump_json(indent=2),
+            "\n".join([request.model_dump_json(indent=2),
                        "新しいミームのうち、重複しているものの番号を挙げてください。"]),
             DedupeDraft.model_json_schema(), system=_DEDUPE_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
         try:
@@ -115,9 +115,9 @@ def _classify(s: Session, ai: AIClient) -> int:
     unclassified = list(s.scalars(select(Meme).where(Meme.category.is_(None)).order_by(Meme.id)).all())
     sources = [SourceText(row=meme, label="ミーム", text=meme.text) for meme in unclassified]
     for batch in batches(sources, constants.MEME_BATCH_LETTERS):
-        request = ClassifyRequest(memes=[MemeText(text=source.text) for source in batch])
+        request = ClassifyRequestSerialized(memes=[MemeText(text=source.text) for source in batch])
         decided = ai.try_generate_json(
-            "\n".join([ClassifyRequestSerialized.model_validate(request).model_dump_json(indent=2),
+            "\n".join([request.model_dump_json(indent=2),
                        "それぞれのミームに分類を振ってください。"]),
             ClassifyDraft.model_json_schema(), system=_CLASSIFY_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
         try:
@@ -140,7 +140,7 @@ def refresh(s: Session, ai: AIClient) -> int:
     added = 0
     for batch in batches(pending, constants.MEME_BATCH_LETTERS):
         decided = ai.try_generate_json(
-            "\n".join([SourceBatchSerialized.model_validate(SourceBatch(sources=batch)).model_dump_json(indent=2),
+            "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                        "それぞれの元からミームを抜き出してください。"]),
             MemesDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
         try:

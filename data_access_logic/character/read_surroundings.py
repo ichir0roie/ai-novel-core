@@ -5,9 +5,9 @@ from pydantic import BaseModel
 
 from data_access_logic.character.record import CharacterHead
 from data_access_logic.entrypoint import SessionEntrypoint
+from data_access_logic.event import reading as event_reading
 from data_access_logic.material import Timestamp
 from data_access_logic.query import character_simulation_query, common_query
-from data_access_logic.story import reading
 
 
 class Surroundings(BaseModel):
@@ -15,7 +15,7 @@ class Surroundings(BaseModel):
     time: Timestamp
     reach: int
     characters: list[CharacterHead]
-    events: list[reading.EventRow]
+    events: list[event_reading.EventRow]
 
 
 class ReadSurroundings(SessionEntrypoint):
@@ -33,4 +33,4 @@ class ReadSurroundings(SessionEntrypoint):
         return Surroundings(
             character_id=self.character_id, time=until, reach=self.reach,
             characters=[CharacterHead.model_validate(character) for character in characters],
-            events=[reading.EventRow.model_validate(event) for event in events])
+            events=[event_reading.EventRow.model_validate(event) for event in events])

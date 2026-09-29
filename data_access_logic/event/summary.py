@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.event.models import EventMaterial, EventSourceSerialized, EventSummaryDraft
+from data_access_logic.event.models import EventSerialized, EventSourceSerialized, EventSummaryDraft
 from db.schema import Event, EventSummary, summary_source_hash
 
 _SYSTEM_PROMPT = """\
@@ -44,7 +44,7 @@ def summarize(s: Session, ai: AIClient, event: Event) -> EventSummary | None:
     return row
 
 
-def summarized_events(s: Session, ai: AIClient, query: Select[tuple[Event]]) -> list[EventMaterial]:
+def summarized_events(s: Session, ai: AIClient, query: Select[tuple[Event]]) -> list[EventSerialized]:
     for event in s.scalars(query).all():
         summarize(s, ai, event)
     # 要約の commit で読み込んだ関連が期限切れになるので、要約を揃えてから読み直す
@@ -52,4 +52,4 @@ def summarized_events(s: Session, ai: AIClient, query: Select[tuple[Event]]) -> 
         query.options(selectinload(Event.location), selectinload(Event.summary))
         .execution_options(populate_existing=True)
     ).all()
-    return [EventMaterial.model_validate(event) for event in events]
+    return [EventSerialized.model_validate(event) for event in events]

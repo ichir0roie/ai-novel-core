@@ -29,23 +29,28 @@ class PlaceSituationMaterial(Material):
     scene: str | None = None
 
 
-def _situation(situation: PlaceSituationMaterial) -> dict[str, Any]:
-    place, focus = situation.place, situation.focus_character
-    return {
-        "現在の時刻": str(situation.time),
-        "場所": {"名前": place.name, "種別": place.kind, "説明": place.text},
-        "居合わせる人物・対象": [
-            ParticipantSerialized.model_validate(participant).model_dump() for participant in situation.participants],
-        "この場所の直近の出来事(新しい順)": [event.name for event in situation.recent_events],
-        "この時点より後に既に決まっている出来事": [
-            EventSerialized.model_validate(event).model_dump() for event in situation.later_events],
-        "進めたい筋書き": "\n\n".join(story.text for story in situation.stories if story.text) or None,
-        "筋書きに関わる直近の出来事(新しい順)": [event.name for event in situation.story_recent_events],
-        "主役": {"人物id": focus.id, "名前": focus.name} if focus else None,
-        "主役の直前の出来事": (EventSerialized.model_validate(situation.focus_previous_event).model_dump()
-                               if situation.focus_previous_event else None),
-        "場面の指定": situation.scene,
-    }
+class PlaceSituationSerialized(PlaceSituationMaterial):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    participants: list[ParticipantSerialized]
+    later_events: list[EventSerialized]
+    focus_previous_event: EventSerialized | None = None
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        place, focus = self.place, self.focus_character
+        return {
+            "現在の時刻": str(self.time),
+            "場所": {"名前": place.name, "種別": place.kind, "説明": place.text},
+            "居合わせる人物・対象": [participant.model_dump() for participant in self.participants],
+            "この場所の直近の出来事(新しい順)": [event.name for event in self.recent_events],
+            "この時点より後に既に決まっている出来事": [event.model_dump() for event in self.later_events],
+            "進めたい筋書き": "\n\n".join(story.text for story in self.stories if story.text) or None,
+            "筋書きに関わる直近の出来事(新しい順)": [event.name for event in self.story_recent_events],
+            "主役": {"人物id": focus.id, "名前": focus.name} if focus else None,
+            "主役の直前の出来事": self.focus_previous_event.model_dump() if self.focus_previous_event else None,
+            "場面の指定": self.scene,
+        }
 
 
 class JudgementDraft(BaseModel):
@@ -100,11 +105,14 @@ class JudgementRequest(Material):
 class JudgementRequestSerialized(JudgementRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    situation: PlaceSituationSerialized
+    participant: ParticipantSerialized
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
-            "場所の状況": _situation(self.situation),
-            "この当事者": ParticipantSerialized.model_validate(self.participant).model_dump(),
+            "場所の状況": self.situation.model_dump(),
+            "この当事者": self.participant.model_dump(),
         }
 
 
@@ -142,10 +150,12 @@ class CandidateRequest(Material):
 class CandidateRequestSerialized(CandidateRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    situation: PlaceSituationSerialized
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
-            "場所の状況": _situation(self.situation),
+            "場所の状況": self.situation.model_dump(),
             "当事者ごとの思考・感情・望み・恐れ・行動": _judgements(self.judgements),
             "出来事の種": self.seeds,
         }
@@ -161,10 +171,12 @@ class RecordRequest(Material):
 class RecordRequestSerialized(RecordRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    situation: PlaceSituationSerialized
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
-            "場所の状況": _situation(self.situation),
+            "場所の状況": self.situation.model_dump(),
             "移動先の候補": [
                 {"場所id": destination.id, "名前": destination.name, "種別": destination.kind}
                 for destination in self.destinations],

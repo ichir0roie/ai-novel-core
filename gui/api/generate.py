@@ -3,7 +3,7 @@
 (`mode="edit"` / `"both"` なら、既存行の本文が空のときに限り、その行の本文だけを埋める)入口を結ぶ。
 
 入口は `data_access_logic/<領域>/` の `Generate*`(claude を叩くので Claude Code の環境でだけ、裏の job として走る)。
-下書きは入口の第一引数に、`params` の値はそのままの名前で入口の引数に渡す。
+下書きは入口の第一引数に、`params` の値はそのままの名前で入口の引数に渡す(空の欄は渡さない)。
 """
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ai.claude_code import ai_client
+from data_access_logic.episode.form import EpisodeForm
+from gui.api.fields import field_meta
 from gui.api.models import ColumnMeta, GeneratorMeta
 
 
@@ -36,9 +38,7 @@ class Generator:
                              params=list(self.params), panel=self.panel)
 
 
-_CHARACTER_IDS = ColumnMeta(key="character_ids", label="登場人物", type="id_list", nullable=True, required=False,
-                            references="character",
-                            comment="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
+_CHARACTER_IDS = field_meta("character_ids", EpisodeForm.model_fields["character_ids"])
 # 推敲の指示文。大きなマークダウンの欄(section)で必須にする(本文が空のときの「AI で書く」と違い、
 # 推敲は必ず観点を指示するので、空なら文体の好みに沿って見直すだけ、という省略は無くした)
 _INSTRUCTION = ColumnMeta(key="instruction", label="Instruction", type="string", nullable=False, required=True,
@@ -80,13 +80,10 @@ def generator_of(table: str, key: str) -> Generator:
     raise KeyError(f"{table} に {key} という AI 生成は無い")
 
 
-def _cleaned(value: Any) -> Any:
-    """空の欄(None・空文字・空の配列)は「指定なし」なので渡さない。子の一覧は行ごとに同じ掃除をする。"""
-    if isinstance(value, dict):
-        return {key: _cleaned(item) for key, item in value.items() if item not in (None, "", [])}
-    if isinstance(value, list):
-        return [_cleaned(item) for item in value]
-    return value
+def _given(values: dict[str, Any]) -> dict[str, Any]:
+    """画面は選ばなかった欄も空(None・空文字・空の配列)で送るので、省いて入口・下書きの既定に任せる。
+    子の一覧の行の中の空欄は、下書きのモデル(`Draft`)が「指定なし」にする。"""
+    return {key: value for key, value in values.items() if value not in (None, "", [])}
 
 
 def build_args(generator: Generator, draft: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
@@ -94,4 +91,4 @@ def build_args(generator: Generator, draft: dict[str, Any], args: dict[str, Any]
     unknown = set(args) - known
     if unknown:
         raise ValueError(f"{generator.table}/{generator.key} に無い指定: {sorted(unknown)}")
-    return {generator.draft_arg: _cleaned(draft), **_cleaned(args)}
+    return {generator.draft_arg: _given(draft), **_given(args)}

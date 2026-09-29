@@ -10,7 +10,7 @@ from data_access_logic.idea.link_ideas import LinkIdeas
 from data_access_logic.idea.merge_idea import MergeIdea
 from data_access_logic.idea.resolve_terms import ResolveTerms
 from data_access_logic.idea.search_ideas import SearchIdeas
-from data_access_logic.story import reading
+from data_access_logic.story import reading as story_reading
 from db.schema import (
     Character, CharacterIdea, CharacterPlace, ConfirmStatus, Episode, EpisodeIdea, Event, EventIdea, Idea,
     Location, Story,
@@ -307,7 +307,7 @@ def test_unconfirmed_ideas_are_left_out_of_the_brief_but_still_meme_extracted(se
     confirmed = _idea(session, "魔力", "世界の力", location_id=places["world"].id)
     ai = MockAIClient(seed=1)
 
-    names = [idea["name"] for idea in reading.brief(session, places["village"].id, "2100/01/01")["ideas"]]
+    names = [idea["name"] for idea in story_reading.brief(session, places["village"].id, "2100/01/01")["ideas"]]
     meme.refresh(session, ai)
 
     assert names == ["魔力"]
@@ -319,7 +319,7 @@ def test_brief_leaves_out_ideas_not_in_effect_at_the_time(session, places):
     _idea(session, "寄生", location_id=places["world"].id, end=Stamp(2100))
     _idea(session, "宿り", location_id=places["world"].id, start=Stamp(2000), end=Stamp(2101))
 
-    names = [idea["name"] for idea in reading.brief(session, places["village"].id, "2100")["ideas"]]
+    names = [idea["name"] for idea in story_reading.brief(session, places["village"].id, "2100")["ideas"]]
 
     assert names == ["宿り"]
 

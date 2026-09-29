@@ -9,7 +9,8 @@ from data_access_logic.event.form import EventForm
 from data_access_logic.event.novelist import novelize_event
 from data_access_logic.event.progress import progress_place
 from data_access_logic.event.record import EventRecord
-from data_access_logic.event_seed.extractor import draw as draw_seeds, refresh_and_consolidate
+from data_access_logic.event_seed.extractor import draw as draw_seeds
+from data_access_logic.event_seed.extractor import refresh_and_consolidate
 from data_access_logic.query import common_query, world_createion_query
 from data_access_logic.query.base import character_active_condition
 from db.schema import Character, Event, Location, Session, Stamp, get_env_session

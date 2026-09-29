@@ -1,20 +1,14 @@
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterPlaceRow
-from data_access_logic.material import Form, Timestamp
+from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, ConfirmStatus, PersonalityLevel
 from db.stamp import Stamp
 
 
-def _blank_is_unset(value: Any) -> Any:
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
-
-
-class CharacterParameterForm(BaseModel):
+class CharacterParameterForm(Draft):
     """作者が決めた性別・体格・口調・性格など。空の欄はサイコロ(性格)か AI が決める。"""
 
     family_name: str | None = None
@@ -38,16 +32,9 @@ class CharacterParameterForm(BaseModel):
     sensitivity: PersonalityLevel | None = None
     imagination: PersonalityLevel | None = None
 
-    @field_validator("*", mode="before")
-    @classmethod
-    def _blank(cls, value: Any) -> Any:
-        return _blank_is_unset(value)
 
-
-class CharacterForm(BaseModel):
-    """GUI の欄で渡る、人物の下書き。空の欄は「指定なし」。"""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class CharacterForm(Draft):
+    """人物の下書き。"""
 
     id: int | None = None
     name: str | None = None
@@ -60,11 +47,6 @@ class CharacterForm(BaseModel):
     # GUI は期間ごとの行の配列で渡す。生まれるときの値なので先頭の行だけを使う
     parameters: list[CharacterParameterForm] = []
 
-    @field_validator("*", mode="before")
-    @classmethod
-    def _blank(cls, value: Any) -> Any:
-        return _blank_is_unset(value)
-
     @field_validator("start", "end", mode="before")
     @classmethod
     def _stamp(cls, value: Any) -> Stamp | None:
@@ -73,8 +55,6 @@ class CharacterForm(BaseModel):
     @field_validator("parameters", mode="before")
     @classmethod
     def _rows(cls, value: Any) -> Any:
-        if value is None:
-            return []
         return [value] if isinstance(value, dict) else value
 
 
@@ -86,8 +66,9 @@ class CharacterCreateForm(Form):
     main_character: bool = False
     event_seeded: bool = False
     meme_seeded: bool = False
-    # 出自。`character_place` の行として、誕生から死亡までの期間で足す
-    place_id: int | None = None
+    # `character_place` の行として、誕生から死亡までの期間で足す
+    place_id: Annotated[int | None, References("location")] = Field(
+        default=None, title="出自(場所)", description="足すときの出自。CharacterPlace の一番古い行になる")
     start: Timestamp | None = None
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow] = []

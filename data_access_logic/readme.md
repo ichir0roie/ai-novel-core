@@ -46,7 +46,7 @@ db の触り方(入口越し・読み取り)は 世界リポジトリの `.claud
 
 `run()` は、入口が組んだレスポンスのモデルを `model_dump(mode="json")` した dict(一覧はそのリスト)を返す。
 時刻は `"11579/03/02 00:00:00"` の文字列、`confirmed` は値の文字列になる。レスポンスのモデルは、行を写したものが
-`data_access_logic/<領域>/record.py`(`*Record` など)、読む入口の組み立ては `story/reading.py`、入口だけのものはその入口のファイルにある。
+`data_access_logic/<領域>/record.py`(`*Record` など)、読む入口の組み立ては各領域の `reading.py`(出来事の行・人物の一覧表・話の題・作品の要約と断面)、入口だけのものはその入口のファイルにある。
 GUI の API は JSON の dict を受け取り、入口の引数の型注釈に沿ってモデルに読み込んでから呼ぶ(`gui/api/interface.py`)。
 
 ## 依頼内容 → 呼ぶコード
@@ -373,7 +373,7 @@ Claude のモデルの既定は `claude-sonnet-5` の `medium`(`ai/claude_code/a
 - `character/` — 人物・居場所・相関(一覧・本文用の読み出し・周り・下書き・確定・修正・AI 生成)、相関図(`relation_graph.py`)
 - `event/` — 出来事(一覧・絞り込み・下書き・確定・修正・削除・AI 生成)
 - `event_seed/` — 出来事の種の修正
-- `story/` — 作品(一覧・書き始め・断面・顔ぶれ・確定・修正・削除)。読む入口の組み立て(`reading.py`)
+- `story/` — 作品(一覧・書き始め・断面・顔ぶれ・確定・修正・削除)
 - `episode/` — 話(読み出し・未同期・確定・同期フラグ・AI の枠・本文・推敲)
 - `idea/` — アイデア(検索・確定・修正・削除・統合)と中間段(下書きの語をアイデアと照らす・本文とアイデアを結ぶ)
 - `meme/` — ミーム(確定・修正・削除・引く・抜き出す・要約の取りこぼし)
@@ -398,8 +398,11 @@ GUI の API(`gui/api/interface.py`)は、領域のディレクトリ直下のフ
 - 行をレスポンスのモデルに詰めるのは `record_of(session, モデル, 行)`。当事者・登場人物のような noload のリレーションは、
   モデルの `LOAD_OPTIONS`(`EventRecord` / `EpisodeRecord`)で読み直してから詰める。一覧を引くときは `loading(query, モデル)`
 - 行を呼ぶ名前(一覧・参照先・レビュー)は `label.py` の `label_of`
+- AI を呼んで得た結果は、得たその場で commit する(長い AI 呼び出しの前も、それまでの保存分を commit する)。
+  db だけを触る「確定する」入口は、`execute` の中で commit しない(`.claude/docs/data-access.md`)
 
 入口の基底は `entrypoint.py`(db だけを触る)と `ai_entrypoint.py`(確定のあとに AI を回す)に置く。
+読む入口が返す行の組み立ては、各領域の `reading.py` に置く(`event/reading.py` の `EventRow`、`character/reading.py` の `CharacterSheet` など)。
 
 ```
 Entrypoint(entrypoint.py)

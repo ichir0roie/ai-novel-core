@@ -8,17 +8,16 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ai.instructions.event_writing import (
-    CHARACTER_TEXT_UPDATE_INSTRUCTION, CHARACTER_NOTE_LIMIT, CHARACTER_NOTE_SEPARATOR,
-    EVENT_AGE_INSTRUCTION, EVENT_PROGRESSION_INSTRUCTION, EVENT_RECORD_INSTRUCTION, RECENT_EVENT_LIMIT,
+    CHARACTER_NOTE_LIMIT, CHARACTER_NOTE_SEPARATOR, CHARACTER_TEXT_UPDATE_INSTRUCTION, EVENT_AGE_INSTRUCTION,
+    EVENT_PROGRESSION_INSTRUCTION, EVENT_RECORD_INSTRUCTION, RECENT_EVENT_LIMIT,
 )
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION, fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
 from data_access_logic.event.progress_models import (
-    CandidateDraft, CandidateRequest, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft,
-    JudgementDraft, JudgementRequest, JudgementRequestSerialized, ParticipantJudgement,
-    PlaceSituationMaterial, RecordRequest, RecordRequestSerialized,
+    CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, JudgementDraft,
+    JudgementRequestSerialized, ParticipantJudgement, PlaceSituationSerialized, RecordRequestSerialized,
 )
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.location.models import LocationMaterial, PlaceMaterial
@@ -26,7 +25,6 @@ from data_access_logic.query import common_query, story_createion_query, world_c
 from data_access_logic.query.base import location_active_condition
 from db.schema import Character, CharacterPlace, ConfirmStatus, Event, EventCharacter, Location
 from db.stamp import Stamp
-from randomizer.random_location_generator import build_location
 
 # 一度に居合わせる人物として渡す上限
 _PARTICIPANT_LIMIT = 20
@@ -116,7 +114,7 @@ def _add_days(time: Stamp, days: int) -> Stamp:
 def _situation(
     s: Session, ai: AIClient, place_id: int, characters: list[Character], time: Stamp,
     focus: Character | None, scene: str | None, use_story: bool,
-) -> PlaceSituationMaterial:
+) -> PlaceSituationSerialized:
     place = PlaceMaterial.model_validate(s.get_one(Location, place_id))
     stories = story_createion_query.load_location_story(s, place_id, time) if use_story else []
     story_recent_events = []
@@ -134,7 +132,7 @@ def _situation(
         summarized_events(s, ai, common_query.latest_character_event_select(focus.id, until=time))
         if focus is not None else [])
 
-    return PlaceSituationMaterial(
+    return PlaceSituationSerialized(
         time=time,
         place=place,
         participants=participants_at(s, characters[:_PARTICIPANT_LIMIT], time),
@@ -152,12 +150,11 @@ def _situation(
     )
 
 
-def _judgements(ai: AIClient, situation: PlaceSituationMaterial) -> list[ParticipantJudgement]:
+def _judgements(ai: AIClient, situation: PlaceSituationSerialized) -> list[ParticipantJudgement]:
     judgements = []
     for participant in situation.participants:
         prompt = "\n".join([
-            JudgementRequestSerialized.model_validate(
-                JudgementRequest(situation=situation, participant=participant)).model_dump_json(indent=2),
+            JudgementRequestSerialized(situation=situation, participant=participant).model_dump_json(indent=2),
             "この当事者のいまの思考・感情・望み・恐れ・行動を推測してください。",
         ])
         decided = ai.try_generate_json(prompt, JudgementDraft.model_json_schema(), system=_JUDGEMENT_SYSTEM_PROMPT)
@@ -170,12 +167,11 @@ def _judgements(ai: AIClient, situation: PlaceSituationMaterial) -> list[Partici
 
 
 def _rolled_candidate(
-    ai: AIClient, rng: random.Random, situation: PlaceSituationMaterial,
+    ai: AIClient, rng: random.Random, situation: PlaceSituationSerialized,
     judgements: list[ParticipantJudgement], seeds: list[str],
 ) -> CandidateDraft | None:
     prompt = "\n".join([
-        CandidateRequestSerialized.model_validate(
-            CandidateRequest(situation=situation, judgements=judgements, seeds=seeds)).model_dump_json(indent=2),
+        CandidateRequestSerialized(situation=situation, judgements=judgements, seeds=seeds).model_dump_json(indent=2),
         f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。",
     ])
     decided = ai.try_generate_json(prompt, CandidatesDraft.model_json_schema(), system=_CANDIDATE_SYSTEM_PROMPT)
@@ -237,9 +233,9 @@ def progress_place(
         hints.append("居合わせる人物・対象の人物像に筋書きが書かれていれば、その者個人について進めたい筋書きとして扱い、"
                      "そこへ向かう一歩になる出来事を優先する。")
     prompt = "\n".join([
-        RecordRequestSerialized.model_validate(RecordRequest(
+        RecordRequestSerialized(
             situation=situation, judgements=judgements, destinations=destinations, candidate=candidate,
-        )).model_dump_json(indent=2),
+        ).model_dump_json(indent=2),
         "この候補を、この場所にこの時点で起きた出来事として記録してください。",
         *hints,
     ])
@@ -298,7 +294,7 @@ def progress_place(
         location_notes.append(f"{place.name}(id={place_id}): 消滅")
     founded = draft.location_founded
     if founded is not None and founded.name.strip():
-        new_location = Location(**build_location(
+        new_location = Location(
             parent_id=place_id,
             name=founded.name,
             kind=founded.kind or "集落",
@@ -306,7 +302,7 @@ def progress_place(
             environment=founded.environment or place.environment,
             start=time,
             active_random_generation=place.active_random_generation,
-        ))
+        )
         s.add(new_location)
         s.flush()
         location_notes.append(f"{new_location.name}(id={new_location.id}): 新設")

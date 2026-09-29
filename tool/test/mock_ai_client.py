@@ -22,7 +22,7 @@ class MockAIClient:
     def try_generate_json(
         self, prompt: str, schema: dict, *,
         system: str | None = None, timeout: float = 120.0, options: dict | None = None,
-        tools: tuple[str, ...] = (),
+        tools: tuple[str, ...] = (), model: str = "", effort: str = "",
     ) -> dict:
         self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools})
         return self._fill(schema, prompt, key=None, defs=schema.get("$defs", {}))

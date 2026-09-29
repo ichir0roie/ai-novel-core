@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import factory
 
+from data_access_logic.location.form import LocationCreateForm
 
-class LocationFactory(factory.DictFactory):
+
+class LocationFactory(factory.Factory):
+    class Meta:
+        model = LocationCreateForm
+
     name = factory.Sequence(lambda n: f"仮の土地{n}")
     kind = "大陸"
     text = ""
@@ -25,5 +30,5 @@ class LocationFactory(factory.DictFactory):
     active_random_generation = False
 
 
-def build_location(**overrides) -> dict:
+def build_location(**overrides) -> LocationCreateForm:
     return LocationFactory.build(**overrides)

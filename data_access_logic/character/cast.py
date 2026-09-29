@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.models import CastMaterial, EventCharacterAt, ParticipantMaterial
+from data_access_logic.character.models import CastSerialized, EventCharacterAtSerialized, ParticipantSerialized
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.query import common_query
@@ -27,7 +27,7 @@ def _relations(s: Session, character: Character, time: Stamp) -> list[CharacterR
     ).all())
 
 
-def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) -> list[CastMaterial]:
+def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) -> list[CastSerialized]:
     """話に使うのは、ユーザが確かめた(`confirmed=承認`)出来事だけ。"""
     cast = []
     for character in characters:
@@ -36,7 +36,7 @@ def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) 
             common_query.events_of_character_select(
                 character.id, until=time, limit=constants.EPISODE_CHARACTER_EVENT_LIMIT)
             .where(Event.confirmed == ConfirmStatus.APPROVED))
-        cast.append(CastMaterial(
+        cast.append(CastSerialized(
             character=character,
             age=age_at(character, time),
             parameters=parameters_at(character, time),
@@ -46,9 +46,9 @@ def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) 
     return cast
 
 
-def participants_at(s: Session, characters: list[Character], time: Stamp) -> list[ParticipantMaterial]:
+def participants_at(s: Session, characters: list[Character], time: Stamp) -> list[ParticipantSerialized]:
     return [
-        ParticipantMaterial(
+        ParticipantSerialized(
             character=character,
             age=age_at(character, time),
             parameters=parameters_at(character, time),
@@ -61,11 +61,13 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
     ]
 
 
-def event_characters_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) -> list[EventCharacterAt]:
+def event_characters_at(
+    s: Session, ai: AIClient, characters: list[Character], time: Stamp,
+) -> list[EventCharacterAtSerialized]:
     at = []
     for character in characters:
         previous = summarized_events(s, ai, common_query.latest_character_event_select(character.id, until=time))
-        at.append(EventCharacterAt(
+        at.append(EventCharacterAtSerialized(
             character=character,
             age=age_at(character, time),
             parameters=parameters_at(character, time),

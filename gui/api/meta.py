@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""`db/schema.py` の列の定義から、フォームを組み立てるための情報を作る。列の定義はここでは持たない。"""
+"""`db/schema.py` の列の定義と、入口の引数のモデル(`TableSpec.create_form` など)の欄から、フォームを組み立てるための情報を作る。
+列の定義・欄の検証はここでは持たない。"""
 from __future__ import annotations
 
+import typing
+
+from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 from sqlalchemy import JSON, Boolean, Integer, Numeric, func, select
 from sqlalchemy.orm import Session
 
 from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
-from db.schema import (
-    CONFIRM_STATUSES, MEME_CATEGORIES, PERSONALITY_LEVELS, ConfirmStatusType, PersonalityLevelType, PolygonType,
-    StampType,
-)
+from db.schema import ConfirmStatusType, PolygonType, StampType
 from gui.api import generate
+from gui.api.fields import choices_of, field_meta
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
 
@@ -25,11 +28,10 @@ _LABELS = {
     "place_id": "場所", "viewpoint_character_id": "視点", "synced": "同期済み",
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
     "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
-    "letters": "字数", "character_ids": "当事者", "polygon": "領域(polygon)", "area": "広さ",
+    "letters": "字数", "polygon": "領域(polygon)", "area": "広さ",
     "environment": "環境", "active_random_generation": "自動生成の対象", "description": "説明",
 }
 
-_CHOICES = {("meme", "category"): list(MEME_CATEGORIES)}
 
 # CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
@@ -64,45 +66,50 @@ def _column_type(column) -> str:
     return "string"
 
 
-def column_meta(table: str, model: type, column, section: bool = False, markdown: bool = True,
-                 readonly: bool = False, side: bool = False) -> ColumnMeta:
-    kind = _column_type(column)
-    is_personality = isinstance(column.type, PersonalityLevelType)
-    choices = (list(CONFIRM_STATUSES) if kind == "confirm"
-               else list(PERSONALITY_LEVELS) if is_personality
-               else _CHOICES.get((table, column.key)))
+def column_meta(column, field: FieldInfo | None, section: bool = False, markdown: bool = True,
+                readonly: bool = False, side: bool = False) -> ColumnMeta:
+    """`field` は、その列に当たる入口の引数の欄(無ければ None)。選択肢と必須かどうかは、検証する欄のものを使う。"""
+    choices = choices_of(field) if field is not None else None
     references = None
-    if not is_personality:
-        # 性格列は personality_level への FK を持つが、GUI では id の参照選択ではなく
-        # 上の choices(無/低/並/高/必)のプルダウンにする
+    if choices is None:
+        # 性格列は personality_level への FK を持つが、GUI では id の参照選択ではなく、欄の型の選択肢(無/低/並/高/必)にする
         for foreign_key in column.foreign_keys:
             references = foreign_key.column.table.name
-    required = (not column.nullable and not column.primary_key and column.default is None
-                and column.server_default is None and not section)
+    if field is not None:
+        required = field.is_required() and not section
+    else:
+        required = (not column.nullable and not column.primary_key and column.default is None
+                    and column.server_default is None and not section)
     return ColumnMeta(
-        key=column.key, label=_label(column.key, column.comment), type=kind, nullable=column.nullable,
+        key=column.key, label=_label(column.key, column.comment), type=_column_type(column), nullable=column.nullable,
         required=required, section=section, markdown=markdown, side=side, choices=choices, references=references,
         readonly=readonly or column.primary_key, comment=column.comment)
 
 
+# 表の列でない欄のうち、フォームに出さないもの。人物の誕生・死亡は専用の列を持たず parameters の期間で表すので、
+# 表・モーダルはそちらに出す(値自体は `CharacterRecord` の `start` / `end` として乗る)
+_SHOWN_IN_CHILD_LISTS = {"character": ("start", "end")}
+
+
 def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
-    """入口が列の外で受け取る欄。"""
-    extras = []
-    if spec.name == "character":
-        # 誕生・死亡(start/end)は専用の列を持たず、parameters の期間で表す(表・モーダルはそちらに出す)ので、
-        # ここでは列として足さない。値自体は `CharacterRecord` の `start` / `end` として乗る
-        extras.append(ColumnMeta(key="place_id", label="出自(場所)", type="integer", nullable=True,
-                                 required=False, references="location", create_only=True,
-                                 comment="足すときの出自。CharacterPlace の一番古い行になる"))
-    if spec.name == "event":
-        extras.append(ColumnMeta(key="character_ids", label=_LABELS["character_ids"], type="id_list",
-                                 nullable=True, required=False, references="character",
-                                 comment="居合わせた人物の id"))
-    if spec.name == "episode":
-        extras.append(ColumnMeta(key="character_ids", label=_LABELS["character_ids"], type="id_list",
-                                 nullable=True, required=False, references="character",
-                                 comment="登場人物の id"))
+    """入口が列の外で受け取る欄(出来事の当事者など)。足す入口にしか無い欄は足すときだけ渡せる。"""
+    skipped = {"id", *spec.model.__table__.columns.keys(), *spec.model.CHILD_LISTS, *_SHOWN_IN_CHILD_LISTS.get(spec.name, ())}
+    create_fields, update_fields = spec.create_form.model_fields, spec.update_form.model_fields
+    extras = [field_meta(key, field, create_only=key not in update_fields)
+              for key, field in create_fields.items() if key not in skipped]
+    extras += [field_meta(key, field) for key, field in update_fields.items()
+               if key not in skipped and key not in create_fields]
     return extras
+
+
+def _row_model(spec: TableSpec, name: str) -> type[BaseModel]:
+    """子の一覧の行のモデル(`list[CharacterParameterRow]` の中身)。"""
+    fields = spec.create_form.model_fields if name in spec.create_form.model_fields else spec.update_form.model_fields
+    for member in (fields[name].annotation, *typing.get_args(fields[name].annotation)):
+        for argument in typing.get_args(member):
+            if isinstance(argument, type) and issubclass(argument, BaseModel):
+                return argument
+    raise TypeError(f"{spec.name}.{name} の行のモデルが分からない")
 
 
 def table_columns(spec: TableSpec) -> list[ColumnMeta]:
@@ -116,7 +123,7 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     plain_text_columns = {"text"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
-        meta = column_meta(spec.name, model, column, section=column.key in sections,
+        meta = column_meta(column, spec.create_form.model_fields.get(column.key), section=column.key in sections,
                            readonly=column.key in readonly_columns,
                            markdown=column.key not in plain_text_columns, side=column.key in side_columns)
         (long if meta.section else plain).append(meta)
@@ -129,8 +136,8 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
     display_by_name = _CHILD_LIST_DISPLAY.get(spec.name, {})
     for name in spec.model.CHILD_LISTS:
         child = child_model(spec.model, name)
-        keys = child_columns(spec.model, name)
-        columns = [column_meta(child.__tablename__, child, child.__table__.columns[key]) for key in keys]
+        row_fields = _row_model(spec, name).model_fields
+        columns = [column_meta(child.__table__.columns[key], row_fields.get(key)) for key in child_columns(spec.model, name)]
         result.append(ChildListMeta(name=name, label=_label(name, None), columns=columns,
                                     display=display_by_name.get(name, "table")))
     return result

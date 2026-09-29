@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import factory
 
+from data_access_logic.event.form import EventForm
 
-class EventFactory(factory.DictFactory):
+
+class EventFactory(factory.Factory):
+    class Meta:
+        model = EventForm
+
     name = factory.Sequence(lambda n: f"仮の出来事{n}")
     hidden = False
     text = ""
@@ -17,5 +22,5 @@ class EventFactory(factory.DictFactory):
     end = None
 
 
-def build_event(**overrides) -> dict:
+def build_event(**overrides) -> EventForm:
     return EventFactory.build(**overrides)

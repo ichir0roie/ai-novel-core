@@ -10,14 +10,6 @@ from data_access_logic.episode.form import EpisodeForm, save_frame
 from data_access_logic.episode.record import EpisodeRecord
 
 
-def writer_options(ai, model: str | None, effort: str | None) -> dict | None:
-    """本文を書く呼び出しにだけ効く `model` / `effort`。Claude Code なら省いた方を fable の high で埋める。"""
-    if ai is ai_client:
-        return {"model": model or EPISODE_MODEL, "effort": effort or EPISODE_EFFORT}
-    options = {key: value for key, value in (("model", model), ("effort", effort)) if value}
-    return options or None
-
-
 class GenerateEpisode(SessionEntrypoint):
     """作者の下書き(GUI の欄の値。`story_id` 以外は空でもよい)から、話を一話ぶん(枠と本文)AI に書かせて足す。
     `id` を渡せばその枠(本文の無い話)へ本文を書く。
@@ -49,7 +41,7 @@ class GenerateEpisode(SessionEntrypoint):
         if not record.key.strip() or record.start is None:
             framer.frame_episode(session, self.ai, record.id)
         written = writer.write_episode(
-            session, self.ai, record.id, writer_options=writer_options(self.ai, self.model, self.effort),
+            session, self.ai, record.id, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if written is None:
             raise ValueError("本文が得られなかった")

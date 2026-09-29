@@ -12,9 +12,7 @@ from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_at
-from data_access_logic.episode.models import (
-    EpisodeDraft, EpisodeMaterial, EpisodeMaterialSerialized, StoryMaterial, TargetEpisode,
-)
+from data_access_logic.episode.models import EpisodeDraft, EpisodeMaterialSerialized, StoryMaterial, TargetEpisode
 from data_access_logic.episode.summary import past_episodes
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.idea.context import gather_ideas
@@ -36,7 +34,7 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 {style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}"""
 
 
-def _episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeMaterial:
+def _episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeMaterialSerialized:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -57,7 +55,7 @@ def _episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_co
     place_id = episode.place_id or episode.story.place_id
     characters = [link.character for link in episode.episode_characters]
 
-    return EpisodeMaterial(
+    return EpisodeMaterialSerialized(
         story=story,
         main_episode=main_episode,
         past_episodes=past_episodes(s, ai, episode, past_episode_count),
@@ -82,21 +80,22 @@ def write_episode(
     s: Session,
     ai: AIClient,
     episode_id: int,
+    model: str,
+    effort: str,
     past_episode_count: int = constants.EPISODE_PREVIOUS_LIMIT,
-    writer_options: dict | None = None,
     shared_style_extra: str = "",
     style_extra: str = "",
 ) -> Episode | None:
-    """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
+    """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
     material = _episode_material(s, ai, episode_id, past_episode_count)
 
     prompt = "\n".join([
-        EpisodeMaterialSerialized.model_validate(material).model_dump_json(indent=2),
+        material.model_dump_json(indent=2),
         "この話を書いてください。",
     ])
     decided = ai.try_generate_json(
         prompt, EpisodeDraft.model_json_schema(), system=_system_prompt(shared_style_extra, style_extra),
-        timeout=constants.EPISODE_TIMEOUT, **(writer_options or {}))
+        timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
     try:
         draft = EpisodeDraft.model_validate(decided)
     except ValidationError as error:

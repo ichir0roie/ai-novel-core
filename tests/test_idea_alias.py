@@ -8,7 +8,7 @@ from data_access_logic.idea.merge_idea import MergeIdea
 from data_access_logic.idea.resolve_terms import ResolveTerms
 from data_access_logic.idea.search_ideas import SearchIdeas
 from data_access_logic.idea.update_idea import UpdateIdea
-from data_access_logic.story import reading
+from data_access_logic.story import reading as story_reading
 from db.schema import Idea, IdeaRecognition, Location
 from db.stamp import Stamp
 
@@ -114,7 +114,7 @@ def test_brief_lists_the_essence_once_by_its_recognition(session, places):
     essence = _idea(session, "エナジー", "化学エネルギーとして溜める", location_id=places["world"].id)
     _recognition(session, essence, "魔力", location_id=places["world"].id)
 
-    ideas = reading.brief(session, places["village"].id, "2100")["ideas"]
+    ideas = story_reading.brief(session, places["village"].id, "2100")["ideas"]
 
     assert [(idea["id"], idea["name"]) for idea in ideas] == [(essence.id, "魔力")]
 

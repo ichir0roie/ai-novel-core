@@ -10,15 +10,9 @@ from sqlalchemy.orm import Session
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.event_seed.models import (
-    ConsolidateDraft,
-    ConsolidateRequest,
-    ConsolidateRequestSerialized,
-    SeedsDraft,
-    SeedText,
-)
+from data_access_logic.event_seed.models import ConsolidateDraft, ConsolidateRequestSerialized, SeedsDraft, SeedText
 from data_access_logic.query import event_seed_query
-from data_access_logic.source_text import SourceBatch, SourceBatchSerialized, SourceText, batches, plot_section
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section
 from db.schema import Character, Episode, Event, EventSeed, Story
 
 _SYSTEM_PROMPT = """\
@@ -60,7 +54,7 @@ def refresh(s: Session, ai: AIClient) -> int:
     added = 0
     for batch in batches(pending, constants.EVENT_SEED_BATCH_LETTERS):
         decided = ai.try_generate_json(
-            "\n".join([SourceBatchSerialized.model_validate(SourceBatch(sources=batch)).model_dump_json(indent=2),
+            "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                        "それぞれの元から出来事の種を抜き出してください。"]),
             SeedsDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
         try:
@@ -81,10 +75,10 @@ def refresh(s: Session, ai: AIClient) -> int:
 def _merge(s: Session, ai: AIClient, fresh: list[EventSeed], settled: list[EventSeed]) -> list[EventSeed] | None:
     """まとめ残った新しい種を返す。答えが得られなければ None。"""
     numbered = [*fresh, *settled]
-    request = ConsolidateRequest(fresh=[SeedText.model_validate(seed) for seed in fresh],
-                                 settled=[SeedText.model_validate(seed) for seed in settled])
+    request = ConsolidateRequestSerialized(fresh=[SeedText.model_validate(seed) for seed in fresh],
+                                           settled=[SeedText.model_validate(seed) for seed in settled])
     decided = ai.try_generate_json(
-        "\n".join([ConsolidateRequestSerialized.model_validate(request).model_dump_json(indent=2),
+        "\n".join([request.model_dump_json(indent=2),
                    "同じ出来事を言い換えただけの種の組をまとめてください。"]),
         ConsolidateDraft.model_json_schema(), system=_CONSOLIDATE_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
     try:

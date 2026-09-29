@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from data_access_logic.entrypoint import SessionEntrypoint
+from data_access_logic.event import reading as event_reading
 from data_access_logic.query import common_query
-from data_access_logic.story import reading
 
 _SELECTS = {
     "place_id": common_query.events_of_place_select,
@@ -26,7 +26,7 @@ class ReadEvents(SessionEntrypoint):
         self.limit = limit
         self.until = until
 
-    def execute(self, session) -> list[reading.EventRowHead]:
+    def execute(self, session) -> list[event_reading.EventRowHead]:
         if self.key == "time":
-            return reading.events_at(session, self.value, limit=self.limit)
-        return reading.events_of(session, _SELECTS[self.key], self.value, until=self.until, limit=self.limit)
+            return event_reading.events_at(session, self.value, limit=self.limit)
+        return event_reading.events_of(session, _SELECTS[self.key], self.value, until=self.until, limit=self.limit)

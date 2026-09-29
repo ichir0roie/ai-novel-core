@@ -239,4 +239,4 @@ def create_record(session: Session, spec: TableSpec, data: dict[str, Any]) -> Ma
 
 
 def update_record(session: Session, spec: TableSpec, record_id: int, data: dict[str, Any]) -> Material:
-    return spec.updater(spec.update_form.model_validate({**data, "id": record_id})).execute(session)
+    return spec.updater(spec.update_form(id=record_id, **data)).execute(session)

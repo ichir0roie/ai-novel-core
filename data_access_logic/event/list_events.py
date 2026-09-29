@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from data_access_logic.entrypoint import ListEntrypoint
+from data_access_logic.event.reading import EventRow
 from data_access_logic.query import common_query
-from data_access_logic.story.reading import EventRow
 
 
 class ListEvents(ListEntrypoint):

@@ -4,10 +4,11 @@ from __future__ import annotations
 from pydantic import BaseModel, SerializeAsAny
 
 from data_access_logic.entrypoint import SessionEntrypoint
+from data_access_logic.episode import reading as episode_reading
 from data_access_logic.episode.record import EpisodeHead
 from data_access_logic.material import Timestamp
 from data_access_logic.query import common_query
-from data_access_logic.story import reading
+from data_access_logic.story import reading as story_reading
 from db.schema import Story
 
 _STOPPED_MESSAGE = ("未同期の話が残っている。モード 3(世界観更新)を先に通して、"
@@ -17,15 +18,15 @@ _STOPPED_MESSAGE = ("未同期の話が残っている。モード 3(世界観�
 class StoryStart(BaseModel):
     """未同期の話が残っていれば `stopped` を立て、材料(`time` から下)は読まない。"""
 
-    story: reading.StoryDigest
-    unsynced: list[reading.UnsyncedEpisode]
+    story: story_reading.StoryDigest
+    unsynced: list[episode_reading.UnsyncedEpisode]
     stopped: bool
     message: str | None = None
     time: Timestamp | None = None
     episodes: list[SerializeAsAny[EpisodeHead]] = []
     # 作品に立つ場所が無ければ読まない
-    cast: reading.Cast | None = None
-    brief: reading.Brief | None = None
+    cast: story_reading.Cast | None = None
+    brief: story_reading.Brief | None = None
 
 
 class StartStory(SessionEntrypoint):
@@ -41,15 +42,15 @@ class StartStory(SessionEntrypoint):
 
     def execute(self, session) -> StoryStart:
         story = common_query.get_row(session, Story, self.story_id)
-        unsynced = reading.unsynced_episodes(session, self.story_id)
+        unsynced = episode_reading.unsynced_episodes(session, self.story_id)
         if unsynced and not self.skip_sync:
-            return StoryStart(story=reading.story_digest(session, story), unsynced=unsynced, stopped=True,
+            return StoryStart(story=story_reading.story_digest(session, story), unsynced=unsynced, stopped=True,
                               message=_STOPPED_MESSAGE)
 
         _, until = common_query.resolve_time(session, self.time, story)
-        start = StoryStart(story=reading.story_digest(session, story), unsynced=unsynced, stopped=False, time=until,
-                           episodes=reading.episodes(session, self.story_id, count=self.episodes))
+        start = StoryStart(story=story_reading.story_digest(session, story), unsynced=unsynced, stopped=False, time=until,
+                           episodes=episode_reading.episodes(session, self.story_id, count=self.episodes))
         if story.place_id is not None:
-            start.cast = reading.cast(session, self.story_id, until, count=self.count, levels=self.levels)
-            start.brief = reading.brief(session, story.place_id, until, reach=self.reach)
+            start.cast = story_reading.cast(session, self.story_id, until, count=self.count, levels=self.levels)
+            start.brief = story_reading.brief(session, story.place_id, until, reach=self.reach)
         return start

@@ -3,90 +3,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field, SerializeAsAny, computed_field, model_serializer
+from pydantic import Field, computed_field, model_serializer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from data_access_logic.character.models import CharacterParameterValues
-from data_access_logic.character.parameters import parameters_at
-from data_access_logic.character.record import CharacterHead, CharacterRecord
-from data_access_logic.entrypoint import UnknownRecordError
-from data_access_logic.episode.record import EpisodeHead, EpisodeRow
-from data_access_logic.event.record import EventColumns
+from data_access_logic.character.reading import CharacterSheet, character_sheet, residents
+from data_access_logic.episode.reading import EpisodeTitle
+from data_access_logic.event.reading import EventRow
 from data_access_logic.idea.alias import called
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.location.record import LocationRecord
-from data_access_logic.material import Material, Timestamp
+from data_access_logic.material import Material, Named, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
 from db.schema import Character, Event, Idea, IdeaRecognition, Location, Story
 from db.stamp import Stamp
-
-
-class Named(Material):
-    id: int
-    name: str | None = None
-
-
-class _EventCharacter(Material):
-    character_id: int
-    character: Named | None = None
-
-
-class EventRowHead(EventColumns):
-    location: Named | None = Field(default=None, exclude=True)
-    event_characters: list[_EventCharacter] = Field(exclude=True)
-
-    @computed_field
-    @property
-    def place_name(self) -> str | None:
-        return None if self.location is None else self.location.name
-
-    @computed_field
-    @property
-    def characters(self) -> list[Named]:
-        return [Named(id=link.character_id, name=None if link.character is None else link.character.name)
-                for link in self.event_characters]
-
-
-class EventRow(EventRowHead):
-    text: str
-
-
-class PlaceAt(Material):
-    place_id: int
-    place_name: str | None = None
-    start: Timestamp | None = None
-
-
-class CharacterSheet(Material):
-    """人物の列に、ある時刻の名字・体格・口調・性格(`parameters_at`)を同じ段に並べて出す。"""
-
-    character: SerializeAsAny[CharacterHead]
-    parameters_at: CharacterParameterValues
-    place: PlaceAt | None = None
-    recent_events: list[SerializeAsAny[EventRowHead]]
-
-    @model_serializer(mode="wrap")
-    def _flat(self, handler: Any) -> dict:
-        data = handler(self)
-        return {**data.pop("character"), **data.pop("parameters_at"), **data}
-
-
-class EpisodeTitle(Material):
-    id: int
-    start: Timestamp | None = None
-    title: str
-
-
-class UnsyncedEpisode(EpisodeTitle):
-    story_id: int
-    story: Named | None = Field(default=None, exclude=True)
-
-    @computed_field
-    @property
-    def story_name(self) -> str | None:
-        return None if self.story is None else self.story.name
 
 
 class _StoryWithPlaces(StoryRecord):
@@ -147,53 +78,6 @@ class Cast(Material):
     characters: list[CharacterSheet]
 
 
-def event_row(event: Event, text: bool = True) -> EventRowHead:
-    return (EventRow if text else EventRowHead).model_validate(event)
-
-
-def events_at(session: Session, when, place_ids=None, limit=None, text: bool = True) -> list[EventRowHead]:
-    rows = session.scalars(
-        common_query.events_at_select(when, place_ids=place_ids, limit=limit)).all()
-    return [event_row(row, text=text) for row in rows]
-
-
-def events_of(session: Session, select_fn, record_id: int, until=None, limit=5,
-              text: bool = True) -> list[EventRowHead]:
-    rows = session.scalars(select_fn(record_id, until=until, limit=limit)).all()
-    return [event_row(row, text=text) for row in rows]
-
-
-def residents(session: Session, place_ids, until: Stamp) -> list[int]:
-    character_ids = session.scalars(
-        common_query.resident_character_ids_select(place_ids, until)).all()
-    return [id_ for id_ in character_ids if id_ is not None]
-
-
-def _place_at(session: Session, character_id: int, until: Stamp) -> PlaceAt | None:
-    row = session.scalars(common_query.character_place_select(character_id, until)).first()
-    if row is None:
-        return None
-    return PlaceAt(place_id=row.location_id, place_name=row.place.name if row.place else None, start=row.start)
-
-
-def character_sheet(session: Session, character_id: int, until=None,
-                    count: int = 5, text: bool = True) -> CharacterSheet:
-    character = session.scalars(common_query.character_select(character_id)).first()
-    if character is None:
-        raise UnknownRecordError(f"id={character_id} の character が見つからない")
-    at = common_query.span(until)[1] if until is not None else Stamp(99999, 12, 31, 23, 59, 59)
-
-    return CharacterSheet(
-        character=(CharacterRecord if text else CharacterHead).model_validate(character),
-        # 時刻を渡さないときは、期間を限らない値だけを重ねる
-        parameters_at=parameters_at(character, None if until is None else at),
-        place=_place_at(session, character_id, at),
-        recent_events=events_of(
-            session, common_query.events_of_character_select, character_id, until=None if until is None else at,
-            limit=count, text=text),
-    )
-
-
 def story_digest(session: Session, story: Story) -> StoryDigest:
     episodes = session.scalars(common_query.story_episodes_select(story.id)).all()
     return StoryDigest(
@@ -207,19 +91,6 @@ def story_digest(session: Session, story: Story) -> StoryDigest:
 def stories(session: Session) -> list[StoryDigest]:
     rows = session.scalars(common_query.stories_select()).all()
     return [story_digest(session, story) for story in rows]
-
-
-def episodes(session: Session, story_id: int, count: int = 10, before=None,
-             text: bool = True) -> list[EpisodeHead]:
-    common_query.get_row(session, Story, story_id)
-    rows = session.scalars(
-        common_query.episodes_select(story_id, count=count, before=before)).all()
-    return [(EpisodeRow if text else EpisodeHead).model_validate(episode) for episode in reversed(rows)]
-
-
-def unsynced_episodes(session: Session, story_id: int | None = None) -> list[UnsyncedEpisode]:
-    rows = session.scalars(common_query.unsynced_episodes_select(story_id)).all()
-    return [UnsyncedEpisode.model_validate(episode) for episode in rows]
 
 
 def brief(session: Session, place_id: int, when=None, reach: int = 60, full: bool = False) -> Brief:

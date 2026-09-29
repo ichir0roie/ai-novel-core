@@ -116,6 +116,11 @@ class EpisodeMaterial(Material):
 class EpisodeMaterialSerialized(EpisodeMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    cast: list[CastSerialized]
+    place_events: list[EventSerialized]
+    later_events: list[EventSerialized]
+    ideas: IdeaContextSerialized
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         episode = self.main_episode
@@ -127,14 +132,14 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
                 "時刻": str(episode.start),
                 "場所": _place(self.locations),
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
-                "登場人物": [CastSerialized.model_validate(member).model_dump() for member in self.cast],
+                "登場人物": [member.model_dump() for member in self.cast],
                 "種": episode.key,
             },
             "この場所の直近の出来事(古い順)": [
-                EventSerialized.model_validate(event).model_dump() for event in self.place_events],
+                event.model_dump() for event in self.place_events],
             "この時点より後に既に決まっている出来事": [
-                EventSerialized.model_validate(event).model_dump() for event in self.later_events],
-            "関係する設定": IdeaContextSerialized.model_validate(self.ideas).model_dump(),
+                event.model_dump() for event in self.later_events],
+            "関係する設定": self.ideas.model_dump(),
         }
 
 
@@ -151,6 +156,8 @@ class EpisodeRevisionMaterial(Material):
 class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    cast: list[CastSerialized]
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         episode = self.main_episode
@@ -161,7 +168,7 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
             "直す話": {
                 "時刻": str(episode.start),
                 "場所": _place(self.locations),
-                "登場人物": [CastSerialized.model_validate(member).model_dump() for member in self.cast],
+                "登場人物": [member.model_dump() for member in self.cast],
                 "今の題": episode.title,
                 "今の本文": episode.text,
             },
@@ -182,6 +189,9 @@ class EpisodeFrameMaterial(Material):
 class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    cast: list[CastSerialized]
+    later_events: list[EventSerialized]
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         episode = self.main_episode
@@ -193,9 +203,9 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
                 "立つ場所": _place(self.locations),
             },
             "直前の話(新しい順)": _past_episodes(self.past_episodes),
-            "登場人物": [CastSerialized.model_validate(member).model_dump() for member in self.cast],
+            "登場人物": [member.model_dump() for member in self.cast],
             "この時点より後に既に決まっている出来事": [
-                EventSerialized.model_validate(event).model_dump() for event in self.later_events],
+                event.model_dump() for event in self.later_events],
             "作者の指定": {
                 "題": episode.title.strip() or None,
                 "種": episode.key.strip() or None,

@@ -1,16 +1,14 @@
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
-from data_access_logic.material import Form, Timestamp
+from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import ConfirmStatus
 from db.stamp import Stamp
 
 
-class EventForm(BaseModel):
-    """GUI の欄で渡る、出来事の下書き。空の欄は「指定なし」。"""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class EventForm(Draft):
+    """出来事の下書き。"""
 
     # 渡せば、その出来事の本文だけを埋める(`GenerateEvent`)
     id: int | None = None
@@ -23,13 +21,6 @@ class EventForm(BaseModel):
     character_ids: list[int] | None = None
     hidden: bool = False
     parent_event_id: int | None = None
-
-    @field_validator("*", mode="before")
-    @classmethod
-    def _blank_is_unset(cls, value: Any) -> Any:
-        if isinstance(value, str) and not value.strip():
-            return None
-        return value
 
     @field_validator("time", "start", "end", mode="before")
     @classmethod
@@ -59,7 +50,8 @@ class EventCreateForm(Form):
     end: Timestamp | None = None
     event_seeded: bool = False
     meme_seeded: bool = False
-    character_ids: list[int] = []
+    character_ids: Annotated[list[int], References("character")] = Field(
+        default=[], title="当事者", description="居合わせた人物の id")
 
 
 class EventUpdateForm(Form):

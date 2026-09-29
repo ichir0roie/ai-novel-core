@@ -12,7 +12,7 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_at
 from data_access_logic.episode.models import (
-    EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeRevisionMaterialSerialized, RevisedEpisode, StoryMaterial,
+    EpisodeRevisionDraft, EpisodeRevisionMaterialSerialized, RevisedEpisode, StoryMaterial,
 )
 from data_access_logic.episode.summary import past_episodes
 from data_access_logic.query import common_query
@@ -32,7 +32,7 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 
 def _revision_material(
     s: Session, ai: AIClient, episode_id: int, past_episode_count: int,
-) -> EpisodeRevisionMaterial:
+) -> EpisodeRevisionMaterialSerialized:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -52,7 +52,7 @@ def _revision_material(
     place_id = episode.place_id or episode.story.place_id
     characters = [link.character for link in episode.episode_characters]
 
-    return EpisodeRevisionMaterial(
+    return EpisodeRevisionMaterialSerialized(
         story=story,
         main_episode=main_episode,
         past_episodes=past_episodes(s, ai, episode, past_episode_count),
@@ -77,23 +77,24 @@ def revise_episode(
     ai: AIClient,
     episode_id: int,
     instruction: str,
+    model: str,
+    effort: str,
     past_episode_count: int = constants.EPISODE_PREVIOUS_LIMIT,
-    writer_options: dict | None = None,
     shared_style_extra: str = "",
     style_extra: str = "",
 ) -> Episode | None:
-    """`writer_options` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
+    """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
     if not instruction.strip():
         raise ValueError("instruction(直す指示)が空")
     material = _revision_material(s, ai, episode_id, past_episode_count)
 
     prompt = "\n".join([
-        EpisodeRevisionMaterialSerialized.model_validate(material).model_dump_json(indent=2),
+        material.model_dump_json(indent=2),
         f"直す指示: {instruction.strip()}",
     ])
     decided = ai.try_generate_json(
         prompt, EpisodeRevisionDraft.model_json_schema(), system=_system_prompt(shared_style_extra, style_extra),
-        timeout=constants.EPISODE_TIMEOUT, **(writer_options or {}))
+        timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
     try:
         draft = EpisodeRevisionDraft.model_validate(decided)
     except ValidationError as error:

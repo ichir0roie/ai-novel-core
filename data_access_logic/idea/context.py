@@ -12,7 +12,7 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms
+from data_access_logic.idea.models import IdeaContextSerialized, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms
 from data_access_logic.idea.search import keywords_of, search, spellings
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, ConfirmStatus, Idea, Location
@@ -83,7 +83,9 @@ def _related(s: Session, hits: list[IdeaMaterial], place_id: int | None, time: S
     return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]
 
 
-def resolve_ideas(s: Session, keywords: list[IdeaTerm], place_id: int | None, time: Stamp | None) -> IdeaContextMaterial:
+def resolve_ideas(
+    s: Session, keywords: list[IdeaTerm], place_id: int | None, time: Stamp | None,
+) -> IdeaContextSerialized:
     """洗い出した語をアイデアと照らし、当たらなかった固有の語を候補として足す。
 
     足す候補の効く期間は語の `start` / `end`(時期のはっきりしない語は None のまま)。
@@ -104,12 +106,15 @@ def resolve_ideas(s: Session, keywords: list[IdeaTerm], place_id: int | None, ti
     related = _related(s, _dated(hit_ideas, time), place_id, time)
     recognitions = called(s, [idea.id for idea in related], place_id, time)
 
-    return IdeaContextMaterial(
+    return IdeaContextSerialized(
         hits=hit_ideas,
         candidates=list(candidates.values()),
         related=[RelatedIdeaMaterial(idea=idea, recognition=recognitions.get(idea.id)) for idea in related],
     )
 
 
-def gather_ideas(s: Session, draft: str, ai: AIClient, place_id: int | None, time: Stamp | None) -> IdeaContextMaterial:
-    return resolve_ideas(s, keywords_of(draft, ai, time), place_id, time)
+def gather_ideas(s: Session, draft: str, ai: AIClient, place_id: int | None, time: Stamp | None) -> IdeaContextSerialized:
+    """AI が洗い出した語から足した候補は、この後の生成が失敗しても残すよう、その場で確定する。"""
+    context = resolve_ideas(s, keywords_of(draft, ai, time), place_id, time)
+    s.commit()
+    return context

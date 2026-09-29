@@ -13,4 +13,6 @@ class AIClient(Protocol):
         system: str | None = None,
         timeout: float = 120.0,
         options: dict | None = None,
+        model: str = ...,
+        effort: str = ...,
     ) -> dict: ...

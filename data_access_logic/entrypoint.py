@@ -111,13 +111,13 @@ class CommitEntrypoint(SessionEntrypoint):
 
 
 class RandomDraft(Entrypoint):
-    """db に触れない下書き。返した形のまま、確定する入口の引数のモデルに読み込める。"""
+    """db に触れない下書き。返した形のまま、確定する入口の引数に渡せる。"""
 
+    # `randomizer/` の factory。確定する入口の引数のモデルをそのまま組む
     builder: staticmethod
-    draft_model: type[BaseModel]
 
     def __init__(self, **overrides):
         self.overrides = overrides
 
     def result(self) -> BaseModel:
-        return self.draft_model.model_validate(self.builder(**self.overrides))
+        return self.builder(**self.overrides)

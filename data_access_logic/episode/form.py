@@ -1,18 +1,16 @@
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from data_access_logic.material import Form, Timestamp
+from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import Episode, EpisodeCharacter
 from db.stamp import Stamp
 
 
-class EpisodeForm(BaseModel):
-    """GUI の欄・スキルの引数で渡る、話の下書き。空の欄は「指定なし」。"""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class EpisodeForm(Draft):
+    """話の下書き。"""
 
     id: int | None = None
     story_id: int | None = None
@@ -22,14 +20,9 @@ class EpisodeForm(BaseModel):
     end: Stamp | None = None
     viewpoint_character_id: int | None = None
     place_id: int | None = None
-    character_ids: list[int] | None = None
-
-    @field_validator("*", mode="before")
-    @classmethod
-    def _blank_is_unset(cls, value: Any) -> Any:
-        if isinstance(value, str) and not value.strip():
-            return None
-        return value
+    character_ids: Annotated[list[int] | None, References("character")] = Field(
+        default=None, title="登場人物",
+        description="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
 
     @field_validator("start", "end", mode="before")
     @classmethod
@@ -54,13 +47,21 @@ class EpisodeCommitForm(Form):
     # 渡さなければ、手で直した話として同期していない扱いにする
     synced: bool | None = None
     # 渡すと登場人物(`episode_character`)をまるごと置き換える
-    character_ids: list[int] | None = None
+    character_ids: Annotated[list[int] | None, References("character")] = Field(
+        default=None, title="登場人物", description="登場人物の id")
 
     @model_validator(mode="after")
     def _story_of_new_episode(self) -> "EpisodeCommitForm":
         if self.id is None and self.story_id is None:
             raise ValueError("story_id は必須(id を渡さず新しい話を足すとき)")
         return self
+
+
+class EpisodeCreateForm(EpisodeCommitForm):
+    """新しい話を足すときの `EpisodeCommitForm`(GUI の足す画面が必須の欄を示すのに使う)。"""
+
+    id: None = None
+    story_id: int = Field(...)
 
 
 def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> None:

@@ -14,9 +14,7 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import event_characters_at
 from data_access_logic.character.models import CharacterBase
-from data_access_logic.event.novelist_models import (
-    EventNovelDraft, EventNovelMaterial, EventNovelMaterialSerialized, RecordedEvent,
-)
+from data_access_logic.event.novelist_models import EventNovelDraft, EventNovelMaterialSerialized, RecordedEvent
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.links import link
@@ -37,7 +35,7 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 
 def _novel_material(
     s: Session, ai: AIClient, event_id: int, focus_character_id: int | None, scene: str | None,
-) -> EventNovelMaterial:
+) -> EventNovelMaterialSerialized:
     event = s.scalar(
         select(Event)
         .where(Event.id == event_id)
@@ -57,7 +55,7 @@ def _novel_material(
     time = main_event.start or main_event.time
     place_id = event.location_id
 
-    return EventNovelMaterial(
+    return EventNovelMaterialSerialized(
         main_event=main_event,
         focus_character=focus_character,
         scene=scene,
@@ -89,7 +87,7 @@ def novelize_event(
     else:
         viewpoint = "当事者のうちこの出来事の中心にいる一人を"
     prompt = "\n".join([
-        EventNovelMaterialSerialized.model_validate(material).model_dump_json(indent=2),
+        material.model_dump_json(indent=2),
         f"この出来事を、{viewpoint}視点人物にした{letters}の小説の本文に書き起こしてください。",
     ])
     decided = ai.try_generate_json(

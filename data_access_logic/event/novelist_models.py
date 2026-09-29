@@ -29,6 +29,10 @@ class EventNovelMaterial(Material):
 class EventNovelMaterialSerialized(EventNovelMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    event_characters: list[EventCharacterAtSerialized]
+    later_events: list[EventSerialized]
+    ideas: IdeaContextSerialized
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         event, place = self.main_event, self.main_event.location
@@ -38,11 +42,11 @@ class EventNovelMaterialSerialized(EventNovelMaterial):
             "終わり": str(event.end) if event.end else None,
             "場面の指定": self.scene,
             "主役": self.focus_character.name if self.focus_character else None,
-            "当事者": [EventCharacterAtSerialized.model_validate(at).model_dump() for at in self.event_characters],
+            "当事者": [at.model_dump() for at in self.event_characters],
             "この時点より後に既に決まっている出来事": [
-                EventSerialized.model_validate(later).model_dump() for later in self.later_events],
+                later.model_dump() for later in self.later_events],
             "この出来事の記録": {"名前": event.name, "記録": event.text},
-            "関係する設定": IdeaContextSerialized.model_validate(self.ideas).model_dump(),
+            "関係する設定": self.ideas.model_dump(),
         }
 
 

@@ -330,6 +330,8 @@ class PolishRequest(Material):
 class PolishRequestSerialized(PolishRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    ideas: IdeaContextSerialized
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        return {"下書き": self.draft, "関係する設定": IdeaContextSerialized.model_validate(self.ideas).model_dump()}
+        return {"下書き": self.draft, "関係する設定": self.ideas.model_dump()}

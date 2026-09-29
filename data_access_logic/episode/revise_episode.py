@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from ai.claude_code import ai_client
+from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import reviser
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.form import EpisodeForm, save_frame
-from data_access_logic.episode.generate_episode import writer_options
 from data_access_logic.episode.record import EpisodeRecord
 
 
@@ -44,7 +44,7 @@ class ReviseEpisode(SessionEntrypoint):
             form.character_ids = self.character_ids
         save_frame(session, form)
         revised = reviser.revise_episode(
-            session, self.ai, form.id, self.instruction, writer_options=writer_options(self.ai, self.model, self.effort),
+            session, self.ai, form.id, self.instruction, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if revised is None:
             raise ValueError("本文が得られなかった")

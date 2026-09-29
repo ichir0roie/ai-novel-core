@@ -1,6 +1,7 @@
+from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, PlainSerializer, PlainValidator, WithJsonSchema
+from pydantic import BaseModel, ConfigDict, PlainSerializer, PlainValidator, WithJsonSchema, model_validator
 
 from db.stamp import Stamp
 
@@ -10,6 +11,37 @@ class Material(BaseModel):
 
     # このモデルに詰めるのに要る、noload のリレーションの読み方(`entrypoint.record_of` / `entrypoint.loading` が使う)
     LOAD_OPTIONS: ClassVar[tuple] = ()
+
+
+class Named(Material):
+    """行を id と名前だけで指す。"""
+
+    id: int
+    name: str | None = None
+
+
+@dataclass(frozen=True)
+class References:
+    """`Annotated` に添えて、欄が指す行のテーブルを表す(`Annotated[int | None, References("location")]`)。"""
+
+    table: str
+
+
+def _blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+class Draft(BaseModel):
+    """GUI の欄・スキルの引数で渡る下書き。空の欄(None・空白だけの文字列)は、渡さなかったのと同じ扱いにする。"""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unset_blanks(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        return {key: item for key, item in value.items() if not _blank(item)}
 
 
 class Form(BaseModel):

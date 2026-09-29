@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.story import reading
+from data_access_logic.story import reading as story_reading
 
 
 class ReadCast(SessionEntrypoint):
@@ -12,5 +12,5 @@ class ReadCast(SessionEntrypoint):
         self.count = count
         self.levels = levels
 
-    def execute(self, session) -> reading.Cast:
-        return reading.cast(session, self.story_id, self.time, count=self.count, levels=self.levels)
+    def execute(self, session) -> story_reading.Cast:
+        return story_reading.cast(session, self.story_id, self.time, count=self.count, levels=self.levels)

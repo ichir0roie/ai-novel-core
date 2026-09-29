@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from data_access_logic.entrypoint import SessionEntrypoint
+from data_access_logic.episode import reading as episode_reading
 from data_access_logic.episode.record import EpisodeHead
-from data_access_logic.story import reading
 
 
 class ReadEpisodes(SessionEntrypoint):
@@ -14,4 +14,4 @@ class ReadEpisodes(SessionEntrypoint):
         self.text = text
 
     def execute(self, session) -> list[EpisodeHead]:
-        return reading.episodes(session, self.story_id, count=self.count, before=self.before, text=self.text)
+        return episode_reading.episodes(session, self.story_id, count=self.count, before=self.before, text=self.text)

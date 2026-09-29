@@ -121,12 +121,14 @@ def _relations(relations: list[CharacterRelationMaterial]) -> list[dict[str, Any
 class CastSerialized(CastMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    recent_events: list[EventSerialized]
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
             **_sheet(self.character, self),
             "関係": _relations(self.relations),
-            "直近の出来事(古い順)": [EventSerialized.model_validate(event).model_dump() for event in self.recent_events],
+            "直近の出来事(古い順)": [event.model_dump() for event in self.recent_events],
         }
 
 
@@ -162,10 +164,11 @@ class ParticipantSerialized(ParticipantMaterial):
 class EventCharacterAtSerialized(EventCharacterAt):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
+    previous_event: EventSerialized | None = None
+
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
             **_sheet(self.character, self),
-            "直前の出来事": (EventSerialized.model_validate(self.previous_event).model_dump()
-                             if self.previous_event else None),
+            "直前の出来事": self.previous_event.model_dump() if self.previous_event else None,
         }

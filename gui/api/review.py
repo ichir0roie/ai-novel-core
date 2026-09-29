@@ -58,4 +58,5 @@ def next_pending(session: Session, spec: TableSpec, after: int = 0) -> ReviewNex
 
 def decide(session: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus,
            changes: dict[str, Any]) -> Material:
-    return records.update_record(session, spec, record_id, {**changes, "confirmed": decision})
+    # 画面は直しの欄から確認(confirmed)を外して送り、ボタンで選んだ判定を別に渡す
+    return spec.updater(spec.update_form(id=record_id, confirmed=decision, **changes)).execute(session)
