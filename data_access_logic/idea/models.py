@@ -1,7 +1,7 @@
 import unicodedata
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validator, model_serializer, model_validator
 
 from data_access_logic import constants
 from data_access_logic.material import Material
@@ -43,7 +43,7 @@ def _stamp_or_none(value: Any) -> Stamp | None:
 
 
 class IdeaTerm(Material):
-    """アイデアと照らす語。claude が渡す語も、AI が挙げた語(`IdeaTermDraft`)も、この形にそろえる。"""
+    """アイデアと照らす語。claude が渡す語も、AI が挙げた語(`IdeaTermDraft`)も、この形で扱う。"""
 
     keyword: str
     variants: list[str] = []
@@ -104,7 +104,12 @@ def unique_terms(terms: list[IdeaTerm]) -> list[IdeaTerm]:
     return list(found.values())
 
 
-class IdeaTermDraft(BaseModel):
+# AI には時期を文字列で書かせ、`IdeaTerm` のバリデータで `Stamp` に読む
+_StampText = Annotated[Stamp | None, WithJsonSchema({"anyOf": [{"type": "string"}, {"type": "null"}]})]
+
+
+class IdeaTermDraft(IdeaTerm):
+    # AI にはすべての欄を書かせる。整え方は `IdeaTerm` のバリデータのまま
     model_config = ConfigDict(extra="forbid")
 
     keyword: str = Field(description="語")
@@ -114,10 +119,10 @@ class IdeaTermDraft(BaseModel):
     description: str = Field(description="この文の中でその語が何を指しているかの一文")
     coined: bool = Field(description="その語がこの世界・作品に固有の語(作中の呼び名・造語・固有の技術や制度の名)なら true、一般の語なら false")
     kind: str = Field(description="その語の種別。「技術」「制度」「概念」「呼称」「現象」「施設」「時代」などの短い語で一つ")
-    start: str | None = Field(description=(
+    start: _StampText = Field(description=(
         "その事柄がこの世界に現れた(作られた・始まった・そう呼ばれ始めた)時期。"
         "文の時刻と文の中身から、ある程度はっきり言えるときだけ「年」か「年/月/日」で書く。はっきり言えなければ null"))
-    end: str | None = Field(description="その事柄が終わった・廃れた・そう呼ばれなくなった時期。文から分かるときだけ start と同じ形で書き、分からなければ null")
+    end: _StampText = Field(description="その事柄が終わった・廃れた・そう呼ばれなくなった時期。文から分かるときだけ start と同じ形で書き、分からなければ null")
 
 
 class IdeaTermsDraft(BaseModel):
@@ -125,6 +130,15 @@ class IdeaTermsDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     terms: list[IdeaTermDraft] = Field(description="設定資料と照らし合わせる語。0〜8 件")
+
+    @field_validator("terms", mode="before")
+    @classmethod
+    def _without_blank_keyword(cls, value: Any) -> Any:
+        # keyword が空白だけの語は、応答ごと捨てずにその語だけを落とす
+        if not isinstance(value, list):
+            return value
+        return [term for term in value
+                if not (isinstance(term, dict) and isinstance(term.get("keyword"), str) and not normalized(term["keyword"]))]
 
 
 class RelatedIdeaMaterial(Material):

@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
@@ -44,13 +43,7 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
         IdeaTermsDraft, system=_SYSTEM_PROMPT, timeout=constants.IDEA_TERMS_TIMEOUT)
     if decided is None:
         return []
-    terms = []
-    for draft in decided.terms:
-        try:
-            terms.append(IdeaTerm.model_validate(draft))
-        except ValidationError:  # keyword が空
-            continue
-    return unique_terms(terms)
+    return unique_terms(list(decided.terms))
 
 
 def _kana_swapped(text: str) -> str:
