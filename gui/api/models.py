@@ -164,6 +164,10 @@ class CharacterLocationsResponse(BaseModel):
     locations: dict[int, int]
 
 
+class PlaceCharactersResponse(BaseModel):
+    character_ids: list[int]
+
+
 class Health(BaseModel):
     world_dir: str
     db_path: str

@@ -314,6 +314,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/place_characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Place Characters
+         * @description `time` に `place_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う
+         */
+        get: operations["place_characters_api_place_characters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -600,6 +620,11 @@ export interface components {
         OptionList: {
             /** Items */
             items: components["schemas"]["Option"][];
+        };
+        /** PlaceCharactersResponse */
+        PlaceCharactersResponse: {
+            /** Character Ids */
+            character_ids: number[];
         };
         /** Planet */
         Planet: {
@@ -1358,6 +1383,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CharacterLocationsResponse"];
+                };
+            };
+        };
+    };
+    place_characters_api_place_characters_get: {
+        parameters: {
+            query: {
+                place_id: number;
+                time: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceCharactersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

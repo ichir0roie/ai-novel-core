@@ -124,6 +124,11 @@ export type CharacterLocationsResponse = components["schemas"]["CharacterLocatio
 
 export const getCharacterLocations = () => api<CharacterLocationsResponse>("/api/character_locations");
 
+export type PlaceCharactersResponse = components["schemas"]["PlaceCharactersResponse"];
+
+export const getPlaceCharacters = (placeId: number, time: string) =>
+  api<PlaceCharactersResponse>(`/api/place_characters?${new URLSearchParams({ place_id: String(placeId), time })}`);
+
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {
   const items: Rec[] = [];

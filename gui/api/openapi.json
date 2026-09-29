@@ -805,6 +805,55 @@
           }
         }
       }
+    },
+    "/api/place_characters": {
+      "get": {
+        "summary": "Place Characters",
+        "description": "`time` に `place_id` の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う",
+        "operationId": "place_characters_api_place_characters_get",
+        "parameters": [
+          {
+            "name": "place_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Place Id"
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceCharactersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1610,6 +1659,22 @@
           "items"
         ],
         "title": "OptionList"
+      },
+      "PlaceCharactersResponse": {
+        "properties": {
+          "character_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Character Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "character_ids"
+        ],
+        "title": "PlaceCharactersResponse"
       },
       "Planet": {
         "properties": {
