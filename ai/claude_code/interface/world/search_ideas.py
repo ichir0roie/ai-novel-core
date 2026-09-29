@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 from ai.claude_code.interface._base import SessionEntrypoint
-from ai.time_keeper import idea_alias, idea_search
+from data_access_logic.idea.alias import called
+from data_access_logic.idea.search import search
+from db.stamp import Stamp
 
 
 class SearchIdeas(SessionEntrypoint):
@@ -19,17 +21,16 @@ class SearchIdeas(SessionEntrypoint):
         self.keywords = keywords
         self.place_id = None if place_id is None else int(place_id)
         self.limit = limit
-        self.time = time
+        self.time = Stamp.parse(time)
 
     def execute(self, session) -> list[dict]:
-        hits = idea_search.search(session, self.keywords, self.place_id, self.time, limit=self.limit,
-                                  confirmed_only=False)
-        called = idea_alias.called(session, [hit.idea.id for hit in hits], self.place_id, self.time)
+        hits = search(session, self.keywords, self.place_id, self.time, limit=self.limit, confirmed_only=False)
+        recognitions = called(session, [hit.idea.id for hit in hits], self.place_id, self.time)
         return [
             {"id": hit.idea.id, "name": hit.idea.name, "kind": hit.idea.kind,
              "confirmed": hit.idea.confirmed,
              "parent_idea_id": hit.idea.parent_idea_id,
-             "called": idea_alias.name_of(hit.idea, called),
+             "called": recognitions[hit.idea.id].name if hit.idea.id in recognitions else hit.idea.name,
              "text": hit.idea.text,
              "score": hit.score, "keywords": hit.keywords}
             for hit in hits]

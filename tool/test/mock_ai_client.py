@@ -7,7 +7,8 @@ from __future__ import annotations
 import random
 import re
 
-_CHARACTER_ID_IN_PROMPT = re.compile(r"'character_id': (\d+)")
+# 材料は日本語の見出しの JSON(`"人物id": 1`)で渡る。dict の repr(`'character_id': 1`)で渡す生成器も残っている
+_CHARACTER_ID_IN_PROMPT = re.compile(r"(?:'character_id'|\"人物id\"): (\d+)")
 
 # 空だと後段が何もしない配列だけ、件数を持たせる。それ以外の配列は空で返す。
 _ARRAY_SIZES = {"candidates": 3, "seeds": 2}
@@ -24,12 +25,20 @@ class MockAIClient:
         tools: tuple[str, ...] = (),
     ) -> dict:
         self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools})
-        return self._fill(schema, prompt, key=None)
+        return self._fill(schema, prompt, key=None, defs=schema.get("$defs", {}))
 
     def usage_summary(self) -> str:
         return f"mock 呼び出し {len(self.calls)}回"
 
-    def _fill(self, schema: dict, prompt: str, key: str | None):
+    def _fill(self, schema: dict, prompt: str, key: str | None, defs: dict):
+        # pydantic の model_json_schema は入れ子のモデルを $defs に置いて $ref で指し、省ける値を anyOf で書く
+        if "$ref" in schema:
+            return self._fill(defs[schema["$ref"].rsplit("/", 1)[-1]], prompt, key, defs)
+        if "anyOf" in schema:
+            options = schema["anyOf"]
+            if any(option.get("type") == "null" for option in options):
+                return None
+            return self._fill(options[0], prompt, key, defs)
         types = schema.get("type")
         if isinstance(types, list):
             if "null" in types:
@@ -38,14 +47,14 @@ class MockAIClient:
         if "enum" in schema:
             return self.rng.choice(schema["enum"])
         if types == "object":
-            return {name: self._fill(sub, prompt, name)
+            return {name: self._fill(sub, prompt, name, defs)
                     for name, sub in schema.get("properties", {}).items()}
         if types == "array":
             if key == "character_ids":
                 ids = sorted({int(m) for m in _CHARACTER_ID_IN_PROMPT.findall(prompt)})
                 return self.rng.sample(ids, min(len(ids), self.rng.randint(1, 2))) if ids else []
             item = schema.get("items", {"type": "string"})
-            return [self._fill(item, prompt, key) for _ in range(_ARRAY_SIZES.get(key or "", 0))]
+            return [self._fill(item, prompt, key, defs) for _ in range(_ARRAY_SIZES.get(key or "", 0))]
         if types == "integer":
             low = schema.get("minimum", 1)
             high = schema.get("maximum", max(low, 1))

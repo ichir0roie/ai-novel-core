@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ai.claude_code.interface.randomizer._base import CommitMemeSource
-from ai.time_keeper.idea_context import find_or_create_classification
+from data_access_logic.idea.classification import find_or_create_classification
 from db.child_lists import load_children
 from db.schema import Idea, Location
 from db.schema_pydantic import to_dict

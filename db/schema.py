@@ -268,6 +268,7 @@ class Event(EventSeededMixin, MemeSeededMixin, TextBase):
     child_events: Mapped[list["Event"]] = relationship(
         back_populates="parent_event", lazy="noload", cascade="all, delete-orphan"
     )
+    summary: Mapped["EventSummary | None"] = relationship(lazy="noload", viewonly=True)
 
 
 class EventCharacter(Base):
@@ -706,7 +707,7 @@ class IdeaRecognition(Base):
     """アイデアの作中での呼び名を、場所・時代ごとに一行で持つ。
 
     `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
-    当てはまる行が無ければ本質の `name` をそのまま使う(`ai/time_keeper/idea_alias.py` の `called`)。
+    当てはまる行が無ければ本質の `name` をそのまま使う(`data_access_logic/idea/alias.py` の `called`)。
     効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/idea_context.py`)。
     """
 

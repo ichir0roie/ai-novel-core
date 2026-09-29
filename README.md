@@ -43,7 +43,7 @@ ai/                 AI に生成させる側をまとめた置き場
                     randomizer/ story/ world/ meme/ idea/ review/ fact_check/
 gui/                データ編集 GUI。api/(FastAPI)と web/(Next.js)
 tool/               地図(map/)・人物相関図(relation/)の描画、危険操作(danger/)、テスト用の道具(test/。必ず novel.test.db を使う。
-                    mock_ai_client で AI 無しに redrive_mock_world を回す、seed_mock_db で全テーブルにモックデータを流し込む)
+                    mock_ai_client で AI 無しに redrive_mock_world を回す、seed_mock_db で全テーブルにモックデータを流し込む。novel.test.db は copy_novel_db で本番の novel.db を写して作る)
 ```
 
 

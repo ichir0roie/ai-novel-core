@@ -5,7 +5,7 @@ import random
 
 from ai.claude_code.interface._base import SessionEntrypoint
 from ai.time_keeper import constants
-from ai.time_keeper import meme as _meme
+from data_access_logic.meme.extractor import draw
 
 __all__ = ["DrawMemes"]
 
@@ -17,4 +17,4 @@ class DrawMemes(SessionEntrypoint):
 
     def execute(self, session) -> list[dict]:
         categories = constants.MEME_PERSON_CATEGORIES if self.person else constants.MEME_NON_PERSON_CATEGORIES
-        return _meme.draw(session, random.Random(self.seed), categories)
+        return [drawn.model_dump() for drawn in draw(session, random.Random(self.seed), categories)]

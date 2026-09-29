@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ai.claude_code import claude_code_time_keeper, story_writer
+from ai.claude_code import claude_code_time_keeper
 from ai.claude_code.interface._base import CommitEntrypoint, Entrypoint, SessionEntrypoint
 import ai.claude_code.interface as interface_package
 from ai.claude_code.interface.randomizer._base import RandomDraft
@@ -30,7 +30,6 @@ _TIME_KEEPER: dict[str, Callable] = {
     "fill_episode": claude_code_time_keeper.claude_fill_episode_main,
     "loop": claude_code_time_keeper.claude_main,
     "story_years": claude_code_time_keeper.claude_story_years_main,
-    "write_story": story_writer.write_story,
 }
 
 

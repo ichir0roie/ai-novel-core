@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from ai.time_keeper import idea_context
+from data_access_logic.idea.links import linked_records
 from data_access_logic.query import dictionary_query, meme_query, review_query
 from db.schema import Idea, Story
 
@@ -23,7 +23,7 @@ def _label(record) -> str:
 
 def _appearances(session: Session, idea: Idea) -> str:
     places = []
-    for table, records in idea_context.linked_records(session, idea.id).items():
+    for table, records in linked_records(session, idea.id).items():
         places += [f"{table}「{_label(record)}」(id={record.id})" for record in records]
     return "、".join(places) or "(結んだ本文なし)"
 

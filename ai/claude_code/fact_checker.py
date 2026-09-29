@@ -9,11 +9,13 @@ from __future__ import annotations
 import os
 import re
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import func, select
 
 from ai.claude_code import ai_client
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
-from ai.time_keeper import meme
+from data_access_logic.meme.extractor import refresh as refresh_memes
+from data_access_logic.source_text import SourceBatch, SourceBatchSerialized, SourceText, batches
 from db.schema import Idea, Meme, Oracle, Session
 
 WEB_TOOLS = ("WebSearch", "WebFetch", "ToolSearch")
@@ -40,7 +42,7 @@ def _append_fact_check(text: str | None, fact_check: str) -> str:
 
 _SYSTEM_PROMPT = f"""\
 あなたは創作の設定を検める、科学・歴史・思想に詳しい校閲者です。
-小説の世界の設定(アイデア)か、著者の創作・AI についての覚え書き(oracle)か、人物の行動原理の芯になる考え方(ミーム)を番号つきで渡すので、\
+小説の世界の設定(アイデア)か、著者の創作・AI についての覚え書き(oracle)か、人物の行動原理の芯になる考え方(ミーム)を番号つきの JSON で渡すので、\
 それぞれをDラボのナレッジとネット検索で調べ、内容の妥当性を検め、書き手の役に立つ補足を書いてください。
 - Dラボのナレッジ検索(search_dlab_knowledge。見当たらなければ ToolSearch で「dlab」を探す)が使えるなら、\
   必ず先にそれで調べる。心理学・行動科学・脳科学・健康・人間関係・社会・AI に関わる内容は特に、Dラボの知見を軸にする。\
@@ -59,28 +61,26 @@ _SYSTEM_PROMPT = f"""\
   ## 出典
   出典は `- [題](URL)` の箇条書きにする。Dラボの動画・記事は題の頭に「Dラボ: 」を付ける。
 - 全体で 400〜800 字を目安にする。
-{FACT_CHECK_BIO_INSTRUCTION}
-JSON で答えてください。キーは results だけ。各要素は number(番号)と fact_check(検めた結果の markdown)の二つ。"""
+{FACT_CHECK_BIO_INSTRUCTION}"""
 
-_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "results": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "number": {"type": "integer"},
-                    "fact_check": {"type": "string"},
-                },
-                "required": ["number", "fact_check"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["results"],
-    "additionalProperties": False,
-}
+
+class FactCheckDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    number: int = Field(description="番号")
+    fact_check: str = Field(description="検めた結果の markdown")
+
+    @field_validator("fact_check")
+    @classmethod
+    def _stripped(cls, value: str) -> str:
+        return value.strip()
+
+
+class FactChecksDraft(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
+
+    results: list[FactCheckDraft] = Field(description="番号ごとの検めた結果")
 
 MODELS = {"idea": Idea, "oracle": Oracle, "meme": Meme}
 
@@ -90,27 +90,17 @@ def tools() -> tuple[str, ...]:
     return WEB_TOOLS + tuple(tool.strip() for tool in dlab.split(",") if tool.strip())
 
 
-def _describe(record: Idea | Oracle | Meme) -> str:
+_Checked = Idea | Oracle | Meme
+
+
+def _source(record: _Checked) -> SourceText[_Checked]:
+    """前に検めた結果は外して、素の本文だけを検めさせる。"""
     text = strip_fact_check(record.text)
     if isinstance(record, Idea):
-        return f"アイデア「{record.name}」(種類: {record.kind})\n{text}"
+        return SourceText(row=record, label=f"アイデア「{record.name}」(種類: {record.kind})", text=text)
     if isinstance(record, Oracle):
-        return f"覚え書き(oracle)\n{text}"
-    return f"ミーム(分類: {record.category or '未分類'})\n{text}"
-
-
-def _batches(records: list) -> list[list]:
-    batches: list[list] = []
-    letters = 0
-    for record in records:
-        size = len(_describe(record))
-        if batches and letters + size <= BATCH_LETTERS:
-            batches[-1].append(record)
-            letters += size
-        else:
-            batches.append([record])
-            letters = size
-    return batches
+        return SourceText(row=record, label="覚え書き(oracle)", text=text)
+    return SourceText(row=record, label=f"ミーム(分類: {record.category or '未分類'})", text=text)
 
 
 def targets(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> list:
@@ -128,27 +118,24 @@ def targets(session: Session, table: str, ids: list[int] | None = None, limit: i
 def check(session: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> int:
     records = targets(session, table, ids, limit)
     written = 0
-    for batch in _batches(records):
-        numbered = "\n\n".join(
-            f"## {number}\n{_describe(record)}" for number, record in enumerate(batch, start=1))
+    for batch in batches([_source(record) for record in records], BATCH_LETTERS):
         decided = ai_client.try_generate_json(
-            f"{numbered}\n\nそれぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。",
-            _SCHEMA, system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
-        for item in decided.get("results") or []:
-            if not isinstance(item, dict) or not isinstance(item.get("fact_check"), str):
+            "\n".join([SourceBatchSerialized.model_validate(SourceBatch(sources=batch)).model_dump_json(indent=2),
+                       "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。"]),
+            FactChecksDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
+        try:
+            results = FactChecksDraft.model_validate(decided).results
+        except ValidationError:
+            continue
+        for result in results:
+            if not (1 <= result.number <= len(batch) and result.fact_check):
                 continue
-            try:
-                number = int(item.get("number"))
-            except (TypeError, ValueError):
-                continue
-            text = item["fact_check"].strip()
-            if 1 <= number <= len(batch) and text:
-                record = batch[number - 1]
-                record.text = _append_fact_check(record.text, text)
-                # 検証結果もミームの元になるので、抜き出し直させる
-                if hasattr(record, "meme_seeded"):
-                    record.meme_seeded = False
-                written += 1
+            record = batch[result.number - 1].row
+            record.text = _append_fact_check(record.text, result.fact_check)
+            # 検証結果もミームの元になるので、抜き出し直させる
+            if not isinstance(record, Meme):
+                record.meme_seeded = False
+            written += 1
         session.commit()
     if records:
         print(f"[claude_code/fact_checker] {table} {len(records)}件のうち、{written}件を検めた")
@@ -171,6 +158,6 @@ def check_and_extract(session: Session, table: str, ids: list[int] | None = None
     if table == "meme":
         return {"checked": checked, "memes_added": 0}
     last_id = last_meme_id(session)
-    added = meme.refresh(session, ai_client)
+    added = refresh_memes(session, ai_client)
     check_new_memes(session, last_id)
     return {"checked": checked, "memes_added": added}

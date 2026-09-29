@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from ai.claude_code.interface._base import SessionEntrypoint, UnknownRecordError
 from ai.time_keeper import place_event_generator
+from data_access_logic.event.form import EventForm
 from db.schema import Event, EventCharacter
 from db.schema_pydantic import to_dict
 
@@ -24,7 +25,7 @@ class GenerateEvent(SessionEntrypoint):
     小説の本文だけを書かせて埋める(名前・時刻・場所・当事者は変えない)。
     """
 
-    def __init__(self, event: dict | None = None, seed: int | None = None, *,
+    def __init__(self, event: dict | None = None, seed: int | None = None,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.event = dict(event or {})
         self.seed = seed
@@ -38,7 +39,7 @@ class GenerateEvent(SessionEntrypoint):
         if event_id is not None:
             return self._complete(session, event_id)
         record = place_event_generator.generate_from_draft(
-            session, self.ai, draft, random.Random(self.seed),
+            session, self.ai, EventForm.model_validate(draft), random.Random(self.seed),
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         session.refresh(record)
         # `Event.event_characters` は noload なので、中間テーブルを直接引く

@@ -5,7 +5,7 @@ import random
 
 from ai.claude_code import ai_client
 from ai.claude_code.interface._base import SessionEntrypoint
-from ai.time_keeper.random_character_generator import _generate_one
+from data_access_logic.character.generator import generate_character
 from data_access_logic.query import world_createion_query
 from db.schema import Location, Stamp
 
@@ -31,9 +31,10 @@ class GenerateCharacters(SessionEntrypoint):
 
         rng = random.Random(self.seed)
         created = []
-        # _generate_one は一人ごとに commit するので、途中で止まっても作った人物は残る
+        # generate_character は一人ごとに commit するので、途中で止まっても作った人物は残る
         for place in places:
             for _ in range(rng.randint(*self.count)):
-                record = _generate_one(session, place, self.time, rng, self.ai, person=self.person)
-                created.append({"id": record.id, "name": record.name, "place_id": place.id})
+                record = generate_character(session, self.ai, rng, place.id, self.time, self.person)
+                if record is not None:
+                    created.append({"id": record.id, "name": record.name, "place_id": place.id})
         return created

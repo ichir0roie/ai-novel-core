@@ -4,15 +4,7 @@ from __future__ import annotations
 # _format
 MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
-# character_lifespan
-# 老衰。この歳を過ぎるまでは自然死しない。
-NATURAL_DEATH_MIN_AGE = 50
-# この歳に達したら、老衰は必ず起きる(不老でない限り)。
-NATURAL_DEATH_MAX_AGE = 150
-# 事故。年齢によらず、年に一度この確率で起きうる(不死でない限り)。
-ACCIDENT_PROBABILITY_PER_YEAR = 0.003
-
-# random_character_generator
+# data_access_logic/character/generator
 GENERATION_CHARACTER_PROBABILITY = 0.3
 GENERATION_CHARACTER_AGE_RANGE = (0, 40)
 # 命名時の重複回避に渡す「既にいる人物・対象」の上限。born_place とその祖先
@@ -23,10 +15,7 @@ NEARBY_CHARACTER_LIMIT = 20
 NON_PERSON_PROBABILITY = 0.3
 NON_PERSON_KINDS = ("国", "組織", "商会", "氏族", "集団", "物")
 
-# random_location_generator
-LOCATION_PROBABILITY = 0.01  # 1年に1度、1%の確率で
-
-# event_progression_generator
+# data_access_logic/event/progress
 PLACE_PROBABILITY = 0.75
 # 直近 PLACE_COOLDOWN_MONTHS ヶ月以内に同じ場所で出来事が起きていたら、
 # ロール確率に PLACE_PROBABILITY_COOLDOWN_FACTOR を掛けて下げる。プロットが
@@ -57,7 +46,7 @@ TRAIT_COLUMNS = (
 # 一つの場所に置く人物・対象の上限。これ以上居る場所はランダム生成の候補から外す。
 MAX_CHARACTER_PER_LOCATION = 5
 
-# character_event_generator
+# character_event_generator / data_access_logic/event/novelist
 # 前の出来事の終わりから、次の出来事の始まりまでに空ける日数(両端を含む)。
 NEXT_EVENT_GAP_DAYS = (1, 7)
 # 出来事がまだ無い人物の最初の出来事を、生まれてから何年後に置くか(両端を含む)。
@@ -67,7 +56,7 @@ EVENT_NOVEL_TIMEOUT = 300.0
 # 直前の出来事の本文を要約させるのを待つ秒数。
 EVENT_SUMMARY_TIMEOUT = 120.0
 
-# event_seed
+# data_access_logic/event_seed
 # 出来事の種を抜き出すとき、一度の呼び出しで渡す元の本文の字数の上限。
 EVENT_SEED_BATCH_LETTERS = 6000
 EVENT_SEED_TIMEOUT = 300.0
@@ -78,7 +67,7 @@ EVENT_SEED_CONSOLIDATE_EVERY = 50
 # 棚卸しで一度に見比べる、棚卸し済みの種の字数の上限(棚卸し前の種は毎回すべて添える)。
 EVENT_SEED_CONSOLIDATE_LETTERS = 15000
 
-# meme
+# data_access_logic/meme
 # ミームを抜き出すとき、一度の呼び出しで渡す元の本文の字数の上限。
 MEME_BATCH_LETTERS = 6000
 MEME_TIMEOUT = 300.0
@@ -97,7 +86,7 @@ MEME_POSITIONS = {
     "裏": "内に秘めている",
 }
 
-# episode_generator
+# data_access_logic/episode
 # 本文を一話ぶん書かせるので、断片の JSON より長く待つ秒数。
 EPISODE_TIMEOUT = 900.0
 # 前の話を名指ししないときに、作品の中から渡す直前の話の本数。
@@ -107,11 +96,11 @@ EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。
 EPISODE_PLACE_EVENT_LIMIT = 3
 
-# story_summary
+# data_access_logic/episode/summary
 # 話一話ぶんの概要・文体を覚え書きにさせるのを待つ秒数。
 RECAP_TIMEOUT = 300.0
 
-# idea_search / idea_context
+# data_access_logic/idea
 IDEA_TERMS_TIMEOUT = 300.0
 # 清書に渡すアイデアの上限(直接当たったものと、その上位・下位を合わせて)。
 IDEA_CONTEXT_LIMIT = 100

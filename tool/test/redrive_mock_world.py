@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
-from tool.test import TEST_DB_PATH  # noqa: F401  db を novel.test.db に固定する(schema より先に読む)
+from tool.test import NOVEL_DB_PATH, TEST_DB_PATH, copy_novel_db  # db を novel.test.db に固定する(schema より先に読む)
 
 import argparse
 import os
-import shutil
 
 from ai.time_keeper.main import loop_time
-from db.schema import NOVEL_DB_PATH, Stamp
+from db.schema import Stamp
 from tool.danger import reset_world
 from tool.test.mock_ai_client import MockAIClient
-
-DEFAULT_SOURCE_DB = NOVEL_DB_PATH
 
 
 def prepare_test_db(copy_from: str | None = None) -> None:
     if copy_from is None:
         if os.path.exists(TEST_DB_PATH):
             return
-        copy_from = DEFAULT_SOURCE_DB
-    if not os.path.exists(copy_from):
-        raise FileNotFoundError(f"写し元の db が無い: {copy_from}")
-    shutil.copy2(copy_from, TEST_DB_PATH)
+        copy_from = NOVEL_DB_PATH
+    copy_novel_db(copy_from)
     print(f"[redrive_mock] {copy_from} → {TEST_DB_PATH}")
 
 

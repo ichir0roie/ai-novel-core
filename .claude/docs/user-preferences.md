@@ -8,7 +8,7 @@
 - ユーザーが追加する値(舞台設定・抽出した文体の癖など)は親リポジトリ(世界リポジトリ)側に
   `core/` と同階層の python モジュール(例: `instructions/style.py`)として置く
 - 親リポジトリ側の値は、AI へ渡す文面を組み立てる末端の生成関数(`ai/instructions/style.py` の
-  `style_instruction()`、`ai/time_keeper/*_generator.py` の `write` 系、`story_writer.write_next_episode`、
+  `style_instruction()`、`ai/time_keeper/*_generator.py` の `write` 系、`data_access_logic/episode/` の `write_episode` など、
   `claude_code_time_keeper.py` / `local_ai_time_keeper.py` の `claude_*_main` など)の引数として渡す。
   `core` は「引数を渡さなければ空でよい(システム固有の値だけで成り立つ)」設計にする
 

@@ -3,8 +3,8 @@ import os
 
 import pytest
 
-from tool.test import TEST_DB_PATH  # noqa: F401  schema より先に読む(db を novel.test.db に固定)
-from db.schema import Base, create_db, engine, get_env_session  # noqa: E402
+from tool.test import copy_novel_db  # schema より先に読む(db を novel.test.db に固定)
+from db.schema import Base, engine, get_env_session  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.engine import Engine  # noqa: E402
 
@@ -19,10 +19,8 @@ def _fast_sqlite(dbapi_connection, _):
 
 @pytest.fixture(scope="session", autouse=True)
 def fresh_test_db():
-    # create_db が返す engine も捨てる。消して作り直したファイルを掴んだまま
-    # 残ると、以後の書き込みが sqlite の disk I/O error になることがある
-    create_db(TEST_DB_PATH).dispose()
-    engine.dispose()  # 作り直す前のファイルを掴んでいる接続を捨てる
+    copy_novel_db()
+    engine.dispose()  # 写す前のファイルを掴んでいる接続を捨てる
     yield
 
 

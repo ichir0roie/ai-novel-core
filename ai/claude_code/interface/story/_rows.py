@@ -1,22 +1,55 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from pydantic import field_serializer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ai.time_keeper import idea_alias
+from data_access_logic.idea.alias import called
+from data_access_logic.material import Material
 from data_access_logic.query import common_query
-from db.schema import Character, Event, Location, Story
+from db.schema import Character, Event, Idea, IdeaRecognition, Location, Story
 from db.schema_pydantic import to_dict_with
 from db.stamp import Stamp
 
 
+class _Named(Material):
+    id: int
+    name: str | None = None
+
+
+class _PlaceAt(Material):
+    place_id: int
+    place_name: str | None = None
+    start: Stamp | None = None
+
+    @field_serializer("start")
+    def _start(self, value: Stamp | None) -> str | None:
+        return None if value is None else str(value)
+
+
+class _EpisodeHead(Material):
+    id: int
+    start: Stamp | None = None
+    title: str
+
+    @field_serializer("start")
+    def _start(self, value: Stamp | None) -> str | None:
+        return None if value is None else str(value)
+
+
+class _UnsyncedEpisode(_EpisodeHead):
+    story_id: int
+    story_name: str | None = None
+
+
 def event_row(event, *, text: bool = True) -> dict:
-    data = to_dict_with(event, relations=common_query.EVENT_RELATIONS, text=text)
-    data["characters"] = [
-        {"id": link.character_id, "name": None if link.character is None else link.character.name}
-        for link in event.event_characters]
-    return data
+    return {
+        **to_dict_with(event, relations=common_query.EVENT_RELATIONS, text=text),
+        "characters": [
+            _Named(id=link.character_id, name=link.character.name if link.character else None).model_dump()
+            for link in event.event_characters],
+    }
 
 
 def events_at(session: Session, when, *, place_ids=None, limit=None,
@@ -32,24 +65,18 @@ def events_of(session: Session, select_fn, record_id: int, *, until=None, limit=
     return [event_row(row, text=text) for row in rows]
 
 
-def open_events(session: Session, place_ids, until: Stamp) -> list[dict]:
-    rows = session.scalars(common_query.open_events_select(place_ids, until)).all()
-    return [event_row(row) for row in rows]
-
-
 def residents(session: Session, place_ids, until: Stamp) -> list[int]:
     character_ids = session.scalars(
         common_query.resident_character_ids_select(place_ids, until)).all()
     return [id_ for id_ in character_ids if id_ is not None]
 
 
-def _place_at(session: Session, select_fn, owner_id: int, until: Stamp) -> dict | None:
-    row = session.scalars(select_fn(owner_id, until)).first()
+def _place_at(session: Session, character_id: int, until: Stamp) -> dict | None:
+    row = session.scalars(common_query.character_place_select(character_id, until)).first()
     if row is None:
         return None
-    return {"place_id": row.location_id,
-            "place_name": None if row.place is None else row.place.name,
-            "start": None if row.start is None else str(row.start)}
+    return _PlaceAt(place_id=row.location_id, place_name=row.place.name if row.place else None,
+                    start=row.start).model_dump()
 
 
 def character_sheet(session: Session, character_id: int, *, until=None,
@@ -59,29 +86,25 @@ def character_sheet(session: Session, character_id: int, *, until=None,
         raise common_query.NotFoundError(f"character_id={character_id} という id の character が見つからない")
     at = common_query.span(until)[1] if until is not None else Stamp(99999, 12, 31, 23, 59, 59)
 
-    sheet = to_dict_with(character, text=text)
-    # 時刻を渡さないときは、期間を限らない値だけを重ねる
-    sheet.update(character.parameters_at(None if until is None else at))
-    sheet["place"] = _place_at(session, common_query.character_place_select, character_id, at)
-    sheet["recent_events"] = events_of(
-        session, common_query.events_of_character_select, character_id, until=None if until is None else at,
-        limit=count, text=text)
-    return sheet
+    return {
+        **to_dict_with(character, text=text),
+        # 時刻を渡さないときは、期間を限らない値だけを重ねる
+        **character.parameters_at(None if until is None else at),
+        "place": _place_at(session, character_id, at),
+        "recent_events": events_of(
+            session, common_query.events_of_character_select, character_id, until=None if until is None else at,
+            limit=count, text=text),
+    }
 
 
 def story_digest(session: Session, story: Story) -> dict:
     episodes = session.scalars(common_query.story_episodes_select(story.id)).all()
-    digest = to_dict_with(
-        story, relations={"world": "world_name", "place": "place_name"})
-    digest["episode_count"] = len(episodes)
-    digest["last_episode"] = _episode_head(episodes[-1]) if episodes else None
-    digest["unsynced"] = [_episode_head(episode) for episode in episodes if not episode.synced]
-    return digest
-
-
-def _episode_head(episode) -> dict:
-    return {"id": episode.id, "start": None if episode.start is None else str(episode.start),
-            "title": episode.title}
+    return {
+        **to_dict_with(story, relations={"world": "world_name", "place": "place_name"}),
+        "episode_count": len(episodes),
+        "last_episode": _EpisodeHead.model_validate(episodes[-1]).model_dump() if episodes else None,
+        "unsynced": [_EpisodeHead.model_validate(episode).model_dump() for episode in episodes if not episode.synced],
+    }
 
 
 def stories(session: Session) -> list[dict]:
@@ -90,10 +113,7 @@ def stories(session: Session) -> list[dict]:
 
 
 def episode_row(episode, *, text: bool = True) -> dict:
-    data = to_dict_with(episode)
-    if not text:
-        data.pop("text", None)
-    return data
+    return to_dict_with(episode, text=text)
 
 
 def episodes(session: Session, story_id: int, *, count: int = 10, before=None,
@@ -106,10 +126,8 @@ def episodes(session: Session, story_id: int, *, count: int = 10, before=None,
 
 def unsynced_episodes(session: Session, story_id: int | None = None) -> list[dict]:
     rows = session.scalars(common_query.unsynced_episodes_select(story_id)).all()
-    return [{"id": episode.id, "story_id": episode.story_id,
-             "story_name": None if episode.story is None else episode.story.name,
-             "start": None if episode.start is None else str(episode.start),
-             "title": episode.title}
+    return [_UnsyncedEpisode(id=episode.id, start=episode.start, title=episode.title, story_id=episode.story_id,
+                             story_name=episode.story.name if episode.story else None).model_dump()
             for episode in rows]
 
 
@@ -121,10 +139,8 @@ def brief(session: Session, place_id: int, when=None, *, reach: int = 60,
     since, until = common_query.span(when)
     place_ids = common_query.descendant_place_ids(session, place_id)
 
-    def visible(rows):
-        if full:
-            return rows
-        return [row for row in rows if not row.get("hidden")]
+    def visible(events: list[Event]) -> list[dict]:
+        return [event_row(event) for event in events if full or not event.hidden]
 
     recent_query = (select(Event)
                     .options(*common_query.EVENT_LOAD_OPTIONS)
@@ -132,38 +148,34 @@ def brief(session: Session, place_id: int, when=None, *, reach: int = 60,
                            Event.time <= until,
                            Event.time >= Stamp(max(1, since.year - reach)))
                     .order_by(Event.time.desc(), Event.id.desc()))
-    recent = [event_row(row) for row in session.scalars(recent_query).all()]
+    recent = list(session.scalars(recent_query).all())
 
     character_ids = residents(session, place_ids, until)
     ideas = session.scalars(
         common_query.ideas_select(common_query.idea_scope_ids(session, place_id), until)).all()
-    called = idea_alias.called(session, [idea.id for idea in ideas], place_id, until)
+    recognitions = called(session, [idea.id for idea in ideas], place_id, until)
 
-    character_names = _names_for(session, character_ids, "Character")
+    characters = session.scalars(select(Character).where(Character.id.in_(character_ids))).all() if character_ids else []
+    character_names = {character.id: character.name for character in characters}
 
     return {
         "place": to_dict_with(location),
         "path": common_query.place_path(session, place_id),
         "time": str(until),
         "reach": reach,
-        "open_events": visible(open_events(session, place_ids, until)),
+        "open_events": visible(list(session.scalars(common_query.open_events_select(place_ids, until)).all())),
         "recent_events": visible(recent),
-        "ideas": [{"id": idea.id, "name": idea_alias.name_of(idea, called), "kind": idea.kind,
-                   "text": idea_alias.text_of(idea, called)} for idea in ideas],
-        "present_characters": [
-            {"id": id_, "name": character_names.get(id_)} for id_ in character_ids],
+        "ideas": [_idea_row(idea, recognitions.get(idea.id)) for idea in ideas],
+        "present_characters": [_Named(id=id_, name=character_names[id_]).model_dump() for id_ in character_ids],
     }
 
 
-_NAME_MODELS = {"Character": Character, "Location": Location}
-
-
-def _names_for(session: Session, ids: list[int], model_name: str) -> dict[int, str | None]:
-    if not ids:
-        return {}
-    model = _NAME_MODELS[model_name]
-    rows = session.scalars(select(model).where(model.id.in_(ids))).all()
-    return {row.id: row.name for row in rows}
+def _idea_row(idea: Idea, recognition: IdeaRecognition | None) -> dict:
+    """その場所・時代の呼び名があればその名で、作中での受け止め方を本質の本文の前に置く。"""
+    if recognition is None:
+        return {"id": idea.id, "name": idea.name, "kind": idea.kind, "text": idea.text}
+    return {"id": idea.id, "name": recognition.name, "kind": idea.kind,
+            "text": " ".join(part for part in (recognition.detail, idea.text) if part)}
 
 
 def cast(session: Session, story_id: int, when=None, *, count: int = 5,
@@ -173,13 +185,13 @@ def cast(session: Session, story_id: int, when=None, *, count: int = 5,
         raise ValueError(f"作品 {story.name} に立つ場所(place_id)が無い")
     _, until = common_query.resolve_time(session, when, story)
     root_id = common_query.place_up(session, story.place_id, levels)
+    root = session.get_one(Location, root_id)
     place_ids = common_query.descendant_place_ids(session, root_id)
     character_ids = residents(session, place_ids, until)
     return {
         "story": {"id": story.id, "name": story.name},
         "time": str(until),
-        "scope": {"id": root_id, "name": _names_for(session, [root_id], "Location").get(root_id),
-                  "path": common_query.place_path(session, root_id)},
+        "scope": {**_Named(id=root.id, name=root.name).model_dump(), "path": common_query.place_path(session, root_id)},
         "characters": [
             character_sheet(session, id_, until=until, count=count, text=False)
             for id_ in character_ids],

@@ -10,7 +10,6 @@ ai/claude_code/
   ai_client.py            `ai/local_ai/ai_client.py` と同じ関数(generate / generate_json / try_generate_json)。
                           中身は `claude -p --output-format json --json-schema …` の subprocess
   claude_code_time_keeper.py  `ai/time_keeper/main.py` に claude_code の ai_client を渡して回す入口
-  story_writer.py         作品の次の話を書いて db へ確定する(local_ai に無い、ここだけの生成器)
   fact_checker.py         アイデア・oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く(local_ai に無い)
   interface/              Claude が db を読み書きする入口(一覧は interface/readme.md)
 ```
@@ -21,7 +20,7 @@ ai/claude_code/
   で、単発の「プロンプト → JSON」に絞る。カレントは一時ディレクトリにして、
   このリポジトリの `CLAUDE.md` や設定を読み込ませない
 - モデルと effort は `ai_client.py` の `_MODEL`(`claude-sonnet-5`)・`_EFFORT`(`medium`)を既定にし、`--model` `--effort` に渡す。
-  話の本文の生成(`story_writer.py`・`claude_write_episode_main`・`claude_fill_episode_main`)だけは
+  話の本文の生成(`claude_write_episode_main`・`claude_fill_episode_main`・`claude_revise_episode_main`)だけは
   `EPISODE_MODEL`(`claude-fable-5-1`)・`EPISODE_EFFORT`(`high`)を渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
 - ループの終わりに Claude Code の呼び出し回数・トークン・費用を出す
@@ -65,29 +64,14 @@ claude_daily_event_main()
   居場所に一番近く掛かる作品の `start`(生まれより後なら生まれ)から数える
 - その時刻に居場所が無い者・`active_random_generation` でない場所に居る者は選び直す
   (常駐ループが出来事の対象にしない者は、ここでも対象にしない)
-- 直前の出来事は、本文の代わりに要約(`event_summary.py`)を渡す。要約は `event_summary` テーブル
+- 直前の出来事は、本文の代わりに要約(`data_access_logic/event/summary.py`)を渡す。要約は `event_summary` テーブル
   に残し、本文が変わっていなければ作り直さない。要約が作れなければ本文のまま渡す
 - 組み立ては常駐ループの `event_progression_generator` と同じ(当事者ごとの推測 → 候補をサイコロ → 記録)。
   選んだ者は必ず当事者に入る。居合わせる者のうち、自分の時間が既に先へ進んでいる者は加えない
 - 記録として起こしたあと、本文(`text`)だけを話と同じ小説の形、一話の三分の一(`EVENT_NOVEL_TARGET_LETTERS`)に
   書き直す(`ai/instructions/event_writing.py` の `EVENT_NOVEL_INSTRUCTION`)。書けなければ記録のまま残す
 
-本文を書く(作品 `story_id` の次の話を 1 話。`episodes_to_write` で続けて書く):
-
-```
-.venv/bin/python -c "
-from ai.claude_code.story_writer import write_story
-write_story(story_id=1, episodes_to_write=1)
-write_story(story_id=1, episode_id=40)     # 種だけ入っている話(id=40)を埋める
-"
-```
-
-材料は作品の見出し・直前の話・断面・顔ぶれ。顔ぶれは書く話の登場人物(`episode_character`)だけで、
-`start_story` 入口と違い、作品の場所・時刻から人物を拾わない(断面からも居合わせる人物 `present_characters` は外す)。
-直前の話は 3 話(`RECAP_EPISODE_LIMIT`)まで、本文の代わりに概要で渡す。書く前に一話ずつ本文を読ませて
-概要と文体の覚え書きを作らせ、概要を直前の話として、一番新しい話の文体の覚え書きと一緒に本文のプロンプトへ載せる。
-覚え書きは `episode_summary` テーブルに一話ずつ残し、本文が変わっていなければ作り直さない。
-概要が作れなかった話は本文のまま渡す。
+話の本文は `claude_write_episode_main` / `claude_fill_episode_main`(書き方は `interface/readme.md` の「常駐ループ」)で書く。
 
 - 書く話は `episode_id` で指す。省くと**本文の入っている最後の話の次**(`start` の順)を書く。
   その位置に種だけの話が無ければ、`start` の無い新しい話として末尾に足す。

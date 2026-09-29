@@ -5,8 +5,8 @@ from ai.claude_code import ai_client
 from ai.claude_code.claude_code_time_keeper import _writer_options
 from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.story._base import StoryQuery
-from ai.time_keeper import episode_generator, episode_reviser
-from db.schema import Episode
+from data_access_logic.episode import reviser
+from data_access_logic.episode.form import EpisodeForm, save_frame
 
 
 class ReviseEpisode(StoryQuery):
@@ -24,13 +24,11 @@ class ReviseEpisode(StoryQuery):
     """
 
     def __init__(self, episode: dict, instruction: str, character_ids: list[int] | None = None,
-                 previous_episode_ids: list[int] | None = None,
-                 model: str | None = None, effort: str | None = None, *,
+                 model: str | None = None, effort: str | None = None,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.episode = dict(episode or {})
         self.instruction = instruction
         self.character_ids = character_ids
-        self.previous_episode_ids = previous_episode_ids
         self.model = model
         self.effort = effort
         self.shared_style_extra = shared_style_extra
@@ -44,23 +42,14 @@ class ReviseEpisode(StoryQuery):
         return options or None
 
     def execute(self, session) -> dict:
-        episode_id = self.episode.get("id")
-        if episode_id is None:
+        form = EpisodeForm.model_validate(self.episode)
+        if form.id is None:
             raise ValueError("episode.id は必須")
-        record = session.get(Episode, int(episode_id))
-        if record is None:
-            raise ValueError(f"話 id={episode_id} が見つからない")
-        draft = {k: v for k, v in self.episode.items()
-                 if k not in ("id", "text", "synced", "letters", "character_ids")}
-        character_ids = episode_generator.resolve_character_ids(
-            session, record.id,
-            self.character_ids if self.character_ids is not None else self.episode.get("character_ids"))
-        if draft:
-            # AI 呼び出し(数分かかることがある)の前に、題・種など今の下書きの値を一度保存しておく
-            episode_generator.save_draft(session, record, draft)
-        revised = episode_reviser.generate(
-            session, self.ai, int(episode_id), character_ids, self.instruction, self.previous_episode_ids,
-            writer_options=self._writer_options(),
+        if self.character_ids is not None:
+            form.character_ids = self.character_ids
+        save_frame(session, form)
+        revised = reviser.revise_episode(
+            session, self.ai, form.id, self.instruction, writer_options=self._writer_options(),
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if revised is None:
             raise ValueError("本文が得られなかった")

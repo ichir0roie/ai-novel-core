@@ -129,8 +129,8 @@ claude を叩くので裏の job になり、画面は job を待って、終わ
 
 本文のある話の詳細画面には「AI で推敲する」も出る(`story.revise_episode.ReviseEpisode`、`generate.py` では
 `panel=True`)。直す指示(`instruction`)を必須で受け取り、筋は変えず指示にある観点だけを直す。
-登場人物(`character_ids`)・直前の話(`previous_episode_ids`)は聞かない。登場人物はこの話の `episode_character`
-(ページの登場人物のボタンで編集中の値)を使い、空なら止まる。直前の話は `ReviseEpisode` 側がその時刻より前の三話を
+登場人物(`character_ids`)は聞かない。登場人物はこの話の `episode_character`
+(ページの登場人物のボタンで編集中の値)を使い、空なら止まる。直前の話は、この話の時刻より前で概要のある三話を
 自動で使う。
 
 上の「AI で作成 / AI で補完」の小さなボタン列(`GeneratePanel`)とは別に、本文を見ながら大きな指示文を

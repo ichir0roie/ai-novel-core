@@ -15,14 +15,16 @@
 from __future__ import annotations
 
 from ai.claude_code.interface._base import CommitEntrypoint
-from ai.time_keeper import idea_alias, idea_context
+from data_access_logic.idea.context import resolve_ideas
+from data_access_logic.idea.models import IdeaMaterial, IdeaRecognitionMaterial
 from db.schema import Idea
+from db.stamp import Stamp
 
 
-def _row(idea: Idea, called=None) -> dict:
+def _row(idea: IdeaMaterial, recognition: IdeaRecognitionMaterial | None = None) -> dict:
     return {"id": idea.id, "name": idea.name, "kind": idea.kind, "confirmed": idea.confirmed,
             "parent_idea_id": idea.parent_idea_id,
-            "called": idea_alias.name_of(idea, called or {}), "text": idea.text}
+            "called": recognition.name if recognition else idea.name, "text": idea.text}
 
 
 class ResolveTerms(CommitEntrypoint):
@@ -31,10 +33,10 @@ class ResolveTerms(CommitEntrypoint):
     def __init__(self, terms, place_id: int | None = None, time=None):
         self.terms = terms
         self.place_id = None if place_id is None else int(place_id)
-        self.time = time
+        self.time = Stamp.parse(time)
 
     def execute(self, session) -> dict:
-        context = idea_context.resolve(session, self.terms, self.place_id, self.time)
-        return {"ideas": [_row(idea, context.called) for idea in context.related],
+        context = resolve_ideas(session, self.terms, self.place_id, self.time)
+        return {"ideas": [_row(related.idea, related.recognition) for related in context.related],
                 "hits": [idea.id for idea in context.hits],
                 "candidates": [_row(idea) for idea in context.candidates]}

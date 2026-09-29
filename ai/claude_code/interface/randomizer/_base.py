@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from ai.claude_code import ai_client, fact_checker
 from ai.claude_code.interface._base import CommitEntrypoint, Entrypoint
-from ai.time_keeper import generated_content, meme
+from ai.time_keeper import generated_content
+from data_access_logic.meme.extractor import refresh
 from db.schema import get_env_session
 
 
@@ -51,7 +52,7 @@ class CommitMemeSource(CommitDraft):
                 fact_checker.check(session, self.model.__tablename__, ids=[result["id"]])
                 result["text"] = session.get(self.model, result["id"]).text
             last_id = fact_checker.last_meme_id(session)
-            result["memes_added"] = meme.refresh(session, ai_client)
+            result["memes_added"] = refresh(session, ai_client)
             if self.fact_check:
                 fact_checker.check_new_memes(session, last_id)
         return result

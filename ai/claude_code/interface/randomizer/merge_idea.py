@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from ai.claude_code.interface._base import UnknownRecordError
 from ai.claude_code.interface.randomizer._base import CommitDraft
-from ai.time_keeper import idea_context
+from data_access_logic.idea.links import relink
 from db.schema import Idea
 
 
@@ -35,7 +35,7 @@ class MergeIdea(CommitDraft):
         for recognition in list(source.recognitions):
             source.recognitions.remove(recognition)
             target.recognitions.append(recognition)
-        moved = idea_context.relink(session, source.id, target.id)
+        moved = relink(session, source.id, target.id)
         data = {"merged": {"id": source.id, "name": source.name, "kind": source.kind},
                 "into": {"id": target.id, "name": target.name, "kind": target.kind},
                 "links_moved": moved}

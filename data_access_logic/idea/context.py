@@ -1,17 +1,27 @@
+"""下書き(一段目)と清書(二段目)のあいだに挟む中間段。
+
+下書きから語を洗い出してアイデアと照らし、当たったアイデアとその上位・下位を清書に渡す。
+どのアイデアにも当たらなかった固有の語(`coined`)は、未確認のアイデアとして足す(候補)。
+候補は確かめる(`confirmed` を 承認 にする)まで検索・清書には出ない。退けた(非承認)語は候補にも足さない。
+"""
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ai.time_keeper import constants, idea_alias, idea_search
+from ai.time_keeper import constants
 from ai.time_keeper._ai import AIClient
-from ai.time_keeper.idea_context import find_or_create_classification
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaTerm, RelatedIdeaMaterial
+from data_access_logic.idea.alias import called
+from data_access_logic.idea.classification import find_or_create_classification
+from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, terms_of
+from data_access_logic.idea.search import keywords_of, search, spellings
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, ConfirmStatus, Idea, Location
 from db.stamp import Stamp
 
 
-def _dated(ideas: list[Idea], time: Stamp | None) -> list[Idea]:
+def _dated(ideas: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
     # その時刻にもうあるのかが分からないアイデアを渡すと、後の時代の設定が前の時代に紛れ込む
     if time is None:
         return ideas
@@ -23,7 +33,7 @@ def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
         select(Idea)
         .where(
             Idea.confirmed != ConfirmStatus.APPROVED,
-            Idea.name.in_(idea_search.spellings(term.keyword)),
+            Idea.name.in_(spellings(term.keyword)),
         )
         .order_by(Idea.id)
     )
@@ -54,7 +64,7 @@ def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
     return candidate
 
 
-def _related(s: Session, hits: list[Idea], place_id: int | None, time: Stamp | None) -> list[Idea]:
+def _related(s: Session, hits: list[IdeaMaterial], place_id: int | None, time: Stamp | None) -> list[IdeaMaterial]:
     related = {idea.id: idea for idea in hits}
     for idea in hits:
         parent_id = idea.parent_idea_id
@@ -62,7 +72,7 @@ def _related(s: Session, hits: list[Idea], place_id: int | None, time: Stamp | N
             parent = s.get(Idea, parent_id)
             if parent is None:
                 break
-            related[parent.id] = parent
+            related[parent.id] = IdeaMaterial.model_validate(parent)
             parent_id = parent.parent_idea_id
 
     if hits:
@@ -71,20 +81,17 @@ def _related(s: Session, hits: list[Idea], place_id: int | None, time: Stamp | N
             dictionary_query.ideas_by_parent_select([idea.id for idea in hits], place_ids, time)
         ).all()
         for child in children:
-            related.setdefault(child.id, child)
+            related.setdefault(child.id, IdeaMaterial.model_validate(child))
     return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]
 
 
-def gather_ideas(
-    s: Session,
-    draft: str,
-    ai: AIClient,
-    place_id: int | None,
-    time: Stamp | None,
-) -> IdeaContextMaterial:
-    raw_terms = idea_search.keywords_of(draft, ai, time)
-    hits = idea_search.search(s, raw_terms, place_id, time)
-    terms = [IdeaTerm.model_validate(term) for term in raw_terms]
+def resolve_ideas(s: Session, keywords: Any, place_id: int | None, time: Stamp | None) -> IdeaContextMaterial:
+    """洗い出した語(`terms_of` が受け取る形)をアイデアと照らし、当たらなかった固有の語を候補として足す。
+
+    足す候補の効く期間は語の `start` / `end`(時期のはっきりしない語は None のまま)。
+    """
+    terms = terms_of(keywords)
+    hits = search(s, terms, place_id, time)
 
     matched = {keyword for hit in hits for keyword in hit.keywords}
     candidates: dict[int, Idea] = {}
@@ -97,10 +104,14 @@ def gather_ideas(
 
     hit_ideas = [hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]]
     related = _related(s, _dated(hit_ideas, time), place_id, time)
-    called = idea_alias.called(s, [idea.id for idea in related], place_id, time)
+    recognitions = called(s, [idea.id for idea in related], place_id, time)
 
     return IdeaContextMaterial(
         hits=hit_ideas,
         candidates=list(candidates.values()),
-        related=[RelatedIdeaMaterial(idea=idea, recognition=called.get(idea.id)) for idea in related],
+        related=[RelatedIdeaMaterial(idea=idea, recognition=recognitions.get(idea.id)) for idea in related],
     )
+
+
+def gather_ideas(s: Session, draft: str, ai: AIClient, place_id: int | None, time: Stamp | None) -> IdeaContextMaterial:
+    return resolve_ideas(s, keywords_of(draft, ai, time), place_id, time)

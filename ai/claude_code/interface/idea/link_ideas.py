@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from ai.claude_code.interface._base import CommitEntrypoint
-from ai.time_keeper import idea_context
+from data_access_logic.idea.links import link
 from db.schema import Character, Episode, Event, Idea
 
 
@@ -27,5 +27,5 @@ class LinkIdeas(CommitEntrypoint):
         for idea_id in self.idea_ids:
             self.check_exists(session, Idea, idea_id, "idea_ids")
         record = session.get(model, owner_id)
-        added = idea_context.link(session, record, [session.get(Idea, id_) for id_ in self.idea_ids])
+        added = link(session, record, [session.get_one(Idea, id_) for id_ in self.idea_ids])
         return {f"{model.__tablename__}_id": owner_id, "linked": added}

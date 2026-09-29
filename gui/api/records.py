@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
 from ai.claude_code.interface.randomizer.commit_event import CommitEvent
-from ai.time_keeper import idea_context
+from data_access_logic.idea.links import linked_records
 from data_access_logic.query import common_query
 from db.schema import (
     Character, ConfirmStatusType, Episode, EpisodeCharacter, Event, EventCharacter, Story,
@@ -200,7 +200,7 @@ def related_of(session: Session, spec: TableSpec, row) -> dict:
     if spec.name == "idea":
         related["appearances"] = [
             {"table": table, "id": record.id, "label": label_of(spec_of(table), record)}
-            for table, records in idea_context.linked_records(session, row.id).items()
+            for table, records in linked_records(session, row.id).items()
             for record in records]
     if spec.name == "story":
         episodes = session.scalars(select(Episode).where(Episode.story_id == row.id)

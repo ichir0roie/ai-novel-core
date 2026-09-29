@@ -5,32 +5,27 @@ from ai.claude_code import ai_client
 from ai.claude_code.claude_code_time_keeper import _writer_options
 from ai.claude_code.interface.story import _rows
 from ai.claude_code.interface.story._base import StoryQuery
-from ai.time_keeper import episode_generator, frame_generator
-from db.schema import Episode, Stamp
+from data_access_logic.episode import framer, writer
+from data_access_logic.episode.form import EpisodeForm, save_frame
 
 
 class GenerateEpisode(StoryQuery):
     """作者の下書き(GUI の欄の値。`story_id` 以外は空でもよい)から、話を一話ぶん(枠と本文)AI に書かせて足す。
     `id` を渡せばその枠(本文の無い話)へ本文を書く。
 
-    種(`key`)と時刻(`start`)が下書きに揃っていれば、そのまま `write_episode`(常駐ループ側)と同じ生成で本文を書く。
-    どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
-    登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`(話の `episode_character`
-    と同じ欄)、それも無ければ枠の `episode_character`。使う登場人物は枠の `episode_character` として保存する。
-    空なら止まる(時刻・場所から人物を拾う既定は持たない)。`model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
+    AI 呼び出し(数分〜十数分かかることがある)の前に、下書きを枠として一度保存する。途中で失敗しても、枠は db に残る。
+    種(`key`)か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
+    登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`、それも無ければ枠の
+    `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
+    `model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み(世界リポジトリの `instructions/style.py`)。
-
-    AI 呼び出し(数分〜十数分かかることがある)の前に、下書きの題・種・視点・場所・時刻・登場人物を一度保存する。
-    途中で失敗しても、この保存分(枠)は db に残る。
     """
 
     def __init__(self, episode: dict, character_ids: list[int] | None = None,
-                 previous_episode_ids: list[int] | None = None,
-                 model: str | None = None, effort: str | None = None, *,
+                 model: str | None = None, effort: str | None = None,
                  shared_style_extra: str = "", style_extra: str = "", ai=ai_client):
         self.episode = dict(episode or {})
         self.character_ids = character_ids
-        self.previous_episode_ids = previous_episode_ids
         self.model = model
         self.effort = effort
         self.shared_style_extra = shared_style_extra
@@ -44,46 +39,15 @@ class GenerateEpisode(StoryQuery):
         return options or None
 
     def execute(self, session) -> dict:
-        draft = dict(self.episode)
-        for key in ("letters", "synced", "text"):
-            draft.pop(key, None)
-        episode_id = draft.pop("id", None)
-        character_ids = draft.pop("character_ids", None)
+        form = EpisodeForm.model_validate(self.episode)
         if self.character_ids is not None:
-            character_ids = self.character_ids
-        slot = episode_generator.frame(session, episode_id) if episode_id is not None else None
-        story_id = draft.get("story_id") or (slot.story_id if slot else None)
-        if story_id in (None, ""):
-            raise ValueError("story_id は必須")
-        story_id = int(story_id)
-        character_ids = episode_generator.resolve_character_ids(
-            session, slot.id if slot else None, character_ids)
-        episode_generator.characters(session, character_ids)
-
-        if slot is None:
-            slot = Episode(story_id=story_id, title="", key="")
-            session.add(slot)
-        episode_generator.save_draft(session, slot, draft)
-        episode_generator.set_characters(session, slot.id, character_ids)
-        session.commit()
-
-        key = (draft.get("key") or slot.key or "").strip()
-        time = Stamp.parse(draft.get("start")) or slot.start
-        if not key or time is None:
-            slot = frame_generator.generate_frame(
-                session, self.ai, story_id, draft, character_ids, self.previous_episode_ids,
-                episode_id=slot.id)
-            key, time = slot.key, slot.start
-
-        viewpoint_character_id = draft.get("viewpoint_character_id")
-        viewpoint_character_id = int(viewpoint_character_id) if viewpoint_character_id not in (None, "") else None
-        place_id = draft.get("place_id")
-        place_id = int(place_id) if place_id not in (None, "") else None
-        record = frame_generator.generate(
-            session, self.ai, story_id, key, time, character_ids, self.previous_episode_ids,
-            place_id=place_id, viewpoint_character_id=viewpoint_character_id,
-            writer_options=self._writer_options(), episode_id=slot.id,
+            form.character_ids = self.character_ids
+        record = save_frame(session, form)
+        if not record.key.strip() or record.start is None:
+            framer.frame_episode(session, self.ai, record.id)
+        written = writer.write_episode(
+            session, self.ai, record.id, writer_options=self._writer_options(),
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
-        if record is None:
+        if written is None:
             raise ValueError("本文が得られなかった")
-        return _rows.episode_row(record)
+        return _rows.episode_row(written)

@@ -5,3 +5,7 @@ class LocationMaterial(Material):
     id: int
     name: str
     kind: str | None = None
+
+
+class PlaceMaterial(LocationMaterial):
+    text: str

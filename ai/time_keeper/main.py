@@ -5,9 +5,12 @@ import random
 import traceback
 
 from ai.time_keeper import (
-    character_event_generator, frame_generator, episode_generator, episode_reviser, event_progression_generator,
-    event_seed, meme, place_event_generator,
+    character_event_generator, event_progression_generator, place_event_generator,
 )
+from data_access_logic.episode import reviser, writer
+from data_access_logic.event_seed import extractor as event_seed
+from data_access_logic.meme.extractor import refresh as refresh_memes
+from data_access_logic.episode.form import EpisodeForm, save_frame
 from data_access_logic.query import common_query, world_createion_query
 from db.schema import Session, Stamp, Story, get_env_session
 from ai.time_keeper import (
@@ -66,7 +69,7 @@ def daily_event(
     世界ごとの好みを呼び出し側(親リポジトリ側)から渡す。
     """
     with get_env_session() as s:
-        meme.refresh(s, ai)
+        refresh_memes(s, ai)
         event_seed.refresh(s, ai)
         event_seed.consolidate(s, ai)
         record = character_event_generator.generate_next(
@@ -81,7 +84,7 @@ def place_event(
 ) -> int | None:
     time = Stamp.parse(time)
     with get_env_session() as s:
-        meme.refresh(s, ai)
+        refresh_memes(s, ai)
         event_seed.refresh(s, ai)
         event_seed.consolidate(s, ai)
         record = place_event_generator.generate_at(
@@ -91,43 +94,44 @@ def place_event(
 
 def write_episode(
     ai: AIClient, story_id: int, key: str | None, time: Stamp | str | None, character_ids: list[int] | None,
-    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
-    viewpoint_character_id: int | None = None, writer_options: dict | None = None,
-    episode_id: int | None = None, shared_style_extra: str = "", style_extra: str = "",
+    place_id: int | None = None, viewpoint_character_id: int | None = None, episode_id: int | None = None,
+    writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
+    """`episode_id` を渡すと話を足さずにその枠へ書く。省いた値は枠のものを使う。"""
     with get_env_session() as s:
-        record = frame_generator.generate(
-            s, ai, story_id, key, time, character_ids, previous_episode_ids,
-            place_id=place_id, viewpoint_character_id=viewpoint_character_id, writer_options=writer_options,
-            episode_id=episode_id, shared_style_extra=shared_style_extra, style_extra=style_extra)
-        return record.id if record is not None else None
+        record = save_frame(s, EpisodeForm(
+            id=episode_id, story_id=story_id, key=key, start=time, place_id=place_id,
+            viewpoint_character_id=viewpoint_character_id, character_ids=character_ids))
+        written = writer.write_episode(
+            s, ai, record.id, writer_options=writer_options,
+            shared_style_extra=shared_style_extra, style_extra=style_extra)
+        return written.id if written is not None else None
 
 
 def fill_episode(
-    ai: AIClient, episode_id: int, character_ids: list[int] | None = None,
-    previous_episode_ids: list[int] | None = None,
-    *, place_id: int | None = None, writer_options: dict | None = None,
+    ai: AIClient, episode_id: int, character_ids: list[int] | None = None, writer_options: dict | None = None,
     shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
+    """`character_ids` を省けば枠の登場人物(`episode_character`)。"""
     with get_env_session() as s:
-        record = episode_generator.generate(
-            s, ai, episode_id, character_ids, previous_episode_ids,
-            place_id=place_id, writer_options=writer_options,
+        save_frame(s, EpisodeForm(id=episode_id, character_ids=character_ids))
+        written = writer.write_episode(
+            s, ai, episode_id, writer_options=writer_options,
             shared_style_extra=shared_style_extra, style_extra=style_extra)
-        return record.id if record is not None else None
+        return written.id if written is not None else None
 
 
 def revise_episode(
     ai: AIClient, episode_id: int, character_ids: list[int] | None, instruction: str,
-    previous_episode_ids: list[int] | None = None, *, place_id: int | None = None,
     writer_options: dict | None = None, shared_style_extra: str = "", style_extra: str = "",
 ) -> int | None:
+    """`character_ids` を省けばこの話の登場人物(`episode_character`)。"""
     with get_env_session() as s:
-        record = episode_reviser.generate(
-            s, ai, episode_id, character_ids, instruction, previous_episode_ids,
-            place_id=place_id, writer_options=writer_options,
+        save_frame(s, EpisodeForm(id=episode_id, character_ids=character_ids))
+        revised = reviser.revise_episode(
+            s, ai, episode_id, instruction, writer_options=writer_options,
             shared_style_extra=shared_style_extra, style_extra=style_extra)
-        return record.id if record is not None else None
+        return revised.id if revised is not None else None
 
 
 def loop_time_for_story(ai: AIClient, story_id: int, years: int = 5) -> Stamp:
