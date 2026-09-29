@@ -4,17 +4,16 @@ import random
 import pytest
 
 from ai.claude_code import story_writer
-from ai.claude_code.interface.idea.link_ideas import LinkIdeas
-from ai.claude_code.interface.idea.resolve_terms import ResolveTerms
-from ai.claude_code.interface.randomizer.delete_idea import DeleteIdea
-from ai.claude_code.interface.randomizer.merge_idea import MergeIdea
-from ai.claude_code.interface.story import _rows
-from ai.claude_code.interface.world.search_ideas import SearchIdeas
-from ai.time_keeper import character_event_generator, episode_summary, idea_context, idea_search, meme
-from ai.time_keeper import random_character_generator
+from ai.time_keeper import character_event_generator, episode_summary, idea_context, idea_search, meme, random_character_generator
+from data_access_logic.idea.delete_idea import DeleteIdea
+from data_access_logic.idea.link_ideas import LinkIdeas
+from data_access_logic.idea.merge_idea import MergeIdea
+from data_access_logic.idea.resolve_terms import ResolveTerms
+from data_access_logic.idea.search_ideas import SearchIdeas
+from data_access_logic.story import reading
 from db.schema import (
-    ConfirmStatus,
-    Character, CharacterIdea, CharacterPlace, Episode, EpisodeIdea, Event, EventIdea, Idea, Location, Story,
+    Character, CharacterIdea, CharacterPlace, ConfirmStatus, Episode, EpisodeIdea, Event, EventIdea, Idea,
+    Location, Story,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -308,7 +307,7 @@ def test_unconfirmed_ideas_are_left_out_of_the_brief_but_still_meme_extracted(se
     confirmed = _idea(session, "魔力", "世界の力", location_id=places["world"].id)
     ai = MockAIClient(seed=1)
 
-    names = [idea["name"] for idea in _rows.brief(session, places["village"].id, "2100/01/01")["ideas"]]
+    names = [idea["name"] for idea in reading.brief(session, places["village"].id, "2100/01/01")["ideas"]]
     meme.refresh(session, ai)
 
     assert names == ["魔力"]
@@ -320,7 +319,7 @@ def test_brief_leaves_out_ideas_not_in_effect_at_the_time(session, places):
     _idea(session, "寄生", location_id=places["world"].id, end=Stamp(2100))
     _idea(session, "宿り", location_id=places["world"].id, start=Stamp(2000), end=Stamp(2101))
 
-    names = [idea["name"] for idea in _rows.brief(session, places["village"].id, "2100")["ideas"]]
+    names = [idea["name"] for idea in reading.brief(session, places["village"].id, "2100")["ideas"]]
 
     assert names == ["宿り"]
 

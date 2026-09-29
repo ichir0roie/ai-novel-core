@@ -2,13 +2,13 @@ import json
 
 import pytest
 
-from ai.claude_code.interface.randomizer.commit_place import CommitPlace
-from ai.claude_code.interface.randomizer.update_place import UpdatePlace
-from ai.claude_code.interface.world.list_neighbors import ListNeighbors
+from data_access_logic.location.commit_place import CommitPlace
+from data_access_logic.location.list_neighbors import ListNeighbors
+from data_access_logic.location.update_place import UpdatePlace
+from data_access_logic.map.collect import planet_maps
+from data_access_logic.map.layout import fit_frame
 from db.polygon import outer_ring, parse_polygon, polygon_center
 from db.schema import Location
-from tool.map.collect import collect_planets
-from tool.map.layout import fit_frame
 
 TRIANGLE = [[10, 20], [30, 20], [30, 40]]
 CLOSED = {"type": "Polygon", "coordinates": [[[10.0, 20.0], [30.0, 20.0], [30.0, 40.0], [10.0, 20.0]]]}
@@ -76,13 +76,14 @@ def outlined(session):
 
 
 def test_collect_separates_points_and_shapes(session, outlined):
-    [entry] = collect_planets(session)
-    assert [p["name"] for p in entry["points"]] == ["国", "町"]
-    assert [p["name"] for p in entry["shapes"]] == ["大陸", "国"]
-    assert entry["shapes"][0]["lon"] is None and entry["shapes"][0]["polygon"]["type"] == "Polygon"
-    assert entry["points"][1]["polygon"] is None
+    [entry] = planet_maps(session)
+    assert [p.name for p in entry.points] == ["国", "町"]
+    assert [p.name for p in entry.shapes] == ["大陸", "国"]
+    assert entry.shapes[0].lon is None and entry.shapes[0].polygon is not None
+    assert entry.shapes[0].polygon["type"] == "Polygon"
+    assert entry.points[1].polygon is None
 
-    frame = fit_frame(entry["points"], entry["shapes"])
+    frame = fit_frame(entry.points, entry.shapes)
     assert (frame.lon_min, frame.lon_max, frame.lat_min, frame.lat_max) == (-30, 70, -20, 60)
 
 

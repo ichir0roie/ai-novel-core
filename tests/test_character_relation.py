@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
-from ai.claude_code.interface.randomizer.commit_character_relation import CommitCharacterRelation
-from ai.claude_code.interface.randomizer.update_character_relation import UpdateCharacterRelation
-from ai.claude_code.interface.world.list_character_relations import ListCharacterRelations
+from data_access_logic.character.commit_character_relation import CommitCharacterRelation
+from data_access_logic.character.list_character_relations import ListCharacterRelations
+from data_access_logic.character.update_character_relation import UpdateCharacterRelation
+from data_access_logic.entrypoint import UnknownFieldError, UnknownRecordError
 from db.schema import Character, CharacterRelation
 from db.stamp import Stamp
 

@@ -1,7 +1,7 @@
-from ai.claude_code.interface.story.read_events import ReadEvents
-from ai.claude_code.interface.world.list_events import ListEvents
 import pytest
 
+from data_access_logic.event.list_events import ListEvents
+from data_access_logic.event.read_events import ReadEvents
 from db.schema import Character, Event, EventCharacter, Location
 from db.stamp import Stamp
 

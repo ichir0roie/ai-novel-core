@@ -1,14 +1,16 @@
 
+from types import SimpleNamespace
+
 import pytest
 
-from ai.claude_code.interface.world.list_neighbors import ListNeighbors
-from data_access_logic.query.common_query import NotFoundError
-from db.schema import Location
-from tool.map.category import category_of
-from tool.map.geometry import (
+from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.location.list_neighbors import ListNeighbors
+from data_access_logic.map.category import category_of
+from data_access_logic.map.geometry import (
     angular_distance_deg, bearing_deg, bearing_name, distance_km, planet_radius_km,
 )
-from tool.map.layout import fit_frame, place_labels, text_width
+from data_access_logic.map.layout import fit_frame, place_labels, text_width
+from db.schema import Location
 
 EARTH_AREA = 510_072_000
 TOKYO = (139.69, 35.69)
@@ -35,10 +37,10 @@ def test_great_circle_distance_and_bearing():
 
 
 def test_fit_frame_pads_and_snaps_to_grid():
-    frame = fit_frame([{"lon": -12, "lat": 36}, {"lon": 125, "lat": -26}])
+    frame = fit_frame([SimpleNamespace(lon=-12, lat=36), SimpleNamespace(lon=125, lat=-26)])
     assert (frame.lon_min, frame.lon_max, frame.lat_min, frame.lat_max) == (-30, 140, -40, 50)
     assert frame.x(frame.lon_min) == frame.left and frame.y(frame.lat_max) == frame.top
-    whole = fit_frame([{"lon": -179, "lat": 89}, {"lon": 179, "lat": -89}])
+    whole = fit_frame([SimpleNamespace(lon=-179, lat=89), SimpleNamespace(lon=179, lat=-89)])
     assert (whole.lon_min, whole.lon_max, whole.lat_min, whole.lat_max) == (-180, 180, -90, 90)
 
 
@@ -117,5 +119,5 @@ def test_list_neighbors_kind_and_limit(star):
 def test_list_neighbors_rejects_place_without_coordinates(star):
     with pytest.raises(ValueError, match="経緯度を持たない"):
         ListNeighbors(star["continent"]).run()
-    with pytest.raises(NotFoundError):
+    with pytest.raises(UnknownRecordError):
         ListNeighbors(999999).run()

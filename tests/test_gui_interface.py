@@ -1,4 +1,4 @@
-"""`ai/claude_code/interface/` の入口を GUI の API から呼ぶ(`/api/interface`)。
+"""`data_access_logic/` の入口を GUI の API から呼ぶ(`/api/interface`)。
 claude コマンドを叩く入口は Claude Code の環境(CLAUDECODE=1)でだけ、裏の job として走ること。"""
 import time
 
@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from db.schema import Location
-from gui.api import app as app_module, interface
+from gui.api import app as app_module
+from gui.api import interface
 
 
 @pytest.fixture
@@ -30,41 +31,41 @@ def test_catalog_lists_entrances_with_params_and_claude_flags(client, monkeypatc
     entrances = {entrance["id"]: entrance for entrance in body["entrances"]}
 
     assert body["claude_available"] is False
-    places = entrances["world.list_places.ListPlaces"]
+    places = entrances["location.list_places.ListPlaces"]
     assert places["area"] == "world" and places["claude"] is False and places["writes"] is False
     assert places["params"] == [{"name": "kind", "required": False, "default": None, "annotation": "str | None"}]
 
-    assert entrances["randomizer.update_idea.UpdateIdea"]["claude"] is False
-    assert entrances["randomizer.update_idea.UpdateIdea"]["writes"] is True
+    assert entrances["idea.update_idea.UpdateIdea"]["claude"] is False
+    assert entrances["idea.update_idea.UpdateIdea"]["writes"] is True
     # 確定のあとに AI を回す入口・AI を受け取る入口・常駐ループ側は claude を叩く
-    for entrance_id in ("randomizer.commit_idea.CommitIdea", "randomizer.commit_oracle.CommitOracle",
-                        "randomizer.commit_event.CommitEvent", "randomizer.update_event.UpdateEvent",
-                        "story.commit_episode.CommitEpisode", "story.commit_story.CommitStory",
+    for entrance_id in ("idea.commit_idea.CommitIdea", "oracle.commit_oracle.CommitOracle",
+                        "event.commit_event.CommitEvent", "event.update_event.UpdateEvent",
+                        "episode.commit_episode.CommitEpisode", "story.commit_story.CommitStory",
                         "fact_check.check_facts.CheckFacts", "meme.extract_memes.ExtractMemes",
                         "meme.refresh_generated_content.RefreshGeneratedContent",
-                        "randomizer.generate_characters.GenerateCharacters",
+                        "character.generate_characters.GenerateCharacters",
                         "time_keeper.daily_event", "time_keeper.write_episode", "time_keeper.write_story"):
         assert entrances[entrance_id]["claude"] is True, entrance_id
     assert [p["name"] for p in entrances["time_keeper.place_event"]["params"]] == [
         "place_id", "time", "key", "shared_style_extra", "style_extra"]
-    assert entrances["randomizer.generate_characters.GenerateCharacters"]["params"][2]["default"] == [2, 4]
+    assert entrances["character.generate_characters.GenerateCharacters"]["params"][2]["default"] == [2, 4]
 
 
 def test_plain_entrance_runs_synchronously(client, session):
     session.add_all([Location(name="村", kind="村", text=""), Location(name="町", kind="町", text="")])
     session.commit()
 
-    result = client.post("/api/interface/world.list_places.ListPlaces", json={"args": {"kind": "村"}})
+    result = client.post("/api/interface/location.list_places.ListPlaces", json={"args": {"kind": "村"}})
     assert result.status_code == 200, result.text
     assert [row["name"] for row in result.json()["result"]] == ["村"]
 
-    created = client.post("/api/interface/randomizer.commit_meme.CommitMeme",
+    created = client.post("/api/interface/meme.commit_meme.CommitMeme",
                           json={"args": {"meme": {"text": "約束を守る", "category": "信条"}}})
     assert created.status_code == 200 and created.json()["result"]["confirmed"] == "承認"
 
-    assert client.post("/api/interface/world.list_places.ListPlaces", json={"args": {"nope": 1}}).status_code == 400
+    assert client.post("/api/interface/location.list_places.ListPlaces", json={"args": {"nope": 1}}).status_code == 400
     assert client.post("/api/interface/world.nope.Nope", json={}).status_code == 404
-    assert client.post("/api/interface/randomizer.commit_meme.CommitMeme",
+    assert client.post("/api/interface/meme.commit_meme.CommitMeme",
                        json={"args": {"meme": {"text": ""}}}).status_code == 400
 
 
@@ -72,7 +73,7 @@ def test_background_job_returns_id_and_result(client, session):
     session.add(Location(name="村", kind="村", text=""))
     session.commit()
 
-    accepted = client.post("/api/interface/world.list_places.ListPlaces", json={"args": {}, "background": True})
+    accepted = client.post("/api/interface/location.list_places.ListPlaces", json={"args": {}, "background": True})
     assert accepted.status_code == 202, accepted.text
     job = _wait(client, accepted.json()["id"])
     assert job["status"] == "done" and [row["name"] for row in job["result"]] == ["村"]
@@ -84,7 +85,7 @@ def test_claude_entrances_need_claude_code_environment(client, monkeypatch):
     monkeypatch.delenv("CLAUDECODE", raising=False)
     denied = client.post("/api/interface/time_keeper.daily_event", json={"args": {}})
     assert denied.status_code == 403 and "CLAUDECODE" in denied.json()["detail"]
-    assert client.post("/api/interface/randomizer.commit_idea.CommitIdea",
+    assert client.post("/api/interface/idea.commit_idea.CommitIdea",
                        json={"args": {"idea": {"name": "x", "kind": "技術"}}}).status_code == 403
 
     monkeypatch.setenv("CLAUDECODE", "1")
@@ -125,4 +126,4 @@ def test_style_defaults_come_from_the_world_instructions(monkeypatch):
     entrance = interface.entrance_of("time_keeper.fill_episode")
     filled = interface._style_defaults({"episode_id": 1, "style_extra": "自分で渡した"}, entrance.params)
     assert filled == {"episode_id": 1, "style_extra": "自分で渡した", "shared_style_extra": "共有の癖"}
-    assert interface._style_defaults({"kind": None}, interface.entrance_of("world.list_places.ListPlaces").params) == {"kind": None}
+    assert interface._style_defaults({"kind": None}, interface.entrance_of("location.list_places.ListPlaces").params) == {"kind": None}

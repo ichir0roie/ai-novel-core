@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""`ai/claude_code/interface/` の入口と、常駐ループの `claude_*_main` を API から呼ぶ。
+"""`data_access_logic/<領域>/` の入口と、常駐ループの `claude_*_main` を API から呼ぶ。
 
-入口の一覧は import 時にディレクトリを歩いて集める(readme の表と同じ「領域.ファイル.クラス」で呼ぶ)。
+入口の一覧は import 時にディレクトリを歩いて集める(`data_access_logic/readme.md` の表と同じ「領域.ファイル.クラス」で呼ぶ)。
 `claude -p` を回すもの(確定のあとに AI を回す `run()` を持つ入口、AI を受け取る入口、常駐ループ側)は
 `claude=True` にし、Claude Code の環境でだけ、裏の job として走らせる。
 """
@@ -16,10 +16,9 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, TypeAdapter
 
+import data_access_logic
 from ai.claude_code import claude_code_time_keeper
-from ai.claude_code.interface._base import CommitEntrypoint, Entrypoint, SessionEntrypoint
-import ai.claude_code.interface as interface_package
-from ai.claude_code.interface.randomizer._base import RandomDraft
+from data_access_logic.entrypoint import CommitEntrypoint, Entrypoint, RandomDraft, SessionEntrypoint
 from db.schema import Stamp
 
 # `result()` を上書きしていない(= 確定のあとに AI を回さない)基底
@@ -46,7 +45,7 @@ class Param:
 
 @dataclass(frozen=True)
 class Entrance:
-    id: str          # 例: world.list_places.ListPlaces / time_keeper.daily_event
+    id: str          # 例: location.list_places.ListPlaces / time_keeper.daily_event
     area: str
     name: str
     doc: str
@@ -93,10 +92,10 @@ def _uses_claude(cls: type) -> bool:
 
 
 def _collect_interface() -> list[Entrance]:
-    """`interface/<領域>/<動詞_対象>.py` を歩く。領域のディレクトリは `__init__.py` を持たない(名前空間パッケージ)ので、
-    pkgutil ではなくファイルを直接見る。"""
+    """`data_access_logic/<領域>/*.py` を歩き、そのファイルで定義した入口のクラスを拾う。領域のディレクトリは
+    `__init__.py` を持たない(名前空間パッケージ)ので、pkgutil ではなくファイルを直接見る。"""
     found = []
-    root = os.path.dirname(os.path.abspath(interface_package.__file__ or os.path.join(next(iter(interface_package.__path__)), "x")))
+    root = next(iter(data_access_logic.__path__))
     for area_name in sorted(os.listdir(root)):
         area_dir = os.path.join(root, area_name)
         if area_name.startswith(("_", ".")) or not os.path.isdir(area_dir):
@@ -105,7 +104,7 @@ def _collect_interface() -> list[Entrance]:
             if not filename.endswith(".py") or filename.startswith("_"):
                 continue
             module_name = filename[:-3]
-            module = importlib.import_module(f"{interface_package.__name__}.{area_name}.{module_name}")
+            module = importlib.import_module(f"data_access_logic.{area_name}.{module_name}")
             for name, cls in inspect.getmembers(module, inspect.isclass):
                 if cls.__module__ != module.__name__ or not issubclass(cls, Entrypoint):
                     continue
@@ -172,29 +171,24 @@ def _has_model(annotation: Any) -> bool:
     return any(_has_model(argument) for argument in typing.get_args(annotation))
 
 
-def _modeled(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
-    """JSON で来た dict を、入口の引数の型(pydantic のモデル)に読み込む。モデルでない引数はそのまま渡す。"""
+def prepare(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
+    """JSON で来た引数を入口の signature に当て、型が pydantic のモデルの引数はモデルに読み込む。
+    食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)。"""
+    args = _style_defaults(args, entrance.params)
     target = entrance.target
+    try:
+        inspect.signature(target).bind(**args)
+    except TypeError as error:
+        raise ValueError(f"{entrance.id} の引数が合わない: {error}") from error
     hints = typing.get_type_hints(target.__init__ if inspect.isclass(target) else target)
     return {name: TypeAdapter(hints[name]).validate_python(value) if name in hints and _has_model(hints[name]) else value
             for name, value in args.items()}
 
 
-def check_args(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
-    """引数を入口の signature に当てる。食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)。
-    job には JSON のまま残すので、モデルへの読み込みは確かめるだけにして、呼ぶときに読み込み直す。"""
-    args = _style_defaults(args, entrance.params)
-    try:
-        inspect.signature(entrance.target).bind(**args)
-    except TypeError as error:
-        raise ValueError(f"{entrance.id} の引数が合わない: {error}") from error
-    _modeled(entrance, args)
-    return args
-
-
-def invoke(entrance: Entrance, args: dict[str, Any]) -> Any:
-    """入口を呼ぶ。クラスなら組み立てて `run()`、関数ならそのまま。"""
-    args = _modeled(entrance, check_args(entrance, args))
+def call(entrance: Entrance, arguments: dict[str, Any]) -> Any:
+    """`prepare` した引数で入口を呼ぶ。クラスなら組み立てて `run()`(dump 済みの結果)。常駐ループ側の関数は
+    `Stamp` や ORM の行を返すので、JSON にできる形へ直す。"""
     target = entrance.target
-    result = target(**args).run() if inspect.isclass(target) else target(**args)
-    return to_jsonable(result)
+    if inspect.isclass(target):
+        return target(**arguments).run()
+    return to_jsonable(target(**arguments))

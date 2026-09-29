@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
-from ai.claude_code.interface.randomizer.commit_idea import CommitIdea
+from data_access_logic.entrypoint import UnknownFieldError, UnknownRecordError
+from data_access_logic.idea.commit_idea import CommitIdea
 from db.schema import Idea, Location
 
 

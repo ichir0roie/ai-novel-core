@@ -6,24 +6,19 @@ import re
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from db.schema import (
-    ConfirmStatus,
-    Character, CharacterPlace, CharacterRelation, Episode,
-    Event, EventCharacter, Idea, Location,
-    Story,
-)
+from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
+from db.schema import (
+    Character, CharacterPlace, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
+    Story,
+)
 from db.stamp import Stamp, StampError
 
 EVENT_LOAD_OPTIONS = (
     selectinload(Event.location),
     selectinload(Event.event_characters).selectinload(EventCharacter.character),
 )
-
-
-class NotFoundError(LookupError):
-    pass
 
 
 # ---------------------------------------------------------------- 時刻
@@ -50,15 +45,11 @@ def resolve_time(session: Session, when, story: Story | None) -> tuple[Stamp, St
     raise ValueError("時刻が決まらない(作品に立つ年が無いので time を渡す)")
 
 
-def get_row(session: Session, model, id_: int, label: str):
+def get_row(session: Session, model, id_: int):
     row = session.get(model, id_)
     if row is None:
-        raise NotFoundError(f"{label}={id_} という id の {model.__tablename__} が見つからない")
+        raise UnknownRecordError(f"id={id_} の {model.__tablename__} が見つからない")
     return row
-
-
-def get_story(session: Session, story_id: int) -> Story:
-    return get_row(session, Story, story_id, "story_id")
 
 
 def _in_span(column, since: Stamp, until: Stamp):
@@ -79,7 +70,7 @@ def latest_time_select() -> Select:
 
 def descendant_place_ids(session: Session, place_id: int) -> list[int]:
     """何段あるか分からないので一段ずつたどる。"""
-    get_row(session, Location, place_id, "place_id")
+    get_row(session, Location, place_id)
     found = [place_id]
     frontier = [place_id]
     while frontier:
@@ -93,7 +84,7 @@ def descendant_place_ids(session: Session, place_id: int) -> list[int]:
 
 def idea_scope_ids(session: Session, place_id: int) -> list[int]:
     """アイデアの `location_id` は、そこから配下で効く。現在地から最上位までをたどる。"""
-    found = [get_row(session, Location, place_id, "place_id").id]
+    found = [get_row(session, Location, place_id).id]
     current = session.get(Location, place_id)
     while current is not None and current.parent_id and current.parent_id not in found:
         current = session.get(Location, current.parent_id)
@@ -116,7 +107,7 @@ def place_path(session: Session, place_id: int) -> list[LocationMaterial]:
 
 
 def place_up(session: Session, place_id: int, levels: int) -> int:
-    current = get_row(session, Location, place_id, "place_id")
+    current = get_row(session, Location, place_id)
     for _ in range(max(0, levels)):
         if current.parent_id is None:
             break

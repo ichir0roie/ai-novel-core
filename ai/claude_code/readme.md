@@ -11,7 +11,6 @@ ai/claude_code/
                           中身は `claude -p --output-format json --json-schema …` の subprocess
   claude_code_time_keeper.py  `ai/time_keeper/main.py` に claude_code の ai_client を渡して回す入口
   fact_checker.py         アイデア・oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く(local_ai に無い)
-  interface/              Claude が db を読み書きする入口(一覧は interface/readme.md)
 ```
 
 ## 仕組み
@@ -71,7 +70,7 @@ claude_daily_event_main()
 - 記録として起こしたあと、本文(`text`)だけを話と同じ小説の形、一話の三分の一(`EVENT_NOVEL_TARGET_LETTERS`)に
   書き直す(`ai/instructions/event_writing.py` の `EVENT_NOVEL_INSTRUCTION`)。書けなければ記録のまま残す
 
-話の本文は `claude_write_episode_main` / `claude_fill_episode_main`(書き方は `interface/readme.md` の「常駐ループ」)で書く。
+話の本文は `claude_write_episode_main` / `claude_fill_episode_main`(書き方は `data_access_logic/readme.md` の「常駐ループ」)で書く。
 
 - 書く話は `episode_id` で指す。省くと**本文の入っている最後の話の次**(`start` の順)を書く。
   その位置に種だけの話が無ければ、`start` の無い新しい話として末尾に足す。

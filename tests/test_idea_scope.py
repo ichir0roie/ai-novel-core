@@ -1,7 +1,7 @@
 import pytest
 
-from ai.claude_code.interface.story import _rows
 from data_access_logic.query import common_query
+from data_access_logic.story import reading
 from db.schema import Idea, Location
 from db.stamp import Stamp
 
@@ -28,7 +28,7 @@ def add_idea(session, name, **columns):
 
 
 def brief_names(session, place_id, when="0001/01/01"):
-    return sorted(idea["name"] for idea in _rows.brief(session, place_id, when)["ideas"])
+    return sorted(idea["name"] for idea in reading.brief(session, place_id, when)["ideas"])
 
 
 def test_scope_runs_from_the_place_up_to_the_top(session, places):

@@ -1,19 +1,16 @@
 import pytest
 
-from ai.claude_code.interface._base import UnknownRecordError
-from ai.claude_code.interface.story.delete_story import DeleteStory
-from ai.claude_code.interface.story.list_stories import ListStories
-from ai.claude_code.interface.story.list_unsynced_episodes import ListUnsyncedEpisodes
-from ai.claude_code.interface.story.read_brief import ReadBrief
-from ai.claude_code.interface.story.read_cast import ReadCast
-from ai.claude_code.interface.story.read_episodes import ReadEpisodes
-from ai.claude_code.interface.story.read_surroundings import ReadSurroundings
-from ai.claude_code.interface.story.set_episode_synced import SetEpisodeSynced
-from ai.claude_code.interface.story.start_story import StartStory
-from data_access_logic.query.common_query import NotFoundError
-from db.schema import (
-    Character, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Location, Story,
-)
+from data_access_logic.character.read_surroundings import ReadSurroundings
+from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.episode.list_unsynced_episodes import ListUnsyncedEpisodes
+from data_access_logic.episode.read_episodes import ReadEpisodes
+from data_access_logic.episode.set_episode_synced import SetEpisodeSynced
+from data_access_logic.story.delete_story import DeleteStory
+from data_access_logic.story.list_stories import ListStories
+from data_access_logic.story.read_brief import ReadBrief
+from data_access_logic.story.read_cast import ReadCast
+from data_access_logic.story.start_story import StartStory
+from db.schema import Character, CharacterPlace, ConfirmStatus, Episode, Event, EventCharacter, Location, Story
 from db.stamp import Stamp
 
 
@@ -96,7 +93,7 @@ def test_read_episodes_returns_latest_in_order(session, world):
 
 
 def test_read_episodes_rejects_unknown_story():
-    with pytest.raises(NotFoundError):
+    with pytest.raises(UnknownRecordError):
         ReadEpisodes(9999).run()
 
 
@@ -274,5 +271,5 @@ def test_start_story_without_place_omits_cast_and_brief(session):
 
 
 def test_start_story_rejects_unknown_story():
-    with pytest.raises(NotFoundError):
+    with pytest.raises(UnknownRecordError):
         StartStory(9999).run()

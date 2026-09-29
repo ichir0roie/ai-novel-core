@@ -1,7 +1,7 @@
 import pytest
 
-from ai.claude_code.interface._base import UnknownRecordError
-from ai.claude_code.interface.randomizer.commit_character_place import CommitCharacterPlace
+from data_access_logic.character.commit_character_place import CommitCharacterPlace
+from data_access_logic.entrypoint import UnknownRecordError
 from db.schema import Character, CharacterPlace, Location
 from db.stamp import Stamp
 
@@ -42,7 +42,7 @@ def test_commit_rejects_unknown_or_missing_references(session, world):
 
 
 def test_update_sets_end_when_moving(session, world):
-    from ai.claude_code.interface.randomizer.update_character_place import UpdateCharacterPlace
+    from data_access_logic.character.update_character_place import UpdateCharacterPlace
 
     row = CommitCharacterPlace({
         "character_id": world["person"], "location_id": world["village"], "start": "2120"}).run()

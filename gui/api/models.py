@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from data_access_logic.character.relation_graph import RelationGraph
+from data_access_logic.map.collect import PlanetMap
 from db.schema import ConfirmStatus
 
 ColumnType = Literal["integer", "number", "boolean", "string", "stamp", "json", "confirm", "id_list"]
@@ -143,43 +145,6 @@ class Decision(BaseModel):
     changes: dict[str, Any] = Field(default_factory=dict)
 
 
-class Planet(BaseModel):
-    id: int
-    name: str | None
-    area: float | None
-    radius_km: float | None
-
-
-class MapPlace(BaseModel):
-    id: int
-    name: str | None
-    kind: str | None
-    # 地図の色分け(`tool.map.category`)
-    category: str
-    parent_id: int | None
-    parent_name: str | None
-    parent_kind: str | None
-    lon: float | None
-    lat: float | None
-    alt: float | None
-    polygon: dict[str, Any] | None
-    environment: str | None
-    sample_region: str | None
-    sample_culture: str | None
-    sample_era: str | None
-    start: str | None
-    end: str | None
-    link: str
-
-
-class PlanetMap(BaseModel):
-    planet: Planet
-    # 経緯度を持つ場所
-    points: list[MapPlace]
-    # 輪郭(polygon)を持つ場所
-    shapes: list[MapPlace]
-
-
 class MapsResponse(BaseModel):
     planets: list[PlanetMap]
     categories: list[str]
@@ -189,29 +154,7 @@ class MapsResponse(BaseModel):
     bearings: list[str]
 
 
-class RelationCharacter(BaseModel):
-    id: int
-    name: str | None
-    kind: str | None
-    sex: str | None
-    start: int | None
-    end: int | None
-    link: str
-
-
-class Relation(BaseModel):
-    id: int
-    character_id_1: int
-    character_id_2: int
-    relation: str | None
-    start: int | None
-    end: int | None
-    text: str
-
-
-class RelationsResponse(BaseModel):
-    characters: list[RelationCharacter]
-    relations: list[Relation]
+class RelationsResponse(RelationGraph):
     # 種別ごとの色に使う並び
     colors: list[str]
 

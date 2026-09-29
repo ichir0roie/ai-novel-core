@@ -2,16 +2,16 @@ import json
 
 import pytest
 
-from ai.claude_code.interface._base import UnknownFieldError
-from ai.claude_code.interface.randomizer.commit_character import CommitCharacter
-from ai.claude_code.interface.randomizer.commit_place import CommitPlace
-from ai.claude_code.interface.randomizer.create_random_character import CreateRandomCharacter
-from ai.claude_code.interface.randomizer.update_character import UpdateCharacter
-from ai.claude_code.interface.story.update_story import UpdateStory
-from ai.claude_code.interface.story.read_character import ReadCharacter
+from data_access_logic.character.commit_character import CommitCharacter
+from data_access_logic.character.create_random_character import CreateRandomCharacter
+from data_access_logic.character.read_character import ReadCharacter
+from data_access_logic.character.update_character import UpdateCharacter
+from data_access_logic.entrypoint import UnknownFieldError
+from data_access_logic.location.commit_place import CommitPlace
+from data_access_logic.story.update_story import UpdateStory
 from db.schema import (
-    PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterPlace, ConfirmStatus,
-    Location, Story,
+    PERSONALITY_COLUMNS, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterPlace, ConfirmStatus, Location,
+    Story,
 )
 from db.stamp import Stamp
 from randomizer.random_character_generator import build_parameter

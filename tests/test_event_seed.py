@@ -2,9 +2,9 @@ import random
 
 import pytest
 
-from ai.claude_code.interface._base import UnknownRecordError
-from ai.claude_code.interface.randomizer.update_event_seed import UpdateEventSeed
 from ai.time_keeper import event_seed
+from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.event_seed.update_event_seed import UpdateEventSeed
 from data_access_logic.query import event_seed_query
 from db.schema import Character, Episode, Event, EventSeed, Story
 from db.stamp import Stamp

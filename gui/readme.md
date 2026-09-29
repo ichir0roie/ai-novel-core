@@ -10,7 +10,7 @@
 - 星ごとの地図(`/maps`)と人物相関図(`/relations`)。元データは `/api/maps` `/api/relations`。ナビには出さず、
   場所の詳細から `/maps?location=<id>`(その場所を中心に置いて描く)へ、人物の詳細から `/relations?character=<id>`
   (その人物に関わる関係だけを描く)へ飛ぶ
-- `ai/claude_code/interface/` の入口と常駐ループ(`claude_*_main`)を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
+- `data_access_logic/` の入口と常駐ループ(`claude_*_main`)を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
   `claude` コマンドを叩くものは Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る
 
 ## 構成の決め方
@@ -18,7 +18,7 @@
 列の定義(`db/schema.py`)、値の型(`Stamp`・`confirmed`)、確定・修正のときの検証(実在確認・別名の制約・
 子の行の扱い)はすべて python 側にある。Next.js から SQLite を直接開くと、その全部を
 TypeScript にもう一度書くことになり、正が二つになる。そのため API は FastAPI で python 側に置き、
-書き込みは `ai/claude_code/interface/` の入口(`execute(session)`)を通す。画面は列の情報を
+書き込みは `data_access_logic/` の入口(`execute(session)`)を通す。画面は列の情報を
 `GET /api/tables` から受け取って組み立てるので、列を足しても画面のコードは変えなくてよい。
 型は FastAPI の OpenAPI(`gui/api/openapi.json`)から `gui/web/lib/openapi.d.ts` を生成して合わせる。
 画面に出す文言(ボタン・見出し・状態表示など、英語)は `gui/web/lib/text.ts` の `T` に集め、ページ・コンポーネントには直書きしない。
@@ -26,7 +26,9 @@ db の値(承認/非承認/未確認、場所の category など)と API から�
 
 入口の `run()` ではなく `execute(session)` を呼ぶのは、`run()` が確定のあとに AI(`claude -p`)で
 要約・ミーム・検証を作る段を持ち、GUI の一回の操作で待てる長さではないため。その分は
-`RefreshGeneratedContent` が後でまとめて拾う。
+`RefreshGeneratedContent` が後でまとめて拾う。追加・修正の応答は、`execute(session)` が返したレスポンスのモデル
+(`*Record`)をそのまま使い、行を読み直さない。行を引く・名前で呼ぶ・当事者を読むといった処理も `data_access_logic` のもの
+(`common_query.get_row`・`label.label_of`・`entrypoint.loading`)を使い、API の側には写しを持たない。
 
 ## 起動
 
@@ -73,7 +75,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
 | GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、この API が Claude Code の環境かどうか |
-| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `world.list_places.ListPlaces` や `time_keeper.daily_event`。`claude` を叩く入口と `background` は job の id を 202 で返す |
+| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_places.ListPlaces` や `time_keeper.daily_event`。`claude` を叩く入口と `background` は job の id を 202 で返す |
 | POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」「AI で補完」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す(下書きに `id` があれば、その行の空の本文だけを埋める)入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。`key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |
 | GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー(API を起こしているあいだだけ持つ) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
@@ -94,7 +96,8 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 ## 入口と claude コマンド
 
 `POST /api/interface/{id}` は、クラスの入口なら組み立てて `run()` を、常駐ループ側なら `claude_*_main` をそのまま呼ぶ。
-`args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに読み込んでから渡す(読み込めなければ 400)。
+`args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに一度だけ読み込んでから渡す(`interface.prepare`。読み込めなければ 400。
+裏の job にする前に読み込み、job はそのモデルで `interface.call` する)。
 どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `result()` を上書きしている入口、
 AI を引数に取る入口、`time_keeper.*`)。それらは
 
@@ -116,10 +119,10 @@ id を渡し、AI がその行の本文だけを書いて埋める(本文以外�
 
 | テーブル | ボタン | 入口 | 足す画面 | 詳細画面(本文が空のときだけ) |
 | --- | --- | --- | --- | --- |
-| 人物 | AI で作成 / AI で補完 | `randomizer.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`place_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 | 決まっている名前・属性・出自を核に本文だけを書く |
-| 出来事 | AI で作成 / AI で補完 | `randomizer.generate_event.GenerateEvent` | 名前・本文は場面の指定。時刻・場所・当事者は決まった値(省けば世界の最新・当事者の現在地・居合わせるサブキャラクター) | 記録・当事者・関連する設定から小説の本文だけを書く |
-| 話 | AI で枠を作る | `story.generate_frame.GenerateFrame` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。登場人物はパネルの `character_ids`(初めは欄の値)。本文は書かない | (出ない。枠のみで足す画面専用) |
-| 話 | AI で本文まで書く | `story.generate_episode.GenerateEpisode` | 種と時刻が揃っていればそのまま本文を書く。どちらかが空なら先に枠を決める。登場人物はパネルの `character_ids`(初めは欄の値。空なら止まる) | 本文の無い話のページに出る(その枠へ書く)。登場人物はパネルの `character_ids`(初めはこの話の `episode_character`。空なら止まる) |
+| 人物 | AI で作成 / AI で補完 | `character.generate_character.GenerateCharacter` | 名前・説明は核。性別・体格・口調・性格(`parameters`)・種別・生年・没年・メインキャラクターは決まった値。出自(`place_id`)は出身地。`time`(現在の時刻)を省けば世界の最新の出来事の時刻 | 決まっている名前・属性・出自を核に本文だけを書く |
+| 出来事 | AI で作成 / AI で補完 | `event.generate_event.GenerateEvent` | 名前・本文は場面の指定。時刻・場所・当事者は決まった値(省けば世界の最新・当事者の現在地・居合わせるサブキャラクター) | 記録・当事者・関連する設定から小説の本文だけを書く |
+| 話 | AI で枠を作る | `episode.generate_frame.GenerateFrame` | 作品は必須。題・種・視点・場所は核、時刻は決まった値(省けば AI が直前の話の後から選ぶ)。登場人物はパネルの `character_ids`(初めは欄の値)。本文は書かない | (出ない。枠のみで足す画面専用) |
+| 話 | AI で本文まで書く | `episode.generate_episode.GenerateEpisode` | 種と時刻が揃っていればそのまま本文を書く。どちらかが空なら先に枠を決める。登場人物はパネルの `character_ids`(初めは欄の値。空なら止まる) | 本文の無い話のページに出る(その枠へ書く)。登場人物はパネルの `character_ids`(初めはこの話の `episode_character`。空なら止まる) |
 
 話の生成・推敲に渡す登場人物は、話と人物のリレーション(`episode_character`。話のページの登場人物のボタン、
 足す画面の `character_ids` の欄)だけから取る。生成パネルの「登場人物」は初めにその値を出し、選び直せば
@@ -129,7 +132,7 @@ claude を叩くので裏の job になり、画面は job を待って、終わ
 
 ## AI で推敲する
 
-本文のある話の詳細画面には「AI で推敲する」も出る(`story.revise_episode.ReviseEpisode`、`generate.py` では
+本文のある話の詳細画面には「AI で推敲する」も出る(`episode.revise_episode.ReviseEpisode`、`generate.py` では
 `panel=True`)。直す指示(`instruction`)を必須で受け取り、筋は変えず指示にある観点だけを直す。
 登場人物(`character_ids`)は聞かない。登場人物はこの話の `episode_character`
 (ページの登場人物のボタンで編集中の値)を使い、空なら止まる。直前の話は、この話の時刻より前で概要のある三話を

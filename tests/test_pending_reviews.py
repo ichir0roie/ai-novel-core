@@ -1,10 +1,7 @@
 """週次ルーチンで Todoist のタスクにする、ユーザの判断が要るものの一覧(`ListPendingReviews`)。"""
-from ai.claude_code.interface.review.list_pending_reviews import ListPendingReviews
 from ai.time_keeper import idea_context
-from db.schema import (
-    ConfirmStatus,
-    Episode, Event, Idea, Location, Story,
-)
+from data_access_logic.review.list_pending_reviews import ListPendingReviews
+from db.schema import ConfirmStatus, Episode, Event, Idea, Location, Story
 from db.stamp import Stamp
 
 

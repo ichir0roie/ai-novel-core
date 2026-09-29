@@ -1,7 +1,10 @@
+from typing import ClassVar
+
 from pydantic import Field, computed_field
+from sqlalchemy.orm import selectinload
 
 from data_access_logic.material import Material, Timestamp
-from db.schema import ConfirmStatus
+from db.schema import ConfirmStatus, Event
 
 
 class EventColumns(Material):
@@ -23,6 +26,8 @@ class EventCharacterLink(Material):
 
 
 class EventRecord(EventColumns):
+    LOAD_OPTIONS: ClassVar[tuple] = (selectinload(Event.event_characters),)
+
     text: str
     event_characters: list[EventCharacterLink] = Field(exclude=True)
 

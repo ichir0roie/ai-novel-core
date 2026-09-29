@@ -1,12 +1,12 @@
 """GUI の「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す入口(`Generate*`)。"""
 import pytest
 
-from ai.claude_code.interface.randomizer.generate_character import GenerateCharacter
-from ai.claude_code.interface.randomizer.generate_event import GenerateEvent
-from ai.claude_code.interface.story.generate_episode import GenerateEpisode
-from ai.claude_code.interface.story.generate_frame import GenerateFrame
-from ai.claude_code.interface.story.revise_episode import ReviseEpisode
 from ai.time_keeper import episode_generator, episode_reviser, frame_generator, random_character_generator
+from data_access_logic.character.generate_character import GenerateCharacter
+from data_access_logic.episode.generate_episode import GenerateEpisode
+from data_access_logic.episode.generate_frame import GenerateFrame
+from data_access_logic.episode.revise_episode import ReviseEpisode
+from data_access_logic.event.generate_event import GenerateEvent
 from db.schema import (
     Character, CharacterPlace, ConfirmStatus, Episode, EpisodeCharacter, Event, EventCharacter, Location, Story,
 )

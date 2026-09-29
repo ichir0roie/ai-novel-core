@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ai.claude_code import ai_client
-from gui.api import app as app_module, interface
+from gui.api import app as app_module
+from gui.api import interface
 
 
 @pytest.fixture
@@ -31,7 +32,7 @@ def test_tables_meta_lists_the_generators(client, monkeypatch):
     assert body["claude_available"] is False
     assert [g["key"] for g in tables["character"]["generators"]] == ["ai", "complete"]
     character = {g["key"]: g for g in tables["character"]["generators"]}
-    assert character["ai"]["entrance"] == "randomizer.generate_character.GenerateCharacter"
+    assert character["ai"]["entrance"] == "character.generate_character.GenerateCharacter"
     assert [p["key"] for p in character["ai"]["params"]] == ["time"]
     assert character["ai"]["mode"] == "create"
     assert character["complete"]["mode"] == "edit" and character["complete"]["when_empty"] == "text"
@@ -75,7 +76,7 @@ def test_generate_needs_claude_code_and_rejects_unknown_targets(client, monkeypa
 def test_generate_runs_the_entrance_as_a_job_with_the_draft(client, monkeypatch):
     monkeypatch.setenv("CLAUDECODE", "1")
     calls = []
-    entrance = interface.entrance_of("story.generate_episode.GenerateEpisode")
+    entrance = interface.entrance_of("episode.generate_episode.GenerateEpisode")
     monkeypatch.setitem(interface.ENTRANCES, entrance.id, interface.Entrance(
         **{**entrance.__dict__, "target": lambda **kwargs: calls.append(kwargs) or {"id": 7, "text": "本文"}}))
 

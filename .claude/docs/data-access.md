@@ -19,5 +19,5 @@
 - dict への変換と二重の変換は残さない。関数は最初からモデルを返し(呼ぶ側で `model_validate` し直さない)、フォームは ORM の行へ属性で書く
   (`Model(**form.model_dump())` や `model_copy(update=dict)` にしない)。dict にするのは API・CLI へ返す最後の `model_dump(mode="json")` だけ
 - 既存のメソッド(`common_query` など)で済むものは自前で書かない
-- claude の入口(`ai/claude_code/interface/`)の引数は、`str | dict` にせず pydantic のモデル(`data_access_logic/<領域>/form.py`)で受ける。
+- 入口(`data_access_logic/<領域>/<動詞_対象>.py`。claude は `show()`、GUI の API は `execute(session)` を呼ぶ)の引数は、`str | dict` にせず pydantic のモデル(`data_access_logic/<領域>/form.py`)で受ける。
   レスポンスもモデル(`data_access_logic/<領域>/record.py` など)で組み、`run()` が `model_dump(mode="json")` した結果を返す

@@ -1,8 +1,8 @@
 import pytest
 
-from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
-from ai.claude_code.interface.randomizer.delete_idea import DeleteIdea
-from ai.claude_code.interface.randomizer.update_idea import UpdateIdea
+from data_access_logic.entrypoint import UnknownFieldError, UnknownRecordError
+from data_access_logic.idea.delete_idea import DeleteIdea
+from data_access_logic.idea.update_idea import UpdateIdea
 from db.schema import Idea, Location
 
 

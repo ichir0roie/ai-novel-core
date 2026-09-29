@@ -3,14 +3,14 @@ import random
 import pytest
 
 from ai.claude_code import ai_client
-from ai.claude_code.interface.meme.draw_memes import DrawMemes
-from ai.claude_code.interface.randomizer.commit_idea import CommitIdea
-from ai.claude_code.interface.randomizer.commit_oracle import CommitOracle
-from ai.claude_code.interface.randomizer.delete_meme import DeleteMeme
-from ai.claude_code.interface.randomizer.update_meme import UpdateMeme
-from ai.claude_code.interface.randomizer.update_oracle import UpdateOracle
 from ai.time_keeper import constants, meme
-from data_access_logic.query import meme_query
+from data_access_logic.idea.commit_idea import CommitIdea
+from data_access_logic.meme.delete_meme import DeleteMeme
+from data_access_logic.meme.draw_memes import DrawMemes
+from data_access_logic.meme.update_meme import UpdateMeme
+from data_access_logic.oracle.commit_oracle import CommitOracle
+from data_access_logic.oracle.update_oracle import UpdateOracle
+from data_access_logic.query import meme_query, review_query
 from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -100,7 +100,7 @@ def test_unconfirmed_memes_select_finds_only_the_unconfirmed(session):
     session.add_all([confirmed, unconfirmed])
     session.commit()
 
-    rows = session.scalars(meme_query.unconfirmed_memes_select()).all()
+    rows = session.scalars(review_query.pending_select(Meme)).all()
 
     assert [row.id for row in rows] == [unconfirmed.id]
 

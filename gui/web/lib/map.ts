@@ -1,5 +1,5 @@
 import { T } from "@/lib/text";
-/** 地図の座標の決め方と距離・方角。python 側(`tool/map/layout.py` `tool/map/geometry.py`)と同じ決め方にする。 */
+/** 地図の座標の決め方と距離・方角。python 側(`data_access_logic/map/layout.py` `data_access_logic/map/geometry.py`)と同じ決め方にする。 */
 
 export type Polygon = { coordinates: number[][][] };
 export type LonLat = { lon: number; lat: number };

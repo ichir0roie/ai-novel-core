@@ -1,14 +1,14 @@
 """アイデアの作中での呼び名(`idea_recognition`)と、場所・時代による呼び名の選び方(`idea_alias`)。"""
 import pytest
 
-from ai.claude_code.interface.idea.resolve_terms import ResolveTerms
-from ai.claude_code.interface.randomizer.commit_idea import CommitIdea
-from ai.claude_code.interface.randomizer.delete_idea import DeleteIdea
-from ai.claude_code.interface.randomizer.merge_idea import MergeIdea
-from ai.claude_code.interface.randomizer.update_idea import UpdateIdea
-from ai.claude_code.interface.story import _rows
-from ai.claude_code.interface.world.search_ideas import SearchIdeas
 from ai.time_keeper import idea_alias, idea_context, idea_search
+from data_access_logic.idea.commit_idea import CommitIdea
+from data_access_logic.idea.delete_idea import DeleteIdea
+from data_access_logic.idea.merge_idea import MergeIdea
+from data_access_logic.idea.resolve_terms import ResolveTerms
+from data_access_logic.idea.search_ideas import SearchIdeas
+from data_access_logic.idea.update_idea import UpdateIdea
+from data_access_logic.story import reading
 from db.schema import Idea, IdeaRecognition, Location
 from db.stamp import Stamp
 
@@ -114,7 +114,7 @@ def test_brief_lists_the_essence_once_by_its_recognition(session, places):
     essence = _idea(session, "エナジー", "化学エネルギーとして溜める", location_id=places["world"].id)
     _recognition(session, essence, "魔力", location_id=places["world"].id)
 
-    ideas = _rows.brief(session, places["village"].id, "2100")["ideas"]
+    ideas = reading.brief(session, places["village"].id, "2100")["ideas"]
 
     assert [(idea["id"], idea["name"]) for idea in ideas] == [(essence.id, "魔力")]
 

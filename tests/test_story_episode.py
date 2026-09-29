@@ -2,9 +2,9 @@
 import pytest
 
 from ai.claude_code import ai_client
-from ai.claude_code.interface._base import UnknownRecordError
-from ai.claude_code.interface.story.commit_episode import CommitEpisode
-from ai.claude_code.interface.story.commit_story import CommitStory
+from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.episode.commit_episode import CommitEpisode
+from data_access_logic.story.commit_story import CommitStory
 from db.schema import Character, Episode, EpisodeSummary, Location
 
 

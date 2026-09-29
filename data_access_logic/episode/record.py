@@ -1,6 +1,10 @@
+from typing import ClassVar
+
 from pydantic import Field, computed_field
+from sqlalchemy.orm import selectinload
 
 from data_access_logic.material import Material, Timestamp
+from db.schema import Episode
 
 
 class EpisodeHead(Material):
@@ -26,6 +30,8 @@ class EpisodeCharacterLink(Material):
 
 
 class EpisodeRecord(EpisodeRow):
+    LOAD_OPTIONS: ClassVar[tuple] = (selectinload(Episode.episode_characters),)
+
     episode_characters: list[EpisodeCharacterLink] = Field(exclude=True)
 
     @computed_field

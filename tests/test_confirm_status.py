@@ -1,11 +1,13 @@
 """`confirmed` の三段(未確認/承認/非承認)。以前の bool からの読み替えと、非承認が候補・検索・引き出しに出ないこと。"""
+import random
+
 import pytest
 from sqlalchemy.exc import StatementError
 
-from ai.time_keeper import idea_context, meme as meme_module
-from data_access_logic.query import common_query, dictionary_query, meme_query
+from ai.time_keeper import idea_context
+from ai.time_keeper import meme as meme_module
+from data_access_logic.query import common_query, dictionary_query, meme_query, review_query
 from db.schema import ConfirmStatus, Idea, Location, Meme, parse_confirm_status
-import random
 
 
 def test_parse_accepts_legacy_bool_and_rejects_unknown():
@@ -51,14 +53,14 @@ def test_rejected_rows_are_left_out_everywhere(session):
                      Meme(text="退けた", category="信条", confirmed=ConfirmStatus.REJECTED)])
     session.commit()
 
-    assert [i.id for i in session.scalars(dictionary_query.unconfirmed_ideas_select())] == [pending.id]
+    assert [i.id for i in session.scalars(review_query.pending_select(Idea))] == [pending.id]
     assert [i.id for i in session.scalars(common_query.ideas_select([world.id]))] == [approved.id]
     assert [i.id for i in session.scalars(
         dictionary_query.ideas_by_terms_select(["虫憑き", "宿り", "魔力"]))] == [approved.id]
     assert {i.id for i in session.scalars(
         dictionary_query.ideas_by_terms_select(["虫憑き", "宿り", "魔力"], confirmed_only=False))} == {
             approved.id, pending.id, rejected.id}
-    assert [m.text for m in session.scalars(meme_query.unconfirmed_memes_select())] == ["未確認"]
+    assert [m.text for m in session.scalars(review_query.pending_select(Meme))] == ["未確認"]
     drawn = meme_module.draw(session, random.Random(0), ("信条",) * 20)
     assert {d["text"] for d in drawn} <= {"確かめた"}
 

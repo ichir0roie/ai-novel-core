@@ -3,12 +3,12 @@
 import pytest
 
 from ai.claude_code import ai_client, fact_checker
-from ai.claude_code.interface.meme import extract_memes
-from ai.claude_code.interface.meme.extract_memes import ExtractMemes
-from ai.claude_code.interface.randomizer.commit_idea import CommitIdea
-from ai.claude_code.interface.fact_check.check_facts import CheckFacts
-from ai.claude_code.interface.randomizer.commit_oracle import CommitOracle
 from ai.time_keeper import meme
+from data_access_logic.fact_check.check_facts import CheckFacts
+from data_access_logic.idea.commit_idea import CommitIdea
+from data_access_logic.meme import extract_memes
+from data_access_logic.meme.extract_memes import ExtractMemes
+from data_access_logic.oracle.commit_oracle import CommitOracle
 from db.schema import Idea, Meme, Oracle
 
 

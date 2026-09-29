@@ -71,11 +71,6 @@ def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None,
             .order_by(Idea.id))
 
 
-def unconfirmed_ideas_select() -> Select:
-    """まだ確かめていない候補(`confirmed=未確認`)。退けた(非承認)ものは含めない。"""
-    return select(Idea).where(Idea.confirmed == ConfirmStatus.PENDING).order_by(Idea.id)
-
-
 def ideas_by_parent_select(parent_ids, place_ids=None, time: Stamp | None = None,
                            confirmed_only: bool = True) -> Select:
     conditions = [Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(place_ids, time)]

@@ -7,6 +7,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from data_access_logic.entrypoint import loading
+from data_access_logic.label import label_of
+from data_access_logic.material import Material
+from data_access_logic.query import review_query
 from db.schema import ConfirmStatus
 from gui.api import records
 from gui.api.models import ReviewNext, ReviewSummary, ReviewTable
@@ -40,19 +44,18 @@ def next_pending(session: Session, spec: TableSpec, after: int = 0) -> ReviewNex
     """`after` より後ろの id で最初の未確認。飛ばした(スキップした)ものは次に回るので、`after` に飛ばした id を渡す。"""
     model = spec.model
     remaining = _count(session, spec, ConfirmStatus.PENDING)
-    row = session.scalar(records.loaded(spec, select(model).where(model.confirmed == ConfirmStatus.PENDING, model.id > after)
-                                        .order_by(model.id).limit(1)))
+    row = session.scalar(loading(review_query.pending_select(model).where(model.id > after).limit(1), spec.record_model))
     if row is None and after:
         # 末尾まで飛ばしたら先頭に戻る
-        row = session.scalar(records.loaded(spec, select(model).where(model.confirmed == ConfirmStatus.PENDING)
-                                            .order_by(model.id).limit(1)))
+        row = session.scalar(loading(review_query.pending_select(model).limit(1), spec.record_model))
     if row is None:
         return ReviewNext(record=None, label=None, remaining=remaining)
-    record = records.record_of(spec, row)
-    return ReviewNext(record=record.model_dump(mode="json"), label=records.label_of(spec, row), remaining=remaining,
+    record = spec.record_model.model_validate(row)
+    return ReviewNext(record=record.model_dump(mode="json"), label=label_of(model, row), remaining=remaining,
                       labels=records.reference_labels(session, spec, [record]),
-                      related=records.related_of(session, spec, row).model_dump(mode="json"))
+                      related=records.related_of(session, record).model_dump(mode="json"))
 
 
-def decide(session: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus, changes: dict[str, Any]) -> None:
-    records.update_record(session, spec, record_id, {**changes, "confirmed": decision})
+def decide(session: Session, spec: TableSpec, record_id: int, decision: ConfirmStatus,
+           changes: dict[str, Any]) -> Material:
+    return records.update_record(session, spec, record_id, {**changes, "confirmed": decision})

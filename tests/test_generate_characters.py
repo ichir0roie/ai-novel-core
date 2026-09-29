@@ -1,6 +1,6 @@
 import pytest
 
-from ai.claude_code.interface.randomizer.generate_characters import GenerateCharacters
+from data_access_logic.character.generate_characters import GenerateCharacters
 from db.schema import Character, CharacterPlace, Location, Story
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient

@@ -1,16 +1,14 @@
 import pytest
 
 from ai.claude_code import ai_client
-from ai.claude_code.interface._base import UnknownFieldError, UnknownRecordError
-from ai.claude_code.interface.randomizer.commit_event import CommitEvent
-from ai.claude_code.interface.randomizer.create_random_event import CreateRandomEvent
-from ai.claude_code.interface.randomizer.create_random_place import CreateRandomPlace
-from ai.claude_code.interface.randomizer.delete_event import DeleteEvent
-from ai.claude_code.interface.randomizer.delete_place import DeletePlace
-from ai.claude_code.interface.randomizer.update_event import UpdateEvent
-from db.schema import (
-    Character, ConfirmStatus, Event, EventCharacter, EventIdea, EventSummary, Idea, Location,
-)
+from data_access_logic.entrypoint import UnknownFieldError, UnknownRecordError
+from data_access_logic.event.commit_event import CommitEvent
+from data_access_logic.event.create_random_event import CreateRandomEvent
+from data_access_logic.event.delete_event import DeleteEvent
+from data_access_logic.event.update_event import UpdateEvent
+from data_access_logic.location.create_random_place import CreateRandomPlace
+from data_access_logic.location.delete_place import DeletePlace
+from db.schema import Character, ConfirmStatus, Event, EventCharacter, EventIdea, EventSummary, Idea, Location
 
 
 @pytest.fixture

@@ -13,7 +13,13 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
-from ai.claude_code.interface._base import UnknownRecordError
+from data_access_logic.character.latest_places import latest_place_ids
+from data_access_logic.character.relation_graph import relation_graph
+from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
+from data_access_logic.map.collect import planet_maps
+from data_access_logic.map.geometry import BEARINGS
+from data_access_logic.map.render_svg import COLORS, render_svg
 from db.schema import DB_PATH, WORLD_DIR, get_env_session
 from gui.api import generate, interface, meta, records, review
 from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_claude_code
@@ -24,12 +30,6 @@ from gui.api.models import (
     RunRequest, RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
-from tool.character_place.collect import collect_character_locations
-from tool.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
-from tool.map.collect import collect_planets
-from tool.map.geometry import BEARINGS
-from tool.map.render_svg import COLORS, render_svg
-from tool.relation.collect import collect_relations
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
 app.add_middleware(
@@ -112,8 +112,8 @@ def list_options(table: str, q: str | None = None, limit: int = Query(200, ge=1,
 def create_record(table: str, data: dict[str, Any], session: Session = Depends(session_dep)) -> RecordResponse:
     spec = spec_of(table)
     with session.begin():
-        record_id = records.create_record(session, spec, data)
-    return records.get_record(session, spec, record_id)
+        record = records.create_record(session, spec, data)
+    return records.response_of(session, spec, record)
 
 
 @app.post("/api/tables/{table}/generate/{generator}", response_model=JobInfo, status_code=202)
@@ -123,8 +123,9 @@ def generate_record(table: str, generator: str, request: GenerateRequest) -> Job
     spec = generate.generator_of(spec_of(table).name, generator)
     entrance = interface.entrance_of(spec.entrance)
     require_claude_code(entrance.id)
-    args = interface.check_args(entrance, generate.build_args(spec, request.draft, request.args))
-    job = runner.submit(entrance.id, args, lambda: interface.invoke(entrance, args))
+    args = generate.build_args(spec, request.draft, request.args)
+    arguments = interface.prepare(entrance, args)
+    job = runner.submit(entrance.id, args, lambda: interface.call(entrance, arguments))
     return JobInfo.model_validate(job)
 
 
@@ -138,8 +139,8 @@ def update_record(table: str, record_id: int, data: dict[str, Any],
                   session: Session = Depends(session_dep)) -> RecordResponse:
     spec = spec_of(table)
     with session.begin():
-        records.update_record(session, spec, record_id, data)
-    return records.get_record(session, spec, record_id)
+        record = records.update_record(session, spec, record_id, data)
+    return records.response_of(session, spec, record)
 
 
 @app.get("/api/review", response_model=ReviewSummary)
@@ -157,8 +158,8 @@ def review_decide(table: str, record_id: int, decision: Decision,
                   session: Session = Depends(session_dep)) -> RecordResponse:
     spec = review.review_spec(table)
     with session.begin():
-        review.decide(session, spec, record_id, decision.decision, decision.changes)
-    return records.get_record(session, spec, record_id)
+        record = review.decide(session, spec, record_id, decision.decision, decision.changes)
+    return records.response_of(session, spec, record)
 
 
 @app.get("/api/interface", response_model=EntranceList)
@@ -174,11 +175,12 @@ def run_entrance(entrance_id: str, request: RunRequest, response: Response):
     entrance = interface.entrance_of(entrance_id)
     if entrance.claude:
         require_claude_code(entrance.id)
+    arguments = interface.prepare(entrance, request.args)
     if entrance.claude or request.background:
-        job = runner.submit(entrance.id, request.args, lambda: interface.invoke(entrance, request.args))
+        job = runner.submit(entrance.id, request.args, lambda: interface.call(entrance, arguments))
         response.status_code = 202
         return JobInfo.model_validate(job)
-    return RunResult(entrance=entrance.id, result=interface.invoke(entrance, request.args))
+    return RunResult(entrance=entrance.id, result=interface.call(entrance, arguments))
 
 
 @app.get("/api/jobs", response_model=JobList)
@@ -197,29 +199,30 @@ def get_job(job_id: str) -> JobInfo:
 @app.get("/api/maps", response_model=MapsResponse)
 def maps(session: Session = Depends(session_dep)) -> MapsResponse:
     """星ごとの地図の元データ。画面(`/maps`)が場所の座標・領域から描く"""
-    return MapsResponse(planets=collect_planets(session), categories=list(CATEGORIES),
+    return MapsResponse(planets=planet_maps(session), categories=list(CATEGORIES),
                         category_colors=dict(CATEGORY_COLORS), shape_opacity=dict(SHAPE_OPACITY),
                         bearings=list(BEARINGS))
 
 
 @app.get("/api/maps/{planet_id}.svg")
 def map_svg(planet_id: int, session: Session = Depends(session_dep)) -> Response:
-    for entry in collect_planets(session):
-        if entry["planet"]["id"] == planet_id:
-            return Response(render_svg(entry["planet"], entry["points"], entry["shapes"]), media_type="image/svg+xml")
+    for planet_map in planet_maps(session):
+        if planet_map.planet.id == planet_id:
+            return Response(render_svg(planet_map.planet, planet_map.points, planet_map.shapes), media_type="image/svg+xml")
     raise UnknownRecordError(f"id={planet_id} の星に地図が無い(座標を持つ場所が無いか、星でない)")
 
 
 @app.get("/api/relations", response_model=RelationsResponse)
 def relations(session: Session = Depends(session_dep)) -> RelationsResponse:
     """人物相関図の元データ。画面(`/relations`)が描く"""
-    return RelationsResponse(**collect_relations(session), colors=list(COLORS))
+    graph = relation_graph(session)
+    return RelationsResponse(characters=graph.characters, relations=graph.relations, colors=list(COLORS))
 
 
 @app.get("/api/character_locations", response_model=CharacterLocationsResponse)
 def character_locations(session: Session = Depends(session_dep)) -> CharacterLocationsResponse:
     """人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う"""
-    return CharacterLocationsResponse(locations=collect_character_locations(session))
+    return CharacterLocationsResponse(locations=latest_place_ids(session))
 
 
 _ = Created  # OpenAPI に出す型として残す

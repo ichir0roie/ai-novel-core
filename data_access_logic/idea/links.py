@@ -1,10 +1,12 @@
 """出来事・話・人物の本文が踏まえたアイデアを、中間テーブル(`event_idea` など)で結ぶ。"""
 from typing import Callable
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from data_access_logic.idea.models import IdeaMaterial
+from data_access_logic.label import label_of
 from db.schema import Base, Character, CharacterIdea, Episode, EpisodeIdea, Event, EventIdea, Idea
 
 
@@ -55,6 +57,19 @@ def linked_records(s: Session, idea_id: int) -> list[Event | Episode | Character
     return [record for table in _LINKS for record in s.scalars(
         select(table.owner).join(table.table, table.owner_id == table.owner.id)
         .where(table.idea_id == idea_id).order_by(table.owner.id)).all()]
+
+
+class Appearance(BaseModel):
+    """アイデアが出てきた所(結んでいる出来事・話・人物)。"""
+
+    table: str
+    id: int
+    label: str
+
+
+def appearances(s: Session, idea_id: int) -> list[Appearance]:
+    return [Appearance(table=record.__tablename__, id=record.id, label=label_of(type(record), record))
+            for record in linked_records(s, idea_id)]
 
 
 def relink(s: Session, source_id: int, target_id: int | None) -> int:

@@ -2,7 +2,7 @@
 """「AI で作成」「AI で補完」のボタン。テーブルごとに、欄の値(下書き)を核に AI が全欄を組み立て直して行を足す
 (`mode="edit"` / `"both"` なら、既存行の本文が空のときに限り、その行の本文だけを埋める)入口を結ぶ。
 
-入口は `ai/claude_code/interface/` の `Generate*`(claude を叩くので Claude Code の環境でだけ、裏の job として走る)。
+入口は `data_access_logic/<領域>/` の `Generate*`(claude を叩くので Claude Code の環境でだけ、裏の job として走る)。
 下書きは入口の第一引数に、`params` の値はそのままの名前で入口の引数に渡す。
 """
 from __future__ import annotations
@@ -49,21 +49,21 @@ _EFFORT_PARAM = ColumnMeta(key="effort", label="本文の effort", type="string"
                            choices=list(ai_client.AVAILABLE_EFFORTS), default=ai_client.EPISODE_EFFORT)
 
 GENERATORS: tuple[Generator, ...] = (
-    Generator("character", "ai", "AI で作成", "randomizer.generate_character.GenerateCharacter", "character",
+    Generator("character", "ai", "AI で作成", "character.generate_character.GenerateCharacter", "character",
               params=(ColumnMeta(key="time", label="現在の時刻", type="stamp", nullable=True, required=False,
                                  comment="この時刻に生きている人物として作る。空なら世界の最新の出来事の時刻"),)),
-    Generator("character", "complete", "AI で補完", "randomizer.generate_character.GenerateCharacter", "character",
+    Generator("character", "complete", "AI で補完", "character.generate_character.GenerateCharacter", "character",
               mode="edit", when_empty="text"),
-    Generator("event", "ai", "AI で作成", "randomizer.generate_event.GenerateEvent", "event"),
-    Generator("event", "complete", "AI で補完", "randomizer.generate_event.GenerateEvent", "event",
+    Generator("event", "ai", "AI で作成", "event.generate_event.GenerateEvent", "event"),
+    Generator("event", "complete", "AI で補完", "event.generate_event.GenerateEvent", "event",
               mode="edit", when_empty="text"),
-    Generator("episode", "frame", "AI で枠を作る", "story.generate_frame.GenerateFrame", "frame",
+    Generator("episode", "frame", "AI で枠を作る", "episode.generate_frame.GenerateFrame", "frame",
               params=(_CHARACTER_IDS,)),
-    Generator("episode", "episode", "AI で本文まで書く", "story.generate_episode.GenerateEpisode", "episode",
+    Generator("episode", "episode", "AI で本文まで書く", "episode.generate_episode.GenerateEpisode", "episode",
               mode="both", when_empty="text",
               params=(_CHARACTER_IDS, _MODEL_PARAM, _EFFORT_PARAM)),
     # GUI の専用レイアウト(RevisePanel)は指示文・モデル・effort だけを出す
-    Generator("episode", "revise", "AI で推敲する", "story.revise_episode.ReviseEpisode", "episode",
+    Generator("episode", "revise", "AI で推敲する", "episode.revise_episode.ReviseEpisode", "episode",
               mode="edit", when_not_empty="text", panel=True,
               params=(_INSTRUCTION, _MODEL_PARAM, _EFFORT_PARAM)),
 )

@@ -5,10 +5,11 @@ from __future__ import annotations
 from sqlalchemy import JSON, Boolean, Integer, Numeric, func, select
 from sqlalchemy.orm import Session
 
+from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
 from db.schema import (
-    CONFIRM_STATUSES, MEME_CATEGORIES, PERSONALITY_LEVELS, ConfirmStatusType, PersonalityLevelType,
-    PolygonType, StampType,
+    CONFIRM_STATUSES, MEME_CATEGORIES, PERSONALITY_LEVELS, ConfirmStatusType, PersonalityLevelType, PolygonType,
+    StampType,
 )
 from gui.api import generate
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
@@ -89,7 +90,7 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
     extras = []
     if spec.name == "character":
         # 誕生・死亡(start/end)は専用の列を持たず、parameters の期間で表す(表・モーダルはそちらに出す)ので、
-        # ここでは列として足さない。値自体は COMPUTED_COLUMNS として record には引き続き乗る
+        # ここでは列として足さない。値自体は `CharacterRecord` の `start` / `end` として乗る
         extras.append(ColumnMeta(key="place_id", label="出自(場所)", type="integer", nullable=True,
                                  required=False, references="location", create_only=True,
                                  comment="足すときの出自。CharacterPlace の一番古い行になる"))
@@ -137,7 +138,7 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
 
 def table_meta(session: Session, spec: TableSpec) -> TableMeta:
     count = session.scalar(select(func.count()).select_from(spec.model)) or 0
-    return TableMeta(name=spec.name, label=spec.label, label_column=spec.label_column,
+    return TableMeta(name=spec.name, label=spec.label, label_column=LABEL_COLUMNS[spec.model],
                      columns=table_columns(spec), child_lists=child_lists(spec),
                      reviewable=spec.reviewable, count=count, sort=spec.sort, order=spec.order,
                      generators=[generator.to_meta() for generator in generate.generators_of(spec.name)])

@@ -1,6 +1,6 @@
 import pytest
 
-from ai.claude_code.interface.randomizer.update_place import UpdatePlace
+from data_access_logic.location.update_place import UpdatePlace
 from db.schema import Location
 
 

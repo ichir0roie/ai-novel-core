@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, PlainSerializer, PlainValidator, WithJsonSchema
 
@@ -7,6 +7,9 @@ from db.stamp import Stamp
 
 class Material(BaseModel):
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
+
+    # このモデルに詰めるのに要る、noload のリレーションの読み方(`entrypoint.record_of` / `entrypoint.loading` が使う)
+    LOAD_OPTIONS: ClassVar[tuple] = ()
 
 
 class Form(BaseModel):

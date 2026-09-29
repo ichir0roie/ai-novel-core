@@ -1,6 +1,6 @@
-from ai.claude_code.interface.world.list_characters import ListCharacters
-from ai.claude_code.interface.world.list_places import ListPlaces
-from ai.claude_code.interface.world.search_ideas import SearchIdeas
+from data_access_logic.character.list_characters import ListCharacters
+from data_access_logic.idea.search_ideas import SearchIdeas
+from data_access_logic.location.list_places import ListPlaces
 from db.schema import Character, CharacterParameter, CharacterPlace, Idea, Location
 from db.stamp import Stamp
 
