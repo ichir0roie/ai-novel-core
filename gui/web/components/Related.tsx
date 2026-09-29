@@ -18,6 +18,7 @@ export default function Related({
   const appearances = related.appearances as Appearance[] | undefined;
   const episodes = related.episodes as Appearance[] | undefined;
   const context = related.context as Parameters<typeof EpisodeContext>[0]["context"] | undefined;
+  const placeCharacterIds = related.place_character_ids as number[] | null | undefined;
   const graph = owner?.table === "character" ? { href: `/relations?character=${owner.id}`, ...T.related.relationGraph }
     : owner?.table === "location" ? { href: `/maps?location=${owner.id}`, ...T.related.mapCentered }
     : null;
@@ -69,6 +70,7 @@ export default function Related({
           characterIds={characterIds}
           onChangeCharacterIds={onChangeCharacterIds}
           episodeStart={episodeStart}
+          placeCharacterIds={placeCharacterIds ?? null}
         />
       )}
     </>

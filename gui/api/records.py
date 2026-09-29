@@ -20,8 +20,10 @@ from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.label import clipped, label_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
+from data_access_logic.query.period import alive_at
 from data_access_logic.story.record import StoryRecord
-from db.schema import Base, Character, ConfirmStatusType, Episode, Event, Story
+from db.schema import Base, Character, CharacterPlace, ConfirmStatusType, Episode, Event, Story
+from db.stamp import Stamp
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
 
@@ -76,6 +78,8 @@ class StoryRelated(Related):
 
 class EpisodeRelated(Related):
     context: EpisodeContext
+    # 話の時刻に話の場所にいる人物。場所の無い話は None(人物を絞らない)
+    place_character_ids: list[int] | None
 
 
 def _preview(spec: TableSpec, row: Base) -> str:
@@ -209,6 +213,12 @@ def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:
                           story=_context_block(s, "story", stories))
 
 
+def _place_character_ids(s: Session, place_id: int, time: Stamp) -> list[int]:
+    places = s.scalars(select(CharacterPlace)
+                       .where(CharacterPlace.location_id == place_id, alive_at(CharacterPlace, time))).all()
+    return sorted({place.character_id for place in places if place.character_id is not None})
+
+
 def related_of(s: Session, record: Material) -> Related:
     if isinstance(record, IdeaRecord):
         return IdeaRelated(appearances=appearances(s, record.id))
@@ -220,7 +230,9 @@ def related_of(s: Session, record: Material) -> Related:
             for episode in episodes])
     # 時期の無い話は、重なる出来事・作品を出しようがない
     if isinstance(record, EpisodeRecord) and record.start is not None:
-        return EpisodeRelated(context=_episode_context(s, record))
+        return EpisodeRelated(context=_episode_context(s, record),
+                              place_character_ids=_place_character_ids(s, record.place_id, record.start)
+                              if record.place_id is not None else None)
     return Related()
 
 

@@ -16,11 +16,14 @@ type Props = {
   characterIds: number[];
   onChange: (ids: number[]) => void;
   episodeStart: unknown;
+  // 話の時刻に話の場所にいる人物。null なら絞らない(場所・時刻の無い話)
+  placeCharacterIds: number[] | null;
 };
 
 /** 話の登場人物(`episode_character`)。「time & place」の行に並ぶボタンで、押すとモーダルで追加削除する。
- * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。 */
-export default function EpisodeCharacters({ characterIds, onChange, episodeStart }: Props) {
+ * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。
+ * 候補は、検索欄が空なら話の場所にいる人物だけ、検索語を入れたら全人物から探す(選んだ人物はいつも出す)。 */
+export default function EpisodeCharacters({ characterIds, onChange, episodeStart, placeCharacterIds }: Props) {
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -29,7 +32,8 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
   const selected = characterIds.map((id) => byId.get(id)).filter((o): o is NonNullable<typeof o> => o != null);
 
   const q = filter.trim();
-  const shown = options.filter((o) => !q || o.label.includes(q) || characterIds.includes(o.id));
+  const shown = options.filter((o) =>
+    characterIds.includes(o.id) || (q ? o.label.includes(q) : placeCharacterIds === null || placeCharacterIds.includes(o.id)));
   const toggle = (id: number) => onChange(characterIds.includes(id) ? characterIds.filter((v) => v !== id) : [...characterIds, id]);
 
   return (
