@@ -38,3 +38,9 @@ class EpisodeRecord(EpisodeRow):
     @property
     def character_ids(self) -> list[int]:
         return [link.character_id for link in self.episode_characters]
+
+
+class EpisodeSummaryRecord(Material):
+    episode_id: int
+    summary: str
+    style: str

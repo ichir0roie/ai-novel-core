@@ -18,11 +18,16 @@ def summarize(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | No
     text = episode.text.strip()
     if not text:
         return None
-    digest = summary_source_hash(text)
     row = s.scalar(select(EpisodeSummary).where(EpisodeSummary.episode_id == episode.id))
-    if row is not None and row.source_hash == digest:
+    if row is not None and row.source_hash == summary_source_hash(text):
         return row
+    return rewrite_summary(s, ai, episode)
 
+
+def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | None:
+    text = episode.text.strip()
+    if not text:
+        return None
     prompt = "\n".join([
         EpisodeSourceSerialized.model_validate(episode).model_dump_json(indent=2),
         "この話の概要と文体を覚え書きにしてください。",
@@ -30,10 +35,11 @@ def summarize(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | No
     draft = ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
     if draft is None:
         return None
+    row = s.scalar(select(EpisodeSummary).where(EpisodeSummary.episode_id == episode.id))
     if row is None:
         row = EpisodeSummary(story_id=episode.story_id, episode_id=episode.id)
         s.add(row)
-    row.source_hash = digest
+    row.source_hash = summary_source_hash(text)
     row.summary = draft.summary
     row.style = draft.style
     s.commit()

@@ -22,7 +22,7 @@ class CompleteKey(SessionEntrypoint):
     下書きは AI 呼び出しの前に枠として一度保存する。種か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決める。
     登場人物は下書きの `character_ids`、省けば枠の `episode_character`。空なら止まる。
     `order` は作者の注文(展開・焦点・雰囲気など、今の種に加えて新しい種に望むこと)。今の種と合わせて取り入れる。
-    `model` / `effort` は種の書き直しと候補の呼び出しにだけ効く(省けば sonnet の low)。
+    `model` / `effort` は種の書き直しと候補の呼び出しにだけ効く(省けば `KEY_MODEL` / `KEY_EFFORT`)。
     """
 
     def __init__(

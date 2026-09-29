@@ -21,7 +21,7 @@ class ReviseEpisode(SessionEntrypoint):
     省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければこの話の `episode_character`。
     使う登場人物はこの話の `episode_character` として保存する。空なら止まる。
     前の話の概要に出ていない人物は、その材料から AI が初登場と判断して外見・性格の描写を厚くする。
-    `model` / `effort` は本文を書く呼び出しにだけ効く(省けば fable の high)。
+    `model` / `effort` は本文を書く呼び出しにだけ効く(省けば opus 5.5 の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
 
     `episode` に `id` 以外の欄(題・種など)があれば、AI 呼び出し(数分かかることがある)の前に

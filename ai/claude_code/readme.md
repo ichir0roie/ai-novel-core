@@ -16,9 +16,9 @@ ai/claude_code/
 - 各呼び出しは `--tools ""`(道具なし。`tools=("WebSearch", "WebFetch")` を渡したときだけ、その道具を許す)・`--no-session-persistence`・`--system-prompt`
   で、単発の「プロンプト → JSON」に絞る。カレントは一時ディレクトリにして、
   このリポジトリの `CLAUDE.md` や設定を読み込ませない
-- モデルと effort は `ai_client.py` の `_MODEL`(`claude-sonnet-5`)・`_EFFORT`(`medium`)を既定にし、`--model` `--effort` に渡す。
+- モデルと effort は `ai_client.py` の `_MODEL`(`claude-opus-5-5`)・`_EFFORT`(`low`)を既定にし、`--model` `--effort` に渡す。
   話の本文の生成(`GenerateEpisode`・`ReviseEpisode`)だけは
-  `EPISODE_MODEL`(`claude-fable-5-1`)・`EPISODE_EFFORT`(`high`)を渡す
+  `EPISODE_MODEL`(`claude-opus-5-5`)・`EPISODE_EFFORT`(`high`)を渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
 
 ## 環境変数(`.env` でよい)
