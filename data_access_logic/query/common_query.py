@@ -79,6 +79,29 @@ def descendant_location_ids(s: Session, location_id: int) -> list[int]:
     return found
 
 
+def story_path_ids(s: Session, story_id: int) -> list[int]:
+    """親の作品をたどった、一番上の作品からこの作品までの id。上から順"""
+    path: list[int] = []
+    current: int | None = story_id
+    while current is not None and current not in path:
+        path.append(current)
+        current = get_row(s, Story, current).parent_story_id
+    return list(reversed(path))
+
+
+def story_family_ids(s: Session, story_id: int) -> list[int]:
+    """一番上の作品とその子孫(章・外伝)の id。章をまたいで前の話を読むのに使う"""
+    found = story_path_ids(s, story_id)[:1]
+    frontier = found
+    while frontier:
+        children = s.scalars(
+            select(Story.id).where(Story.parent_story_id.in_(frontier))).all()
+        children = [child for child in children if child not in found]
+        found = found + children
+        frontier = children
+    return found
+
+
 def idea_scope_ids(s: Session, location_id: int) -> list[int]:
     """アイデアの `location_id` は、そこから配下で効く。現在地から最上位までをたどる。"""
     get_row(s, Location, location_id)

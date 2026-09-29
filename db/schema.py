@@ -669,6 +669,11 @@ class Story(EventSeededMixin, TextBase):
     start: Mapped[Stamp | None] = mapped_column(StampType, comment="立つ年", sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
+    parent_story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)
+    # 章の話を書くとき、親の作品の筋書きまでたどって渡す。書き込みは常に parent_story_id を直に触る
+    parent_story: Mapped["Story | None"] = relationship(remote_side="Story.id", viewonly=True)
+
     episodes: Mapped[list["Episode"]] = relationship(
         back_populates="story", lazy="noload",
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
