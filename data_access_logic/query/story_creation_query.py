@@ -21,11 +21,3 @@ def load_location_story(s: Session, location_id: int, time: Stamp):
         ).order_by(Story.id)
     ).all()
     return sorted(stories, key=lambda story: depth[story.place_id])
-
-
-def join_story_text(stories: list[Story]) -> str:
-    return "\n\n".join(story.text for story in stories if story.text)
-
-
-def load_location_story_text(s: Session, location_id: int, time: Stamp) -> str:
-    return join_story_text(load_location_story(s, location_id, time))

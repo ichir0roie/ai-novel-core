@@ -1,4 +1,3 @@
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -28,11 +27,8 @@ def summarize(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | No
         EpisodeSourceSerialized.model_validate(episode).model_dump_json(indent=2),
         "この話の概要と文体を覚え書きにしてください。",
     ])
-    decided = ai.try_generate_json(
-        prompt, EpisodeSummaryDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
-    try:
-        draft = EpisodeSummaryDraft.model_validate(decided)
-    except ValidationError:
+    draft = ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
+    if draft is None:
         return None
     if row is None:
         row = EpisodeSummary(story_id=episode.story_id, episode_id=episode.id)

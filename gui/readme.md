@@ -151,9 +151,8 @@ claude を叩くので裏の job になり、画面は job を待って、終わ
 `GeneratorMeta.panel` が true の生成器は `GeneratePanel` には出さず、`RevisePanel` の側だけが拾う
 (テーブルごとに一つを想定)。
 
-## テスト
+## 型と lint
 
 ```
-.venv/bin/python -m pytest core/tests/test_gui_api.py core/tests/test_gui_interface.py core/tests/test_confirm_status.py
 (cd core/gui/web && npm run typecheck && npm run lint)
 ```

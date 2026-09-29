@@ -2,9 +2,9 @@
 """出来事の種は、元の本文から時代・場所・固有名詞を抜いたもの。出来事の生成(`GenerateEvent`)で候補を立てる手がかりに引く。"""
 from __future__ import annotations
 
+import logging
 import random
 
-from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from data_access_logic.event_seed.models import ConsolidateDraft, ConsolidateReq
 from data_access_logic.query import event_seed_query
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section
 from db.schema import Character, Episode, Event, EventSeed, Story
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは物語の編集者です。
@@ -53,22 +55,20 @@ def refresh(s: Session, ai: AIClient) -> int:
     pending = _pending(s)
     added = 0
     for batch in batches(pending, constants.EVENT_SEED_BATCH_LETTERS):
-        decided = ai.try_generate_json(
+        decided = ai.generate(
             "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                        "それぞれの元から出来事の種を抜き出してください。"]),
-            SeedsDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
-        try:
-            seeds = SeedsDraft.model_validate(decided).seeds
-        except ValidationError:
-            print(f"[data_access_logic/event_seed] 元{len(batch)}件から種を抜き出せなかった。次の回に抜き出し直す")
+            SeedsDraft, system=_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
+        if decided is None:
+            logger.warning(f"元{len(batch)}件から種を抜き出せなかった。次の回に抜き出し直す")
             continue
-        s.add_all(EventSeed(text=seed) for seed in seeds)
-        added += len(seeds)
+        s.add_all(EventSeed(text=seed) for seed in decided.seeds)
+        added += len(decided.seeds)
         for source in batch:
             source.row.event_seeded = True
         s.commit()
     if pending:
-        print(f"[data_access_logic/event_seed] 元{len(pending)}件から抜き出し、種を{added}件足した")
+        logger.info(f"元{len(pending)}件から抜き出し、種を{added}件足した")
     return added
 
 
@@ -77,14 +77,13 @@ def _merge(s: Session, ai: AIClient, fresh: list[EventSeed], settled: list[Event
     numbered = [*fresh, *settled]
     request = ConsolidateRequestSerialized(fresh=[SeedText.model_validate(seed) for seed in fresh],
                                            settled=[SeedText.model_validate(seed) for seed in settled])
-    decided = ai.try_generate_json(
+    decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "同じ出来事を言い換えただけの種の組をまとめてください。"]),
-        ConsolidateDraft.model_json_schema(), system=_CONSOLIDATE_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
-    try:
-        merges = ConsolidateDraft.model_validate(decided).merges
-    except ValidationError:
+        ConsolidateDraft, system=_CONSOLIDATE_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
+    if decided is None:
         return None
+    merges = decided.merges
     merged: set[int] = set()
     for merge in merges:
         numbers = set(merge.numbers)
@@ -97,7 +96,7 @@ def _merge(s: Session, ai: AIClient, fresh: list[EventSeed], settled: list[Event
             s.delete(numbered[number - 1])
         s.add(EventSeed(text=merge.text, consolidated=True))
         merged |= numbers
-        print(f"[data_access_logic/event_seed] 種{len(numbers)}件をまとめた: {merge.text}")
+        logger.info(f"種{len(numbers)}件をまとめた: {merge.text}")
     s.commit()
     return [seed for number, seed in enumerate(fresh, start=1) if number not in merged]
 
@@ -118,14 +117,14 @@ def consolidate(s: Session, ai: AIClient) -> int:
     for chunk in batches(settled, constants.EVENT_SEED_CONSOLIDATE_LETTERS) or [[]]:
         remaining = _merge(s, ai, fresh, [source.row for source in chunk])
         if remaining is None:
-            print("[data_access_logic/event_seed] 棚卸しの答えが得られなかった。次の回にやり直す")
+            logger.warning("棚卸しの答えが得られなかった。次の回にやり直す")
             return before - _count(s)
         fresh = remaining
     for seed in fresh:
         seed.consolidated = True
     s.commit()
     removed = before - _count(s)
-    print(f"[data_access_logic/event_seed] 棚卸しで種を{removed}件減らした(残り{before - removed}件)")
+    logger.info(f"棚卸しで種を{removed}件減らした(残り{before - removed}件)")
     return removed
 
 

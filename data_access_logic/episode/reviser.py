@@ -2,7 +2,8 @@
 """手直しなので、本文を書いたときと違い `synced` は変えない。"""
 from __future__ import annotations
 
-from pydantic import ValidationError
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -17,6 +18,8 @@ from data_access_logic.episode.models import (
 from data_access_logic.episode.summary import past_episodes
 from data_access_logic.query import common_query
 from db.schema import Episode, EpisodeCharacter
+
+logger = logging.getLogger(__name__)
 
 
 def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
@@ -92,13 +95,11 @@ def revise_episode(
         material.model_dump_json(indent=2),
         f"直す指示: {instruction.strip()}",
     ])
-    decided = ai.try_generate_json(
-        prompt, EpisodeRevisionDraft.model_json_schema(), system=_system_prompt(shared_style_extra, style_extra),
+    draft = ai.generate(
+        prompt, EpisodeRevisionDraft, system=_system_prompt(shared_style_extra, style_extra),
         timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
-    try:
-        draft = EpisodeRevisionDraft.model_validate(decided)
-    except ValidationError as error:
-        print(f"[data_access_logic/episode] {material.story.name}: 本文が得られなかったので見送り: {error}")
+    if draft is None:
+        logger.warning(f"{material.story.name}: 本文が得られなかったので見送り")
         return None
 
     record = s.get_one(Episode, episode_id)
@@ -106,5 +107,5 @@ def revise_episode(
     record.text = draft.text
     record.key = _append_instruction_to_key(record.key, instruction)
     s.commit()
-    print(f"[data_access_logic/episode] 推敲「{record.title}」 id={record.id} {record.letters}字")
+    logger.info(f"推敲「{record.title}」 id={record.id} {record.letters}字")
     return record

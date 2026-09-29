@@ -2,9 +2,9 @@
 """場所に居合わせる人物・対象から、当事者ごとの推測 → 候補をサイコロ → 記録、の順で出来事を一件起こす。"""
 from __future__ import annotations
 
+import logging
 import random
 
-from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ai.instructions.event_writing import (
@@ -21,10 +21,12 @@ from data_access_logic.event.progress_models import (
 )
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.location.models import LocationMaterial, PlaceMaterial
-from data_access_logic.query import common_query, story_createion_query, world_createion_query
+from data_access_logic.query import common_query, story_creation_query, world_creation_query
 from data_access_logic.query.base import location_active_condition
 from db.schema import Character, CharacterPlace, ConfirmStatus, Event, EventCharacter, Location
 from db.stamp import Stamp
+
+logger = logging.getLogger(__name__)
 
 # 一度に居合わせる人物として渡す上限
 _PARTICIPANT_LIMIT = 20
@@ -116,7 +118,7 @@ def _situation(
     focus: Character | None, scene: str | None, use_story: bool,
 ) -> PlaceSituationSerialized:
     place = PlaceMaterial.model_validate(s.get_one(Location, place_id))
-    stories = story_createion_query.load_location_story(s, place_id, time) if use_story else []
+    stories = story_creation_query.load_location_story(s, place_id, time) if use_story else []
     story_recent_events = []
     if stories:
         # 横(兄弟の場所)の出来事は含めない。作品の配下全体を渡すと、他の国の展開まで持ち込まれて
@@ -157,10 +159,8 @@ def _judgements(ai: AIClient, situation: PlaceSituationSerialized) -> list[Parti
             JudgementRequestSerialized(situation=situation, participant=participant).model_dump_json(indent=2),
             "この当事者のいまの思考・感情・望み・恐れ・行動を推測してください。",
         ])
-        decided = ai.try_generate_json(prompt, JudgementDraft.model_json_schema(), system=_JUDGEMENT_SYSTEM_PROMPT)
-        try:
-            judgement = JudgementDraft.model_validate(decided)
-        except ValidationError:
+        judgement = ai.generate(prompt, JudgementDraft, system=_JUDGEMENT_SYSTEM_PROMPT)
+        if judgement is None:
             continue
         judgements.append(ParticipantJudgement(character=participant.character, judgement=judgement))
     return judgements
@@ -174,15 +174,12 @@ def _rolled_candidate(
         CandidateRequestSerialized(situation=situation, judgements=judgements, seeds=seeds).model_dump_json(indent=2),
         f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。",
     ])
-    decided = ai.try_generate_json(prompt, CandidatesDraft.model_json_schema(), system=_CANDIDATE_SYSTEM_PROMPT)
-    try:
-        candidates = CandidatesDraft.model_validate(decided).candidates
-    except ValidationError:
+    decided = ai.generate(prompt, CandidatesDraft, system=_CANDIDATE_SYSTEM_PROMPT)
+    if decided is None or not decided.candidates:
         return None
-    if not candidates:
-        return None
+    candidates = decided.candidates
     chosen = rng.choice(candidates)
-    print(f"[data_access_logic/event] 候補 {candidates.index(chosen) + 1}/{len(candidates)}: {chosen.name}")
+    logger.info(f"候補 {candidates.index(chosen) + 1}/{len(candidates)}: {chosen.name}")
     return chosen
 
 
@@ -190,7 +187,7 @@ def _destinations(s: Session, place_id: int, time: Stamp) -> list[LocationMateri
     root_id = common_query.place_up(s, place_id, constants.REACH_LEVELS)
     nearby_ids = set(common_query.descendant_place_ids(s, root_id)) - {place_id, root_id}
     places = s.scalars(
-        world_createion_query.alive_locations_select(time)
+        world_creation_query.alive_locations_select(time)
         .where(Location.id.in_(nearby_ids), location_active_condition(time))
     ).all()
     return [LocationMaterial.model_validate(place) for place in places[:constants.MOVE_DESTINATION_LIMIT]]
@@ -239,11 +236,9 @@ def progress_place(
         "この候補を、この場所にこの時点で起きた出来事として記録してください。",
         *hints,
     ])
-    decided = ai.try_generate_json(prompt, EventRecordDraft.model_json_schema(), system=_RECORD_SYSTEM_PROMPT)
-    try:
-        draft = EventRecordDraft.model_validate(decided)
-    except ValidationError as error:
-        print(f"[data_access_logic/event] 場所id={place_id}: 記録が得られなかった: {error}")
+    draft = ai.generate(prompt, EventRecordDraft, system=_RECORD_SYSTEM_PROMPT)
+    if draft is None:
+        logger.warning(f"場所id={place_id}: 記録が得られなかった")
         return None
 
     by_id = {character.id: character for character in characters}
@@ -309,7 +304,7 @@ def progress_place(
 
     s.commit()
     involved_names = [name for name in (by_id[character_id].name for character_id in involved_ids) if name]
-    print(f"[data_access_logic/event] {time} 場所id={place_id}: {record.name}"
+    logger.info(f"{time} 場所id={place_id}: {record.name}"
           f" / 継続: {draft.event_duration_days}日({time}〜{end})"
           + (f" / 関わった: {', '.join(involved_names)}" if involved_names else "")
           + (f" / 移動: {'; '.join(move_notes)}" if move_notes else "")

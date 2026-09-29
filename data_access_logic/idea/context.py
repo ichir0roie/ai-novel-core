@@ -5,6 +5,8 @@
 候補は確かめる(`confirmed` を 承認 にする)まで検索・清書には出ない。退けた(非承認)語は候補にも足さない。
 """
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,8 @@ from data_access_logic.idea.search import keywords_of, search, spellings
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, ConfirmStatus, Idea, Location
 from db.stamp import Stamp
+
+logger = logging.getLogger(__name__)
 
 
 def _dated(ideas: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
@@ -58,7 +62,7 @@ def _candidate(s: Session, term: IdeaTerm, place_id: int | None) -> Idea | None:
     )
     s.add(candidate)
     s.flush()
-    print(f"[data_access_logic/idea] 候補を足した: {candidate.name}(id={candidate.id})")
+    logger.info(f"候補を足した: {candidate.name}(id={candidate.id})")
     return candidate
 
 

@@ -5,9 +5,9 @@
 """
 from __future__ import annotations
 
+import logging
 import random
 
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -30,9 +30,11 @@ from data_access_logic.idea.links import link
 from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.meme.extractor import draw, position_legend
 from data_access_logic.meme.models import DrawnMeme
-from data_access_logic.query import common_query, dictionary_query, story_createion_query
+from data_access_logic.query import common_query, dictionary_query, story_creation_query
 from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterPlace, ConfirmStatus, Location
 from db.stamp import Stamp
+
+logger = logging.getLogger(__name__)
 
 _PLACEHOLDER_INSTRUCTION = (
     f"この一件の名前はまだ決まっていない。説明の中でこの一件を指すときは必ず「{NAME_PLACEHOLDER}」と書き、名前を考案して書き込まない。"
@@ -122,14 +124,10 @@ def _element(ai: AIClient, rng: random.Random, request: StoryElementsRequestSeri
     モデルが生成時に自由選択して同じ立場へ偏るのを防ぐ。"""
     if not request.stories:
         return None
-    decided = ai.try_generate_json(
-        request.model_dump_json(indent=2),
-        StoryElementsDraft.model_json_schema(), system=_ELEMENT_SYSTEM_PROMPT)
-    try:
-        elements = StoryElementsDraft.model_validate(decided).elements
-    except ValidationError:
+    decided = ai.generate(request.model_dump_json(indent=2), StoryElementsDraft, system=_ELEMENT_SYSTEM_PROMPT)
+    if decided is None or not decided.elements:
         return None
-    return rng.choice(elements) if elements else None
+    return rng.choice(decided.elements)
 
 
 def _nearby_characters(s: Session, born_place_id: int | None, time: Stamp) -> list[Character]:
@@ -150,7 +148,7 @@ def _birth_material(
         select(Location).where(Location.id == born_place_id)
         .options(joinedload(Location.parent)).execution_options(populate_existing=True))
         if born_place_id is not None else None)
-    stories = story_createion_query.load_location_story(s, born_place_id, time) if born_place_id is not None else []
+    stories = story_creation_query.load_location_story(s, born_place_id, time) if born_place_id is not None else []
     later_ideas = (s.scalars(dictionary_query.later_ideas_select(
         common_query.idea_scope_ids(s, born_place_id), time)).all() if born_place_id is not None else [])
     elements_request = StoryElementsRequestSerialized(time=time, stories=stories, later_ideas=later_ideas)
@@ -177,15 +175,13 @@ def _content(
 ) -> PersonContentDraft | NonPersonContentDraft | None:
     draft_model: type[PersonContentDraft] | type[NonPersonContentDraft] = (
         PersonContentDraft if material.person else NonPersonContentDraft)
-    decided = ai.try_generate_json(
+    decided = ai.generate(
         "\n".join([material.model_dump_json(indent=2), request]),
-        draft_model.model_json_schema(),
+        draft_model,
         system=_PERSON_CONTENT_SYSTEM_PROMPT if material.person else _NON_PERSON_CONTENT_SYSTEM_PROMPT)
-    try:
-        return draft_model.model_validate(decided)
-    except ValidationError as error:
-        print(f"[data_access_logic/character] 中身が得られなかった: {error}")
-        return None
+    if decided is None:
+        logger.warning("中身が得られなかった")
+    return decided
 
 
 def _polished(s: Session, ai: AIClient, draft: str, born_place_id: int | None, time: Stamp) -> tuple[str, list[IdeaMaterial]]:
@@ -193,14 +189,13 @@ def _polished(s: Session, ai: AIClient, draft: str, born_place_id: int | None, t
     ideas = gather_ideas(s, draft, ai, born_place_id, time)
     if not ideas.related:
         return draft, ideas.linked
-    decided = ai.try_generate_json(
+    decided = ai.generate(
         "\n".join([PolishRequestSerialized(draft=draft, ideas=ideas).model_dump_json(indent=2),
                    "この説明を清書してください。"]),
-        PolishDraft.model_json_schema(), system=_POLISH_SYSTEM_PROMPT, timeout=constants.IDEA_POLISH_TIMEOUT)
-    try:
-        return PolishDraft.model_validate(decided).text, ideas.linked
-    except ValidationError:
+        PolishDraft, system=_POLISH_SYSTEM_PROMPT, timeout=constants.IDEA_POLISH_TIMEOUT)
+    if decided is None:
         return draft, ideas.linked
+    return decided.text, ideas.linked
 
 
 def _history(items: list[HistoryItemDraft], born_year: int, age: int) -> str:
@@ -224,15 +219,11 @@ def _composed(
 
 def _name(ai: AIClient, material: CharacterNameMaterialSerialized, person: bool) -> PersonNameDraft | NameDraft | None:
     draft_model: type[PersonNameDraft] | type[NameDraft] = PersonNameDraft if person else NameDraft
-    decided = ai.try_generate_json(
+    return ai.generate(
         "\n".join([material.model_dump_json(indent=2),
                    "この一件に似合う名前を決めてください。"]),
-        draft_model.model_json_schema(),
+        draft_model,
         system=_PERSON_NAME_SYSTEM_PROMPT if person else _NON_PERSON_NAME_SYSTEM_PROMPT)
-    try:
-        return draft_model.model_validate(decided)
-    except ValidationError:
-        return None
 
 
 def _starting_parameters(rng: random.Random, person: bool, form: CharacterForm | None) -> CharacterParameterValues:
@@ -308,7 +299,7 @@ def generate_character(
     s.commit()
 
     place_label = (f"{material.born_place.name}(id={material.born_place.id})" if material.born_place else "不明")
-    print(f"[data_access_logic/character] {time} 生成: {record.name} id={record.id} 種別={record.kind}"
+    logger.info(f"{time} 生成: {record.name} id={record.id} 種別={record.kind}"
           f" 出自={place_label} 年齢={age}\n"
           f"    筋書きの要素: {material.element or '(無し)'}\n"
           + "".join(f"    ミーム: {drawn.position}: {drawn.text}\n" for drawn in material.memes)

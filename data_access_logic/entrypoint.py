@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from data_access_logic.logs import configure_logging
 from data_access_logic.material import Material
 from db.schema import get_env_session
 
@@ -55,6 +56,7 @@ class Entrypoint:
         return dumped(self.result())
 
     def show(self) -> None:
+        configure_logging()
         print(json.dumps(self.run(), ensure_ascii=False, indent=2))
 
     def result(self) -> BaseModel | Sequence[BaseModel]:

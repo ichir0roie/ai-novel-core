@@ -65,9 +65,5 @@ class CharacterFactory(factory.Factory):
     parameters = factory.LazyFunction(lambda: [ParameterFactory.build()])
 
 
-def build_parameter(**overrides) -> CharacterParameterRow:
-    return ParameterFactory.build(**overrides)
-
-
 def build_character(**overrides) -> CharacterCreateForm:
     return CharacterFactory.build(**overrides)

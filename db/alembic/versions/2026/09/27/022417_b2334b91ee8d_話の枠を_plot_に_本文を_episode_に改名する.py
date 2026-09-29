@@ -52,24 +52,6 @@ def _rename_index(table: str, old: str, new: str, columns: list[str], unique: bo
     op.create_index(new, table, columns, unique=unique)
 
 
-def _retable_manifest(mapping: dict[str, str]) -> None:
-    """md の台帳(`.markdown_sync.json`)が持つ表の名前も合わせる。古いままだと取り込みが md を別の表の行と取り違える。
-    md の同期は廃止したので、同期の道具が無ければ何もしない"""
-    try:
-        from db.schema import WORLDS_ROOT
-        from tool.markdown.sync_manifest import Manifest, locked
-    except ImportError:
-        return
-
-    with locked(WORLDS_ROOT):
-        manifest = Manifest(WORLDS_ROOT)
-        if not manifest.exists:
-            return
-        for entry in manifest.entries.values():
-            entry["table"] = mapping.get(entry["table"], entry["table"])
-        manifest.save()
-
-
 def upgrade() -> None:
     """Upgrade schema."""
     # 要約は本文の要約なので、枠の id から本文の id へ付け替える。本文の無い枠の要約は残さない
@@ -97,8 +79,6 @@ def upgrade() -> None:
     _rename_index('plot_idea', 'ix_episode_idea_episode_id', 'ix_plot_idea_plot_id', ['plot_id'])
     _rename_index('plot_idea', 'ix_episode_idea_idea_id', 'ix_plot_idea_idea_id', ['idea_id'])
 
-    _retable_manifest({"episode": "plot", "episode_text": "episode"})
-
 
 def downgrade() -> None:
     """Downgrade schema."""
@@ -120,5 +100,3 @@ def downgrade() -> None:
 
     _remap_summary("SELECT episode_text.episode_id FROM episode_text WHERE episode_text.id = episode_summary.episode_id")
     _rebuild_summary('episode')
-
-    _retable_manifest({"plot": "episode", "episode": "episode_text"})

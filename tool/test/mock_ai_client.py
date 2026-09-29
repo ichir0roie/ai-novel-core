@@ -7,6 +7,8 @@ from __future__ import annotations
 import random
 import re
 
+from pydantic import BaseModel, ValidationError
+
 # 材料は日本語の見出しの JSON(`"人物id": 1`)で渡る。dict の repr(`'character_id': 1`)で渡す生成器も残っている
 _CHARACTER_ID_IN_PROMPT = re.compile(r"(?:'character_id'|\"人物id\"): (\d+)")
 
@@ -19,16 +21,16 @@ class MockAIClient:
         self.rng = random.Random(seed)
         self.calls: list[dict] = []
 
-    def try_generate_json(
-        self, prompt: str, schema: dict, *,
-        system: str | None = None, timeout: float = 120.0, options: dict | None = None,
+    def generate[Output: BaseModel](
+        self, prompt: str, output: type[Output], system: str | None = None, timeout: float = 120.0,
         tools: tuple[str, ...] = (), model: str = "", effort: str = "",
-    ) -> dict:
+    ) -> Output | None:
+        schema = output.model_json_schema()
         self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools})
-        return self._fill(schema, prompt, key=None, defs=schema.get("$defs", {}))
-
-    def usage_summary(self) -> str:
-        return f"mock 呼び出し {len(self.calls)}回"
+        try:
+            return output.model_validate(self._fill(schema, prompt, key=None, defs=schema.get("$defs", {})))
+        except ValidationError:
+            return None
 
     def _fill(self, schema: dict, prompt: str, key: str | None, defs: dict):
         # pydantic の model_json_schema は入れ子のモデルを $defs に置いて $ref で指し、省ける値を anyOf で書く

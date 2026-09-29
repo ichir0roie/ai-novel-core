@@ -7,7 +7,7 @@ from ai.claude_code import ai_client
 from data_access_logic.character.generator import generate_character
 from data_access_logic.character.record import GeneratedCharacter
 from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.query import world_createion_query
+from data_access_logic.query import world_creation_query
 from db.schema import Location, Stamp
 
 
@@ -27,7 +27,7 @@ class GenerateCharacters(SessionEntrypoint):
             place = session.get(Location, place_id)
             if place is None:
                 raise ValueError(f"place_id={place_id} という id の location が見つからない")
-            world_createion_query.check_has_story(session, place_id, "character")
+            world_creation_query.check_has_story(session, place_id, "character")
             places.append(place)
 
         rng = random.Random(self.seed)

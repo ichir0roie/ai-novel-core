@@ -4,7 +4,7 @@ from __future__ import annotations
 from data_access_logic.character.form import CharacterCreateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
-from data_access_logic.query import world_createion_query
+from data_access_logic.query import world_creation_query
 from db.child_lists import replaced_rows
 from db.schema import Character, CharacterHistory, CharacterParameter, CharacterPlace, Location
 
@@ -20,8 +20,8 @@ class CommitCharacter(CommitEntrypoint):
         self.check_exists(session, Location, form.place_id, "place_id")
         if form.place_id is not None:
             place = session.get_one(Location, form.place_id)
-            world_createion_query.check_within_parent_span(place, form.start, form.end, "character")
-            world_createion_query.check_has_story(session, form.place_id, "character")
+            world_creation_query.check_within_parent_span(place, form.start, form.end, "character")
+            world_creation_query.check_has_story(session, form.place_id, "character")
 
         record = Character()
         form.write_to(record)

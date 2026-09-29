@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import random
 
 from ai.claude_code import ai_client
@@ -11,9 +12,11 @@ from data_access_logic.event.progress import progress_place
 from data_access_logic.event.record import EventRecord
 from data_access_logic.event_seed.extractor import draw as draw_seeds
 from data_access_logic.event_seed.extractor import refresh_and_consolidate
-from data_access_logic.query import common_query, world_createion_query
+from data_access_logic.query import common_query, world_creation_query
 from data_access_logic.query.base import character_active_condition
 from db.schema import Character, Event, Location, Session, Stamp, get_env_session
+
+logger = logging.getLogger(__name__)
 
 
 def _current_place_id(session: Session, character: Character, time: Stamp) -> int | None:
@@ -24,9 +27,9 @@ def _current_place_id(session: Session, character: Character, time: Stamp) -> in
 def _present_characters(session: Session, place_id: int, time: Stamp) -> list[Character]:
     """その場所・時刻に居合わせて手の空いたサブキャラクター。場所を名指しされるので、
     ランダム生成の対象か(active_random_generation)は見ない。"""
-    busy_ids = set(session.scalars(world_createion_query.busy_character_ids_select(time)).all())
+    busy_ids = set(session.scalars(world_creation_query.busy_character_ids_select(time)).all())
     characters = session.scalars(
-        world_createion_query.alive_characters_select(time)
+        world_creation_query.alive_characters_select(time)
         .where(character_active_condition()).order_by(Character.id)).all()
     return [character for character in characters
             if character.id not in busy_ids and _current_place_id(session, character, time) == place_id]
@@ -101,7 +104,7 @@ class GenerateEvent(SessionEntrypoint):
             session.get_one(Event, form.parent_event_id)
 
         scene = form.scene
-        print(f"[data_access_logic/event] {place.name}(id={place_id}) {time} の出来事(下書き「{scene or '(指定なし)'}」): "
+        logger.info(f"{place.name}(id={place_id}) {time} の出来事(下書き「{scene or '(指定なし)'}」): "
               f"当事者の候補 {', '.join(c.name or '?' for c in members)}")
         seeds = draw_seeds(session, rng)
         record = progress_place(session, self.ai, rng, place_id, members, time, seeds, scene=scene)

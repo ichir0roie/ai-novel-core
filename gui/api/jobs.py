@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
 import traceback
 import uuid
@@ -12,6 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 
 def _now() -> str:
@@ -52,7 +55,7 @@ class JobRunner:
         except Exception as error:  # 裏で走るので、落ちた理由は job に残す
             job.error = "".join(traceback.format_exception_only(type(error), error)).strip()
             job.status = "failed"
-            traceback.print_exc()
+            logger.exception(f"{job.entrance}(job {job.id})が落ちた")
         finally:
             job.finished_at = _now()
 

@@ -2,7 +2,8 @@
 """記録として起こした出来事の本文(`text`)を、話と同じ小説の形に書き直す。書けなければ記録のまま残す。"""
 from __future__ import annotations
 
-from pydantic import ValidationError
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -20,6 +21,8 @@ from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.links import link
 from data_access_logic.query import common_query
 from db.schema import Event, EventCharacter
+
+logger = logging.getLogger(__name__)
 
 
 def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
@@ -90,16 +93,16 @@ def novelize_event(
         material.model_dump_json(indent=2),
         f"この出来事を、{viewpoint}視点人物にした{letters}の小説の本文に書き起こしてください。",
     ])
-    decided = ai.try_generate_json(
-        prompt, EventNovelDraft.model_json_schema(), system=_system_prompt(shared_style_extra, style_extra),
+    draft = ai.generate(
+        prompt, EventNovelDraft, system=_system_prompt(shared_style_extra, style_extra),
         timeout=constants.EVENT_NOVEL_TIMEOUT)
 
     record = s.get_one(Event, event_id)
-    try:
-        record.text = EventNovelDraft.model_validate(decided).text
-        print(f"[data_access_logic/event] {record.name}(id={record.id}): 本文を小説にした({len(record.text)}字)")
-    except ValidationError as error:
-        print(f"[data_access_logic/event] {record.name}(id={record.id}): 本文を小説にできなかったので記録のまま残す: {error}")
+    if draft is None:
+        logger.warning(f"{record.name}(id={record.id}): 本文を小説にできなかったので記録のまま残す")
+    else:
+        record.text = draft.text
+        logger.info(f"{record.name}(id={record.id}): 本文を小説にした({len(record.text)}字)")
     link(s, record, material.ideas.linked)
     s.commit()
     return record

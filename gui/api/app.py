@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.character.latest_places import latest_place_ids
 from data_access_logic.character.relation_graph import relation_graph
 from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.logs import configure_logging
 from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from data_access_logic.map.collect import planet_maps
 from data_access_logic.map.geometry import BEARINGS
@@ -30,6 +31,8 @@ from gui.api.models import (
     RunRequest, RunResult, TablesResponse,
 )
 from gui.api.tables import spec_of
+
+configure_logging()
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
 app.add_middleware(

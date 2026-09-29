@@ -119,35 +119,6 @@ class ConfirmStatusType(TypeDecorator):
             return value
 
 
-LOCATION_COLUMNS = ("location_world", "location_planet",
-                    "location_longitude", "location_latitude",
-                    "location_altitude")
-
-_LOCATION_TAGS = ("w", "p", "lon", "lat", "alt")
-
-
-def _digit(value) -> str:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return str(value).strip()
-    return str(int(number)) if number == int(number) else repr(number)
-
-
-def location_text(values) -> str | None:
-    """`w4/p1/lon12/lat-/alt-` のように、上から順に並ぶ。前方一致がそのまま
-    「同じ世界線」「同じ星」の絞り込みになる。
-    """
-    get = values.get if hasattr(values, "get") else (
-        lambda column: getattr(values, column, None))
-    parts = [get(column) for column in LOCATION_COLUMNS]
-    if all(part in (None, "") for part in parts):
-        return None
-    return "/".join(
-        tag + ("-" if part in (None, "") else _digit(part))
-        for tag, part in zip(_LOCATION_TAGS, parts))
-
-
 class Base(DeclarativeBase):
 
     # SQLite は「INTEGER PRIMARY KEY」だけを rowid の別名として autoincrement する。
@@ -367,7 +338,10 @@ class PersonalityLevelType(TypeDecorator):
 
     impl = Integer
     cache_ok = True
-    python_type = str
+
+    @property
+    def python_type(self) -> type:
+        return str
 
     def process_bind_param(self, value, dialect):
         if value is None:
@@ -441,8 +415,8 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     def _last_parameter(self) -> "CharacterParameter | None":
         if not self.parameters:
             return None
-        bounded = [row for row in self.parameters if row.start is not None]
-        return max(bounded, key=lambda row: row.start) if bounded else self.parameters[-1]
+        bounded = [(row.start, row) for row in self.parameters if row.start is not None]
+        return max(bounded, key=lambda pair: pair[0])[1] if bounded else self.parameters[-1]
 
     @property
     def start(self) -> Stamp | None:
@@ -842,23 +816,7 @@ def _make_engine(path):
 
 
 engine = _make_engine(DB_PATH)
-_fixed_engines = {}
-
-
-def _fixed_engine(path):
-    if path not in _fixed_engines:
-        _fixed_engines[path] = _make_engine(path)
-    return _fixed_engines[path]
 
 
 def get_env_session():
     return Session(engine)
-
-
-def get_novel_session():
-    return Session(_fixed_engine(NOVEL_DB_PATH))
-
-
-def get_test_session():
-    return Session(_fixed_engine(TEST_DB_PATH))
-

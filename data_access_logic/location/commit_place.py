@@ -4,7 +4,7 @@ from __future__ import annotations
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.location.form import LocationCreateForm
 from data_access_logic.location.record import LocationRecord
-from data_access_logic.query import world_createion_query
+from data_access_logic.query import world_creation_query
 from db.schema import Location
 
 
@@ -19,7 +19,7 @@ class CommitPlace(CommitEntrypoint):
         if self.place.parent_id is not None:
             parent = session.get_one(Location, self.place.parent_id)
             self._check_area(session, parent, self.place.area)
-            world_createion_query.check_within_parent_span(
+            world_creation_query.check_within_parent_span(
                 parent, self.place.start, self.place.end, "location")
 
         record = Location()
@@ -37,7 +37,7 @@ class CommitPlace(CommitEntrypoint):
                 f"area={area} が親(id={parent.id})の広さ {parent.area} 未満でない")
 
         siblings_area = session.scalar(
-            world_createion_query.siblings_area_sum_select(parent.id))
+            world_creation_query.siblings_area_sum_select(parent.id))
         if float(siblings_area) + area > float(parent.area):  # DECIMAL 列の合計は Decimal で返る
             raise ValueError(
                 f"area={area} を足すと、親(id={parent.id})の広さ {parent.area} を"

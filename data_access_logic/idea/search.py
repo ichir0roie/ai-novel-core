@@ -39,15 +39,13 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
     if not (text or "").strip():
         return []
     when = f"この文の時刻: {time}\n\n" if time is not None else ""
-    decided = ai.try_generate_json(
+    decided = ai.generate(
         f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げてください。",
-        IdeaTermsDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.IDEA_TERMS_TIMEOUT)
-    try:
-        drafts = IdeaTermsDraft.model_validate(decided).terms
-    except ValidationError:
+        IdeaTermsDraft, system=_SYSTEM_PROMPT, timeout=constants.IDEA_TERMS_TIMEOUT)
+    if decided is None:
         return []
     terms = []
-    for draft in drafts:
+    for draft in decided.terms:
         try:
             terms.append(IdeaTerm.model_validate(draft))
         except ValidationError:  # keyword が空

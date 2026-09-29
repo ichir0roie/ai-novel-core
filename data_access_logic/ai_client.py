@@ -3,16 +3,16 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from pydantic import BaseModel
+
 
 class AIClient(Protocol):
-    def try_generate_json(
+    def generate[Output: BaseModel](
         self,
         prompt: str,
-        schema: dict,
-        *,
+        output: type[Output],
         system: str | None = None,
         timeout: float = 120.0,
-        options: dict | None = None,
         model: str = ...,
         effort: str = ...,
-    ) -> dict: ...
+    ) -> Output | None: ...

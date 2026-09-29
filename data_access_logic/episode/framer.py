@@ -2,7 +2,8 @@
 """本文は書かない(`writer.write_episode` で別に書く)。"""
 from __future__ import annotations
 
-from pydantic import ValidationError
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -17,6 +18,8 @@ from data_access_logic.event.summary import summarized_events
 from data_access_logic.query import common_query
 from db.schema import Episode, EpisodeCharacter
 from db.stamp import Stamp, StampError
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの構成を考える作家です。
@@ -76,11 +79,9 @@ def frame_episode(
         material.model_dump_json(indent=2),
         "この作品の次の一話の枠を決めてください。",
     ])
-    decided = ai.try_generate_json(prompt, EpisodeFrameDraft.model_json_schema(), system=_SYSTEM_PROMPT)
-    try:
-        draft = EpisodeFrameDraft.model_validate(decided)
-    except ValidationError as error:
-        raise ValueError(f"枠が得られなかった: {error}") from error
+    draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM_PROMPT)
+    if draft is None:
+        raise ValueError("枠が得られなかった")
 
     start = material.main_episode.start
     if start is None:
@@ -97,6 +98,6 @@ def frame_episode(
     record.start = start
     record.synced = False
     s.commit()
-    print(f"[data_access_logic/episode] {material.story.name} {start}「{record.title}」"
+    logger.info(f"{material.story.name} {start}「{record.title}」"
           f" id={record.id} の枠を決めた")
     return record

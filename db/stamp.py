@@ -16,23 +16,12 @@ from functools import total_ordering
 
 _DIGITS = re.compile(r"\A\d+\Z")
 
-# ファイル名の頭。`4340_1_1` と `4340_1_1_093000`
-_STEM = re.compile(r"\A(\d+)_(\d{1,2})_(\d{1,2})(?:_(\d{6}))?\Z")
-
 # 年の下に付く五つの欄。桁数と、書かれなかったときの値
 _PARTS = (("month", 2, 1), ("day", 2, 1),
           ("hour", 2, 0), ("minute", 2, 0), ("second", 2, 0))
 
 # 年より下の桁の合計。10 桁(mmddhhmmss)
 _UNDER = sum(width for _, width, _ in _PARTS)
-
-# 月ごとの日数(平年)。うるう年は2月だけ+1する。
-_MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-_DAYS_BEFORE_MONTH = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
-
-
-def _is_leap_year(year: int) -> bool:
-    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 
 class StampError(ValueError):
@@ -90,17 +79,6 @@ class Stamp:
         return cls(*nums)
 
     @classmethod
-    def from_stem(cls, stem: str) -> "Stamp | None":
-        m = _STEM.match(stem)
-        if not m:
-            return None
-        year, month, day, clock = m.groups()
-        hour, minute, second = (0, 0, 0)
-        if clock:
-            hour, minute, second = (int(clock[i:i + 2]) for i in (0, 2, 4))
-        return cls(int(year), int(month), int(day), hour, minute, second)
-
-    @classmethod
     def from_int(cls, value) -> "Stamp | None":
         if value is None:
             return None
@@ -117,27 +95,6 @@ class Stamp:
     def to_int(self) -> int:
         return (((((self.year * 100 + self.month) * 100 + self.day) * 100
                   + self.hour) * 100 + self.minute) * 100 + self.second)
-
-    def to_seconds(self) -> int:
-        """プロレプティック・グレゴリオ暦での、相対的な秒数。
-
-        絶対的な暦の起点は決めていない(西暦0年をそのまま起点にしただけ)ので、
-        単独の値には意味がなく、二点の差分(間に何秒あるか)を見るのにだけ使う
-        (時の幅に対する線形補間など)。
-        """
-        days_before_year = (365 * self.year + self.year // 4
-                            - self.year // 100 + self.year // 400)
-        day_of_year = _DAYS_BEFORE_MONTH[self.month - 1] + self.day
-        if self.month > 2 and _is_leap_year(self.year):
-            day_of_year += 1
-        days = days_before_year + day_of_year
-        return ((days * 24 + self.hour) * 60 + self.minute) * 60 + self.second
-
-    def stem(self) -> str:
-        head = f"{self.year}_{self.month:02d}_{self.day:02d}"
-        if (self.hour, self.minute, self.second) == (0, 0, 0):
-            return head
-        return f"{head}_{self.hour:02d}{self.minute:02d}{self.second:02d}"
 
     def __str__(self) -> str:
         return (f"{self.year}/{self.month:02d}/{self.day:02d} "

@@ -13,7 +13,8 @@
   `execute` はなるべく使わず `scalars` / `scalar` で ORM を取る。リレーションが足りなければ `schema.py` に読み取り専用(`viewonly=True`)で足す
 - マテリアルには見出し(エイリアス)を付けない。AI に渡す形はマテリアルを継承した `*Serialized` の `model_serializer` で組む。
   AI が誤解しないよう見出しを日本語にし、管理用の値(id・`confirmed` など)を外し、要るものだけを抜き出す。値が null・空でも消さずに渡す
-- AI の出力も pydantic のモデルで受ける。json schema は `model_json_schema()` で作り、整形・検証はバリデータに置く。
+- AI の出力も pydantic のモデルで受ける。AI の client の `generate(prompt, 出力のモデル, ...)` に出力のモデルを渡すと、
+  client が json schema を作ってそのモデルで返す(得られなければ None)。整形・検証はバリデータに置く。
   このモデルの docstring は schema の description として AI に渡るので書かない
 - dict の `.get` や文字列キーでの取り出しは極力使わない。既存の関数が dict を返すなら、境目でモデルに読み込んでから属性で扱う
 - dict への変換と二重の変換は残さない。関数は最初からモデルを返し(呼ぶ側で `model_validate` し直さない)、フォームは ORM の行へ属性で書く

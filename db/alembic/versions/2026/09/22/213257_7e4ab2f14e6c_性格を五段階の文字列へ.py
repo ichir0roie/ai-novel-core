@@ -10,7 +10,10 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-from db.schema import PERSONALITY_COLUMNS, PERSONALITY_DEFAULT
+from db.schema import PERSONALITY_COLUMNS
+
+# この版のときの既定(並)。後で schema から消えたので、値で持つ
+PERSONALITY_DEFAULT = "並"
 
 
 # revision identifiers, used by Alembic.

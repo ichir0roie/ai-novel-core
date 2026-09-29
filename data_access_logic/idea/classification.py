@@ -1,8 +1,12 @@
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.query import common_query
 from db.schema import ConfirmStatus, Idea
+
+logger = logging.getLogger(__name__)
 
 
 def _anchor(s: Session, place_id: int | None) -> Idea | None:
@@ -32,5 +36,5 @@ def find_or_create_classification(s: Session, kind: str, place_id: int | None) -
         location_id=anchor.location_id, text=f'{anchor.name}における「{kind}」のアイデアをまとめる分類。')
     s.add(classification)
     s.flush()
-    print(f"[data_access_logic/idea] 分類を足した: {classification.name}(id={classification.id})")
+    logger.info(f"分類を足した: {classification.name}(id={classification.id})")
     return classification

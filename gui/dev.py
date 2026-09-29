@@ -21,6 +21,7 @@ Brave が無ければ既定のブラウザで開く。
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import re
 import shutil
@@ -32,6 +33,11 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+
+from data_access_logic.logs import configure_logging
+
+# `python -m gui.dev` で起こすと `__name__` は `__main__` になるので、名前を書く
+logger = logging.getLogger("gui.dev")
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -68,12 +74,12 @@ def _brave_profile_dir() -> str:
 def _open_browser(url: str) -> None:
     brave = _brave()
     if brave is None:
-        print("[gui/dev] Brave が見つからないので既定のブラウザで開く")
+        logger.info("Brave が見つからないので既定のブラウザで開く")
         webbrowser.open(url)
         return
     profile = _brave_profile_dir()
     os.makedirs(profile, exist_ok=True)
-    print(f"[gui/dev] Brave をプロファイル {profile} で開く")
+    logger.info(f"Brave をプロファイル {profile} で開く")
     # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
     _popen([brave, f"--user-data-dir={profile}", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -145,12 +151,12 @@ def _free_port(port: int, name: str) -> bool:
     try:
         pids = _listening_pids(port)
     except FileNotFoundError as e:
-        print(f"[gui/dev] ポート {port}({name})を使っている処理を調べられない({e.filename} が無い)", file=sys.stderr)
+        logger.warning(f"ポート {port}({name})を使っている処理を調べられない({e.filename} が無い)")
         return False
     if not pids:
-        print(f"[gui/dev] ポート {port}({name})を使っている処理が見つからない", file=sys.stderr)
+        logger.warning(f"ポート {port}({name})を使っている処理が見つからない")
         return False
-    print(f"[gui/dev] ポート {port}({name})を使っている処理 {pids} を止める")
+    logger.info(f"ポート {port}({name})を使っている処理 {pids} を止める")
     for pid in pids:
         _kill(pid, force=False)
     if _wait_until_closed(port, timeout=10.0):
@@ -170,12 +176,12 @@ def _wait_for(port: int, name: str, process: subprocess.Popen, path: str = "/", 
     deadline = time.time() + timeout
     while time.time() < deadline:
         if process.poll() is not None:
-            print(f"[gui/dev] {name} が終了コード {process.returncode} で止まった", file=sys.stderr)
+            logger.warning(f"{name} が終了コード {process.returncode} で止まった")
             return False
         if _http_alive(port, path):
             return True
         time.sleep(0.3)
-    print(f"[gui/dev] {name} が {timeout:.0f} 秒で立ち上がらなかった", file=sys.stderr)
+    logger.warning(f"{name} が {timeout:.0f} 秒で立ち上がらなかった")
     return False
 
 
@@ -205,7 +211,7 @@ def _terminate(process: subprocess.Popen) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     parser.add_argument("--api-port", type=int, default=8765)
     parser.add_argument("--web-port", type=int, default=3000)
     parser.add_argument("--no-browser", action="store_true", help="ブラウザを開かない")
@@ -213,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--browser-only", action="store_true",
                          help="ブラウザだけ開く(API・画面はすでに起きている前提で、起こしも死活監視もしない)")
     args = parser.parse_args(argv)
+    configure_logging()
 
     if args.browser_only:
         _open_browser(f"http://localhost:{args.web_port}/")
@@ -220,11 +227,10 @@ def main(argv: list[str] | None = None) -> int:
 
     for port, name in ((args.api_port, "API"), (args.web_port, "画面")):
         if _port_open(port) and not _free_port(port, name):
-            print(f"[gui/dev] ポート {port}({name})を空けられない。手で止めるか --{'api' if name == 'API' else 'web'}-port で変える",
-                  file=sys.stderr)
+            logger.error(f"ポート {port}({name})を空けられない。手で止めるか --{'api' if name == 'API' else 'web'}-port で変える")
             return 1
     if not os.path.isdir(os.path.join(WEB_DIR, "node_modules")):
-        print("[gui/dev] gui/web/node_modules が無いので npm install を回す")
+        logger.info("gui/web/node_modules が無いので npm install を回す")
         subprocess.run([_npm(), "install", "--no-audit", "--no-fund"], cwd=WEB_DIR, check=True)
 
     def spawn_api() -> subprocess.Popen:
@@ -247,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     def watch(process: subprocess.Popen, port: int, name: str, spawn, path: str = "/") -> subprocess.Popen:
         # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
         if process.poll() is not None:
-            print(f"[gui/dev] {name} が止まった(終了コード {process.returncode})。再起動する", file=sys.stderr)
+            logger.warning(f"{name} が止まった(終了コード {process.returncode})。再起動する")
             process = spawn()
             _wait_for(port, name, process, path)
             down_since[name] = None
@@ -259,8 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         if since is None:
             down_since[name] = time.time()
         elif time.time() - since > STALL_TIMEOUT:
-            print(f"[gui/dev] {name} が応答しないまま {STALL_TIMEOUT:.0f} 秒止まっている"
-                  "(reload 先のコードにエラーが残っている?)。作り直す", file=sys.stderr)
+            logger.warning(f"{name} が応答しないまま {STALL_TIMEOUT:.0f} 秒止まっている"
+                           "(reload 先のコードにエラーが残っている?)。作り直す")
             _terminate(process)
             process = spawn()
             _wait_for(port, name, process, path)
@@ -275,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         if not (_wait_for(args.api_port, "API", api, "/api/health") and _wait_for(args.web_port, "画面", web)):
             return 1
         url = f"http://localhost:{args.web_port}/"
-        print(f"[gui/dev] API http://127.0.0.1:{args.api_port}/docs / 画面 {url}(Ctrl+C で止める)")
+        logger.info(f"API http://127.0.0.1:{args.api_port}/docs / 画面 {url}(Ctrl+C で止める)")
         if not args.no_browser:
             _open_browser(url)
         while True:
@@ -283,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             web = watch(web, args.web_port, "画面", spawn_web)
             time.sleep(WATCH_INTERVAL)
     except KeyboardInterrupt:
-        print("\n[gui/dev] 止める")
+        logger.info("止める")
         return 0
     finally:
         for process in (api, web):

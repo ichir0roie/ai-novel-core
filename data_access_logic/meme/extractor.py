@@ -2,10 +2,10 @@
 """ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。元の側の `meme_seeded` で抜き出し済みかだけを持つ。"""
 from __future__ import annotations
 
+import logging
 import random
 import re
 
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,8 @@ from data_access_logic.meme.models import (
 from data_access_logic.query import meme_query
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section
 from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
+
+logger = logging.getLogger(__name__)
 
 CATEGORY_DESCRIPTIONS = {
     "信条": "何を大事にし、どう振る舞うか。一人の行動の型",
@@ -96,17 +98,16 @@ def _without_duplicates(s: Session, ai: AIClient, candidates: list[MemeDraft]) -
             break
         request = DedupeRequestSerialized(fresh=[candidate.text for candidate in fresh],
                                           existing=[MemeText(text=source.text) for source in chunk])
-        decided = ai.try_generate_json(
+        decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
                        "新しいミームのうち、重複しているものの番号を挙げてください。"]),
-            DedupeDraft.model_json_schema(), system=_DEDUPE_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
-        try:
-            duplicates = set(DedupeDraft.model_validate(decided).duplicates)
-        except ValidationError:
+            DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+        if decided is None:
             return None
+        duplicates = set(decided.duplicates)
         for number in sorted(duplicates):
             if 1 <= number <= len(fresh):
-                print(f"[data_access_logic/meme] 既にあるミームと重なるので足さない: {fresh[number - 1].text}")
+                logger.info(f"既にあるミームと重なるので足さない: {fresh[number - 1].text}")
         fresh = [candidate for number, candidate in enumerate(fresh, start=1) if number not in duplicates]
     return fresh
 
@@ -116,21 +117,19 @@ def _classify(s: Session, ai: AIClient) -> int:
     sources = [SourceText(row=meme, label="ミーム", text=meme.text) for meme in unclassified]
     for batch in batches(sources, constants.MEME_BATCH_LETTERS):
         request = ClassifyRequestSerialized(memes=[MemeText(text=source.text) for source in batch])
-        decided = ai.try_generate_json(
+        decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
                        "それぞれのミームに分類を振ってください。"]),
-            ClassifyDraft.model_json_schema(), system=_CLASSIFY_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
-        try:
-            categories = ClassifyDraft.model_validate(decided).categories
-        except ValidationError:
+            ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+        if decided is None:
             continue
-        for item in categories:
+        for item in decided.categories:
             if 1 <= item.number <= len(batch) and item.category in MEME_CATEGORIES:
                 batch[item.number - 1].row.category = item.category
         s.commit()
     classified = sum(1 for meme in unclassified if meme.category)
     if unclassified:
-        print(f"[data_access_logic/meme] 分類の空いたミーム{len(unclassified)}件のうち、{classified}件に分類を振った")
+        logger.info(f"分類の空いたミーム{len(unclassified)}件のうち、{classified}件に分類を振った")
     return classified
 
 
@@ -139,18 +138,16 @@ def refresh(s: Session, ai: AIClient) -> int:
     pending = _pending(s)
     added = 0
     for batch in batches(pending, constants.MEME_BATCH_LETTERS):
-        decided = ai.try_generate_json(
+        decided = ai.generate(
             "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                        "それぞれの元からミームを抜き出してください。"]),
-            MemesDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
-        try:
-            candidates = MemesDraft.model_validate(decided).memes
-        except ValidationError:
-            print(f"[data_access_logic/meme] 元{len(batch)}件からミームを抜き出せなかった。次の回に抜き出し直す")
+            MemesDraft, system=_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+        if decided is None:
+            logger.warning(f"元{len(batch)}件からミームを抜き出せなかった。次の回に抜き出し直す")
             continue
-        fresh = _without_duplicates(s, ai, candidates)
+        fresh = _without_duplicates(s, ai, decided.memes)
         if fresh is None:
-            print(f"[data_access_logic/meme] 元{len(batch)}件から抜き出したミームの重複を確かめられなかった。次の回に抜き出し直す")
+            logger.warning(f"元{len(batch)}件から抜き出したミームの重複を確かめられなかった。次の回に抜き出し直す")
             continue
         for candidate in fresh:
             s.add(Meme(text=candidate.text, category=candidate.known_category))
@@ -159,7 +156,7 @@ def refresh(s: Session, ai: AIClient) -> int:
             source.row.meme_seeded = True
         s.commit()
     if pending:
-        print(f"[data_access_logic/meme] 元{len(pending)}件から抜き出し、ミームを{added}件足した")
+        logger.info(f"元{len(pending)}件から抜き出し、ミームを{added}件足した")
     _classify(s, ai)
     return added
 

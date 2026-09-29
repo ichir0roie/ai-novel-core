@@ -6,17 +6,20 @@ Dラボの MCP のサーバー名は環境ごとに違う(`claude mcp list` で�
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 
 from ai.claude_code import ai_client
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
 from data_access_logic.meme.extractor import refresh as refresh_memes
-from data_access_logic.source_text import SourceBatch, SourceBatchSerialized, SourceText, batches
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches
 from db.schema import Idea, Meme, Oracle, Session
+
+logger = logging.getLogger(__name__)
 
 WEB_TOOLS = ("WebSearch", "WebFetch", "ToolSearch")
 DEFAULT_DLAB_TOOLS = "mcp__d-lab"
@@ -125,15 +128,13 @@ def check(session: Session, table: str, ids: list[int] | None = None, limit: int
     records = targets(session, table, ids, limit)
     written = 0
     for batch in batches([_source(record) for record in records], BATCH_LETTERS):
-        decided = ai_client.try_generate_json(
-            "\n".join([SourceBatchSerialized.model_validate(SourceBatch(sources=batch)).model_dump_json(indent=2),
+        decided = ai_client.generate(
+            "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                        "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。"]),
-            FactChecksDraft.model_json_schema(), system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
-        try:
-            results = FactChecksDraft.model_validate(decided).results
-        except ValidationError:
+            FactChecksDraft, system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
+        if decided is None:
             continue
-        for result in results:
+        for result in decided.results:
             if not (1 <= result.number <= len(batch) and result.fact_check):
                 continue
             record = batch[result.number - 1].row
@@ -144,7 +145,7 @@ def check(session: Session, table: str, ids: list[int] | None = None, limit: int
             written += 1
         session.commit()
     if records:
-        print(f"[claude_code/fact_checker] {table} {len(records)}件のうち、{written}件を検めた")
+        logger.info(f"{table} {len(records)}件のうち、{written}件を検めた")
     return written
 
 

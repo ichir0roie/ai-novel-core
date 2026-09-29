@@ -270,12 +270,6 @@ def characters_select() -> Select:
 
 # ---------------------------------------------------------------- 作品
 
-def story_select(story_id: int) -> Select:
-    return (select(Story)
-            .options(selectinload(Story.world), selectinload(Story.place))
-            .where(Story.id == story_id))
-
-
 def stories_select() -> Select:
     return (select(Story)
             .options(selectinload(Story.world), selectinload(Story.place))

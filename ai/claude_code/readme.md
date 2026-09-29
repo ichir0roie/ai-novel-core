@@ -6,8 +6,8 @@ AI を `ai` 引数(`data_access_logic/ai_client.py` の `AIClient`)で受け取�
 
 ```
 ai/claude_code/
-  ai_client.py            `ai/local_ai/ai_client.py` と同じ関数(generate / generate_json / try_generate_json)。
-                          中身は `claude -p --output-format json --json-schema …` の subprocess
+  ai_client.py            `generate(prompt, 出力のモデル, ...)`。出力のモデルの json schema を渡して
+                          `claude -p --output-format json --json-schema …` を subprocess で呼び、そのモデルで返す(得られなければ None)
   fact_checker.py         アイデア・oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く(local_ai に無い)
 ```
 
@@ -20,7 +20,6 @@ ai/claude_code/
   話の本文の生成(`GenerateEpisode`・`ReviseEpisode`)だけは
   `EPISODE_MODEL`(`claude-fable-5-1`)・`EPISODE_EFFORT`(`high`)を渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
-- 呼び出し回数・トークン・費用は `ai_client.usage_summary()` で引ける
 
 ## 環境変数(`.env` でよい)
 

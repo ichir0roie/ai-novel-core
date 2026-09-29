@@ -40,10 +40,6 @@ def recognitions_select(essence_ids, place_ids=None, time: Stamp | None = None) 
             .order_by(IdeaRecognition.start.desc().nulls_last(), IdeaRecognition.id))
 
 
-def ideas_by_keyword_select(keyword: str, confirmed_only: bool = True) -> Select:
-    return ideas_by_terms_select([keyword], confirmed_only=confirmed_only)
-
-
 def ideas_by_terms_select(terms, place_ids=None, time: Stamp | None = None,
                           confirmed_only: bool = True) -> Select:
     """名前か本文(基本の本文、その場所・時代の作中の呼び名 `IdeaRecognition`)に

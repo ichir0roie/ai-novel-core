@@ -2,7 +2,8 @@
 """自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。"""
 from __future__ import annotations
 
-from pydantic import ValidationError
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -19,6 +20,8 @@ from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.links import link
 from data_access_logic.query import common_query
 from db.schema import ConfirmStatus, Episode, EpisodeCharacter, Event
+
+logger = logging.getLogger(__name__)
 
 
 def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
@@ -93,13 +96,11 @@ def write_episode(
         material.model_dump_json(indent=2),
         "この話を書いてください。",
     ])
-    decided = ai.try_generate_json(
-        prompt, EpisodeDraft.model_json_schema(), system=_system_prompt(shared_style_extra, style_extra),
+    draft = ai.generate(
+        prompt, EpisodeDraft, system=_system_prompt(shared_style_extra, style_extra),
         timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
-    try:
-        draft = EpisodeDraft.model_validate(decided)
-    except ValidationError as error:
-        print(f"[data_access_logic/episode] {material.story.name}: 本文が得られなかったので見送り: {error}")
+    if draft is None:
+        logger.warning(f"{material.story.name}: 本文が得られなかったので見送り")
         return None
 
     record = s.get_one(Episode, episode_id)
@@ -110,5 +111,5 @@ def write_episode(
     s.flush()
     link(s, record, material.ideas.linked)
     s.commit()
-    print(f"[data_access_logic/episode] {material.story.name}「{record.title}」 id={record.id} {record.letters}字")
+    logger.info(f"{material.story.name}「{record.title}」 id={record.id} {record.letters}字")
     return record

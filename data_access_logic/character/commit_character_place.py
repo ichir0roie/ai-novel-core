@@ -5,7 +5,7 @@ from __future__ import annotations
 from data_access_logic.character.form import CharacterPlaceCreateForm
 from data_access_logic.character.record import CharacterPlaceRecord
 from data_access_logic.entrypoint import CommitEntrypoint
-from data_access_logic.query import world_createion_query
+from data_access_logic.query import world_creation_query
 from db.schema import Character, CharacterPlace, Location
 
 
@@ -19,7 +19,7 @@ class CommitCharacterPlace(CommitEntrypoint):
         self.check_exists(session, Character, self.place.character_id, "character_id")
         self.check_exists(session, Location, self.place.location_id, "location_id")
         location = session.get_one(Location, self.place.location_id)
-        world_createion_query.check_within_parent_span(
+        world_creation_query.check_within_parent_span(
             location, self.place.start, self.place.end, "character_place")
 
         record = CharacterPlace()

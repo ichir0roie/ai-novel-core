@@ -429,8 +429,8 @@ Entrypoint(entrypoint.py)
 | `common_query.py`              | 時刻の扱い・断面・顔ぶれ・場所の道筋                         |
 | `character_simulation_query.py` | 人物を軸に周辺を読む(`read_surroundings`)                   |
 | `dictionary_query.py`          | アイデア(辞書)の検索。名前・本文(`idea_note` を左外部結合した追記も含む)の部分一致、場所・時刻の範囲、自動生成の候補 |
-| `story_createion_query.py`     | 場所に掛かる作品(`story`)の読み出し                          |
-| `world_createion_query.py`     | 生きている人物、広さの整合、進行中の判定               |
+| `story_creation_query.py`      | 場所に掛かる作品(`story`)の読み出し                          |
+| `world_creation_query.py`      | 生きている人物、広さの整合、進行中の判定               |
 | `event_seed_query.py`          | 出来事の種をまだ抜き出していない元(`event_seeded` が false) |
 | `review_query.py`              | ユーザの判断が要るもの(本文に残った TODO・世界観へ反映していない話) |
 
