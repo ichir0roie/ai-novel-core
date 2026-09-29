@@ -17,6 +17,8 @@ type Props = {
   mode: "create" | "edit";
   /** 直し終わった行の id */
   onDone: (id: number) => void;
+  /** 実行の直前に呼ぶ(画面の変更を保存する)。false を返したら AI を呼ばない */
+  beforeRun: () => Promise<boolean>;
   disabled?: boolean;
 };
 
@@ -27,7 +29,7 @@ type Props = {
  * モデル・effort・実行ボタン。タイトル・キーテキストは見出しや左の欄に既に出ているのでここでは繰り返さない。
  * 登場人物・直前の話は聞かない(登場人物は下書きの `character_ids`、つまりこの話の `episode_character`、
  * 直前の話は `ReviseEpisode` 側がその時刻より前の三話を自動で使う)。 */
-export function useRevisePanel({ table, meta, draft, mode, onDone, disabled }: Props): PanelParts | null {
+export function useRevisePanel({ table, meta, draft, mode, onDone, beforeRun, disabled }: Props): PanelParts | null {
   const { claudeAvailable } = useMeta();
   const [args, setArgs] = useState<Rec>({});
   const [open, setOpen] = useState(false);
@@ -47,6 +49,7 @@ export function useRevisePanel({ table, meta, draft, mode, onDone, disabled }: P
 
   const run = async () => {
     setError(null);
+    if (!(await beforeRun())) return;
     const mine: Rec = {};
     for (const param of params) if (!isEmpty(args[param.key])) mine[param.key] = args[param.key];
     await start(() => generateRecord(table, generator.key, compactDraft(draft), mine));

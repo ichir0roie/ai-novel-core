@@ -114,13 +114,6 @@ div.markdown-preview table { border-collapse: collapse; margin: 0.4em 0; }
 div.markdown-preview th, div.markdown-preview td { border: 1px solid var(--line); padding: 0.3em 0.6em; text-align: left; }
 div.markdown-preview th { background: var(--chip); font-weight: 600; }
 
-/* 本文(section)欄のプレビュー表示(マークダウンではなく純粋なテキスト)。textarea.section と同じ箱 */
-div.plain-preview {
-  min-height: 28rem; flex: 1; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 6px;
-  background: var(--panel); line-height: 1.7; cursor: pointer; overflow: auto; white-space: pre-wrap;
-}
-div.plain-preview:hover { border-color: var(--accent); }
-
 button { padding: 0.45rem 0.9rem; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: default; }
@@ -175,13 +168,12 @@ button.ghost { background: transparent; }
 .record-header .status { margin: 0; }
 .record-text { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 1rem; overflow: auto; }
 .record-text .field.section { flex: 1; min-height: 0; }
-.record-text textarea.section, .record-text .markdown-preview, .record-text .plain-preview { height: 100%; min-height: 8rem; resize: none; overflow: auto; }
+.record-text textarea.section, .record-text .markdown-preview { height: 100%; min-height: 8rem; resize: none; overflow: auto; }
 /* すぐ下に一覧(アイデアの呼び名など)を続けて出す本文は、枠いっぱいに伸ばさず中身の行数ぶんの高さにする。
    .record-text 自体がスクロールを持つので、一覧側の場所を空けられる */
 .record-text .field.section.auto { flex: none; min-height: 0; }
 .record-text .field.section.auto textarea.section,
-.record-text .field.section.auto .markdown-preview,
-.record-text .field.section.auto .plain-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
+.record-text .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
 /* textarea は overflow: visible を無視して auto 扱いにするブラウザの仕様があり、その結果 flex アイテムとしての
    自動最小サイズが中身の高さではなく 0 相当になって、上の flex: none が無いと JS が付けた高さを無視して縮む */
 /* 「AI で作成」。押すと本文の右側で大半(9 割ほど)を使って開く。閉じているあいだは何も置かない(body が null) */
@@ -202,11 +194,11 @@ button.ghost { background: transparent; }
   .record { overflow: auto; display: flex; flex-direction: column; }
   .record-side { overflow: visible; flex-shrink: 0; }
   .record-text { flex-shrink: 0; }
-  .record-text textarea.section, .record-text .markdown-preview, .record-text .plain-preview { height: auto; min-height: 40rem; resize: vertical; }
+  .record-text textarea.section, .record-text .markdown-preview { height: auto; min-height: 40rem; resize: vertical; }
   .record-side .field.section.side { flex: none; }
   .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 28rem; resize: vertical; }
   .revise-panel.open { flex: none; min-height: 0; }
-  .revise-body textarea.section, .revise-body .markdown-preview, .revise-body .plain-preview { height: auto; min-height: 32rem; resize: vertical; }
+  .revise-body textarea.section, .revise-body .markdown-preview { height: auto; min-height: 32rem; resize: vertical; }
   .generate-right { flex: none; }
 }
 
@@ -219,7 +211,7 @@ button.ghost { background: transparent; }
 .revise-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-shrink: 0; }
 .revise-body { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.6rem; }
 .revise-body .field.section { flex: 1 0 auto; min-height: 20rem; }
-.revise-body textarea.section, .revise-body .markdown-preview, .revise-body .plain-preview { height: 100%; min-height: 20rem; resize: none; overflow: auto; }
+.revise-body textarea.section, .revise-body .markdown-preview { height: 100%; min-height: 20rem; resize: none; overflow: auto; }
 .revise-fields { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; flex-shrink: 0; }
 .revise-fields .field { min-width: 10rem; }
 
@@ -321,6 +313,31 @@ button.ghost { background: transparent; }
 .related.context-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
+/* 登場人物の名前。押すと人物のモーダル(CharacterSheetModal)を開く */
+.episode-characters-summary button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
+.episode-characters-summary button.character-open:hover { text-decoration: underline; }
+
+/* 人物のモーダル(CharacterSheetModal)。人物詳細と同じ .record.split で、左に欄とパラメータ、右に本文と期間ごとの説明。
+   モーダルの高さを決めて本体はスクロールさせず、左右(.record-side / .record-text)がそれぞれスクロールする */
+.modal.wide:has(.character-sheet) { height: 90vh; }
+.modal-body:has(> .character-sheet) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.character-sheet h3 { margin: 0 0 0.6rem; font-size: 1rem; color: var(--muted); }
+.character-sheet .record-side h3:not(:first-child) { margin-top: 1rem; }
+.sheet-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.5rem 1rem; margin: 0; }
+.sheet-fields dt { font-size: 0.78rem; color: var(--muted); }
+.sheet-fields dd { margin: 0; white-space: pre-wrap; }
+.sheet-levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.35rem 1rem; margin-top: 1rem; }
+.sheet-level { display: flex; align-items: center; gap: 0.5rem; }
+.sheet-level-label { flex: 1; font-size: 0.85rem; }
+.sheet-level-cells { display: flex; gap: 2px; }
+.sheet-level-cell { width: 1rem; height: 0.6rem; border-radius: 2px; background: var(--chip); }
+.sheet-level-cell.on { background: var(--accent); }
+.sheet-level-value { width: 1.2rem; text-align: center; font-size: 0.85rem; }
+/* 閲覧専用なので、本文・札のクリックで編集に入る見た目(カーソル・ホバー)を外す */
+.character-sheet div.markdown-preview.sheet-text { cursor: default; }
+.character-sheet div.markdown-preview.sheet-text:hover { border-color: var(--line); }
+.childlist.flow .flow-card.sheet-history { cursor: default; }
+.childlist.flow .flow-card.sheet-history:hover { background: none; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
 /* 選択欄の横に置く、選んだ行のページへのリンク(RecordLink) */
 .record-link { align-self: center; white-space: nowrap; font-size: 0.85rem; }

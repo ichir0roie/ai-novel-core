@@ -17,7 +17,7 @@ from data_access_logic.episode.record import EpisodeRecord
 class ReviseEpisode(SessionEntrypoint):
     """すでに本文のある話(`episode` の `id`)を、直す指示(`instruction`。必須)に沿って AI に書き直させる。
 
-    筋は変えず、指示にある観点だけを直す。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、
+    指示の箇所だけでなく、指示と材料を総合的に判断して本文を大幅に書き直してよい(話の大筋は保つ)。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、
     省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければこの話の `episode_character`。
     使う登場人物はこの話の `episode_character` として保存する。空なら止まる。
     前の話の概要に出ていない人物は、その材料から AI が初登場と判断して外見・性格の描写を厚くする。

@@ -12,9 +12,9 @@ from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import cast_at
+from data_access_logic.character.cast import cast_at, relations_at
 from data_access_logic.episode.models import EpisodeDraft, EpisodeMaterialSerialized, StoryMaterial, TargetEpisode
-from data_access_logic.episode.summary import past_episodes
+from data_access_logic.episode.summary import recent_episodes, summarized_episodes
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.links import link
@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
     return f"""\
 あなたは日本語のライトノベルを書く作家です。
-作品・直前の話・書く話(時刻・場所・視点・登場人物・種)などを日本語の見出しを付けた JSON で渡すので、この作品の話を一話ぶん書いてください。
+作品・前の話・書く話(時刻・場所・視点・登場人物・種)などを日本語の見出しを付けた JSON で渡すので、この作品の話を一話ぶん書いてください。
 種は作者が決めたこの話の中身です。それを場面まで展開したものを本文にし、種に無い出来事を足さないでください。
-直前の話は本文の代わりに概要で渡します。概要の筋をそのまま受け継ぎ、揃える文体を渡したときはそれに揃えてください。
+直前の話は本文で、それより前の話は概要で渡します。筋をそのまま受け継ぎ、語の選び方・言い回し・地の文とセリフの運びは直前の話の本文に揃えてください。直前の話の文をそのまま写さないでください。
 登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
 {EVENT_AGE_INSTRUCTION}
@@ -37,7 +37,7 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 {style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}"""
 
 
-def episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeMaterialSerialized:
+def episode_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeMaterialSerialized:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -61,10 +61,12 @@ def episode_material(s: Session, ai: AIClient, episode_id: int, past_episode_cou
     return EpisodeMaterialSerialized(
         story=story,
         main_episode=main_episode,
-        past_episodes=past_episodes(s, ai, episode, past_episode_count),
+        past_episodes=summarized_episodes(s, ai, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id)
         if location_id is not None else [],
         cast=cast_at(s, ai, characters, main_episode.start),
+        relations=relations_at(s, characters, main_episode.start),
         location_events=list(reversed(summarized_events(
             s, ai,
             common_query.events_of_location_select(
@@ -85,12 +87,11 @@ def write_episode(
     episode_id: int,
     model: str,
     effort: str,
-    past_episode_count: int = constants.EPISODE_PREVIOUS_LIMIT,
     shared_style_extra: str = "",
     style_extra: str = "",
 ) -> Episode | None:
     """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
-    material = episode_material(s, ai, episode_id, past_episode_count)
+    material = episode_material(s, ai, episode_id)
 
     prompt = "\n".join([
         material.model_dump_json(indent=2),

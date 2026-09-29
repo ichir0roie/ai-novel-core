@@ -5,7 +5,7 @@ from collections.abc import Collection
 import re
 
 from sqlalchemy import ColumnElement, Select, func, or_, select
-from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, Session, aliased, selectinload
 
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.location.models import LocationMaterial
@@ -308,10 +308,16 @@ def ideas_select(location_ids: Collection[int] | None, time: Stamp | None = None
             .order_by(Idea.id))
 
 
-def character_relations_at_select(character_id: int, time: Stamp) -> Select:
-    return (select(CharacterRelation)
-            .where(or_(CharacterRelation.character_1_id == character_id,
-                       CharacterRelation.character_2_id == character_id),
+def character_relations_at_select(character_ids: Collection[int], time: Stamp) -> Select:
+    """`character_ids` のどれかが片側にいる関係を、両側の人物の名前・関係の名前・説明で一行ずつ出す。"""
+    character_1 = aliased(Character)
+    character_2 = aliased(Character)
+    return (select(character_1.name.label("name1"), character_2.name.label("name2"),
+                   CharacterRelation.relation, CharacterRelation.text)
+            .join(character_1, CharacterRelation.character_1)
+            .join(character_2, CharacterRelation.character_2)
+            .where(or_(CharacterRelation.character_1_id.in_(character_ids),
+                       CharacterRelation.character_2_id.in_(character_ids)),
                    alive_at(CharacterRelation, time))
             .order_by(CharacterRelation.id))
 

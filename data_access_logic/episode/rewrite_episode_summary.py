@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class RewriteEpisodeSummary(SessionEntrypoint):
-    """本文が変わっていなくても、話の概要と文体の覚え書き(`episode_summary`)を作り直す。"""
+    """本文が変わっていなくても、話の概要(`episode_summary`)を作り直す。"""
 
     def __init__(self, episode_ids: list[int], ai: AIClient = ai_client):
         self.episode_ids = episode_ids

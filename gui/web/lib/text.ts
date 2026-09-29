@@ -153,6 +153,17 @@ export const T = {
     none: "(no characters yet)",
   },
 
+  characterSheet: {
+    record: "Record",
+    at: (time: string | null) => (time ? `At ${time}` : "Parameters (no time limits)"),
+    born: "Born",
+    died: "Died",
+    age: "Age",
+    location: "Location",
+    noText: "(no text)",
+    noHistory: "(no history)",
+  },
+
   storyTree: {
     episodes: (n: number) => `${n} episodes`,
     stories: (n: number) => `${n} stories`,

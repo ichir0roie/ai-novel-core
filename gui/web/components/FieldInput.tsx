@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
 import MarkdownField from "./MarkdownField";
-import PlainTextField from "./PlainTextField";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
 import StampInput from "./StampInput";
 import TreeReferenceSelect from "./TreeReferenceSelect";
@@ -161,7 +160,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
   }
   if (column.section && !compact) {
     return column.markdown === false ? (
-      <PlainTextField value={(value as string | null) ?? null} onChange={onChange} />
+      <textarea className="section" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value)} />
     ) : (
       <MarkdownField value={(value as string | null) ?? null} onChange={onChange} autoHeight={autoHeight} />
     );

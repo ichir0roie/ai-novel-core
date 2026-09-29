@@ -119,7 +119,7 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     readonly_columns = {"letters"} if spec.name == "episode" else set()
     # AI 生成前の種は、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
     side_columns = {"key"} if spec.name == "episode" else set()
-    # 話の本文は小説の地の文なので、マークダウンとして解釈せずただのテキストとして扱う
+    # 話の本文は小説の地の文、キーテキストは短い種なので、マークダウンとして解釈せずただのテキストとして扱う
     plain_text_columns = {"text"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:

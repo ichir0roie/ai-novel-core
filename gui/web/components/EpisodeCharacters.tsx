@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import CharacterSheetModal from "@/components/CharacterSheetModal";
 import Modal from "@/components/Modal";
-import { RecordLink, useOptions } from "@/components/ReferenceSelect";
+import { useOptions } from "@/components/ReferenceSelect";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -23,11 +24,13 @@ type Props = {
 /** 話の登場人物(`episode_character`)。「time & place」の行に並ぶボタンで、押すとモーダルで追加削除する。
  * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。
  * 候補は、検索欄が空ならフォームの場所(`location_id`)に時刻(`start`)にいる人物だけ、検索語を入れたら全人物から探す
- * (選んだ人物はいつも出す)。場所・時刻が空か読めないときは絞らない。 */
+ * (選んだ人物はいつも出す)。場所・時刻が空か読めないときは絞らない。
+ * 並んだ名前を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
 export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeLocationId }: Props) {
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
+  const [viewing, setViewing] = useState<number | null>(null);
   const locationCharacterIds = useLocationCharacterIds(episodeLocationId, episodeStart, open);
 
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
@@ -48,11 +51,14 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
           ? selected.map((o, i) => (
               <span key={o.id}>
                 {i > 0 && " / "}
-                <RecordLink table="character" id={o.id} label={labelWithAge(o.label, o.born, episodeStart)} />
+                <button type="button" className="character-open" onClick={() => setViewing(o.id)}>
+                  {labelWithAge(o.label, o.born, episodeStart)}
+                </button>
               </span>
             ))
           : T.episodeCharacters.none}
       </span>
+      {viewing !== null && <CharacterSheetModal characterId={viewing} time={episodeStart} onClose={() => setViewing(null)} />}
       {open && (
         <Modal title={T.episodeCharacters.modalTitle} onClose={() => setOpen(false)}>
           <input type="text" placeholder={T.filter} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "0.3rem" }} />

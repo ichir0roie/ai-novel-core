@@ -57,14 +57,12 @@ export default function RecordPage() {
     void load();
   }, [load]);
 
-  const generatePanel = useGeneratePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
-  const revisePanel = useRevisePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
-
-  if (!meta) return <div className="status info">{T.loading}</div>;
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
 
-  const save = async (thenBack: boolean) => {
+  /** 保存できたら true。変更が無ければ何もせず true */
+  const save = async (thenBack: boolean): Promise<boolean> => {
+    if (!dirty) return true;
     setBusy(true);
     setError(null);
     setSaved(null);
@@ -76,12 +74,19 @@ export default function RecordPage() {
       invalidateOptions(table);
       setSaved(T.record.saved(Object.keys(changes)));
       if (thenBack) openPage(`/tables/${table}`);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setBusy(false);
     }
   };
+
+  const generatePanel = useGeneratePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
+  const revisePanel = useRevisePanel({ table, meta, draft: value, mode: "edit", onDone: generated, beforeRun: () => save(false), disabled: busy });
+
+  if (!meta) return <div className="status info">{T.loading}</div>;
 
   return (
     <div className="page-fill">

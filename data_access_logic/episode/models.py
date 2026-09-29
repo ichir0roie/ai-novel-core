@@ -3,7 +3,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from ai.instructions.style import layout_novel_text
-from data_access_logic.character.models import CastMaterial, CastSerialized, CharacterMaterial
+from data_access_logic.character.models import (
+    CastMaterial, CastSerialized, CharacterMaterial, CharacterRelationLine, relations_for_prompt,
+)
 from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized
 from data_access_logic.location.models import LocationMaterial
@@ -22,7 +24,6 @@ class StoryMaterial(Material):
 
 class EpisodeSummaryMaterial(Material):
     summary: str
-    style: str
 
 
 class EpisodeBase(Material):
@@ -32,6 +33,11 @@ class EpisodeBase(Material):
 class PastEpisode(EpisodeBase):
     start: Stamp | None = None
     summary: EpisodeSummaryMaterial
+
+
+class RecentEpisode(EpisodeBase):
+    start: Stamp | None = None
+    text: str
 
 
 class UnwrittenEpisode(EpisodeBase):
@@ -85,8 +91,11 @@ def _past_episodes(past_episodes: list[PastEpisode]) -> list[dict[str, Any]]:
     ]
 
 
-def _style(past_episodes: list[PastEpisode]) -> str | None:
-    return past_episodes[0].summary.style if past_episodes else None
+def _recent_episodes(recent_episodes: list[RecentEpisode]) -> list[dict[str, Any]]:
+    return [
+        {"題": recent.title, "時刻": str(recent.start) if recent.start else None, "本文": recent.text}
+        for recent in recent_episodes
+    ]
 
 
 def _location(locations: list[LocationMaterial]) -> str | None:
@@ -102,11 +111,15 @@ def _story(story: StoryMaterial) -> dict[str, Any]:
 class EpisodeMaterial(Material):
     story: StoryMaterial
     main_episode: TargetEpisode
-    # 新しい順
+    # 直前の話より前の話。古い順
     past_episodes: list[PastEpisode]
+    # 直前の話。古い順
+    recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
+    # 登場人物のどれかが片側にいる関係
+    relations: list[CharacterRelationLine]
     # 古い順
     location_events: list[EventMaterial]
     later_events: list[EventMaterial]
@@ -126,13 +139,14 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
         episode = self.main_episode
         return {
             "作品": _story(self.story),
-            "直前の話(新しい順)": _past_episodes(self.past_episodes),
-            "揃える文体": _style(self.past_episodes),
+            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
+            "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
             "書く話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
                 "登場人物": [member.model_dump() for member in self.cast],
+                "登場人物の関係": relations_for_prompt(self.relations),
                 "種": episode.key,
             },
             "この場所の直近の出来事(古い順)": [
@@ -184,11 +198,15 @@ class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
 class EpisodeRevisionMaterial(Material):
     story: StoryMaterial
     main_episode: RevisedEpisode
-    # 新しい順
+    # 直前の話より前の話。古い順
     past_episodes: list[PastEpisode]
+    # 直前の話。古い順
+    recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
+    # 登場人物のどれかが片側にいる関係
+    relations: list[CharacterRelationLine]
 
 
 class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
@@ -201,12 +219,13 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
         episode = self.main_episode
         return {
             "作品": _story(self.story),
-            "直前の話(新しい順)": _past_episodes(self.past_episodes),
-            "揃える文体": _style(self.past_episodes),
+            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
+            "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
             "直す話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
                 "登場人物": [member.model_dump() for member in self.cast],
+                "登場人物の関係": relations_for_prompt(self.relations),
                 "今の題": episode.title,
                 "今の本文": episode.text,
             },
@@ -216,11 +235,13 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
 class EpisodeFrameMaterial(Material):
     story: StoryMaterial
     main_episode: FrameEpisode
-    # 新しい順
+    # 古い順
     past_episodes: list[PastEpisode]
     # 作品の立つ場所とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
+    # 登場人物のどれかが片側にいる関係
+    relations: list[CharacterRelationLine]
     later_events: list[EventMaterial]
 
 
@@ -240,8 +261,9 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
                 "終わり": str(self.story.end) if self.story.end else None,
                 "立つ場所": _location(self.locations),
             },
-            "直前の話(新しい順)": _past_episodes(self.past_episodes),
+            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
             "登場人物": [member.model_dump() for member in self.cast],
+            "登場人物の関係": relations_for_prompt(self.relations),
             "この時点より後に既に決まっている出来事": [
                 event.model_dump() for event in self.later_events],
             "作者の指定": {
@@ -391,9 +413,8 @@ class EpisodeSummaryDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(description="概要")
-    style: str = Field(description="文体の覚え書き")
 
-    @field_validator("summary", "style")
+    @field_validator("summary")
     @classmethod
     def _filled(cls, value: str) -> str:
         return _not_empty(value)

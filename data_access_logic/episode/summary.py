@@ -1,17 +1,18 @@
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.episode.models import EpisodeSourceSerialized, EpisodeSummaryDraft, PastEpisode
+from data_access_logic.episode.models import (
+    EpisodeSourceSerialized, EpisodeSummaryDraft, PastEpisode, RecentEpisode,
+)
 from db.schema import Episode, EpisodeSummary, summary_source_hash
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
-話の題と本文を一話ぶん日本語の見出しを付けた JSON で渡すので、次の話を書く作家へ渡す覚え書きを作ってください。
+話の題と本文を一話ぶん日本語の見出しを付けた JSON で渡すので、次の話を書く作家へ渡す概要を作ってください。
 概要には、誰が何をして何がどうなったか、次の話へ引き継ぐ筋と、人物の立場・関係の変わりようを書いてください。
-文体の覚え書きには、地の文と会話の混ぜ方・一文の長さ・視点の置き方・語り口の癖を、真似できる言い方で書いてください。
-どちらも本文を写さず、四〜六文にまとめてください。"""
+本文を写さず、四〜六文にまとめてください。"""
 
 
 def summarize(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | None:
@@ -30,7 +31,7 @@ def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummar
         return None
     prompt = "\n".join([
         EpisodeSourceSerialized.model_validate(episode).model_dump_json(indent=2),
-        "この話の概要と文体を覚え書きにしてください。",
+        "この話の概要を作ってください。",
     ])
     draft = ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
     if draft is None:
@@ -41,12 +42,11 @@ def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummar
         s.add(row)
     row.source_hash = summary_source_hash(text)
     row.summary = draft.summary
-    row.style = draft.style
     s.commit()
     return row
 
 
-def past_episodes(s: Session, ai: AIClient, episode: Episode, past_episode_count: int) -> list[PastEpisode]:
+def _past_episodes_select(episode: Episode) -> Select[tuple[Episode]]:
     query = (
         select(Episode)
         .where(
@@ -55,10 +55,21 @@ def past_episodes(s: Session, ai: AIClient, episode: Episode, past_episode_count
             Episode.text != "",
         )
         .order_by(Episode.start.desc(), Episode.id.desc())
-        .limit(past_episode_count)
     )
     if episode.start is not None:
         query = query.where(Episode.start <= episode.start)
+    return query
+
+
+# 直前の話(新しい順に `constants.EPISODE_FULL_TEXT_COUNT` 話)は校正済みとみなし、文体の見本を兼ねて本文ごと渡す。古い順
+def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
+    rows = s.scalars(_past_episodes_select(episode).limit(constants.EPISODE_FULL_TEXT_COUNT)).all()
+    return [RecentEpisode.model_validate(row) for row in reversed(rows)]
+
+
+# 新しい方から `skipped_count` 話を除いた、それより前の話すべてを概要で渡す。古い順
+def summarized_episodes(s: Session, ai: AIClient, episode: Episode, skipped_count: int) -> list[PastEpisode]:
+    query = _past_episodes_select(episode).offset(skipped_count)
     for past in s.scalars(query).all():
         summarize(s, ai, past)
     # 要約の commit で読み込んだ関連が期限切れになるので、要約を揃えてから読み直す
@@ -68,4 +79,4 @@ def past_episodes(s: Session, ai: AIClient, episode: Episode, past_episode_count
         .options(selectinload(Episode.summary))
         .execution_options(populate_existing=True)
     ).all()
-    return [PastEpisode.model_validate(row) for row in rows]
+    return [PastEpisode.model_validate(row) for row in reversed(rows)]

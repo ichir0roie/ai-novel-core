@@ -55,12 +55,13 @@ class CharacterParameterValues(Material):
     imagination: PersonalityLevel = PersonalityLevel.NORMAL
 
 
-class CharacterRelationMaterial(Material):
+class CharacterRelationLine(Material):
+    """`common_query.character_relations_at_select` の一行。name1 から見た name2 との関係。"""
+
+    name1: str | None = None
+    name2: str | None = None
     relation: str
     text: str
-    # character_1 から見た character_2 との関係
-    character_1: CharacterBase
-    character_2: CharacterBase
 
 
 class CharacterAt(Material):
@@ -72,14 +73,13 @@ class CharacterAt(Material):
 
 class CastMaterial(CharacterAt):
     character: CharacterMaterial
-    relations: list[CharacterRelationMaterial]
     # 古い順
     recent_events: list[EventMaterial]
 
 
 class ParticipantMaterial(CharacterAt):
     character: ParticipantCharacter
-    relations: list[CharacterRelationMaterial]
+    relations: list[CharacterRelationLine]
     # 新しい順
     recent_events: list[EventBase]
 
@@ -101,14 +101,9 @@ def _sheet(character: CharacterBase, at: CharacterAt) -> dict[str, Any]:
     }
 
 
-def _relations(relations: list[CharacterRelationMaterial]) -> list[dict[str, Any]]:
+def relations_for_prompt(relations: list[CharacterRelationLine]) -> list[dict[str, Any]]:
     return [
-        {
-            "誰から": relation.character_1.name,
-            "誰へ": relation.character_2.name,
-            "関係": relation.relation,
-            "説明": relation.text,
-        }
+        {"誰から": relation.name1, "誰へ": relation.name2, "関係": relation.relation, "説明": relation.text}
         for relation in relations
     ]
 
@@ -122,7 +117,6 @@ class CastSerialized(CastMaterial):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             **_sheet(self.character, self),
-            "関係": _relations(self.relations),
             "直近の出来事(古い順)": [event.model_dump() for event in self.recent_events],
         }
 
@@ -151,6 +145,6 @@ class ParticipantSerialized(ParticipantMaterial):
                 "感受性": parameters.sensitivity,
                 "想像力": parameters.imagination,
             },
-            "関係": _relations(self.relations),
+            "関係": relations_for_prompt(self.relations),
             "直近の出来事(新しい順)": [event.name for event in self.recent_events],
         }

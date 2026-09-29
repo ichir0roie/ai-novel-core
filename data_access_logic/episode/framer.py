@@ -9,11 +9,11 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import cast_at
+from data_access_logic.character.cast import cast_at, relations_at
 from data_access_logic.episode.models import (
     EpisodeFrameDraft, EpisodeFrameMaterialSerialized, FrameEpisode, StoryMaterial,
 )
-from data_access_logic.episode.summary import past_episodes
+from data_access_logic.episode.summary import summarized_episodes
 from data_access_logic.event.summary import summarized_events
 from data_access_logic.query import common_query
 from db.schema import Episode, EpisodeCharacter
@@ -23,16 +23,16 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの構成を考える作家です。
-作品・直前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・種・時刻)を決めてください。
+作品・前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・種・時刻)を決めてください。
 種は本文を書く前の作者のメモです。300〜500 字を目安に、「## 場面」(番号付きの箇条書き。一行は「場所 / 出る人 / そこで変わること」)と「## 狙い」(この話で読者に伝えたいこと・変わること)の二つの節で書いてください。
 視点・場所を作者が指定したときは、それに沿う場面にしてください(視点・場所自体はここでは決めません)。
-直前の話は概要で渡します。その続きとして自然に立つ話にし、直前の話をなぞり直さないでください。
+前の話は概要で古い順に渡します。その続きとして自然に立つ話にし、直前の話をなぞり直さないでください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしないでください。
 作者の指定は、それを核にして足りないところを補ってください。null でない値は決まっているので変えないでください。
 時刻は「年/月/日」の形で、直前の話より後、作品の期間の中から選んでください。"""
 
 
-def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_count: int) -> EpisodeFrameMaterialSerialized:
+def _frame_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeFrameMaterialSerialized:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -52,9 +52,9 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
     location_id = episode.story.location_id
     characters = [link.character for link in episode.episode_characters]
 
-    previous = past_episodes(s, ai, episode, past_episode_count)
+    previous = summarized_episodes(s, ai, episode, 0)
     # 時刻が決まっていなければ、直前の話の時点の人物・出来事を材料にする
-    time = main_episode.start or (previous[0].start if previous else None) or story.start or Stamp(1)
+    time = main_episode.start or (previous[-1].start if previous else None) or story.start or Stamp(1)
     return EpisodeFrameMaterialSerialized(
         story=story,
         main_episode=main_episode,
@@ -62,6 +62,7 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
         locations=common_query.location_path(s, location_id)
         if location_id is not None else [],
         cast=cast_at(s, ai, characters, time),
+        relations=relations_at(s, characters, time),
         later_events=summarized_events(
             s, ai,
             common_query.events_after_select(
@@ -69,11 +70,9 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int, past_episode_coun
     )
 
 
-def frame_episode(
-    s: Session, ai: AIClient, episode_id: int, past_episode_count: int = constants.EPISODE_PREVIOUS_LIMIT,
-) -> Episode:
+def frame_episode(s: Session, ai: AIClient, episode_id: int) -> Episode:
     """題・種は作者の指定を核に AI が組み立て直し、時刻は決まっていればそれ、無ければ AI が直前の話の後から選ぶ。"""
-    material = _frame_material(s, ai, episode_id, past_episode_count)
+    material = _frame_material(s, ai, episode_id)
 
     prompt = "\n".join([
         material.model_dump_json(indent=2),

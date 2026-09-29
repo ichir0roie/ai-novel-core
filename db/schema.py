@@ -737,7 +737,7 @@ class EpisodeCharacter(Base):
 
 
 class EpisodeSummary(Base):
-    """話の本文(`Episode`)の概要と文体の覚え書き。"""
+    """話の本文(`Episode`)の概要。"""
 
     __tablename__ = "episode_summary"
 
@@ -747,7 +747,6 @@ class EpisodeSummary(Base):
     source_hash: Mapped[str] = mapped_column(
         String, comment="要約した本文の sha256。本文と食い違ったら作り直す", sort_order=120)
     summary: Mapped[str] = mapped_column(String, comment="概要", sort_order=130)
-    style: Mapped[str] = mapped_column(String, comment="文体の覚え書き", sort_order=140)
 
 
 class EventIdea(Base):

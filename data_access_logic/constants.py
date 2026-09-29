@@ -15,8 +15,6 @@ NON_PERSON_KINDS = ("国", "組織", "商会", "氏族", "集団", "物")
 # (levels=1、「隣の集落にいる者も枠に入れる」)と同じ考え方をそろえる。
 REACH_LEVELS = 1
 MOVE_DESTINATION_LIMIT = 20
-# 当事者一人ぶんに渡す相関の上限。
-RELATION_LIMIT = 10
 # 出来事を起こす時点より後に既にある出来事を、いくつまで渡すか。
 LATER_EVENT_LIMIT = 5
 # event_duration_days の取りうる範囲。範囲外の値は丸める。
@@ -67,8 +65,8 @@ EPISODE_TIMEOUT = 900.0
 EPISODE_KEY_TIMEOUT = 300.0
 # 書き直した種から、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
 EPISODE_CASTING_TIMEOUT = 300.0
-# 前の話を名指ししないときに、作品の中から渡す直前の話の本数。
-EPISODE_PREVIOUS_LIMIT = 3
+# 本文をまるごと渡す直前の話の本数。それより前の話は、作品の中のすべてを概要で渡す。
+EPISODE_FULL_TEXT_COUNT = 3
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。
