@@ -1,9 +1,6 @@
-from ai.time_keeper import event_progression_generator
-from ai.time_keeper.random_character_generator import _generate_one
 from data_access_logic.query.base import character_active_condition
 from db.schema import Character, CharacterPlace, Location, Story
 from db.stamp import Stamp
-from tool.test.mock_ai_client import MockAIClient
 
 
 def _place(session) -> Location:
@@ -35,25 +32,6 @@ def test_character_active_condition_matches_main_character_flag(session):
     assert main_character.id not in ids
 
 
-def test_group_by_place_keeps_only_sub_characters(session):
-    place = _place(session)
-    main_character = _character(session, place, main_character=True)
-    sub_character = _character(session, place, main_character=False)
-
-    grouped = event_progression_generator._group_by_place(session, Stamp(2100))
-
-    ids = {c.id for c in grouped[place.id]}
-    assert sub_character.id in ids
-    assert main_character.id not in ids
-
-
-def test_generated_character_is_marked_sub_character(session):
-    place = _place(session)
-    ai = MockAIClient(seed=1)
-
-    record = _generate_one(session, place, Stamp(2100, 1, 1), __import__("random").Random(1), ai, person=True)
-
-    assert record.main_character is False
 
 
 def test_character_without_the_flag_is_a_sub_character(session):

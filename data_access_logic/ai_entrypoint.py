@@ -9,20 +9,21 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ai.claude_code import ai_client, fact_checker
-from ai.time_keeper import generated_content
 from data_access_logic.entrypoint import CommitEntrypoint
+from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.record import EpisodeRecord
+from data_access_logic.event import summary as event_summary
 from data_access_logic.event.record import EventRecord
 from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.meme.extractor import refresh
 from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.story.record import StoryRecord
-from db.schema import get_env_session
+from db.schema import Episode, Event, get_env_session
 
 
 class CommitAndRefresh(CommitEntrypoint):
-    """記録を確定したあと、確定のトランザクションを閉じてから `generated_content.refresh`
-    でミーム抽出・要約を追いかける基底(AI が答えなくても確定自体は残るよう、別のセッションで行う)。
+    """記録を確定したあと、確定のトランザクションを閉じてからミーム抽出と、出来事・話ならその要約を
+    追いかける基底(AI が答えなくても確定自体は残るよう、別のセッションで行う)。
     """
 
     def execute(self, session) -> EventRecord | EpisodeRecord | StoryRecord:
@@ -32,8 +33,17 @@ class CommitAndRefresh(CommitEntrypoint):
         with get_env_session() as session, session.begin():
             committed = self.execute(session)
         with get_env_session() as session:
-            generated_content.refresh(session, ai_client, session.get_one(self.model, committed.id))
+            refresh(session, ai_client)
+            row = session.get_one(self.model, committed.id)
+            if isinstance(row, Event):
+                event_summary.summarize(session, ai_client, row)
+            elif isinstance(row, Episode):
+                episode_summary.summarize(session, ai_client, row)
+            self.follow_up(session)
         return committed
+
+    def follow_up(self, session) -> None:
+        """入口ごとに足す、確定したあとの AI の段。"""
 
 
 class MemeSourceCommitted(BaseModel):

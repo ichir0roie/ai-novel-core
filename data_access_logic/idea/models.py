@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
-from ai.time_keeper import constants
+from data_access_logic import constants
 from data_access_logic.material import Material
 from db.schema import ConfirmStatus
 from db.stamp import Stamp, StampError

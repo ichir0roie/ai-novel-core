@@ -2,8 +2,8 @@ from pydantic import ValidationError
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.event.models import EventMaterial, EventSourceSerialized, EventSummaryDraft
 from db.schema import Event, EventSummary, summary_source_hash
 

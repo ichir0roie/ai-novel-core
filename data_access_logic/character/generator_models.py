@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
-from ai.time_keeper import constants
+from data_access_logic import constants
 from data_access_logic.character.models import CharacterBase, CharacterParameterValues
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
 from data_access_logic.location.models import LocationMaterial, PlaceMaterial

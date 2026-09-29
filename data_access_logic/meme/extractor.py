@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.meme.models import (
     ClassifyDraft, ClassifyRequest, ClassifyRequestSerialized, DedupeDraft, DedupeRequest, DedupeRequestSerialized,
     DrawnMeme, MemeDraft, MemesDraft, MemeText,

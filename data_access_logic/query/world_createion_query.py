@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, func, or_, select
 
 from data_access_logic.query import common_query
 from db.schema import (
@@ -56,10 +56,6 @@ def alive_characters_select(time) -> Select:
     return select(Character).where(or_(born.is_(None), born <= time), or_(died.is_(None), died > time))
 
 
-def active_story_count_select(time) -> Select:
-    return (select(func.count(Story.id))
-            .where(or_(Story.start.is_(None), Story.start <= time),
-                   or_(Story.end.is_(None), Story.end > time)))
 
 
 def check_within_parent_span(parent: Location, child_start: Stamp | None, child_end: Stamp | None, label: str) -> None:

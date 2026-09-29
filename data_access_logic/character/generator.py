@@ -15,9 +15,8 @@ from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.naming import (
     CHARACTER_NAMING_INSTRUCTION, IDEA_NAMING_INSTRUCTION, NAME_PLACEHOLDER, fill_name_placeholder,
 )
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
-from ai.time_keeper._format import format_time
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator_models import (
     BirthPlaceMaterial, CharacterBirthMaterial, CharacterBirthMaterialSerialized, CharacterNameMaterial,
@@ -312,7 +311,7 @@ def generate_character(
     s.commit()
 
     place_label = (f"{material.born_place.name}(id={material.born_place.id})" if material.born_place else "不明")
-    print(f"[data_access_logic/character] {format_time(time)} 生成: {record.name} id={record.id} 種別={record.kind}"
+    print(f"[data_access_logic/character] {time} 生成: {record.name} id={record.id} 種別={record.kind}"
           f" 出自={place_label} 年齢={age}\n"
           f"    筋書きの要素: {material.element or '(無し)'}\n"
           + "".join(f"    ミーム: {drawn.position}: {drawn.text}\n" for drawn in material.memes)

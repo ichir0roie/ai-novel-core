@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """乱数で言語を一つ引いてから固有名詞を組み立てる、といった対話越しの手順は
-JSON 生成 1 回で名づけを終える場面(`ai/local_ai/` の常駐ループ)には
+JSON 生成 1 回で名づけを終える場面(`data_access_logic/character/generator.py` の人物の自動生成)には
 埋め込めないので、要旨だけを定数として持ち、プロンプト経由で一括で守らせる。
 """
 from __future__ import annotations

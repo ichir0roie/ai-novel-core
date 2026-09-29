@@ -1,4 +1,4 @@
-db を読み書きする処理と、それを呼ぶ入口を置く場所。claude・GUI の API・常駐ループは、どれもここの処理を使う。
+db を読み書きする処理と、それを呼ぶ入口を置く場所。claude と GUI の API は、どちらもここの処理を使う。
 **claude が db を触る操作の前にこの readme を引く。**
 
 入口は `<領域>/<動詞_対象>.py` に一つずつ置いたクラス。同じ入口を、呼ぶ側が次のように使い分ける。
@@ -70,7 +70,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(place_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る。`confirmed=未確認` で足す(下の「出来事・人物の承認フラグ」) |
 | 「出来事を足して」                   | `event.create_random_event.CreateRandomEvent()` → `event.commit_event.CommitEvent(event)` |
 | 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
-| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None, shared_style_extra="", style_extra="")`。場所の出来事(`place_event`)と同じ生成を、名前・記録を場面の指定に、時刻・場所・当事者を決まった値として回す。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
+| 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None, shared_style_extra="", style_extra="")`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、記録・当事者・関連する設定から小説の本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
 | 「この人物の出自・居場所を足して」   | `character.commit_character_place.CommitCharacterPlace(place)`              |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`     |
 | 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を `location_id` から自動で探して親にする(無ければ作る)。時代ごとの追記は `notes`(下の「アイデアの追記」)、場所・時代ごとの作中の呼び名は `recognitions`(下の「アイデアの認識(呼び名)」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し、足したミームも検める。`{"record": 確定したアイデア, "memes_added": 足したミームの件数}` を返す。`fact_check=False` で検めずに本文からだけ抜き出す |
@@ -105,17 +105,15 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話が残っていれば止まる           |
 | 「この下書きから話の枠を AI に決めさせて」「GUI の AI で枠を作る」 | `episode.generate_frame.GenerateFrame(frame=EpisodeForm(story_id=…, viewpoint_character_id=…, place_id=…, character_ids=[…], …), character_ids=None)`。下書きを枠として保存してから、題・種(`## 場面` / `## 狙い` の形)・時刻を下書きを核に AI が決める(`id` を渡せばその本文の無い枠を決め直す)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ。視点(`viewpoint_character_id`。Character への FK)・場所(`place_id`。Location への FK)は AI には決めさせず、下書きにあればその id をそのまま使う(無ければ NULL のまま)。登場人物は `character_ids`(省けば下書きの `character_ids`、それも無ければ枠の `episode_character`)で、足した枠の `episode_character` にも残す |
-| 「この下書きから一話ぶん AI に書かせて」「GUI の AI で本文まで書く」 | `episode.generate_episode.GenerateEpisode(episode=EpisodeForm(story_id=…, viewpoint_character_id=…, place_id=…, character_ids=[…], …), character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。種と時刻が揃っていれば常駐ループの `write_episode` と同じ生成で本文を書き、どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決める。`id` を渡せばその本文の無い枠へ書く。登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければ枠の `episode_character` で、空なら AI を呼ぶ前に止まる(時刻・場所から人物を拾う既定は無い)。視点・場所は下書きの `viewpoint_character_id` / `place_id`(どちらも Episode の列。省けば NULL のまま、既存の枠を書くときは枠のものを使う)。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない(`episode.model` / `episode.effort` 列は廃止した)。使う登場人物は AI 呼び出しの前に、その話の登場人物リレーション(`episode_character`)として保存される |
+| 「この下書きから一話ぶん AI に書かせて」「GUI の AI で本文まで書く」 | `episode.generate_episode.GenerateEpisode(episode=EpisodeForm(story_id=…, viewpoint_character_id=…, place_id=…, character_ids=[…], …), character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。種と時刻が揃っていれば本文を書き(下の「話の生成」)、どちらかが空なら先に `GenerateFrame` と同じ生成で枠を決める。`id` を渡せばその本文の無い枠へ書く。登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければ枠の `episode_character` で、空なら AI を呼ぶ前に止まる(時刻・場所から人物を拾う既定は無い)。視点・場所は下書きの `viewpoint_character_id` / `place_id`(どちらも Episode の列。省けば NULL のまま、既存の枠を書くときは枠のものを使う)。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない(`episode.model` / `episode.effort` 列は廃止した)。使う登場人物は AI 呼び出しの前に、その話の登場人物リレーション(`episode_character`)として保存される |
 | 「この話を推敲して」「初登場キャラの描写を厚くして」 | `episode.revise_episode.ReviseEpisode(episode=EpisodeForm(id=…, character_ids=[…]), instruction="…", character_ids=None, model=None, effort=None, shared_style_extra="", style_extra="")`。すでに本文のある話を、`instruction`(直す指示。必須)に沿って AI に書き直させる。筋は変えず指示にある観点だけを直す。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、省けば下書きの `character_ids`、それも無ければこの話の `episode_character` で、空なら止まる。前の話の概要に出ていない人物は、AI が初登場と判断して外見・性格の描写を厚くする。場所はこの話自身の `place_id`(無ければ作品の立つ場所)を使う。本文が無い話は先に `GenerateEpisode` で書く。`model` / `effort` は本文を書く Claude の呼び出しにだけ効く選択肢で、db には残らない。使った登場人物は、この話の `episode_character` としても保存される(既存の関連を全置換)。
 `instruction` はキーテキスト(`episode.key`)の末尾に「## 推敲」の節として自動で積まれる(二回目以降は見出しを重ねず箇条書きを足す) |
 | 「本文を確定する」「話の種を入れる」 | `episode.commit_episode.CommitEpisode(episode)`。`id` を渡せばその話を直し(渡した欄だけ)、省けば `story_id` の作品に新しい話を足す。`synced` を渡さなければ同期していない扱い(false)にする。`key`(種)か `text`(本文)のどちらかがあればよい。`text` は `ai/instructions/style.py` の `layout_novel_text` で改行を整えてから入れる(地の文は一文一行、「◇」の行は空行二つ)。話に番号は無く、作品の中では `start` の順に並ぶ(`start` の無い話は後ろに id 順)。あいだに話を足すときは、前後の話のあいだの `start` を付ける |
 | 「未同期の話は残ってる?」           | `episode.list_unsynced_episodes.ListUnsyncedEpisodes(story_id=None)`           |
 | 「世界観へ反映済みにする」           | `episode.set_episode_synced.SetEpisodeSynced(episode_id, synced=True)`   |
-| 「世界を進めて」「ループを回して」   | 入口ではなく常駐ループ。「常駐ループ」を見る                                  |
-| 「毎日のルーチン」「サブキャラの次の出来事を起こして」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `daily_event`。主役を決めるなら `character_id` を渡す。「〇〇の17歳の出来事」のように歳を決めるなら `age` も渡す(直前の出来事の後ではなく、その歳のうちに差し込む) |
-| 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `place_event`。場所 id・時刻・`key`(ジャンルや場面を一言で)を渡す。当事者はその時刻にそこにいるサブキャラクターから選ぶ |
-| 「この種で話を書いて」「〇〇と△△が出る話を 11579/03/02 で」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `write_episode`。作品 id・`key`(話の種)・時刻・登場人物の id のリストを渡す。場所・視点を決めるなら `place_id` / `viewpoint_character_id`。題・時刻だけ決めた本文の無い話(枠)へ書くなら `episode_id`(種・時刻・視点・題は省けば枠のもの) |
-| 「この枠に本文を書いて」「話 id=40 の本文を生成して」 | 入口ではなく常駐ループ側。「常駐ループ」の表の `fill_episode`。枠の話 id と登場人物の id のリストを渡す。種・時刻・視点・場所は枠のものを使う。本文のモデルを変えるなら `model` / `effort`(省けば fable の high) |
+| 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | `event.generate_event.GenerateEvent(event=EventForm(location_id=…, time=…, name="〇〇な場面"))`。当事者はその時刻にそこにいて手の空いたサブキャラクターから選ぶ(下の「出来事の生成」)。当事者を決めるなら `character_ids` |
+| 「この種で話を書いて」「〇〇と△△が出る話を 11579/03/02 で」 | `episode.generate_episode.GenerateEpisode(episode=EpisodeForm(story_id=…, key="…", start="11579/03/02", character_ids=[…]))`。場所・視点を決めるなら `place_id` / `viewpoint_character_id`(下の「話の生成」) |
+| 「この枠に本文を書いて」「話 id=40 の本文を生成して」 | `episode.generate_episode.GenerateEpisode(episode=EpisodeForm(id=40), character_ids=[…])`。種・時刻・視点・場所は枠のものを使う。`character_ids` を省けば枠の `episode_character`。本文のモデルを変えるなら `model` / `effort`(省けば fable の high) |
 
 **まだ入口が無いもの**(頼まれたら作ってから行う): 人物の削除。
 
@@ -144,7 +142,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 一番後に始まる行の `end` は死亡を兼ねるので、死んでいない人物・対象では空にする。育ちなどの区切りで
   「この段階の値はここまで」を表したいときも、まだ次の段階の行を足していないなら、この行の `end` は
   空のままにする(埋めると死亡と区別が付かなくなる)。次の段階が決まったら、新しい行を足す側で表す
-- 生成(毎日のルーチン・出来事の進行)は、出来事の時刻の値を使う。人物の自動生成・`CreateRandomCharacter` は期間を限らない一行だけを作る
+- 出来事の生成(`GenerateEvent`)は、出来事の時刻の値を使う。人物の自動生成・`CreateRandomCharacter` は期間を限らない一行だけを作る
 - `CommitCharacter` / `UpdateCharacter` は `parameters` を受け取る。`UpdateCharacter` に渡すと配列をまるごと置き換える
 - `name` は名字を含めない名だけを持つ。名字は `family_name` に分け、結婚・養子・家の取り立てなどで変わるなら、
   変わった時点からの行を足す。名字を持たない身分なら空。`CreateRandomCharacter` の下書きでは空なので、
@@ -232,25 +230,25 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 
 - 古今表裏: 古=かつて持っていたが今は手放した / 今=いま持っている / 表=人前で掲げている / 裏=内に秘めている
 - 引き方: 分類ごとに 0〜2 件。人物は 信条・欲求・境遇、人物以外の対象は 信条・欲求・集団 から引く。
-  理(世界の法則)は引かない(`ai/time_keeper/constants.py` の `MEME_*`)
+  理(世界の法則)は引かない(`data_access_logic/constants.py` の `MEME_*`)
 - ユーザが確かめた(`confirmed=承認`)ミームだけを引く。抜き出したばかりの `confirmed=未確認` のミームと、退けた `非承認` のミームは、
-  週次レビューで確かめられるまで、毎日のルーチン・場所の出来事・人物生成のどれでも文脈に取り入れられない
-- 時の流れの中で生む人物(`ai/time_keeper/random_character_generator.py`)は、この引き方と整理を自動で行う
+  週次レビューで確かめられるまで、出来事の生成・人物生成のどちらでも文脈に取り入れられない
+- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う
 
 ## 出来事・人物の承認フラグ
 
 `event` / `character` も `confirmed`(未確認/承認/非承認)を持つ。列の既定値は 承認(GUI から手で足す・
-`CommitEvent` / `CommitCharacter` で確定するときは渡さなければ 承認)だが、ランダム生成(常駐ループの毎日の
-ルーチン・場所の出来事・自然死・`GenerateCharacter(s)` / `GenerateEvent` が使う自動生成)は明示的に
+`CommitEvent` / `CommitCharacter` で確定するときは渡さなければ 承認)だが、AI の自動生成
+(`GenerateCharacter(s)` / `GenerateEvent`)は明示的に
 `confirmed=未確認` で足す。ユーザが GUI のレビュー画面(`reviewable=True`)で確かめて 承認 にするまで:
 
-- `write_episode` / `fill_episode`(`GenerateEpisode` / `GenerateFrame` も同じ)は、渡された `character_ids`
+- `GenerateEpisode` / `GenerateFrame` は、渡された `character_ids`
   (省いたときは話の `episode_character`)に未確認・非承認の人物が混ざっていると止まる
 - 話に渡す材料(場所の直近の出来事・登場人物それぞれの直近の出来事)も、未確認・非承認の出来事は使わない
 - `ReadCast` / `ReadBrief` の顔ぶれ、`ReadSurroundings` の周りの人物・出来事にも、未確認・非承認は出てこない
 
 (「この時点より後に既に決まっている出来事」は、まだ確かめていない出来事でも矛盾を避けるために渡す。
-毎日のルーチン・場所の出来事どうしの候補選び・当事者選びも、承認済みに絞らない)
+出来事の生成(`GenerateEvent`)の候補選び・当事者選びも、承認済みに絞らない)
 
 ## 中間段(下書き → 語の洗い出し → 清書)
 
@@ -275,7 +273,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 
 | 生成 | 下書き | 清書 |
 | ---- | ------ | ---- |
-| 毎日の出来事 | 記録(`data_access_logic/event/progress.py`) | 小説の本文(`data_access_logic/event/novelist.py`) |
+| 出来事の生成(`GenerateEvent`) | 記録(`data_access_logic/event/progress.py`) | 小説の本文(`data_access_logic/event/novelist.py`) |
 | 人物の自動生成 | 中身を決めた説明 | 関係する設定があれば説明を清書 |
 | 話の生成(`data_access_logic/episode/writer.py`) | 種(`key`) | 本文 |
 
@@ -287,10 +285,11 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 補足:
 
-- `CommitEvent` / `CommitStory` / `CommitEpisode` は、確定したあとに毎回
-  `ai/time_keeper/generated_content.py` の `refresh` を自分で呼ぶ。ミームの棚卸し
-  (`data_access_logic/meme/extractor.py` の `refresh`)と、出来事・話ならその場での要約(`event_summary` / `episode_summary`)を
-  まとめて行うので、`ExtractMemes` を別に呼ぶ必要は無い。確定の入口を通らなかった分の
+- `CommitEvent` / `UpdateEvent` / `CommitStory` / `CommitEpisode` は、確定したあとに毎回(`ai_entrypoint.py` の `CommitAndRefresh`)
+  ミームの棚卸し
+  (`data_access_logic/meme/extractor.py` の `refresh`)と、出来事・話ならその場での要約(`event_summary` / `episode_summary`。
+  本文が変わっていれば作り直す)をまとめて行うので、`ExtractMemes` を別に呼ぶ必要は無い。`CommitEvent` はさらに出来事の種を抜き出す
+  (下の「出来事の生成・話の生成」)。話を書く・推敲する入口(`GenerateEpisode` / `ReviseEpisode`)も、書いたあとに話の要約を作り直す。確定の入口を通らなかった分の
   取りこぼしをまとめて拾いたいときは `RefreshGeneratedContent` を呼ぶ。これらの経路で足したミームは
   検めない(`fact_check` が空のまま)ので、`CheckFacts("meme")` で後から埋める
 - 話は `episode` テーブルに一話一行で持つ。枠(`key`。作者が入れる種、AI 生成前)と
@@ -322,55 +321,32 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
   閉じて揃える)で `CommitPlace` / `UpdatePlace` から入れる。経緯度が無い面の場所
   (大陸など)にも持たせられ、地図では薄い面として描く
 
-## 常駐ループ
+## 出来事の生成・話の生成
 
-世界の生成(出来事・人物・場所・本文)は主に `ai/local_ai/` の常駐ループが行う。
-その起動だけは運用タスクとして直接呼んでよい。
+`GenerateEvent` / `GenerateEpisode` / `ReviseEpisode` / `GenerateFrame` は `shared_style_extra` / `style_extra` も渡せる。
+世界の舞台設定や、既存の話から抽出した文体の癖のような「ユーザーの好み」は `core` には定数で持たず
+(`ai/instructions/style.py` の `style_instruction()` を見る)、呼び出し側(世界リポジトリ側。例えば `instructions/style.py`)が
+この二引数で渡す。省けば空でよく、その場合は `core` だけの汎用の文体になる。GUI の API から呼ぶときは、渡さなければ
+世界リポジトリの `instructions/style.py` から埋める(`gui/readme.md`)。
 
-| したいこと                                   | ローカル AI                                | Claude Code                                                        |
-| -------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| 時間を進める                                 | `local_ai_time_keeper.loop_time()`         | `claude_code_time_keeper.claude_main()`                            |
-| ある作品の開始から指定年数ぶん進める         | `local_ai_time_keeper.loop_time_for_story()` | `claude_code_time_keeper.claude_story_years_main()`               |
-| サブキャラ一人の次の出来事を一件起こす(毎日のルーチン) | `local_ai_time_keeper.daily_event()`       | `claude_code_time_keeper.claude_daily_event_main()`                |
-| ある場所・時刻に、居合わせるサブキャラで出来事を一件起こす(場面を指定) | `local_ai_time_keeper.place_event(place_id, time, key)` | `claude_code_time_keeper.claude_place_event_main(place_id, time, key)` |
-| 種・時刻・登場人物を決めて、作品に話を一話足す(`episode_id` で既存の枠へ書く) | `local_ai_time_keeper.write_episode(story_id, key, time, character_ids, place_id=None, viewpoint_character_id=None, episode_id=None)` | `claude_code_time_keeper.claude_write_episode_main(story_id, key, time, character_ids, place_id=None, viewpoint_character_id=None, episode_id=None, model=None, effort=None)` |
-| 話の枠(種・時刻の入った本文の無い話)に、本文だけを書く | `local_ai_time_keeper.fill_episode(episode_id, character_ids=None)` | `claude_code_time_keeper.claude_fill_episode_main(episode_id, character_ids=None, model=None, effort=None)` |
+出来事の生成(`GenerateEvent`)は、下書きの名前・記録を場面の指定(「市場の喧嘩」「怪談」など)に、時刻・場所・当事者を決まった値として、
+当事者ごとの推測 → 候補をサイコロ → 記録(`data_access_logic/event/progress.py`)→ 小説の本文(`data_access_logic/event/novelist.py`)の順で一件起こす。
+当事者を省けば、その時刻にその場所にいて(`character_place`)、別の出来事の最中でない、生きているサブキャラクターから選ぶ。
+場所を名指しするので、場所の `active_random_generation` は見ない。作品の本文(筋書き)は渡さない。
+出来事の候補は、出来事の種(`event_seed` テーブル)からランダムに引いた種か、直前の出来事からの連想で立てる。
+種は作品の本文・話の種(`key`、無ければ本文)・人物の `# plot` の節・出来事の本文から、時代・場所・固有名詞を抜いて抜き出したもの
+(`data_access_logic/event_seed/extractor.py` の `refresh`。`event_seeded` が false の元だけから抜き出して true にする。
+似た種は `consolidate` でまとめる)。抜き出しは、出来事を足す入口(`CommitEvent` / `GenerateEvent`)が、足したあとに
+確定とは別のセッションで行う(足した出来事自身の本文も元になる。AI が答えなくても出来事は残る)。
+GUI の表から足したとき(`execute(session)`)は抜き出さず、次に入口から出来事を足したときにまとめて拾う。
+その場所か当事者に掛かる「この時点より後に既に決まっている出来事」は、要約を添えて記録を決める段にも小説に書き起こす段にも渡し、矛盾させない。
+起こした出来事は `confirmed=未確認` で足す。
 
-(`ai.local_ai.` / `ai.claude_code.` を頭に付ける)
-
-上の四つ(`daily_event` / `place_event` / `write_episode` / `fill_episode`。ローカル AI・Claude Code とも)は
-`shared_style_extra` / `style_extra` も渡せる。世界の舞台設定や、既存の話から抽出した文体の癖のような
-「ユーザーの好み」は `core` には定数で持たず(`ai/instructions/style.py` の `style_instruction()` を見る)、
-呼び出し側(世界リポジトリ側。例えば `instructions/style.py`)がこの二引数で渡す。省けば空でよく、
-その場合は `core` だけの汎用の文体になる。
-
-毎日のルーチンは、人物ごとに生まれてから 5〜20 年後を起点に自分の時を刻む。作品の時期には合わせず、
-作品の本文(筋書き)も渡さない。出来事の候補は、出来事の種(`event_seed` テーブル)から
-ランダムに引いた種か、直前の出来事からの連想で立てる。種は作品の本文・話の種(`key`、無ければ本文)・
-人物の `# plot` の節・出来事の本文から、時代・場所・固有名詞を抜いて抜き出したもの。ルーチンの頭で、
-`event_seeded` が false の元だけから抜き出して true にする(`data_access_logic/event_seed/extractor.py`)。
-抜き出しは元ごとに一度だけ。本文を書き直して抜き出し直したいときは、その行の `event_seeded` を false に戻す。
-抜き出すときは似た種があるかを見ない。棚卸し前(`consolidated` が false)の種が 50 件たまったら、ルーチンの頭で
-AI に棚卸し済みの種と見比べさせ、同じ出来事の言い換えだけをまとめる(`data_access_logic/event_seed/extractor.py` の `consolidate`)。
-人物ごとに時を刻むので、出来事を起こす時点より後に、別の人物の出来事が既にあることがある。その場所か当事者に掛かる
-そうした出来事(`age` で差し込むときは主役自身の後の出来事も)は、要約を添えて「この時点より後に既に決まっている出来事」として
-記録を決める段にも小説に書き起こす段にも渡し、矛盾させない。`age` を渡したときは、直前の出来事はその時点より前に終わったものに限り、
-その時点に別の出来事の最中にいる者は当事者から外す(主役なら選び直す)。
-ルーチンで起こした出来事は `CommitEvent` を通らないので、`confirmed=未確認` で足し、ルーチンの頭でミームも棚卸しする
-(`data_access_logic/meme/extractor.py` の `refresh`)。前の回までに起こした出来事から、当事者が行き着いた考え方をミームとして抜き出す。
-
-場所の出来事(`place_event`)は、毎日のルーチンの主役の代わりに場所・時刻・`key`(ジャンルや場面を一言で。「市場の喧嘩」「怪談」など)を決めて起こす。
-それ以外は毎日のルーチンと同じ(頭でのミーム・種の棚卸し、種を引く、作品の本文を渡さない、後の出来事を渡す、小説に書き起こす)。
-当事者の候補は、その時刻にその場所にいて(`character_place`)、別の出来事の最中でない、生きているサブキャラクター。
-場所を名指しするので、場所の `active_random_generation` は見ない。`key` は候補・記録・小説のすべての段に場面の指定として渡し、
-小説は当事者のうち指定が一番よく伝わる一人の視点で書く。`time` は `Stamp` か `"11579/03/02"` の形の文字列。
-居合わせる者がいなければ何もせず None を返す(`ai/time_keeper/place_event_generator.py`)。
-
-話の生成(`write_episode`)は、作者が決めた種(`key`)・時刻・登場人物(`character_ids`)から、作品(`story_id`)に話を一話足す。
-どの入口も、まず渡した値を話の行(枠)と登場人物(`episode_character`)として保存し(`data_access_logic/episode/form.py`)、
+話の生成(`GenerateEpisode`)は、作者が決めた種(`key`)・時刻・登場人物(`character_ids`)から、作品(`story_id`)に話を一話足す。
+まず渡した値を話の行(枠)と登場人物(`episode_character`)として保存し(`data_access_logic/episode/form.py`)、
 本文を書く処理(`data_access_logic/episode/writer.py`)は episode_id の行だけから材料を読む。
 話に渡す登場人物は、話と人物のリレーション(`episode_character`)だけ。`character_ids` を渡せばそれでリレーションを置き換え、
-`None` を渡せば枠の `episode_character` を使う。空なら止まる。
+省けば枠の `episode_character` を使う。空なら止まる。
 時刻・場所から人物を拾う既定(その時刻に生きているメインキャラクター・その場所に住む人物)は持たない。
 前の話は、作品の中でこの話の時刻より前の、概要のある三話(`constants.EPISODE_PREVIOUS_LIMIT`)を概要と文体の覚え書きで渡す。
 概要の無い話は書く前に作る(本文が変わっていなければ作り直さない)。
@@ -378,14 +354,12 @@ AI に棚卸し済みの種と見比べさせ、同じ出来事の言い換え�
 直近の出来事と、その場所か登場人物に掛かる「この時点より後に既に決まっている出来事」も渡し、矛盾させない。
 種から中間段でアイデアを引いて「関係する設定」として渡し、話に結ぶ(`episode_idea`)。
 自動生成なので `synced` を立てる。題は枠に題があればそれを残し、空なら本文を書いたときの題で埋める。
-Claude のモデルの既定は `claude-sonnet-5` の `medium`(`ai_client.py` の `_MODEL` / `_EFFORT`)で、本文だけは
+書いたあと、その話の概要(`episode_summary`)を作り直す。推敲(`ReviseEpisode`)も同じく、書き直した本文から作り直す。
+Claude のモデルの既定は `claude-sonnet-5` の `medium`(`ai/claude_code/ai_client.py` の `_MODEL` / `_EFFORT`)で、本文だけは
 `claude-fable-5-1` の `high`(`EPISODE_MODEL` / `EPISODE_EFFORT`)で書く。本文のモデルは `model` / `effort` で差し替えられる
 (この選択肢は本文を書く Claude 呼び出しにだけ効く一時的な値で、`episode` テーブルには残らない)。
-`episode_id` を渡すと、話を足さずにその枠へ書く。省いた値は枠のものを使う。本文のある話・種か時刻の無い枠は止まる。
-本文が得られなければ枠を変えずに None を返す。
-
-本文だけの生成(`fill_episode`)は、枠(`episode_id`)の種・時刻・視点・場所を使って本文を書き、同じ行の `text` に足す。
-材料と書き方は話の生成と同じ。
+`id` を渡すと、話を足さずにその枠へ書く。省いた欄は枠のものを使う。本文のある話は止まる。
+本文が得られなければ `ValueError` で止まる(枠は保存したまま残る)。
 
 上の表の「作る」「確定する」入口を使えば、Claude も対話の中で人物・場所・出来事の
 内容を決めて確定してよい。

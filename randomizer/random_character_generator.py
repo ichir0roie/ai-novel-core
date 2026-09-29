@@ -24,7 +24,7 @@ class ParameterFactory(factory.DictFactory):
     # 名字は出自・身分・土地柄で決まるので、サイコロでは引かず名づけのときに決める。
     # 性別・体格・一人称・二人称・三人称・口調も、少ない候補からサイコロで引くと種類が偏るので、
     # ここでは None のままにし、人物説明に合わせて AI が自分で考えて決める
-    # (ai/time_keeper/random_character_generator.py の `_CONTENT_SCHEMA` 側)。
+    # (data_access_logic/character/generator.py の `generate_character` 側)。
     family_name = None
     sex = None
     height = factory.Faker("pyfloat", min_value=140, max_value=195, right_digits=1, positive=True)

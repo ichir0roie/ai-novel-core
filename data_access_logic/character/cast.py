@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session, joinedload
 
 from ai.instructions.event_writing import RECENT_EVENT_LIMIT
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.models import CastMaterial, EventCharacterAt, ParticipantMaterial
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import summarized_events

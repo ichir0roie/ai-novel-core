@@ -3,7 +3,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from ai.instructions.event_writing import EVENT_DURATION_INSTRUCTION
-from ai.time_keeper import constants
+from data_access_logic import constants
 from data_access_logic.character.models import ParticipantCharacter, ParticipantMaterial, ParticipantSerialized
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.location.models import LocationMaterial, PlaceMaterial

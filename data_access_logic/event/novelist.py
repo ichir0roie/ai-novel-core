@@ -10,8 +10,8 @@ from ai.instructions import event_writing
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.style import EVENT_NOVEL_TARGET_LETTERS
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import event_characters_at
 from data_access_logic.character.models import CharacterBase
 from data_access_logic.event.novelist_models import (

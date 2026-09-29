@@ -19,7 +19,7 @@ _session = scoped_session(sessionmaker())
 _LOCALE = "ja_JP"
 _YEAR_RANGE = (4000, 5000)
 
-# 実際の生成(ai/time_keeper/random_character_generator.py)は人物説明に合わせて AI が自分で
+# 実際の生成(data_access_logic/character/generator.py)は人物説明に合わせて AI が自分で
 # 決めるが、ここは db にそれらしい見た目のダミー行を積むだけの目的なので、少ない候補からのサイコロでよい。
 _SEX_CHOICES = ("男", "女", "不定")
 _BUILD_CHOICES = ("細身", "小柄", "がっしり", "長身", "ふくよか", "痩身")

@@ -8,8 +8,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms

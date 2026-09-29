@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """出来事(`Event`)の書き方・進め方のルールを持つ、正本。
 
-Claude が `commit_event` の `text` を書くときも、`ai/local_ai/`(`ai_client`
-を介してローカル AI が db への確定まで一気に行う `time_keeper` の常駐ループ)
-が `data_access_logic/event/progress.py` で出来事を
+Claude が `CommitEvent` の `text` を書くときも、`GenerateEvent` が
+`data_access_logic/event/progress.py` で出来事を
 生成するときも、**ここに書いた定数の文面をそのまま基準にする。**
 
 **出来事の `text` は小説ではなく、情報整理のための記録。** 実際のストーリー
 (本文)は話(`Episode`)の側で別に書くので、出来事で文体・セリフの言い回しを
 決めない。出来事が持つのは、物事がどう変わったか・人物が何を感じたか・誰と
 どの組織が何をしたか、という後から引ける中身だけ。
-ただし毎日のルーチン・場所の出来事が起こす出来事だけは、記録として
+ただし AI に起こさせた出来事(`GenerateEvent`)だけは、記録として
 起こしたあと、`EVENT_NOVEL_INSTRUCTION` で話と同じ小説の形に書き直す(`data_access_logic/event/novelist.py`)。
 **ルールの文面を変えるときはここだけを直す。**
 """
@@ -67,7 +66,7 @@ text は、渡された出来事の記録を、話(episode)と同じ小説の本
 
 
 def event_novel_instruction(*, shared_style_extra: str = "", style_extra: str = "") -> str:
-    """出来事の本文(毎日のルーチンの小説化)の指示。文体の好み(`shared_style_extra` / `style_extra`。
+    """出来事の本文(`GenerateEvent` の小説化)の指示。文体の好み(`shared_style_extra` / `style_extra`。
     世界の舞台設定・既存の話から抽出した文体の癖など)は呼び出し側(親リポジトリ側)から渡す。"""
     return (f"{_EVENT_NOVEL_BODY}\n"
             f"{style.style_instruction('event_novel', shared_extra=shared_style_extra, extra=style_extra)}")

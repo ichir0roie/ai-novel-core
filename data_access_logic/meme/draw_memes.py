@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 
-from ai.time_keeper import constants
+from data_access_logic import constants
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.meme.extractor import draw
 from data_access_logic.meme.models import DrawnMeme

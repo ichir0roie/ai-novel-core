@@ -10,7 +10,7 @@
 - 星ごとの地図(`/maps`)と人物相関図(`/relations`)。元データは `/api/maps` `/api/relations`。ナビには出さず、
   場所の詳細から `/maps?location=<id>`(その場所を中心に置いて描く)へ、人物の詳細から `/relations?character=<id>`
   (その人物に関わる関係だけを描く)へ飛ぶ
-- `data_access_logic/` の入口と常駐ループ(`claude_*_main`)を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
+- `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
   `claude` コマンドを叩くものは Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る
 
 ## 構成の決め方
@@ -75,7 +75,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
 | GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、この API が Claude Code の環境かどうか |
-| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_places.ListPlaces` や `time_keeper.daily_event`。`claude` を叩く入口と `background` は job の id を 202 で返す |
+| POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_places.ListPlaces` のような「領域.ファイル.クラス」。`claude` を叩く入口と `background` は job の id を 202 で返す |
 | POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」「AI で補完」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す(下書きに `id` があれば、その行の空の本文だけを埋める)入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。`key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |
 | GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー(API を起こしているあいだだけ持つ) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
@@ -95,11 +95,11 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 
 ## 入口と claude コマンド
 
-`POST /api/interface/{id}` は、クラスの入口なら組み立てて `run()` を、常駐ループ側なら `claude_*_main` をそのまま呼ぶ。
+`POST /api/interface/{id}` は、入口を組み立てて `run()` を呼ぶ。
 `args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに一度だけ読み込んでから渡す(`interface.prepare`。読み込めなければ 400。
 裏の job にする前に読み込み、job はそのモデルで `interface.call` する)。
 どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `result()` を上書きしている入口、
-AI を引数に取る入口、`time_keeper.*`)。それらは
+AI を引数に取る入口)。それらは
 
 - `CLAUDECODE=1` のある環境で起こした API でだけ通す。外なら 403。Claude Code のシェルは `CLAUDECODE=1` を持ち、
   `gui.dev` はどこから起こしても API に渡す(uvicorn を直に起こしたときだけ、自分で渡さなければ止まる)

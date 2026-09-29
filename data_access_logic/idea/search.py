@@ -9,8 +9,8 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.idea.models import IdeaHit, IdeaTerm, IdeaTermsDraft, normalized, unique_terms
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Idea

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""出来事の種は、元の本文から時代・場所・固有名詞を抜いたもの。毎日のルーチンで候補を立てる手がかりに引く。"""
+"""出来事の種は、元の本文から時代・場所・固有名詞を抜いたもの。出来事の生成(`GenerateEvent`)で候補を立てる手がかりに引く。"""
 from __future__ import annotations
 
 import random
@@ -8,10 +8,14 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.event_seed.models import (
-    ConsolidateDraft, ConsolidateRequest, ConsolidateRequestSerialized, SeedsDraft, SeedText,
+    ConsolidateDraft,
+    ConsolidateRequest,
+    ConsolidateRequestSerialized,
+    SeedsDraft,
+    SeedText,
 )
 from data_access_logic.query import event_seed_query
 from data_access_logic.source_text import SourceBatch, SourceBatchSerialized, SourceText, batches, plot_section
@@ -134,3 +138,9 @@ def consolidate(s: Session, ai: AIClient) -> int:
 def draw(s: Session, rng: random.Random, count: int = constants.EVENT_SEED_DRAW_COUNT) -> list[str]:
     seeds = s.scalars(select(EventSeed.text).order_by(EventSeed.id)).all()
     return rng.sample(list(seeds), min(count, len(seeds)))
+
+
+def refresh_and_consolidate(s: Session, ai: AIClient) -> None:
+    """出来事を足したあとに呼ぶ。種を抜き出していない元(足した出来事自身も含む)から種を足し、たまっていれば似た種をまとめる。"""
+    refresh(s, ai)
+    consolidate(s, ai)

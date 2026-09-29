@@ -248,13 +248,6 @@ def latest_character_event_select(character_id: int, until: Stamp | None = None)
     return query.where(finished <= until) if until is not None else query
 
 
-def character_events_overlapping_select(character_id: int, time: Stamp) -> Select:
-    started = func.coalesce(Event.start, Event.time)
-    finished = func.coalesce(Event.end, Event.start, Event.time)
-    return (select(Event)
-            .where(Event.event_characters.any(EventCharacter.character_id == character_id),
-                   started <= time, finished > time)
-            .limit(1))
 
 
 def resident_character_ids_select(place_ids, until: Stamp) -> Select:

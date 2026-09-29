@@ -18,7 +18,7 @@ STYLE_SOURCE_EPISODE_LIMIT = 10
 # 一話ぶんの本文の目安。
 EPISODE_TARGET_LETTERS = (5000, 8000)
 
-# 話と同じ小説の形で書く出来事の本文(毎日のルーチン)の目安。一話の三分の一。
+# 話と同じ小説の形で書く出来事の本文(`GenerateEvent`)の目安。一話の三分の一。
 EVENT_NOVEL_TARGET_LETTERS = tuple(int(round(letters / 3, -2)) for letters in EPISODE_TARGET_LETTERS)
 
 # 生成のときに場面の切れ目へ置かせる行。`layout_novel_text` が空行二つに置き換える。
@@ -172,7 +172,7 @@ EPISODE_STYLE_BASE = f"""\
 種(key)に場面が足りないときは、足りないぶんを場面として立ててから書く。
 種(key)にある出来事は、渡された作品・登場人物・場所・直前の話・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。"""
 
-# 話と同じ小説の形で書く出来事の本文(毎日のルーチン)。文体の好み(extra)は呼び出し側から渡す。
+# 話と同じ小説の形で書く出来事の本文(`GenerateEvent`)。文体の好み(extra)は呼び出し側から渡す。
 EVENT_NOVEL_STYLE_BASE = f"""\
 {NOVEL_STYLE_BASE}
 {_scale_rule("出来事一件", EVENT_NOVEL_TARGET_LETTERS)}"""

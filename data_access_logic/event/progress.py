@@ -12,9 +12,8 @@ from ai.instructions.event_writing import (
     EVENT_AGE_INSTRUCTION, EVENT_PROGRESSION_INSTRUCTION, EVENT_RECORD_INSTRUCTION, RECENT_EVENT_LIMIT,
 )
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION, fill_name_placeholder
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
-from ai.time_keeper._format import add_days, format_time
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
 from data_access_logic.event.progress_models import (
     CandidateDraft, CandidateRequest, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft,
@@ -31,6 +30,9 @@ from randomizer.random_location_generator import build_location
 
 # 一度に居合わせる人物として渡す上限
 _PARTICIPANT_LIMIT = 20
+
+_MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+_DAYS_IN_400_YEARS = 146097
 
 _SITUATION_INSTRUCTION = """\
 場所の状況は日本語の見出しを付けた JSON で渡す。
@@ -81,6 +83,34 @@ event_text の書き方:
 
 character_updates の text の書き方:
 {CHARACTER_TEXT_UPDATE_INSTRUCTION}"""
+
+
+def _days_in_month(year: int, month: int) -> int:
+    if month == 2 and year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
+        return 29
+    return _MONTH_DAYS[month - 1]
+
+
+def _days_before_year(year: int) -> int:
+    y = year - 1
+    return 365 * y + y // 4 - y // 100 + y // 400
+
+
+def _add_days(time: Stamp, days: int) -> Stamp:
+    """出来事の終わり(始まりから続いた日数ぶん後)。月末・閏年をまたいで数える。"""
+    ordinal = _days_before_year(time.year) + sum(_days_in_month(time.year, m) for m in range(1, time.month)) + time.day
+    ordinal += days
+    year = ordinal * 400 // _DAYS_IN_400_YEARS + 1
+    while _days_before_year(year) >= ordinal:
+        year -= 1
+    while _days_before_year(year + 1) < ordinal:
+        year += 1
+    day = ordinal - _days_before_year(year)
+    month = 1
+    while day > _days_in_month(year, month):
+        day -= _days_in_month(year, month)
+        month += 1
+    return Stamp(year, month, day, time.hour, time.minute, time.second)
 
 
 def _situation(
@@ -239,7 +269,7 @@ def progress_place(
             involved_ids.append(character.id)
         move_notes.append(f"{character.name} → {destination.name}")
 
-    end = add_days(time, draft.event_duration_days)
+    end = _add_days(time, draft.event_duration_days)
     record = Event(
         name=draft.event_name,
         text=draft.event_text,
@@ -283,8 +313,8 @@ def progress_place(
 
     s.commit()
     involved_names = [name for name in (by_id[character_id].name for character_id in involved_ids) if name]
-    print(f"[data_access_logic/event] {format_time(time)} 場所id={place_id}: {record.name}"
-          f" / 継続: {draft.event_duration_days}日({format_time(time)}〜{format_time(end)})"
+    print(f"[data_access_logic/event] {time} 場所id={place_id}: {record.name}"
+          f" / 継続: {draft.event_duration_days}日({time}〜{end})"
           + (f" / 関わった: {', '.join(involved_names)}" if involved_names else "")
           + (f" / 移動: {'; '.join(move_notes)}" if move_notes else "")
           + (f" / 人物・対象更新: {'; '.join(update_notes)}" if update_notes else "")

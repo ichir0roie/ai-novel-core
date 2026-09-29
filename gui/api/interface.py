@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""`data_access_logic/<領域>/` の入口と、常駐ループの `claude_*_main` を API から呼ぶ。
+"""`data_access_logic/<領域>/` の入口を API から呼ぶ。
 
 入口の一覧は import 時にディレクトリを歩いて集める(`data_access_logic/readme.md` の表と同じ「領域.ファイル.クラス」で呼ぶ)。
-`claude -p` を回すもの(確定のあとに AI を回す `run()` を持つ入口、AI を受け取る入口、常駐ループ側)は
+`claude -p` を回すもの(確定のあとに AI を回す `run()` を持つ入口、AI を受け取る入口)は
 `claude=True` にし、Claude Code の環境でだけ、裏の job として走らせる。
 """
 from __future__ import annotations
@@ -17,22 +17,11 @@ from typing import Any, Callable
 from pydantic import BaseModel, TypeAdapter
 
 import data_access_logic
-from ai.claude_code import claude_code_time_keeper
 from data_access_logic.entrypoint import CommitEntrypoint, Entrypoint, RandomDraft, SessionEntrypoint
-from db.schema import Stamp
 
 # `result()` を上書きしていない(= 確定のあとに AI を回さない)基底
 _PLAIN_RESULTS = {SessionEntrypoint.result, CommitEntrypoint.result, RandomDraft.result}
 
-# 常駐ループ側。世界ごとの文体(`instructions/style.py`)は、渡されなければ `_style_defaults` で埋める
-_TIME_KEEPER: dict[str, Callable] = {
-    "daily_event": claude_code_time_keeper.claude_daily_event_main,
-    "place_event": claude_code_time_keeper.claude_place_event_main,
-    "write_episode": claude_code_time_keeper.claude_write_episode_main,
-    "fill_episode": claude_code_time_keeper.claude_fill_episode_main,
-    "loop": claude_code_time_keeper.claude_main,
-    "story_years": claude_code_time_keeper.claude_story_years_main,
-}
 
 
 @dataclass(frozen=True)
@@ -45,14 +34,14 @@ class Param:
 
 @dataclass(frozen=True)
 class Entrance:
-    id: str          # 例: location.list_places.ListPlaces / time_keeper.daily_event
+    id: str          # 例: location.list_places.ListPlaces
     area: str
     name: str
     doc: str
     params: tuple[Param, ...]
     claude: bool     # claude コマンドを叩く(裏の job として、Claude Code の環境でだけ走る)
     writes: bool     # db に書く
-    target: Callable
+    target: type[Entrypoint]
 
 
 def _jsonable_default(value: Any) -> Any:
@@ -116,14 +105,8 @@ def _collect_interface() -> list[Entrance]:
     return found
 
 
-def _collect_time_keeper() -> list[Entrance]:
-    return [Entrance(id=f"time_keeper.{name}", area="time_keeper", name=name, doc=_doc(func),
-                     params=_params(func), claude=True, writes=True, target=func)
-            for name, func in _TIME_KEEPER.items()]
-
-
 ENTRANCES: dict[str, Entrance] = {
-    entrance.id: entrance for entrance in sorted(_collect_interface(), key=lambda e: e.id) + _collect_time_keeper()}
+    entrance.id: entrance for entrance in sorted(_collect_interface(), key=lambda e: e.id)}
 
 
 def entrance_of(entrance_id: str) -> Entrance:
@@ -151,20 +134,6 @@ def _style_defaults(args: dict[str, Any], params: tuple[Param, ...]) -> dict[str
     return filled
 
 
-def to_jsonable(value: Any) -> Any:
-    if isinstance(value, Stamp):
-        return str(value)
-    if isinstance(value, dict):
-        return {str(key): to_jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [to_jsonable(item) for item in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if hasattr(value, "id") and hasattr(value, "__table__"):
-        return {"id": value.id}
-    return repr(value)
-
-
 def _has_model(annotation: Any) -> bool:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return True
@@ -180,15 +149,11 @@ def prepare(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
         inspect.signature(target).bind(**args)
     except TypeError as error:
         raise ValueError(f"{entrance.id} の引数が合わない: {error}") from error
-    hints = typing.get_type_hints(target.__init__ if inspect.isclass(target) else target)
+    hints = typing.get_type_hints(target.__init__)
     return {name: TypeAdapter(hints[name]).validate_python(value) if name in hints and _has_model(hints[name]) else value
             for name, value in args.items()}
 
 
 def call(entrance: Entrance, arguments: dict[str, Any]) -> Any:
-    """`prepare` した引数で入口を呼ぶ。クラスなら組み立てて `run()`(dump 済みの結果)。常駐ループ側の関数は
-    `Stamp` や ORM の行を返すので、JSON にできる形へ直す。"""
-    target = entrance.target
-    if inspect.isclass(target):
-        return target(**arguments).run()
-    return to_jsonable(target(**arguments))
+    """`prepare` した引数で入口を組み立てて `run()` を呼ぶ(dump 済みの結果)。"""
+    return entrance.target(**arguments).run()

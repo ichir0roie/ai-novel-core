@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_at
 from data_access_logic.episode.models import (
     EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeRevisionMaterialSerialized, RevisedEpisode, StoryMaterial,

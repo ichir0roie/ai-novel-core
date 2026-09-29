@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-
 from ai.claude_code import ai_client
-from ai.claude_code.claude_code_time_keeper import _writer_options
+from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import framer, writer
+from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.form import EpisodeForm, save_frame
 from data_access_logic.episode.record import EpisodeRecord
+
+
+def writer_options(ai, model: str | None, effort: str | None) -> dict | None:
+    """本文を書く呼び出しにだけ効く `model` / `effort`。Claude Code なら省いた方を fable の high で埋める。"""
+    if ai is ai_client:
+        return {"model": model or EPISODE_MODEL, "effort": effort or EPISODE_EFFORT}
+    options = {key: value for key, value in (("model", model), ("effort", effort)) if value}
+    return options or None
 
 
 class GenerateEpisode(SessionEntrypoint):
@@ -33,12 +41,6 @@ class GenerateEpisode(SessionEntrypoint):
         self.style_extra = style_extra
         self.ai = ai
 
-    def _writer_options(self) -> dict | None:
-        if self.ai is ai_client:
-            return _writer_options(self.model, self.effort)
-        options = {key: value for key, value in (("model", self.model), ("effort", self.effort)) if value}
-        return options or None
-
     def execute(self, session) -> EpisodeRecord:
         form = self.episode.model_copy()
         if self.character_ids is not None:
@@ -47,8 +49,10 @@ class GenerateEpisode(SessionEntrypoint):
         if not record.key.strip() or record.start is None:
             framer.frame_episode(session, self.ai, record.id)
         written = writer.write_episode(
-            session, self.ai, record.id, writer_options=self._writer_options(),
+            session, self.ai, record.id, writer_options=writer_options(self.ai, self.model, self.effort),
             shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
         if written is None:
             raise ValueError("本文が得られなかった")
+        # 書いた本文から概要を作り直す(本文が変わっていなければそのまま)
+        episode_summary.summarize(session, self.ai, written)
         return record_of(session, EpisodeRecord, written)

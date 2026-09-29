@@ -4,11 +4,12 @@
 """
 from __future__ import annotations
 
-
+from ai.claude_code import ai_client
 from data_access_logic.ai_entrypoint import CommitAndRefresh
 from data_access_logic.entrypoint import record_of
 from data_access_logic.event.form import EventCreateForm
 from data_access_logic.event.record import EventRecord
+from data_access_logic.event_seed.extractor import refresh_and_consolidate
 from db.schema import Character, Event, EventCharacter, Location
 
 
@@ -31,3 +32,7 @@ class CommitEvent(CommitAndRefresh):
         session.add(record)
         session.flush()
         return record_of(session, EventRecord, record)
+
+    def follow_up(self, session) -> None:
+        # 足した出来事自身の本文も種の元になる
+        refresh_and_consolidate(session, ai_client)

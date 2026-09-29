@@ -6,9 +6,8 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ai.time_keeper import constants
-from ai.time_keeper._ai import AIClient
-from ai.time_keeper._format import format_time
+from data_access_logic import constants
+from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_at
 from data_access_logic.episode.models import (
     EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeFrameMaterialSerialized, FrameEpisode, StoryMaterial,
@@ -98,6 +97,6 @@ def frame_episode(
     record.start = start
     record.synced = False
     s.commit()
-    print(f"[data_access_logic/episode] {material.story.name} {format_time(start)}「{record.title}」"
+    print(f"[data_access_logic/episode] {material.story.name} {start}「{record.title}」"
           f" id={record.id} の枠を決めた")
     return record
