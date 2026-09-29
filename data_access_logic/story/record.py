@@ -11,6 +11,7 @@ class StoryRecord(Material):
     start: Timestamp | None = None
     end: Timestamp | None = None
     event_seeded: bool
+    parent_story_id: int | None = None
     text: str
 
 

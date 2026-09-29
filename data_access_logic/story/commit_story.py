@@ -18,6 +18,7 @@ class CommitStory(CommitAndRefresh):
     def execute(self, s: Session) -> StoryRecord:
         self.check_exists(s, Location, self.story.world_id, "world_id")
         self.check_exists(s, Location, self.story.location_id, "location_id")
+        self.check_exists(s, Story, self.story.parent_story_id, "parent_story_id")
 
         record = Story()
         self.story.write_to(record)

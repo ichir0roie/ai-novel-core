@@ -24,6 +24,11 @@ class DeleteStory(CommitEntrypoint):
         if episode_id is not None:
             raise ValueError(
                 f"story_id={record.id} にはまだ話が残っている。先に話を消してから削除する")
+        child_id = s.scalar(
+            select(Story.id).where(Story.parent_story_id == record.id).limit(1))
+        if child_id is not None:
+            raise ValueError(
+                f"story_id={record.id} にはまだ子の作品(id={child_id})が残っている。先に子の作品を消すか付け替える")
 
         deleted = DeletedStory.model_validate(record)
         s.delete(record)

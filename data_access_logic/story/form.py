@@ -13,6 +13,7 @@ class StoryCreateForm(Form):
     start: Timestamp | None = None
     end: Timestamp | None = None
     event_seeded: bool = False
+    parent_story_id: int | None = None
 
 
 class StoryUpdateForm(Form):
@@ -26,3 +27,4 @@ class StoryUpdateForm(Form):
     start: Timestamp | None = None
     end: Timestamp | None = None
     event_seeded: bool | None = None
+    parent_story_id: int | None = None

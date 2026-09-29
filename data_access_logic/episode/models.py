@@ -20,6 +20,7 @@ class StoryMaterial(Material):
     state: str
     start: Stamp | None = None
     end: Stamp | None = None
+    parent_story: "StoryMaterial | None" = None
 
 
 class EpisodeSummaryMaterial(Material):
@@ -105,7 +106,8 @@ def _location(locations: list[LocationMaterial]) -> str | None:
 
 
 def _story(story: StoryMaterial) -> dict[str, Any]:
-    return {"作品名": story.name, "筋書き": story.text, "語り": story.narration, "状態": story.state}
+    return {"作品名": story.name, "筋書き": story.text, "語り": story.narration, "状態": story.state,
+            "親の作品": None if story.parent_story is None else _story(story.parent_story)}
 
 
 class EpisodeMaterial(Material):

@@ -27,7 +27,7 @@ _LABELS = {
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
     "viewpoint_character_id": "視点", "synced": "同期済み",
     "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
-    "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事",
+    "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事", "parent_story_id": "親の作品",
     "letters": "字数", "polygon": "領域(polygon)", "area": "広さ",
     "environment": "環境", "active_random_generation": "自動生成の対象", "description": "説明",
 }
