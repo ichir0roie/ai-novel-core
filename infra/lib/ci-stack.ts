@@ -5,7 +5,7 @@ import type { Construct } from "constructs";
 import { api, type DeployConfig } from "./config.js";
 
 // API のイメージの置き場と、GitHub Actions が引き受けるロール。リポジトリは公開なので、ロールは main の push だけが引き受けられ、
-// できることは novel-api の ECR への push と、novel-api 関数のコードの差し替えだけにする(cdk deploy はさせない)
+// できることは novel-api の ECR への push(と、push や関数の差し替えに要るイメージの読み取り)と、novel-api 関数のコードの差し替えだけにする(cdk deploy はさせない)
 interface NovelCiStackProps extends StackProps {
   github: DeployConfig["github"];
 }
@@ -38,7 +38,8 @@ export class NovelCiStack extends Stack {
         },
       }),
     });
-    repository.grantPush(deployRole);
+    // buildx の push は既にある目録を読み(BatchGetImage)、関数の差し替えもイメージを読むので、push だけでは足りない
+    repository.grantPullPush(deployRole);
     deployRole.addToPolicy(new iam.PolicyStatement({
       actions: ["lambda:UpdateFunctionCode", "lambda:GetFunction", "lambda:GetFunctionConfiguration"],
       resources: [`arn:aws:lambda:${this.region}:${this.account}:function:${api.functionName}`],
