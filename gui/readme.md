@@ -12,6 +12,7 @@
   (その人物に関わる関係だけを描く)へ飛ぶ
 - `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
   `claude` コマンドを叩くものは Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る
+  (Lambda など claude の無い所では、待ち行列に積んで Claude Code のルーチンが回す。`NOVEL_CLAUDE_MODE`、`.docs/claude-tasks.md`)
 
 ## 構成の決め方
 
@@ -61,7 +62,9 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 (cd core/gui/web && npm install && npm run dev)     # http://localhost:3000
 ```
 
-`/api/*` は Next.js が `NOVEL_API_URL`(既定 `http://127.0.0.1:8765`)へ流すので、ブラウザから見ると同じオリジンになる。
+`/api/*` は Next.js の route handler(`gui/web/app/api/[...path]/route.ts`)が `NOVEL_API_URL`(既定 `http://127.0.0.1:8765`)へ流すので、
+ブラウザから見ると同じオリジンになる。`NOVEL_API_KEY` があれば、流すときに `x-novel-api-key` を付ける(API 側も同じ値を持つと、
+合わない要求を 401 にする。公開の URL に置くとき用。`.docs/aws-deploy.md`)。
 
 ## API
 
@@ -76,10 +79,11 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/review` | 未確認・承認・非承認の件数 |
 | GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
 | POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
-| GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、この API が Claude Code の環境かどうか |
+| GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、claude を叩く入口を呼べるか(`claude_available`)・その扱い(`claude_mode`) |
 | POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_locations.ListLocations` のような「領域.ファイル.クラス」。`claude` を叩く入口と `background` は job の id を 202 で返す |
 | POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」「AI で補完」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す(下書きに `id` があれば、その行の空の本文だけを埋める)入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。生成器の `key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |
-| GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー(API を起こしているあいだだけ持つ) |
+| GET | `/api/jobs` / `/api/jobs/{id}` | 裏で走らせた入口の状態・結果・エラー。プロセスの中の job(API を起こしているあいだだけ持つ)と、待ち行列 `ai_task` の行(id は `task-<n>`)の両方 |
+| GET | `/api/ping` | 起きているかだけ(`NOVEL_API_KEY` があっても合言葉なしで通す) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
 | GET | `/api/maps/{planet_id}.svg` | 星ひとつの地図(svg)。場所の座標・領域から python で描く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
@@ -108,6 +112,8 @@ AI を引数に取る入口)。それらは
 - `CLAUDECODE=1` のある環境で起こした API でだけ通す。外なら 403。Claude Code のシェルは `CLAUDECODE=1` を持ち、
   `gui.dev` はどこから起こしても API に渡す(uvicorn を直に起こしたときだけ、自分で渡さなければ止まる)
 - 数分〜十数分掛かるので、必ず裏の job にして 202 で id を返す。結果は `/api/jobs/{id}` で引く。job は一度に一つずつ走る
+- `NOVEL_CLAUDE_MODE=queue` の API(Lambda)は、その場で回さず待ち行列(`ai_task`)に積んで `task-<n>` を返し、
+  Claude Code のルーチン(`tool/routine/run_ai_tasks.py`)が回す。`off` なら 403(`gui/api/claude_env.py`、`.docs/claude-tasks.md`)
 - `shared_style_extra` / `style_extra` は渡さない。入口が世界リポジトリの `instructions/style.py` から読む(`data_access_logic/world_style.py`)
 
 ## AI で作成 / AI で補完

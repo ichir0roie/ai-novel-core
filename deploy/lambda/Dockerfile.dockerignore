@@ -1,0 +1,10 @@
+# deploy/lambda/Dockerfile のビルドに渡さないもの(BuildKit は <Dockerfile>.dockerignore を読む)
+.git
+**/__pycache__
+**/*.pyc
+.env
+.venv
+.pytest_cache
+gui/web
+tests
+tool

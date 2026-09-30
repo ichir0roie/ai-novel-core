@@ -134,6 +134,7 @@ export default function InterfacePage() {
       {catalog && !catalog.claude_available && (
         <div className="status info">{T.endpoints.outsideClaude}</div>
       )}
+      {catalog?.claude_mode === "queue" && <div className="status info">{T.endpoints.queueMode}</div>}
       <div className="toolbar">
         <input type="search" placeholder={T.endpoints.searchPlaceholder} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>

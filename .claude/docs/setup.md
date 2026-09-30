@@ -6,6 +6,8 @@
 python・pytest・alembic は世界リポジトリのルートを cwd にし、`DEM_WORLD_DIR` にそのルートを、
 `PYTHONPATH` に `<ルート>/core` を渡して動かす。
 `novel.db` の場所は `DEM_NOVEL_DB_PATH` でも差し替えられる。
+`DEM_DATABASE_URL`(PostgreSQL の SQLAlchemy の URL)を渡すと、`novel.db` ではなくその db を読み書きする(`.docs/postgres.md`)。
+テスト(`tool.test`)はこれを消して必ず `novel.test.db` を使う。
 自分の世界を作るときは、空のリポジトリで `git submodule add https://github.com/ichir0roie/ai-novel-core.git core` する。
 
 git のコマンドは世界リポジトリのルートで打つ。

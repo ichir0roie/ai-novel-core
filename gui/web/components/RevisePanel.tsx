@@ -30,7 +30,7 @@ type Props = {
  * 登場人物・直前の話は聞かない(登場人物は下書きの `character_ids`、つまりこの話の `episode_character`、
  * 直前の話は `ReviseEpisode` 側がその時刻より前の三話を自動で使う)。 */
 export function useRevisePanel({ table, meta, draft, mode, onDone, beforeRun, disabled }: Props): PanelParts | null {
-  const { claudeAvailable } = useMeta();
+  const { claudeAvailable, claudeMode } = useMeta();
   const [args, setArgs] = useState<Rec>({});
   const [open, setOpen] = useState(false);
   const { job, error, running, start, setError } = useGenerateJob((id) => {
@@ -78,6 +78,7 @@ export function useRevisePanel({ table, meta, draft, mode, onDone, beforeRun, di
         </button>
       </div>
       {!claudeAvailable && <div className="status error">{T.generate.unavailable}</div>}
+      {claudeMode === "queue" && <div className="status info">{T.generate.queued}</div>}
       <div className="revise-body">
         {instructionParam && (
           <div key={instructionParam.key} className="field section">

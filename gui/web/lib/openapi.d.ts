@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ping */
+        get: operations["ping_api_ping_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -210,7 +227,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Jobs */
+        /**
+         * List Jobs
+         * @description このプロセスの job と、待ち行列(`ai_task`)の新しい行を、新しい順に
+         */
         get: operations["list_jobs_api_jobs_get"];
         put?: never;
         post?: never;
@@ -453,6 +473,12 @@ export interface components {
             entrances: components["schemas"]["EntranceMeta"][];
             /** Claude Available */
             claude_available: boolean;
+            /**
+             * Claude Mode
+             * @default off
+             * @enum {string}
+             */
+            claude_mode: "direct" | "queue" | "off";
         };
         /** EntranceMeta */
         EntranceMeta: {
@@ -574,6 +600,13 @@ export interface components {
             world_dir: string;
             /** Db Path */
             db_path: string;
+            /** Dialect */
+            dialect: string;
+            /**
+             * Claude Mode
+             * @enum {string}
+             */
+            claude_mode: "direct" | "queue" | "off";
         };
         /** JobInfo */
         JobInfo: {
@@ -882,6 +915,12 @@ export interface components {
              * @default false
              */
             claude_available: boolean;
+            /**
+             * Claude Mode
+             * @default off
+             * @enum {string}
+             */
+            claude_mode: "direct" | "queue" | "off";
         };
         /** ValidationError */
         ValidationError: {
@@ -905,6 +944,28 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    ping_api_ping_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+        };
+    };
     health_api_health_get: {
         parameters: {
             query?: never;

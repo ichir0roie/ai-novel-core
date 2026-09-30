@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import { MetaProvider } from "@/lib/meta";
@@ -16,7 +16,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <MetaProvider>
           <Nav />
-          <main>{children}</main>
+          {/* 画面は useSearchParams を読むので、next build の静的な書き出しでは読めるまで待つ境界が要る */}
+          <main>
+            <Suspense>{children}</Suspense>
+          </main>
         </MetaProvider>
       </body>
     </html>

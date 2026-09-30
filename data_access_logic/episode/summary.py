@@ -51,7 +51,7 @@ def _past_episodes_select(s: Session, episode: Episode) -> Select[Episode]:
             Episode.id != episode.id,
             Episode.main_text != "",
         )
-        .order_by(Episode.start.desc(), Episode.id.desc())
+        .order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
     )
     if episode.start is not None:
         query = query.where(Episode.start <= episode.start)

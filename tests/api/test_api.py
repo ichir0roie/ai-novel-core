@@ -37,7 +37,9 @@ def test_health(client):
     response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"world_dir": os.environ["DEM_WORLD_DIR"], "db_path": TEST_DB_PATH}
+    health = response.json()
+    assert {key: health[key] for key in ("world_dir", "db_path", "dialect")} == {
+        "world_dir": os.environ["DEM_WORLD_DIR"], "db_path": TEST_DB_PATH, "dialect": "sqlite"}
 
 
 def test_tables(client, world, in_claude_code):

@@ -5,6 +5,28 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/ping": {
+      "get": {
+        "summary": "Ping",
+        "operationId": "ping_api_ping_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Ping Api Ping Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health",
@@ -658,6 +680,7 @@
     "/api/jobs": {
       "get": {
         "summary": "List Jobs",
+        "description": "このプロセスの job と、待ち行列(`ai_task`)の新しい行を、新しい順に",
         "operationId": "list_jobs_api_jobs_get",
         "responses": {
           "200": {
@@ -1112,6 +1135,16 @@
           "claude_available": {
             "type": "boolean",
             "title": "Claude Available"
+          },
+          "claude_mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "queue",
+              "off"
+            ],
+            "title": "Claude Mode",
+            "default": "off"
           }
         },
         "type": "object",
@@ -1418,12 +1451,27 @@
           "db_path": {
             "type": "string",
             "title": "Db Path"
+          },
+          "dialect": {
+            "type": "string",
+            "title": "Dialect"
+          },
+          "claude_mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "queue",
+              "off"
+            ],
+            "title": "Claude Mode"
           }
         },
         "type": "object",
         "required": [
           "world_dir",
-          "db_path"
+          "db_path",
+          "dialect",
+          "claude_mode"
         ],
         "title": "Health"
       },
@@ -2394,6 +2442,16 @@
             "type": "boolean",
             "title": "Claude Available",
             "default": false
+          },
+          "claude_mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "queue",
+              "off"
+            ],
+            "title": "Claude Mode",
+            "default": "off"
           }
         },
         "type": "object",

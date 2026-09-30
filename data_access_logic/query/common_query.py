@@ -250,7 +250,7 @@ def character_location_select(character_id: int, until: Stamp) -> Select:
     return (select(CharacterLocation)
             .options(selectinload(CharacterLocation.location))
             .where(CharacterLocation.character_id == character_id, alive_at(CharacterLocation, until))
-            .order_by(CharacterLocation.start.desc(), CharacterLocation.id.desc())
+            .order_by(CharacterLocation.start.desc().nulls_last(), CharacterLocation.id.desc())
             .execution_options(populate_existing=True))
 
 
@@ -271,7 +271,9 @@ def resident_character_ids_select(location_ids: Collection[int], until: Stamp) -
     return (select(CharacterLocation.character_id).distinct()
             .join(Character, Character.id == CharacterLocation.character_id)
             .where(CharacterLocation.location_id.in_(list(location_ids)), alive_at(CharacterLocation, until),
-                   Character.confirmed == ConfirmStatus.APPROVED))
+                   Character.confirmed == ConfirmStatus.APPROVED)
+            # DISTINCT の並びは db 次第(PostgreSQL は崩れる)なので、id の順に決める
+            .order_by(CharacterLocation.character_id))
 
 
 def character_select(character_id: int) -> Select:
