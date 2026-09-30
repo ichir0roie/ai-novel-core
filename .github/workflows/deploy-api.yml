@@ -1,6 +1,7 @@
 # main に API(gui/api)と、それが読むコードの変更が入ったら、Lambda のコンテナを作り直して差し替える。
 # AWS へは OIDC で一時的な権限をもらう(鍵を GitHub に置かない)。設定の手順は `.docs/ci-cd.md`。
 # リポジトリの変数(Settings → Secrets and variables → Actions → Variables)が無ければ何もしない(フォーク・設定前)。
+# ロールの ARN と関数 URL は、公開のログに出さないよう秘密(Secrets)から読む。job の if は秘密を読めないので変数で判定する。
 name: deploy-api
 
 on:
@@ -28,7 +29,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    if: vars.LAMBDA_FUNCTION_NAME != ''
     runs-on: ubuntu-24.04
     env:
       IMAGE_TAG: ${{ github.sha }}
@@ -40,8 +41,9 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
 
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -65,5 +67,8 @@ jobs:
           aws lambda wait function-updated-v2 --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
 
       - name: smoke test
-        if: vars.API_BASE_URL != ''
-        run: curl --fail --silent --show-error --retry 5 --retry-delay 3 "${{ vars.API_BASE_URL }}/api/ping"
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          if [ -z "$API_BASE_URL" ]; then exit 0; fi
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$API_BASE_URL/api/ping"

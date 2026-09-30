@@ -13,18 +13,26 @@
 3. `infra/lambda/Dockerfile` を `linux/amd64` で建て、ECR に `<commit の sha>` と `main` の二つの tag で push
    (`--provenance=false`。Lambda は複数アーキの目録を受け付けない)
 4. `aws lambda update-function-code`(`<commit の sha>` の tag)→ 反映を待つ
-5. `API_BASE_URL` があれば `/api/ping` を叩いて確かめる
+5. 秘密の `API_BASE_URL` があれば `/api/ping` を叩いて確かめる
 
-リポジトリの変数(Settings → Secrets and variables → Actions → **Variables**)が無ければ、ジョブは飛ばされる
-(このリポジトリは公開なので、フォークや設定前に落ちないようにしている)。秘密は置かない。
+変数 `LAMBDA_FUNCTION_NAME` が無ければ、ジョブは飛ばされる(このリポジトリは公開なので、フォークや設定前に落ちないようにしている)。
+公開リポジトリの Actions のログは誰でも読め、変数(Variables)はログに伏せ字にならない。
+アカウント ID を含むロールの ARN と関数 URL は秘密(Secrets)に置く(ログでは `***` になる)。アカウント ID も `mask-aws-account-id` で伏せる。
+
+Settings → Secrets and variables → Actions の **Variables**:
 
 | 変数 | 例 |
 | --- | --- |
-| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::123456789012:role/github-ai-novel-core-deploy` |
 | `AWS_REGION` | `ap-northeast-1` |
 | `ECR_REPOSITORY` | `novel-api` |
 | `LAMBDA_FUNCTION_NAME` | `novel-api` |
-| `API_BASE_URL` | Lambda の関数 URL(任意。煙の確かめ用) |
+
+同じ画面の **Secrets**:
+
+| 秘密 | 例 |
+| --- | --- |
+| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::123456789012:role/github-ai-novel-core-deploy` |
+| `API_BASE_URL` | Lambda の関数 URL(任意。煙の確かめ用。末尾の `/` は除く) |
 
 ## CDK との分担
 
@@ -48,7 +56,7 @@
 ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタック(`infra/lib/ci-stack.ts`)で作る。
 
 1. `core/infra` で `npx cdk deploy NovelCi`
-2. 出力の `DeployRoleArn` を、リポジトリの変数 `AWS_DEPLOY_ROLE_ARN` に置く
+2. 出力の `DeployRoleArn` を、リポジトリの秘密 `AWS_DEPLOY_ROLE_ARN` に置く
 
 `NovelCi` が作るもの:
 
