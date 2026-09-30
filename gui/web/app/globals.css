@@ -395,17 +395,24 @@ button.ghost { background: transparent; }
 /* 注文は一行ずつ書くので、空行を挟まない改行もプレビューで改行のまま出す(マークダウンの既定では一段落につながる) */
 .panel.generate .field.section.auto .markdown-preview :is(p, li) { white-space: pre-line; }
 
-/* 作品一覧のツリー(場所の木に作品をぶら下げる) */
+/* 作品一覧(作品の親子の木)・人物一覧(場所の木に人物をぶら下げる)のツリー */
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree .tree { margin-left: 0.6rem; padding-left: 0.9rem; border-left: 1px solid var(--line); }
-.tree-location > details > summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; padding: 0.25rem 0; }
-.tree-location > details > summary::marker { color: var(--muted); }
+:is(.tree-location, .tree-parent) > details > summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; padding: 0.25rem 0; }
+:is(.tree-location, .tree-parent) > details > summary::marker { color: var(--muted); }
 .tree-name { font-weight: 600; }
 .tree-kind, .tree-count, .tree-meta { color: var(--muted); font-size: 0.85rem; }
 .tree-link { font-size: 0.8rem; margin-left: auto; }
 .tree-story { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.2rem 0; }
 .tree-story::before { content: "▸"; color: var(--muted); font-size: 0.75rem; }
 .tree-meta { display: inline-flex; gap: 0.5rem; align-items: baseline; }
+.tree-story > div { display: flex; gap: 0.6rem; align-items: baseline; }
+/* 作品ツリー: flex にした summary では既定のマーカーが出ないので、開閉の印を自前で付ける。子の無い作品は点にする */
+.tree-parent > details > summary { list-style: none; }
+.tree-parent > details > summary::-webkit-details-marker { display: none; }
+.tree-parent > details > summary::before { content: "▸"; color: var(--muted); font-size: 0.75rem; }
+.tree-parent > details[open] > summary::before { content: "▾"; }
+.tree-story.tree-leaf::before { content: "•"; }
 
 /* アイデアツリー: 親の見出しとその子の並びを横に伸ばす(親 1 行 + 右へ子が連なる組織図の形)。
    本文は出さず見出し行だけなので、深い階層でも横スクロールで追える幅に収める */
@@ -426,7 +433,7 @@ button.ghost { background: transparent; }
 }
 .tree-caret:hover { color: var(--fg); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* 作品ツリー(StoryTree): 見出し行のドラッグ&ドロップで location_id を差し替える */
+/* 作品ツリー(StoryTree): 見出し行のドラッグ&ドロップで parent_story_id を差し替える */
 .tree-draggable[draggable="true"] { cursor: grab; }
 .tree-draggable.dragging { opacity: 0.4; }
 .drop-target { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }

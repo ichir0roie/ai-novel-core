@@ -1,9 +1,8 @@
 import type { Rec } from "./api";
 
-/** 作品一覧のツリー。場所(location)を `parent_id` で木にし、作品は `location_id`(無ければ `world_id`)の場所の下に置く。
- *  作品を一つも含まない枝は落とし、どちらも無い作品は `unplaced` に出す。 */
+/** 作品一覧のツリー。作品を `parent_story_id` で木にする。親が見つからない作品は根に置く。 */
 
-export type TreeStory = {
+export type StoryNode = {
   id: number;
   name: string;
   state: string | null;
@@ -11,19 +10,8 @@ export type TreeStory = {
   end: string | null;
   // 話(episode)の数
   episodes: number;
+  children: StoryNode[];
 };
-
-export type TreeNode = {
-  id: number;
-  name: string | null;
-  kind: string | null;
-  stories: TreeStory[];
-  children: TreeNode[];
-  // 子孫まで含めた作品の数
-  total: number;
-};
-
-export type StoryTree = { nodes: TreeNode[]; unplaced: TreeStory[] };
 
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
 const str = (v: unknown): string | null => (v == null ? null : String(v));
@@ -37,13 +25,13 @@ function byStart(a: Rec, b: Rec): number {
   return sa < sb ? -1 : 1;
 }
 
-export function buildStoryTree(locations: Rec[], stories: Rec[], episodes: Rec[]): StoryTree {
-  const known = new Set(locations.map((l) => Number(l.id)));
-  const children = new Map<number | null, Rec[]>();
-  for (const location of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
-    const parent = num(location.parent_id);
+export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
+  const known = new Set(stories.map((s) => Number(s.id)));
+  const childrenOf = new Map<number | null, Rec[]>();
+  for (const story of [...stories].sort(byStart)) {
+    const parent = num(story.parent_story_id);
     const key = parent !== null && known.has(parent) ? parent : null;
-    children.set(key, [...(children.get(key) ?? []), location]);
+    childrenOf.set(key, [...(childrenOf.get(key) ?? []), story]);
   }
 
   const episodeCount = new Map<number, number>();
@@ -52,29 +40,35 @@ export function buildStoryTree(locations: Rec[], stories: Rec[], episodes: Rec[]
     if (storyId !== null) episodeCount.set(storyId, (episodeCount.get(storyId) ?? 0) + 1);
   }
 
-  const storiesAt = new Map<number, TreeStory[]>();
-  const unplaced: TreeStory[] = [];
-  for (const story of [...stories].sort(byStart)) {
+  const node = (story: Rec): StoryNode => {
     const id = Number(story.id);
-    const entry: TreeStory = {
+    return {
       id, name: String(story.name ?? story.label ?? ""), state: str(story.state),
       start: str(story.start), end: str(story.end), episodes: episodeCount.get(id) ?? 0,
-    };
-    const location = num(story.location_id), world = num(story.world_id);
-    const at = location !== null && known.has(location) ? location : world !== null && known.has(world) ? world : null;
-    if (at === null) unplaced.push(entry);
-    else storiesAt.set(at, [...(storiesAt.get(at) ?? []), entry]);
-  }
-
-  const node = (location: Rec): TreeNode | null => {
-    const id = Number(location.id);
-    const subtree = (children.get(id) ?? []).map(node).filter((n): n is TreeNode => n !== null);
-    const own = storiesAt.get(id) ?? [];
-    if (subtree.length === 0 && own.length === 0) return null;
-    return {
-      id, name: str(location.name), kind: str(location.kind), stories: own, children: subtree,
-      total: own.length + subtree.reduce((sum, child) => sum + child.total, 0),
+      children: (childrenOf.get(id) ?? []).map(node),
     };
   };
-  return { nodes: (children.get(null) ?? []).map(node).filter((n): n is TreeNode => n !== null), unplaced };
+  return (childrenOf.get(null) ?? []).map(node);
+}
+
+/** id の子孫(自分自身は含まない)の id 集合。ドラッグ中、循環になる落とし先を弾くのに使う。 */
+export function descendantIds(nodes: StoryNode[], id: number): Set<number> {
+  const result = new Set<number>();
+  const collect = (n: StoryNode) => {
+    for (const child of n.children) {
+      result.add(child.id);
+      collect(child);
+    }
+  };
+  const find = (list: StoryNode[]): StoryNode | null => {
+    for (const n of list) {
+      if (n.id === id) return n;
+      const found = find(n.children);
+      if (found) return found;
+    }
+    return null;
+  };
+  const target = find(nodes);
+  if (target) collect(target);
+  return result;
 }

@@ -167,9 +167,8 @@ export const T = {
   storyTree: {
     episodes: (n: number) => `${n} episodes`,
     stories: (n: number) => `${n} stories`,
-    openLocation: "Open location",
     noStories: "No stories yet",
-    noLocation: "No location",
+    moveToRoot: "Drop here to make it a top-level story",
     moveFailed: (error: string) => `Could not move: ${error}`,
   },
 
