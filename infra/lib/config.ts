@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 // SSM パラメータ /novel/deploy/config に JSON で置く(形は infra/aws.example.json)。使い回す既存のリソースの ID が無ければ、
 // スタックがそのリソースを作る
 export interface DeployConfig {
-  github: { repository: string; branch: string };
+  // ownerId・repositoryId は、リポジトリの OIDC の sub が ID 入りの形(immutable subject)のときに書く
+  github: { repository: string; branch: string; ownerId?: number; repositoryId?: number };
   existing: {
     vpcId?: string;
     dbInstanceIdentifier?: string;
