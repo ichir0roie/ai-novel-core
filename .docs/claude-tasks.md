@@ -90,8 +90,9 @@ web の環境の作り方(ネットワーク・環境変数)は [web-session.md]
 API を本番を写したテスト用の db(`.claude/docs/testing.md`)に向けて起こし、web の流れをその API 越しに回す(AI は `tool.test.mock_ai_client` を渡せば呼ばない)。
 
 ```
-# API(queue モード。ユーザの GUI と別のポート)
-DEM_DATABASE_URL="${DEM_DEV_DATABASE_URL%/*}/novel_test" DEM_DATABASE_IAM_AUTH=0 NOVEL_CLAUDE_MODE=queue \
+# API(queue モード。ユーザの GUI と別のポート)。開発用の PostGIS が無ければ infra_local/postgis.sh が用意する
+dev=${DEM_DEV_DATABASE_URL:-$(infra_local/postgis.sh .venv/bin/python)}
+DEM_DATABASE_URL="${dev%/*}/novel_test" DEM_DATABASE_IAM_AUTH=0 NOVEL_CLAUDE_MODE=queue \
     .venv/bin/python -m uvicorn gui.api.app:app --port 18765
 # 回す側: Claude Code の中で
 NOVEL_API_URL=http://127.0.0.1:18765 .venv/bin/python -m web_session.run_ai_tasks

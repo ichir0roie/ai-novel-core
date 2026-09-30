@@ -5,6 +5,7 @@
 """
 import logging
 import os
+import subprocess
 import sys
 
 from sqlalchemy.engine import make_url
@@ -16,12 +17,22 @@ PRODUCTION_DATABASE_URL = os.environ.get("DEM_DATABASE_URL") or None
 PRODUCTION_IAM_AUTH = os.environ.get("DEM_DATABASE_IAM_AUTH") == "1"
 
 
-def _test_database_url() -> str:
+def _dev_database_url() -> str:
+    """開発用の PostGIS の URL。渡されていなければ、テストで要ったこの時に `infra_local/postgis.sh` で用意する。"""
     dev = os.environ.get("DEM_DEV_DATABASE_URL")
-    if not dev:
-        raise RuntimeError("DEM_DEV_DATABASE_URL が無い。手元の PostGIS を infra_local/postgis.sh で用意する"
-                           "(SessionStart フックが用意して渡す)")
-    url = make_url(dev).set(database=TEST_DATABASE_NAME)
+    if dev:
+        return dev
+    logger.info("開発用の PostGIS を用意する(infra_local/postgis.sh)")
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    result = subprocess.run(["bash", os.path.join("infra_local", "postgis.sh"), sys.executable], cwd=root,
+                            stdout=subprocess.PIPE, text=True, encoding="utf-8", check=True)
+    dev = result.stdout.strip().splitlines()[-1]
+    os.environ["DEM_DEV_DATABASE_URL"] = dev
+    return dev
+
+
+def _test_database_url() -> str:
+    url = make_url(_dev_database_url()).set(database=TEST_DATABASE_NAME)
     # 取り違えて本番(転送越しの RDS も 127.0.0.1)に書かないよう、開発用の db と同じサーバーの別の db だけを許す
     if url.host not in ("127.0.0.1", "localhost") or PRODUCTION_DATABASE_URL and \
             (make_url(PRODUCTION_DATABASE_URL).host, make_url(PRODUCTION_DATABASE_URL).port) == (url.host, url.port):
