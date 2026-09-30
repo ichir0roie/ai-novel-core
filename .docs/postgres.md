@@ -36,7 +36,8 @@ db(`novel_dev`)が無ければ上の `init_db --create-database` で作って、
 | Claude Code on the web(`CLAUDE_CODE_REMOTE=true`) | apt で入れた既定のクラスタ(初回は入れるのに 1 分半ほど) | `postgresql+psycopg://novel:novel@127.0.0.1:5432/novel_dev` |
 | それ以外(手元の端末) | Docker のコンテナ `novel-postgis`(`postgis/postgis:16-3.5`、中身はボリューム `novel-postgis-data`) | `postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev` |
 
-SessionStart フックがこれを呼び、URL を `DEM_DEV_DATABASE_URL` に渡す。`DEM_DATABASE_URL`(本番)は変えないので、
+`DEM_DEV_DATABASE_URL` が渡されていなければ、テスト(`tool.test`)が要ったときにこれを呼んで用意する。手で使うときは
+`DEM_DEV_DATABASE_URL=${DEM_DEV_DATABASE_URL:-$(infra_local/postgis.sh .venv/bin/python)}` で受ける。`DEM_DATABASE_URL`(本番)は変えないので、
 開発で動かすときに渡す:
 
 ```

@@ -13,4 +13,4 @@
 - 裏で起こし(`run_in_background`)、使い終わったら `kill -TERM` で止め、18765 / 13000 が閉じたことを `ss -ltn` で確かめる
 - 起こした API は、渡した `DEM_DATABASE_URL` の db を読み書きする(ふだんは本番の RDS)。書き込みを伴う確かめは、
   本番を写したテスト用の db(`.claude/docs/testing.md`)に向けて起こす:
-  `DEM_DATABASE_URL="${DEM_DEV_DATABASE_URL%/*}/novel_test" DEM_DATABASE_IAM_AUTH=0 .venv/bin/python -m uvicorn gui.api.app:app --port 18765`
+  `dev=${DEM_DEV_DATABASE_URL:-$(infra_local/postgis.sh .venv/bin/python)} && DEM_DATABASE_URL="${dev%/*}/novel_test" DEM_DATABASE_IAM_AUTH=0 .venv/bin/python -m uvicorn gui.api.app:app --port 18765`
