@@ -85,6 +85,7 @@ npx cdk deploy    # 当てる
 コマンドを流す。世界リポジトリのルートで:
 
 ```
+export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current
 .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini upgrade head
 .venv/bin/python -m tool.aws.rds --database postgres -- psql
@@ -129,13 +130,13 @@ npx cdk deploy    # 当てる
 3. 最初のイメージを手元で建て、`main` の tag で push する(`infra/lambda/push-image.sh`)。以降は GitHub Actions が `<sha>` と `main` で push する
 4. `npx cdk deploy NovelApi` で関数(メモリ 1024 MB・タイムアウト 30 秒・private subnet は二つの AZ のもの)と関数 URL(認証 `NONE`)を deploy する。
    関数は `novel-api:main` のイメージで作り、CDK は自分でイメージを建てない(CI との分担は [ci-cd.md](ci-cd.md#cdk-との分担))
-5. 環境変数は CDK が置く。middleware が `NOVEL_API_KEYS` を読めるようになるまでは、`NOVEL_API_KEY` に `gui` の鍵だけを置く
+5. 環境変数は CDK が置く
 
 | 変数 | 値 |
 | --- | --- |
 | `DEM_DATABASE_URL` | `postgresql+psycopg://novel_app@<RDS のエンドポイント>:5432/novel?sslmode=require`(パスワードは書かない) |
 | `DEM_DATABASE_IAM_AUTH` | `1`。接続を張るたびに IAM データベース認証の token を作り、パスワードの代わりに渡す |
-| `NOVEL_API_KEYS` | 呼ぶ側ごとの合言葉(`gui=<鍵>,web=<鍵>`)。それぞれ長い乱数(`openssl rand -hex 32`)。どの鍵で来たかをログに出す(これから作る) |
+| `NOVEL_API_KEYS` | 呼ぶ側ごとの合言葉(`gui=<鍵>,web=<鍵>`)。それぞれ長い乱数(`openssl rand -hex 32`)。どの鍵で来たかをログに出す |
 | `NOVEL_CLAUDE_MODE` | `queue`(イメージの既定。AI のボタンを消すなら `off`) |
 
 確かめ: `curl <関数 URL>/api/ping` が `{"ok":true}`、`curl -H 'x-novel-api-key: …' <関数 URL>/api/health` が `"dialect":"postgresql"`。

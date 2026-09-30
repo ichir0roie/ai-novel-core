@@ -74,6 +74,7 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 AWS の db へは、作業する端末から踏み台越しに当てる(`tool.aws.rds` が `DEM_DATABASE_URL` を渡す。[aws-deploy.md](aws-deploy.md#手元から-db-へ繋ぐ))。
 
 ```
+export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current
 .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini upgrade head
 ```

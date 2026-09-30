@@ -51,7 +51,7 @@ db が要る web の作業の専用の環境を作る。ふだんのセッショ
 
 API に届いたか・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・待ち行列の件数・
 `claude` コマンドの有無を JSON で出す。`connected: true` かつ `alembic_current == alembic_head` なら終了コード 0。
-手元から AWS の db の版を確かめるときは `.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current`。
+手元から AWS の db の版を確かめるときは `DEM_WORLD_DIR="$PWD" PYTHONPATH=core .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current`。
 
 | 出たもの | 見るところ |
 | --- | --- |

@@ -20,9 +20,6 @@ _DIGITS = re.compile(r"\A\d+\Z")
 _PARTS = (("month", 2, 1), ("day", 2, 1),
           ("hour", 2, 0), ("minute", 2, 0), ("second", 2, 0))
 
-# 年より下の桁の合計。10 桁(mmddhhmmss)
-_UNDER = sum(width for _, width, _ in _PARTS)
-
 
 # 月ごとの日数(平年)と、グレゴリオ暦の四百年の日数
 _MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)

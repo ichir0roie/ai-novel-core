@@ -12,7 +12,6 @@ from collections.abc import Iterator
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
@@ -46,13 +45,6 @@ logger = logging.getLogger(__name__)
 configure_logging()
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
-# 画面は Next.js 越しに同じオリジンで呼ぶので、ブラウザから直に呼ぶ先だけを NOVEL_CORS_ORIGINS(カンマ区切り)で足す
-_extra_origins = [origin.strip() for origin in os.environ.get("NOVEL_CORS_ORIGINS", "").split(",") if origin.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", *_extra_origins],
-    allow_methods=["*"], allow_headers=["*"],
-)
 
 # 公開の URL(Lambda の関数 URL など)に置くときの合言葉。呼ぶ側ごとに `名前=鍵` をカンマで区切って持つ(例: gui=…,web=…)。
 # 呼ぶ側ごとに分けるのは、漏れる危険の高い web のセッションの鍵を、画面の鍵を止めずに替えたり外したりするため。
@@ -77,7 +69,7 @@ _PUBLIC_PATHS = {"/api/ping"}
 
 @app.middleware("http")
 async def _require_api_key(request: Request, call_next):
-    if _API_KEYS and request.method != "OPTIONS" and request.url.path not in _PUBLIC_PATHS:
+    if _API_KEYS and request.url.path not in _PUBLIC_PATHS:
         given = request.headers.get(API_KEY_HEADER, "").encode()
         caller = next((name for name, key in _API_KEYS.items() if hmac.compare_digest(given, key.encode())), None)
         if caller is None:

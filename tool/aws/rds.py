@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """AWS の RDS(PostgreSQL)へ、踏み台越しに手元から繋いでコマンドを流す。世界リポジトリのルートで:
 
+    export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
     .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current
     .venv/bin/python -m tool.aws.rds --database postgres -- psql
     .venv/bin/python -m tool.aws.rds          # 繋いだまま $SHELL を開く。exit で閉じる
