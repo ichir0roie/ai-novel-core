@@ -8,6 +8,7 @@
 | [aws-deploy.md](aws-deploy.md) | AWS に置く形(Amplify の画面 / Lambda Web Adapter の API / RDS)、`infra/` の CDK、手元から db へ繋ぐ道(`tool.aws.rds`) |
 | [ci-cd.md](ci-cd.md) | GitHub から Lambda・Amplify への自動デプロイ(OIDC・変数・マイグレーションの流し方) |
 | [claude-tasks.md](claude-tasks.md) | Web にしたときの AI ボタンの扱い(`NOVEL_CLAUDE_MODE`)と、待ち行列・フラグを web のセッションが回す仕組み(`web_session/` と API の段) |
+| [cost.md](cost.md) | 費用の見直し(RDS を EC2 と S3 のバックアップに替える案・リザーブドインスタンス、main へのマージごとのデプロイの費用) |
 | [web-session.md](web-session.md) | Claude Code on the web のセッションから db に届く道(API を通す。その環境の設定) |
 
 ## 全体の形

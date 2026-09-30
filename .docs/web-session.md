@@ -3,7 +3,7 @@
 待ち行列を回す web のセッション([claude-tasks.md](claude-tasks.md))は、Anthropic のクラウドの VM で動く。
 その VM は AWS の db(RDS for PostgreSQL。[aws-deploy.md](aws-deploy.md))に直に繋がない。
 db の読み書きは、すべて API(`novel-api` の関数 URL、HTTPS)の段(`/api/steps/{id}`)と入口(`/api/interface/{id}`)を通す(下の「決めた道」)。
-Claude 向けの決まりは `.claude/docs/aws.md`。
+Claude 向けの決まりは `.claude/docs/web-db.md`(AWS の側は `.claude/docs/aws.md`)。
 
 ## 届かない理由
 
