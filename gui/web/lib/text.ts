@@ -168,8 +168,14 @@ export const T = {
     episodes: (n: number) => `${n} episodes`,
     stories: (n: number) => `${n} stories`,
     noStories: "No stories yet",
-    moveToRoot: "Drop here to make it a top-level story",
+    moveToRoot: "Move here to make it a top-level story (no parent)",
     moveFailed: (error: string) => `Could not move: ${error}`,
+    move: "Move",
+    cancelMove: "Cancel move",
+    moveModeHint: (name: string) => `Moving "${name}" — click another story to make it the new parent (Esc to cancel)`,
+    collapseAll: "Collapse all",
+    addChild: "Add child story",
+    addEpisode: "Add episode",
   },
 
   characterTree: {
