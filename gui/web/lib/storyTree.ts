@@ -51,7 +51,17 @@ export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
   return (childrenOf.get(null) ?? []).map(node);
 }
 
-/** id の子孫(自分自身は含まない)の id 集合。ドラッグ中、循環になる落とし先を弾くのに使う。 */
+/** id のノードを木から探す。 */
+export function findNode(nodes: StoryNode[], id: number): StoryNode | null {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    const found = findNode(n.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** id の子孫(自分自身は含まない)の id 集合。付け替えの間、循環になる親の候補を弾くのに使う。 */
 export function descendantIds(nodes: StoryNode[], id: number): Set<number> {
   const result = new Set<number>();
   const collect = (n: StoryNode) => {
@@ -60,15 +70,20 @@ export function descendantIds(nodes: StoryNode[], id: number): Set<number> {
       collect(child);
     }
   };
-  const find = (list: StoryNode[]): StoryNode | null => {
-    for (const n of list) {
-      if (n.id === id) return n;
-      const found = find(n.children);
-      if (found) return found;
-    }
-    return null;
-  };
-  const target = find(nodes);
+  const target = findNode(nodes, id);
   if (target) collect(target);
+  return result;
+}
+
+/** 子を持つ(開閉できる)作品の id をすべて集める。「すべて閉じる」で使う。 */
+export function collapsibleIds(nodes: StoryNode[]): string[] {
+  const result: string[] = [];
+  const collect = (n: StoryNode) => {
+    if (n.children.length > 0) {
+      result.push(String(n.id));
+      n.children.forEach(collect);
+    }
+  };
+  nodes.forEach(collect);
   return result;
 }

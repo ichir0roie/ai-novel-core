@@ -438,13 +438,13 @@ button.ghost { background: transparent; }
 .tree-draggable.dragging { opacity: 0.4; }
 .drop-target { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
 
-/* アイデアツリー: Move ボタンで移動モードに入り、別の行をクリックして parent_idea_id を差し替える
-   (量が多いとスクロールで見切れるドラッグ&ドロップは使わない) */
+/* アイデア・作品ツリー: Move ボタンで移動モードに入り、別の行をクリックして親を差し替える
+   (量が多いとドラッグ&ドロップはスクロールで見切れる。アイデアはこちらだけを持つ) */
 .tree-move-btn {
   font-size: 0.75rem; padding: 0.1rem 0.4rem; margin-left: 0.4rem;
 }
 
-/* アイデアツリー: 行の右クリックで開く Add child / Delete のポップアップメニュー */
+/* アイデア・作品ツリー: 行の右クリックで開く Add child などのポップアップメニュー */
 .context-menu-backdrop { position: fixed; inset: 0; z-index: 30; }
 .context-menu {
   position: fixed; z-index: 31; min-width: 9rem; background: var(--panel); border: 1px solid var(--line);
@@ -457,9 +457,10 @@ button.ghost { background: transparent; }
 .context-menu-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .context-menu-item.danger { color: var(--danger); background: none; }
 .context-menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
-.tree-idea-summary.moving { background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 4px; }
-.tree-idea-summary.move-target:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
-.tree-idea-summary.move-blocked { opacity: 0.4; cursor: default; }
+:is(.tree-idea-summary, .tree-draggable).moving { background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 4px; }
+:is(.tree-idea-summary, .tree-draggable).move-target { cursor: pointer; }
+:is(.tree-idea-summary, .tree-draggable).move-target:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
+:is(.tree-idea-summary, .tree-draggable).move-blocked { opacity: 0.4; cursor: default; }
 .tree-move-hint { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .tree-root-drop {
   display: block; width: 100%; border: 1px dashed var(--line); border-radius: 8px; padding: 0.5rem 0.7rem;
