@@ -8,7 +8,8 @@ applications:
       phases:
         preBuild:
           commands:
-            # package-lock.json は手元の npm 11(Node 24)で作る。npm 10 の npm ci はそれを食い違いとして拒む
+            # package-lock.json は npm 11 の新しい版で作る(手元では `npx -y npm@11 install …`)。npm 10 や古い npm 11(11.6 で確かめた)は
+            # optional の依存(@emnapi/* など)を lock から落とすことがあり、ここの npm ci がそれを食い違いとして拒む
             - nvm install 24 && nvm use 24
             - npm ci
         build:
