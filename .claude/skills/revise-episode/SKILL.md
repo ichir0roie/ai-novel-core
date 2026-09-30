@@ -15,7 +15,9 @@ print('EPISODE_ID', episode['id'])
 "
 ```
 
-- 対象の話に出る人物(`character_ids`)は先に全員洗い出してから渡す。人物ごとに調べ直しを繰り返さない
+- 対象の話に登場する人物(`character_ids`)は先に全員洗い出してから渡す。人物ごとに調べ直しを繰り返さない
+  - 話題・回想・噂に名前が出るだけの人物は `character_ids` に入れない。`ReviseEpisode` が推敲の前後にプロット・本文から
+    名前で拾い、`episode_character` に `mentioned=true` の行として登録し、その人物の設定(歳・口調・人物像)も AI に渡す
   - その作品の話の並びは `episode.read_episodes.ReadEpisodes(story_id, count=..., text=False)` で一度に取る
     (`start` 順で返るので、並びを確かめる select を別に打ち直さない)
   - 対象の話の本文に出る名前から人物 id を引く(`select id, name from character where name like '%<名>%'`)

@@ -21,6 +21,8 @@ class ReviseEpisode(SessionEntrypoint):
     指示の箇所だけでなく、指示と材料を総合的に判断して本文を大幅に書き直してよい(話の大筋は保つ)。登場人物(この話に出る人物。初登場・既出とも)は `character_ids`、
     省けば下書きの `character_ids`(話の `episode_character` と同じ欄)、それも無ければこの話の `episode_character`。
     使う登場人物はこの話の `episode_character` として保存する。空なら止まる。
+    登場せず名前が出るだけの人物は、推敲の前後にプロット・本文から拾って `episode_character` の `mentioned` の行にし、
+    その設定(歳・口調・人物像)を AI に渡す(`data_access_logic/episode/mentions.py`)。
     前の話の概要に出ていない人物は、その材料から AI が初登場と判断して外見・性格の描写を厚くする。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば opus 5.5 の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば db の `style_preference` から読む。

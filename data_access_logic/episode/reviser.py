@@ -13,16 +13,18 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
+from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import cast_event_ids, cast_of, relations_at
+from data_access_logic.character.cast import cast_event_ids, cast_of, mentioned_of, relations_at
 from data_access_logic.episode.models import (
     EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeRevisionMaterialSerialized, RevisedEpisode, StoryMaterial,
 )
+from data_access_logic.episode.mentions import cast_characters, mentioned_in, save_mentions
 from data_access_logic.episode.summary import past_episode_ids, past_episodes, recent_episodes
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Character, Episode, EpisodeCharacter
+from db.schema import Episode, EpisodeCharacter
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 語の選び方・言い回し・地の文とセリフの運びは直前の話の本文に揃えてください。直前の話の文をそのまま写さないでください。
 登場人物それぞれの直近の出来事は、この話の前に済んだことです。
 {EVENT_AGE_INSTRUCTION}
+{MENTIONED_INSTRUCTION}
 {style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}"""
 
 
@@ -52,13 +55,9 @@ def _episode(s: Session, episode_id: int) -> Episode:
     )
     if episode is None:
         raise ValueError(f"話 id={episode_id} が見つからない")
-    if not episode.episode_characters:
+    if not cast_characters(episode):
         raise ValueError(f"話 id={episode_id} の登場人物(episode_character)が空。登場人物を指定してから直す")
     return episode
-
-
-def _characters(episode: Episode) -> list[Character]:
-    return [link.character for link in episode.episode_characters]
 
 
 def revision_targets(s: Session, episode_id: int) -> SummaryTargets:
@@ -66,7 +65,7 @@ def revision_targets(s: Session, episode_id: int) -> SummaryTargets:
     main_episode = RevisedEpisode.model_validate(episode)
     return SummaryTargets(
         episode_ids=past_episode_ids(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
-        event_ids=cast_event_ids(s, _characters(episode), main_episode.start),
+        event_ids=cast_event_ids(s, cast_characters(episode), main_episode.start),
     )
 
 
@@ -75,7 +74,7 @@ def revision_material(s: Session, episode_id: int) -> EpisodeRevisionMaterialSer
     episode = _episode(s, episode_id)
     main_episode = RevisedEpisode.model_validate(episode)
     location_id = episode.location_id or episode.story.location_id
-    characters = _characters(episode)
+    characters = cast_characters(episode)
     return EpisodeRevisionMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
@@ -83,6 +82,7 @@ def revision_material(s: Session, episode_id: int) -> EpisodeRevisionMaterialSer
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, main_episode.start),
+        mentioned=mentioned_of(mentioned_in(episode), main_episode.start),
         relations=relations_at(s, characters, main_episode.start),
     )
 
@@ -117,6 +117,7 @@ def save_revision(s: Session, episode_id: int, draft: EpisodeRevisionDraft, inst
     record.main_text = draft.main_text
     record.plot_text = _append_instruction_to_plot(record.plot_text, instruction)
     s.flush()
+    save_mentions(s, episode_id)
     logger.info(f"推敲「{record.title}」 id={record.id} {record.letters}字")
     return record
 

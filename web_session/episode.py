@@ -137,7 +137,9 @@ def complete_plot(
 
     location_id = material.locations[-1].id if material.locations else None
     known = call(episode_steps.known_locations, episode_steps.LocationScope(location_id=location_id))
-    casting = plot_completer.casting_draft(ai, material, plot_text, known, model, effort)
+    known_people = call(episode_steps.known_characters, episode_steps.KnownCharactersForm(
+        episode_id=saved.id, time=material.main_episode.start))
+    casting = plot_completer.casting_draft(ai, material, plot_text, known, known_people, model, effort)
     if casting is not None and casting.characters:
         rng = random.Random()
         for candidate in casting.characters:

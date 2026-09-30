@@ -11,19 +11,23 @@ import logging
 import random
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
+from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
+from data_access_logic.character.cast import mentioned_of
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator import generate_character
+from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.models import (
     EpisodeCastingDraft, EpisodeCastingRequestSerialized, EpisodeCharacterCandidateDraft, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodePlotDraft, EpisodePlotRequestSerialized,
 )
+from data_access_logic.episode.mentions import mentioned_in, save_mentions
 from data_access_logic.episode.writer import episode_material, writing_targets
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.location.models import LocationMaterial
@@ -45,12 +49,14 @@ _PLOT_SYSTEM_PROMPT = f"""\
 登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
 {EVENT_AGE_INSTRUCTION}
+{MENTIONED_INSTRUCTION}
 {IDEA_CONTEXT_INSTRUCTION}"""
 
 _CASTING_SYSTEM_PROMPT = f"""\
 あなたは日本語のライトノベルの設定を整える作家です。
 話の材料と、その話の新しいプロットを日本語の見出しを付けた JSON で渡すので、新しいプロットに出てくるのに材料に無い人物・舞台を挙げてください。
 characters には、新しいプロットで台詞や行動のある人物のうち、登場人物にいない人物を挙げてください。群衆や、名前の要らない通りすがりは挙げません。
+「新しいプロットに名前の出る既知の人物」は、もういる人物なので挙げません。
 人物の説明は、材料の作品・場所・時刻に馴染むように書いてください。
 location には、新しいプロットの主な舞台が書く話の場所より細かい場所で、「この場所の中の既知の場所」にも無いときだけ、その舞台を書いてください。
 location の名前は次の基準で名づけます。
@@ -72,7 +78,21 @@ def save_plot(s: Session, episode_id: int, plot_text: str) -> Episode:
     record = s.get_one(Episode, episode_id)
     record.plot_text = plot_text
     s.flush()
+    save_mentions(s, episode_id)
     return record
+
+
+def known_characters(s: Session, episode_id: int, time: Stamp) -> list[MentionedMaterial]:
+    """登場人物でなく、今のプロット・本文に名前が出る人物(`save_mentions` で拾った人物)。"""
+    episode = s.scalar(
+        select(Episode)
+        .where(Episode.id == episode_id)
+        .options(selectinload(Episode.episode_characters).joinedload(EpisodeCharacter.character))
+        .execution_options(populate_existing=True)
+    )
+    if episode is None:
+        raise ValueError(f"話 id={episode_id} が見つからない")
+    return list(mentioned_of(mentioned_in(episode), time))
 
 
 def known_locations(s: Session, location_id: int | None) -> list[LocationMaterial]:
@@ -84,9 +104,11 @@ def known_locations(s: Session, location_id: int | None) -> list[LocationMateria
 
 
 def casting_draft(
-    ai: AIClient, material: EpisodeMaterial, plot_text: str, known: list[LocationMaterial], model: str, effort: str,
+    ai: AIClient, material: EpisodeMaterial, plot_text: str, known: list[LocationMaterial],
+    known_people: list[MentionedMaterial], model: str, effort: str,
 ) -> EpisodeCastingDraft | None:
-    request = EpisodeCastingRequestSerialized(material=material, plot_text=plot_text, known_locations=known)
+    request = EpisodeCastingRequestSerialized(
+        material=material, plot_text=plot_text, known_locations=known, known_characters=known_people)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げてください。"]),
         EpisodeCastingDraft, system=_CASTING_SYSTEM_PROMPT, timeout=constants.EPISODE_CASTING_TIMEOUT,
@@ -153,7 +175,9 @@ def complete_plot(
     s.commit()
 
     location_id = material.locations[-1].id if material.locations else None
-    casting = casting_draft(ai, material, plot_text, known_locations(s, location_id), model, effort)
+    casting = casting_draft(
+        ai, material, plot_text, known_locations(s, location_id),
+        known_characters(s, episode_id, material.main_episode.start), model, effort)
     if casting is not None and casting.characters:
         _add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start)
     if casting is not None and casting.location is not None:

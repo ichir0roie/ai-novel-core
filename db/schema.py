@@ -764,6 +764,11 @@ class EpisodeCharacter(Base):
 
     episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
     character_id: Mapped[int] = mapped_column(Integer, ForeignKey("character.id"), index=True, sort_order=110)
+    mentioned: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="この話に登場せず、プロット・本文に名前が出るだけの人物か。"
+                "推敲・プロット補完・枠の生成のたびに、プロット・本文から拾い直す",
+        sort_order=120)
 
     episode: Mapped["Episode"] = relationship(back_populates="episode_characters", lazy="noload")
     character: Mapped["Character"] = relationship(lazy="noload")

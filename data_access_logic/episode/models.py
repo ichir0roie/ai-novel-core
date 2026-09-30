@@ -4,7 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.character.models import (
-    CastMaterial, CastSerialized, CharacterMaterial, CharacterRelationLine, relations_for_prompt,
+    CastMaterial, CastSerialized, CharacterMaterial, CharacterRelationLine, MentionedMaterial, MentionedSerialized,
+    relations_for_prompt,
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized
@@ -116,6 +117,8 @@ class EpisodeMaterial(Material):
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
+    # 登場人物でなく、プロット・本文に名前が出るだけの人物
+    mentioned: list[MentionedMaterial]
     # 登場人物のどれかが片側にいる関係
     relations: list[CharacterRelationLine]
     # 古い順
@@ -128,6 +131,7 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     cast: list[CastSerialized]
+    mentioned: list[MentionedSerialized]
     location_events: list[EventSerialized]
     later_events: list[EventSerialized]
     ideas: IdeaContextSerialized
@@ -144,6 +148,7 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
                 "場所": _location(self.locations),
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
                 "登場人物": [member.model_dump() for member in self.cast],
+                "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
                 "プロット": episode.plot_text,
             },
@@ -177,12 +182,15 @@ class EpisodeCastingRequest(Material):
     plot_text: str
     # 話の場所の直下にある場所
     known_locations: list[LocationMaterial]
+    # 登場人物でなく、新しいプロットに名前が出る既知の人物
+    known_characters: list[MentionedMaterial]
 
 
 class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     material: EpisodeMaterialSerialized
+    known_characters: list[MentionedSerialized]
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -190,6 +198,7 @@ class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
             **self.material.model_dump(),
             "新しいプロット": self.plot_text,
             "この場所の中の既知の場所": [_location([location]) for location in self.known_locations],
+            "新しいプロットに名前の出る既知の人物": [member.model_dump() for member in self.known_characters],
         }
 
 
@@ -203,6 +212,8 @@ class EpisodeRevisionMaterial(Material):
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
+    # 登場人物でなく、プロット・本文に名前が出るだけの人物
+    mentioned: list[MentionedMaterial]
     # 登場人物のどれかが片側にいる関係
     relations: list[CharacterRelationLine]
 
@@ -211,6 +222,7 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     cast: list[CastSerialized]
+    mentioned: list[MentionedSerialized]
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -223,6 +235,7 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
                 "登場人物": [member.model_dump() for member in self.cast],
+                "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
                 "今の題": episode.title,
                 "今の本文": episode.main_text,
@@ -238,6 +251,8 @@ class EpisodeFrameMaterial(Material):
     # 作品の立つ場所とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
+    # 登場人物でなく、プロット・本文に名前が出るだけの人物
+    mentioned: list[MentionedMaterial]
     # 登場人物のどれかが片側にいる関係
     relations: list[CharacterRelationLine]
     later_events: list[EventMaterial]
@@ -247,6 +262,7 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     cast: list[CastSerialized]
+    mentioned: list[MentionedSerialized]
     later_events: list[EventSerialized]
 
     @model_serializer
@@ -261,6 +277,7 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
             },
             "前の話の概要(古い順)": _past_episodes(self.past_episodes),
             "登場人物": [member.model_dump() for member in self.cast],
+            "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
             "登場人物の関係": relations_for_prompt(self.relations),
             "この時点より後に既に決まっている出来事": [
                 event.model_dump() for event in self.later_events],

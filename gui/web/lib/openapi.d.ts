@@ -536,6 +536,11 @@ export interface components {
         EpisodeCharacterLink: {
             /** Character Id */
             character_id: number;
+            /**
+             * Mentioned
+             * @default false
+             */
+            mentioned: boolean;
         };
         /** EpisodeRecord */
         EpisodeRecord: {
@@ -565,6 +570,11 @@ export interface components {
             main_text: string;
             /** Character Ids */
             readonly character_ids: number[];
+            /**
+             * Mentioned Character Ids
+             * @description この話に登場せず、プロット・本文に名前が出るだけの人物
+             */
+            readonly mentioned_character_ids: number[];
         };
         /** GenerateRequest */
         GenerateRequest: {

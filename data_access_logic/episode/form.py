@@ -1,9 +1,10 @@
 from typing import Annotated
 
 from pydantic import Field, model_validator
-from sqlalchemy import delete
+from sqlalchemy import delete, or_
 from sqlalchemy.orm import Session
 
+from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import Episode, EpisodeCharacter
 
@@ -59,7 +60,10 @@ class EpisodeCreateForm(EpisodeCommitForm):
 
 
 def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> None:
-    s.execute(delete(EpisodeCharacter).where(EpisodeCharacter.episode_id == episode_id))
+    """登場人物を置き換える。名前だけ出る人物(`mentioned`)の行は、登場人物になった人物の分だけ消す。"""
+    s.execute(delete(EpisodeCharacter).where(
+        EpisodeCharacter.episode_id == episode_id,
+        or_(EpisodeCharacter.mentioned.is_(False), EpisodeCharacter.character_id.in_(character_ids))))
     s.add_all([EpisodeCharacter(episode_id=episode_id, character_id=character_id)
                for character_id in dict.fromkeys(character_ids)])
     s.flush()
@@ -67,7 +71,7 @@ def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> Non
 
 def save_frame(s: Session, form: EpisodeForm) -> Episode:
     """AI 呼び出し(数分〜十数分かかることがある)の前に下書きを保存しておき、途中で失敗しても編集を失わないようにする
-    (呼ぶ側がこの後すぐ commit する)。"""
+    (呼ぶ側がこの後すぐ commit する)。名前だけ出る人物も、保存したプロット・本文から拾い直して、AI に渡す材料に入れる。"""
     if form.id is not None:
         record = s.get_one(Episode, form.id)
     elif form.story_id is not None:
@@ -91,4 +95,5 @@ def save_frame(s: Session, form: EpisodeForm) -> Episode:
     s.flush()
     if form.character_ids is not None:
         set_characters(s, record.id, form.character_ids)
+    save_mentions(s, record.id)
     return record

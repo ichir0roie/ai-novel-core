@@ -18,6 +18,7 @@ class GenerateFrame(SessionEntrypoint):
     下書きは AI 呼び出しの前に枠として一度保存する。視点・場所は AI に決めさせず、下書きの値のまま残す。
     登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids` で、枠の
     `episode_character` として残す。どちらも無ければ枠の `episode_character`(空なら作品と直前の話だけを材料にする)。
+    下書き・決めたプロットに名前が出るだけの人物は `episode_character` の `mentioned` の行にし、その設定を AI に渡す。
     """
 
     def __init__(self, frame: EpisodeForm, character_ids: list[int] | None = None, ai: AIClient = ai_client):

@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.models import CastSerialized, CharacterRelationLine, ParticipantSerialized
+from data_access_logic.character.models import (
+    CastSerialized, CharacterRelationLine, MentionedSerialized, ParticipantSerialized,
+)
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import events_of, summarized_events
 from data_access_logic.query import common_query
@@ -44,6 +46,13 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
             parameters=parameters_at(character, time),
             recent_events=list(reversed(events_of(s, _recent_events_select(character, time)))),
         )
+        for character in characters
+    ]
+
+
+def mentioned_of(characters: list[Character], time: Stamp) -> list[MentionedSerialized]:
+    return [
+        MentionedSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time))
         for character in characters
     ]
 

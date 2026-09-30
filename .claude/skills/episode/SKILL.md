@@ -31,6 +31,9 @@ episode = GenerateEpisode(EpisodeForm(id=<episodeのid>, character_ids=[<人物i
   プロットに無い出来事は足されない
 - 話に渡す登場人物は、話と人物のリレーション(`episode_character`)だけ。渡した `[<人物id>, ...]` はその話の `episode_character` として残る。
   枠へ書くときに `character_ids` を省けば、枠の `episode_character` を使う。時刻・場所から人物を拾う既定は無い
+- 名前が出るだけの人物(話題・回想・噂)は `character_ids` に入れない。プロット・本文に名前が出る承認済みの人物は、
+  話の保存・枠の生成・プロット補完・推敲のたびに `episode_character` の `mentioned=true` の行として拾い直され、
+  その設定(歳・口調・人物像)も「名前だけ出る人物」として AI に渡る
 - 前の話は、作品の中でその時刻より前の話が自動で渡る(直前の五話は本文、それより前は概要。名指しはできない)。
   章・外伝のように親の作品(`story.parent_story_id`)の子になっている作品では、一番上の作品とその子孫の話をまとめて時刻の順に見る
 - プロット(`plot_text`)か時刻(`start`)が空なら、先に AI が枠(題・プロット・時刻)を決めてから本文を書く。プロットと時刻は渡しておく
