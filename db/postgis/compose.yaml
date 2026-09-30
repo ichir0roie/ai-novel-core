@@ -1,0 +1,16 @@
+# 手元に PostGIS を立てる。`docker compose -f core/db/postgis/compose.yaml up -d`
+# 接続先は copy_to_postgis.py の既定(DEM_POSTGIS_URL)と揃えてある。イメージが postgis 拡張を入れた db を作る
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: novel
+      POSTGRES_PASSWORD: novel
+      POSTGRES_DB: novel
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+
+volumes:
+  postgis-data:

@@ -29,7 +29,7 @@ AI にラノベを書いてもらうためのプロジェクト。
 
 ```
 db/                 **記録の形(SQLAlchemy)。列はここ一か所で決まる**
-                    alembic/ にマイグレーション
+                    alembic/ にマイグレーション、postgis/ に空間の問い合わせを試す PostGIS への写し
 data_access_logic/  **db を読み書きする処理と入口。db に触れるのはここ越しだけ**(一覧は data_access_logic/readme.md)
                     location/ character/ event/ event_seed/ story/ episode/ idea/ meme/ oracle/ review/ fact_check/ map/ query/
 randomizer/         db に触れない下書き作り(factory)と乱数
