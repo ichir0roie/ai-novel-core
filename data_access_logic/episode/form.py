@@ -14,7 +14,7 @@ class EpisodeForm(Draft):
     id: int | None = None
     story_id: int | None = None
     title: str | None = None
-    key: str | None = None
+    plot_text: str | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
@@ -30,9 +30,9 @@ class EpisodeCommitForm(Form):
     id: int | None = None
     story_id: int | None = None
     title: str | None = None
-    key: str | None = None
+    plot_text: str | None = None
     # 改行を整えてから入れる(`layout_novel_text`)
-    text: str | None = None
+    main_text: str | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
@@ -70,15 +70,15 @@ def save_frame(s: Session, form: EpisodeForm) -> Episode:
     if form.id is not None:
         record = s.get_one(Episode, form.id)
     elif form.story_id is not None:
-        record = Episode(story_id=form.story_id, title="", key="")
+        record = Episode(story_id=form.story_id, title="", plot_text="")
         s.add(record)
     else:
         raise ValueError("story_id は必須")
 
     if form.title is not None:
         record.title = form.title
-    if form.key is not None:
-        record.key = form.key
+    if form.plot_text is not None:
+        record.plot_text = form.plot_text
     if form.start is not None:
         record.start = form.start
     if form.end is not None:

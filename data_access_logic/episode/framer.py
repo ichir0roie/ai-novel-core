@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの構成を考える作家です。
-作品・前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・種・時刻)を決めてください。
-種は本文を書く前の作者のメモです。300〜500 字を目安に、「## 場面」(番号付きの箇条書き。一行は「場所 / 出る人 / そこで変わること」)と「## 狙い」(この話で読者に伝えたいこと・変わること)の二つの節で書いてください。
+作品・前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・プロット・時刻)を決めてください。
+プロットは本文を書く前の作者のメモです。300〜500 字を目安に、「## 場面」(番号付きの箇条書き。一行は「場所 / 出る人 / そこで変わること」)と「## 狙い」(この話で読者に伝えたいこと・変わること)の二つの節で書いてください。
 視点・場所を作者が指定したときは、それに沿う場面にしてください(視点・場所自体はここでは決めません)。
 前の話は概要で古い順に渡します。その続きとして自然に立つ話にし、直前の話をなぞり直さないでください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしないでください。
@@ -71,7 +71,7 @@ def _frame_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeFrameMa
 
 
 def frame_episode(s: Session, ai: AIClient, episode_id: int) -> Episode:
-    """題・種は作者の指定を核に AI が組み立て直し、時刻は決まっていればそれ、無ければ AI が直前の話の後から選ぶ。"""
+    """題・プロットは作者の指定を核に AI が組み立て直し、時刻は決まっていればそれ、無ければ AI が直前の話の後から選ぶ。"""
     material = _frame_material(s, ai, episode_id)
 
     prompt = "\n".join([
@@ -93,7 +93,7 @@ def frame_episode(s: Session, ai: AIClient, episode_id: int) -> Episode:
 
     record = s.get_one(Episode, episode_id)
     record.title = draft.title
-    record.key = draft.key
+    record.plot_text = draft.plot_text
     record.start = start
     record.synced = False
     s.commit()

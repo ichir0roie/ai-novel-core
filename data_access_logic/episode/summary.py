@@ -1,5 +1,5 @@
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
@@ -7,7 +7,7 @@ from data_access_logic.episode.models import (
     EpisodeSourceSerialized, EpisodeSummaryDraft, PastEpisode, RecentEpisode,
 )
 from data_access_logic.query import common_query
-from db.schema import Episode, EpisodeSummary, summary_source_hash
+from db.schema import Episode, summary_source_hash
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -16,18 +16,17 @@ _SYSTEM_PROMPT = """\
 本文を写さず、四〜六文にまとめてください。"""
 
 
-def summarize(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | None:
-    text = episode.text.strip()
+def summarize(s: Session, ai: AIClient, episode: Episode) -> Episode | None:
+    text = episode.main_text.strip()
     if not text:
         return None
-    row = s.scalar(select(EpisodeSummary).where(EpisodeSummary.episode_id == episode.id))
-    if row is not None and row.source_hash == summary_source_hash(text):
-        return row
+    if episode.summary_text is not None and episode.summary_source_hash == summary_source_hash(text):
+        return episode
     return rewrite_summary(s, ai, episode)
 
 
-def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummary | None:
-    text = episode.text.strip()
+def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> Episode | None:
+    text = episode.main_text.strip()
     if not text:
         return None
     prompt = "\n".join([
@@ -37,24 +36,20 @@ def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> EpisodeSummar
     draft = ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
     if draft is None:
         return None
-    row = s.scalar(select(EpisodeSummary).where(EpisodeSummary.episode_id == episode.id))
-    if row is None:
-        row = EpisodeSummary(story_id=episode.story_id, episode_id=episode.id)
-        s.add(row)
-    row.source_hash = summary_source_hash(text)
-    row.summary = draft.summary
+    episode.summary_source_hash = summary_source_hash(text)
+    episode.summary_text = draft.summary_text
     s.commit()
-    return row
+    return episode
 
 
 # 章・外伝に分けた作品でも筋を切らないよう、一番上の作品とその子孫の話をまとめて時刻の順に見る
-def _past_episodes_select(s: Session, episode: Episode) -> Select[tuple[Episode]]:
+def _past_episodes_select(s: Session, episode: Episode) -> Select[Episode]:
     query = (
         select(Episode)
         .where(
             Episode.story_id.in_(common_query.story_family_ids(s, episode.story_id)),
             Episode.id != episode.id,
-            Episode.text != "",
+            Episode.main_text != "",
         )
         .order_by(Episode.start.desc(), Episode.id.desc())
     )
@@ -71,14 +66,7 @@ def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
 
 # 新しい方から `skipped_count` 話を除いた、それより前の話すべてを概要で渡す。古い順
 def summarized_episodes(s: Session, ai: AIClient, episode: Episode, skipped_count: int) -> list[PastEpisode]:
-    query = _past_episodes_select(s, episode).offset(skipped_count)
-    for past in s.scalars(query).all():
+    rows = s.scalars(_past_episodes_select(s, episode).offset(skipped_count)).all()
+    for past in rows:
         summarize(s, ai, past)
-    # 要約の commit で読み込んだ関連が期限切れになるので、要約を揃えてから読み直す
-    rows = s.scalars(
-        query
-        .join(EpisodeSummary, EpisodeSummary.episode_id == Episode.id)
-        .options(selectinload(Episode.summary))
-        .execution_options(populate_existing=True)
-    ).all()
-    return [PastEpisode.model_validate(row) for row in reversed(rows)]
+    return [PastEpisode.model_validate(row) for row in reversed(rows) if row.summary_text is not None]

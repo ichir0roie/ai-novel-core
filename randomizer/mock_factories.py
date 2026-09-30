@@ -236,8 +236,8 @@ class EpisodeFactory(_ModelFactory):
 
     story_id = _pool(Story, "StoryFactory")
     title = factory.Faker("sentence", nb_words=4, locale=_LOCALE)
-    key = factory.Faker("text", max_nb_chars=200, locale=_LOCALE)
-    text = _text()
+    plot_text = factory.Faker("text", max_nb_chars=200, locale=_LOCALE)
+    main_text = _text()
     synced = factory.Faker("pybool")
     start = _optional_stamp()
     end = _end_after_start()

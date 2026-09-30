@@ -23,29 +23,25 @@ class StoryMaterial(Material):
     parent_story: "StoryMaterial | None" = None
 
 
-class EpisodeSummaryMaterial(Material):
-    summary: str
-
-
 class EpisodeBase(Material):
     title: str
 
 
 class PastEpisode(EpisodeBase):
     start: Stamp | None = None
-    summary: EpisodeSummaryMaterial
+    summary_text: str
 
 
 class RecentEpisode(EpisodeBase):
     start: Stamp | None = None
-    text: str
+    main_text: str
 
 
 class UnwrittenEpisode(EpisodeBase):
-    key: str
-    text: str
+    plot_text: str
+    main_text: str
 
-    @field_validator("text")
+    @field_validator("main_text")
     @classmethod
     def _unwritten(cls, value: str) -> str:
         if value.strip():
@@ -57,12 +53,12 @@ class TargetEpisode(UnwrittenEpisode):
     start: Stamp
     viewpoint_character: CharacterMaterial | None = None
 
-    @field_validator("key")
+    @field_validator("plot_text")
     @classmethod
-    def _seeded(cls, value: str) -> str:
+    def _plotted(cls, value: str) -> str:
         value = value.strip()
         if not value:
-            raise ValueError("話の種(key)が空")
+            raise ValueError("話のプロット(plot_text)が空")
         return value
 
 
@@ -75,9 +71,9 @@ class FrameEpisode(UnwrittenEpisode):
 
 class RevisedEpisode(EpisodeBase):
     start: Stamp
-    text: str
+    main_text: str
 
-    @field_validator("text")
+    @field_validator("main_text")
     @classmethod
     def _written(cls, value: str) -> str:
         if not value.strip():
@@ -87,14 +83,14 @@ class RevisedEpisode(EpisodeBase):
 
 def _past_episodes(past_episodes: list[PastEpisode]) -> list[dict[str, Any]]:
     return [
-        {"題": past.title, "時刻": str(past.start) if past.start else None, "概要": past.summary.summary}
+        {"題": past.title, "時刻": str(past.start) if past.start else None, "概要": past.summary_text}
         for past in past_episodes
     ]
 
 
 def _recent_episodes(recent_episodes: list[RecentEpisode]) -> list[dict[str, Any]]:
     return [
-        {"題": recent.title, "時刻": str(recent.start) if recent.start else None, "本文": recent.text}
+        {"題": recent.title, "時刻": str(recent.start) if recent.start else None, "本文": recent.main_text}
         for recent in recent_episodes
     ]
 
@@ -149,7 +145,7 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
                 "登場人物": [member.model_dump() for member in self.cast],
                 "登場人物の関係": relations_for_prompt(self.relations),
-                "種": episode.key,
+                "プロット": episode.plot_text,
             },
             "この場所の直近の出来事(古い順)": [
                 event.model_dump() for event in self.location_events],
@@ -159,13 +155,13 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
         }
 
 
-class EpisodeKeyRequest(Material):
+class EpisodePlotRequest(Material):
     material: EpisodeMaterial
-    # 今の種に加えて、作者が新しい種に望むこと
+    # 今のプロットに加えて、作者が新しいプロットに望むこと
     order: str | None = None
 
 
-class EpisodeKeyRequestSerialized(EpisodeKeyRequest):
+class EpisodePlotRequestSerialized(EpisodePlotRequest):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     material: EpisodeMaterialSerialized
@@ -177,8 +173,8 @@ class EpisodeKeyRequestSerialized(EpisodeKeyRequest):
 
 class EpisodeCastingRequest(Material):
     material: EpisodeMaterial
-    # 書き直した種。材料の「書く話」の種(書き直す前の種)と置き換わる
-    key: str
+    # 書き直したプロット。材料の「書く話」のプロット(書き直す前のプロット)と置き換わる
+    plot_text: str
     # 話の場所の直下にある場所
     known_locations: list[LocationMaterial]
 
@@ -192,7 +188,7 @@ class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             **self.material.model_dump(),
-            "新しい種": self.key,
+            "新しいプロット": self.plot_text,
             "この場所の中の既知の場所": [_location([location]) for location in self.known_locations],
         }
 
@@ -229,7 +225,7 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
                 "登場人物": [member.model_dump() for member in self.cast],
                 "登場人物の関係": relations_for_prompt(self.relations),
                 "今の題": episode.title,
-                "今の本文": episode.text,
+                "今の本文": episode.main_text,
             },
         }
 
@@ -270,7 +266,7 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
                 event.model_dump() for event in self.later_events],
             "作者の指定": {
                 "題": episode.title.strip() or None,
-                "種": episode.key.strip() or None,
+                "プロット": episode.plot_text.strip() or None,
                 "時刻": str(episode.start) if episode.start else None,
                 "終わり": str(episode.end) if episode.end else None,
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
@@ -281,7 +277,7 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
 
 class EpisodeSource(Material):
     title: str
-    text: str
+    main_text: str
 
 
 class EpisodeSourceSerialized(EpisodeSource):
@@ -289,7 +285,7 @@ class EpisodeSourceSerialized(EpisodeSource):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        return {"題": self.title, "本文": self.text}
+        return {"題": self.title, "本文": self.main_text}
 
 
 def _laid_out(value: str) -> str:
@@ -311,26 +307,26 @@ class EpisodeDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(description="サブタイトル。短く")
-    text: str = Field(description="本文")
+    main_text: str = Field(description="本文")
 
     @field_validator("title")
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("text")
+    @field_validator("main_text")
     @classmethod
     def _text(cls, value: str) -> str:
         return _laid_out(value)
 
 
-class EpisodeKeyDraft(BaseModel):
+class EpisodePlotDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    key: str = Field(description="この話の新しい種。今の種とそっくり置き換わる")
+    plot_text: str = Field(description="この話の新しいプロット。今のプロットとそっくり置き換わる")
 
-    @field_validator("key")
+    @field_validator("plot_text")
     @classmethod
     def _filled(cls, value: str) -> str:
         return _not_empty(value)
@@ -339,7 +335,7 @@ class EpisodeKeyDraft(BaseModel):
 class EpisodeCharacterCandidateDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    called: str = Field(description="新しい種での呼び名")
+    called: str = Field(description="新しいプロットでの呼び名")
     text: str = Field(description="人物像と、この話での役どころ")
 
     @field_validator("called", "text")
@@ -367,9 +363,9 @@ class EpisodeCastingDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     characters: list[EpisodeCharacterCandidateDraft] | None = Field(
-        description="新しい種に出てくるのに、登場人物にいない人物。いなければ null")
+        description="新しいプロットに出てくるのに、登場人物にいない人物。いなければ null")
     location: EpisodeLocationCandidateDraft | None = Field(
-        description="新しい種の主な舞台が、書く話の場所より細かく、この場所の中の既知の場所にも無いときの、その舞台。"
+        description="新しいプロットの主な舞台が、書く話の場所より細かく、この場所の中の既知の場所にも無いときの、その舞台。"
                     "それ以外は null")
 
 
@@ -378,14 +374,14 @@ class EpisodeRevisionDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(default="", description="サブタイトル。直さないなら空")
-    text: str = Field(description="書き直した本文")
+    main_text: str = Field(description="書き直した本文")
 
     @field_validator("title")
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("text")
+    @field_validator("main_text")
     @classmethod
     def _text(cls, value: str) -> str:
         return _laid_out(value)
@@ -396,7 +392,7 @@ class EpisodeFrameDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(description="サブタイトル。短く")
-    key: str = Field(description="種")
+    plot_text: str = Field(description="プロット")
     start: str = Field(description="時刻。「年/月/日」の形")
 
     @field_validator("title", "start")
@@ -404,9 +400,9 @@ class EpisodeFrameDraft(BaseModel):
     def _stripped(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("key")
+    @field_validator("plot_text")
     @classmethod
-    def _key(cls, value: str) -> str:
+    def _plot_text(cls, value: str) -> str:
         return _not_empty(value)
 
 
@@ -414,9 +410,9 @@ class EpisodeSummaryDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    summary: str = Field(description="概要")
+    summary_text: str = Field(description="概要")
 
-    @field_validator("summary")
+    @field_validator("summary_text")
     @classmethod
     def _filled(cls, value: str) -> str:
         return _not_empty(value)

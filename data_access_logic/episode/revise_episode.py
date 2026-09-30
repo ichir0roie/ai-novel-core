@@ -24,7 +24,7 @@ class ReviseEpisode(SessionEntrypoint):
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば opus 5.5 の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
 
-    `episode` に `id` 以外の欄(題・種など)があれば、AI 呼び出し(数分かかることがある)の前に
+    `episode` に `id` 以外の欄(題・プロットなど)があれば、AI 呼び出し(数分かかることがある)の前に
     その下書きの値を一度保存する。途中で失敗しても、この保存分は db に残る。
     """
 

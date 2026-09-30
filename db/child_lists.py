@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`TextBase.CHILD_LISTS` に挙げた子の行を、配列としてまるごと置き換える。
+"""`ContentBase.CHILD_LISTS` に挙げた子の行を、配列としてまるごと置き換える。
 
 入口と GUI では、子の行は id と親への外部キーを持たない(行は配列の並びで決まる)。
 """

@@ -128,8 +128,8 @@ class Base(DeclarativeBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
 
 
-class TextBase(Base):
-    """本文(`text`)を持つ行。作品・人物・出来事・アイデアなど、物語の中身を文章で持つテーブルの基底。"""
+class ContentBase(Base):
+    """作品・人物・出来事・アイデア・話など、物語の中身を文章で持つテーブルの基底。"""
 
     __abstract__ = True
 
@@ -137,6 +137,12 @@ class TextBase(Base):
     TEXT_COLUMNS: tuple[str, ...] = ("text",)
     # 子の行の配列として出し入れする relationship の名前(`db/child_lists.py`)
     CHILD_LISTS: tuple[str, ...] = ()
+
+
+class TextBase(ContentBase):
+    """本文を `text` に持つ行。"""
+
+    __abstract__ = True
 
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
 
@@ -679,14 +685,14 @@ class Story(EventSeededMixin, TextBase):
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
 
-class Episode(EventSeededMixin, TextBase):
-    """話。種・時刻・視点・場所と本文までを一行に持つ。"""
+class Episode(EventSeededMixin, ContentBase):
+    """話。プロット・時刻・視点・場所と本文、本文の概要までを一行に持つ。"""
 
     __tablename__ = "episode"
 
-    TEXT_COLUMNS = ("key", "text")
+    TEXT_COLUMNS = ("plot_text", "main_text", "summary_text")
 
-    text: Mapped[str] = mapped_column(
+    main_text: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
         comment="本文。まだ書いていない話(枠だけ)は空文字", sort_order=10000)
 
@@ -715,17 +721,20 @@ class Episode(EventSeededMixin, TextBase):
 
     episode_characters: Mapped[list["EpisodeCharacter"]] = relationship(
         back_populates="episode", lazy="noload", cascade="all, delete-orphan", order_by="EpisodeCharacter.id")
-    summary: Mapped["EpisodeSummary | None"] = relationship(lazy="noload", viewonly=True)
 
     letters: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=290)
 
-    key: Mapped[str] = mapped_column(
+    plot_text: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
-        comment="キーテキスト。作者が入れる、AI 生成前の種",
+        comment="プロット。作者が入れる、AI 生成前の話の中身",
         sort_order=10010)
+    summary_text: Mapped[str | None] = mapped_column(
+        String, comment="本文の概要。AI が本文から作る。まだ作っていなければ空", sort_order=10020)
+    summary_source_hash: Mapped[str | None] = mapped_column(
+        String, comment="概要を作った本文の sha256。本文と食い違ったら概要を作り直す", sort_order=10030)
 
-    @validates("text")
+    @validates("main_text")
     def _letters_follow_text(self, _key, value):
         self.letters = len(value or "")
         return value
@@ -741,19 +750,6 @@ class EpisodeCharacter(Base):
     character: Mapped["Character"] = relationship(lazy="noload")
 
 
-class EpisodeSummary(Base):
-    """話の本文(`Episode`)の概要。"""
-
-    __tablename__ = "episode_summary"
-
-    story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), index=True, sort_order=100)
-    episode_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("episode.id"), unique=True, index=True, sort_order=110)
-    source_hash: Mapped[str] = mapped_column(
-        String, comment="要約した本文の sha256。本文と食い違ったら作り直す", sort_order=120)
-    summary: Mapped[str] = mapped_column(String, comment="概要", sort_order=130)
-
-
 class EventIdea(Base):
     """出来事の本文が踏まえたアイデア。"""
 
@@ -765,7 +761,7 @@ class EventIdea(Base):
 
 
 class EpisodeIdea(Base):
-    """話の種から引いて本文が踏まえたアイデア。"""
+    """話のプロットから引いて本文が踏まえたアイデア。"""
 
     __tablename__ = "episode_idea"
     __table_args__ = (UniqueConstraint("episode_id", "idea_id"),)
