@@ -41,6 +41,7 @@ core のどこにも書かない。
   | 項目 | 中身 |
   | --- | --- |
   | `github` | 必須。CI のロールを引き受けられる、自分の core のリポジトリとブランチ |
+  | `github.subClaimPrefix` | 任意。GitHub の OIDC の sub の前半。リポジトリが immutable subject(sub が `repo:<owner>@<ID>/<repo>@<ID>` の形)なら要る。`gh api repos/<owner>/<repo>/actions/oidc/customization/sub` の `sub_claim_prefix` をそのまま置く。無ければ `repo:<repository>` |
   | `existing` | 全部任意。無いものはスタックが作る |
   | `existing.vpcId` | 無く、`dbInstanceIdentifier` があれば、その db の VPC を使う |
   | `existing.dbInstanceIdentifier` | 使い回す RDS。マスターのパスワードは RDS の管理(`--manage-master-user-password`)にしておく。エンドポイント・セキュリティグループ・秘密の ARN は、synth のときにこの名前から引くので、設定に書かない |
