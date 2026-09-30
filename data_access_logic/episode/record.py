@@ -17,12 +17,12 @@ class EpisodeHead(Material):
     viewpoint_character_id: int | None = None
     location_id: int | None = None
     letters: int
-    key: str
+    plot_text: str
     event_seeded: bool
 
 
 class EpisodeRow(EpisodeHead):
-    text: str
+    main_text: str
 
 
 class EpisodeCharacterLink(Material):
@@ -41,6 +41,5 @@ class EpisodeRecord(EpisodeRow):
 
 
 class EpisodeSummaryRecord(Material):
-    episode_id: int
-    summary: str
-    style: str
+    id: int
+    summary_text: str

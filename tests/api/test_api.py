@@ -49,7 +49,7 @@ def test_tables(client, world, in_claude_code):
     tables = {table["name"]: table for table in body["tables"]}
     assert set(tables) == {"story", "episode", "character", "character_relation", "event", "location", "idea",
                            "meme", "oracle"}
-    assert [generator["key"] for generator in tables["episode"]["generators"]] == ["frame", "key", "episode", "revise"]
+    assert [generator["key"] for generator in tables["episode"]["generators"]] == ["frame", "plot", "episode", "revise"]
     assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
 
 
@@ -63,9 +63,9 @@ def test_list_records(client, world):
     assert (body["total"], body["limit"], body["offset"]) == (1, 10, 0)
     item = body["items"][0]
     assert item["id"] == world.episode_id
-    # 本文の列(話は種・本文の順)は外し、空でない最初の列の頭を preview に出す
+    # 本文の列(話はプロット・本文の順)は外し、空でない最初の列の頭を preview に出す
     assert item["preview"] == "市で出会う"
-    assert "key" not in item and "text" not in item
+    assert "plot_text" not in item and "main_text" not in item and "summary_text" not in item
     assert body["labels"]["story_id"] == {str(world.story_id): "テスト作品"}
     assert set(body["labels"]["character_ids"]) == {str(id_) for id_ in world.character_ids}
 
@@ -106,7 +106,7 @@ def test_create_record(client, world):
 
 def test_generate_record(client, world, in_claude_code, mock_ai):
     response = client.post("/api/tables/episode/generate/episode", json={
-        "draft": {"story_id": world.story_id, "title": "API の話", "key": "API から書く話",
+        "draft": {"story_id": world.story_id, "title": "API の話", "plot_text": "API から書く話",
                   "start": "1200/04/03 09:00:00", "end": "1200/04/03 12:00:00",
                   "viewpoint_character_id": world.character_ids[1], "location_id": world.location_id,
                   "character_ids": world.character_ids},
@@ -117,10 +117,10 @@ def test_generate_record(client, world, in_claude_code, mock_ai):
     assert job["status"] == "done", job["error"]
     assert job["entrance"] == "episode.generate_episode.GenerateEpisode"
     result = job["result"]
-    assert (result["story_id"], result["key"]) == (world.story_id, "API から書く話")
+    assert (result["story_id"], result["plot_text"]) == (world.story_id, "API から書く話")
     assert result["viewpoint_character_id"] == world.character_ids[1]
     assert result["character_ids"] == world.character_ids
-    assert result["text"]
+    assert result["main_text"]
 
 
 def test_get_record(client, world):

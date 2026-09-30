@@ -26,7 +26,7 @@ type Props = {
  * save ボタンの並びに置く小さなボタン(`toggle`)と、押すと開く大きな欄(`body`)を分けて返す。
  * 汎用のフィールド一覧(GeneratePanel と同じ組み方)では、参照選択の欄(フィルター付き)が場所を取って
  * 肝心の指示テキストが埋もれるので、ここは専用の構成で組む: 指示テキスト(大きなマークダウン欄)・
- * モデル・effort・実行ボタン。タイトル・キーテキストは見出しや左の欄に既に出ているのでここでは繰り返さない。
+ * モデル・effort・実行ボタン。タイトル・プロットは見出しや左の欄に既に出ているのでここでは繰り返さない。
  * 登場人物・直前の話は聞かない(登場人物は下書きの `character_ids`、つまりこの話の `episode_character`、
  * 直前の話は `ReviseEpisode` 側がその時刻より前の三話を自動で使う)。 */
 export function useRevisePanel({ table, meta, draft, mode, onDone, beforeRun, disabled }: Props): PanelParts | null {

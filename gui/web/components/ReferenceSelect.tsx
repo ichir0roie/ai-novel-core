@@ -39,7 +39,7 @@ export function invalidateOptions(table: string) {
   for (const listener of listeners) listener(table);
 }
 
-/** AI の生成は他のテーブルにも行を足す(話のキー情報補完が人物・場所を作るなど)ので、全部の取り置きを捨てる。 */
+/** AI の生成は他のテーブルにも行を足す(話のプロット補完が人物・場所を作るなど)ので、全部の取り置きを捨てる。 */
 export function invalidateAllOptions() {
   cache.clear();
   for (const listener of listeners) listener(null);

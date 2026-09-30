@@ -37,12 +37,12 @@ _SeedSource = Story | Episode | Character | Event
 
 
 def _pending(s: Session) -> list[SourceText[_SeedSource]]:
-    """話は種(`key`)を、無ければ本文を使う。人物は `# plot` の節だけを使う。"""
+    """話はプロット(`plot_text`)を、無ければ本文を使う。人物は `# plot` の節だけを使う。"""
     sources: list[SourceText[_SeedSource]] = []
     for story in s.scalars(event_seed_query.unseeded_select(Story)).all():
         sources.append(SourceText(row=story, label="作品の筋書き", text=story.text))
     for episode in s.scalars(event_seed_query.unseeded_select(Episode)).all():
-        sources.append(SourceText(row=episode, label="話の骨組み", text=episode.key.strip() or episode.text))
+        sources.append(SourceText(row=episode, label="話の骨組み", text=episode.plot_text.strip() or episode.main_text))
     for character in s.scalars(event_seed_query.unseeded_select(Character)).all():
         sources.append(SourceText(row=character, label="人物の筋書き", text=plot_section(character.text)))
     for event in s.scalars(event_seed_query.unseeded_select(Event)).all():

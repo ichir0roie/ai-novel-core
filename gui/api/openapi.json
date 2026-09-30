@@ -1272,17 +1272,17 @@
             "type": "integer",
             "title": "Letters"
           },
-          "key": {
+          "plot_text": {
             "type": "string",
-            "title": "Key"
+            "title": "Plot Text"
           },
           "event_seeded": {
             "type": "boolean",
             "title": "Event Seeded"
           },
-          "text": {
+          "main_text": {
             "type": "string",
-            "title": "Text"
+            "title": "Main Text"
           },
           "character_ids": {
             "items": {
@@ -1300,9 +1300,9 @@
           "title",
           "synced",
           "letters",
-          "key",
+          "plot_text",
           "event_seeded",
-          "text",
+          "main_text",
           "character_ids"
         ],
         "title": "EpisodeRecord"

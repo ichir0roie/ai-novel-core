@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class RewriteEpisodeSummary(SessionEntrypoint):
-    """本文が変わっていなくても、話の概要(`episode_summary`)を作り直す。"""
+    """本文が変わっていなくても、話の概要(`summary_text`)を作り直す。"""
 
     def __init__(self, episode_ids: list[int], ai: AIClient = ai_client):
         self.episode_ids = episode_ids
@@ -28,9 +28,9 @@ class RewriteEpisodeSummary(SessionEntrypoint):
         rewritten = []
         for episode in episodes:
             episode_id = episode.id
-            row = episode_summary.rewrite_summary(s, self.ai, episode)
-            if row is None:
+            rewritten_episode = episode_summary.rewrite_summary(s, self.ai, episode)
+            if rewritten_episode is None:
                 logger.warning("話 id=%s の要約を作れなかった(本文が空か、AI が答えなかった)", episode_id)
                 continue
-            rewritten.append(EpisodeSummaryRecord.model_validate(row))
+            rewritten.append(EpisodeSummaryRecord.model_validate(rewritten_episode))
         return rewritten

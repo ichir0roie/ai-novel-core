@@ -21,7 +21,7 @@ from gui.api.tables import TABLES, TableSpec
 # コメントより短い、フォームに出す見出し
 _LABELS = {
     "id": "id", "name": "名前", "kind": "種別", "text": "本文", "start": "開始", "end": "終了",
-    "title": "題", "key": "種(キーテキスト)", "category": "分類", "confirmed": "確認",
+    "title": "題", "plot_text": "プロット", "main_text": "本文", "category": "分類", "confirmed": "確認",
     "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
     "character_id": "人物", "character_1_id": "人物 1", "character_2_id": "人物 2", "relation": "関係",
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
@@ -117,12 +117,16 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     sections = set(model.TEXT_COLUMNS)
     # 字数は本文から自動で数えるので、フォームでは直に書けない
     readonly_columns = {"letters"} if spec.name == "episode" else set()
-    # AI 生成前の種は、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
-    side_columns = {"key"} if spec.name == "episode" else set()
-    # 話の本文は小説の地の文、キーテキストは短い種なので、マークダウンとして解釈せずただのテキストとして扱う
-    plain_text_columns = {"text"} if spec.name == "episode" else set()
+    # 本文の概要は AI に前の話を渡すためのものなので、画面には出さない
+    hidden_columns = {"summary_text", "summary_source_hash"} if spec.name == "episode" else set()
+    # AI 生成前のプロットは、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
+    side_columns = {"plot_text"} if spec.name == "episode" else set()
+    # 話の本文は小説の地の文なので、マークダウンとして解釈せずただのテキストとして扱う
+    plain_text_columns = {"main_text"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
+        if column.key in hidden_columns:
+            continue
         meta = column_meta(column, spec.create_form.model_fields.get(column.key), section=column.key in sections,
                            readonly=column.key in readonly_columns,
                            markdown=column.key not in plain_text_columns, side=column.key in side_columns)

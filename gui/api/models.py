@@ -23,8 +23,8 @@ class ColumnMeta(BaseModel):
     section: bool = False
     # section の欄をマークダウンのプレビュー付きにするか。false なら純粋なテキストとして扱う
     markdown: bool = True
-    # section のうち、本文と並べず左側の欄の一番下に高さを決めたスクロール欄で置くか(話のキーテキストなど、
-    # 本文とは別に参照するだけの短い種)
+    # section のうち、本文と並べず左側の欄の一番下に高さを決めたスクロール欄で置くか(話のプロットなど、
+    # 本文とは別に参照するだけの短いメモ)
     side: bool = False
     choices: list[str] | None = None
     # choices のうち、空欄のときに実際に使われる値(プルダウンにその選択肢だと分かるよう "(default)" を添える)

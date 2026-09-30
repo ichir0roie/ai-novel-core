@@ -27,7 +27,7 @@ class CommitEpisode(CommitAndRefresh):
             self.check_exists(s, Character, character_id, "character_ids")
 
         if form.id is None:
-            record = Episode(key="", title="")
+            record = Episode(plot_text="", title="")
             s.add(record)
         else:
             record = common_query.get_row(s, Episode, form.id)
@@ -35,8 +35,8 @@ class CommitEpisode(CommitAndRefresh):
         # 手で直した話は、世界観へ戻し直すまで同期していない扱いにする(GUI で同期フラグを渡されたらそれに従う)
         if form.synced is None:
             record.synced = False
-        if form.text is not None:
-            record.text = layout_novel_text(form.text)
+        if form.main_text is not None:
+            record.main_text = layout_novel_text(form.main_text)
         self.finalize(s, record)
         # 渡されなければ既存の登場人物はそのまま
         if form.character_ids is not None:

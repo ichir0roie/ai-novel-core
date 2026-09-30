@@ -118,7 +118,7 @@ def world() -> Iterator[World]:
                             time="1200/04/01 15:00:00", location_id=location.id, parent_event_id=event.id,
                             event_seeded=True, meme_seeded=True)
         s.add(child_event)
-        episode = Episode(story_id=story.id, title="テスト第一話", key="市で出会う", text="市で二人が出会った。",
+        episode = Episode(story_id=story.id, title="テスト第一話", plot_text="市で出会う", main_text="市で二人が出会った。",
                           synced=True, start="1200/04/01 12:00:00", end="1200/04/01 18:00:00",
                           viewpoint_character_id=characters[0].id, location_id=location.id, event_seeded=True)
         s.add(episode)

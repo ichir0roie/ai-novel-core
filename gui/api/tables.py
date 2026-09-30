@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GUI が扱うテーブル。本文を持つテーブル(`TextBase`)を、確定・修正の入口と組にして持つ。
+"""GUI が扱うテーブル。本文を持つテーブル(`ContentBase`)を、確定・修正の入口と組にして持つ。
 
 GUI からの書き込みは、入口の `execute(s)`(検証と db への書き込みだけ)を呼ぶ。
 `run()` は呼ばない。`run()` は確定のあとに AI(`claude -p`)で要約・ミーム・検証を作る段を持ち、
@@ -78,7 +78,7 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", "作品", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, StoryRecord,
               ("name", "text")),
     TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
-              EpisodeRecord, ("title", "key"), sort="start", order="desc"),
+              EpisodeRecord, ("title", "plot_text"), sort="start", order="desc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
               CharacterUpdateForm, CharacterRecord, ("name", "text"), reviewable=True),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,

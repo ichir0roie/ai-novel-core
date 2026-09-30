@@ -67,14 +67,14 @@ def _revision_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeRevi
     )
 
 
-def _append_instruction_to_key(key: str, instruction: str) -> str:
+def _append_instruction_to_plot(plot_text: str, instruction: str) -> str:
     """あとで見返せるよう、指示を消さずに積む。"""
     heading = "## 推敲"
     bullet = f"- {instruction.strip()}"
-    if heading in key:
-        return f"{key.rstrip()}\n{bullet}\n"
-    sep = "\n\n" if key.strip() else ""
-    return f"{key.rstrip()}{sep}{heading}\n\n{bullet}\n"
+    if heading in plot_text:
+        return f"{plot_text.rstrip()}\n{bullet}\n"
+    sep = "\n\n" if plot_text.strip() else ""
+    return f"{plot_text.rstrip()}{sep}{heading}\n\n{bullet}\n"
 
 
 def revise_episode(
@@ -105,8 +105,8 @@ def revise_episode(
 
     record = s.get_one(Episode, episode_id)
     record.title = draft.title or record.title
-    record.text = draft.text
-    record.key = _append_instruction_to_key(record.key, instruction)
+    record.main_text = draft.main_text
+    record.plot_text = _append_instruction_to_plot(record.plot_text, instruction)
     s.commit()
     logger.info(f"推敲「{record.title}」 id={record.id} {record.letters}字")
     return record

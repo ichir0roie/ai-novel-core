@@ -61,9 +61,9 @@ MEME_POSITIONS = {
 # data_access_logic/episode
 # 本文を一話ぶん書かせるので、断片の JSON より長く待つ秒数。
 EPISODE_TIMEOUT = 900.0
-# キー情報補完で、種を書き直させるのを待つ秒数。
-EPISODE_KEY_TIMEOUT = 300.0
-# 書き直した種から、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
+# プロット補完で、プロットを書き直させるのを待つ秒数。
+EPISODE_PLOT_TIMEOUT = 300.0
+# 書き直したプロットから、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
 EPISODE_CASTING_TIMEOUT = 300.0
 # 本文をまるごと渡す直前の話の本数。それより前の話は、作品の中のすべてを概要で渡す。
 EPISODE_FULL_TEXT_COUNT = 5
@@ -73,7 +73,7 @@ EPISODE_CHARACTER_EVENT_LIMIT = 3
 EPISODE_PLACE_EVENT_LIMIT = 3
 
 # data_access_logic/episode/summary
-# 話一話ぶんの概要・文体を覚え書きにさせるのを待つ秒数。
+# 話一話ぶんの概要を作らせるのを待つ秒数。
 RECAP_TIMEOUT = 300.0
 
 # data_access_logic/idea

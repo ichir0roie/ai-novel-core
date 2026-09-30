@@ -19,7 +19,7 @@ class GenerateEpisode(SessionEntrypoint):
     `id` を渡せばその枠(本文の無い話)へ本文を書く。
 
     AI 呼び出し(数分〜十数分かかることがある)の前に、下書きを枠として一度保存する。途中で失敗しても、枠は db に残る。
-    種(`key`)か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
+    プロット(`plot_text`)か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
     登場人物は下書きの `character_ids`、省けば枠の `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば opus 5.5 の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
@@ -43,7 +43,7 @@ class GenerateEpisode(SessionEntrypoint):
 
     def execute(self, s: Session) -> EpisodeRecord:
         record = save_frame(s, self.episode)
-        if not record.key.strip() or record.start is None:
+        if not record.plot_text.strip() or record.start is None:
             framer.frame_episode(s, self.ai, record.id)
         written = writer.write_episode(
             s, self.ai, record.id, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,

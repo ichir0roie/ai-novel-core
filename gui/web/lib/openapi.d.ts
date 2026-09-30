@@ -510,12 +510,12 @@ export interface components {
             location_id?: number | null;
             /** Letters */
             letters: number;
-            /** Key */
-            key: string;
+            /** Plot Text */
+            plot_text: string;
             /** Event Seeded */
             event_seeded: boolean;
-            /** Text */
-            text: string;
+            /** Main Text */
+            main_text: string;
             /** Character Ids */
             readonly character_ids: number[];
         };

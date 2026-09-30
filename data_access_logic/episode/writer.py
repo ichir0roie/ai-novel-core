@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
     return f"""\
 あなたは日本語のライトノベルを書く作家です。
-作品・前の話・書く話(時刻・場所・視点・登場人物・種)などを日本語の見出しを付けた JSON で渡すので、この作品の話を一話ぶん書いてください。
-種は作者が決めたこの話の中身です。それを場面まで展開したものを本文にし、種に無い出来事を足さないでください。
+作品・前の話・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この作品の話を一話ぶん書いてください。
+プロットは作者が決めたこの話の中身です。それを場面まで展開したものを本文にし、プロットに無い出来事を足さないでください。
 直前の話は本文で、それより前の話は概要で渡します。筋をそのまま受け継ぎ、語の選び方・言い回し・地の文とセリフの運びは直前の話の本文に揃えてください。直前の話の文をそのまま写さないでください。
 登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
@@ -77,7 +77,7 @@ def episode_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeMateri
             common_query.events_after_select(
                 location_id, [character.id for character in characters], main_episode.start,
                 limit=constants.LATER_EVENT_LIMIT)),
-        ideas=gather_ideas(s, main_episode.key, ai, location_id, main_episode.start),
+        ideas=gather_ideas(s, main_episode.plot_text, ai, location_id, main_episode.start),
     )
 
 
@@ -108,7 +108,7 @@ def write_episode(
     # 作者が決めた題は残し、空のときだけ本文を書いたときの題で埋める
     record.title = record.title.strip() or draft.title
     record.synced = True
-    record.text = draft.text
+    record.main_text = draft.main_text
     s.flush()
     link(s, record, material.ideas.linked)
     s.commit()
