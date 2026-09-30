@@ -1,7 +1,7 @@
 -- アプリ(Lambda の API)が使う db のロール novel_app。行の読み書き(DML)だけを許し、表を作る・変える権限(DDL)は与えない。
 -- パスワードは持たせず、IAM データベース認証(rds_iam)で繋ぐ。何度流しても同じ結果になる。
--- マスター(表の持ち主。マイグレーションもマスターで流す)で、世界リポジトリのルートから:
---   .venv/bin/python -m tool.aws.rds -- psql -v ON_ERROR_STOP=1 -f core/infra/sql/novel_app.sql
+-- マスター(表の持ち主。マイグレーションもマスターで流す)で、リポジトリのルートから:
+--   .venv/bin/python -m tool.aws.rds -- psql -v ON_ERROR_STOP=1 -f infra/sql/novel_app.sql
 
 DO $$
 BEGIN

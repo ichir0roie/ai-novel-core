@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""空の PostgreSQL(+ PostGIS)に、`db/schema.py` の表を作る。世界リポジトリのルートから:
+"""空の PostgreSQL(+ PostGIS)に、`db/schema.py` の表を作る。リポジトリのルートから:
 
     DEM_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/novel \\
         .venv/bin/python -m db.postgres.init_db --create-database

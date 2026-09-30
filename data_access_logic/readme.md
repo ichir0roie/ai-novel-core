@@ -11,7 +11,7 @@ db を読み書きする処理と、それを呼ぶ入口を置く場所。claud
     from data_access_logic.location.list_locations import ListLocations
     ListLocations(kind="村").show()
 
-db の触り方(入口越し・読み取り)は 世界リポジトリの `.claude/docs/db.md` を見る。ユーザが見て直す窓口は `gui/`。
+db の触り方(入口越し・読み取り)は `.claude/docs/db.md` を見る。ユーザが見て直す窓口は `gui/`。
 ここの入口は GUI の API(`POST /api/interface/<領域>.<ファイル>.<クラス>`)からも同じ引数で呼べる(`gui/readme.md`)。
 
 ## 引数とレスポンス

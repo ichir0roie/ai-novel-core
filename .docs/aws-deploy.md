@@ -60,10 +60,10 @@ core のどこにも書かない。
 
 ## infra(CDK)
 
-`core/infra` で動かす。bootstrap(`CDKToolkit`)は済んでいる。
+`infra` で動かす。bootstrap(`CDKToolkit`)は済んでいる。
 
 ```
-cd core/infra
+cd infra
 npm install
 npx cdk diff      # 変わるものを見る
 npx cdk deploy    # 当てる
@@ -81,30 +81,35 @@ npx cdk deploy    # 当てる
 手元 ──ssh(EC2 Instance Connect Endpoint の open-tunnel)──▶ 踏み台 ──5432──▶ RDS
 ```
 
-`tool.aws.rds` が、踏み台を起こすところから転送を張るところまでを行い、`DEM_DATABASE_URL` と psql 用の `PG*` を渡して
-コマンドを流す。世界リポジトリのルートで:
+`tool.aws.rds` が、踏み台を起こすところから転送を張るところまでを行う。使い方は二つ。リポジトリのルートで:
 
 ```
-export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini upgrade head
+.venv/bin/python -m tool.aws.rds --serve   # ふだん用。127.0.0.1:15432 に転送を張り続ける
+.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # マスターで流す
 .venv/bin/python -m tool.aws.rds --database postgres -- psql
-.venv/bin/python -m tool.aws.rds          # 繋いだまま $SHELL を開く。exit で閉じる
+.venv/bin/python -m tool.aws.rds          # マスターで繋いだまま $SHELL を開く。exit で閉じる
 ```
+
+| 使い方 | 繋ぐ db のロール | 認証 |
+| --- | --- | --- |
+| `--serve`(ふだんの読み書き。SessionStart フックと VS Code のタスク「db tunnel」が起こす) | `novel_app`(行の読み書きだけ) | IAM データベース認証。`DEM_DATABASE_URL=postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require` と `DEM_DATABASE_IAM_AUTH=1` を渡した python が、繋ぐたびにトークンを作る。トークンは RDS の本来のエンドポイント(SSM の `/novel/db/endpoint`)に宛てて作る |
+| `-- <コマンド>`(マイグレーション・表の権限を変える SQL など、DDL が要る作業) | マスター | RDS が管理する秘密からパスワードを読み、`DEM_DATABASE_URL`・`PG*` にして渡す。既定のポートは 15433 |
 
 1. SSM の `/novel/*` から db と踏み台を引く
 2. 踏み台が止まっていれば起こす
-3. 使い捨ての鍵を EC2 Instance Connect で踏み台に送り(60 秒だけ効く)、ssh で db のポートを手元の `--port`(既定 15432)へ転送する
-4. マスターの秘密からパスワードを読み、`postgresql+psycopg://…@127.0.0.1:15432/novel?sslmode=require` を組む
-5. 自分で起こした踏み台は、終わるときに止める
+3. 使い捨ての鍵を EC2 Instance Connect で踏み台に送り(60 秒だけ効く)、ssh で db のポートを手元の `--port` へ転送する
+4. `--serve` は転送が切れるたびに張り直す(EC2 Instance Connect Endpoint の転送は一本 1 時間で切れる)。コマンドを渡したときは、
+   マスターの秘密からパスワードを読んでコマンドを流す
+5. 自分で起こした踏み台は、終わるときに止める(`--serve` は Ctrl+C か SIGTERM で終わる)
 
-- 要るもの: AWS CLI v2、ssh、AWS の権限(`ssm:GetParametersByPath`・`ec2:DescribeInstances`・`ec2:StartInstances`・`ec2:StopInstances`・
-  `ec2-instance-connect:SendSSHPublicKey`・`ec2-instance-connect:OpenTunnel`・`secretsmanager:GetSecretValue`)
-- パスワードは RDS が回すので、毎回秘密から読み直す。手でどこかに写さない
-- EC2 Instance Connect Endpoint の転送は、一本 1 時間で切れる
-- 同時に二つ動かすと、先に踏み台を起こした方が終わるときに踏み台を止め、もう一方の転送も切れる。長く使う方に `--keep-bastion` を付ける
+- 要るもの: AWS CLI v2、ssh、AWS の権限(`ssm:GetParametersByPath`・`ssm:GetParameters`・`ec2:DescribeInstances`・`ec2:StartInstances`・`ec2:StopInstances`・
+  `ec2-instance-connect:SendSSHPublicKey`・`ec2-instance-connect:OpenTunnel`・`rds-db:connect`(`novel_app`)・`secretsmanager:GetSecretValue`(マスター))
+- パスワードは手でどこかに写さない。ふだんの接続はパスワードを持たず、マスターのパスワードは RDS が回すので毎回秘密から読み直す
+- `--serve` を動かしている間は踏み台も動き続ける(t4g.nano)。使わない間は止める(`pkill -f 'tool.aws.rds --serve'`)
+- `--serve` とコマンドを渡す方は別のポートで聞くので、同時に動かせる。ただし、先に踏み台を起こした方が終わるときに踏み台を止め、
+  もう一方の転送も切れる。コマンドを渡す方を `--serve` の最中に回すなら、踏み台は `--serve` が起こしたものなので止まらない
 
-## API(Lambda)(これから作る)
+## API(Lambda)
 
 `infra/` のスタックで作る(ECR・関数・関数 URL・実行ロール・セキュリティグループ)。
 
@@ -181,7 +186,7 @@ Lambda の環境変数を読める人にはどのみち見えるので、一人�
 合言葉を替える(`<gui|web>` は替える側):
 
 1. `aws ssm put-parameter --name /novel/api-keys/<gui|web> --type SecureString --overwrite --value "$(openssl rand -hex 32)"`
-2. `core/infra` で `npx cdk deploy NovelApi`。Lambda の環境変数が替わり、古い鍵はその時点で通らなくなる
+2. `infra` で `npx cdk deploy NovelApi`。Lambda の環境変数が替わり、古い鍵はその時点で通らなくなる
 3. `gui` を替えたら Amplify の `NOVEL_API_KEY` を替えて建て直す。`web` を替えたら web の環境の `NOVEL_API_KEY` を替える
 
 2 と 3 の間は、替えた側の呼び出しが 401 になる。止めずに替えたくなったら、同じ呼ぶ側に新旧二つの鍵を一時的に置ける形を
@@ -201,7 +206,7 @@ API に任意の SQL を受ける口は作らず、公開するのは `data_acce
 
 | | ローカル(`gui.dev`) | AWS |
 | --- | --- | --- |
-| db | SQLite の `novel.db` | RDS for PostgreSQL(db `novel`) |
+| db | 同じ RDS(踏み台越しの転送、`novel_app` の IAM 認証) | RDS for PostgreSQL(db `novel`。VPC の中から、`novel_app` の IAM 認証) |
 | `/api/*` の流し先 | `NOVEL_API_URL` 既定 `http://127.0.0.1:8765` | Lambda の関数 URL |
 | 合言葉 | 無し(`NOVEL_API_KEY` 空) | 有り |
 | AI のボタン | その場で回す(`direct`) | 待ち行列に積む(`queue`) |

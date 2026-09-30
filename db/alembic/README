@@ -2,23 +2,25 @@ Generic single-database configuration.
 
 ## コマンド例
 
-世界リポジトリのルートから実行する(環境変数 `DEM_WORLD_DIR` と `PYTHONPATH` を渡しておく)。
+リポジトリのルートから実行する。RDS(本番)に当てるときは、表を変える権限のあるマスターで流すので `tool.aws.rds` 越しにする
+(`.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head`。
+ふだんの `DEM_DATABASE_URL` の novel_app は表を変えられない)。
 
 ```
 # 今 db がどのリビジョンにいるか見る
-python -m alembic -c core/db/alembic/alembic.ini current
+python -m alembic -c db/alembic/alembic.ini current
 
 # 履歴を見る
-python -m alembic -c core/db/alembic/alembic.ini history
+python -m alembic -c db/alembic/alembic.ini history
 
 # schema.py を直したあと、差分からマイグレーションを自動生成する
-python -m alembic -c core/db/alembic/alembic.ini revision --autogenerate
+python -m alembic -c db/alembic/alembic.ini revision --autogenerate
 
 # 生成された versions/{yyyy}/{mm}/{dd}/ 配下のファイルを確認・手直ししてから、db に反映する
-python -m alembic -c core/db/alembic/alembic.ini upgrade head
+python -m alembic -c db/alembic/alembic.ini upgrade head
 
 # 一つ前のリビジョンへ戻す
-python -m alembic -c core/db/alembic/alembic.ini downgrade -1
+python -m alembic -c db/alembic/alembic.ini downgrade -1
 ```
 
 `versions/` は `versions/{yyyy}/{mm}/{dd}/{hhmmss}_{rev}_{slug}.py` の形で

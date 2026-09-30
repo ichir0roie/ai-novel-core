@@ -2,7 +2,7 @@
 # 開発用の PostgreSQL + PostGIS を用意し、空の db の SQLAlchemy の URL を標準出力に出す(.docs/postgres.md「開発用の db」)。
 # 何度走らせてもよい。サーバーが無ければ入れて起動し、db が無ければ schema.py から空の db を作る。
 # クラウド(Claude Code on the web)では apt で入れた既定のクラスタ、それ以外では Docker のコンテナで動かす。
-# 世界リポジトリのルートを cwd にし、DEM_WORLD_DIR と PYTHONPATH を渡して、引数に python を渡して呼ぶ。
+# リポジトリのルートを cwd にし、引数に python を渡して呼ぶ。
 set -euo pipefail
 
 py=${1:-.venv/bin/python}

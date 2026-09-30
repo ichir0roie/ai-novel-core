@@ -1,18 +1,15 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
 
 from db.postgres.postgis import POSTGIS_COLUMNS, POSTGIS_TABLES
-from db.schema import Base, database_url
+from db.schema import DATABASE_IAM_AUTH, Base, database_url, make_url_engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# db/schema.py と同じ db(DEM_DATABASE_URL があればその PostgreSQL、無ければ DB_PATH の SQLite)を使う。
+# db/schema.py と同じ db(DEM_DATABASE_URL)を使う。RDS に当てるときは tool.aws.rds がマスターの URL を渡す。
 # URL の % は configparser の補間に食われるので重ねる
 config.set_main_option("sqlalchemy.url", database_url().replace("%", "%%"))
 
@@ -57,11 +54,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # 手元のふだんの接続(novel_app)は IAM 認証のトークンで繋ぐので、schema.py と同じ作り方で engine を作る
+    connectable = make_url_engine(database_url(), iam_auth=DATABASE_IAM_AUTH)
 
     with connectable.connect() as connection:
         context.configure(

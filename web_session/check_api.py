@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""web のセッションから API 越しに db に届くかを確かめる。世界リポジトリのルートで:
+"""web のセッションから API 越しに db に届くかを確かめる。リポジトリのルートで:
 
     .venv/bin/python -m web_session.check_api
 

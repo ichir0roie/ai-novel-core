@@ -13,7 +13,6 @@ from sqlalchemy import (
     UniqueConstraint,
     select,
     Select,
-    text,
     update,
     or_,
     and_,
@@ -838,29 +837,14 @@ class AiTask(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=190)
 
 
-# 既定値は持たない。場所を取り違えると sqlite が空の db を黙って作るので、未設定なら import で止める。
-WORLD_DIR = os.environ["DEM_WORLD_DIR"]
-NOVEL_DB_PATH = os.environ.get("DEM_NOVEL_DB_PATH", os.path.join(WORLD_DIR, "novel.db"))
-DB_PATH = os.environ.get("DEM_DB_PATH", NOVEL_DB_PATH)
-# PostgreSQL(RDS など)に繋ぐときの SQLAlchemy の URL(例: postgresql+psycopg://user:pass@host:5432/novel)。
-# 渡せば DB_PATH の SQLite より優先する。`tool.test` はこれを消して novel.test.db に固定する
+# 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、
+# テストは手元の PostGIS(`tool.test`)を指す。web のセッションは db に繋がず表の定義だけを使うので、無くても import はできる
 DATABASE_URL = os.environ.get("DEM_DATABASE_URL") or None
-
-
-def create_db(path=DB_PATH):
-    """台帳から何度でも組み直せるので、既にあれば消して作り直す。"""
-    path = os.path.abspath(path)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if os.path.exists(path):
-        os.remove(path)
-    engine = create_engine(f"sqlite:///{path}")
-    with engine.begin() as conn:
-        # sqlite の既定も UTF-8 だが、文字化け事故を防ぐため明記しておく。
-        # テーブルが空のうちしか効かないので create_all の前に打つ。
-        conn.execute(text("PRAGMA encoding='UTF-8'"))
-    Base.metadata.create_all(engine)
-    seed_master_rows(engine)
-    return engine
+# RDS の IAM データベース認証で繋ぐか(パスワードの代わりに、接続のたびにトークンを作る)
+DATABASE_IAM_AUTH = os.environ.get("DEM_DATABASE_IAM_AUTH") == "1"
+# 手元の転送(127.0.0.1)越しに IAM 認証で繋ぐとき、トークンは RDS の本来のエンドポイントに宛てて作る。その在りかの SSM パラメータ
+_RDS_ENDPOINT_PARAMETERS = ("/novel/db/endpoint", "/novel/db/port")
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def seed_master_rows(engine) -> None:
@@ -870,40 +854,56 @@ def seed_master_rows(engine) -> None:
         s.commit()
 
 
-def database_url(path=DB_PATH) -> str:
-    return DATABASE_URL or f"sqlite:///{os.path.abspath(path)}"
+def database_url() -> str:
+    if not DATABASE_URL:
+        raise RuntimeError("DEM_DATABASE_URL が無い。手元は `tool.aws.rds --serve` の転送と、"
+                           "SessionStart フックか .vscode が渡す DEM_DATABASE_URL で RDS に繋ぐ(.claude/docs/setup.md)")
+    return DATABASE_URL
 
 
-def make_url_engine(url: str):
+def make_url_engine(url: str, iam_auth: bool = False):
     if make_url(url).get_backend_name() == "sqlite":
         return create_engine(url)
-    # Lambda は凍結をはさんで接続を使い回すので、切れた接続を使う前に確かめる
+    # Lambda は凍結をはさんで接続を使い回し、手元の転送は 1 時間で張り直すので、切れた接続を使う前に確かめる
     engine = create_engine(url, pool_pre_ping=True, pool_recycle=300)
-    if os.environ.get("DEM_DATABASE_IAM_AUTH") == "1":
+    if iam_auth:
         _use_iam_auth_token(engine)
     return engine
 
 
 def _use_iam_auth_token(engine) -> None:
     # RDS の IAM データベース認証のトークンは 15 分で切れるので、接続を張るたびに作る。
-    # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む。boto3 は Lambda のイメージにだけ入れる
-    import boto3  # pyright: ignore[reportMissingImports]
+    # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む
+    import boto3
     from sqlalchemy import event
 
     rds = boto3.client("rds")
+    signed_for: dict[tuple[str, int], tuple[str, int]] = {}
+
+    def rds_endpoint(host: str, port: int) -> tuple[str, int]:
+        if host not in _LOOPBACK_HOSTS:
+            return host, port
+        if (host, port) not in signed_for:
+            values = boto3.client("ssm").get_parameters(Names=list(_RDS_ENDPOINT_PARAMETERS))["Parameters"]
+            found = {value["Name"]: value["Value"] for value in values}
+            endpoint, rds_port = (found[name] for name in _RDS_ENDPOINT_PARAMETERS)
+            signed_for[(host, port)] = (endpoint, int(rds_port))
+        return signed_for[(host, port)]
 
     @event.listens_for(engine, "do_connect")
     def _set_token(dialect, conn_rec, cargs, cparams):
+        host, port = rds_endpoint(cparams["host"], int(cparams.get("port", 5432)))
         cparams["password"] = rds.generate_db_auth_token(
-            DBHostname=cparams["host"], Port=int(cparams.get("port", 5432)), DBUsername=cparams["user"],
-            Region=rds.meta.region_name)
+            DBHostname=host, Port=port, DBUsername=cparams["user"], Region=rds.meta.region_name)
 
 
-def _make_engine(path):
-    return make_url_engine(database_url(path))
+def _no_database(*args, **kwargs):
+    database_url()
 
 
-engine = _make_engine(DB_PATH)
+# URL が無ければ、繋いだ時点で database_url() の理由で止まる engine にする
+engine = (make_url_engine(DATABASE_URL, iam_auth=DATABASE_IAM_AUTH) if DATABASE_URL
+          else create_engine("postgresql+psycopg://", creator=_no_database))
 
 
 def get_env_session():

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""SQLite の `novel.db` の中身を、`init_db` で作った PostgreSQL へ写す。世界リポジトリのルートから:
+"""ある db の中身を、`init_db` で作った PostgreSQL へ写す。リポジトリのルートから:
 
-    DEM_DATABASE_URL=postgresql+psycopg://user:pass@host:5432/novel \\
-        .venv/bin/python -m db.postgres.import_sqlite            # 写し元は DEM_NOVEL_DB_PATH(既定は <世界>/novel.db)
+    .venv/bin/python -m db.postgres.copy_db --source-url sqlite:////path/to/novel.db \\
+        --url postgresql+psycopg://user:pass@host:5432/novel
+
+写し元は SQLite(昔の `novel.db`)でも PostgreSQL でもよい。テストの db に本番を写すのにも使う(`tool.test.copy_production_db`)。
 
 - 写し元と写し先は同じ alembic の版(head)にそろえておく。食い違えば止まる
 - 写し先は `init_db` 直後の空の db を前提にする。行があれば止まる(`--truncate` で消してから写す)
 - 写し元の外部キーが指す先の無い行(SQLite は外部キーを確かめない)があれば、写す前に並べて止まる
 - 一つのトランザクションで写すので、途中で落ちれば何も入らない
 
-値は列の型(Stamp・confirmed など)を通さず、db に入っている生の値のまま運ぶ(`db/rebuild_db.py` と同じ理由)。
+値は列の型(Stamp・confirmed など)を通さず、db に入っている生の値のまま運ぶ(型を通すと、今の型が受け付けない古い値で止まる)。
 """
 from __future__ import annotations
 
@@ -27,7 +29,7 @@ _BATCH = 1000
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--source", help="写し元の SQLite のファイル。省けば DEM_NOVEL_DB_PATH(既定は <世界>/novel.db)")
+    p.add_argument("--source-url", required=True, help="写し元の SQLAlchemy の URL(SQLite は sqlite:////<絶対パス>)")
     p.add_argument("--url", help="写し先の SQLAlchemy の URL。省けば DEM_DATABASE_URL")
     p.add_argument("--truncate", action="store_true", help="写し先の表を空にしてから写す(写し先の行は消える)")
     return p.parse_args(argv)
@@ -40,32 +42,47 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit("URL が無い。--url か DEM_DATABASE_URL で PostgreSQL の URL を渡す")
     os.environ["DEM_DATABASE_URL"] = url
 
-    from sqlalchemy import MetaData, create_engine, func, select, text
+    from sqlalchemy.engine import make_url
 
     from data_access_logic.logs import configure_logging
-    from db.schema import NOVEL_DB_PATH, Base, engine
+    from db.schema import engine, make_url_engine
 
     configure_logging()
+    source_url = make_url(args.source_url)
+    if source_url.get_backend_name() == "sqlite":
+        if not source_url.database or not os.path.exists(source_url.database):
+            sys.exit(f"写し元が無い: {source_url.database}")
+        # 他の処理が書き込み中でも半端に読まないよう、読み取り専用で開く
+        source = make_url_engine(f"sqlite:///file:{os.path.abspath(source_url.database)}?mode=ro&uri=true")
+    else:
+        source = make_url_engine(args.source_url)
+    counts = copy_database(source, engine, truncate=args.truncate)
+    source.dispose()
+    for name, count in counts.items():
+        print(f"{name}\t{count}")
+
+
+def copy_database(source, engine, truncate: bool = False) -> dict[str, int]:
+    """source の全表の行を engine(PostgreSQL)へ写し、表ごとの行数を返す。"""
+    from sqlalchemy import MetaData, func, select, text
+
+    from db.schema import Base
+
     if engine.dialect.name != "postgresql":
         sys.exit("写し先が PostgreSQL ではない")
-    source_path = os.path.abspath(args.source or NOVEL_DB_PATH)
-    if not os.path.exists(source_path):
-        sys.exit(f"写し元が無い: {source_path}")
-    source = create_engine(f"sqlite:///file:{source_path}?mode=ro&uri=true")
-
     source_meta = MetaData()
-    source_meta.reflect(bind=source)
     target_meta = MetaData()
     with warnings.catch_warnings():
         # PostGIS の幾何の列(生成列。写さない)の型を SQLAlchemy が知らないという警告
         warnings.filterwarnings("ignore", message="Did not recognize type 'geometry'")
+        source_meta.reflect(bind=source)
         target_meta.reflect(bind=engine)
     tables = [table for table in Base.metadata.sorted_tables if table.name in target_meta.tables]
 
     with source.connect() as src, engine.begin() as dst:
         _check_revision(src, dst)
         _check_orphans(src, source_meta, tables)
-        if args.truncate:
+        if truncate:
             names = ", ".join(f'"{table.name}"' for table in tables)
             dst.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
         else:
@@ -86,9 +103,7 @@ def main(argv: list[str] | None = None) -> None:
             copied = dst.scalar(select(func.count()).select_from(target_meta.tables[name]))
             if copied != count:
                 raise RuntimeError(f"{name}: 写し元 {count} 行に対し、写し先 {copied} 行")
-    source.dispose()
-    for name, count in counts.items():
-        print(f"{name}\t{count}")
+    return counts
 
 
 def _check_revision(src, dst) -> None:
@@ -155,7 +170,11 @@ def _copy_table(src, dst, source_table, target_table, self_refs: list[str]) -> i
     from sqlalchemy import JSON, bindparam, select
     from sqlalchemy.dialects.postgresql import JSONB
 
-    columns = [column.name for column in source_table.columns if column.name in target_table.c]
+    from db.postgres.postgis import POSTGIS_COLUMNS
+
+    # PostGIS の幾何は生成列なので写さない(写し先が値から作り直す)
+    columns = [column.name for column in source_table.columns
+               if column.name in target_table.c and (source_table.name, column.name) not in POSTGIS_COLUMNS]
     for name in columns:
         # 読み取った jsonb の型は None を JSON の null で入れるので、SQL の NULL で入れる型に替える
         if isinstance(target_table.c[name].type, JSON):

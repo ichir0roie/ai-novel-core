@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""データ編集 GUI の API。世界リポジトリのルートから次で起動する(`DEM_WORLD_DIR` / `PYTHONPATH` は他と同じ)。
+"""データ編集 GUI の API。リポジトリのルートから次で起動する(`DEM_DATABASE_URL` などは他の python と同じ)。
 
     .venv/bin/python -m uvicorn gui.api.app:app --port 8765 --reload
 """
@@ -29,7 +29,7 @@ from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OP
 from data_access_logic.map.collect import planet_maps
 from data_access_logic.map.geometry import BEARINGS
 from data_access_logic.map.render_svg import COLORS, render_svg
-from db.schema import DB_PATH, WORLD_DIR, AiTask, engine, get_env_session
+from db.schema import AiTask, engine, get_env_session
 from db.stamp import Stamp
 from gui.api import generate, interface, meta, records, review
 from gui.api.claude_env import ClaudeCommandForbidden, claude_available, claude_mode, require_claude_code
@@ -126,9 +126,7 @@ def ping() -> dict[str, bool]:
 
 @app.get("/api/health", response_model=Health)
 def health() -> Health:
-    dialect = engine.dialect.name
-    return Health(world_dir=WORLD_DIR, db_path=DB_PATH if dialect == "sqlite" else "", dialect=dialect,
-                  claude_mode=claude_mode())
+    return Health(dialect=engine.dialect.name, claude_mode=claude_mode())
 
 
 @app.get("/api/tables", response_model=TablesResponse)

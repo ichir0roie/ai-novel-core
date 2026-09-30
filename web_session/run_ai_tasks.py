@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""待ち行列(`ai_task`)を、Claude Code on the web のセッションで回す。世界リポジトリのルートで:
+"""待ち行列(`ai_task`)を、Claude Code on the web のセッションで回す。リポジトリのルートで:
 
     .venv/bin/python -m web_session.run_ai_tasks
 

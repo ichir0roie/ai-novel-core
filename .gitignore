@@ -9,4 +9,10 @@ backup
 
 tmp
 .pytest_cache
-*.test.db
+# db は RDS(本番)と手元の PostGIS(開発・テスト)に置く。SQLite のファイルは入れない
+*.db
+
+# gui.dev のブラウザのプロファイル、tool.aws.rds --serve のログ、Claude Code の手元だけの設定
+.brave-profile/
+.cache/
+.claude/settings.local.json

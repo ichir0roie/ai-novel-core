@@ -1,6 +1,6 @@
 # ruff(python の lint)の設定。`uvx ruff check` で回す。
 
-# python の版は世界リポジトリの .python-version に合わせる
+# python の版は .python-version に合わせる
 target-version = "py314"
 
 [lint]

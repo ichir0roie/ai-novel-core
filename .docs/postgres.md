@@ -1,31 +1,29 @@
 # PostgreSQL + PostGIS
 
-`db/schema.py` を唯一の正のまま、SQLite(`novel.db`)と PostgreSQL のどちらでも動くようにしてある。
-どちらを使うかは環境変数で決まる。
+db は PostgreSQL + PostGIS。本番は AWS の RDS ただ一つで、開発とテストは手元に作った PostgreSQL + PostGIS を使う。
+`db/schema.py` が唯一の正で、どの db を読み書きするかは環境変数で決まる。
 
 | 環境変数 | 意味 |
 | --- | --- |
-| `DEM_DATABASE_URL` | PostgreSQL の SQLAlchemy の URL(例: `postgresql+psycopg://novel:***@host:5432/novel`)。あれば SQLite より優先する |
-| `DEM_DB_PATH` / `DEM_NOVEL_DB_PATH` | 今までどおりの SQLite のファイル。`DEM_DATABASE_URL` が無いときに使う |
+| `DEM_DATABASE_URL` | 読み書きする db の SQLAlchemy の URL。手元のふだんは踏み台越しの RDS(`.claude/docs/setup.md`) |
+| `DEM_DATABASE_IAM_AUTH` | `1` なら、パスワードの代わりに RDS の IAM データベース認証のトークンで繋ぐ(Lambda と手元のふだん) |
+| `DEM_DEV_DATABASE_URL` | 開発用の空の db(下の「開発用の db」)。SessionStart フックが渡す |
 
-テスト(`tool.test` を読むもの)は `DEM_DATABASE_URL` を消して必ず `novel.test.db` を使う。本番の PostgreSQL には書かない。
+テスト(`tool.test` を読むもの)は `DEM_DATABASE_URL` を手元のテスト用の db(`novel_test`)に差し替える。本番の RDS には書かない。
 
 ## 空の db を作る
 
-PostGIS の入ったサーバー(RDS for PostgreSQL・ローカルの `postgresql-16-postgis-3` など)に対して、
-世界リポジトリのルートで:
+PostGIS の入ったサーバー(RDS for PostgreSQL・ローカルの `postgresql-16-postgis-3` など)に対して、リポジトリのルートで:
 
 ```
-export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
-export DEM_DATABASE_URL='postgresql+psycopg://novel:***@host:5432/novel'
-.venv/bin/python -m db.postgres.init_db --create-database
+.venv/bin/python -m db.postgres.init_db --url 'postgresql+psycopg://novel:***@host:5432/novel' --create-database
 ```
 
 - `--create-database` は、URL の db が無ければ同じサーバーの `postgres` db に繋いで `CREATE DATABASE`(UTF8)する
 - `CREATE EXTENSION postgis` → `schema.py` の全表 → マスター(`personality_level`)→ PostGIS の生成列 → alembic を head に stamp
 - 表が一つでもあれば止まる。作り直すなら db ごと消してからやり直す
 - 過去のマイグレーション(SQLite 向けに積んできた `batch_alter_table`)は流さない。今の形を `schema.py` から作る
-- AWS の db へは、`DEM_DATABASE_URL` を自分で書かずに踏み台越しに流す:
+- AWS の db へは、URL を自分で書かずに踏み台越しにマスターで流す:
   `.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m db.postgres.init_db --create-database`([aws-deploy.md](aws-deploy.md#手元から-db-へ繋ぐ))
 
 ## 開発用の db
@@ -38,33 +36,35 @@ db(`novel_dev`)が無ければ上の `init_db --create-database` で作って、
 | Claude Code on the web(`CLAUDE_CODE_REMOTE=true`) | apt で入れた既定のクラスタ(初回は入れるのに 1 分半ほど) | `postgresql+psycopg://novel:novel@127.0.0.1:5432/novel_dev` |
 | それ以外(手元の端末) | Docker のコンテナ `novel-postgis`(`postgis/postgis:16-3.5`、中身はボリューム `novel-postgis-data`) | `postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev` |
 
-世界リポジトリの SessionStart フックがこれを呼び、URL を `DEM_DEV_DATABASE_URL` に渡す。`DEM_DATABASE_URL` は変えないので、
-執筆(`novel.db`)の作業には影響しない。開発で動かすときに渡す:
+SessionStart フックがこれを呼び、URL を `DEM_DEV_DATABASE_URL` に渡す。`DEM_DATABASE_URL`(本番)は変えないので、
+開発で動かすときに渡す:
 
 ```
-DEM_DATABASE_URL="$DEM_DEV_DATABASE_URL" .venv/bin/python -m ...
+DEM_DATABASE_URL="$DEM_DEV_DATABASE_URL" DEM_DATABASE_IAM_AUTH=0 .venv/bin/python -m ...
 ```
 
-- `core` の変更で列が増えたら、同じように `DEM_DATABASE_URL="$DEM_DEV_DATABASE_URL"` を渡して `alembic upgrade head` を当てる(フックは当てない)
+- `core` の変更で列が増えたら、同じように開発用の db の URL を渡して `alembic upgrade head` を当てる(フックは当てない)
 - 空に戻すときは db を消す(`docker exec novel-postgis dropdb -U novel novel_dev`、クラウドは `runuser -u postgres -- dropdb novel_dev`)。次にスクリプトを走らせると作り直す
-- テスト(`tool.test`)は今までどおり `novel.test.db` を使う
+- テスト用の db(`novel_test`)も同じサーバーに作る。`tool.test.copy_production_db` が、テストのたびに消して作り直し、本番を写す
 
-## novel.db の中身を移す
+## db から db へ写す
 
 ```
-.venv/bin/python -m alembic -c core/db/alembic/alembic.ini upgrade head   # 先に novel.db を head へ(DEM_DATABASE_URL を外して)
-.venv/bin/python -m db.postgres.import_sqlite                               # 写し元は DEM_NOVEL_DB_PATH(既定 <世界>/novel.db)
+.venv/bin/python -m db.postgres.copy_db --source-url <写し元の URL> --url <写し先の URL>
 ```
+
+写し元は PostgreSQL でも SQLite(`sqlite:////<絶対パス>`)でもよい。本番の `novel.db`(SQLite)を RDS へ移したのもこれで、
+テスト用の db に本番を写すのもこれ(`tool.test.copy_production_db`)。
 
 - 写し元・写し先の alembic の版が違えば止まる
 - 写し先に行があれば止まる(`--truncate` で空にしてから写す)
-- SQLite は外部キーを確かめないので、指す先の無い行があれば写す前に一覧を出して止まる
+- 指す先の無い外部キーの行(SQLite は外部キーを確かめない)があれば、写す前に一覧を出して止まる
 - 自分の表を指す外部キー(`location.parent_id` など)は、親が後ろの id にあっても入るよう、いったん空で入れて後から埋める
-- 値は型を通さず生のまま運び、真偽(0/1)だけ `boolean` に直す。最後に連番(`id`)を最大値へ寄せ、件数を突き合わせる
+- 値は型を通さず生のまま運び、真偽(0/1)だけ `boolean` に直す。PostGIS の生成列は写さない。最後に連番(`id`)を最大値へ寄せ、件数を突き合わせる
 - 全部を一つのトランザクションで写すので、途中で落ちれば何も入らない
 
-手元の `novel.db` の写し(84 場所・118 人物・50 話ほど)で、写したあとの API の応答(334 の GET と読み取りの入口)が
-SQLite と PostgreSQL で一致することを確かめてある。
+`novel.db` の写し(84 場所・118 人物・50 話ほど)で、写したあとの API の応答(334 の GET と読み取りの入口)が
+SQLite と PostgreSQL で一致することを確かめてある。`novel.db` を切り離す前に、RDS の 24 表の全行が `novel.db` と一致することも確かめた。
 
 ## PostGIS
 
@@ -120,7 +120,9 @@ WHERE area.geom_shape IS NOT NULL;
 
 alembic の autogenerate は、これらの列・索引と PostGIS の `spatial_ref_sys` を消そうとしない(`db/alembic/env.py` の `include_object`)。
 
-## 二つの db の違いで直したところ
+## SQLite との違いで直したところ
+
+以前は SQLite(`novel.db`)でも動かしていた。そのときに PostgreSQL との違いで直したところ。
 
 | 違い | 直し方 |
 | --- | --- |
@@ -132,12 +134,11 @@ alembic の autogenerate は、これらの列・索引と PostGIS の `spatial_
 
 ## マイグレーション
 
-`schema.py` を変えたら今までどおり SQLite の `novel.db` に対して `revision --autogenerate` → 確認 → `upgrade head`。
-同じファイルを PostgreSQL にも当てる(`DEM_DATABASE_URL` を渡して `upgrade head`)。`batch_alter_table` は
-PostgreSQL ではそのまま ALTER になるので、同じマイグレーションが両方で通る。
-PostgreSQL に当てる手順は [ci-cd.md](ci-cd.md#マイグレーション) を見る。
+`schema.py` を変えたら、開発用の db に対して `revision --autogenerate` → 確認 → `upgrade head` を回す
+(`DEM_DATABASE_URL="$DEM_DEV_DATABASE_URL" DEM_DATABASE_IAM_AUTH=0 .venv/bin/python -m alembic -c db/alembic/alembic.ini ...`)。
+同じファイルを RDS にも当てる。表を変えるのでマスターで流す(手順は [ci-cd.md](ci-cd.md#マイグレーション))。
 
 ## 接続
 
-Lambda は凍結をはさんで接続を使い回すので、PostgreSQL の engine は `pool_pre_ping=True`・`pool_recycle=300` で作る
+Lambda は凍結をはさんで接続を使い回し、手元の転送は 1 時間ごとに張り直すので、PostgreSQL の engine は `pool_pre_ping=True`・`pool_recycle=300` で作る
 (`db/schema.py` の `make_url_engine`)。ドライバは `psycopg`(`requirements.txt`)。

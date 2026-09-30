@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """API(uvicorn)と画面(next dev)を一緒に起こし、ブラウザで画面を開く。Ctrl+C で両方止める。
 
-世界リポジトリのルートから(`DEM_WORLD_DIR` / `PYTHONPATH` は他の python と同じ):
+リポジトリのルートから(`DEM_DATABASE_URL` などは他の python と同じ):
 
     .venv/bin/python -m gui.dev                 # http://localhost:3000 を開く
     .venv/bin/python -m gui.dev --no-browser    # 開かない
@@ -12,7 +12,7 @@
 API には `CLAUDECODE=1` を渡すので、Claude Code の外から起こしても claude を叩く入口が通る。
 ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
 
-ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルート(`DEM_WORLD_DIR`)の
+ブラウザは Brave があればそれを使い、プロファイルをリポジトリのルートの
 `.brave-profile/` に作って開く(普段のプロファイルと分け、GUI 用のタブ・設定だけをそこに残す)。
 このディレクトリは Claude Code の SessionStart フック(`.claude/hooks/session-start.sh`)が
 セッション開始時に用意する(`gui.dev` 実行時にも無ければ作る)。
@@ -41,6 +41,8 @@ logger = logging.getLogger("gui.dev")
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# API が読むパッケージ。--reload はここだけを見張る(根ごとだと .venv と gui/web/node_modules まで走査して重い)
+API_SOURCE_DIRS = ("ai", "data_access_logic", "db", "gui/api", "randomizer")
 BRAVE_PROFILE_DIR_NAME = ".brave-profile"
 
 
@@ -67,8 +69,7 @@ def _brave() -> str | None:
 
 
 def _brave_profile_dir() -> str:
-    world_dir = os.environ.get("DEM_WORLD_DIR") or os.getcwd()
-    return os.path.join(os.path.abspath(world_dir), BRAVE_PROFILE_DIR_NAME)
+    return os.path.join(CORE_DIR, BRAVE_PROFILE_DIR_NAME)
 
 
 def _open_browser(url: str) -> None:
@@ -236,8 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     def spawn_api() -> subprocess.Popen:
         api_args = [sys.executable, "-m", "uvicorn", "gui.api.app:app", "--port", str(args.api_port)]
         if not args.no_reload:
-            # 監視は core/ だけ。cwd(世界のルート)を丸ごと見ると .venv まで走査して重い
-            api_args += ["--reload", "--reload-dir", CORE_DIR]
+            api_args += ["--reload"]
+            for source_dir in API_SOURCE_DIRS:
+                api_args += ["--reload-dir", os.path.join(CORE_DIR, source_dir)]
         # ユーザが素のターミナルから起こしても、claude を叩く入口(AI で作成など)を通す(gui/api/claude_env.py)
         return _popen(api_args, env={**os.environ, "CLAUDECODE": "1"})
 
