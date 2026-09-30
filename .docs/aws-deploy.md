@@ -41,6 +41,7 @@ core のどこにも書かない。
   | 項目 | 中身 |
   | --- | --- |
   | `github` | 必須。CI のロールを引き受けられる、自分の core のリポジトリとブランチ |
+  | `github.ownerId`・`github.repositoryId` | リポジトリの OIDC の `sub` が ID 入りの形(`repo:<owner>@<ownerId>/<repo>@<repositoryId>:…`)のとき、その二つの数。形は `gh api repos/<owner>/<repo>/actions/oidc/customization/sub` の `sub_claim_prefix` で見る。合っていないと CI が `Not authorized to perform sts:AssumeRoleWithWebIdentity` で落ちる |
   | `existing` | 全部任意。無いものはスタックが作る |
   | `existing.vpcId` | 無く、`dbInstanceIdentifier` があれば、その db の VPC を使う |
   | `existing.dbInstanceIdentifier` | 使い回す RDS。マスターのパスワードは RDS の管理(`--manage-master-user-password`)にしておく。エンドポイント・セキュリティグループ・秘密の ARN は、synth のときにこの名前から引くので、設定に書かない |
