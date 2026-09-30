@@ -1,4 +1,4 @@
-"""テストは `novel.test.db` だけを読み書きする。`tool.test` を最初に import して db パスを固定する。"""
+"""テストは手元の PostGIS のテスト用の db(`novel_test`)だけを読み書きする。`tool.test` を最初に import して db を固定する。"""
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tool.test import copy_novel_db  # schema より先に読む(db を novel.test.db に固定)
+from tool.test import copy_production_db  # schema より先に読む(db をテスト用の db に固定)
 from tool.test.mock_ai_client import MockAIClient  # noqa: E402
 from db.schema import (  # noqa: E402
     Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterRelation, ConfirmStatus, Episode,
@@ -18,8 +18,8 @@ from data_access_logic.entrypoint import Entrypoint  # noqa: E402
 
 @pytest.fixture(scope="session", autouse=True)
 def fresh_test_db() -> None:
-    copy_novel_db()
-    engine.dispose()  # 写す前のファイルを掴んでいる接続を捨てる
+    copy_production_db()
+    engine.dispose()  # 作り直す前の db を掴んでいる接続を捨てる
 
 
 @pytest.fixture(autouse=True)

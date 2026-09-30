@@ -1,5 +1,4 @@
 """GUI の API(`gui/api/app.py`)。エンドポイントごとに、なるべく多くの値を渡す一件を通す。"""
-import os
 import time
 from collections.abc import Iterator
 
@@ -7,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gui.api.app import app
-from tool.test import TEST_DB_PATH
 
 
 @pytest.fixture
@@ -38,8 +36,7 @@ def test_health(client):
 
     assert response.status_code == 200
     health = response.json()
-    assert {key: health[key] for key in ("world_dir", "db_path", "dialect")} == {
-        "world_dir": os.environ["DEM_WORLD_DIR"], "db_path": TEST_DB_PATH, "dialect": "sqlite"}
+    assert health["dialect"] == "postgresql"
 
 
 def test_tables(client, world, in_claude_code):

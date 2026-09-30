@@ -677,6 +677,55 @@
         }
       }
     },
+    "/api/steps/{step_id}": {
+      "post": {
+        "summary": "Run Step",
+        "description": "db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、\n流れと AI を自分で持ったまま db に触る所だけを頼む",
+        "operationId": "run_step_api_steps__step_id__post",
+        "parameters": [
+          {
+            "name": "step_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Step Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Run Step Api Steps  Step Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs": {
       "get": {
         "summary": "List Jobs",
@@ -1444,14 +1493,6 @@
       },
       "Health": {
         "properties": {
-          "world_dir": {
-            "type": "string",
-            "title": "World Dir"
-          },
-          "db_path": {
-            "type": "string",
-            "title": "Db Path"
-          },
           "dialect": {
             "type": "string",
             "title": "Dialect"
@@ -1468,8 +1509,6 @@
         },
         "type": "object",
         "required": [
-          "world_dir",
-          "db_path",
           "dialect",
           "claude_mode"
         ],

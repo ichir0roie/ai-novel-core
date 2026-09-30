@@ -55,7 +55,7 @@ Settings → Secrets and variables → Actions の **Variables**:
 
 ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタック(`infra/lib/ci-stack.ts`)で作る。
 
-1. `core/infra` で `npx cdk deploy NovelCi`
+1. `infra` で `npx cdk deploy NovelCi`
 2. 出力の `DeployRoleArn` を、リポジトリの秘密 `AWS_DEPLOY_ROLE_ARN` に置く
 
 `NovelCi` が作るもの:
@@ -74,9 +74,8 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 AWS の db へは、作業する端末から踏み台越しに当てる(`tool.aws.rds` が `DEM_DATABASE_URL` を渡す。[aws-deploy.md](aws-deploy.md#手元から-db-へ繋ぐ))。
 
 ```
-export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini upgrade head
+.venv/bin/python -m alembic -c db/alembic/alembic.ini current                                   # 版を見るだけなら、ふだんの接続でよい
+.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # 当てるのはマスターで
 ```
 
 GitHub Actions からは当てない(db への道をワークフローに開けたくない・マイグレーションは中身を見てから当てたい)。

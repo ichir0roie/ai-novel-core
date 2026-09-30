@@ -1,0 +1,114 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "db tunnel",
+      "type": "shell",
+      // 踏み台越しの転送を 127.0.0.1:15432 に張り続ける(1 時間ごとに張り直す)。止めるときはターミナルで Ctrl+C(自分で起こした踏み台も止まる)。
+      // Claude Code のセッションを開いていれば SessionStart フックが裏で起こしているので、要らない
+      "command": ".venv/bin/python",
+      "args": ["-m", "tool.aws.rds", "--serve"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONUTF8": "1"
+        }
+      },
+      "windows": {
+        "command": ".venv\\Scripts\\python.exe"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "close": true
+      }
+    },
+    {
+      "label": "app",
+      "type": "shell",
+      // データ編集 GUI。API(uvicorn :8765)と画面(next dev :3000)を一緒に起こし、ブラウザで http://localhost:3000 を開く。
+      // 止めるときはターミナルで Ctrl+C(両方止まる)。db への転送(タスク「db tunnel」)を先に張っておく
+      "command": ".venv/bin/python",
+      "args": ["-m", "gui.dev"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONUTF8": "1",
+          "DEM_DATABASE_URL": "postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require",
+          "DEM_DATABASE_IAM_AUTH": "1",
+          // claude コマンドを叩く入口(gui/api/claude_env.py の判定)を、このタスクから起こした API でも通す
+          "CLAUDECODE": "1"
+        }
+      },
+      // npm は nvm で入れており、nvm は ~/.bashrc(対話シェルでだけ読まれる)で PATH に足されるので、対話モードで起こす
+      "linux": {
+        "options": {
+          "shell": {
+            "executable": "bash",
+            "args": ["-ic"]
+          }
+        }
+      },
+      "windows": {
+        "command": ".venv\\Scripts\\python.exe"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "close": true
+      }
+    },
+    {
+      "label": "app browser",
+      "type": "shell",
+      // API・画面はすでに起きている前提で、ブラウザだけ開く(gui.dev --browser-only)
+      "command": ".venv/bin/python",
+      "args": ["-m", "gui.dev", "--browser-only"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONUTF8": "1"
+        }
+      },
+      "windows": {
+        "command": ".venv\\Scripts\\python.exe"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "close": true
+      }
+    },
+    {
+      "label": "git push",
+      "type": "shell",
+      // 今のブランチの変更をすべて日時のメッセージでコミットし、pull --rebase してから push する。
+      // 公開リポジトリなので、構築の値(アカウント ID・リソースの ID など)が紛れていないかを先に確かめておく(.claude/docs/aws.md)
+      "command": "m=\"$(date '+%Y-%m-%d %H:%M:%S')\"; git add -A; git commit -m \"$m\"; git pull --rebase && git push",
+      "windows": {
+        "command": "$m = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; git add -A; git commit -m $m; git pull --rebase; if ($?) { git push }",
+        "options": {
+          "cwd": "${workspaceFolder}",
+          "shell": {
+            "executable": "powershell.exe",
+            "args": ["-NoProfile", "-Command"]
+          }
+        }
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "close": true
+      }
+    }
+  ]
+}

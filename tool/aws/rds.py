@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""AWS の RDS(PostgreSQL)へ、踏み台越しに手元から繋いでコマンドを流す。世界リポジトリのルートで:
+"""AWS の RDS(PostgreSQL)へ、踏み台越しに手元から繋ぐ。リポジトリのルートで:
 
-    export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
-    .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current
+    .venv/bin/python -m tool.aws.rds --serve   # 転送を 127.0.0.1:15432 に張り続ける(ふだんの読み書き用)
+    .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini current
     .venv/bin/python -m tool.aws.rds --database postgres -- psql
-    .venv/bin/python -m tool.aws.rds          # 繋いだまま $SHELL を開く。exit で閉じる
+    .venv/bin/python -m tool.aws.rds          # マスターで繋いだまま $SHELL を開く。exit で閉じる
+
+`--serve` は転送だけを張る。ふだんの読み書きは、その転送へ novel_app(行の読み書きだけ)で IAM データベース認証を使って繋ぐ
+(`DEM_DATABASE_URL` と `DEM_DATABASE_IAM_AUTH=1`。SessionStart フックと `.vscode` が渡す)。パスワードはどこにも置かない。
+EC2 Instance Connect Endpoint の転送は一本 1 時間で切れるので、切れたら張り直す。止めるのは Ctrl+C か SIGTERM。
+
+`--` の後ろにコマンドを渡すと、マスターで繋いで流す(マイグレーション・表の権限を変える SQL など、DDL が要る作業):
 
 1. `infra/` の CDK(NovelData)が置いた SSM パラメータ `/novel/*` から、db と踏み台を引く
 2. 踏み台が止まっていれば起こす
 3. 使い捨ての鍵を EC2 Instance Connect で踏み台に送り、EC2 Instance Connect Endpoint 越しの ssh で
    db のポートを手元の `--port` へ転送する
 4. RDS が管理するマスターの秘密からパスワードを読み、`DEM_DATABASE_URL` と psql 用の `PG*` を渡してコマンドを流す
-5. 自分で起こした踏み台は、終わるときに止める(`--keep-bastion` で残す)
+5. 自分で起こした踏み台は、終わるときに止める(`--keep-bastion` で残す。`--serve` でも同じ)
 
 秘密は RDS が 7 日ごとに回すので、パスワードは毎回読み直す。EICE の転送は一本 1 時間で切れる。
 コマンドの終了コードをそのまま返す。
@@ -22,6 +28,7 @@ import argparse
 import json
 import logging
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -35,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 PARAMETER_PREFIX = "/novel/"
 BASTION_OS_USER = "ec2-user"
+# --serve が聞くポート。SessionStart フックと .vscode が渡す DEM_DATABASE_URL もここを指す
+SERVE_PORT = 15432
 
 
 class RdsTarget(BaseModel):
@@ -53,13 +62,17 @@ class MasterSecret(BaseModel):
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--port", type=int, default=15432, help="手元で聞くポート")
+    p.add_argument("--serve", action="store_true", help="コマンドを流さず、転送を張り続ける")
+    p.add_argument("--port", type=int, help=f"手元で聞くポート。省けば --serve は {SERVE_PORT}、コマンドを流すときは {SERVE_PORT + 1}")
     p.add_argument("--database", help="繋ぐ db。省けば SSM の /novel/db/name")
     p.add_argument("--keep-bastion", action="store_true", help="自分で起こした踏み台を、終わっても止めない")
     p.add_argument("command", nargs=argparse.REMAINDER, help="`--` の後ろに流すコマンド。省けば $SHELL")
     args = p.parse_args(argv)
     if args.command[:1] == ["--"]:
         args.command = args.command[1:]
+    if args.serve and args.command:
+        p.error("--serve にはコマンドを渡さない")
+    args.port = args.port or (SERVE_PORT if args.serve else SERVE_PORT + 1)
     return args
 
 
@@ -131,6 +144,8 @@ def connection_env(target: RdsTarget, secret: MasterSecret, port: int, database:
                      host="127.0.0.1", port=port, database=database, query={"sslmode": "require"})
     return {
         "DEM_DATABASE_URL": url.render_as_string(hide_password=False),
+        # 手元のふだんの設定(novel_app を IAM 認証で)を引き継ぐと、マスターのパスワードがトークンに差し替わる
+        "DEM_DATABASE_IAM_AUTH": "0",
         "PGHOST": "127.0.0.1",
         "PGPORT": str(port),
         "PGUSER": secret.username,
@@ -138,6 +153,21 @@ def connection_env(target: RdsTarget, secret: MasterSecret, port: int, database:
         "PGDATABASE": database,
         "PGSSLMODE": "require",
     }
+
+
+def serve(target: RdsTarget, port: int, key_dir: Path) -> None:
+    # SIGTERM でも finally(踏み台を止める)を通す
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+    while True:
+        tunnel = open_tunnel(target, port, key_dir)
+        try:
+            tunnel.wait()
+        finally:
+            tunnel.terminate()
+            tunnel.wait()
+        logger.info("転送が切れた。張り直す")
+        (key_dir / "key").unlink(missing_ok=True)
+        (key_dir / "key.pub").unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -151,6 +181,12 @@ def main(argv: list[str] | None = None) -> None:
     returncode = 1
     try:
         with tempfile.TemporaryDirectory() as key_dir:
+            if args.serve:
+                try:
+                    serve(target, args.port, Path(key_dir))
+                except KeyboardInterrupt:
+                    pass
+                return
             tunnel = open_tunnel(target, args.port, Path(key_dir))
             try:
                 env = connection_env(target, read_master_secret(target.db_master_secret_arn), args.port,

@@ -176,9 +176,6 @@ class LocationCharactersResponse(BaseModel):
 
 
 class Health(BaseModel):
-    world_dir: str
-    # SQLite のときだけファイルの場所。PostgreSQL なら空
-    db_path: str
     dialect: str
     claude_mode: ClaudeModeName
 

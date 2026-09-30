@@ -21,7 +21,7 @@ core(ai-novel-core)は公開リポジトリで、誰がクローンしても、�
 
 | 場所 | db への道 | db のロール | 持つ鍵 |
 | --- | --- | --- | --- |
-| 手元(CLI・VS Code) | ふだんは SQLite の `novel.db`。AWS の db へは `tool.aws.rds` の踏み台越しだけ | マスター | 手元の AWS CLI の権限 |
+| 手元(CLI・VS Code) | 踏み台越しの転送(`tool.aws.rds --serve`、127.0.0.1:15432)。ふだんの読み書きは IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`)。マイグレーションなど DDL が要る作業は `tool.aws.rds --` 越しにマスターで | `novel_app`(ふだん)/ マスター(DDL) | 手元の AWS CLI の権限(`rds-db:connect`・マスターの秘密の読み取り) |
 | Lambda(`novel-api`) | VPC の中から psycopg で直に。IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`) | `novel_app`(行の読み書きだけ) | 実行ロールの `rds-db:connect` |
 | web のセッション(Claude Code on the web) | db には繋がない。`novel-api` の API のエンドポイントだけを呼ぶ | 無し | web 用の API の合言葉だけ |
 

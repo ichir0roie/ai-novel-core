@@ -1,6 +1,6 @@
 # gui — データ編集 GUI
 
-`novel.db` をブラウザから見て直すための道具。API(`gui/api`、FastAPI)と画面(`gui/web`、Next.js)の二つ。
+db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAPI)と画面(`gui/web`、Next.js)の二つ。
 
 - 未確認のアイデア・ミームを一件ずつ出し、直しながら「承認」「非承認」を付けて次へ進むレビュー画面
 - 本文を持つテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き・文体の好み)の一覧・表示・修正・追加
@@ -17,7 +17,7 @@
 ## 構成の決め方
 
 列の定義(`db/schema.py`)、値の型(`Stamp`・`confirmed`)、確定・修正のときの検証(実在確認・別名の制約・
-子の行の扱い)はすべて python 側にある。Next.js から SQLite を直接開くと、その全部を
+子の行の扱い)はすべて python 側にある。Next.js から db を直接開くと、その全部を
 TypeScript にもう一度書くことになり、正が二つになる。そのため API は FastAPI で python 側に置き、
 書き込みは `data_access_logic/` の入口(`execute(s)`)を通す。画面は列の情報を
 `GET /api/tables` から受け取って組み立てるので、列を足しても画面のコードは変えなくてよい。
@@ -33,11 +33,11 @@ db の値(承認/非承認/未確認、場所の category など)と API から�
 
 ## 起動
 
-世界リポジトリのルートで(環境変数は他の python と同じ)。API と画面を一緒に起こしてブラウザで開くのは `gui.dev`。
-`gui/web/node_modules` が無ければ先に `npm install` を回す。VS Code なら タスク `gui`(世界リポジトリの `.vscode/tasks.json`)。
+リポジトリのルートで(環境変数は他の python と同じ。db は `DEM_DATABASE_URL` の RDS で、踏み台越しの転送を先に張っておく。
+`.claude/docs/setup.md`)。API と画面を一緒に起こしてブラウザで開くのは `gui.dev`。
+`gui/web/node_modules` が無ければ先に `npm install` を回す。VS Code なら タスク `db tunnel` のあとに `app`(`.vscode/tasks.json`)。
 
 ```
-export DEM_WORLD_DIR="$PWD" PYTHONPATH="$PWD/core"
 .venv/bin/python -m gui.dev              # API :8765 + 画面 :3000 を起こし、http://localhost:3000 を開く。Ctrl+C で両方止める
                                           # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
 .venv/bin/python -m gui.dev --no-browser # 開かない。--api-port / --web-port でポートを変える
@@ -49,17 +49,17 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 `next dev` はビルド先(`gui/web/.next`)ごとに 1 つしか動かせないので、2 つ目を起こすときは環境変数 `NOVEL_WEB_DIST_DIR`
 でビルド先を分ける(テスト用は `.next-test`)。
 
-ブラウザは Brave があればそれを使い、プロファイルを世界リポジトリのルートの `.brave-profile/` に作って
+ブラウザは Brave があればそれを使い、プロファイルをリポジトリのルートの `.brave-profile/` に作って
 (`--user-data-dir`)開く。普段のプロファイルと分かれるので、GUI 用のタブ・設定だけがそこに残る。
-`.brave-profile/` は世界リポジトリの `.gitignore` に入れておく。Claude Code の SessionStart フック
+`.brave-profile/` は `.gitignore` に入れてある。Claude Code の SessionStart フック
 (`.claude/hooks/session-start.sh`)がセッション開始時にこのディレクトリを用意する
 (`gui.dev` 実行時にも無ければ作る)。Brave が無ければ既定のブラウザで開く。
 
 別々に起こすなら次の二つ。
 
 ```
-.venv/bin/python -m uvicorn gui.api.app:app --port 8765 --reload --reload-dir core   # core/ の .py を直すと自動で再起動
-(cd core/gui/web && npm install && npm run dev)     # http://localhost:3000
+.venv/bin/python -m uvicorn gui.api.app:app --port 8765 --reload --reload-dir data_access_logic --reload-dir db --reload-dir gui/api   # .py を直すと自動で再起動
+(cd gui/web && npm install && npm run dev)     # http://localhost:3000
 ```
 
 `/api/*` は Next.js の route handler(`gui/web/app/api/[...path]/route.ts`)が `NOVEL_API_URL`(既定 `http://127.0.0.1:8765`)へ流すので、
@@ -98,7 +98,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 
 ```
 .venv/bin/python -m gui.api.dump_openapi
-(cd core/gui/web && npm run types)
+(cd gui/web && npm run types)
 ```
 
 ## 入口と claude コマンド
@@ -168,5 +168,5 @@ claude を叩くので裏の job になり、画面は job を待って、終わ
 ## 型と lint
 
 ```
-(cd core/gui/web && npm run typecheck && npm run lint)
+(cd gui/web && npm run typecheck && npm run lint)
 ```

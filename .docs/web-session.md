@@ -26,6 +26,8 @@ web のセッションの側のコードは `web_session/` にある(`api.py` �
 ### クラウド環境(claude.ai/code → 環境の設定 → Edit)
 
 db が要る web の作業の専用の環境を作る。ふだんのセッションの環境に API の鍵を置かない。
+セッションで開くリポジトリは ai-novel-core(このリポジトリ)だけでよい。SessionStart フック(`.claude/hooks/session-start.sh`)が
+`.venv` を用意する。web のセッションでは RDS への転送も `DEM_DATABASE_URL` も用意しない。
 
 - Network access: `Custom`。既定の一覧(PyPI・npm など。フックの `uv pip install` に要る)を残し、`novel-api` の関数 URL のホスト
   (`<id>.lambda-url.ap-northeast-1.on.aws`)を足す。
@@ -43,7 +45,7 @@ db が要る web の作業の専用の環境を作る。ふだんのセッショ
 
 ## 確かめる
 
-その環境でセッションを開き、世界リポジトリのルートで:
+その環境で ai-novel-core のセッションを開き、リポジトリのルートで:
 
 ```
 .venv/bin/python -m web_session.check_api
@@ -51,7 +53,7 @@ db が要る web の作業の専用の環境を作る。ふだんのセッショ
 
 API に届いたか・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・待ち行列の件数・
 `claude` コマンドの有無を JSON で出す。`connected: true` かつ `alembic_current == alembic_head` なら終了コード 0。
-手元から AWS の db の版を確かめるときは `DEM_WORLD_DIR="$PWD" PYTHONPATH=core .venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c core/db/alembic/alembic.ini current`。
+手元から AWS の db の版を確かめるときは `.venv/bin/python -m alembic -c db/alembic/alembic.ini current`(ふだんの転送越しの接続で読める)。
 
 | 出たもの | 見るところ |
 | --- | --- |

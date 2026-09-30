@@ -220,6 +220,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/steps/{step_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Step
+         * @description db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、
+         *     流れと AI を自分で持ったまま db に触る所だけを頼む
+         */
+        post: operations["run_step_api_steps__step_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs": {
         parameters: {
             query?: never;
@@ -596,10 +617,6 @@ export interface components {
         };
         /** Health */
         Health: {
-            /** World Dir */
-            world_dir: string;
-            /** Db Path */
-            db_path: string;
             /** Dialect */
             dialect: string;
             /**
@@ -1352,6 +1369,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResult"] | components["schemas"]["JobInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_step_api_steps__step_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                step_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

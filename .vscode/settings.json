@@ -1,0 +1,22 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  // ふだんの読み書きは、踏み台越しの転送(タスク「db tunnel」)の先の RDS へ、novel_app の IAM データベース認証で繋ぐ(.claude/docs/setup.md)
+  "terminal.integrated.env.linux": {
+    "PYTHONUTF8": "1",
+    "DEM_DATABASE_URL": "postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require",
+    "DEM_DATABASE_IAM_AUTH": "1",
+    "DEM_DEV_DATABASE_URL": "postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev"
+  },
+  "terminal.integrated.env.osx": {
+    "PYTHONUTF8": "1",
+    "DEM_DATABASE_URL": "postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require",
+    "DEM_DATABASE_IAM_AUTH": "1",
+    "DEM_DEV_DATABASE_URL": "postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev"
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONUTF8": "1",
+    "DEM_DATABASE_URL": "postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require",
+    "DEM_DATABASE_IAM_AUTH": "1",
+    "DEM_DEV_DATABASE_URL": "postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev"
+  }
+}
