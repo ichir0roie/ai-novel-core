@@ -7,7 +7,7 @@ db は PostgreSQL + PostGIS。本番は AWS の RDS ただ一つで、開発と�
 | --- | --- |
 | `DEM_DATABASE_URL` | 読み書きする db の SQLAlchemy の URL。手元のふだんは踏み台越しの RDS(`.claude/docs/setup.md`) |
 | `DEM_DATABASE_IAM_AUTH` | `1` なら、パスワードの代わりに RDS の IAM データベース認証のトークンで繋ぐ(Lambda と手元のふだん) |
-| `DEM_DEV_DATABASE_URL` | 開発用の空の db(下の「開発用の db」)。SessionStart フックが渡す |
+| `DEM_DEV_DATABASE_URL` | 開発用の空の db(下の「開発用の db」)。無ければテスト(`tool.test`)が用意する |
 
 テスト(`tool.test` を読むもの)は `DEM_DATABASE_URL` を手元のテスト用の db(`novel_test`)に差し替える。本番の RDS には書かない。
 
@@ -36,7 +36,7 @@ db(`novel_dev`)が無ければ上の `init_db --create-database` で作って、
 | Claude Code on the web(`CLAUDE_CODE_REMOTE=true`) | apt で入れた既定のクラスタ(初回は入れるのに 1 分半ほど) | `postgresql+psycopg://novel:novel@127.0.0.1:5432/novel_dev` |
 | それ以外(手元の端末) | Docker のコンテナ `novel-postgis`(`postgis/postgis:16-3.5`、中身はボリューム `novel-postgis-data`) | `postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev` |
 
-`DEM_DEV_DATABASE_URL` が渡されていなければ、テスト(`tool.test`)が要ったときにこれを呼んで用意する。手で使うときは
+SessionStart フックは呼ばない。`DEM_DEV_DATABASE_URL` が渡されていなければ、テスト(`tool.test`)が要ったときにこれを呼んで用意する。手で使うときは
 `DEM_DEV_DATABASE_URL=${DEM_DEV_DATABASE_URL:-$(infra_local/postgis.sh .venv/bin/python)}` で受ける。`DEM_DATABASE_URL`(本番)は変えないので、
 開発で動かすときに渡す:
 

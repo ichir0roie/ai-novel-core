@@ -7,7 +7,8 @@
 
 python・pytest・alembic はリポジトリのルートを cwd にし、ルートの `.venv/bin/python`(Windows は `.venv\Scripts\python.exe`)で呼ぶ。
 python の版は `.python-version`(3.14)に書く。Claude Code のセッションでは SessionStart フック(`.claude/hooks/session-start.sh`)が
-`.venv` を用意する。手で用意するときは(python 本体は uv が取ってくる。uv が古いと新しい版を知らないので、uvx で新しめの uv を使う):
+`.venv` を用意する。web のセッションでは起動を待たせないよう裏で用意し(ログは `.cache/session-setup.log`)、python を使うコマンドだけを
+PreToolUse フック(`.claude/hooks/wait-setup.sh`)が用意の済むまで待たせる。手で用意するときは(python 本体は uv が取ってくる。uv が古いと新しい版を知らないので、uvx で新しめの uv を使う):
 
 ```
 uvx --from 'uv>=0.9' uv venv --python 3.14 .venv
@@ -32,7 +33,7 @@ uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.tx
 | --- | --- | --- |
 | `DEM_DATABASE_URL` | 読み書きする db。手元は踏み台越しの RDS(`postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require`) | SessionStart フック・`.vscode`(ターミナル・タスク・デバッグ) |
 | `DEM_DATABASE_IAM_AUTH` | `1` なら IAM データベース認証のトークンで繋ぐ | 同上 |
-| `DEM_DEV_DATABASE_URL` | 開発用の空の PostgreSQL + PostGIS(`infra_local/postgis.sh`)。テストの db もこのサーバーに作る | SessionStart フック(`.vscode` は固定の値) |
+| `DEM_DEV_DATABASE_URL` | 開発用の空の PostgreSQL + PostGIS(`infra_local/postgis.sh`)。テストの db もこのサーバーに作る | `.vscode` は固定の値。Claude Code では渡さず、テスト(`tool.test`)が要ったときに用意する |
 | `PYTHONUTF8` | `1`(Windows の文字化け除け。`.claude/docs/encoding.md`) | 同上 |
 
 - 手元から RDS へは、踏み台越しの転送(`.venv/bin/python -m tool.aws.rds --serve`)を張って繋ぐ。SessionStart フックが裏で起こし、

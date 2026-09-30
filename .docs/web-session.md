@@ -27,7 +27,8 @@ web のセッションの側のコードは `web_session/` にある(`api.py` �
 
 db が要る web の作業の専用の環境を作る。ふだんのセッションの環境に API の鍵を置かない。
 セッションで開くリポジトリは ai-novel-core(このリポジトリ)だけでよい。SessionStart フック(`.claude/hooks/session-start.sh`)が
-`.venv` を用意する。web のセッションでは RDS への転送も `DEM_DATABASE_URL` も用意しない。
+`.venv` を裏で用意する(起動は待たせず、python を使うコマンドだけを `.claude/hooks/wait-setup.sh` が待たせる)。
+web のセッションでは RDS への転送も `DEM_DATABASE_URL` も、開発用の PostgreSQL も用意しない。
 
 - Network access: `Custom`。既定の一覧(PyPI・npm など。フックの `uv pip install` に要る)を残し、画面(Amplify)のホスト
   (`main.<アプリの ID>.amplifyapp.com`)を足す。関数 URL は AWS の署名が無いと通らないので、web のセッションは画面の `/api/*` を叩き、

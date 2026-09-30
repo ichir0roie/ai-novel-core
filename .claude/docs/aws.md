@@ -27,6 +27,13 @@ core(ai-novel-core)は公開リポジトリで、誰がクローンしても、�
 
 web のセッションでは、環境変数 `CLAUDE_CODE_REMOTE` が `true` になっている。
 
+web のセッションで db だけの入口を読むだけの調査は、`.venv` の用意を待たず `curl` で API を叩けばよい(合言葉は環境変数のまま渡し、値を出さない):
+
+```
+curl -sS -H "x-novel-api-key: $NOVEL_API_KEY" -H 'content-type: application/json' \
+  -d '{"args":{}}' "${NOVEL_API_URL%/}/api/interface/story.list_stories.ListStories"
+```
+
 ## 決まり
 
 1. マイグレーション(`alembic upgrade`)を AWS の db に当てるのは、手元から `tool.aws.rds` 越しにだけ行う。
