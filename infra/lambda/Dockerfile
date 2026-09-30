@@ -10,7 +10,7 @@ FROM public.ecr.aws/docker/library/python:3.14-slim
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
 # DEM_WORLD_DIR は db.schema の import に要るだけで、Lambda では世界リポジトリを持たない(db は DEM_DATABASE_URL)。
-# claude を叩く入口は待ち行列に積み、Claude Code のルーチンが回す(NOVEL_CLAUDE_MODE=queue)
+# claude を叩く入口は待ち行列に積み、頼まれた Claude Code on the web のセッションが回す(NOVEL_CLAUDE_MODE=queue)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONUTF8=1 \
     PYTHONDONTWRITEBYTECODE=1 \

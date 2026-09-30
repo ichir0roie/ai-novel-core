@@ -4,8 +4,9 @@ import { execFileSync } from "node:child_process";
 // SSM パラメータ /novel/deploy/config に JSON で置く(形は infra/aws.example.json)。使い回す既存のリソースの ID が無ければ、
 // スタックがそのリソースを作る
 export interface DeployConfig {
-  // ownerId・repositoryId は、リポジトリの OIDC の sub が ID 入りの形(immutable subject)のときに書く
-  github: { repository: string; branch: string; ownerId?: number; repositoryId?: number };
+  // subClaimPrefix は GitHub の OIDC の sub の前半。immutable subject を使うリポジトリは sub が `repo:<owner>@<ID>/<repo>@<ID>` で始まるので、
+  // `gh api repos/<owner>/<repo>/actions/oidc/customization/sub` の sub_claim_prefix を置く。無ければ `repo:<repository>`
+  github: { repository: string; branch: string; subClaimPrefix?: string };
   existing: {
     vpcId?: string;
     dbInstanceIdentifier?: string;

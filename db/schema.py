@@ -800,9 +800,6 @@ class CharacterIdea(Base):
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
-IDEA_LINK_MODELS = {Event: EventIdea, Episode: EpisodeIdea, Character: CharacterIdea}
-
-
 def utc_now() -> datetime:
     # SQLite の DateTime は時差を持てないので、どちらの db でも時差を落とした UTC で持つ
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -871,9 +868,6 @@ def seed_master_rows(engine) -> None:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
                   for name, id_ in _PERSONALITY_LEVEL_IDS.items())
         s.commit()
-
-
-TEST_DB_PATH = os.path.join(WORLD_DIR, "novel.test.db")
 
 
 def database_url(path=DB_PATH) -> str:

@@ -1,14 +1,12 @@
 # 記録の形は db/schema.py、マイグレーションは db/alembic/
-# 下書き作りに factory-boy、ローカル AI 以外の生成に anthropic を使う
+# 下書き作りに factory-boy を使う。python-dotenv は ai/claude_code の .env を読む
 # データ編集 GUI の API(gui/api)に fastapi と uvicorn、その TestClient に httpx を使う。watchfiles は uvicorn --reload の監視用
 # PostgreSQL(DEM_DATABASE_URL)へは psycopg で繋ぐ(`.docs/postgres.md`)
 sqlalchemy>=2.0
-pyyaml>=6.0
 pydantic>=2.0
 alembic>=1.20
 factory-boy>=3.3
 pytest>=8.0
-anthropic>=0.40
 python-dotenv>=1.0
 fastapi>=0.115
 uvicorn>=0.30

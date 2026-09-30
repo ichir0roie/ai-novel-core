@@ -14,11 +14,7 @@ export class NovelCiStack extends Stack {
   constructor(scope: Construct, id: string, props: NovelCiStackProps) {
     super(scope, id, props);
     const { github } = props;
-    const [owner, repo] = github.repository.split("/");
-    // ID 入りの形なら、名前が消されて他人に取り直されたリポジトリからは引き受けられない
-    const subjectRepository = github.ownerId && github.repositoryId
-      ? `${owner}@${github.ownerId}/${repo}@${github.repositoryId}`
-      : github.repository;
+    const subClaimPrefix = github.subClaimPrefix ?? `repo:${github.repository}`;
 
     const repository = new ecr.Repository(this, "ApiRepository", {
       repositoryName: api.repositoryName,
@@ -38,7 +34,7 @@ export class NovelCiStack extends Stack {
       assumedBy: new iam.WebIdentityPrincipal(provider.oidcProviderArn, {
         StringEquals: {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": `repo:${subjectRepository}:ref:refs/heads/${github.branch}`,
+          "token.actions.githubusercontent.com:sub": `${subClaimPrefix}:ref:refs/heads/${github.branch}`,
         },
       }),
     });

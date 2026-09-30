@@ -7,7 +7,7 @@ import { databaseName, type DeployConfig, describeDbInstance, parameterPrefix } 
 
 export interface NovelData {
   vpc: ec2.IVpc;
-  db: { instanceIdentifier: string; endpoint: string; port: number; securityGroupId: string; resourceId: string };
+  db: { endpoint: string; port: number; securityGroupId: string; resourceId: string };
 }
 
 interface NovelDataStackProps extends StackProps {
@@ -36,8 +36,8 @@ export class NovelDataStack extends Stack {
 
     let db: NovelData["db"];
     let masterSecretArn: string;
-    if (existing.dbInstanceIdentifier && existingDb) {
-      db = { instanceIdentifier: existing.dbInstanceIdentifier, ...existingDb };
+    if (existingDb) {
+      db = existingDb;
       masterSecretArn = existingDb.masterSecretArn;
     } else {
       const dbSecurityGroup = new ec2.SecurityGroup(this, "DbSecurityGroup", { vpc, allowAllOutbound: false });
@@ -56,7 +56,6 @@ export class NovelDataStack extends Stack {
         removalPolicy: RemovalPolicy.SNAPSHOT,
       });
       db = {
-        instanceIdentifier: instance.instanceIdentifier,
         endpoint: instance.dbInstanceEndpointAddress,
         port: 5432,
         securityGroupId: dbSecurityGroup.securityGroupId,
@@ -68,7 +67,6 @@ export class NovelDataStack extends Stack {
     const bastion = existing.bastion ?? this.createBastion(vpc, db);
 
     const parameters: Record<string, string> = {
-      "db/instance-identifier": db.instanceIdentifier,
       "db/endpoint": db.endpoint,
       "db/port": String(db.port),
       "db/name": databaseName,

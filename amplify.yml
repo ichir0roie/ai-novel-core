@@ -7,7 +7,8 @@ applications:
       phases:
         preBuild:
           commands:
-            - nvm install 22 && nvm use 22
+            # package-lock.json は手元の npm 11(Node 24)で作る。npm 10 の npm ci はそれを食い違いとして拒む
+            - nvm install 24 && nvm use 24
             - npm ci
         build:
           commands:
