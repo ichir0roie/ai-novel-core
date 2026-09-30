@@ -1284,17 +1284,6 @@
             "type": "string",
             "title": "Main Text"
           },
-          "summary_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary Text"
-          },
           "character_ids": {
             "items": {
               "type": "integer"

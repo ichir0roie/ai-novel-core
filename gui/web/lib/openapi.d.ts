@@ -516,8 +516,6 @@ export interface components {
             event_seeded: boolean;
             /** Main Text */
             main_text: string;
-            /** Summary Text */
-            summary_text?: string | null;
             /** Character Ids */
             readonly character_ids: number[];
         };

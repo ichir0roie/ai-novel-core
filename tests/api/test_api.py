@@ -63,7 +63,7 @@ def test_list_records(client, world):
     assert (body["total"], body["limit"], body["offset"]) == (1, 10, 0)
     item = body["items"][0]
     assert item["id"] == world.episode_id
-    # 本文の列(話はプロット・本文・概要の順)は外し、空でない最初の列の頭を preview に出す
+    # 本文の列(話はプロット・本文の順)は外し、空でない最初の列の頭を preview に出す
     assert item["preview"] == "市で出会う"
     assert "plot_text" not in item and "main_text" not in item and "summary_text" not in item
     assert body["labels"]["story_id"] == {str(world.story_id): "テスト作品"}

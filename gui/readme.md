@@ -85,7 +85,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
-話(`episode`)はプロット(`plot_text`)と本文(`main_text`)を一緒に扱う。本文の概要(`summary_text`)は読むだけ。出来事は `character_ids`(当事者)、
+話(`episode`)はプロット(`plot_text`)と本文(`main_text`)を一緒に扱う。本文の概要(`summary_text`)は画面に出さない。出来事は `character_ids`(当事者)、
 人物は足すときだけ `location_id`(出自)を受け取る。
 話を足す画面は、作品が決まるとその作品の最後の話(`/api/last_episode`)から場所・視点・登場人物を空の欄にだけ写す。
 人物の選択肢(`/api/tables/character/options`)はメインキャラクターを先に並べる。

@@ -23,7 +23,6 @@ class EpisodeHead(Material):
 
 class EpisodeRow(EpisodeHead):
     main_text: str
-    summary_text: str | None = None
 
 
 class EpisodeCharacterLink(Material):

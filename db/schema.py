@@ -690,7 +690,7 @@ class Episode(EventSeededMixin, ContentBase):
 
     __tablename__ = "episode"
 
-    TEXT_COLUMNS = ("plot_text", "main_text", "summary_text")
+    TEXT_COLUMNS = ("plot_text", "main_text")
 
     main_text: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
