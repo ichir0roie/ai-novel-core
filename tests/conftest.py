@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tool.test import copy_production_db  # schema より先に読む(db をテスト用の db に固定)
+from tool.test import ensure_test_db  # schema より先に読む(db をテスト用の db に固定)
 from tool.test.mock_ai_client import MockAIClient  # noqa: E402
 from db.schema import (  # noqa: E402
     Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterRelation, ConfirmStatus, Episode,
@@ -17,8 +17,8 @@ from data_access_logic.entrypoint import Entrypoint  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
-def fresh_test_db() -> None:
-    copy_production_db()
+def prepared_test_db() -> None:
+    ensure_test_db()
     engine.dispose()  # 作り直す前の db を掴んでいる接続を捨てる
 
 

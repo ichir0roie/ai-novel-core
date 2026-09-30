@@ -45,7 +45,8 @@ DEM_DATABASE_URL="$DEM_DEV_DATABASE_URL" DEM_DATABASE_IAM_AUTH=0 .venv/bin/pytho
 
 - `core` の変更で列が増えたら、同じように開発用の db の URL を渡して `alembic upgrade head` を当てる(フックは当てない)
 - 空に戻すときは db を消す(`docker exec novel-postgis dropdb -U novel novel_dev`、クラウドは `runuser -u postgres -- dropdb novel_dev`)。次にスクリプトを走らせると作り直す
-- テスト用の db(`novel_test`)も同じサーバーに作る。`tool.test.copy_production_db` が、テストのたびに消して作り直し、本番を写す
+- テスト用の db(`novel_test`)も同じサーバーに作る。テストの始めに、無いか空のときだけ本番を写して作る(`tool.test.ensure_test_db`)。
+  作り直すときは `.venv/bin/python -m tool.test.recreate_db`(消して本番を写し直す)
 
 ## db から db へ写す
 

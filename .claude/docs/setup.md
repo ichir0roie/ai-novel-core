@@ -14,7 +14,17 @@ uvx --from 'uv>=0.9' uv venv --python 3.14 .venv
 uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-`.venv` に pip は入らない。パッケージを足すときも `uv pip install --python .venv/bin/python ...` で入れる。
+`.venv` に pip は入らない。
+
+`requirements.txt` は、依存の依存まで版とハッシュを固定したもので、手では書かない。直接使うパッケージは `requirements.in` に書き、
+そこから作る(Windows でも同じファイルで入るよう `--universal` で作る)。パッケージを足す・版を上げるときは、`requirements.in` を直してから:
+
+```
+uvx --from 'uv>=0.9' uv pip compile requirements.in --universal --python-version 3.14 --generate-hashes -o requirements.txt
+uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.txt
+```
+
+固定した版の中で上げるだけなら、1 行目に `--upgrade-package <名前>`(全部なら `--upgrade`)を足す。
 
 ## db と環境変数
 

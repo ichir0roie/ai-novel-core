@@ -3,10 +3,13 @@
 `db.schema` は import 時に `DEM_DATABASE_URL` で engine を固定するので、この package の読み込み(= 配下のモジュールより先に走る)で
 環境変数を差し替える。差し替える前の `DEM_DATABASE_URL`(手元は転送越しの RDS)は、本番を写すときの写し元として取っておく。
 """
+import logging
 import os
 import sys
 
 from sqlalchemy.engine import make_url
+
+logger = logging.getLogger(__name__)
 
 TEST_DATABASE_NAME = "novel_test"
 PRODUCTION_DATABASE_URL = os.environ.get("DEM_DATABASE_URL") or None
@@ -36,8 +39,47 @@ os.environ["DEM_DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.pop("DEM_DATABASE_IAM_AUTH", None)
 
 
-def copy_production_db() -> None:
-    """テスト用の db を作り直し、本番の db の行を写す。写し元は読むだけ。"""
+def ensure_test_db() -> None:
+    """テスト用の db が無いか空なら、本番を写して作る。行があれば何もしない(作り直すのは `tool.test.recreate_db`)。"""
+    if not _test_db_has_rows():
+        copy_production_db()
+        return
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import text
+
+    from db.schema import engine
+
+    with engine.connect() as conn:
+        current = conn.scalar(text("SELECT version_num FROM alembic_version"))
+    alembic_ini = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "db", "alembic", "alembic.ini")
+    head = ScriptDirectory.from_config(Config(alembic_ini)).get_current_head()
+    if current != head:
+        logger.warning(f"テスト用の db の版({current})がコードの版({head})と違う。"
+                       "`.venv/bin/python -m tool.test.recreate_db` で作り直す")
+
+
+def _test_db_has_rows() -> bool:
+    from sqlalchemy import inspect, text
+
+    from db.schema import Base, engine, make_url_engine
+
+    admin = make_url_engine(make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False))
+    with admin.connect() as conn:
+        exists = conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": TEST_DATABASE_NAME})
+    admin.dispose()
+    if not exists:
+        return False
+    with engine.connect() as conn:
+        names = set(inspect(conn).get_table_names())
+        # personality_level は init_db が入れるマスターなので、写し終えたかの目安にならない
+        return any(conn.scalar(text(f'SELECT 1 FROM "{table.name}" LIMIT 1'))
+                   for table in Base.metadata.sorted_tables if table.name in names and table.name != "personality_level")
+
+
+def copy_production_db() -> dict[str, int]:
+    """テスト用の db を作り直し、本番の db の行を写す。写し元は読むだけ。表ごとの写した行数を返す。"""
     if not PRODUCTION_DATABASE_URL:
         raise RuntimeError("写し元の DEM_DATABASE_URL が無い。`tool.aws.rds --serve` の転送を張り、RDS への URL を渡しておく")
     from sqlalchemy import text
@@ -55,6 +97,6 @@ def copy_production_db() -> None:
 
     source = make_url_engine(PRODUCTION_DATABASE_URL, iam_auth=PRODUCTION_IAM_AUTH)
     try:
-        copy_database(source, engine)
+        return copy_database(source, engine)
     finally:
         source.dispose()

@@ -85,6 +85,32 @@
       }
     },
     {
+      "label": "test db recreate",
+      "type": "shell",
+      // テスト用の db(novel_test)を消し、本番の RDS を写して作り直す。pytest は行があればそのまま使うので、取り込み直したいときに回す。
+      // db への転送(タスク「db tunnel」)を先に張っておく
+      "command": ".venv/bin/python",
+      "args": ["-m", "tool.test.recreate_db"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONUTF8": "1",
+          "DEM_DATABASE_URL": "postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require",
+          "DEM_DATABASE_IAM_AUTH": "1",
+          "DEM_DEV_DATABASE_URL": "postgresql+psycopg://novel:novel@127.0.0.1:55432/novel_dev"
+        }
+      },
+      "windows": {
+        "command": ".venv\\Scripts\\python.exe"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "close": false
+      }
+    },
+    {
       "label": "git push",
       "type": "shell",
       // 今のブランチの変更をすべて日時のメッセージでコミットし、pull --rebase してから push する。
