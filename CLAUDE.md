@@ -2,9 +2,18 @@
 
 Claude はユーザへの返答を常に日本語で書く。
 
-Claude Code では `.claude/hooks/session-start.sh`(SessionStart フック)が、`.venv` の用意、開発用の PostgreSQL の用意、
-手元では RDS への転送の起動と環境変数の設定を行う。作品の中身は db(AWS の RDS)にだけあり、このリポジトリには無い。
+作品の中身は db(AWS の RDS)にだけあり、このリポジトリには無い。
 プロット・時刻・登場人物を決めた話(プロットと本文をまとめて持つ `episode`)はスキル `episode` の手順で回す。
+
+# 作業する場所
+
+作業する場所は二つあり、環境変数 `CLAUDE_CODE_REMOTE` で見分ける。db への道と git の進め方が違うので、
+下の表で場所を限った行は、その場所の行だけを読む(もう一方は読まない)。スキルも、場所で違う手順は別のファイルに分けてある。
+
+| 場所 | `CLAUDE_CODE_REMOTE` | SessionStart フック(`.claude/hooks/session-start.sh`) | db | git |
+| --- | --- | --- | --- | --- |
+| 手元(CLI・VS Code) | `true` でない | `.venv` を用意し、RDS への転送を起こして `DEM_DATABASE_URL` を渡す | 入口越しに直に読み書きする | 頼まれたときだけ |
+| web のセッション(Claude Code on the web) | `true` | `.venv` を裏で用意する(python のコマンドだけ用意が済むまで待たされる) | 繋がない。API 越しに読み書きする | セッションの指示に従う |
 
 # 条件付きのドキュメント
 
@@ -18,14 +27,15 @@ Claude Code では `.claude/hooks/session-start.sh`(SessionStart フック)が�
 | ファイルを読み書きするコードを書くとき、日本語を出すコマンドを打つとき | `.claude/docs/encoding.md` |
 | リポジトリの構成・環境変数を扱うとき、python・pytest・alembic を動かすとき、`.venv` を用意するとき | `.claude/docs/setup.md` |
 | git でコミット・push・merge・ブランチ操作をするとき、worktree で作業してと頼まれたとき | `.claude/docs/git.md` |
-| db を読み書きするとき(入口の呼び出し・作成、マイグレーションの確認、他のセッションとの同時作業を含む) | `.claude/docs/db.md` |
+| 手元で db を読み書きするとき(入口の呼び出し・作成、マイグレーションの確認、他のセッションとの同時作業を含む) | `.claude/docs/db.md` |
+| web のセッションで db を読み書きするとき(id・行を引く、入口・AI の入口を呼ぶ) | `.claude/docs/web-db.md` |
 | テストをしてと明確に依頼されたとき | `.claude/docs/testing.md` |
 | テスト・動作確認で GUI(API・画面)を動かすとき | `.claude/docs/gui.md` |
 | ミームを扱うとき、本文・人物の `text` を書くとき | `.claude/docs/meme.md` |
 | 列名・型を確かめるとき、`db/schema.py` やマイグレーションを変えるとき | `.claude/docs/schema.md` |
 | db を読む処理・AI とやり取りする処理(pydantic のマテリアル・出力モデル)を書く・直すとき、リファクタするとき | `.claude/docs/data-access.md` |
 | PostgreSQL(`DEM_DATABASE_URL`)・AWS へのデプロイ・GitHub Actions・AI の待ち行列(`ai_task`)と web のセッションで回す仕組み(`web_session/`・`steps.py`)を扱うとき | `.docs/README.md` から当たる文書 |
-| AWS の db・資源に触れるとき、Claude Code on the web(`CLAUDE_CODE_REMOTE=true`)で db が要る作業をするとき | `.claude/docs/aws.md` |
+| AWS の db・資源に触れるとき、API(Lambda)の段・web の流れ(`web_session/`)のコードを書くとき | `.claude/docs/aws.md` |
 
 # コーディング規約
 

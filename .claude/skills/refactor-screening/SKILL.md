@@ -6,6 +6,13 @@ description: core リポジトリ全体を定期的にスクリーニングし�
 `CLAUDE.md` のルールに従う。対象はこのリポジトリ全体(`ai/` `db/` `gui/` `data_access_logic/` など)。
 db の行(RDS)は変更しない。
 
+手順は手元(`CLAUDE_CODE_REMOTE` が `true` でない)向けに書いてある。web のセッション(`CLAUDE_CODE_REMOTE=true`)では次のように読み替える。
+
+- 1 の worktree は切らない。セッションが指定したブランチで、リポジトリのルートのまま作業する(5 の worktree の後始末も要らない)
+- 4 の本番を写したテスト用の db は作れない(RDS に繋がない)。`tool.test.mock_ai_client` とコードを読むことで確かめ、
+  写した db で確かめていないことを PR と報告に書く
+- 5 の PR は `gh` ではなく GitHub の MCP のツールで作る
+
 ## 1. 作業場所を用意する
 
 このスキルを呼ばれたことを、worktree・コミット・push・PR の作成の依頼とみなす。今のブランチを乱さないよう worktree を切る。

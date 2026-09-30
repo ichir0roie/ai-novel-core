@@ -1,7 +1,8 @@
-# AWS の db と、web のセッションでの db の扱い
+# AWS の db・資源と、API・web の流れの形
 
-AWS の db(RDS for PostgreSQL、db `novel`)に触れる作業と、Claude Code on the web で
-db が要る作業の決まり。資源の構成と手順は `.docs/aws-deploy.md`、待ち行列と web のセッションで回す仕組みは `.docs/claude-tasks.md` にある。
+AWS の db(RDS for PostgreSQL、db `novel`)と資源に触れる作業、API(Lambda)の段と web のセッションの流れ(`web_session/`)の
+コードを書く作業の決まり。資源の構成と手順は `.docs/aws-deploy.md`、待ち行列と web のセッションで回す仕組みは `.docs/claude-tasks.md` にある。
+web のセッションで db を読み書きする手順は `.claude/docs/web-db.md`、手元は `.claude/docs/db.md`。
 
 ## core は公開リポジトリ
 
@@ -27,20 +28,11 @@ core(ai-novel-core)は公開リポジトリで、誰がクローンしても、�
 
 web のセッションでは、環境変数 `CLAUDE_CODE_REMOTE` が `true` になっている。
 
-web のセッションで db だけの入口を読むだけの調査は、`.venv` の用意を待たず `curl` で API を叩けばよい(合言葉は環境変数のまま渡し、値を出さない):
-
-```
-curl -sS -H "x-novel-api-key: $NOVEL_API_KEY" -H 'content-type: application/json' \
-  -d '{"args":{}}' "${NOVEL_API_URL%/}/api/interface/story.list_stories.ListStories"
-```
-
 ## 決まり
 
 1. マイグレーション(`alembic upgrade`)を AWS の db に当てるのは、手元から `tool.aws.rds` 越しにだけ行う。
    web のセッション・Lambda・GitHub Actions からは当てない。当てるのはユーザに言われてからにし、前にマイグレーションの中身をユーザに見せる
-2. web のセッションでは、db に直に繋ごうとしない。`DEM_DATABASE_URL` を組まない、`tool.aws.rds` を使わない、踏み台やトンネルを試さない。
-   db が要る作業は API のエンドポイントを呼んで行う。エンドポイントが無い作業は、web の中で回り道を作らず、
-   「手元で行うか、エンドポイントを足すコードの変更が要る」とユーザに伝える
+2. web のセッションでは、db に直に繋がず API を呼ぶ(手順と決まりは `.claude/docs/web-db.md`)
 3. API に、任意の SQL や、表を丸ごと消すような操作を受ける口を作らない。公開するのは `data_access_logic` の入口と、画面のための決まった操作だけ
 4. `novel_app` に表を作る・変える権限(DDL)を与えない。表の形を変えるのはマイグレーションだけで、マスターで流す。
    これから増える表への `novel_app` の権限は、マスターに掛けた既定の権限(`infra/sql/novel_app.sql`)で付くので、マイグレーションをマスター以外で流さない
