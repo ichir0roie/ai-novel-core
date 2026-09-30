@@ -51,6 +51,8 @@ export class NovelApiStack extends Stack {
       architecture: lambda.Architecture.X86_64,
       memorySize: 1024,
       timeout: Duration.seconds(30),
+      // 関数 URL は公開なので、叩き続けられても費用と db の接続数がこれ以上に膨らまないようにする
+      reservedConcurrentExecutions: 5,
       role: functionRole,
       vpc,
       vpcSubnets: props.functionSubnetIds

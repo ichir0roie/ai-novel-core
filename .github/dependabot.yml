@@ -1,0 +1,7 @@
+# ワークフローの action は commit の SHA で固定している。固定したままだと更新が止まるので、Dependabot に新しい版の PR を出させる
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
