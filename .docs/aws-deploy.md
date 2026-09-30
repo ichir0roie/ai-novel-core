@@ -73,7 +73,7 @@ npx cdk deploy    # 当てる
 | --- | --- |
 | `NovelData` | 手元の道具とほかのスタックが引く値を、SSM パラメータ `/novel/*` に置く(db のエンドポイント・ポート・db 名・マスターの秘密の ARN、踏み台と EC2 Instance Connect Endpoint の ID)。標準のパラメータなので料金は掛からない |
 | `NovelCi` | ECR リポジトリ `novel-api`、GitHub の OIDC プロバイダ、CI のロール `github-ai-novel-core-deploy`([ci-cd.md](ci-cd.md)) |
-| `NovelApi` | Lambda `novel-api`(VPC の中)・関数 URL・セキュリティグループ・実行ロール。関数 URL は SSM の `/novel/api/function-url` にも出す |
+| `NovelApi` | Lambda `novel-api`(VPC の中)・関数 URL・セキュリティグループ・実行ロール・ログの出し先(保存 2 週間。CloudWatch Logs の無料枠に収める)。関数 URL は SSM の `/novel/api/function-url` にも出す |
 
 ## 手元から db へ繋ぐ
 

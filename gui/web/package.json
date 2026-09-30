@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/credential-provider-node": "^3.972.84",
+    "@smithy/signature-v4": "^5.7.4",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",

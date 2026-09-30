@@ -2,10 +2,12 @@ import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-
 import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as iam from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
+import { grantInvokeViaFunctionUrl } from "./api-stack.js";
 import { api, type DeployConfig } from "./config.js";
 
 // API のイメージの置き場と、GitHub Actions が引き受けるロール。リポジトリは公開なので、ロールは main の push だけが引き受けられ、
-// できることは novel-api の ECR への push(と、push や関数の差し替えに要るイメージの読み取り)と、novel-api 関数のコードの差し替えだけにする(cdk deploy はさせない)
+// できることは novel-api の ECR への push(と、push や関数の差し替えに要るイメージの読み取り)と、novel-api 関数のコードの差し替え、
+// 差し替えたあとの確かめに関数 URL を呼ぶことだけにする(cdk deploy はさせない)
 interface NovelCiStackProps extends StackProps {
   github: DeployConfig["github"];
 }
@@ -44,6 +46,8 @@ export class NovelCiStack extends Stack {
       actions: ["lambda:UpdateFunctionCode", "lambda:GetFunction", "lambda:GetFunctionConfiguration"],
       resources: [`arn:aws:lambda:${this.region}:${this.account}:function:${api.functionName}`],
     }));
+
+    grantInvokeViaFunctionUrl(deployRole, `arn:aws:lambda:${this.region}:${this.account}:function:${api.functionName}`);
 
     new CfnOutput(this, "RepositoryUri", { value: repository.repositoryUri });
     new CfnOutput(this, "DeployRoleArn", { value: deployRole.roleArn });

@@ -66,9 +66,14 @@ jobs:
             --image-uri "$IMAGE" --output text --query 'LastUpdateStatus'
           aws lambda wait function-updated-v2 --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
 
+      # 関数 URL の認証は AWS_IAM なので、引き受けたロールの一時的な鍵で SigV4 の署名を付ける
       - name: smoke test
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
         run: |
           if [ -z "$API_BASE_URL" ]; then exit 0; fi
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$API_BASE_URL/api/ping"
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            --aws-sigv4 "aws:amz:${{ vars.AWS_REGION }}:lambda" \
+            --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \
+            -H "x-amz-security-token: $AWS_SESSION_TOKEN" \
+            "$API_BASE_URL/api/ping"
