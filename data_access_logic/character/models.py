@@ -77,6 +77,18 @@ class CastMaterial(CharacterAt):
     recent_events: list[EventMaterial]
 
 
+class MentionedMaterial(CharacterAt):
+    """話に登場せず、プロット・本文に名前が出るだけの人物。"""
+
+    character: CharacterMaterial
+
+
+class CastCandidate(CharacterAt):
+    """話の登場人物の候補。AI に id で選ばせる。"""
+
+    character: ParticipantCharacter
+
+
 class ParticipantMaterial(CharacterAt):
     character: ParticipantCharacter
     relations: list[CharacterRelationLine]
@@ -119,6 +131,22 @@ class CastSerialized(CastMaterial):
             **_sheet(self.character, self),
             "直近の出来事(古い順)": [event.model_dump() for event in self.recent_events],
         }
+
+
+class MentionedSerialized(MentionedMaterial):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return _sheet(self.character, self)
+
+
+class CastCandidateSerialized(CastCandidate):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return {"人物id": self.character.id, **_sheet(self.character, self)}
 
 
 class ParticipantSerialized(ParticipantMaterial):

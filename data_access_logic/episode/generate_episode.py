@@ -4,10 +4,10 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ai.claude_code import ai_client
-from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL
+from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL, PLOT_EFFORT, PLOT_MODEL
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
-from data_access_logic.episode import framer, writer
+from data_access_logic.episode import caster, framer, writer
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.form import EpisodeForm, save_frame
 from data_access_logic.episode.record import EpisodeRecord
@@ -21,7 +21,8 @@ class GenerateEpisode(SessionEntrypoint):
 
     AI 呼び出し(数分〜十数分かかることがある)の前に、下書きを枠として一度保存する。途中で失敗しても、枠は db に残る。
     プロット(`plot_text`)か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
-    登場人物は下書きの `character_ids`、省けば枠の `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
+    登場人物は下書きの `character_ids`、省けば枠の `episode_character`。本文を書く前に、プロットで台詞・行動のある人物を
+    AI に挙げさせて登場人物に足す(外さない)。db にいない人物は作って足す(`caster.py`)。それでも空なら止まる。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば opus 5.5 の high)。
     `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば db の `style_preference` から読む。
     """
@@ -47,6 +48,7 @@ class GenerateEpisode(SessionEntrypoint):
         s.commit()
         if not record.plot_text.strip() or record.start is None:
             framer.frame_episode(s, self.ai, record.id)
+        caster.cast_from_plot(s, self.ai, record.id, model=PLOT_MODEL, effort=PLOT_EFFORT)
         extras = read_style_extras(s, StyleTarget.EPISODE).overridden(self.shared_style_extra, self.style_extra)
         written = writer.write_episode(
             s, self.ai, record.id, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,

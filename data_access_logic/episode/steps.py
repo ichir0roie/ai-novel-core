@@ -6,12 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import record_of
-from data_access_logic.episode import framer, plot_completer, reviser, writer
+from data_access_logic.episode import caster, framer, plot_completer, reviser, writer
 from data_access_logic.episode import summary as episode_summary
+from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, save_frame
 from data_access_logic.episode.models import (
-    EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
+    EpisodeCastMaterial, EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
     EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
@@ -74,6 +75,12 @@ class PlotForm(BaseModel):
 
 class LocationScope(BaseModel):
     location_id: int | None
+
+
+class KnownCharactersForm(BaseModel):
+    episode_id: int
+    # 年齢・その時点の口調などを決める時刻(話の時刻)
+    time: Stamp
 
 
 class CastMemberForm(BaseModel):
@@ -157,6 +164,16 @@ def save_plot(s: Session, form: PlotForm) -> None:
 @db_step
 def known_locations(s: Session, form: LocationScope) -> list[LocationMaterial]:
     return plot_completer.known_locations(s, form.location_id)
+
+
+@db_step
+def cast_material(s: Session, form: RowId) -> EpisodeCastMaterial:
+    return caster.cast_material(s, form.id)
+
+
+@db_step
+def known_characters(s: Session, form: KnownCharactersForm) -> list[MentionedMaterial]:
+    return plot_completer.known_characters(s, form.episode_id, form.time)
 
 
 @db_step

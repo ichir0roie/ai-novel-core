@@ -1280,6 +1280,11 @@
           "character_id": {
             "type": "integer",
             "title": "Character Id"
+          },
+          "mentioned": {
+            "type": "boolean",
+            "title": "Mentioned",
+            "default": false
           }
         },
         "type": "object",
@@ -1373,6 +1378,15 @@
             "type": "array",
             "title": "Character Ids",
             "readOnly": true
+          },
+          "mentioned_character_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Mentioned Character Ids",
+            "description": "この話に登場せず、プロット・本文に名前が出るだけの人物",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -1385,7 +1399,8 @@
           "plot_text",
           "event_seeded",
           "main_text",
-          "character_ids"
+          "character_ids",
+          "mentioned_character_ids"
         ],
         "title": "EpisodeRecord"
       },

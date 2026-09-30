@@ -14,16 +14,17 @@ from ai.claude_code import ai_client
 from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL, PLOT_EFFORT, PLOT_MODEL
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
-from data_access_logic.episode import framer, plot_completer, reviser, writer
+from data_access_logic.episode import caster, framer, plot_completer, reviser, writer
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeForm
-from data_access_logic.episode.models import EpisodeMaterial
+from data_access_logic.episode.models import EpisodeCharacterCandidateDraft, EpisodeMaterial
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from data_access_logic.style_preference import steps as style_steps
 from data_access_logic.style_preference.extras import StyleExtras
 from data_access_logic.style_preference.form import StyleTarget
+from db.stamp import Stamp
 from web_session import character
 from web_session.api import call
 from web_session.summary import refresh, rewrite_episode_summaries
@@ -47,6 +48,33 @@ def _material(ai: AIClient, episode_id: int) -> EpisodeMaterial:
         episode_id=episode_id, keywords=keywords_of(targets.plot_text, ai, targets.start)))
 
 
+def _add_characters(
+    ai: AIClient, episode_id: int, candidates: list[EpisodeCharacterCandidateDraft], location_id: int | None, time: Stamp,
+) -> None:
+    rng = random.Random()
+    for candidate in candidates:
+        # 人物は一人ごとに書き戻すので、途中で止まっても作った人物は残る
+        record = character.generate(ai, rng, location_id, time, True,
+                                    CharacterForm(name=candidate.called, text=candidate.text))
+        if record is None:
+            logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
+            continue
+        call(episode_steps.add_cast_member, episode_steps.CastMemberForm(episode_id=episode_id, character_id=record.id))
+
+
+def _cast(ai: AIClient, episode_id: int) -> None:
+    """本文を書く前に、プロットで台詞・行動のある人物を登場人物に足す(`caster.cast_from_plot` に当たる)。"""
+    material = call(episode_steps.cast_material, RowId(id=episode_id))
+    draft = caster.cast_draft(ai, material, PLOT_MODEL, PLOT_EFFORT)
+    if draft is None:
+        return
+    found, created = caster.split_members(material, draft)
+    for character_id in found:
+        call(episode_steps.add_cast_member, episode_steps.CastMemberForm(episode_id=episode_id, character_id=character_id))
+    location_id = material.locations[-1].id if material.locations else None
+    _add_characters(ai, episode_id, created, location_id, material.main_episode.start)
+
+
 def _style_extras(shared_style_extra: str | None, style_extra: str | None) -> StyleExtras:
     extras = call(style_steps.style_extras, style_steps.StyleTargetForm(target=StyleTarget.EPISODE))
     return extras.overridden(shared_style_extra, style_extra)
@@ -68,6 +96,7 @@ def generate_episode(
     saved = call(episode_steps.save_episode_frame, episode)
     if saved.needs_frame:
         _frame(ai, saved.id)
+    _cast(ai, saved.id)
     material = _material(ai, saved.id)
     extras = _style_extras(shared_style_extra, style_extra)
     draft = writer.episode_draft(ai, material, model or EPISODE_MODEL, effort or EPISODE_EFFORT, extras.shared, extras.own)
@@ -137,17 +166,11 @@ def complete_plot(
 
     location_id = material.locations[-1].id if material.locations else None
     known = call(episode_steps.known_locations, episode_steps.LocationScope(location_id=location_id))
-    casting = plot_completer.casting_draft(ai, material, plot_text, known, model, effort)
+    known_people = call(episode_steps.known_characters, episode_steps.KnownCharactersForm(
+        episode_id=saved.id, time=material.main_episode.start))
+    casting = plot_completer.casting_draft(ai, material, plot_text, known, known_people, model, effort)
     if casting is not None and casting.characters:
-        rng = random.Random()
-        for candidate in casting.characters:
-            # 人物は一人ごとに書き戻すので、途中で止まっても作った人物は残る
-            record = character.generate(ai, rng, location_id, material.main_episode.start, True,
-                                        CharacterForm(name=candidate.called, text=candidate.text))
-            if record is None:
-                logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
-                continue
-            call(episode_steps.add_cast_member, episode_steps.CastMemberForm(episode_id=saved.id, character_id=record.id))
+        _add_characters(ai, saved.id, casting.characters, location_id, material.main_episode.start)
     if casting is not None and casting.location is not None:
         call(episode_steps.add_location, episode_steps.NewLocationForm(
             episode_id=saved.id, candidate=casting.location, parent_id=location_id))

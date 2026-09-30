@@ -27,6 +27,7 @@ class EpisodeRow(EpisodeHead):
 
 class EpisodeCharacterLink(Material):
     character_id: int
+    mentioned: bool = False
 
 
 class EpisodeRecord(EpisodeRow):
@@ -39,13 +40,22 @@ class EpisodeRecord(EpisodeRow):
     def _from_dumped(cls, value: Any) -> Any:
         # API(`/api/steps`)が JSON にして返した形(`character_ids`)からも読み直せるように
         if isinstance(value, dict) and "episode_characters" not in value and "character_ids" in value:
-            return {**value, "episode_characters": [{"character_id": character_id} for character_id in value["character_ids"]]}
+            return {**value, "episode_characters": [
+                *({"character_id": character_id} for character_id in value["character_ids"]),
+                *({"character_id": character_id, "mentioned": True}
+                  for character_id in value.get("mentioned_character_ids", [])),
+            ]}
         return value
 
     @computed_field
     @property
     def character_ids(self) -> list[int]:
-        return [link.character_id for link in self.episode_characters]
+        return [link.character_id for link in self.episode_characters if not link.mentioned]
+
+    @computed_field(description="この話に登場せず、プロット・本文に名前が出るだけの人物")
+    @property
+    def mentioned_character_ids(self) -> list[int]:
+        return [link.character_id for link in self.episode_characters if link.mentioned]
 
 
 class EpisodeSummaryRecord(Material):
