@@ -30,7 +30,10 @@ episode = GenerateEpisode(EpisodeForm(id=<episodeのid>, character_ids=[<人物i
 - プロットは `data_access_logic/readme.md` の「補足」にある `## 場面` / `## 狙い` の形に割ってから渡すとよい。
   プロットに無い出来事は足されない
 - 話に渡す登場人物は、話と人物のリレーション(`episode_character`)だけ。渡した `[<人物id>, ...]` はその話の `episode_character` として残る。
-  枠へ書くときに `character_ids` を省けば、枠の `episode_character` を使う。時刻・場所から人物を拾う既定は無い
+  枠へ書くときに `character_ids` を省けば、枠の `episode_character` を使う
+- 本文を書く前に、AI がプロットで台詞・行動のある人物を挙げて登場人物に足す(渡した人物は外さない)。
+  db の人物と呼び名が違っても照合し、db にいない人物は自動生成で作って足す。なので `character_ids` は、
+  必ず出したい人物(視点など)だけ渡せばよい。作られた人物は報告に含める
 - 名前が出るだけの人物(話題・回想・噂)は `character_ids` に入れない。プロット・本文に名前が出る承認済みの人物は、
   話の保存・枠の生成・プロット補完・推敲のたびに `episode_character` の `mentioned=true` の行として拾い直され、
   その設定(歳・口調・人物像)も「名前だけ出る人物」として AI に渡る

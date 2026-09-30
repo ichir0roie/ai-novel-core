@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import random
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
@@ -119,9 +119,12 @@ def casting_draft(
 
 
 def add_cast_member(s: Session, episode_id: int, character_id: int) -> None:
-    """未確認の人物は話に出せない(`CharacterMaterial`)。この話の本文に書く人物なので承認して足す。"""
+    """未確認の人物は話に出せない(`CharacterMaterial`)。この話の本文に書く人物なので承認して足す。
+    名前だけ出る人物(`mentioned`)の行があれば、登場人物の行に置き換える。"""
     record = s.get_one(Character, character_id)
     record.confirmed = ConfirmStatus.APPROVED
+    s.execute(delete(EpisodeCharacter).where(
+        EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.character_id == character_id))
     s.add(EpisodeCharacter(episode_id=episode_id, character_id=character_id))
     s.flush()
     logger.info(f"{record.name}(id={record.id})を登場人物に足した")
@@ -143,7 +146,7 @@ def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidat
     return location
 
 
-def _add_characters(
+def add_characters(
     s: Session, ai: AIClient, episode_id: int, candidates: list[EpisodeCharacterCandidateDraft],
     location_id: int | None, time: Stamp,
 ) -> None:
@@ -179,7 +182,7 @@ def complete_plot(
         ai, material, plot_text, known_locations(s, location_id),
         known_characters(s, episode_id, material.main_episode.start), model, effort)
     if casting is not None and casting.characters:
-        _add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start)
+        add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start)
     if casting is not None and casting.location is not None:
         add_location(s, episode_id, casting.location, location_id)
         s.commit()

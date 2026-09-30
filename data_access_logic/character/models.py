@@ -83,6 +83,12 @@ class MentionedMaterial(CharacterAt):
     character: CharacterMaterial
 
 
+class CastCandidate(CharacterAt):
+    """話の登場人物の候補。AI に id で選ばせる。"""
+
+    character: ParticipantCharacter
+
+
 class ParticipantMaterial(CharacterAt):
     character: ParticipantCharacter
     relations: list[CharacterRelationLine]
@@ -133,6 +139,14 @@ class MentionedSerialized(MentionedMaterial):
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return _sheet(self.character, self)
+
+
+class CastCandidateSerialized(CastCandidate):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return {"人物id": self.character.id, **_sheet(self.character, self)}
 
 
 class ParticipantSerialized(ParticipantMaterial):
