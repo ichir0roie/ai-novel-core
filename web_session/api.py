@@ -2,9 +2,8 @@
 """web のセッションから Lambda の API(`novel-api`)を呼ぶ。
 
 web のセッションは db に繋がず AWS の鍵も持たない。関数 URL は AWS の署名が無いと通らないので、画面(Amplify)の `/api/*` を
-Basic 認証と web 用の合言葉付きの HTTPS で叩き、Amplify が署名して関数 URL へ流す。
-`NOVEL_API_URL`(Amplify の URL)・`NOVEL_API_BASIC_USER` / `NOVEL_API_BASIC_PASSWORD`(Amplify の Basic 認証)・
-`NOVEL_API_KEY`(web 用の合言葉)は、web の環境の環境変数に置く(`.docs/web-session.md`)。
+web 用の合言葉付きの HTTPS で叩き、Amplify が合言葉を確かめてから署名して関数 URL へ流す。
+`NOVEL_API_URL`(Amplify の URL)と `NOVEL_API_KEY`(web 用の合言葉)は、web の環境の環境変数に置く(`.docs/web-session.md`)。
 """
 from __future__ import annotations
 
@@ -34,14 +33,8 @@ def _base_url() -> str:
     return url
 
 
-def _basic_auth() -> tuple[str, str] | None:
-    user = os.environ.get("NOVEL_API_BASIC_USER", "")
-    password = os.environ.get("NOVEL_API_BASIC_PASSWORD", "")
-    return (user, password) if user or password else None
-
-
 def _post(path: str, body: Any) -> Any:
-    response = httpx.post(f"{_base_url()}{path}", json=body, timeout=_TIMEOUT, auth=_basic_auth(),
+    response = httpx.post(f"{_base_url()}{path}", json=body, timeout=_TIMEOUT,
                           headers={_API_KEY_HEADER: os.environ.get("NOVEL_API_KEY", "")})
     if response.is_error:
         raise ApiError(f"{path} が {response.status_code} を返した: {response.text[-2000:]}")

@@ -34,6 +34,10 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
 /* スマホではアドレスバーの出入りで 100% が実際の表示より高くなり、下端(保存ボタンなど)が隠れるので、見えている高さに合わせる */
 body { height: 100dvh; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; display: flex; flex-direction: row; }
+/* ログインの画面(components/AuthGate.tsx)。ThemeProvider が全体を div で包むので、箱を作らせず body の flex をそのまま効かせる。
+   ログインの箱は幅いっぱいに広げて真ん中に置かせる */
+[data-amplify-theme] { display: contents; }
+[data-amplify-authenticator] { flex: 1; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1 { font-size: 1.4rem; margin: 0 0 0.75rem; }

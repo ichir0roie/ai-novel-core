@@ -1,3 +1,5 @@
+import { fetchAuthSession } from "aws-amplify/auth";
+import { loginRequired } from "./auth";
 import type { components } from "./openapi";
 
 export type TableMeta = components["schemas"]["TableMeta"];
@@ -22,6 +24,8 @@ export class ApiError extends Error {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  // アクセストークン(1 時間)が切れていれば、更新のトークンで取り直してクッキーに置く。route handler はクッキーのトークンを確かめる
+  if (loginRequired) await fetchAuthSession();
   const response = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },

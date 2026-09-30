@@ -76,7 +76,7 @@ export class NovelApiStack extends Stack {
       },
     });
     // 署名の無い要求は関数が起きる前に Lambda が弾くので、URL を叩かれ続けても料金もログも生まれない。
-    // 画面は Amplify の SSR のコンピュートロールで、web のセッションは Amplify の /api/*(Basic 認証)越しに届く
+    // 画面は Amplify の SSR のコンピュートロールで、web のセッションは Amplify の /api/*(web 用の合言葉)越しに届く
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.AWS_IAM });
     // Amplify のアプリは CDK の外にあるので、このロールは aws amplify update-app --compute-role-arn で付ける
     const amplifyComputeRole = new iam.Role(this, "AmplifyComputeRole", {

@@ -74,6 +74,7 @@ npx cdk deploy    # 当てる
 | `NovelData` | 手元の道具とほかのスタックが引く値を、SSM パラメータ `/novel/*` に置く(db のエンドポイント・ポート・db 名・マスターの秘密の ARN、踏み台と EC2 Instance Connect Endpoint の ID)。標準のパラメータなので料金は掛からない |
 | `NovelCi` | ECR リポジトリ `novel-api`、GitHub の OIDC プロバイダ、CI のロール `github-ai-novel-core-deploy`([ci-cd.md](ci-cd.md)) |
 | `NovelApi` | Lambda `novel-api`(VPC の中)・関数 URL・セキュリティグループ・実行ロール・ログの出し先(保存 2 週間。CloudWatch Logs の無料枠に収める)。関数 URL は SSM の `/novel/api/function-url` にも出す |
+| `NovelAuth` | 画面のログインに使う Cognito のユーザープール(料金区分 Lite。月 1 万人まで無料)と、画面用のアプリクライアント。ID は SSM の `/novel/auth/user-pool-id`・`/novel/auth/user-pool-client-id` に出す |
 
 ## 手元から db へ繋ぐ
 
@@ -159,10 +160,15 @@ db のロール `novel_app`(行の読み書きだけ。IAM データベース認
 | `AMPLIFY_MONOREPO_APP_ROOT` | `gui/web` |
 | `NOVEL_API_URL` | Lambda の関数 URL(末尾の `/` は無くてよい) |
 | `NOVEL_API_KEY` | Lambda の `NOVEL_API_KEYS` の `gui=` と同じ値 |
+| `NOVEL_WEB_API_KEY` | Lambda の `NOVEL_API_KEYS` の `web=` と同じ値。web のセッションの `/api/*` を、Amplify の段でも確かめるのに使う |
+| `NEXT_PUBLIC_NOVEL_USER_POOL_ID` | SSM の `/novel/auth/user-pool-id`(`npx cdk deploy NovelAuth` のあと) |
+| `NEXT_PUBLIC_NOVEL_USER_POOL_CLIENT_ID` | SSM の `/novel/auth/user-pool-client-id` |
 
 `amplify.yml` がビルドのときに `NOVEL_*` を `.env.production` に写す(SSR のサーバーは実行時にコンソールの環境変数を
-読めないため。Amplify の案内どおりの形)。
-3. 「アクセスコントロール」で `main` ブランチにユーザ名・パスワードを掛ける
+読めないため。Amplify の案内どおりの形)。`NEXT_PUBLIC_*` は秘密ではなく、`next build` がブラウザ向けのコードにも埋め込む。
+`AMPLIFY_APP_ORIGIN` は置かない(置くと adapter-nextjs がサーバー側でログインする形に切り替わり、画面の Authenticator が使えなくなる)。
+3. 画面に入る人を Cognito に作る(画面からの登録は閉じてある)。仮のパスワードがメールで届き、最初のログインで替える:
+   `aws cognito-idp admin-create-user --user-pool-id <ユーザープールの ID> --username <メールアドレス> --user-attributes Name=email,Value=<メールアドレス> Name=email_verified,Value=true`
 4. 以降は `main` への push で Amplify が建て直す
 
 Next.js は 16 系を使っている。Amplify の SSR が対応する版は Amplify のドキュメントで確かめる(ビルドが通っても、
@@ -172,8 +178,12 @@ Next.js は 16 系を使っている。Amplify の SSR が対応する版は Amp
 
 公開の URL に置くので、二段で閉じる。
 
-1. 画面: Amplify の「アクセスコントロール」でブランチにユーザ名・パスワード(Basic 認証)を掛ける。
-   CloudFront の段で掛かるので、`/api/*` の route handler も含めて全部が閉じる
+1. 画面: Amplify の Auth で Cognito(`NovelAuth`)にログインする(`gui/web/components/AuthGate.tsx`)。ログインするまで画面の中身は出さない。
+   トークンはクッキーに置き、`/api/*` の route handler が、adapter-nextjs で Cognito の公開鍵による署名を確かめてから流す。
+   更新のトークンは 365 日効くので、その間はログインし直さなくてよい。
+   web のセッションは Cognito に入らず、`x-novel-api-key` に web 用の合言葉を付けて `/api/*` を叩く。Amplify が
+   `NOVEL_WEB_API_KEY` と合うかを見てから流し、Lambda がもう一度見る。
+   Amplify の「アクセスコントロール」(Basic 認証)は、ブラウザを閉じるたびに入れ直しになるので使わない
 2. API: 合言葉を呼ぶ側ごとに分ける(Amplify 用の `gui`、Claude Code on the web 用の `web`)。Lambda の `NOVEL_API_KEYS` に両方を置き、
    API は `x-novel-api-key` がどれにも合わない要求を 401 で返す(`/api/ping` だけは Lambda Web Adapter の起動確認のため通す)。
    片方が漏れたら、それだけを替えるか外す。Amplify の合言葉はサーバー側でだけ足し、ブラウザには渡らない
@@ -187,7 +197,8 @@ Lambda の環境変数を読める人にはどのみち見えるので、一人�
 
 1. `aws ssm put-parameter --name /novel/api-keys/<gui|web> --type SecureString --overwrite --value "$(openssl rand -hex 32)"`
 2. `infra` で `npx cdk deploy NovelApi`。Lambda の環境変数が替わり、古い鍵はその時点で通らなくなる
-3. `gui` を替えたら Amplify の `NOVEL_API_KEY` を替えて建て直す。`web` を替えたら web の環境の `NOVEL_API_KEY` を替える
+3. `gui` を替えたら Amplify の `NOVEL_API_KEY` を替えて建て直す。`web` を替えたら Amplify の `NOVEL_WEB_API_KEY` を替えて建て直し、
+   web の環境の `NOVEL_API_KEY` も替える
 
 2 と 3 の間は、替えた側の呼び出しが 401 になる。止めずに替えたくなったら、同じ呼ぶ側に新旧二つの鍵を一時的に置ける形を
 `NOVEL_API_KEYS` に足す。

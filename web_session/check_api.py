@@ -28,7 +28,6 @@ def main() -> None:
     report: dict[str, Any] = {
         "api_url_set": bool(os.environ.get("NOVEL_API_URL", "").strip()),
         "api_key_set": bool(os.environ.get("NOVEL_API_KEY", "").strip()),
-        "basic_auth_set": bool(os.environ.get("NOVEL_API_BASIC_USER") and os.environ.get("NOVEL_API_BASIC_PASSWORD")),
         "claude_command": shutil.which(os.environ.get("DEM_CLAUDE_AI_COMMAND", "claude")),
         "claudecode_env": os.environ.get("CLAUDECODE") == "1",
         "alembic_head": ScriptDirectory.from_config(Config(_ALEMBIC_INI)).get_current_head(),

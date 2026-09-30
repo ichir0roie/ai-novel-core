@@ -29,15 +29,14 @@ db が要る web の作業の専用の環境を作る。ふだんのセッショ
 セッションで開くリポジトリは ai-novel-core(このリポジトリ)だけでよい。SessionStart フック(`.claude/hooks/session-start.sh`)が
 `.venv` を用意する。web のセッションでは RDS への転送も `DEM_DATABASE_URL` も用意しない。
 
-- Network access: `Custom`。既定の一覧(PyPI・npm など。フックの `uv pip install` に要る)を残し、`novel-api` の関数 URL のホスト
-  (`<id>.lambda-url.ap-northeast-1.on.aws`)を足す。
-  関数 URL は SSM の `/novel/api/function-url` で見る(`aws ssm get-parameter --name /novel/api/function-url`)。
-  このリポジトリは公開なので、実際の URL は文書やコードに書かない
+- Network access: `Custom`。既定の一覧(PyPI・npm など。フックの `uv pip install` に要る)を残し、画面(Amplify)のホスト
+  (`main.<アプリの ID>.amplifyapp.com`)を足す。関数 URL は AWS の署名が無いと通らないので、web のセッションは画面の `/api/*` を叩き、
+  Amplify が合言葉を確かめてから署名して流す。このリポジトリは公開なので、実際の URL は文書やコードに書かない
 - Environment variables: 次を置く。環境変数はその環境を使う人なら誰でも読めるので、置くのは web 用の合言葉だけにする
   (db のパスワード・AWS のアクセスキーは置かない)
 
   ```
-  NOVEL_API_URL=https://<id>.lambda-url.ap-northeast-1.on.aws
+  NOVEL_API_URL=https://main.<アプリの ID>.amplifyapp.com
   NOVEL_API_KEY=<web 用の合言葉。SSM の /novel/api-keys/web の値>
   BASH_DEFAULT_TIMEOUT_MS=3600000
   BASH_MAX_TIMEOUT_MS=3600000
@@ -58,8 +57,8 @@ API に届いたか・db の種類・alembic の版(db の側と、このセッ�
 | 出たもの | 見るところ |
 | --- | --- |
 | `api_url_set` が false | 環境の `NOVEL_API_URL` |
-| `403` / `host_not_allowed` | 環境の Network access に、`novel-api` の関数 URL のホストが入っているか |
-| `401` | 環境の `NOVEL_API_KEY` が、Lambda の `NOVEL_API_KEYS` の `web=` と合っているか |
+| `403` / `host_not_allowed` | 環境の Network access に、画面(Amplify)のホストが入っているか |
+| `401` | 環境の `NOVEL_API_KEY` が、Amplify の `NOVEL_WEB_API_KEY` と Lambda の `NOVEL_API_KEYS` の `web=` の両方と合っているか |
 | `alembic_current` が `alembic_head` と違う | db にマイグレーションを当てる([ci-cd.md](ci-cd.md#マイグレーション))か、`core` を db の版に合わせる |
 | `claude_command` が null | web のセッションでは claude が入っている前提。フックの途中で落ちていないか |
 

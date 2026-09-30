@@ -1,5 +1,6 @@
 # AWS Amplify Hosting のビルド設定。画面(gui/web、Next.js)だけをモノレポの一つのアプリとして建てる。
-# Amplify のアプリの環境変数に AMPLIFY_MONOREPO_APP_ROOT=gui/web、NOVEL_API_URL、NOVEL_API_KEY を置く(`.docs/aws-deploy.md`)。
+# Amplify のアプリの環境変数に AMPLIFY_MONOREPO_APP_ROOT=gui/web、NOVEL_API_URL、NOVEL_API_KEY、NOVEL_WEB_API_KEY、
+# NEXT_PUBLIC_NOVEL_USER_POOL_ID、NEXT_PUBLIC_NOVEL_USER_POOL_CLIENT_ID を置く(`.docs/aws-deploy.md`)。NEXT_PUBLIC_* は next build が埋め込む。
 version: 1
 applications:
   - appRoot: gui/web
@@ -13,7 +14,7 @@ applications:
         build:
           commands:
             # サーバー側(`app/api/[...path]/route.ts`)が実行時に読む値は、ビルドの環境変数から .env.production に写す
-            - env | grep -E '^NOVEL_(API_URL|API_KEY)=' >> .env.production || true
+            - env | grep -E '^NOVEL_(API_URL|API_KEY|WEB_API_KEY)=' >> .env.production || true
             - npm run build
       artifacts:
         baseDirectory: .next

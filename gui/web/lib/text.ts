@@ -25,6 +25,7 @@ export const T = {
   zoom: "Zoom",
   invalidJson: (error: string) => `Invalid JSON: ${error}`,
   cannotReachApi: (error: string) => `Cannot reach API: ${error} (check that uvicorn is running)`,
+  signInRequired: "Sign in required.",
   span,
   confirmWord,
 
