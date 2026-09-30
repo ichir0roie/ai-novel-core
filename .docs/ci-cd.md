@@ -64,7 +64,7 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 | --- | --- |
 | ECR リポジトリ `novel-api` | tag の無いイメージは push から 1 日で消し、残りは新しい 30 個を残す。スタックを消してもリポジトリは残す |
 | GitHub の OIDC プロバイダ | `token.actions.githubusercontent.com`、対象 `sts.amazonaws.com` |
-| CI のロール | 信頼は、SSM の `/novel/deploy/config` に書いた自分の core のリポジトリの `main` だけ(`repo:<owner>/<repo>:ref:refs/heads/main`。immutable subject のリポジトリは `github.subClaimPrefix` の値が前半に入る。公開リポジトリなので、PR やフォークから引き受けられないようにする)。権限は `novel-api` の ECR への push と、関数 `novel-api` の `UpdateFunctionCode`・`GetFunction`・`GetFunctionConfiguration` だけ |
+| CI のロール | 信頼は、SSM の `/novel/deploy/config` に書いた自分の core のリポジトリの `main` だけ(`repo:<owner>/<repo>:ref:refs/heads/main`。immutable subject のリポジトリは `github.subClaimPrefix` の値が前半に入る。公開リポジトリなので、PR やフォークから引き受けられないようにする)。権限は `novel-api` の ECR への push と読み取り(buildx の push と関数の差し替えがイメージを読む)と、関数 `novel-api` の `UpdateFunctionCode`・`GetFunction`・`GetFunctionConfiguration` だけ |
 
 ## マイグレーション
 
