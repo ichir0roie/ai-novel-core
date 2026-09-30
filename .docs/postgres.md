@@ -84,6 +84,40 @@ SRID 4326 は「経緯度の度」として借りているだけで、地球以�
 SELECT name FROM location WHERE ST_Contains(geom_shape, (SELECT geom_point FROM location WHERE id = 7));
 ```
 
+距離・面積は星の大きさで読み替える。星の半径は、星の行(`kind = '星'`。`location_planet` はその `id` を指す)の `area`(表面積 km²)から
+`sqrt(area / 4π)` で出す(`data_access_logic/map/geometry.py` の `planet_radius_km` と同じ決め方。地球の 510,072,000 → 約 6,371 km)。
+
+```sql
+-- :origin_id と同じ星にある場所を近い順に(ListNeighbors と同じ並び)。
+-- 方角は回転楕円体の上で測るので、球で測る ListNeighbors と 1 度ほどずれることがある
+SELECT near.id, near.name, near.kind,
+       round((ST_DistanceSphere(origin.geom_point, near.geom_point, sqrt(planet.area::float8 / (4 * pi())) * 1000) / 1000)::numeric)
+           AS distance_km,
+       round(degrees(ST_Azimuth(origin.geom_point::geography, near.geom_point::geography))::numeric) AS bearing_deg
+FROM location origin
+JOIN location planet ON planet.id = origin.location_planet
+JOIN location near ON near.location_planet = origin.location_planet AND near.id <> origin.id
+WHERE origin.id = :origin_id AND near.geom_point IS NOT NULL
+ORDER BY distance_km, near.id
+LIMIT 10;
+
+-- 点の場所ごとに、それを輪郭に含む同じ星の場所。経緯度の平面で判定するので、極や経度 ±180 をまたぐ輪郭では外れる
+SELECT point.id, point.name, area.id AS area_id, area.name AS area_name
+FROM location point
+JOIN location area ON area.location_planet = point.location_planet AND area.id <> point.id
+    AND ST_Covers(area.geom_shape, point.geom_point)
+ORDER BY point.id;
+
+-- 輪郭の広さ(km²)。地球の球の上で測った広さを、星と地球の半径の比の二乗で伸び縮みさせる
+SELECT area.id, area.name,
+       round((ST_Area(area.geom_shape::geography, false) / 1e6
+              * (planet.area::float8 / (4 * pi())) / (6371.0088 ^ 2))::numeric) AS shape_km2,
+       area.area
+FROM location area
+JOIN location planet ON planet.id = area.location_planet
+WHERE area.geom_shape IS NOT NULL;
+```
+
 alembic の autogenerate は、これらの列・索引と PostGIS の `spatial_ref_sys` を消そうとしない(`db/alembic/env.py` の `include_object`)。
 
 ## 二つの db の違いで直したところ
