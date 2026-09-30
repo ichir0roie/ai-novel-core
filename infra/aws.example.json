@@ -1,0 +1,4 @@
+{
+  "github": { "repository": "<owner>/<repo>", "branch": "main" },
+  "existing": {}
+}

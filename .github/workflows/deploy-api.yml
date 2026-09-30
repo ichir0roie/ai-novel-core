@@ -1,0 +1,69 @@
+# main に API(gui/api)と、それが読むコードの変更が入ったら、Lambda のコンテナを作り直して差し替える。
+# AWS へは OIDC で一時的な権限をもらう(鍵を GitHub に置かない)。設定の手順は `.docs/ci-cd.md`。
+# リポジトリの変数(Settings → Secrets and variables → Actions → Variables)が無ければ何もしない(フォーク・設定前)。
+name: deploy-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ai/**"
+      - "data_access_logic/**"
+      - "db/**"
+      - "randomizer/**"
+      - "gui/__init__.py"
+      - "gui/api/**"
+      - "requirements.txt"
+      - "infra/lambda/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: lint
+        run: pipx run ruff check .
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Lambda は複数アーキの目録(provenance の添付で出来る)を受け付けないので、一つのアーキだけで push する。
+      # main の tag は infra/(CDK)が関数を作るときに指す先。関数の差し替えは commit の sha の tag で行う
+      - name: build and push
+        env:
+          REPOSITORY: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+        run: |
+          docker buildx build --platform linux/amd64 --provenance=false \
+            -f infra/lambda/Dockerfile -t "$REPOSITORY:${{ github.sha }}" -t "$REPOSITORY:main" --push .
+          echo "IMAGE=$REPOSITORY:${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: update lambda
+        run: |
+          aws lambda update-function-code --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}" \
+            --image-uri "$IMAGE" --output text --query 'LastUpdateStatus'
+          aws lambda wait function-updated-v2 --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
+
+      - name: smoke test
+        if: vars.API_BASE_URL != ''
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 3 "${{ vars.API_BASE_URL }}/api/ping"

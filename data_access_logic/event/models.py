@@ -42,6 +42,13 @@ class EventSource(EventBase):
     text: str
 
 
+class EventSummarySource(EventSource):
+    """要約を作り直す出来事。書き戻すときに、要約した本文のハッシュを添える。"""
+
+    id: int
+    source_hash: str
+
+
 class EventSourceSerialized(EventSource):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 

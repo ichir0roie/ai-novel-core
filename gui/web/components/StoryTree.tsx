@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
 import { buildStoryTree, collapsibleIds, descendantIds, findNode, type StoryNode } from "@/lib/storyTree";
 import { useOpenPage } from "@/lib/nav";
@@ -11,43 +11,19 @@ import { useTreeOpen } from "@/lib/treeOpen";
 type OpenState = ReturnType<typeof useTreeOpen>;
 
 const ROOT = "root";
-type DropId = number | typeof ROOT;
+type MoveTarget = number | typeof ROOT;
 
 type ContextMenuState = { node: StoryNode; x: number; y: number };
 
-// ドラッグ&ドロップと、Move ボタンの移動モード(量が多くドラッグ中にスクロールで見切れるとき用)の両方の状態
+// Move ボタンの移動モードの状態。blocked は動かす作品自身の子孫(親にすると循環になる)
 type MoveState = {
-  draggingId: number | null;
-  dropTarget: DropId | null;
   movingId: number | null;
   blocked: Set<number>;
-  onDragStart: (id: number) => void;
-  onDragEnd: () => void;
-  onDragOverTarget: (target: DropId) => void;
-  onDropOnTarget: (target: DropId) => void;
   onStartMove: (id: number) => void;
   onCancelMove: () => void;
-  onMoveHere: (target: DropId) => void;
+  onMoveHere: (target: MoveTarget) => void;
   onContextMenu: (menu: ContextMenuState) => void;
 };
-
-// 行を落とし先にする。自分自身と子孫の上には落とせない(循環になる)
-function dropHandlers(target: DropId, move: MoveState) {
-  const allowed = () =>
-    move.draggingId !== null && (target === ROOT || (target !== move.draggingId && !move.blocked.has(target)));
-  return {
-    onDragOver: (e: DragEvent) => {
-      if (!allowed()) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      move.onDragOverTarget(target);
-    },
-    onDrop: (e: DragEvent) => {
-      e.preventDefault();
-      if (allowed()) move.onDropOnTarget(target);
-    },
-  };
-}
 
 function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
   const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
@@ -55,7 +31,7 @@ function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
   const isSelf = move.movingId === node.id;
   return (
     <>
-      <Link href={`/tables/story/${node.id}`} className="tree-name" draggable={false} onClick={(e) => e.stopPropagation()}>
+      <Link href={`/tables/story/${node.id}`} className="tree-name" onClick={(e) => e.stopPropagation()}>
         {node.name}
       </Link>
       <span className="tree-meta">
@@ -85,22 +61,12 @@ function StoryNodeView({ node, openState, move }: { node: StoryNode; openState: 
   const inMoveMode = move.movingId !== null;
   const isSelf = move.movingId === node.id;
   const isBlocked = inMoveMode && (isSelf || move.blocked.has(node.id));
-  const classes = ["tree-draggable"];
-  if (move.draggingId === node.id) classes.push("dragging");
-  if (move.dropTarget === node.id) classes.push("drop-target");
+  const classes = ["tree-story-row"];
   if (isSelf) classes.push("moving");
   else if (isBlocked) classes.push("move-blocked");
   else if (inMoveMode) classes.push("move-target");
-  // 見出し行だけを掴ませる。li ごと掴ませると、入れ子の行の dragstart が親の li にも届いて親を掴んだことになる
   const rowProps = {
     className: classes.join(" "),
-    draggable: move.draggingId === null && !inMoveMode,
-    onDragStart: (e: DragEvent) => {
-      e.dataTransfer.effectAllowed = "move";
-      move.onDragStart(node.id);
-    },
-    onDragEnd: move.onDragEnd,
-    ...dropHandlers(node.id, move),
     // 移動モードの間は、行のクリックで開閉・リンクへの移動をせず、クリックした作品を親にする
     onClickCapture: (e: MouseEvent) => {
       if (!inMoveMode || (e.target as HTMLElement).closest(".tree-move-btn")) return;
@@ -143,15 +109,13 @@ function StoryNodeView({ node, openState, move }: { node: StoryNode; openState: 
 type Source = { stories: Rec[]; episodes: Rec[] };
 
 /** 作品・話の一覧をそのまま引いて、作品の親子(`parent_story_id`)の木をブラウザで組む。タブに戻ったときに引き直す。
- *  親の付け替えは、見出し行のドラッグ&ドロップか、Move ボタンで移動モードに入って別の作品をクリックする
- *  (一番上の欄なら親なし)。行の右クリックで、子の作品・話を足すメニューを出す。 */
+ *  親の付け替えは、Move ボタンで移動モードに入って別の作品をクリックする(一番上の欄なら親なし)。
+ *  ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない。行の右クリックで、子の作品・話を足すメニューを出す。 */
 export default function StoryTree() {
   const openPage = useOpenPage();
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [dropTarget, setDropTarget] = useState<DropId | null>(null);
   const [movingId, setMovingId] = useState<number | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const openState = useTreeOpen("story");
@@ -187,10 +151,9 @@ export default function StoryTree() {
   }, [load]);
 
   const nodes = useMemo(() => (source ? buildStoryTree(source.stories, source.episodes) : null), [source]);
-  const activeId = draggingId ?? movingId;
   const blocked = useMemo(
-    () => (nodes === null || activeId === null ? new Set<number>() : descendantIds(nodes, activeId)),
-    [nodes, activeId],
+    () => (nodes === null || movingId === null ? new Set<number>() : descendantIds(nodes, movingId)),
+    [nodes, movingId],
   );
   const movingNode = useMemo(() => (nodes === null || movingId === null ? null : findNode(nodes, movingId)), [nodes, movingId]);
 
@@ -208,23 +171,9 @@ export default function StoryTree() {
     [load],
   );
 
-  const onDragEnd = () => {
-    setDraggingId(null);
-    setDropTarget(null);
-  };
   const move: MoveState = {
-    draggingId,
-    dropTarget,
     movingId,
     blocked,
-    onDragStart: setDraggingId,
-    onDragEnd,
-    onDragOverTarget: setDropTarget,
-    onDropOnTarget: (target) => {
-      const id = draggingId;
-      onDragEnd();
-      if (id !== null) void moveTo(id, target === ROOT ? null : target);
-    },
     onStartMove: setMovingId,
     onCancelMove: () => setMovingId(null),
     onMoveHere: (target) => {
@@ -243,11 +192,6 @@ export default function StoryTree() {
       {saveError && <div className="status error">{saveError}</div>}
       {movingId !== null && (
         <div className="tree-move-hint">{T.storyTree.moveModeHint(movingNode?.name ?? `(id ${movingId})`)}</div>
-      )}
-      {draggingId !== null && (
-        <div className={`tree-root-drop${dropTarget === ROOT ? " drop-target" : ""}`} {...dropHandlers(ROOT, move)}>
-          {T.storyTree.moveToRoot}
-        </div>
       )}
       {movingId !== null && (
         <button type="button" className="tree-root-drop" onClick={() => move.onMoveHere(ROOT)}>

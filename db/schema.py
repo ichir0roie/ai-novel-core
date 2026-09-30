@@ -4,9 +4,10 @@ from __future__ import annotations
 import enum
 import hashlib
 import os
+from datetime import datetime, timezone
 
 from sqlalchemy import (
-    BigInteger, Boolean, Integer, String, DECIMAL, JSON, TypeDecorator,
+    BigInteger, Boolean, DateTime, Integer, String, DECIMAL, JSON, TypeDecorator,
     create_engine,
     ForeignKey,
     UniqueConstraint,
@@ -31,6 +32,8 @@ from sqlalchemy.orm import (
 )
 
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import make_url
 
 from db.polygon import parse_polygon
 from db.stamp import Stamp
@@ -61,6 +64,12 @@ class PolygonType(TypeDecorator):
     def __init__(self):
         # 既定だと None が JSON の 'null' 文字列で入り、IS NULL で引けなくなる
         super().__init__(none_as_null=True)
+
+    def load_dialect_impl(self, dialect):
+        # PostgreSQL の json は等値の演算子を持たず、行ごとの DISTINCT・GROUP BY で落ちるので jsonb にする
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(JSONB(none_as_null=True))
+        return dialect.type_descriptor(JSON(none_as_null=True))
 
     def process_bind_param(self, value, dialect):
         return parse_polygon(value)
@@ -318,6 +327,17 @@ class Oracle(MemeSeededMixin, TextBase):
     title: Mapped[str | None] = mapped_column(String, comment="題。覚え書きを呼ぶ名前", sort_order=200)
 
 
+class StylePreference(TextBase):
+    """世界ごとの文体の好み(舞台設定・既存の話から抽出した文体の癖)。`ai/instructions/style.py` の固定の文面に足して AI に渡す。"""
+
+    __tablename__ = "style_preference"
+
+    target: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True,
+        comment="効く対象。shared はどの対象にも効き、episode などはその対象(`ai/instructions/style.py` の STYLE_BASES)だけに効く",
+        sort_order=200)
+
+
 CHARACTER_KIND_PERSON = "人物"
 
 
@@ -458,15 +478,15 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
         order_by="CharacterParameter.id")
     locations: Mapped[list[CharacterLocation]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterLocation.start.desc()"
+        order_by="CharacterLocation.start.desc().nulls_last()"
     )
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterHistory.start.desc()"
+        order_by="CharacterHistory.start.desc().nulls_last()"
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",
-        order_by="Event.start.desc()"
+        order_by="Event.start.desc().nulls_last()"
     )
 
 
@@ -627,7 +647,7 @@ class Idea(MemeSeededMixin, TextBase):
 
     recognitions: Mapped[list["IdeaRecognition"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
-        order_by="IdeaRecognition.start.desc()")
+        order_by="IdeaRecognition.start.desc().nulls_last()")
 
 
 class IdeaRecognition(Base):
@@ -783,10 +803,51 @@ class CharacterIdea(Base):
 IDEA_LINK_MODELS = {Event: EventIdea, Episode: EpisodeIdea, Character: CharacterIdea}
 
 
+def utc_now() -> datetime:
+    # SQLite の DateTime は時差を持てないので、どちらの db でも時差を落とした UTC で持つ
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class AiTaskStatus(enum.StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class AiTask(Base):
+    """claude を叩く入口の呼び出しを、後で Claude Code on the web のセッションが拾って回すための待ち行列。
+
+    claude の無い環境(Lambda の API)で「AI で作成」などを押すと、呼び出しをここに積むだけで返す
+    (`gui/api/claude_env.py` の `queue` モード)。`web_session/run_ai_tasks.py` が古い順に拾って回す。
+    """
+
+    __tablename__ = "ai_task"
+
+    entrance: Mapped[str] = mapped_column(
+        String, nullable=False, comment="呼ぶ入口(`gui/api/interface.py` の id。例: episode.generate_episode.GenerateEpisode)",
+        sort_order=100)
+    args: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, comment="入口に渡す引数(JSON)", sort_order=110)
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default=AiTaskStatus.QUEUED, index=True,
+        comment="queued / running / done / failed", sort_order=120)
+    attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="拾った回数。回したセッションが途中で止まって拾い直すたびに増え、上限を超えたら failed にする", sort_order=125)
+    result: Mapped[dict | list | None] = mapped_column(JSON(none_as_null=True), comment="入口の結果(JSON)", sort_order=130)
+    error: Mapped[str | None] = mapped_column(String, comment="落ちた理由", sort_order=140)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now, sort_order=160)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=180)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=190)
+
+
 # 既定値は持たない。場所を取り違えると sqlite が空の db を黙って作るので、未設定なら import で止める。
 WORLD_DIR = os.environ["DEM_WORLD_DIR"]
 NOVEL_DB_PATH = os.environ.get("DEM_NOVEL_DB_PATH", os.path.join(WORLD_DIR, "novel.db"))
 DB_PATH = os.environ.get("DEM_DB_PATH", NOVEL_DB_PATH)
+# PostgreSQL(RDS など)に繋ぐときの SQLAlchemy の URL(例: postgresql+psycopg://user:pass@host:5432/novel)。
+# 渡せば DB_PATH の SQLite より優先する。`tool.test` はこれを消して novel.test.db に固定する
+DATABASE_URL = os.environ.get("DEM_DATABASE_URL") or None
 
 
 def create_db(path=DB_PATH):
@@ -801,18 +862,51 @@ def create_db(path=DB_PATH):
         # テーブルが空のうちしか効かないので create_all の前に打つ。
         conn.execute(text("PRAGMA encoding='UTF-8'"))
     Base.metadata.create_all(engine)
+    seed_master_rows(engine)
+    return engine
+
+
+def seed_master_rows(engine) -> None:
     with Session(engine) as s:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
-                         for name, id_ in _PERSONALITY_LEVEL_IDS.items())
+                  for name, id_ in _PERSONALITY_LEVEL_IDS.items())
         s.commit()
-    return engine
 
 
 TEST_DB_PATH = os.path.join(WORLD_DIR, "novel.test.db")
 
 
+def database_url(path=DB_PATH) -> str:
+    return DATABASE_URL or f"sqlite:///{os.path.abspath(path)}"
+
+
+def make_url_engine(url: str):
+    if make_url(url).get_backend_name() == "sqlite":
+        return create_engine(url)
+    # Lambda は凍結をはさんで接続を使い回すので、切れた接続を使う前に確かめる
+    engine = create_engine(url, pool_pre_ping=True, pool_recycle=300)
+    if os.environ.get("DEM_DATABASE_IAM_AUTH") == "1":
+        _use_iam_auth_token(engine)
+    return engine
+
+
+def _use_iam_auth_token(engine) -> None:
+    # RDS の IAM データベース認証のトークンは 15 分で切れるので、接続を張るたびに作る。
+    # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む。boto3 は Lambda のイメージにだけ入れる
+    import boto3  # pyright: ignore[reportMissingImports]
+    from sqlalchemy import event
+
+    rds = boto3.client("rds")
+
+    @event.listens_for(engine, "do_connect")
+    def _set_token(dialect, conn_rec, cargs, cparams):
+        cparams["password"] = rds.generate_db_auth_token(
+            DBHostname=cparams["host"], Port=int(cparams.get("port", 5432)), DBUsername=cparams["user"],
+            Region=rds.meta.region_name)
+
+
 def _make_engine(path):
-    return create_engine(f"sqlite:///{os.path.abspath(path)}")
+    return make_url_engine(database_url(path))
 
 
 engine = _make_engine(DB_PATH)

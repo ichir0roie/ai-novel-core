@@ -182,52 +182,54 @@ export default function TablePage() {
         </Link>
       </div>
       {error && <div className="status error">{error}</div>}
-      <table className="list">
-        <thead>
-          <tr>
-            {sortHeader("id", "id")}
-            {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
-            {columns.map((c) => sortHeader(c.key, c.label))}
-            {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {data?.items.map((item) => (
-            <tr
-              key={String(item.id)}
-              className="row"
-              tabIndex={0}
-              onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
-              }}
-            >
-              <td>{String(item.id)}</td>
-              <td className="name">{String(item.label ?? "")}</td>
-              {columns.map((c) => (
-                <td key={c.key}>
-                  {c.references && item[c.key] != null ? (
-                    // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
-                    <span
-                      className="ref"
-                      title={T.list.filterBy(c.label)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setParam(c.key, String(item[c.key]));
-                      }}
-                    >
-                      {cellText(c, item, data.labels)}
-                    </span>
-                  ) : (
-                    cellText(c, item, data.labels)
-                  )}
-                </td>
-              ))}
-              {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+      <div className="scroll-x">
+        <table className="list">
+          <thead>
+            <tr>
+              {sortHeader("id", "id")}
+              {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
+              {columns.map((c) => sortHeader(c.key, c.label))}
+              {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data?.items.map((item) => (
+              <tr
+                key={String(item.id)}
+                className="row"
+                tabIndex={0}
+                onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
+                }}
+              >
+                <td>{String(item.id)}</td>
+                <td className="name">{String(item.label ?? "")}</td>
+                {columns.map((c) => (
+                  <td key={c.key}>
+                    {c.references && item[c.key] != null ? (
+                      // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
+                      <span
+                        className="ref"
+                        title={T.list.filterBy(c.label)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setParam(c.key, String(item[c.key]));
+                        }}
+                      >
+                        {cellText(c, item, data.labels)}
+                      </span>
+                    ) : (
+                      cellText(c, item, data.labels)
+                    )}
+                  </td>
+                ))}
+                {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="pager">
         <button disabled={offset <= 0} onClick={() => setParam("offset", String(Math.max(0, offset - PAGE)))}>
           {T.list.prev}

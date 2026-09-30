@@ -85,10 +85,15 @@ class TableMeta(BaseModel):
     order: Literal["asc", "desc"] = "desc"
 
 
+# claude を叩く入口の扱い(`gui/api/claude_env.py`)。direct: その場で回す / queue: 待ち行列に積み web のセッションが回す / off: 使えない
+ClaudeModeName = Literal["direct", "queue", "off"]
+
+
 class TablesResponse(BaseModel):
     tables: list[TableMeta]
-    # この API が Claude Code の環境で起きているか(false なら「AI で作成」は 403)
+    # 「AI で作成」を押せるか(false なら 403)。queue モードでも true
     claude_available: bool = False
+    claude_mode: ClaudeModeName = "off"
 
 
 class RecordList(BaseModel):
@@ -172,7 +177,10 @@ class LocationCharactersResponse(BaseModel):
 
 class Health(BaseModel):
     world_dir: str
+    # SQLite のときだけファイルの場所。PostgreSQL なら空
     db_path: str
+    dialect: str
+    claude_mode: ClaudeModeName
 
 
 class Created(BaseModel):
@@ -203,8 +211,9 @@ class EntranceMeta(BaseModel):
 
 class EntranceList(BaseModel):
     entrances: list[EntranceMeta]
-    # この API が Claude Code の環境で起きているか(false なら claude=true の入口は 403)
+    # claude=true の入口を呼べるか(false なら 403)。queue モードでも true
     claude_available: bool
+    claude_mode: ClaudeModeName = "off"
 
 
 class RunRequest(BaseModel):

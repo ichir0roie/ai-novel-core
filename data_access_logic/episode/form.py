@@ -66,7 +66,8 @@ def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> Non
 
 
 def save_frame(s: Session, form: EpisodeForm) -> Episode:
-    """AI 呼び出し(数分〜十数分かかることがある)の前に下書きを保存しておき、途中で失敗しても編集を失わないようにする。"""
+    """AI 呼び出し(数分〜十数分かかることがある)の前に下書きを保存しておき、途中で失敗しても編集を失わないようにする
+    (呼ぶ側がこの後すぐ commit する)。"""
     if form.id is not None:
         record = s.get_one(Episode, form.id)
     elif form.story_id is not None:
@@ -90,5 +91,4 @@ def save_frame(s: Session, form: EpisodeForm) -> Episode:
     s.flush()
     if form.character_ids is not None:
         set_characters(s, record.id, form.character_ids)
-    s.commit()
     return record

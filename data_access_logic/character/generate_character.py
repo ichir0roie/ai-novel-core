@@ -15,6 +15,16 @@ from data_access_logic.query import common_query
 from db.schema import CHARACTER_KIND_PERSON, Location, Stamp
 
 
+def generation_time(s: Session, location_id: int | None, time: Stamp | str | None) -> Stamp:
+    """`time` を省けば世界の最新の出来事の時刻。`location_id` があれば、その場所があるかも確かめる。"""
+    if location_id is not None:
+        common_query.get_row(s, Location, location_id)
+    decided = Stamp.parse(time) or s.scalar(common_query.latest_time_select())
+    if decided is None:
+        raise ValueError("time(現在の時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
+    return decided
+
+
 class GenerateCharacter(SessionEntrypoint):
     """作者の下書き(GUI の欄の値。全部空でもよい)を核に、人物を一人 AI に組み立てさせて足す。
 
@@ -38,11 +48,7 @@ class GenerateCharacter(SessionEntrypoint):
         rng = random.Random(self.seed)
         if form.id is not None:
             return CharacterRecord.model_validate(complete_text(s, self.ai, rng, form.id))
-        if form.location_id is not None:
-            common_query.get_row(s, Location, form.location_id)
-        time = Stamp.parse(self.time) or s.scalar(common_query.latest_time_select())
-        if time is None:
-            raise ValueError("time(現在の時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
+        time = generation_time(s, form.location_id, self.time)
         person = (form.kind or CHARACTER_KIND_PERSON) == CHARACTER_KIND_PERSON
         record = generate_character(s, self.ai, rng, form.location_id, time, person, form)
         if record is None:

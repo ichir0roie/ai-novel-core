@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 
 from ai.claude_code import ai_client
 from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL
-from data_access_logic import world_style
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import framer, writer
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.form import EpisodeForm, save_frame
 from data_access_logic.episode.record import EpisodeRecord
+from data_access_logic.style_preference.extras import read_style_extras
+from data_access_logic.style_preference.form import StyleTarget
 
 
 class GenerateEpisode(SessionEntrypoint):
@@ -22,7 +23,7 @@ class GenerateEpisode(SessionEntrypoint):
     プロット(`plot_text`)か時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決めてから本文を書く。
     登場人物は下書きの `character_ids`、省けば枠の `episode_character`。空なら止まる(時刻・場所から人物を拾う既定は持たない)。
     `model` / `effort` は本文を書く呼び出しにだけ効く(省けば opus 5.5 の high)。
-    `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば世界リポジトリの `instructions/style.py` から読む。
+    `shared_style_extra` / `style_extra` は世界ごとの文体の好み。省けば db の `style_preference` から読む。
     """
 
     def __init__(
@@ -37,17 +38,19 @@ class GenerateEpisode(SessionEntrypoint):
         self.episode = episode
         self.model = model
         self.effort = effort
-        self.shared_style_extra = world_style.shared_style_extra(shared_style_extra)
-        self.style_extra = world_style.style_extra(style_extra)
+        self.shared_style_extra = shared_style_extra
+        self.style_extra = style_extra
         self.ai = ai
 
     def execute(self, s: Session) -> EpisodeRecord:
         record = save_frame(s, self.episode)
+        s.commit()
         if not record.plot_text.strip() or record.start is None:
             framer.frame_episode(s, self.ai, record.id)
+        extras = read_style_extras(s, StyleTarget.EPISODE).overridden(self.shared_style_extra, self.style_extra)
         written = writer.write_episode(
             s, self.ai, record.id, model=self.model or EPISODE_MODEL, effort=self.effort or EPISODE_EFFORT,
-            shared_style_extra=self.shared_style_extra, style_extra=self.style_extra)
+            shared_style_extra=extras.shared, style_extra=extras.own)
         if written is None:
             raise ValueError("本文が得られなかった")
         # 書いた本文から概要を作り直す(本文が変わっていなければそのまま)

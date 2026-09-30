@@ -1,0 +1,63 @@
+# AWS の db と、web のセッションでの db の扱い
+
+AWS の db(RDS for PostgreSQL、db `novel`)に触れる作業と、Claude Code on the web で
+db が要る作業の決まり。資源の構成と手順は `.docs/aws-deploy.md`、待ち行列と web のセッションで回す仕組みは `.docs/claude-tasks.md` にある。
+
+## core は公開リポジトリ
+
+core(ai-novel-core)は公開リポジトリで、誰がクローンしても、自分の AWS アカウントに自分用に建てて使える形でなければならない。
+
+- core のコード・CDK・文書・テスト・コミットに、特定の構築の値を書かない。アカウント ID、リソースの ID(VPC・subnet・セキュリティグループ・
+  インスタンス・EC2 Instance Connect Endpoint)、db のインスタンス名とエンドポイント、ARN、関数 URL、合言葉、自分の GitHub のリポジトリ名。
+  文書では `<アカウント ID>` のような置き場所の印を使う
+- アカウントとリージョンは、`cdk` を動かす人の AWS CLI のプロファイルから取る(`CDK_DEFAULT_ACCOUNT` / `CDK_DEFAULT_REGION`)
+- 構築ごとの設定(使い回す既存のリソースの ID、CI を許す GitHub のリポジトリなど)は、構築するアカウントの SSM パラメータ
+  `/novel/deploy/config` に JSON で置き、`infra/` が synth のときに読む。どのリポジトリにも置かない。deploy のあとに決まる値(関数 URL など)も SSM の `/novel/*` に置き、使う側がそこから引く
+- 既存のリソースの ID が設定に無ければ、`infra/` のスタックが自分で作る(NAT の無い VPC、小さな RDS、踏み台と EC2 Instance Connect Endpoint)
+- CDK が手元に貯める `cdk.context.json` は、アカウントやリソースの ID を含むので git に入れない
+- core にコミットする前に、差分を `grep -E '[0-9]{12}|vpc-|subnet-|sg-|i-0|eice-|arn:aws|rds\.amazonaws\.com|lambda-url'` などで見て、構築の値が紛れていないか確かめる
+
+## 場所ごとの db への道
+
+| 場所 | db への道 | db のロール | 持つ鍵 |
+| --- | --- | --- | --- |
+| 手元(CLI・VS Code) | ふだんは SQLite の `novel.db`。AWS の db へは `tool.aws.rds` の踏み台越しだけ | マスター | 手元の AWS CLI の権限 |
+| Lambda(`novel-api`) | VPC の中から psycopg で直に。IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`) | `novel_app`(行の読み書きだけ) | 実行ロールの `rds-db:connect` |
+| web のセッション(Claude Code on the web) | db には繋がない。`novel-api` の API のエンドポイントだけを呼ぶ | 無し | web 用の API の合言葉だけ |
+
+web のセッションでは、環境変数 `CLAUDE_CODE_REMOTE` が `true` になっている。
+
+## 決まり
+
+1. マイグレーション(`alembic upgrade`)を AWS の db に当てるのは、手元から `tool.aws.rds` 越しにだけ行う。
+   web のセッション・Lambda・GitHub Actions からは当てない。当てるのはユーザに言われてからにし、前にマイグレーションの中身をユーザに見せる
+2. web のセッションでは、db に直に繋ごうとしない。`DEM_DATABASE_URL` を組まない、`tool.aws.rds` を使わない、踏み台やトンネルを試さない。
+   db が要る作業は API のエンドポイントを呼んで行う。エンドポイントが無い作業は、web の中で回り道を作らず、
+   「手元で行うか、エンドポイントを足すコードの変更が要る」とユーザに伝える
+3. API に、任意の SQL や、表を丸ごと消すような操作を受ける口を作らない。公開するのは `data_access_logic` の入口と、画面のための決まった操作だけ
+4. `novel_app` に表を作る・変える権限(DDL)を与えない。表の形を変えるのはマイグレーションだけで、マスターで流す。
+   これから増える表への `novel_app` の権限は、マスターに掛けた既定の権限(`infra/sql/novel_app.sql`)で付くので、マイグレーションをマスター以外で流さない
+5. AWS の資源は `infra/` の CDK で持つ。コンソールや CLI で直に作らない・変えない(状態を調べる読み取りはよい)。
+   `cdk deploy` や資源を変える操作は、ユーザに承認を得てから行う。費用を抑えるため、NAT ゲートウェイや VPC のインターフェースエンドポイントを足さない
+6. 鍵は呼ぶ側ごとに分ける。API の合言葉は、画面(Amplify)用と web 用で別にする。web の環境に置くのは web 用の合言葉だけで、
+   db のパスワードや AWS のアクセスキーは置かない
+7. 関数 URL は SSM の `/novel/api/function-url`、合言葉は `/novel/api-keys/<gui|web>` から引く。合言葉の値はログや報告にも出さない
+
+## web から AI の入口を回す形
+
+処理の主体は Claude Code のセッションに置き、Lambda の API は純粋な db とのやり取りだけを受け持つ。
+web のセッションの側のコードは、手元の入口(`data_access_logic`)とは別の関数として `web_session/` に置く。
+そこでは流れを持ち、`claude -p` を回し、Lambda の関数 URL を呼んで返事を受ける。
+
+| 段 | どこで | 形 |
+| --- | --- | --- |
+| 材料を読む・出力を書く | API(Lambda) | db の段。`data_access_logic/<領域>/steps.py` の `@db_step` の関数を、`POST /api/steps/{id}` が一つのトランザクションで回し、終わりに commit する |
+| AI を呼ぶ | web のセッション | `data_access_logic` の AI だけの関数(`*_draft` など)。材料を `*Serialized` に読み直して AI に渡す文面を作り、出力のモデルで受ける |
+| 流れ | web のセッション | `web_session/<領域>.py`。db の段を API で呼び(`web_session/api.py`)、間で AI の段を回す。入口と同じ引数を取り、待ち行列からは `web_session/flows.py` の対応表で引く |
+
+- 材料・出力・レスポンスは、どれも pydantic のモデルで受け渡す(`data-access.md` の方針)。API は受けた JSON を型注釈のモデルに validate してから使う。
+  段の出力は土台のマテリアル(`*Serialized` でないもの)で宣言し、列のまま JSON にする
+- 「AI の結果は得たらすぐ commit する」という境界は保つ。AI の結果を書き戻す段を一回呼ぶのが一つの commit になる。段の中では commit しない
+- 手元の入口も同じ db だけの関数と AI だけの関数をつないで動く。手元と web で違うのは、db の関数を自分のセッションで呼ぶか API で呼ぶかだけ
+- web のセッションで待ち行列を回すのは、ユーザに頼まれたとき(スキル `run-ai-tasks`)。スケジュールで起こすルーチンは使わない
+- claude を叩く入口を足したら、段と web の流れも足す(`.docs/claude-tasks.md` の「claude を叩く入口を足すとき」)

@@ -3,7 +3,7 @@
 
 世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、世界ごとに違う
 「好み」は、ここには定数で持たない。`style_instruction()` の `shared_extra`(共通に効く)・
-`extra`(その対象だけに効く)として、呼び出し側(親リポジトリ側)から渡す。
+`extra`(その対象だけに効く)として、呼び出し側から渡す(入口は db の `style_preference` から読む)。
 
 対象ごとの土台は共通とは別に持っているので、あとから対象ごとに別の文面を用意できる。
 """
@@ -121,7 +121,7 @@ class StyleInstruction:
 
 # --- 共通(どの文にも効く文体) ---------------------------------------------
 # 世界の舞台設定や、既存の話から抽出した文体の癖は、世界ごとに違う「ユーザーの好み」なので
-# ここには置かない。呼び出し側(親リポジトリ)が style_instruction() の shared_extra / extra で渡す。
+# ここには置かない。呼び出し側が style_instruction() の shared_extra / extra で渡す(db の style_preference)。
 
 SHARED_STYLE_BASE = """\
 語の選び方・文の運び方は、この世界の文章すべてで揃える。
@@ -177,7 +177,7 @@ def style_instruction(target: str, shared_extra: str = "", extra: str = "") -> s
 
     ここに定数で置くのは、共通(SHARED_STYLE_BASE)と対象ごと(STYLE_BASES)の固定の文面だけ。
     世界の舞台設定や、既存の話から抽出した文体の癖のような、世界ごとに違う「好み」は定数に持たず、
-    呼び出し側(親リポジトリ)が `shared_extra`(共通に効く)・`extra`(この対象だけに効く)として渡す。
+    呼び出し側が `shared_extra`(共通に効く)・`extra`(この対象だけに効く)として渡す(db の `style_preference`)。
     """
     if target not in STYLE_BASES:
         raise ValueError(f"文体の指示が無い対象: {target}")

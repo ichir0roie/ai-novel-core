@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Dラボの MCP のサーバー名は環境ごとに違う(`claude mcp list` で見る)ので、許可ルールを
 `DEM_CLAUDE_AI_DLAB_TOOLS` で差し替えられるようにしている。繋がっていなければ AI はネット検索だけで検める。
+
+db だけの段(`check_sources` / `save_fact_checks` / `last_meme_id` / `new_meme_ids`)と、AI だけの段(`check_draft`)に分けてある。
+手元では `check` などがつなぎ、web のセッションでは `web_session/fact_check.py` が API 越しにつなぐ。
 """
 from __future__ import annotations
 
@@ -14,7 +17,8 @@ from sqlalchemy import func, select
 from ai.claude_code import ai_client
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
 from data_access_logic.meme.extractor import refresh as refresh_memes
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches
+from data_access_logic.material import Material
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
 from db.schema import Idea, Meme, Oracle, Session
 
 logger = logging.getLogger(__name__)
@@ -84,6 +88,14 @@ class FactChecksDraft(BaseModel):
     results: list[FactCheckDraft] = Field(description="番号ごとの検めた結果")
 
 
+class FactCheckNote(Material):
+    """検めた結果を本文の末尾に足す行。"""
+
+    table: str
+    id: int
+    fact_check: str
+
+
 class FactChecked(BaseModel):
     checked: int
     memes_added: int
@@ -100,17 +112,18 @@ def tools() -> tuple[str, ...]:
 _Checked = Idea | Oracle | Meme
 
 
-def _source(record: _Checked) -> SourceText[_Checked]:
+def _source(record: _Checked) -> SourceText:
     """前に検めた結果は外して、素の本文だけを検めさせる。"""
     text = strip_fact_check(record.text)
     if isinstance(record, Idea):
-        return SourceText(row=record, label=f"アイデア「{record.name}」(種類: {record.kind})", text=text)
+        return source_of(record, f"アイデア「{record.name}」(種類: {record.kind})", text)
     if isinstance(record, Oracle):
-        return SourceText(row=record, label="覚え書き(oracle)", text=text)
-    return SourceText(row=record, label=f"ミーム(分類: {record.category or '未分類'})", text=text)
+        return source_of(record, "覚え書き(oracle)", text)
+    return source_of(record, f"ミーム(分類: {record.category or '未分類'})", text)
 
 
-def targets(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> list:
+def check_sources(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> list[SourceText]:
+    """`ids` を渡さなければ、まだ検めていない行。"""
     model = MODELS[table]
     query = select(model).order_by(model.id)
     if ids is not None:
@@ -119,31 +132,43 @@ def targets(s: Session, table: str, ids: list[int] | None = None, limit: int | N
         query = query.where(~model.text.contains(FACT_CHECK_HEADING), model.text != "")
     if limit is not None:
         query = query.limit(limit)
-    return list(s.scalars(query).all())
+    return [_source(record) for record in s.scalars(query).all()]
+
+
+def check_draft(batch: list[SourceText]) -> list[FactCheckNote] | None:
+    decided = ai_client.generate(
+        "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
+                   "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。"]),
+        FactChecksDraft, system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
+    if decided is None:
+        return None
+    return [FactCheckNote(table=batch[result.number - 1].table, id=batch[result.number - 1].id,
+                          fact_check=result.fact_check)
+            for result in decided.results if 1 <= result.number <= len(batch) and result.fact_check]
+
+
+def save_fact_checks(s: Session, notes: list[FactCheckNote]) -> int:
+    for note in notes:
+        record = row_of(s, note.table, note.id)
+        record.text = _append_fact_check(record.text, note.fact_check)
+        # 検証結果もミームの元になるので、抜き出し直させる
+        if not isinstance(record, Meme):
+            record.meme_seeded = False
+    s.flush()
+    return len(notes)
 
 
 def check(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> int:
-    records = targets(s, table, ids, limit)
+    sources = check_sources(s, table, ids, limit)
     written = 0
-    for batch in batches([_source(record) for record in records], BATCH_LETTERS):
-        decided = ai_client.generate(
-            "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
-                       "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。"]),
-            FactChecksDraft, system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
-        if decided is None:
+    for batch in batches(sources, BATCH_LETTERS):
+        notes = check_draft(batch)
+        if notes is None:
             continue
-        for result in decided.results:
-            if not (1 <= result.number <= len(batch) and result.fact_check):
-                continue
-            record = batch[result.number - 1].row
-            record.text = _append_fact_check(record.text, result.fact_check)
-            # 検証結果もミームの元になるので、抜き出し直させる
-            if not isinstance(record, Meme):
-                record.meme_seeded = False
-            written += 1
+        written += save_fact_checks(s, notes)
         s.commit()
-    if records:
-        logger.info(f"{table} {len(records)}件のうち、{written}件を検めた")
+    if sources:
+        logger.info(f"{table} {len(sources)}件のうち、{written}件を検めた")
     return written
 
 
@@ -151,9 +176,13 @@ def last_meme_id(s: Session) -> int:
     return s.scalar(select(func.max(Meme.id))) or 0
 
 
+def new_meme_ids(s: Session, last_id: int) -> list[int]:
+    return list(s.scalars(select(Meme.id).where(Meme.id > last_id)).all())
+
+
 def check_new_memes(s: Session, last_id: int) -> int:
     """`last_id` より後に足したミームだけを検める(既にあるミームの後埋めは `check` を名指しなしで呼ぶ)。"""
-    ids = list(s.scalars(select(Meme.id).where(Meme.id > last_id)).all())
+    ids = new_meme_ids(s, last_id)
     return check(s, "meme", ids=ids) if ids else 0
 
 

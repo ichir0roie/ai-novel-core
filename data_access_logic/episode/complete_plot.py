@@ -37,6 +37,7 @@ class CompletePlot(SessionEntrypoint):
 
     def execute(self, s: Session) -> EpisodeRecord:
         record = save_frame(s, self.episode)
+        s.commit()
         if not record.plot_text.strip() or record.start is None:
             framer.frame_episode(s, self.ai, record.id)
         completed = plot_completer.complete_plot(

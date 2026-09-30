@@ -6,6 +6,14 @@ from data_access_logic.material import Material
 from db.schema import MEME_CATEGORIES
 
 
+class PooledMeme(Material):
+    """引く元になる、承認済みのミーム。"""
+
+    id: int
+    category: str | None = None
+    text: str
+
+
 class DrawnMeme(Material):
     """引いたミームと、その人物の中での置き場所(古今表裏)。"""
 
@@ -17,6 +25,13 @@ class DrawnMeme(Material):
 
 class MemeText(Material):
     text: str
+
+
+class MemeCategory(Material):
+    """分類の空いたミームに振る分類。"""
+
+    id: int
+    category: str
 
 
 class DedupeRequest(Material):

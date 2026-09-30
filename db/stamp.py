@@ -119,6 +119,28 @@ class Stamp:
     def __repr__(self) -> str:
         return f"Stamp({self})"
 
+    # --- pydantic -------------------------------------------------------
+
+    # モデルの欄に置けるようにする。JSON では `__str__` の文字列で行き来する(API で材料を運ぶため)
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source, _handler):
+        from pydantic_core import core_schema
+
+        return core_schema.no_info_plain_validator_function(
+            cls._validated,
+            serialization=core_schema.plain_serializer_function_ser_schema(str, when_used="json"))
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, _core_schema, _handler):
+        return {"type": "string"}
+
+    @classmethod
+    def _validated(cls, value) -> "Stamp":
+        stamp = cls.parse(value)
+        if stamp is None:
+            raise ValueError("時刻が空")
+        return stamp
+
     # --- 進める ---------------------------------------------------------
 
     def plus_days(self, days: int) -> "Stamp":

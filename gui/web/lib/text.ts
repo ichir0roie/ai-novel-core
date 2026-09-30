@@ -32,6 +32,9 @@ export const T = {
     menu: "Menu",
     endpoints: "Endpoints",
     review: (label: string) => `${label} review`,
+    search: "Jump to a page (type a table or page name)",
+    noMatch: "No matching page",
+    searchHint: "Ctrl+K: search pages",
   },
 
   home: {
@@ -111,6 +114,7 @@ export const T = {
     writesDb: "writes db",
     claudeOnly: "Endpoints that run the claude command can only be called from an API started inside Claude Code (CLAUDECODE=1)",
     outsideClaude: "This API is running outside Claude Code, so endpoints that run claude (resident loop, post-approval AI) cannot be called",
+    queueMode: "This API queues endpoints that run claude (and background runs): a Claude Code on the web session runs them when you ask it to (skill run-ai-tasks). Their progress shows in the job list below",
     running: "Running…",
     run: "Run",
     runInBackground: "Run in background",
@@ -128,7 +132,9 @@ export const T = {
     failed: "Failed",
     description: (mode: "create" | "edit") =>
       `Generate with AI: the AI rebuilds every field around what you entered and ${mode === "create" ? "adds the row" : "writes the record"} (entered values may not survive as-is). Takes several minutes`,
-    unavailable: "This API is running outside Claude Code, so Generate with AI is unavailable (start with CLAUDECODE=1)",
+    unavailable: "Generate with AI is off on this API (start it inside Claude Code with CLAUDECODE=1, or queue for a Claude Code on the web session with NOVEL_CLAUDE_MODE=queue)",
+    queued:
+      "On this API, Generate with AI goes to a queue: a Claude Code on the web session runs it when you ask it to (skill run-ai-tasks). You can leave this page; the result also appears in the job list on the Endpoints page",
     inProgress: (jobId: string, status: string) =>
       `AI is generating… (job ${jobId}, ${status}). The job continues if you leave this page. The result is also visible in the job list on the Endpoints page`,
   },

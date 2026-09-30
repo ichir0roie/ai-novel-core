@@ -30,5 +30,6 @@ class GenerateFrame(SessionEntrypoint):
         if self.character_ids is not None:
             form.character_ids = self.character_ids
         record = save_frame(s, form)
+        s.commit()
         framed = framer.frame_episode(s, self.ai, record.id)
         return record_of(s, EpisodeRecord, framed)

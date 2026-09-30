@@ -5,15 +5,20 @@
 """
 from __future__ import annotations
 
+import hmac
+import logging
+import os
 from collections.abc import Iterator
 from typing import Any
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
+from data_access_logic import step
+from data_access_logic.ai_task import queue
 from data_access_logic.character.latest_locations import latest_location_ids
 from data_access_logic.character.location_characters import location_character_ids
 from data_access_logic.character.relation_graph import relation_graph
@@ -25,10 +30,10 @@ from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OP
 from data_access_logic.map.collect import planet_maps
 from data_access_logic.map.geometry import BEARINGS
 from data_access_logic.map.render_svg import COLORS, render_svg
-from db.schema import DB_PATH, WORLD_DIR, get_env_session
+from db.schema import DB_PATH, WORLD_DIR, AiTask, engine, get_env_session
 from db.stamp import Stamp
 from gui.api import generate, interface, meta, records, review
-from gui.api.claude_env import ClaudeCommandForbidden, in_claude_code, require_claude_code
+from gui.api.claude_env import ClaudeCommandForbidden, claude_available, claude_mode, require_claude_code
 from gui.api.jobs import runner
 from gui.api.models import (
     CharacterLocationsResponse, Created, Decision, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
@@ -37,14 +42,49 @@ from gui.api.models import (
 )
 from gui.api.tables import spec_of
 
+logger = logging.getLogger(__name__)
 configure_logging()
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
+# 画面は Next.js 越しに同じオリジンで呼ぶので、ブラウザから直に呼ぶ先だけを NOVEL_CORS_ORIGINS(カンマ区切り)で足す
+_extra_origins = [origin.strip() for origin in os.environ.get("NOVEL_CORS_ORIGINS", "").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", *_extra_origins],
     allow_methods=["*"], allow_headers=["*"],
 )
+
+# 公開の URL(Lambda の関数 URL など)に置くときの合言葉。呼ぶ側ごとに `名前=鍵` をカンマで区切って持つ(例: gui=…,web=…)。
+# 呼ぶ側ごとに分けるのは、漏れる危険の高い web のセッションの鍵を、画面の鍵を止めずに替えたり外したりするため。
+# 画面の Next.js のサーバー(`gui/web/app/api`)や web のセッションが付けて流す。空ならローカル向けとして確かめない
+API_KEY_HEADER = "x-novel-api-key"
+
+
+def _parse_api_keys(raw: str) -> dict[str, str]:
+    keys: dict[str, str] = {}
+    for entry in filter(None, (entry.strip() for entry in raw.split(","))):
+        name, _, key = (part.strip() for part in entry.partition("="))
+        if not name or not key:
+            raise ValueError("NOVEL_API_KEYS は `名前=鍵` をカンマで区切って書く")
+        keys[name] = key
+    return keys
+
+
+_API_KEYS = _parse_api_keys(os.environ.get("NOVEL_API_KEYS", ""))
+# 合言葉なしで通すパス。Lambda Web Adapter の起動確認が叩く
+_PUBLIC_PATHS = {"/api/ping"}
+
+
+@app.middleware("http")
+async def _require_api_key(request: Request, call_next):
+    if _API_KEYS and request.method != "OPTIONS" and request.url.path not in _PUBLIC_PATHS:
+        given = request.headers.get(API_KEY_HEADER, "").encode()
+        caller = next((name for name, key in _API_KEYS.items() if hmac.compare_digest(given, key.encode())), None)
+        if caller is None:
+            return JSONResponse(status_code=401, content={"detail": f"{API_KEY_HEADER} が無いか違う"})
+        # おかしな書き込みがあったときに、画面からか web のセッションからかを切り分けられるよう、鍵の名前だけを出す
+        logger.info(f"{caller}: {request.method} {request.url.path}")
+    return await call_next(request)
 
 
 def session_dep() -> Iterator[Session]:
@@ -87,14 +127,21 @@ async def _db_busy(_request: Request, error: OperationalError):
     return JSONResponse(status_code=status, content={"detail": str(error.orig or error)})
 
 
+@app.get("/api/ping")
+def ping() -> dict[str, bool]:
+    return {"ok": True}
+
+
 @app.get("/api/health", response_model=Health)
 def health() -> Health:
-    return Health(world_dir=WORLD_DIR, db_path=DB_PATH)
+    dialect = engine.dialect.name
+    return Health(world_dir=WORLD_DIR, db_path=DB_PATH if dialect == "sqlite" else "", dialect=dialect,
+                  claude_mode=claude_mode())
 
 
 @app.get("/api/tables", response_model=TablesResponse)
 def tables(s: Session = Depends(session_dep)) -> TablesResponse:
-    return TablesResponse(tables=meta.all_tables(s), claude_available=in_claude_code())
+    return TablesResponse(tables=meta.all_tables(s), claude_available=claude_available(), claude_mode=claude_mode())
 
 
 @app.get("/api/tables/{table}/records", response_model=RecordList)
@@ -132,7 +179,15 @@ def generate_record(table: str, generator: str, request: GenerateRequest) -> Job
     entrance = interface.entrance_of(spec.entrance)
     require_claude_code(entrance.id)
     args = generate.build_args(spec, request.draft, request.args)
-    arguments = interface.prepare(entrance, args)
+    return _submit(entrance, args, interface.prepare(entrance, args))
+
+
+def _submit(entrance: interface.Entrance, args: dict[str, Any], arguments: dict[str, Any]) -> JobInfo:
+    """裏で回す。`queue` モードでは待ち行列に積むだけで返し、Claude Code on the web のセッションが後で回す
+    (Lambda は応答のあとに走り続けられない)。"""
+    if claude_mode() == "queue":
+        with get_env_session() as s, s.begin():
+            return JobInfo.model_validate(queue.job_view(queue.enqueue(s, entrance.id, args)))
     job = runner.submit(entrance.id, args, lambda: interface.call(entrance, arguments))
     return JobInfo.model_validate(job)
 
@@ -174,7 +229,7 @@ def review_decide(table: str, record_id: int, decision: Decision,
 def list_entrances() -> EntranceList:
     """入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る"""
     return EntranceList(entrances=[EntranceMeta.model_validate(entrance) for entrance in interface.ENTRANCES.values()],
-                        claude_available=in_claude_code())
+                        claude_available=claude_available(), claude_mode=claude_mode())
 
 
 @app.post("/api/interface/{entrance_id}", response_model=RunResult | JobInfo)
@@ -185,19 +240,33 @@ def run_entrance(entrance_id: str, request: RunRequest, response: Response) -> R
         require_claude_code(entrance.id)
     arguments = interface.prepare(entrance, request.args)
     if entrance.claude or request.background:
-        job = runner.submit(entrance.id, request.args, lambda: interface.call(entrance, arguments))
         response.status_code = 202
-        return JobInfo.model_validate(job)
+        return _submit(entrance, request.args, arguments)
     return RunResult(entrance=entrance.id, result=interface.call(entrance, arguments))
 
 
+@app.post("/api/steps/{step_id}")
+def run_step(step_id: str, body: Any = Body(None)) -> Any:
+    """db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、
+    流れと AI を自分で持ったまま db に触る所だけを頼む"""
+    return step.run_json(step_id, body)
+
+
 @app.get("/api/jobs", response_model=JobList)
-def list_jobs() -> JobList:
-    return JobList(jobs=[JobInfo.model_validate(job) for job in runner.list()])
+def list_jobs(s: Session = Depends(session_dep)) -> JobList:
+    """このプロセスの job と、待ち行列(`ai_task`)の新しい行を、新しい順に"""
+    jobs = [JobInfo.model_validate(job) for job in runner.list()]
+    jobs += [JobInfo.model_validate(queue.job_view(task)) for task in queue.recent(s)]
+    return JobList(jobs=sorted(jobs, key=lambda job: job.created_at, reverse=True))
 
 
 @app.get("/api/jobs/{job_id}", response_model=JobInfo)
-def get_job(job_id: str) -> JobInfo:
+def get_job(job_id: str, s: Session = Depends(session_dep)) -> JobInfo:
+    task_id = queue.task_id_of(job_id)
+    if task_id is not None:
+        task = s.get(AiTask, task_id)
+        if task is not None:
+            return JobInfo.model_validate(queue.job_view(task))
     job = runner.get(job_id)
     if job is None:
         raise UnknownRecordError(f"job が無い: {job_id}")

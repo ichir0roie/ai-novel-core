@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。元の側の `meme_seeded` で抜き出し済みかだけを持つ。"""
+"""ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。元の側の `meme_seeded` で抜き出し済みかだけを持つ。
+
+db だけの段(`pending_sources` / `meme_texts` / `save_memes` / `unclassified_sources` / `save_categories` / `meme_pool`)と、
+AI だけの段(`extraction_draft` → `without_duplicates`、`classify_draft`)に分けてある。
+手元では `refresh` がつなぎ、web のセッションでは `web_session/meme.py` が API 越しにつなぐ。
+"""
 from __future__ import annotations
 
 import logging
@@ -14,10 +19,10 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.meme.models import (
     ClassifyDraft, ClassifyRequestSerialized, DedupeDraft, DedupeRequestSerialized,
-    DrawnMeme, MemeDraft, MemesDraft, MemeText,
+    DrawnMeme, MemeCategory, MemeDraft, MemesDraft, MemeText, PooledMeme,
 )
 from data_access_logic.query import meme_query
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section, row_of, source_of
 from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
 
 logger = logging.getLogger(__name__)
@@ -61,43 +66,49 @@ _CLASSIFY_SYSTEM_PROMPT = f"""\
 人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれに次の分類から一つを振ってください。
 {_CATEGORY_GUIDE}"""
 
-_MemeSource = Idea | Oracle | Character | Event
-
-
-def _pending(s: Session) -> list[SourceText[_MemeSource]]:
-    """アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は `# plot` の節だけを使う。"""
-    sources: list[SourceText[_MemeSource]] = []
+def pending_sources(s: Session) -> list[SourceText]:
+    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は `# plot` の節だけを使う。"""
+    sources: list[SourceText] = []
     for idea in s.scalars(meme_query.unseeded_select(Idea)).all():
-        sources.append(SourceText(row=idea, label="アイデア", text=idea.text))
+        sources.append(source_of(idea, "アイデア", idea.text))
     for oracle in s.scalars(meme_query.unseeded_select(Oracle)).all():
-        sources.append(SourceText(row=oracle, label="覚え書き", text=oracle.text))
+        sources.append(source_of(oracle, "覚え書き", oracle.text))
     for character in s.scalars(meme_query.unseeded_select(Character)).all():
-        sources.append(SourceText(row=character, label="人物の筋書き", text=plot_section(character.text)))
+        sources.append(source_of(character, "人物の筋書き", plot_section(character.text)))
     for event in s.scalars(meme_query.unseeded_select(Event)).all():
-        sources.append(SourceText(row=event, label="出来事", text=event.text))
+        sources.append(source_of(event, "出来事", event.text))
     return [source for source in sources if source.text.strip()]
+
+
+def meme_texts(s: Session) -> list[str]:
+    """既にあるミーム。id の順。"""
+    return list(s.scalars(select(Meme.text).order_by(Meme.id)).all())
+
+
+def extraction_draft(ai: AIClient, batch: list[SourceText]) -> MemesDraft | None:
+    return ai.generate(
+        "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
+                   "それぞれの元からミームを抜き出してください。"]),
+        MemesDraft, system=_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
 
 
 def _normalized(text: str) -> str:
     return re.sub(r"[\s。、]", "", text)
 
 
-def _without_duplicates(s: Session, ai: AIClient, candidates: list[MemeDraft]) -> list[MemeDraft] | None:
-    """答えが得られなければ None(元を抜き出し直す)。"""
-    existing = list(s.scalars(select(Meme).order_by(Meme.id)).all())
-    seen = {_normalized(meme.text) for meme in existing}
+def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list[str]) -> list[MemeDraft] | None:
+    """`existing`(既にあるミーム)と同じ考え方の候補を外す。答えが得られなければ None(元を抜き出し直す)。"""
+    seen = {_normalized(text) for text in existing}
     fresh = []
     for candidate in candidates:
         if _normalized(candidate.text) not in seen:
             seen.add(_normalized(candidate.text))
             fresh.append(candidate)
 
-    existing_sources = [SourceText(row=meme, label="ミーム", text=meme.text) for meme in existing]
-    for chunk in batches(existing_sources, constants.MEME_DEDUPE_LETTERS) or [[]]:
+    for chunk in batches([MemeText(text=text) for text in existing], constants.MEME_DEDUPE_LETTERS) or [[]]:
         if not fresh or (not chunk and len(fresh) < 2):
             break
-        request = DedupeRequestSerialized(fresh=[candidate.text for candidate in fresh],
-                                          existing=[MemeText(text=source.text) for source in chunk])
+        request = DedupeRequestSerialized(fresh=[candidate.text for candidate in fresh], existing=chunk)
         decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
                        "新しいミームのうち、重複しているものの番号を挙げてください。"]),
@@ -112,22 +123,49 @@ def _without_duplicates(s: Session, ai: AIClient, candidates: list[MemeDraft]) -
     return fresh
 
 
+def save_memes(s: Session, memes: list[MemeDraft], sources: list[SourceText]) -> int:
+    """ミームを足し、元に抜き出し済みの印を付ける。足した件数を返す。"""
+    for candidate in memes:
+        s.add(Meme(text=candidate.text, category=candidate.known_category))
+    for source in sources:
+        row_of(s, source.table, source.id).meme_seeded = True
+    s.flush()
+    return len(memes)
+
+
+def unclassified_sources(s: Session) -> list[SourceText]:
+    memes = s.scalars(select(Meme).where(Meme.category.is_(None)).order_by(Meme.id)).all()
+    return [source_of(meme, "ミーム", meme.text) for meme in memes]
+
+
+def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] | None:
+    request = ClassifyRequestSerialized(memes=[MemeText(text=source.text) for source in batch])
+    decided = ai.generate(
+        "\n".join([request.model_dump_json(indent=2),
+                   "それぞれのミームに分類を振ってください。"]),
+        ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+    if decided is None:
+        return None
+    return [MemeCategory(id=batch[item.number - 1].id, category=item.category)
+            for item in decided.categories if 1 <= item.number <= len(batch) and item.category in MEME_CATEGORIES]
+
+
+def save_categories(s: Session, categories: list[MemeCategory]) -> int:
+    for item in categories:
+        s.get_one(Meme, item.id).category = item.category
+    s.flush()
+    return len(categories)
+
+
 def _classify(s: Session, ai: AIClient) -> int:
-    unclassified = list(s.scalars(select(Meme).where(Meme.category.is_(None)).order_by(Meme.id)).all())
-    sources = [SourceText(row=meme, label="ミーム", text=meme.text) for meme in unclassified]
-    for batch in batches(sources, constants.MEME_BATCH_LETTERS):
-        request = ClassifyRequestSerialized(memes=[MemeText(text=source.text) for source in batch])
-        decided = ai.generate(
-            "\n".join([request.model_dump_json(indent=2),
-                       "それぞれのミームに分類を振ってください。"]),
-            ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
-        if decided is None:
+    unclassified = unclassified_sources(s)
+    classified = 0
+    for batch in batches(unclassified, constants.MEME_BATCH_LETTERS):
+        categories = classify_draft(ai, batch)
+        if categories is None:
             continue
-        for item in decided.categories:
-            if 1 <= item.number <= len(batch) and item.category in MEME_CATEGORIES:
-                batch[item.number - 1].row.category = item.category
+        classified += save_categories(s, categories)
         s.commit()
-    classified = sum(1 for meme in unclassified if meme.category)
     if unclassified:
         logger.info(f"分類の空いたミーム{len(unclassified)}件のうち、{classified}件に分類を振った")
     return classified
@@ -135,25 +173,18 @@ def _classify(s: Session, ai: AIClient) -> int:
 
 def refresh(s: Session, ai: AIClient) -> int:
     """抜き出せなかった元は `meme_seeded` を false のまま残し、次の回に抜き出し直す。足したミームの件数を返す。"""
-    pending = _pending(s)
+    pending = pending_sources(s)
     added = 0
     for batch in batches(pending, constants.MEME_BATCH_LETTERS):
-        decided = ai.generate(
-            "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
-                       "それぞれの元からミームを抜き出してください。"]),
-            MemesDraft, system=_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+        decided = extraction_draft(ai, batch)
         if decided is None:
             logger.warning(f"元{len(batch)}件からミームを抜き出せなかった。次の回に抜き出し直す")
             continue
-        fresh = _without_duplicates(s, ai, decided.memes)
+        fresh = without_duplicates(ai, decided.memes, meme_texts(s))
         if fresh is None:
             logger.warning(f"元{len(batch)}件から抜き出したミームの重複を確かめられなかった。次の回に抜き出し直す")
             continue
-        for candidate in fresh:
-            s.add(Meme(text=candidate.text, category=candidate.known_category))
-            added += 1
-        for source in batch:
-            source.row.meme_seeded = True
+        added += save_memes(s, fresh, batch)
         s.commit()
     if pending:
         logger.info(f"元{len(pending)}件から抜き出し、ミームを{added}件足した")
@@ -161,18 +192,31 @@ def refresh(s: Session, ai: AIClient) -> int:
     return added
 
 
-def draw(s: Session, rng: random.Random, categories: tuple[str, ...]) -> list[DrawnMeme]:
+def meme_pool(s: Session, categories: tuple[str, ...]) -> list[PooledMeme]:
+    """`draw_from` が引く元。分類ごとに id の順。"""
+    return [
+        PooledMeme.model_validate(meme)
+        for category in categories
+        for meme in s.scalars(
+            select(Meme).where(Meme.category == category, Meme.confirmed == ConfirmStatus.APPROVED).order_by(Meme.id)
+        ).all()
+    ]
+
+
+def draw_from(rng: random.Random, pool: list[PooledMeme], categories: tuple[str, ...]) -> list[DrawnMeme]:
     """分類ごとに `constants.MEME_DRAW_RANGE` の件数を引き、それぞれにその人物の中での置き場所をランダムに振る。"""
     drawn = []
     for category in categories:
-        memes = list(s.scalars(
-            select(Meme).where(Meme.category == category, Meme.confirmed == ConfirmStatus.APPROVED).order_by(Meme.id)
-        ).all())
+        memes = [meme for meme in pool if meme.category == category]
         count = min(rng.randint(*constants.MEME_DRAW_RANGE), len(memes))
         for meme in rng.sample(memes, count):
             drawn.append(DrawnMeme(id=meme.id, position=rng.choice(list(constants.MEME_POSITIONS)),
                                    category=meme.category, text=meme.text))
     return drawn
+
+
+def draw(s: Session, rng: random.Random, categories: tuple[str, ...]) -> list[DrawnMeme]:
+    return draw_from(rng, meme_pool(s, categories), categories)
 
 
 def position_legend() -> str:

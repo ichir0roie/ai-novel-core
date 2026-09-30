@@ -1,23 +1,32 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { getTables, type TableMeta } from "./api";
+import { getTables, type ClaudeMode, type TableMeta } from "./api";
 import { T } from "./text";
 
 type MetaContextValue = {
   tables: TableMeta[];
-  /** API が Claude Code の環境で起きているか(false なら「AI で作成」は使えない) */
+  /** 「AI で作成」を押せるか(false なら使えない)。API がその場で回すか(direct)、待ち行列に積むか(queue) */
   claudeAvailable: boolean;
+  claudeMode: ClaudeMode;
   error: string | null;
   loading: boolean;
   reload: () => Promise<void>;
 };
 
-const MetaContext = createContext<MetaContextValue>({ tables: [], claudeAvailable: false, error: null, loading: true, reload: async () => {} });
+const MetaContext = createContext<MetaContextValue>({
+  tables: [],
+  claudeAvailable: false,
+  claudeMode: "off",
+  error: null,
+  loading: true,
+  reload: async () => {},
+});
 
 export function MetaProvider({ children }: { children: ReactNode }) {
   const [tables, setTables] = useState<TableMeta[]>([]);
   const [claudeAvailable, setClaudeAvailable] = useState(false);
+  const [claudeMode, setClaudeMode] = useState<ClaudeMode>("off");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,6 +36,7 @@ export function MetaProvider({ children }: { children: ReactNode }) {
       const result = await getTables();
       setTables(result.tables);
       setClaudeAvailable(result.claude_available ?? false);
+      setClaudeMode(result.claude_mode ?? "off");
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -38,7 +48,9 @@ export function MetaProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  return <MetaContext.Provider value={{ tables, claudeAvailable, error, loading, reload }}>{children}</MetaContext.Provider>;
+  return (
+    <MetaContext.Provider value={{ tables, claudeAvailable, claudeMode, error, loading, reload }}>{children}</MetaContext.Provider>
+  );
 }
 
 export function useMeta() {

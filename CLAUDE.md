@@ -13,6 +13,8 @@
 | テストをしてと明確に依頼されたとき | `.claude/docs/testing.md` |
 | 列名・型を確かめるとき、`db/schema.py` やマイグレーションを変えるとき | `.claude/docs/schema.md` |
 | db を読む処理・AI とやり取りする処理(pydantic のマテリアル・出力モデル)を書く・直すとき、リファクタするとき | `.claude/docs/data-access.md` |
+| PostgreSQL(`DEM_DATABASE_URL`)・AWS へのデプロイ・GitHub Actions・AI の待ち行列(`ai_task`)と web のセッションで回す仕組み(`web_session/`・`steps.py`)を扱うとき | `.docs/README.md` から当たる文書 |
+| AWS の db・資源に触れるとき、Claude Code on the web(`CLAUDE_CODE_REMOTE=true`)で db が要る作業をするとき | `.claude/docs/aws.md` |
 
 # コーディング規約
 

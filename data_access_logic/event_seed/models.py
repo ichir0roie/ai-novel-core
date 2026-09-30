@@ -9,6 +9,24 @@ class SeedText(Material):
     text: str
 
 
+class StoredSeed(SeedText):
+    id: int
+
+
+class SeedPiles(Material):
+    """棚卸しに回す種。`fresh` は棚卸し前、`settled` は棚卸し済み。どちらも id の順。"""
+
+    fresh: list[StoredSeed]
+    settled: list[StoredSeed]
+
+
+class SeedMerge(Material):
+    """一つにまとめる種の組と、まとめた種。"""
+
+    ids: list[int]
+    text: str
+
+
 class ConsolidateRequest(Material):
     fresh: list[SeedText]
     settled: list[SeedText]

@@ -280,6 +280,13 @@ class EpisodeSource(Material):
     main_text: str
 
 
+class EpisodeSummarySource(EpisodeSource):
+    """概要を作る話。書き戻すときに、概要にした本文のハッシュを添える。"""
+
+    id: int
+    source_hash: str
+
+
 class EpisodeSourceSerialized(EpisodeSource):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 

@@ -1,6 +1,6 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 from sqlalchemy.orm import selectinload
 
 from data_access_logic.material import Material, Timestamp
@@ -33,6 +33,14 @@ class EpisodeRecord(EpisodeRow):
     LOAD_OPTIONS: ClassVar[tuple] = (selectinload(Episode.episode_characters),)
 
     episode_characters: list[EpisodeCharacterLink] = Field(exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_dumped(cls, value: Any) -> Any:
+        # API(`/api/steps`)が JSON にして返した形(`character_ids`)からも読み直せるように
+        if isinstance(value, dict) and "episode_characters" not in value and "character_ids" in value:
+            return {**value, "episode_characters": [{"character_id": character_id} for character_id in value["character_ids"]]}
+        return value
 
     @computed_field
     @property

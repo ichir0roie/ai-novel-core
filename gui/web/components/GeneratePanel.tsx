@@ -28,7 +28,7 @@ export type PanelParts = { toggle: ReactNode; body: ReactNode };
  * 指定できる欄(params)が無ければボタン自体がその場で実行し、`body` は結果待ち・エラーの表示だけになる。
  * 大きな専用パネルで出す推敲(`panel: true`)は `useRevisePanel` の担当なので、ここでは出さない。 */
 export function useGeneratePanel({ table, meta, draft, mode, onDone, disabled }: Props): PanelParts | null {
-  const { claudeAvailable } = useMeta();
+  const { claudeAvailable, claudeMode } = useMeta();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [args, setArgs] = useState<Record<string, Rec>>({});
   const { job, error, running, start, setError } = useGenerateJob((id) => {
@@ -124,6 +124,7 @@ export function useGeneratePanel({ table, meta, draft, mode, onDone, disabled }:
     body: (
       <div className="panel generate">
         {!claudeAvailable && <div className="status error">{T.generate.unavailable}</div>}
+        {claudeMode === "queue" && <div className="status info">{T.generate.queued}</div>}
         {sections.length > 0 ? (
           <div className="generate-stack">
             {sections.map(field)}

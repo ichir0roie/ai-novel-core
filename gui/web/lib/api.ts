@@ -9,6 +9,7 @@ export type ReviewSummary = components["schemas"]["ReviewSummary"];
 export type ReviewNext = components["schemas"]["ReviewNext"];
 export type Option = components["schemas"]["Option"];
 export type ConfirmStatus = components["schemas"]["ConfirmStatus"];
+export type ClaudeMode = components["schemas"]["TablesResponse"]["claude_mode"] & string;
 export type Labels = Record<string, Record<string, string>>;
 export type Rec = Record<string, unknown>;
 

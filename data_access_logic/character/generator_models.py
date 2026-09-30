@@ -7,7 +7,7 @@ from data_access_logic.character.models import CharacterBase, CharacterParameter
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
-from data_access_logic.meme.models import DrawnMeme
+from data_access_logic.meme.models import DrawnMeme, PooledMeme
 from data_access_logic.story.models import StoryPlotMaterial
 from db.stamp import Stamp
 
@@ -335,3 +335,55 @@ class PolishRequestSerialized(PolishRequest):
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {"下書き": self.draft, "関係する設定": self.ideas.model_dump()}
+
+
+class BirthSources(Material):
+    """人物・対象を生むときに db から読む材料。"""
+
+    born_location: BirthLocationMaterial | None = None
+    # 上位の場所のものから順
+    stories: list[StoryPlotMaterial]
+    # この時刻より後に始まる、まだ世に無い設定
+    later_ideas: list[IdeaMaterial]
+    nearby_characters: list[CharacterBase]
+    # 引く元になるミーム(`meme.extractor.draw_from`)
+    meme_pool: list[PooledMeme]
+
+
+class CharacterContent(Material):
+    """中身(説明・年齢・口調)まで決まった人物・対象。設定を踏まえた清書と名付けはこの後。"""
+
+    material: CharacterBirthMaterial
+    content: PersonContentDraft | NonPersonContentDraft
+    kind: str
+    age: int
+    parameters: CharacterParameterValues
+
+
+class CharacterCreation(Material):
+    """生んだ人物・対象として足す値。"""
+
+    name: str
+    kind: str
+    text: str
+    main_character: bool
+    parameters: CharacterParameterValues
+    birth: Stamp
+    # 死亡していなければ空
+    end: Stamp | None = None
+    born_location_id: int | None = None
+    # 説明が踏まえたアイデア
+    ideas: list[IdeaMaterial]
+
+
+class CompletionTarget(Material):
+    """本文(text)を埋める人物・対象の、決まっている値。"""
+
+    id: int
+    name: str | None = None
+    kind: str
+    time: Stamp
+    person: bool
+    born_location_id: int | None = None
+    age: int | None = None
+    parameters: CharacterParameterValues | None = None

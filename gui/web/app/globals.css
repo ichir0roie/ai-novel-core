@@ -31,6 +31,8 @@
 * { box-sizing: border-box; }
 /* 画面全体(window)はスクロールさせない。スクロールするのは main の中(一覧)か、記録の画面の左右それぞれの欄 */
 html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+/* スマホではアドレスバーの出入りで 100% が実際の表示より高くなり、下端(保存ボタンなど)が隠れるので、見えている高さに合わせる */
+body { height: 100dvh; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; display: flex; flex-direction: row; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -38,29 +40,40 @@ h1 { font-size: 1.4rem; margin: 0 0 0.75rem; }
 h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
 code { font-family: var(--mono); font-size: 0.9em; }
 
-/* 画面の上端に薄い帯(nav-bar)だけを常に出す。帯は縦横のレイアウトを占有しない(position: fixed)。
-   帯にマウスを寄せる(hover)かクリックすると、メニュー(nav-drawer)が上から大きく降りてきて
-   中身の上に重なる。hover は :hover が DOM の子孫要素にも効くので、nav-drawer が帯の真下に
-   隙間なく続く限り、マウスがそのままメニューへ降りても hover が途切れない */
-.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
-.nav-bar { display: flex; justify-content: center; height: 7px; }
-.nav-handle { width: 2.6rem; height: 5px; margin-top: 1px; padding: 0; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; }
-.nav-bar:hover .nav-handle, .nav.open .nav-handle { background: var(--muted); }
-.nav-drawer {
-  overflow: hidden auto; max-height: 0; padding: 0 3rem;
-  display: flex; flex-wrap: wrap; gap: 3.5rem; align-items: flex-start; font-size: 1.2rem;
-  background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
-  transition: max-height 0.2s ease, padding 0.2s ease;
+/* メニューは、画面の隅に浮かべた小さな丸いボタン(nav-fab)をクリックしたときだけ開く(hover では開かない)。
+   デスクトップは左上、スマホは親指の届く右下(下の max-width: 640px)。ボタンもメニューもレイアウトを占有しない(position: fixed) */
+.nav-fab {
+  position: fixed; top: 10px; left: 10px; z-index: 31;
+  width: 38px; height: 38px; padding: 0; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel); color: var(--muted); border: 1px solid var(--line); box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
 }
-.nav:hover .nav-drawer, .nav.open .nav-drawer, .nav:focus-within .nav-drawer { max-height: 80vh; padding: 2.6rem 3rem; }
-.nav .brand { font-weight: 700; font-size: 1.8rem; }
+.nav-fab:hover, .nav-fab.open { color: var(--accent); border-color: var(--accent); }
+.nav-panel {
+  position: fixed; top: 56px; left: 10px; z-index: 30;
+  width: max-content; max-width: min(94vw, 72rem); max-height: 80dvh; overflow: auto; padding: 1.6rem 2rem;
+  display: flex; flex-wrap: wrap; gap: 2.5rem; align-items: flex-start; font-size: 1.1rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
+}
+.nav .brand { font-weight: 700; font-size: 1.6rem; }
 .nav a { color: var(--ink); }
 .nav a.active { color: var(--accent); font-weight: 600; }
-.nav .group { display: flex; flex-direction: column; gap: 1rem; flex: 1 0 14rem; }
+.nav .group { display: flex; flex-direction: column; gap: 0.8rem; }
 .nav .badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.7rem; margin-left: 0.3rem; }
+.nav .hint { color: var(--muted); font-size: 0.8rem; }
 
-/* 横幅は画面いっぱいに使う。余白は 10px 固定 */
-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 10px; }
+/* Ctrl+K の検索付きメニュー */
+.palette-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / 0.3); display: flex; justify-content: center; align-items: flex-start; padding-top: 15vh; }
+.palette { width: min(92vw, 34rem); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgb(0 0 0 / 0.3); overflow: hidden; }
+.palette input { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0.8rem 1rem; font-size: 1.05rem; }
+.palette input:focus { outline: none; }
+.palette ul { list-style: none; margin: 0; padding: 0.3rem 0; max-height: 50dvh; overflow: auto; }
+.palette li button { width: 100%; text-align: left; border: 0; border-radius: 0; background: none; padding: 0.45rem 1rem; }
+.palette li.on button { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); color: var(--accent); }
+.palette li.none { padding: 0.45rem 1rem; color: var(--muted); }
+
+/* 横幅は画面いっぱいに使う。余白は 10px 固定。左だけは、左上に浮かべたメニューボタン(nav-fab)が中身に重ならないよう空ける */
+main { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 10px 10px 10px 58px; }
 
 /* 記録の画面(編集・追加・レビュー)。main を全部使い、main 自体はスクロールしない */
 .page-fill { display: flex; flex-direction: column; height: 100%; min-height: 0; width: 100%; }
@@ -217,7 +230,8 @@ button.ghost { background: transparent; }
 
 /* 保存系のボタンと「AI で作成」パネルを、左の欄の一番下にまとめて隣り合わせに置く(フロートさせず、通常の流れの末尾) */
 .record-actions { margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
-.record-actions > .actionbar { flex-shrink: 0; margin-top: 0; }
+/* 帯は中のボタンを折り返して縮める(縮めないと、左の欄より広いとき右へはみ出す)。「AI で作成」と並べて入らなければ、flex-wrap で次の行へ送られる */
+.record-actions > .actionbar { flex: 0 1 auto; min-width: 0; margin-top: 0; }
 .record-actions > .generate-body { flex: 1; min-width: 260px; }
 .record-actions > .generate-body:empty { display: none; }
 
@@ -281,7 +295,7 @@ button.ghost { background: transparent; }
   position: fixed; inset: 0; background: color-mix(in srgb, #000 45%, transparent);
   display: flex; align-items: center; justify-content: center; z-index: 30; padding: 1rem;
 }
-.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: 100%; max-width: 640px; max-height: 90dvh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
 .modal.wide { max-width: min(96vw, 1600px); }
 /* 幅の広い .modal(640px)より小さくてよい、小さなモーダル(日時ピッカーなど)。固定幅でよく、中身に合わせて伸縮させる必要はない */
 .modal.compact { width: min(94vw, 22rem); max-width: min(94vw, 22rem); }
@@ -319,7 +333,7 @@ button.ghost { background: transparent; }
 
 /* 人物のモーダル(CharacterSheetModal)。人物詳細と同じ .record.split で、左に欄とパラメータ、右に本文と期間ごとの説明。
    モーダルの高さを決めて本体はスクロールさせず、左右(.record-side / .record-text)がそれぞれスクロールする */
-.modal.wide:has(.character-sheet) { height: 90vh; }
+.modal.wide:has(.character-sheet) { height: 90dvh; }
 .modal-body:has(> .character-sheet) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .character-sheet h3 { margin: 0 0 0.6rem; font-size: 1rem; color: var(--muted); }
 .character-sheet .record-side h3:not(:first-child) { margin-top: 1rem; }
@@ -433,13 +447,8 @@ button.ghost { background: transparent; }
 }
 .tree-caret:hover { color: var(--fg); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* 作品ツリー(StoryTree): 見出し行のドラッグ&ドロップで parent_story_id を差し替える */
-.tree-draggable[draggable="true"] { cursor: grab; }
-.tree-draggable.dragging { opacity: 0.4; }
-.drop-target { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
-
 /* アイデア・作品ツリー: Move ボタンで移動モードに入り、別の行をクリックして親を差し替える
-   (量が多いとドラッグ&ドロップはスクロールで見切れる。アイデアはこちらだけを持つ) */
+   (ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない) */
 .tree-move-btn {
   font-size: 0.75rem; padding: 0.1rem 0.4rem; margin-left: 0.4rem;
 }
@@ -457,10 +466,10 @@ button.ghost { background: transparent; }
 .context-menu-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .context-menu-item.danger { color: var(--danger); background: none; }
 .context-menu-item.danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
-:is(.tree-idea-summary, .tree-draggable).moving { background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 4px; }
-:is(.tree-idea-summary, .tree-draggable).move-target { cursor: pointer; }
-:is(.tree-idea-summary, .tree-draggable).move-target:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
-:is(.tree-idea-summary, .tree-draggable).move-blocked { opacity: 0.4; cursor: default; }
+:is(.tree-idea-summary, .tree-story-row).moving { background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 4px; }
+:is(.tree-idea-summary, .tree-story-row).move-target { cursor: pointer; }
+:is(.tree-idea-summary, .tree-story-row).move-target:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 4px; }
+:is(.tree-idea-summary, .tree-story-row).move-blocked { opacity: 0.4; cursor: default; }
 .tree-move-hint { color: var(--accent); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .tree-root-drop {
   display: block; width: 100%; border: 1px dashed var(--line); border-radius: 8px; padding: 0.5rem 0.7rem;
@@ -487,3 +496,54 @@ button.ghost { background: transparent; }
 .tree-select-label.selected { font-weight: 600; color: var(--accent); }
 .tree-select-none { color: var(--muted); margin-bottom: 0.2rem; }
 .tree-caret-spacer { display: inline-block; width: 1.1rem; }
+
+/* 入口の画面(/interface)。左に入口の一覧、右に実行と job の一覧 */
+.endpoints { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 1rem; }
+.endpoints .area { margin-bottom: 0.75rem; }
+.endpoints .area .hint { font-weight: 600; }
+.endpoints .area button { width: 100%; text-align: left; padding: 0.2rem 0.5rem; }
+
+/* スマホの幅 */
+@media (max-width: 640px) {
+  /* 下端は、右下に浮かべたメニューボタンの分だけ空け、保存ボタンなどがボタンの下に隠れないようにする */
+  main { padding-left: 8px; padding-right: 8px; padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 1.2rem; }
+
+  /* メニュー: ボタンは親指の届く右下に置き、メニューはその上に下から開く。群れを縦に積み、群れの中のリンクは横に流す */
+  .nav-fab { top: auto; left: auto; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 48px; height: 48px; }
+  .nav-panel {
+    top: auto; left: 8px; right: 8px; bottom: calc(72px + env(safe-area-inset-bottom));
+    width: auto; max-width: none; max-height: 70dvh; padding: 1.2rem 1rem; gap: 1.2rem; font-size: 1.05rem;
+  }
+  .nav .brand { font-size: 1.4rem; }
+  .nav .group { flex: 1 0 100%; flex-direction: row; flex-wrap: wrap; gap: 0.5rem 1.2rem; }
+  .nav .hint { display: none; }
+
+  /* iOS は 16px 未満の入力欄にフォーカスすると画面を拡大するので、入力欄だけ 16px を下回らせない */
+  input, select, textarea, textarea.mono { font-size: max(16px, 1em); }
+
+  .toolbar input[type="search"] { min-width: 0; flex-basis: 100%; }
+  table.list td.preview { max-width: 14rem; }
+
+  .page-fill > .panel.fill { padding: 0.6rem; }
+  .panel { padding: 0.8rem; }
+  .record { gap: 0.9rem; }
+  .record-text textarea.section, .record-text .markdown-preview { min-height: 60dvh; }
+  .actionbar { padding: 0.6rem 0.7rem; }
+  /* 生成パネルの注文欄は 1 列になるので、2 列ぶんを取ると見えない列が増えて横にはみ出す */
+  .panel.generate .form .generate-buttons { grid-column: 1 / -1; }
+
+  .modal-backdrop { padding: 0.5rem; }
+  .modal.wide:has(.character-sheet) { height: 95dvh; }
+  .modal { max-height: 95dvh; }
+
+  /* ツリーの見出し行は名前・期間・件数を 1 行に並べるので、狭いと名前が 1 文字ずつ縦に潰れる。行ごと折り返し、字下げも詰める */
+  .tree .tree { margin-left: 0.3rem; padding-left: 0.6rem; }
+  :is(.tree-location, .tree-parent) > details > summary, .tree-story > div { flex-wrap: wrap; row-gap: 0.1rem; }
+  .tree-meta { flex-wrap: wrap; }
+  .tree-meta .chip { white-space: nowrap; }
+  .endpoints { grid-template-columns: minmax(0, 1fr); }
+  /* 1 列に積むと入口の一覧が長く、選んだ入口の実行欄が遠くなるので、一覧は高さを抑えて中でスクロールする */
+  .endpoints > :first-child { max-height: 40dvh; overflow: auto; }
+  .viz-body { grid-template-rows: minmax(0, 1fr) 45%; gap: 0.6rem; }
+}

@@ -52,7 +52,7 @@ const UNPLACED = "unplaced";
 type Source = { locations: Rec[]; characters: Rec[]; characterLocations: Record<string, number> };
 
 /** 人物一覧のツリー。場所・人物の一覧と、人物ごとの居場所をそのまま引いて、木はブラウザで組む。読み取り専用
- *  (居場所は期間ごとに複数あるので、話のようなドラッグ&ドロップでの付け替えは持たない)。タブに戻ったら引き直す。 */
+ *  (居場所は期間ごとに複数あるので、作品ツリーのような親の付け替えは持たない)。タブに戻ったら引き直す。 */
 export default function CharacterTree() {
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -34,6 +34,7 @@ db の触り方(入口越し・読み取り)は 世界リポジトリの `.claud
 | `CommitIdea` / `UpdateIdea` | `idea.form.IdeaCreateForm` / `IdeaUpdateForm`(呼び名の行は `idea.record.IdeaRecognitionRow`) |
 | `CommitMeme` / `UpdateMeme` | `meme.form.MemeCreateForm` / `MemeUpdateForm` |
 | `CommitOracle` / `UpdateOracle` | `oracle.form.OracleCreateForm` / `OracleUpdateForm` |
+| `CommitStylePreference` / `UpdateStylePreference` | `style_preference.form.StylePreferenceCreateForm` / `StylePreferenceUpdateForm` |
 | `UpdateEventSeed` | `event_seed.form.EventSeedUpdateForm` |
 | `CommitStory` / `UpdateStory` | `story.form.StoryCreateForm` / `StoryUpdateForm` |
 | `CommitEpisode` | `episode.form.EpisodeCommitForm` |
@@ -64,7 +65,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この下書きに関わる設定は?」(中間段を自分で回す) | `idea.resolve_terms.ResolveTerms(terms, location_id=None, time=None)`。下書きから洗い出した語(`IdeaTerm`。`keyword` / `variants` / `description` / `kind` / `start` / `end`)をアイデアと照らし、当たったものと上位・下位を返す。当たらなかった語は候補として足す(下の「中間段」)。候補の効く期間は語の `start` / `end`。`start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け(言えなければ省いて None)、`end` は分かるときだけ付ける。`time` は出来事の時刻。`time` を渡すと `start` が空(時期が未定)のアイデアは `ideas` に入れない。呼び名に当たったら本質のアイデアにそろえ、作中の呼び名を `called` に付ける |
 | 「この本文が踏まえたアイデアを結んで」 | `idea.link_ideas.LinkIdeas(idea_ids, event_id=None, episode_id=None, character_id=None)`。三つのうち一つだけ渡す |
 | 「この候補をあのアイデアにまとめて」 | `idea.merge_idea.MergeIdea(source_id, target_id)`。結んだ本文と source の認識(呼び名)を付け替えてから source を消す |
-| 「判断待ちの一覧」「週次レビュー」   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO。Todoist へ載せる手順はスキル `weekly-review` |
+| 「判断待ちの一覧」                   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO |
 | 「場所を足して」                     | `location.create_random_location.CreateRandomLocation()` で下書き → 内容を決めて `location.commit_location.CommitLocation(location)` |
 | 「人物を足して」                     | `character.create_random_character.CreateRandomCharacter()` → `character.commit_character.CommitCharacter(character)`。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。`# 来歴` 節には節目を歳付きで書く(下の「人物の来歴」) |
 | 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る。`confirmed=未確認` で足す(下の「出来事・人物の承認フラグ」) |
@@ -237,7 +238,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 引き方: 分類ごとに 0〜2 件。人物は 信条・欲求・境遇、人物以外の対象は 信条・欲求・集団 から引く。
   理(世界の法則)は引かない(`data_access_logic/constants.py` の `MEME_*`)
 - ユーザが確かめた(`confirmed=承認`)ミームだけを引く。抜き出したばかりの `confirmed=未確認` のミームと、退けた `非承認` のミームは、
-  週次レビューで確かめられるまで、出来事の生成・人物生成のどちらでも文脈に取り入れられない
+  GUI のレビューで確かめられるまで、出来事の生成・人物生成のどちらでも文脈に取り入れられない
 - 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う
 
 ## 出来事・人物の承認フラグ
@@ -330,9 +331,9 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 `GenerateEpisode` / `ReviseEpisode` は `shared_style_extra` / `style_extra` も渡せる。
 世界の舞台設定や、既存の話から抽出した文体の癖のような「ユーザーの好み」は `core` には定数で持たず
-(`ai/instructions/style.py` の `style_instruction()` を見る)、呼び出し側(世界リポジトリ側。例えば `instructions/style.py`)が
-この二引数で渡す。省けば、世界リポジトリの `instructions/style.py`(`SHARED_EXTRA` / `EPISODE_STYLE_EXTRA`)から
-読む(`world_style.py`)。それも無ければ空で、`core` だけの汎用の文体になる。claude から呼んでも GUI から呼んでも同じ。
+(`ai/instructions/style.py` の `style_instruction()` を見る)、db の `style_preference` 表に対象(`target`)ごとに持つ。
+二引数を省けば、`shared`(どの対象にも効く)と `episode` の行から読む(`style_preference/extras.py`)。
+行が無ければ空で、`core` だけの汎用の文体になる。claude から呼んでも GUI・web のセッションから呼んでも同じ。
 
 出来事の生成(`GenerateEvent`)は、下書きの名前・記録を場面の指定(「市場の喧嘩」「怪談」など)に、時刻・場所・当事者を決まった値として、
 候補をサイコロ → 記録(`data_access_logic/event/progress.py`)の順で一件起こす。
@@ -428,6 +429,18 @@ Entrypoint(entrypoint.py)
 
 (`meme.extract_memes.ExtractMemes`・`meme.refresh_generated_content.RefreshGeneratedContent`・`fact_check.check_facts.CheckFacts` は、
 `execute(s)` の外で db セッションを開き直したいので `Entrypoint` を直接継ぎ、`result()` を書く)
+
+### AI を呼ぶ処理と、web のセッションの段
+
+AI を呼ぶ処理は、db だけの関数(対象を引く `*_targets`、材料を組む `*_material`、書き戻す `save_*`)と、
+AI だけの関数(`*_draft`。材料のモデルを受けて AI の出力のモデルを返し、db に触らない)に分けて置く。
+手元の入口はそれを自分のセッションでつなぐ。Claude Code on the web のセッションは db に繋がないので、
+db だけの関数を `<領域>/steps.py` の段(`@db_step`。`step.py`)として API(`POST /api/steps/<領域>.steps.<関数名>`)越しに呼び、
+流れは `web_session/` に持つ(`.docs/claude-tasks.md` の「web のセッションで回す」)。
+
+- 段は API の一つのトランザクションで回るので、中で commit しない
+- 段の入力・出力は pydantic のモデル。出力は `*Serialized` でない土台のマテリアルで宣言する(列のまま JSON で運ぶ)
+- claude を叩く入口を足したら、段と `web_session/` の流れ(`web_session/flows.py` の対応表)も足す
 
 ## 引き方は query 側にある
 

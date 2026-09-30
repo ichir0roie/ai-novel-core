@@ -2,6 +2,10 @@
 """人物・人物以外の対象(国・組織・集団・物)を一件生む。中身(説明・年齢・口調)→ 設定を踏まえた清書 → 名付け、の順に AI に決めさせる。
 
 名前は中身が決まったあとに、その内容から連想して決める。生んだ人物は `confirmed=未確認` で足す。
+
+db だけの段(`birth_sources` → 語をアイデアと照らす `resolve_ideas` → `save_character`)と、AI・乱数だけの段
+(`character_content` → `character_creation`)に分けてある。手元では `generate_character` がつなぎ、
+web のセッションでは `web_session/character.py` が API 越しにつなぐ。
 """
 from __future__ import annotations
 
@@ -19,18 +23,21 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator_models import (
-    BirthLocationMaterial, CharacterBirthMaterialSerialized, CharacterNameMaterialSerialized, HistoryItemDraft,
-    NameDraft, NonPersonContentDraft, PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized,
-    StoryElementsDraft, StoryElementsRequestSerialized,
+    BirthLocationMaterial, BirthSources, CharacterBirthMaterialSerialized, CharacterContent, CharacterCreation,
+    CharacterNameMaterialSerialized, CompletionTarget, HistoryItemDraft, NameDraft, NonPersonContentDraft,
+    PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized, StoryElementsDraft,
+    StoryElementsRequestSerialized,
 )
-from data_access_logic.character.models import CharacterParameterValues
+from data_access_logic.character.models import CharacterBase, CharacterParameterValues
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
-from data_access_logic.idea.context import gather_ideas
+from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.links import link
-from data_access_logic.idea.models import IdeaMaterial
-from data_access_logic.meme.extractor import draw, position_legend
+from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial
+from data_access_logic.idea.search import keywords_of
+from data_access_logic.meme.extractor import draw_from, meme_pool, position_legend
 from data_access_logic.meme.models import DrawnMeme
 from data_access_logic.query import common_query, dictionary_query, story_creation_query
+from data_access_logic.story.models import StoryPlotMaterial
 from db.schema import CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterLocation, ConfirmStatus, Location
 from db.stamp import Stamp
 
@@ -139,11 +146,11 @@ def _nearby_characters(s: Session, born_location_id: int | None, time: Stamp) ->
     return list(s.scalars(select(Character).where(Character.id.in_(ids))).all()) if ids else []
 
 
-def _birth_material(
-    s: Session, ai: AIClient, rng: random.Random, born_location_id: int | None, time: Stamp, person: bool,
-    parameters: CharacterParameterValues | None, name: str | None, kind: str | None, age: int | None,
-    form: CharacterForm | None,
-) -> CharacterBirthMaterialSerialized:
+def _meme_categories(person: bool) -> tuple[str, ...]:
+    return constants.MEME_PERSON_CATEGORIES if person else constants.MEME_NON_PERSON_CATEGORIES
+
+
+def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person: bool) -> BirthSources:
     born_location = (s.scalar(
         select(Location).where(Location.id == born_location_id)
         .options(joinedload(Location.parent)).execution_options(populate_existing=True))
@@ -151,16 +158,31 @@ def _birth_material(
     stories = story_creation_query.load_location_story(s, born_location_id, time) if born_location_id is not None else []
     later_ideas = (s.scalars(dictionary_query.later_ideas_select(
         common_query.idea_scope_ids(s, born_location_id), time)).all() if born_location_id is not None else [])
-    elements_request = StoryElementsRequestSerialized(time=time, stories=stories, later_ideas=later_ideas)
+    return BirthSources(
+        born_location=BirthLocationMaterial.model_validate(born_location) if born_location is not None else None,
+        stories=[StoryPlotMaterial.model_validate(story) for story in stories],
+        later_ideas=[IdeaMaterial.model_validate(idea) for idea in later_ideas],
+        nearby_characters=[CharacterBase.model_validate(character)
+                           for character in _nearby_characters(s, born_location_id, time)],
+        meme_pool=meme_pool(s, _meme_categories(person)),
+    )
+
+
+def _birth_material(
+    ai: AIClient, rng: random.Random, sources: BirthSources, time: Stamp, person: bool,
+    parameters: CharacterParameterValues | None, name: str | None, kind: str | None, age: int | None,
+    form: CharacterForm | None,
+) -> CharacterBirthMaterialSerialized:
+    elements_request = StoryElementsRequestSerialized(time=time, stories=sources.stories, later_ideas=sources.later_ideas)
     return CharacterBirthMaterialSerialized(
         time=time,
         person=person,
-        born_location=BirthLocationMaterial.model_validate(born_location) if born_location is not None else None,
+        born_location=sources.born_location,
         stories=elements_request.stories,
         later_ideas=elements_request.later_ideas,
         element=_element(ai, rng, elements_request),
-        memes=draw(s, rng, constants.MEME_PERSON_CATEGORIES if person else constants.MEME_NON_PERSON_CATEGORIES),
-        nearby_characters=_nearby_characters(s, born_location_id, time),
+        memes=draw_from(rng, sources.meme_pool, _meme_categories(person)),
+        nearby_characters=sources.nearby_characters,
         parameters=parameters,
         name=name,
         kind=kind,
@@ -184,18 +206,15 @@ def _content(
     return decided
 
 
-def _polished(s: Session, ai: AIClient, draft: str, born_location_id: int | None, time: Stamp) -> tuple[str, list[IdeaMaterial]]:
-    """下書きに関係する設定があれば、それを踏まえて清書する。結ぶアイデアも返す。"""
-    ideas = gather_ideas(s, draft, ai, born_location_id, time)
+def _polished(ai: AIClient, draft: str, ideas: IdeaContextMaterial) -> str:
+    """下書きに関係する設定があれば、それを踏まえて清書する。"""
     if not ideas.related:
-        return draft, ideas.linked
+        return draft
     decided = ai.generate(
         "\n".join([PolishRequestSerialized(draft=draft, ideas=ideas).model_dump_json(indent=2),
                    "この説明を清書してください。"]),
         PolishDraft, system=_POLISH_SYSTEM_PROMPT, timeout=constants.IDEA_POLISH_TIMEOUT)
-    if decided is None:
-        return draft, ideas.linked
-    return decided.text, ideas.linked
+    return draft if decided is None else decided.text
 
 
 def _history(items: list[HistoryItemDraft], born_year: int, age: int) -> str:
@@ -234,22 +253,16 @@ def _starting_parameters(rng: random.Random, person: bool, form: CharacterForm |
     return parameters if person else without_person_values(parameters)
 
 
-def generate_character(
-    s: Session,
-    ai: AIClient,
-    rng: random.Random,
-    born_location_id: int | None,
-    time: Stamp,
-    person: bool,
-    form: CharacterForm | None = None,
-) -> Character | None:
-    """`form` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性格・種別・生年・没年・
-    メインキャラクターかは決まった値として使う。中身が得られなければ足さずに None を返す。"""
+def character_content(
+    ai: AIClient, rng: random.Random, sources: BirthSources, time: Stamp, person: bool, form: CharacterForm | None,
+) -> CharacterContent | None:
+    """`form` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性格・種別・生年は決まった値として使う。
+    中身が得られなければ None。"""
     parameters = _starting_parameters(rng, person, form)
     fixed_kind = form.kind if form and form.kind in constants.NON_PERSON_KINDS else None
     fixed_age = max(0, time.year - form.start.year) if form and form.start is not None else None
     material = _birth_material(
-        s, ai, rng, born_location_id, time, person, parameters if person else None,
+        ai, rng, sources, time, person, parameters if person else None,
         None, None if person else fixed_kind, fixed_age, form)
     subject = "人物" if person else "対象"
     content = _content(ai, material, f"この場所に自然な{subject}を1件、決めてください。")
@@ -268,48 +281,90 @@ def generate_character(
     else:
         kind = fixed_kind or (content.kind if content.kind in constants.NON_PERSON_KINDS
                               else rng.choice(constants.NON_PERSON_KINDS))
-    age = fixed_age if fixed_age is not None else content.age
-    text, ideas = _polished(s, ai, content.text, born_location_id, time)
-    text = _composed(text, content, material.memes, time, age)
+    return CharacterContent(
+        material=material, content=content, kind=kind, age=fixed_age if fixed_age is not None else content.age,
+        parameters=parameters)
 
+
+def character_creation(
+    ai: AIClient, decided: CharacterContent, ideas: IdeaContextMaterial, born_location_id: int | None,
+    form: CharacterForm | None,
+) -> CharacterCreation:
+    """`ideas` は中身の説明(`decided.content.text`)の語をアイデアと照らしたもの。清書して名付ける。"""
+    material = decided.material
+    person = material.person
+    parameters = decided.parameters
+    text = _composed(_polished(ai, decided.content.text, ideas), decided.content, material.memes, material.time,
+                     decided.age)
     named = _name(ai, CharacterNameMaterialSerialized(
-        kind=kind, text=text, age=age, parameters=parameters if person else None,
+        kind=decided.kind, text=text, age=decided.age, parameters=parameters if person else None,
         born_location=material.born_location, nearby_characters=material.nearby_characters,
         hint_name=form.name if form else None,
     ), person)
+    subject = "人物" if person else "対象"
     name = named.name if named is not None else (form.name if form and form.name else subject)
     if isinstance(named, PersonNameDraft):
         parameters.family_name = named.family_name or None
 
-    birth = Stamp(time.year - age)
-    record = Character(
+    location_label = (f"{material.born_location.name}(id={material.born_location.id})" if material.born_location else "不明")
+    logger.info(f"{material.time} 生成: {name} 種別={decided.kind} 出自={location_label} 年齢={decided.age}\n"
+                f"    筋書きの要素: {material.element or '(無し)'}\n"
+                + "".join(f"    ミーム: {drawn.position}: {drawn.text}\n" for drawn in material.memes))
+    return CharacterCreation(
         name=name,
-        kind=kind,
+        kind=decided.kind,
         text=fill_name_placeholder(text, name),
         main_character=bool(form.main_character) if form and form.main_character is not None else False,
+        parameters=parameters,
+        birth=Stamp(material.time.year - decided.age),
+        end=form.end if form else None,
+        born_location_id=born_location_id,
+        ideas=ideas.linked,
+    )
+
+
+def save_character(s: Session, creation: CharacterCreation) -> Character:
+    record = Character(
+        name=creation.name,
+        kind=creation.kind,
+        text=creation.text,
+        main_character=creation.main_character,
         confirmed=ConfirmStatus.PENDING,
         # 生まれた時点で決める値なので、期間を限らない一行だけを持つ。死亡していなければ end は空
-        parameters=[parameter_row(parameters, birth, form.end if form else None)],
+        parameters=[parameter_row(creation.parameters, creation.birth, creation.end)],
     )
     s.add(record)
     s.flush()
-    if born_location_id is not None:
-        s.add(CharacterLocation(character_id=record.id, location_id=born_location_id, start=record.start, end=record.end))
-    link(s, record, ideas)
-    s.commit()
-
-    location_label = (f"{material.born_location.name}(id={material.born_location.id})" if material.born_location else "不明")
-    logger.info(f"{time} 生成: {record.name} id={record.id} 種別={record.kind}"
-          f" 出自={location_label} 年齢={age}\n"
-          f"    筋書きの要素: {material.element or '(無し)'}\n"
-          + "".join(f"    ミーム: {drawn.position}: {drawn.text}\n" for drawn in material.memes)
-          + f"    説明: {record.text}")
+    if creation.born_location_id is not None:
+        s.add(CharacterLocation(character_id=record.id, location_id=creation.born_location_id,
+                                start=record.start, end=record.end))
+    link(s, record, creation.ideas)
+    logger.info(f"足した: {record.name} id={record.id}")
     return record
 
 
-def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: int) -> Character:
-    """人物・対象の本文(text)が空のとき、決まっている名前・属性・出自を核に AI に本文だけを書かせて埋める。
-    性別・体格・口調・性格・種別・生年・没年・名前は変えない。"""
+def generate_character(
+    s: Session,
+    ai: AIClient,
+    rng: random.Random,
+    born_location_id: int | None,
+    time: Stamp,
+    person: bool,
+    form: CharacterForm | None = None,
+) -> Character | None:
+    """中身が得られなければ足さずに None を返す。"""
+    decided = character_content(ai, rng, birth_sources(s, born_location_id, time, person), time, person, form)
+    if decided is None:
+        return None
+    ideas = resolve_ideas(s, keywords_of(decided.content.text, ai, time), born_location_id, time)
+    # AI が洗い出した語から足した候補は、この後の生成が失敗しても残す
+    s.commit()
+    record = save_character(s, character_creation(ai, decided, ideas, born_location_id, form))
+    s.commit()
+    return record
+
+
+def completion_target(s: Session, character_id: int) -> CompletionTarget:
     record = s.get_one(Character, character_id)
     if (record.text or "").strip():
         raise ValueError("text はすでに埋まっている")
@@ -317,23 +372,53 @@ def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: in
     if time is None:
         raise ValueError("time が決められない(世界にまだ出来事が無く、record.start も空)")
     person = record.kind == CHARACTER_KIND_PERSON
-    # locations は新しい順なので、末尾が生まれた場所
-    born_location_id = record.locations[-1].location_id if record.locations else None
-    age = max(0, time.year - record.start.year) if record.start is not None else None
-    parameters = parameters_at(record, time) if person else None
-    name = record.name
+    return CompletionTarget(
+        id=record.id, name=record.name, kind=record.kind, time=time, person=person,
+        # locations は新しい順なので、末尾が生まれた場所
+        born_location_id=record.locations[-1].location_id if record.locations else None,
+        age=max(0, time.year - record.start.year) if record.start is not None else None,
+        parameters=parameters_at(record, time) if person else None,
+    )
+
+
+def completion_content(
+    ai: AIClient, rng: random.Random, target: CompletionTarget, sources: BirthSources,
+) -> tuple[CharacterBirthMaterialSerialized, PersonContentDraft | NonPersonContentDraft]:
+    """決まっている名前・属性・出自を核に、本文だけを AI に書かせる。"""
     material = _birth_material(
-        s, ai, rng, born_location_id, time, person, parameters, name, None if person else record.kind, age, None)
-    subject = "人物" if person else "対象"
+        ai, rng, sources, target.time, target.person, target.parameters, target.name,
+        None if target.person else target.kind, target.age, None)
+    subject = "人物" if target.person else "対象"
     content = _content(ai, material, f"この{subject}の本文(説明)を決めてください。")
     if content is None:
         raise ValueError("本文が得られなかった")
+    return material, content
 
-    text, ideas = _polished(s, ai, content.text, born_location_id, time)
-    text = _composed(text, content, material.memes, time, age)
+
+def completed_text(
+    ai: AIClient, target: CompletionTarget, material: CharacterBirthMaterialSerialized,
+    content: PersonContentDraft | NonPersonContentDraft, ideas: IdeaContextMaterial,
+) -> str:
+    text = _composed(_polished(ai, content.text, ideas), content, material.memes, target.time, target.age)
+    return fill_name_placeholder(text, target.name or "")
+
+
+def save_completed_text(s: Session, character_id: int, text: str, ideas: list[IdeaMaterial]) -> Character:
     record = s.get_one(Character, character_id)
-    record.text = fill_name_placeholder(text, name or "")
+    record.text = text
     link(s, record, ideas)
-    s.commit()
+    s.flush()
     return record
 
+
+def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: int) -> Character:
+    """人物・対象の本文(text)が空のとき、決まっている名前・属性・出自を核に AI に本文だけを書かせて埋める。
+    性別・体格・口調・性格・種別・生年・没年・名前は変えない。"""
+    target = completion_target(s, character_id)
+    material, content = completion_content(
+        ai, rng, target, birth_sources(s, target.born_location_id, target.time, target.person))
+    ideas = resolve_ideas(s, keywords_of(content.text, ai, target.time), target.born_location_id, target.time)
+    s.commit()
+    record = save_completed_text(s, character_id, completed_text(ai, target, material, content, ideas), ideas.linked)
+    s.commit()
+    return record

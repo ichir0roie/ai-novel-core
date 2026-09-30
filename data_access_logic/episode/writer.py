@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。"""
+"""自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。
+
+db だけの段(`writing_targets` → 要約を揃える → `episode_material` → `save_episode`)と、AI だけの段(`episode_draft`)に分けてある。
+手元では `write_episode` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+"""
 from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ai.instructions import style
@@ -12,14 +16,20 @@ from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import cast_at, relations_at
-from data_access_logic.episode.models import EpisodeDraft, EpisodeMaterialSerialized, StoryMaterial, TargetEpisode
-from data_access_logic.episode.summary import recent_episodes, summarized_episodes
-from data_access_logic.event.summary import summarized_events
-from data_access_logic.idea.context import gather_ideas
+from data_access_logic.character.cast import cast_event_ids, cast_of, relations_at
+from data_access_logic.episode.models import (
+    EpisodeDraft, EpisodeMaterial, EpisodeMaterialSerialized, StoryMaterial, TargetEpisode,
+)
+from data_access_logic.episode.summary import past_episode_ids, past_episodes, recent_episodes
+from data_access_logic.event.summary import events_of
+from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.links import link
+from data_access_logic.idea.models import IdeaMaterial, IdeaTerm
+from data_access_logic.idea.search import keywords_of
 from data_access_logic.query import common_query
-from db.schema import ConfirmStatus, Episode, EpisodeCharacter, Event
+from data_access_logic.summary_targets import SummaryTargets, refresh
+from db.schema import Character, ConfirmStatus, Episode, EpisodeCharacter, Event
+from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +47,13 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 {style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}"""
 
 
-def episode_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeMaterialSerialized:
+class WritingTargets(SummaryTargets):
+    # アイデアと照らす語を AI に挙げさせる元(`keywords_of`)
+    plot_text: str
+    start: Stamp
+
+
+def _episode(s: Session, episode_id: int) -> Episode:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -52,33 +68,88 @@ def episode_material(s: Session, ai: AIClient, episode_id: int) -> EpisodeMateri
         raise ValueError(f"話 id={episode_id} が見つからない")
     if not episode.episode_characters:
         raise ValueError(f"話 id={episode_id} の登場人物(episode_character)が空。登場人物を指定してから書く")
-    # 要約・候補のアイデアの commit で読み込んだ関連が期限切れになるので、AI を呼ぶ前にマテリアルへ写しておく
-    main_episode = TargetEpisode.model_validate(episode)
-    story = StoryMaterial.model_validate(episode.story)
-    location_id = episode.location_id or episode.story.location_id
-    characters = [link.character for link in episode.episode_characters]
+    return episode
 
-    return EpisodeMaterialSerialized(
-        story=story,
-        main_episode=main_episode,
-        past_episodes=summarized_episodes(s, ai, episode, constants.EPISODE_FULL_TEXT_COUNT),
-        recent_episodes=recent_episodes(s, episode),
-        locations=common_query.location_path(s, location_id)
-        if location_id is not None else [],
-        cast=cast_at(s, ai, characters, main_episode.start),
-        relations=relations_at(s, characters, main_episode.start),
-        location_events=list(reversed(summarized_events(
-            s, ai,
-            common_query.events_of_location_select(
-                location_id, until=main_episode.start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
-            .where(Event.confirmed == ConfirmStatus.APPROVED)))) if location_id is not None else [],
-        later_events=summarized_events(
-            s, ai,
-            common_query.events_after_select(
-                location_id, [character.id for character in characters], main_episode.start,
-                limit=constants.LATER_EVENT_LIMIT)),
-        ideas=gather_ideas(s, main_episode.plot_text, ai, location_id, main_episode.start),
+
+def _location_id(episode: Episode) -> int | None:
+    return episode.location_id or episode.story.location_id
+
+
+def _characters(episode: Episode) -> list[Character]:
+    return [link.character for link in episode.episode_characters]
+
+
+def _location_events_select(location_id: int, start: Stamp) -> Select[Event]:
+    return (common_query.events_of_location_select(location_id, until=start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
+            .where(Event.confirmed == ConfirmStatus.APPROVED))
+
+
+def _later_events_select(location_id: int | None, characters: list[Character], start: Stamp) -> Select[Event]:
+    return common_query.events_after_select(
+        location_id, [character.id for character in characters], start, limit=constants.LATER_EVENT_LIMIT)
+
+
+def writing_targets(s: Session, episode_id: int) -> WritingTargets:
+    episode = _episode(s, episode_id)
+    main_episode = TargetEpisode.model_validate(episode)
+    location_id = _location_id(episode)
+    characters = _characters(episode)
+    location_events = (s.scalars(_location_events_select(location_id, main_episode.start)).all()
+                       if location_id is not None else [])
+    later_events = s.scalars(_later_events_select(location_id, characters, main_episode.start)).all()
+    return WritingTargets(
+        episode_ids=past_episode_ids(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        event_ids=[*cast_event_ids(s, characters, main_episode.start),
+                   *(event.id for event in location_events), *(event.id for event in later_events)],
+        plot_text=main_episode.plot_text,
+        start=main_episode.start,
     )
+
+
+def episode_material(s: Session, episode_id: int, keywords: list[IdeaTerm]) -> EpisodeMaterialSerialized:
+    """要約は揃えてある前提でそのまま読む。`keywords` の語をアイデアと照らし、当たらなかった造語は候補として足す(`resolve_ideas`)。"""
+    episode = _episode(s, episode_id)
+    main_episode = TargetEpisode.model_validate(episode)
+    location_id = _location_id(episode)
+    characters = _characters(episode)
+    return EpisodeMaterialSerialized(
+        story=StoryMaterial.model_validate(episode.story),
+        main_episode=main_episode,
+        past_episodes=past_episodes(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        recent_episodes=recent_episodes(s, episode),
+        locations=common_query.location_path(s, location_id) if location_id is not None else [],
+        cast=cast_of(s, characters, main_episode.start),
+        relations=relations_at(s, characters, main_episode.start),
+        location_events=list(reversed(events_of(s, _location_events_select(location_id, main_episode.start))))
+        if location_id is not None else [],
+        later_events=events_of(s, _later_events_select(location_id, characters, main_episode.start)),
+        ideas=resolve_ideas(s, keywords, location_id, main_episode.start),
+    )
+
+
+def episode_draft(
+    ai: AIClient, material: EpisodeMaterial, model: str, effort: str, shared_style_extra: str = "", style_extra: str = "",
+) -> EpisodeDraft | None:
+    """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
+    prompt = "\n".join([
+        EpisodeMaterialSerialized.model_validate(material).model_dump_json(indent=2),
+        "この話を書いてください。",
+    ])
+    return ai.generate(
+        prompt, EpisodeDraft, system=_system_prompt(shared_style_extra, style_extra),
+        timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
+
+
+def save_episode(s: Session, episode_id: int, draft: EpisodeDraft, ideas: list[IdeaMaterial]) -> Episode:
+    record = s.get_one(Episode, episode_id)
+    # 作者が決めた題は残し、空のときだけ本文を書いたときの題で埋める
+    record.title = record.title.strip() or draft.title
+    record.synced = True
+    record.main_text = draft.main_text
+    s.flush()
+    link(s, record, ideas)
+    logger.info(f"「{record.title}」 id={record.id} {record.letters}字")
+    return record
 
 
 def write_episode(
@@ -90,27 +161,16 @@ def write_episode(
     shared_style_extra: str = "",
     style_extra: str = "",
 ) -> Episode | None:
-    """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
-    material = episode_material(s, ai, episode_id)
+    targets = writing_targets(s, episode_id)
+    refresh(s, ai, targets)
+    material = episode_material(s, episode_id, keywords_of(targets.plot_text, ai, targets.start))
+    # AI が洗い出した語から足した候補は、この後の生成が失敗しても残す
+    s.commit()
 
-    prompt = "\n".join([
-        material.model_dump_json(indent=2),
-        "この話を書いてください。",
-    ])
-    draft = ai.generate(
-        prompt, EpisodeDraft, system=_system_prompt(shared_style_extra, style_extra),
-        timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
+    draft = episode_draft(ai, material, model, effort, shared_style_extra, style_extra)
     if draft is None:
         logger.warning(f"{material.story.name}: 本文が得られなかったので見送り")
         return None
-
-    record = s.get_one(Episode, episode_id)
-    # 作者が決めた題は残し、空のときだけ本文を書いたときの題で埋める
-    record.title = record.title.strip() or draft.title
-    record.synced = True
-    record.main_text = draft.main_text
-    s.flush()
-    link(s, record, material.ideas.linked)
+    record = save_episode(s, episode_id, draft, material.ideas.linked)
     s.commit()
-    logger.info(f"{material.story.name}「{record.title}」 id={record.id} {record.letters}字")
     return record

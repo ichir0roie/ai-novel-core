@@ -47,7 +47,11 @@ from data_access_logic.story.commit_story import CommitStory
 from data_access_logic.story.form import StoryCreateForm, StoryUpdateForm
 from data_access_logic.story.record import StoryRecord
 from data_access_logic.story.update_story import UpdateStory
-from db.schema import Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story
+from data_access_logic.style_preference.commit_style_preference import CommitStylePreference
+from data_access_logic.style_preference.form import StylePreferenceCreateForm, StylePreferenceUpdateForm
+from data_access_logic.style_preference.record import StylePreferenceRecord
+from data_access_logic.style_preference.update_style_preference import UpdateStylePreference
+from db.schema import Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story, StylePreference
 
 
 @dataclass(frozen=True)
@@ -94,6 +98,9 @@ TABLES: tuple[TableSpec, ...] = (
               ("text",), reviewable=True),
     TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, OracleCreateForm, OracleUpdateForm,
               OracleRecord, ("title", "text")),
+    TableSpec("style_preference", "文体の好み", StylePreference, CommitStylePreference, UpdateStylePreference,
+              StylePreferenceCreateForm, StylePreferenceUpdateForm, StylePreferenceRecord, ("target", "text"),
+              sort="target", order="asc"),
 )
 
 TABLE_BY_NAME: dict[str, TableSpec] = {spec.name: spec for spec in TABLES}

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""プロット補完。本文は書かない(`writer.write_episode` で別に書く)。"""
+"""プロット補完。本文は書かない(`writer.write_episode` で別に書く)。
+
+材料は本文を書くときと同じ(`writer.writing_targets` → 要約を揃える → `writer.episode_material`)。
+AI だけの段(`plot_draft`・`casting_draft`)と db だけの段(`save_plot`・`known_locations`・`add_cast_member`・`add_location`)に分けてあり、
+手元では `complete_plot` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+"""
 from __future__ import annotations
 
 import logging
@@ -16,11 +21,14 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator import generate_character
 from data_access_logic.episode.models import (
-    EpisodeCastingDraft, EpisodeCastingRequestSerialized, EpisodeCharacterCandidateDraft,
-    EpisodePlotDraft, EpisodePlotRequestSerialized, EpisodeLocationCandidateDraft, EpisodeMaterialSerialized,
+    EpisodeCastingDraft, EpisodeCastingRequestSerialized, EpisodeCharacterCandidateDraft, EpisodeLocationCandidateDraft,
+    EpisodeMaterial, EpisodePlotDraft, EpisodePlotRequestSerialized,
 )
-from data_access_logic.episode.writer import episode_material
-from db.schema import ConfirmStatus, Episode, EpisodeCharacter, Location
+from data_access_logic.episode.writer import episode_material, writing_targets
+from data_access_logic.idea.search import keywords_of
+from data_access_logic.location.models import LocationMaterial
+from data_access_logic.summary_targets import refresh
+from db.schema import Character, ConfirmStatus, Episode, EpisodeCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -49,7 +57,8 @@ location の名前は次の基準で名づけます。
 {PLACE_NAMING_INSTRUCTION}"""
 
 
-def _new_plot(ai: AIClient, request: EpisodePlotRequestSerialized, model: str, effort: str) -> str:
+def plot_draft(ai: AIClient, material: EpisodeMaterial, order: str | None, model: str, effort: str) -> str:
+    request = EpisodePlotRequestSerialized(material=material, order=order)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "この話のプロットを書き直してください。"]),
         EpisodePlotDraft, system=_PLOT_SYSTEM_PROMPT, timeout=constants.EPISODE_PLOT_TIMEOUT,
@@ -59,13 +68,25 @@ def _new_plot(ai: AIClient, request: EpisodePlotRequestSerialized, model: str, e
     return draft.plot_text
 
 
-def _casting(
-    s: Session, ai: AIClient, material: EpisodeMaterialSerialized, plot_text: str, location_id: int | None,
-    model: str, effort: str,
+def save_plot(s: Session, episode_id: int, plot_text: str) -> Episode:
+    record = s.get_one(Episode, episode_id)
+    record.plot_text = plot_text
+    s.flush()
+    return record
+
+
+def known_locations(s: Session, location_id: int | None) -> list[LocationMaterial]:
+    """話の場所の直下にある場所。"""
+    if location_id is None:
+        return []
+    return [LocationMaterial.model_validate(location)
+            for location in s.scalars(select(Location).where(Location.parent_id == location_id)).all()]
+
+
+def casting_draft(
+    ai: AIClient, material: EpisodeMaterial, plot_text: str, known: list[LocationMaterial], model: str, effort: str,
 ) -> EpisodeCastingDraft | None:
-    known_locations = (s.scalars(select(Location).where(Location.parent_id == location_id)).all()
-                       if location_id is not None else [])
-    request = EpisodeCastingRequestSerialized(material=material, plot_text=plot_text, known_locations=known_locations)
+    request = EpisodeCastingRequestSerialized(material=material, plot_text=plot_text, known_locations=known)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げてください。"]),
         EpisodeCastingDraft, system=_CASTING_SYSTEM_PROMPT, timeout=constants.EPISODE_CASTING_TIMEOUT,
@@ -73,6 +94,31 @@ def _casting(
     if draft is None:
         logger.warning("人物・舞台の候補が得られなかったので、プロットの書き直しだけにする")
     return draft
+
+
+def add_cast_member(s: Session, episode_id: int, character_id: int) -> None:
+    """未確認の人物は話に出せない(`CharacterMaterial`)。この話の本文に書く人物なので承認して足す。"""
+    record = s.get_one(Character, character_id)
+    record.confirmed = ConfirmStatus.APPROVED
+    s.add(EpisodeCharacter(episode_id=episode_id, character_id=character_id))
+    s.flush()
+    logger.info(f"{record.name}(id={record.id})を登場人物に足した")
+
+
+def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidateDraft, parent_id: int | None) -> Location:
+    location = Location(
+        parent_id=parent_id,
+        name=candidate.name,
+        kind=candidate.kind,
+        text=candidate.text,
+        environment=candidate.environment or None,
+    )
+    s.add(location)
+    s.flush()
+    s.get_one(Episode, episode_id).location_id = location.id
+    s.flush()
+    logger.info(f"舞台 {location.name}(id={location.id})を足し、話の場所にした")
+    return location
 
 
 def _add_characters(
@@ -87,26 +133,8 @@ def _add_characters(
         if record is None:
             logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
             continue
-        # 未確認の人物は話に出せない(`CharacterMaterial`)。この話の本文に書く人物なので承認して足す
-        record.confirmed = ConfirmStatus.APPROVED
-        s.add(EpisodeCharacter(episode_id=episode_id, character_id=record.id))
+        add_cast_member(s, episode_id, record.id)
         s.commit()
-        logger.info(f"「{candidate.called}」を {record.name}(id={record.id})として登場人物に足した")
-
-
-def _add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidateDraft, parent_id: int | None) -> None:
-    location = Location(
-        parent_id=parent_id,
-        name=candidate.name,
-        kind=candidate.kind,
-        text=candidate.text,
-        environment=candidate.environment or None,
-    )
-    s.add(location)
-    s.flush()
-    s.get_one(Episode, episode_id).location_id = location.id
-    s.commit()
-    logger.info(f"舞台 {location.name}(id={location.id})を足し、話の場所にした")
 
 
 def complete_plot(
@@ -116,17 +144,21 @@ def complete_plot(
     それでプロットをそっくり置き換える(今のプロットの中身は書き直したプロットに含めさせる)。
     書き直したプロットに出るのに材料に無い人物は作って登場人物に足し、話の場所より細かい舞台はその場所の下に作って話の場所にする。
     `model` / `effort` はプロットの書き直しと候補の呼び出しに渡す(人物を作る呼び出しは人物の生成の既定のまま)。"""
-    material = episode_material(s, ai, episode_id)
-    plot_text = _new_plot(ai, EpisodePlotRequestSerialized(material=material, order=order), model, effort)
-    s.get_one(Episode, episode_id).plot_text = plot_text
+    targets = writing_targets(s, episode_id)
+    refresh(s, ai, targets)
+    material = episode_material(s, episode_id, keywords_of(targets.plot_text, ai, targets.start))
+    s.commit()
+    plot_text = plot_draft(ai, material, order, model, effort)
+    save_plot(s, episode_id, plot_text)
     s.commit()
 
     location_id = material.locations[-1].id if material.locations else None
-    casting = _casting(s, ai, material, plot_text, location_id, model, effort)
+    casting = casting_draft(ai, material, plot_text, known_locations(s, location_id), model, effort)
     if casting is not None and casting.characters:
         _add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start)
     if casting is not None and casting.location is not None:
-        _add_location(s, episode_id, casting.location, location_id)
+        add_location(s, episode_id, casting.location, location_id)
+        s.commit()
 
     record = s.get_one(Episode, episode_id)
     logger.info(f"{material.story.name}「{record.title}」 id={record.id} のプロットを補完した")

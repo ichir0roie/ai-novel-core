@@ -134,19 +134,20 @@ export default function InterfacePage() {
       {catalog && !catalog.claude_available && (
         <div className="status info">{T.endpoints.outsideClaude}</div>
       )}
+      {catalog?.claude_mode === "queue" && <div className="status info">{T.endpoints.queueMode}</div>}
       <div className="toolbar">
         <input type="search" placeholder={T.endpoints.searchPlaceholder} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: "1rem" }}>
+      <div className="endpoints">
         <div>
           {[...groups.entries()].map(([area, entrances]) => (
-            <div key={area} style={{ marginBottom: "0.75rem" }}>
-              <div className="hint" style={{ fontWeight: 600 }}>
+            <div key={area} className="area">
+              <div className="hint">
                 {T.endpoints.area[area] ?? area}
               </div>
               {entrances.map((entrance) => (
                 <div key={entrance.id}>
-                  <button className={`ghost ${selected === entrance.id ? "primary" : ""}`} style={{ width: "100%", textAlign: "left", padding: "0.2rem 0.5rem" }} onClick={() => setSelected(entrance.id)}>
+                  <button className={`ghost ${selected === entrance.id ? "primary" : ""}`} onClick={() => setSelected(entrance.id)}>
                     {entrance.name}
                     {entrance.claude ? " ✦" : ""}
                   </button>
@@ -161,32 +162,34 @@ export default function InterfacePage() {
           {jobs.length === 0 ? (
             <div className="hint">{T.endpoints.noJobs}</div>
           ) : (
-            <table className="list">
-              <thead>
-                <tr>
-                  <th>{T.endpoints.columns.status}</th>
-                  <th>{T.endpoints.columns.entrance}</th>
-                  <th>{T.endpoints.columns.args}</th>
-                  <th>{T.endpoints.columns.result}</th>
-                  <th>{T.endpoints.columns.time}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <tr key={job.id}>
-                    <td>{job.status}</td>
-                    <td>
-                      <code>{job.entrance}</code>
-                    </td>
-                    <td className="preview">{JSON.stringify(job.args)}</td>
-                    <td className="preview" title={job.error ?? JSON.stringify(job.result)}>
-                      {job.error ?? (job.result === null ? "" : JSON.stringify(job.result))}
-                    </td>
-                    <td className="hint">{job.finished_at ?? job.started_at ?? job.created_at}</td>
+            <div className="scroll-x">
+              <table className="list">
+                <thead>
+                  <tr>
+                    <th>{T.endpoints.columns.status}</th>
+                    <th>{T.endpoints.columns.entrance}</th>
+                    <th>{T.endpoints.columns.args}</th>
+                    <th>{T.endpoints.columns.result}</th>
+                    <th>{T.endpoints.columns.time}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>{job.status}</td>
+                      <td>
+                        <code>{job.entrance}</code>
+                      </td>
+                      <td className="preview">{JSON.stringify(job.args)}</td>
+                      <td className="preview" title={job.error ?? JSON.stringify(job.result)}>
+                        {job.error ?? (job.result === null ? "" : JSON.stringify(job.result))}
+                      </td>
+                      <td className="hint">{job.finished_at ?? job.started_at ?? job.created_at}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

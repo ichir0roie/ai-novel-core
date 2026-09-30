@@ -1,14 +1,14 @@
 """ミーム・出来事の種を抜き出す元の本文を扱う。"""
 import re
-from typing import Any, Generic, TypeVar
+from typing import Any, Protocol
 
 from pydantic import model_serializer
+from sqlalchemy.orm import Session
 
 from data_access_logic.material import Material
+from db.schema import Base
 
 _PLOT_SECTION = re.compile(r"^#[ \t]*plot[ \t]*\n(.*?)(?=^#[ \t]|\Z)", re.M | re.S)
-
-Row = TypeVar("Row")
 
 
 def plot_section(text: str | None) -> str:
@@ -17,17 +17,31 @@ def plot_section(text: str | None) -> str:
     return match.group(1).strip() if match else ""
 
 
-class SourceText(Material, Generic[Row]):
-    # 抜き出したら印を付ける元の行
-    row: Row
+class SourceText(Material):
+    # 抜き出したら印を付ける元の行(API で運べるよう、行そのものではなく表と id で指す)
+    table: str
+    id: int
     # 何の本文か(アイデア・出来事など)
     label: str
     text: str
 
 
-def batches(sources: list[SourceText[Row]], letters_limit: int) -> list[list[SourceText[Row]]]:
+def source_of(row: Base, label: str, text: str) -> SourceText:
+    return SourceText(table=row.__tablename__, id=row.id, label=label, text=text)
+
+
+def row_of(s: Session, table: str, id_: int) -> Any:
+    model = next(mapper.class_ for mapper in Base.registry.mappers if mapper.class_.__tablename__ == table)
+    return s.get_one(model, id_)
+
+
+class _Text(Protocol):
+    text: str
+
+
+def batches[T: _Text](sources: list[T], letters_limit: int) -> list[list[T]]:
     """一度の呼び出しで渡す本文の字数が `letters_limit` を超えないよう分ける(一件で超えるものはそれだけで一束)。"""
-    grouped: list[list[SourceText[Row]]] = []
+    grouped: list[list[T]] = []
     letters = 0
     for source in sources:
         if grouped and letters + len(source.text) <= letters_limit:
@@ -39,11 +53,11 @@ def batches(sources: list[SourceText[Row]], letters_limit: int) -> list[list[Sou
     return grouped
 
 
-class SourceBatch(Material, Generic[Row]):
-    sources: list[SourceText[Row]]
+class SourceBatch(Material):
+    sources: list[SourceText]
 
 
-class SourceBatchSerialized(SourceBatch[Any]):
+class SourceBatchSerialized(SourceBatch):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     @model_serializer

@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { getJob, type GeneratorMeta, type JobInfo, type Rec, type TableMeta } from "./api";
+import { useMeta } from "./meta";
 import { T } from "./text";
 
-/** 「AI で作成」系のボタンが起こす裏の job(claude を叩く)を、終わるまで 2 秒おきに見に行く。
+/** 「AI で作成」系のボタンが起こす裏の job(claude を叩く)を、終わるまで見に行く(その場で回すなら 2 秒、
+ * 待ち行列に積んだなら web のセッションが回すまで掛かるので 15 秒おき)。
  * `GeneratePanel`(小さなボタン列)・`RevisePanel`(推敲の大きなパネル)の両方で使う。 */
 export function useGenerateJob(onDone: (id: number) => void) {
+  const { claudeMode } = useMeta();
+  const interval = claudeMode === "queue" ? 15000 : 2000;
   const [job, setJob] = useState<JobInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const running = job !== null && (job.status === "queued" || job.status === "running");
@@ -28,9 +32,9 @@ export function useGenerateJob(onDone: (id: number) => void) {
         setError(e instanceof Error ? e.message : String(e));
         setJob(null);
       }
-    }, 2000);
+    }, interval);
     return () => clearInterval(timer);
-  }, [running, job, onDone]);
+  }, [running, job, onDone, interval]);
 
   const start = async (fn: () => Promise<JobInfo>) => {
     setError(null);
