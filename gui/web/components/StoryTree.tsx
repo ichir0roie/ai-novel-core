@@ -1,83 +1,97 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
-import { buildStoryTree, type TreeNode, type TreeStory } from "@/lib/storyTree";
+import { buildStoryTree, descendantIds, type StoryNode } from "@/lib/storyTree";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
 
 type OpenState = ReturnType<typeof useTreeOpen>;
 
-const UNPLACED = "unplaced";
-type DropId = number | typeof UNPLACED;
+const ROOT = "root";
+type DropId = number | typeof ROOT;
 
 type DragState = {
   draggingId: number | null;
   dropTarget: DropId | null;
+  blocked: Set<number>;
   onDragStart: (id: number) => void;
   onDragEnd: () => void;
   onDragOverTarget: (target: DropId) => void;
   onDropOnTarget: (target: DropId) => void;
 };
 
-function StoryRow({ story, drag }: { story: TreeStory; drag: DragState }) {
-  const span = [story.start, story.end].filter(Boolean).join(" 〜 ");
-  const classes = ["tree-story", "tree-draggable"];
-  if (drag.draggingId === story.id) classes.push("dragging");
+// 行を落とし先にする。自分自身と子孫の上には落とせない(循環になる)
+function dropHandlers(target: DropId, drag: DragState) {
+  const allowed = () =>
+    drag.draggingId !== null && (target === ROOT || (target !== drag.draggingId && !drag.blocked.has(target)));
+  return {
+    onDragOver: (e: DragEvent) => {
+      if (!allowed()) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      drag.onDragOverTarget(target);
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      if (allowed()) drag.onDropOnTarget(target);
+    },
+  };
+}
+
+function StoryRow({ node }: { node: StoryNode }) {
+  const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
   return (
-    <li
-      className={classes.join(" ")}
-      draggable={drag.draggingId === null}
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "move";
-        drag.onDragStart(story.id);
-      }}
-      onDragEnd={drag.onDragEnd}
-    >
-      <Link href={`/tables/story/${story.id}`} draggable={false}>
-        {story.name}
+    <>
+      <Link href={`/tables/story/${node.id}`} className="tree-name" draggable={false} onClick={(e) => e.stopPropagation()}>
+        {node.name}
       </Link>
       <span className="tree-meta">
-        {story.state && <span className="chip">{story.state}</span>}
+        {node.state && <span className="chip">{node.state}</span>}
         {span && <span>{span}</span>}
-        <span>{T.storyTree.episodes(story.episodes)}</span>
+        <span>{T.storyTree.episodes(node.episodes)}</span>
+        {node.children.length > 0 && <span>{T.storyTree.stories(node.children.length)}</span>}
       </span>
-    </li>
+    </>
   );
 }
 
-function LocationNode({ node, openState, drag }: { node: TreeNode; openState: OpenState; drag: DragState }) {
+function StoryNodeView({ node, openState, drag }: { node: StoryNode; openState: OpenState; drag: DragState }) {
+  const classes = ["tree-draggable"];
+  if (drag.draggingId === node.id) classes.push("dragging");
+  if (drag.dropTarget === node.id) classes.push("drop-target");
+  // 見出し行だけを掴ませる。li ごと掴ませると、入れ子の行の dragstart が親の li にも届いて親を掴んだことになる
+  const rowProps = {
+    className: classes.join(" "),
+    draggable: drag.draggingId === null,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.effectAllowed = "move";
+      drag.onDragStart(node.id);
+    },
+    onDragEnd: drag.onDragEnd,
+    ...dropHandlers(node.id, drag),
+  };
+
+  if (node.children.length === 0) {
+    return (
+      <li className="tree-story tree-leaf">
+        <div {...rowProps}>
+          <StoryRow node={node} />
+        </div>
+      </li>
+    );
+  }
   const key = String(node.id);
   return (
-    <li className="tree-location">
+    <li className="tree-parent">
       <details open={openState.isOpen(key)} onToggle={(e) => openState.setOpen(key, e.currentTarget.open)}>
-        <summary
-          className={drag.dropTarget === node.id ? "drop-target" : ""}
-          onDragOver={(e) => {
-            if (drag.draggingId === null) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-            drag.onDragOverTarget(node.id);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            drag.onDropOnTarget(node.id);
-          }}
-        >
-          <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
-          {node.kind && <span className="tree-kind">{node.kind}</span>}
-          <span className="tree-count">{T.storyTree.stories(node.total)}</span>
-          <Link href={`/tables/location/${node.id}`} className="tree-link" onClick={(e) => e.stopPropagation()}>
-            {T.storyTree.openLocation}
-          </Link>
+        <summary {...rowProps}>
+          <StoryRow node={node} />
         </summary>
         <ul className="tree">
-          {node.stories.map((story) => (
-            <StoryRow key={story.id} story={story} drag={drag} />
-          ))}
           {node.children.map((child) => (
-            <LocationNode key={child.id} node={child} openState={openState} drag={drag} />
+            <StoryNodeView key={child.id} node={child} openState={openState} drag={drag} />
           ))}
         </ul>
       </details>
@@ -85,10 +99,10 @@ function LocationNode({ node, openState, drag }: { node: TreeNode; openState: Op
   );
 }
 
-type Source = { locations: Rec[]; stories: Rec[]; episodes: Rec[] };
+type Source = { stories: Rec[]; episodes: Rec[] };
 
-/** 場所・作品・話の一覧をそのまま引いて、木はブラウザで組む。タブに戻ったときに引き直す。
- *  作品(StoryRow)の見出し行はドラッグ&ドロップで `location_id` を差し替える。 */
+/** 作品・話の一覧をそのまま引いて、作品の親子(`parent_story_id`)の木をブラウザで組む。タブに戻ったときに引き直す。
+ *  作品の見出し行はドラッグ&ドロップで、落とした先の作品の子(一番上の欄なら親なし)に付け替える。 */
 export default function StoryTree() {
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,12 +113,11 @@ export default function StoryTree() {
 
   const load = useCallback(async () => {
     try {
-      const [locations, stories, episodes] = await Promise.all([
-        listAllRecords("location", { sort: "id", order: "asc" }),
+      const [stories, episodes] = await Promise.all([
         listAllRecords("story", { sort: "id", order: "asc" }),
         listAllRecords("episode", { sort: "id", order: "asc" }),
       ]);
-      setSource({ locations, stories, episodes });
+      setSource({ stories, episodes });
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -117,13 +130,17 @@ export default function StoryTree() {
     return () => window.removeEventListener("focus", load);
   }, [load]);
 
-  const tree = useMemo(() => (source ? buildStoryTree(source.locations, source.stories, source.episodes) : null), [source]);
+  const nodes = useMemo(() => (source ? buildStoryTree(source.stories, source.episodes) : null), [source]);
+  const blocked = useMemo(
+    () => (nodes === null || draggingId === null ? new Set<number>() : descendantIds(nodes, draggingId)),
+    [nodes, draggingId],
+  );
 
   const moveTo = useCallback(
-    async (id: number, locationId: number | null) => {
+    async (id: number, parentId: number | null) => {
       setSaveError(null);
       try {
-        await updateRecord("story", id, { location_id: locationId });
+        await updateRecord("story", id, { parent_story_id: parentId });
         await load();
       } catch (e) {
         setSaveError(T.storyTree.moveFailed(e instanceof Error ? e.message : String(e)));
@@ -136,58 +153,36 @@ export default function StoryTree() {
     setDraggingId(null);
     setDropTarget(null);
   };
-  const onDropOnTarget = (target: DropId) => {
-    const id = draggingId;
-    onDragEnd();
-    if (id !== null) void moveTo(id, target === UNPLACED ? null : target);
-  };
   const drag: DragState = {
     draggingId,
     dropTarget,
+    blocked,
     onDragStart: setDraggingId,
     onDragEnd,
     onDragOverTarget: setDropTarget,
-    onDropOnTarget,
+    onDropOnTarget: (target) => {
+      const id = draggingId;
+      onDragEnd();
+      if (id !== null) void moveTo(id, target === ROOT ? null : target);
+    },
   };
 
   if (error) return <div className="status error">{error}</div>;
-  if (!tree) return <div className="status info">{T.loading}</div>;
-  if (tree.nodes.length === 0 && tree.unplaced.length === 0) return <div className="status info">{T.storyTree.noStories}</div>;
+  if (!nodes) return <div className="status info">{T.loading}</div>;
+  if (nodes.length === 0) return <div className="status info">{T.storyTree.noStories}</div>;
 
   return (
     <div className="panel">
       {saveError && <div className="status error">{saveError}</div>}
+      {draggingId !== null && (
+        <div className={`tree-root-drop${dropTarget === ROOT ? " drop-target" : ""}`} {...dropHandlers(ROOT, drag)}>
+          {T.storyTree.moveToRoot}
+        </div>
+      )}
       <ul className="tree tree-root">
-        {tree.nodes.map((node) => (
-          <LocationNode key={node.id} node={node} openState={openState} drag={drag} />
+        {nodes.map((node) => (
+          <StoryNodeView key={node.id} node={node} openState={openState} drag={drag} />
         ))}
-        <li className="tree-location">
-          <details open={openState.isOpen(UNPLACED)} onToggle={(e) => openState.setOpen(UNPLACED, e.currentTarget.open)}>
-            <summary
-              className={dropTarget === UNPLACED ? "drop-target" : ""}
-              onDragOver={(e) => {
-                if (draggingId === null) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDropTarget(UNPLACED);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                onDropOnTarget(UNPLACED);
-              }}
-            >
-              <span className="tree-name">{T.storyTree.noLocation}</span>
-              <span className="tree-count">{T.storyTree.stories(tree.unplaced.length)}</span>
-            </summary>
-            {tree.unplaced.length > 0 && (
-              <ul className="tree">
-                {tree.unplaced.map((story) => (
-                  <StoryRow key={story.id} story={story} drag={drag} />
-                ))}
-              </ul>
-            )}
-          </details>
-        </li>
       </ul>
     </div>
   );
