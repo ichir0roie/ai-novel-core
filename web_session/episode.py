@@ -50,12 +50,13 @@ def _material(ai: AIClient, episode_id: int) -> EpisodeMaterial:
 
 def _add_characters(
     ai: AIClient, episode_id: int, candidates: list[EpisodeCharacterCandidateDraft], location_id: int | None, time: Stamp,
+    plot_text: str,
 ) -> None:
     rng = random.Random()
     for candidate in candidates:
         # 人物は一人ごとに書き戻すので、途中で止まっても作った人物は残る
         record = character.generate(ai, rng, location_id, time, True,
-                                    CharacterForm(name=candidate.called, text=candidate.text))
+                                    CharacterForm(name=candidate.called, text=candidate.text), plot_text)
         if record is None:
             logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
             continue
@@ -72,7 +73,7 @@ def _cast(ai: AIClient, episode_id: int) -> None:
     for character_id in found:
         call(episode_steps.add_cast_member, episode_steps.CastMemberForm(episode_id=episode_id, character_id=character_id))
     location_id = material.locations[-1].id if material.locations else None
-    _add_characters(ai, episode_id, created, location_id, material.main_episode.start)
+    _add_characters(ai, episode_id, created, location_id, material.main_episode.start, material.main_episode.plot_text)
 
 
 def _style_extras(shared_style_extra: str | None, style_extra: str | None) -> StyleExtras:
@@ -170,7 +171,7 @@ def complete_plot(
         episode_id=saved.id, time=material.main_episode.start))
     casting = plot_completer.casting_draft(ai, material, plot_text, known, known_people, model, effort)
     if casting is not None and casting.characters:
-        _add_characters(ai, saved.id, casting.characters, location_id, material.main_episode.start)
+        _add_characters(ai, saved.id, casting.characters, location_id, material.main_episode.start, plot_text)
     if casting is not None and casting.location is not None:
         call(episode_steps.add_location, episode_steps.NewLocationForm(
             episode_id=saved.id, candidate=casting.location, parent_id=location_id))

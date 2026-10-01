@@ -154,4 +154,4 @@ def cast_from_plot(s: Session, ai: AIClient, episode_id: int, model: str, effort
         add_cast_member(s, episode_id, character_id)
     s.commit()
     location_id = material.locations[-1].id if material.locations else None
-    add_characters(s, ai, episode_id, created, location_id, material.main_episode.start)
+    add_characters(s, ai, episode_id, created, location_id, material.main_episode.start, material.main_episode.plot_text)

@@ -80,7 +80,8 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
   話題・回想・噂に名前が出るだけの人物は入れない(`mentioned=true` の行として自動で拾われる)。群衆・名前の要らない通りすがりも入れない
 - 呼び名が違っても(役職・続柄・あだ名など)、人物像から同じ人物と分かれば既存の人物を使う
 - db にいない人物が要るなら、`CommitCharacter`(`text` は `.claude/docs/meme.md` に従う。サブキャラクターの来歴はこの話の時刻までにする)か、
-  AI に組ませるなら `GenerateCharacter` で作ってから `character_ids` に入れる。作品・場所・時刻に馴染む人物にする
+  AI に組ませるなら `GenerateCharacter(CharacterForm(name=…, text=<人物像と役どころ>, location_id=…), time=<話の時刻>, plot_text=<話のプロット>)`
+  で作ってから `character_ids` に入れる(プロットを渡すと、その時刻・場所で役どころを果たせる年齢になる)。作品・場所・時刻に馴染む人物にする
 - 場所: 主な舞台が材料の場所より細かければ、「この場所の中の既知の場所」から選んで `location_id` にする。
   無ければ `CommitLocation(LocationCreateForm(name=…, kind=…, text=…, parent_id=<材料の一番細かい場所id>))` で足す
 - 視点(`viewpoint_character_id`)は頼まれたか、プロットで決まっているときだけ入れる

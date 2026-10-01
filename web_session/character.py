@@ -24,12 +24,13 @@ from web_session.api import call
 
 def generate(
     ai: AIClient, rng: random.Random, born_location_id: int | None, time: Stamp, person: bool,
-    form: CharacterForm | None = None,
+    form: CharacterForm | None = None, plot_text: str | None = None,
 ) -> CharacterRecord | None:
-    """一件生んで足す。中身が得られなければ足さずに None。AI が洗い出した語から足した候補のアイデアは、照らす段で確定する。"""
+    """一件生んで足す。中身が得られなければ足さずに None。AI が洗い出した語から足した候補のアイデアは、照らす段で確定する。
+    `plot_text` は登場させる話のプロット(`generator.character_content`)。"""
     sources = call(character_steps.birth_sources,
                    character_steps.BirthSourcesForm(born_location_id=born_location_id, time=time, person=person))
-    decided = generator.character_content(ai, rng, sources, time, person, form)
+    decided = generator.character_content(ai, rng, sources, time, person, form, plot_text)
     if decided is None:
         return None
     ideas = call(idea_steps.resolve_ideas, idea_steps.ResolveForm(
@@ -50,7 +51,7 @@ def _complete_text(ai: AIClient, rng: random.Random, character_id: int) -> Chara
 
 def generate_character(
     character: CharacterForm | None = None, time: Stamp | str | None = None, seed: int | None = None,
-    ai: AIClient = ai_client,
+    plot_text: str | None = None, ai: AIClient = ai_client,
 ) -> CharacterRecord:
     """`GenerateCharacter` に当たる。`id` を渡せば、その人物の本文(text)が空のときに限り本文だけを埋める。"""
     form = character or CharacterForm()
@@ -60,7 +61,7 @@ def generate_character(
     decided_time = call(character_steps.generation_time, character_steps.GenerationTimeForm(
         location_id=form.location_id, time=None if time is None else str(time)))
     person = (form.kind or CHARACTER_KIND_PERSON) == CHARACTER_KIND_PERSON
-    record = generate(ai, rng, form.location_id, decided_time, person, form)
+    record = generate(ai, rng, form.location_id, decided_time, person, form, plot_text)
     if record is None:
         raise ValueError("人物の中身が得られなかった")
     return record

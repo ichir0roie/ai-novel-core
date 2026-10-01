@@ -25,8 +25,8 @@ from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator_models import (
     BirthLocationMaterial, BirthSources, CharacterBirthMaterialSerialized, CharacterContent, CharacterCreation,
     CharacterNameMaterialSerialized, CompletionTarget, HistoryItemDraft, NameDraft, NonPersonContentDraft,
-    PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized, StoryElementsDraft,
-    StoryElementsRequestSerialized,
+    PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized, ScenePersonContentDraft,
+    StoryElementsDraft, StoryElementsRequestSerialized,
 )
 from data_access_logic.character.models import CharacterBase, CharacterParameterValues
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
@@ -53,6 +53,18 @@ _LATER_INSTRUCTION = (
     "来歴にも現在の姿にも出さず、既にいる人物の説明に出てきても、この時刻にはまだ無いものとして扱う。"
 )
 
+# 生んだ一件はこの時刻から先の出来事・話で使われるので、先の姿を決めておくと、後で生む出来事・話と食い違う
+_PRESENT_INSTRUCTION = (
+    "説明・来歴・行動原理には、現在の時刻までのことだけを書く。現在の時刻より後に起きること(後年の立場・仕事・住まい・人間関係・"
+    "行く末・死)は書かず、「のちに」「やがて」のように先を示すこともしない。"
+)
+
+_SCENE_INSTRUCTION = (
+    "「登場する話のプロット」を渡したときは、この人物はその話に、現在の時刻・出身の場所で、作者の指定の役どころとして登場する。"
+    "年齢・立場・仕事・人間関係は、その話でその役を果たせるものにする(上役なら下の者を束ねられる歳と経歴、子どもの遊び仲間なら同じ年頃など)。"
+    "プロットに無い出来事を、この人物の来歴に書き足さない。"
+)
+
 _MATERIAL_INSTRUCTION = """\
 材料は日本語の見出しを付けた JSON で渡す。
 「決まっている」の値が null でなければ、その値をそのまま使う。
@@ -76,6 +88,8 @@ _PERSON_CONTENT_SYSTEM_PROMPT = f"""\
 「既にいる人物・対象」を渡したときは、その役割・関係・特徴とは重ならない人物にしてください(同じ立場・同じ能力・同じ関係性の作り直しをしない)。
 {_MATERIAL_INSTRUCTION}
 {_LATER_INSTRUCTION}
+{_PRESENT_INSTRUCTION}
+{_SCENE_INSTRUCTION}
 「性格」は各軸を {'/'.join(PERSONALITY_LEVELS)} の五段階で渡す(サイコロで決まっていて変えられない)。人物説明はこの段階と矛盾しないようにし、「無」「必」の軸はその極端さが生活・仕事・人との関わり方に具体的な癖として表れるように書く。段階の語をそのまま書き写さない。
 {_meme_instruction("人物")}
 {_PLACEHOLDER_INSTRUCTION}
@@ -90,6 +104,7 @@ _NON_PERSON_CONTENT_SYSTEM_PROMPT = f"""\
 既にある対象と役割が重なるものは作らない。
 {_MATERIAL_INSTRUCTION}
 {_LATER_INSTRUCTION}
+{_PRESENT_INSTRUCTION}
 {_meme_instruction("対象")}
 {_PLACEHOLDER_INSTRUCTION}"""
 
@@ -115,6 +130,7 @@ _POLISH_SYSTEM_PROMPT = f"""\
 あなたは架空の世界観を構築する設定作家です。
 決まったばかりの人物・対象の説明(下書き)と、その下書きに関係する設定を渡すので、設定を踏まえて説明を清書してください。
 下書きの人物像・生い立ち・関係・長さは変えない。設定と食い違うところ、設定を踏まえると具体的にできるところだけを直す。
+{_PRESENT_INSTRUCTION}
 {IDEA_CONTEXT_INSTRUCTION}
 {_PLACEHOLDER_INSTRUCTION}"""
 
@@ -171,7 +187,7 @@ def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person:
 def _birth_material(
     ai: AIClient, rng: random.Random, sources: BirthSources, time: Stamp, person: bool,
     parameters: CharacterParameterValues | None, name: str | None, kind: str | None, age: int | None,
-    form: CharacterForm | None,
+    form: CharacterForm | None, plot_text: str | None = None,
 ) -> CharacterBirthMaterialSerialized:
     elements_request = StoryElementsRequestSerialized(time=time, stories=sources.stories, later_ideas=sources.later_ideas)
     return CharacterBirthMaterialSerialized(
@@ -189,6 +205,7 @@ def _birth_material(
         age=age,
         hint_name=form.name if form else None,
         hint_text=form.text if form else None,
+        plot_text=plot_text,
     )
 
 
@@ -196,7 +213,8 @@ def _content(
     ai: AIClient, material: CharacterBirthMaterialSerialized, request: str,
 ) -> PersonContentDraft | NonPersonContentDraft | None:
     draft_model: type[PersonContentDraft] | type[NonPersonContentDraft] = (
-        PersonContentDraft if material.person else NonPersonContentDraft)
+        NonPersonContentDraft if not material.person
+        else ScenePersonContentDraft if material.plot_text else PersonContentDraft)
     decided = ai.generate(
         "\n".join([material.model_dump_json(indent=2), request]),
         draft_model,
@@ -255,15 +273,17 @@ def _starting_parameters(rng: random.Random, person: bool, form: CharacterForm |
 
 def character_content(
     ai: AIClient, rng: random.Random, sources: BirthSources, time: Stamp, person: bool, form: CharacterForm | None,
+    plot_text: str | None = None,
 ) -> CharacterContent | None:
     """`form` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性格・種別・生年は決まった値として使う。
+    `plot_text` はこの人物を登場させる話のプロット。生年が決まっていなければ、その役どころに合う年齢を AI に決めさせる。
     中身が得られなければ None。"""
     parameters = _starting_parameters(rng, person, form)
     fixed_kind = form.kind if form and form.kind in constants.NON_PERSON_KINDS else None
     fixed_age = max(0, time.year - form.start.year) if form and form.start is not None else None
     material = _birth_material(
         ai, rng, sources, time, person, parameters if person else None,
-        None, None if person else fixed_kind, fixed_age, form)
+        None, None if person else fixed_kind, fixed_age, form, plot_text)
     subject = "人物" if person else "対象"
     content = _content(ai, material, f"この場所に自然な{subject}を1件、決めてください。")
     if content is None:
@@ -317,7 +337,8 @@ def character_creation(
         main_character=bool(form.main_character) if form and form.main_character is not None else False,
         parameters=parameters,
         birth=Stamp(material.time.year - decided.age),
-        end=form.end if form else None,
+        # 死は先の出来事なので、作者が主要人物に決めて渡したときだけ持たせる(サブキャラクターには持たせない)
+        end=form.end if form and form.main_character else None,
         born_location_id=born_location_id,
         ideas=ideas.linked,
     )
@@ -351,9 +372,11 @@ def generate_character(
     time: Stamp,
     person: bool,
     form: CharacterForm | None = None,
+    plot_text: str | None = None,
 ) -> Character | None:
-    """中身が得られなければ足さずに None を返す。"""
-    decided = character_content(ai, rng, birth_sources(s, born_location_id, time, person), time, person, form)
+    """中身が得られなければ足さずに None を返す。`plot_text` は登場させる話のプロット(`character_content`)。"""
+    decided = character_content(
+        ai, rng, birth_sources(s, born_location_id, time, person), time, person, form, plot_text)
     if decided is None:
         return None
     ideas = resolve_ideas(s, keywords_of(decided.content.text, ai, time), born_location_id, time)

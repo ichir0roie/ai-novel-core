@@ -148,13 +148,13 @@ def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidat
 
 def add_characters(
     s: Session, ai: AIClient, episode_id: int, candidates: list[EpisodeCharacterCandidateDraft],
-    location_id: int | None, time: Stamp,
+    location_id: int | None, time: Stamp, plot_text: str,
 ) -> None:
     rng = random.Random()
     for candidate in candidates:
         # generate_character は一人ごとに commit するので、途中で止まっても作った人物は残る
         record = generate_character(
-            s, ai, rng, location_id, time, True, CharacterForm(name=candidate.called, text=candidate.text))
+            s, ai, rng, location_id, time, True, CharacterForm(name=candidate.called, text=candidate.text), plot_text)
         if record is None:
             logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
             continue
@@ -182,7 +182,7 @@ def complete_plot(
         ai, material, plot_text, known_locations(s, location_id),
         known_characters(s, episode_id, material.main_episode.start), model, effort)
     if casting is not None and casting.characters:
-        add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start)
+        add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start, plot_text)
     if casting is not None and casting.location is not None:
         add_location(s, episode_id, casting.location, location_id)
         s.commit()

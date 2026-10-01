@@ -12,6 +12,7 @@ from data_access_logic.story.models import StoryPlotMaterial
 from db.stamp import Stamp
 
 _AGE_RANGE = constants.GENERATION_CHARACTER_AGE_RANGE
+_SCENE_AGE_RANGE = constants.SCENE_CHARACTER_AGE_RANGE
 
 
 class BirthLocationMaterial(LocationTextMaterial):
@@ -42,6 +43,8 @@ class CharacterBirthMaterial(Material):
     # 作者が下書きに書いた名前・説明。核にするが言い回しは変えてよい
     hint_name: str | None = None
     hint_text: str | None = None
+    # この人物を登場させる話のプロット。年齢を、この時刻・場所でその役どころを果たせる値にする手がかり
+    plot_text: str | None = None
 
 
 def _born_location(born_location: BirthLocationMaterial | None) -> dict[str, Any] | None:
@@ -113,6 +116,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
                 "口調": parameters.tone if parameters else None,
             },
             "作者の指定": {"名前": self.hint_name, "説明": self.hint_text},
+            "登場する話のプロット": self.plot_text,
         }
 
 
@@ -150,9 +154,9 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
         }
 
 
-def _clamped_age(value: Any) -> Any:
+def _clamped_age(value: Any, bounds: tuple[int, int] = _AGE_RANGE) -> Any:
     try:
-        return min(max(int(value), _AGE_RANGE[0]), _AGE_RANGE[1])
+        return min(max(int(value), bounds[0]), bounds[1])
     except (TypeError, ValueError):
         return value
 
@@ -176,16 +180,23 @@ class HistoryItemDraft(BaseModel):
     text: str = Field(description="その歳に何があり、立場・仕事・住まい・人間関係がどう変わったかの1文")
 
 
+_PERSON_AGE_DESCRIPTION = (
+    "現在の時刻での年齢。「登場する話のプロット」があれば、この時刻・この場所でその話の役どころ(作者の指定)を果たせる歳にする。"
+    "無ければ人物説明と矛盾しない値をあなた自身で決める。例えば老成した説明なら年長めに、幼さの残る説明なら年少めに")
+_HISTORY_DESCRIPTION = (
+    "来歴。生まれてから年齢の歳(現在の時刻)までの節目を、歳の順に3〜5件。人物説明の立場・仕事・住まいには、いつそうなったかの節目を必ず含める。"
+    "現在より後の節目・死は含めない")
+
+
 class PersonContentDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(description=(
-        "具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば地の文として含め、別項目には分けない。"
+        "現在の時刻での、具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば地の文として含め、別項目には分けない。"
         "「優しい」「謎めいた」のような、誰にでも当てはまる抽象的な形容だけで済ませず、"
         "この人物固有の具体的な癖・関わり・生い立ちを最低一つ含める"))
-    age: int = Field(ge=_AGE_RANGE[0], le=_AGE_RANGE[1], description=(
-        "年齢。人物説明と矛盾しない値をあなた自身で決める。例えば老成した説明なら年長めに、幼さの残る説明なら年少めに"))
+    age: int = Field(ge=_AGE_RANGE[0], le=_AGE_RANGE[1], description=_PERSON_AGE_DESCRIPTION)
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
     sex: str = Field(description="性別。「男」「女」に限らず、この人物に合う性のあり方を自由に決めてよい")
     build: str = Field(description="体格。背丈・肉付き・立ち姿など、生活・仕事に合う体つきを1文で")
@@ -198,8 +209,7 @@ class PersonContentDraft(BaseModel):
         "土地の言葉で話すなら、どの地方風の方言か(現実の方言を手本にしてよい)と、特徴的な語尾・言い回しを一つ以上。"
         "標準語で話すなら、その人物らしい癖(語尾・口ぐせ・言い淀み・訛りの名残など)を一つ以上。"
         "誰にでも当てはまる「普通の話し方」で済ませない"))
-    history: list[HistoryItemDraft] = Field(description=(
-        "来歴。生まれてから年齢の歳までの節目を、歳の順に3〜5件。人物説明の立場・仕事・住まいには、いつそうなったかの節目を必ず含める"))
+    history: list[HistoryItemDraft] = Field(description=_HISTORY_DESCRIPTION)
 
     @field_validator("age", mode="before")
     @classmethod
@@ -220,6 +230,21 @@ class PersonContentDraft(BaseModel):
         return value
 
 
+class SceneHistoryItemDraft(HistoryItemDraft):
+    age: int = Field(ge=0, le=_SCENE_AGE_RANGE[1], description="その時の歳")
+
+
+# 話のプロットの役どころから生む人物。年かさの役(上役・老人)も作れるよう、年齢の幅を広げる
+class ScenePersonContentDraft(PersonContentDraft):
+    age: int = Field(ge=_SCENE_AGE_RANGE[0], le=_SCENE_AGE_RANGE[1], description=_PERSON_AGE_DESCRIPTION)
+    history: list[SceneHistoryItemDraft] = Field(description=_HISTORY_DESCRIPTION)
+
+    @field_validator("age", mode="before")
+    @classmethod
+    def _age(cls, value: Any) -> Any:
+        return _clamped_age(value, _SCENE_AGE_RANGE)
+
+
 class NonPersonContentDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
@@ -227,7 +252,7 @@ class NonPersonContentDraft(BaseModel):
     # 候補の外の種別が返ったときは、呼び出し側がサイコロで決め直す
     kind: str = Field(description="種別", json_schema_extra={"enum": list(constants.NON_PERSON_KINDS)})
     text: str = Field(description=(
-        "この対象が何であって、何を決められて、誰に対して力を持つのかが伝わる2〜3文の説明。"
+        "現在の時刻での、この対象が何であって、何を決められて、誰に対して力を持つのかが伝わる2〜3文の説明。"
         "「由緒ある」「謎めいた」のような、どの対象にも当てはまる形容だけで済ませない"))
     age: int = Field(ge=_AGE_RANGE[0], le=_AGE_RANGE[1], description="成り立ってからの年数")
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")

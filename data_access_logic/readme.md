@@ -70,7 +70,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「人物を足して」                     | `character.create_random_character.CreateRandomCharacter()` → `character.commit_character.CommitCharacter(character)`。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。`# 来歴` 節には節目を歳付きで書く(下の「人物の来歴」。サブキャラクターは世界の書き進めた所より後を書かない) |
 | 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る。`confirmed=未確認` で足す(下の「出来事・人物の承認フラグ」) |
 | 「出来事を足して」                   | `event.create_random_event.CreateRandomEvent()` → `event.commit_event.CommitEvent(event)` |
-| 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
+| 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None, plot_text=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢(0〜90歳。渡さなければ 0〜40歳)にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、没年は `main_character` を立てて渡したときだけ持たせる。`character` に `id` を渡せば(GUI の詳細画面)、その人物の本文(`text`)が空のときに限り、決まっている名前・属性・出自を核に本文だけを書いて埋める(他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
 | 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None)`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、名前・場所・当事者から記録の本文だけを書いて埋める(`data_access_logic/event/writer.py`。他の欄は変えない)。新しく作るときは `confirmed=未確認` で足す |
 | 「この人物の出自・居場所を足して」   | `character.commit_character_location.CommitCharacterLocation(location)`              |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`     |
@@ -237,7 +237,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 サブキャラクター(`main_character` が false の人物・対象)の `text` には、世界の書き進めた所(本文のある話の一番新しい `start`)より後のこと
 (後年の立場・死・「# 未来」の節・`# plot` の先の筋など)を書かない。没年(`end`)と、居場所(`character_location`)の境目より後の始まり・終わりも入れない。出来事の生成はサブキャラクターを当事者に選ぶので、
 決まった未来があると、生成した出来事や進めたメインの出来事と食い違いやすくなるため。来歴は話の本文で起きたことを、
-話を確定するたびに足していく(スキル `episode` の「確定のあと」)。主要人物(`main_character` が true)は、作者の構想として未来まで書いてよい。
+話を確定するたびに足していく(スキル `episode` の「確定のあと」)。人物の自動生成(`generator.py`)も、説明・来歴に現在の時刻より後のことを書かせず、サブキャラクターには没年を持たせない。プロットからの登場人物・プロット補完で作る人物には話のプロットを渡し、その役どころに合う年齢にする。主要人物(`main_character` が true)は、作者の構想として未来まで書いてよい。
 
 人物が持つミーム(行動原理の芯。`meme` テーブル)も専用の節は無く、その人物の `text` の
 `# meme` 節に、持つミームの文面を `- <古今表裏>: <文面>` の箇条書きでそのまま書く。
