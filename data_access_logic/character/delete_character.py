@@ -7,10 +7,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
-from db.schema import (
-    Character, CharacterHistory, CharacterIdea, CharacterLocation, CharacterParameter, CharacterRelation, Episode,
-    EpisodeCharacter, EventCharacter,
-)
+from db.schema import Character, CharacterIdea, CharacterRelation, Episode, EpisodeCharacter, EventCharacter
 
 
 class DeletedCharacter(Material):
@@ -42,8 +39,8 @@ class DeleteCharacter(CommitEntrypoint):
             raise ValueError(f"character_id={record.id} は話 id={episode_id} の登場人物か視点になっている。先に話から外す")
 
         deleted = DeletedCharacter.model_validate(record)
-        # 関連は noload なので、cascade に頼らず子の行を先に消す
-        for model in (CharacterParameter, CharacterHistory, CharacterLocation, CharacterIdea, EpisodeCharacter):
+        # 期間ごとの値・説明の変化・出自と居場所は selectin で読まれ、cascade で消える。それ以外は先に消す
+        for model in (CharacterIdea, EpisodeCharacter):
             s.execute(delete(model).where(model.character_id == record.id))
         s.execute(delete(CharacterRelation).where(or_(
             CharacterRelation.character_1_id == record.id, CharacterRelation.character_2_id == record.id)))
