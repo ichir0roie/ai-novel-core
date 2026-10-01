@@ -2,7 +2,7 @@
 
 db には繋がない。読むのは API の `curl`、入口は web の流れ(`web_session.flows.run`)で呼ぶ。claude を叩く入口
 (`ReadEpisodeBrief` の要約の作り直し・`CommitEpisode` の概要・ミーム)は AI をこのセッションで回し、db の読み書きだけを API に頼む。
-db だけの入口(`ReadEpisodeCasting`・`CastEpisode`・`ResolveTerms`・`CommitCharacter`・`CommitLocation`・`LinkIdeas`)は同じ `run` でそのまま API に流れる。決まりは `.claude/docs/web-db.md`。
+db だけの入口(`ReadEpisodeCasting`・`ReadEpisodeTexts`・`RefreshMentions`・`CastEpisode`・`ResolveTerms`・`CommitCharacter`・`CommitLocation`・`LinkIdeas`)は同じ `run` でそのまま API に流れる。決まりは `.claude/docs/web-db.md`。
 
 `curl` では合言葉を環境変数のまま渡し、値を出さない。下の `$api` / `$h` は毎回のコマンドの頭で置く。
 
@@ -35,6 +35,8 @@ print(json.dumps(run('<入口の id>', {<引数>}), ensure_ascii=False, indent=2
 | --- | --- | --- |
 | 新しい話の枠を足す | `episode.commit_episode.CommitEpisode` | `{'episode': {'story_id': …, 'plot_text': '''…''', 'start': '<年/月/日>', 'character_ids': […]}}` |
 | 登場人物・場所を決める材料を読む | `episode.read_episode_casting.ReadEpisodeCasting` | `{'episode_id': …}` |
+| 話を id で読む(本文まで) | `episode.read_episode_texts.ReadEpisodeTexts` | `{'episode_ids': […]}`。長いので `> <scratchpad>/texts.json` へ書き出して Read する |
+| 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
 | 本文の材料を読む(結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}`。出力を `> <scratchpad>/brief_<話id>.json` へ書き出して Read する |
 | 設定を引く | `idea.resolve_terms.ResolveTerms` | `{'terms': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |

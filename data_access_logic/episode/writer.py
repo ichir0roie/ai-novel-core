@@ -97,7 +97,7 @@ def writing_targets(s: Session, episode_id: int) -> WritingTargets:
                        if location_id is not None else [])
     later_events = s.scalars(later_events_select(location_id, characters, main_episode.start)).all()
     return WritingTargets(
-        episode_ids=past_episode_ids(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        episode_ids=past_episode_ids(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
         event_ids=[*cast_event_ids(s, characters, main_episode.start),
                    *(event.id for event in location_events), *(event.id for event in later_events)],
         plot_text=main_episode.plot_text,
@@ -114,7 +114,7 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaTerm]) -> E
     return EpisodeMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        past_episodes=past_episodes(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, main_episode.start),
