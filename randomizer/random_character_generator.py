@@ -13,7 +13,7 @@ def _personality() -> factory.Faker:
 
 
 class ParameterFactory(factory.Factory):
-    """期間を限らない(start・end が空の)一行。"""
+    """始まりの無い(start が空の)一行。"""
 
     class Meta:
         model = CharacterParameterRow
@@ -22,7 +22,6 @@ class ParameterFactory(factory.Factory):
         rename = {"build_": "build"}
 
     start = None
-    end = None
 
     # 名字は出自・身分・土地柄で決まるので、サイコロでは引かず名づけのときに決める。
     # 性別・体格・一人称・二人称・三人称・口調も、少ない候補からサイコロで引くと種類が偏るので、
@@ -53,7 +52,7 @@ class ParameterFactory(factory.Factory):
 
 
 class CharacterFactory(factory.Factory):
-    """誕生・死亡は列を持たず、下の `parameters`(期間を限らない一行)の start / end で表す。"""
+    """誕生は列を持たず、下の `parameters`(始まりの無い一行)の start で表す。没年は `end`。"""
 
     class Meta:
         model = CharacterCreateForm

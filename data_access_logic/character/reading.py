@@ -62,7 +62,7 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
 
     return CharacterSheet(
         character=CharacterHead.model_validate(character),
-        # 時刻を渡さないときは、期間を限らない値だけを重ねる
+        # 時刻を渡さないときは、生まれたときの値だけを重ねる
         parameters_at=parameters_at(character, None if until is None else at),
         histories=histories_at(character, None if until is None else at) if text else [],
         location=_location_at(s, character_id, at),

@@ -256,7 +256,7 @@ def _histories(
     text: str, content: PersonContentDraft | NonPersonContentDraft, memes: list[DrawnMeme], time: Stamp,
     age: int | None, name: str,
 ) -> list[CharacterHistoryRow]:
-    """芯(説明・meme・行動原理)は期間を限らない一行に、来歴の節目は、その年から始まる行に一件ずつ置く。"""
+    """芯(説明・meme・行動原理)は始まりの無い一行に、来歴の節目は、その年から始まる行に一件ずつ置く。"""
     if memes:
         text += "\n\n# meme\n" + "\n".join(f"- {drawn.position}: {drawn.text}" for drawn in memes)
         if content.principle:
@@ -364,8 +364,9 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
         kind=creation.kind,
         main_character=creation.main_character,
         confirmed=ConfirmStatus.PENDING,
-        # 生まれた時点で決める値なので、期間を限らない一行だけを持つ。死亡していなければ end は空
-        parameters=[parameter_row(creation.parameters, creation.birth, creation.end)],
+        end=creation.end,
+        # 生まれた時点で決める値なので、誕生から効く一行だけを持つ
+        parameters=[parameter_row(creation.parameters, creation.birth)],
         histories=replaced_rows([], creation.histories, CharacterHistory),
     )
     s.add(record)

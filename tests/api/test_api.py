@@ -84,13 +84,13 @@ def test_create_record(client, world):
         "name": "API の人", "kind": "人物", "confirmed": "未確認", "main_character": True,
         "event_seeded": True, "meme_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
         "end": "1255/06/07",
-        "parameters": [{"start": "1181/02/03", "end": "1255/06/07", "family_name": "東雲", "sex": "女", "height": 162.5,
+        "parameters": [{"start": "1181/02/03", "family_name": "東雲", "sex": "女", "height": 162.5,
                         "build": "中背", "first_person": "わたくし", "second_person": "貴方", "third_person": "彼の方",
                         "tone": "上品", "dialect": "都言葉", "sincerity": "高", "curiosity": "必", "proactivity": "並",
                         "cooperativeness": "低", "sociability": "無", "emotional_expression": "並",
                         "self_esteem": "高", "self_efficacy": "並", "stress_resilience": "低",
                         "flexibility_of_values": "高", "sensitivity": "並", "imagination": "高"}],
-        "histories": [{"start": "1200/01/01", "end": "1210/01/01", "description": "都の役所に勤める"}]})
+        "histories": [{"start": "1200/01/01", "description": "都の役所に勤める"}]})
 
     assert response.status_code == 201
     body = response.json()

@@ -144,7 +144,6 @@ class CharacterParameterFactory(_ModelFactory):
 
     character_id = _pool(Character, "CharacterFactory")
     start = _optional_stamp()
-    end = _end_after_start()
 
     family_name = factory.Faker("last_name", locale=_LOCALE)
     sex = factory.Faker("random_element", elements=_SEX_CHOICES)
@@ -176,7 +175,6 @@ class CharacterHistoryFactory(_ModelFactory):
 
     character_id = _pool(Character, "CharacterFactory")
     start = _optional_stamp()
-    end = _end_after_start()
     description = _text()
 
 

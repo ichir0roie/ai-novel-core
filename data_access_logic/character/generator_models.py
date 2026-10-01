@@ -397,7 +397,7 @@ class CharacterCreation(Material):
 
     name: str
     kind: str
-    # 期間を限らない芯の一行と、来歴の節目ごとの行
+    # 始まりの無い芯の一行と、来歴の節目ごとの行
     histories: list[CharacterHistoryRow]
     main_character: bool
     parameters: CharacterParameterValues

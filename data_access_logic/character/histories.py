@@ -12,7 +12,7 @@ def _start(row: CharacterHistory) -> int:
 
 
 def histories_at(character: Character, time: Stamp | None) -> list[CharacterHistoryRow]:
-    """時刻に掛かる行を、始まりの古い順に返す。時刻が空ならすべての行(作者が読むとき)。
+    """時刻までに始まった行を、始まりの古い順に返す。時刻が空ならすべての行(作者が読むとき)。
 
     時刻より後に始まる行を外すので、先のことを書き足しても、それより前の話・出来事には効かない。
     """
@@ -27,9 +27,5 @@ def plot_of(character: Character) -> str:
 
 
 def histories_for_prompt(histories: list[CharacterHistoryRow]) -> list[dict[str, Any]]:
-    return [
-        {"いつから": str(history.start) if history.start else None,
-         "いつまで": str(history.end) if history.end else None,
-         "説明": history.description}
-        for history in histories
-    ]
+    return [{"いつから": str(history.start) if history.start else None, "説明": history.description}
+            for history in histories]

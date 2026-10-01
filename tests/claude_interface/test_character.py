@@ -29,9 +29,9 @@ _LEVELS = {
 }
 
 
-def _parameter_row(start: str, end: str | None) -> CharacterParameterRow:
+def _parameter_row(start: str) -> CharacterParameterRow:
     return CharacterParameterRow(
-        start=start, end=end, family_name="北原", sex="女", height=158.0, build="小柄", first_person="あたし",
+        start=start, family_name="北原", sex="女", height=158.0, build="小柄", first_person="あたし",
         second_person="あんた", third_person="あいつ", tone="砕けた", dialect="西の訛り", **_LEVELS)
 
 
@@ -39,8 +39,8 @@ def test_commit_character(shown, world):
     result = shown(CommitCharacter(CharacterCreateForm(
         name="北原ミツ", kind="人物", confirmed=ConfirmStatus.PENDING, main_character=True,
         event_seeded=True, meme_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
-        parameters=[_parameter_row("1180/05/06", "1250/01/01")],
-        histories=[CharacterHistoryRow(start="1195/01/01", end="1210/01/01", description="市で店を開く")])))
+        parameters=[_parameter_row("1180/05/06")],
+        histories=[CharacterHistoryRow(start="1195/01/01", description="市で店を開く")])))
 
     assert result["name"] == "北原ミツ"
     assert result["confirmed"] == "未確認"
@@ -145,9 +145,9 @@ def test_update_character(shown, world):
     result = shown(UpdateCharacter(CharacterUpdateForm(
         id=world.character_ids[1], name="テスト花代", kind="人物", confirmed=ConfirmStatus.REJECTED,
         main_character=True, event_seeded=False, meme_seeded=False, start="1171/02/03", end="1261/04/05",
-        parameters=[_parameter_row("1171/02/03", "1261/04/05")],
+        parameters=[_parameter_row("1171/02/03")],
         locations=[CharacterLocationRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
-        histories=[CharacterHistoryRow(start="1200/01/01", end=None, description="改名して村へ移った")])))
+        histories=[CharacterHistoryRow(start="1200/01/01", description="改名して村へ移った")])))
 
     assert result["name"] == "テスト花代"
     assert result["confirmed"] == "非承認"

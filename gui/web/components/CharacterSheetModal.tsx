@@ -8,7 +8,7 @@ import { useTable } from "@/lib/meta";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-type History = { start: string | null; end: string | null; description: string };
+type History = { start: string | null; description: string };
 
 /** `character.read_character.ReadCharacter` の結果。人物の列に、`time` の時点で重ねたパラメータが同じ段に並ぶ
  * (`data_access_logic/character/reading.py` の `CharacterSheet`)。 */
@@ -155,7 +155,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
                       <div key={i} className="flow-card sheet-history">
                         <div className="flow-line">
                           <span className="flow-index">#{i + 1}</span>
-                          <span className="flow-period">{dateOnly(history.start)} ~ {dateOnly(history.end)}</span>
+                          <span className="flow-period">{dateOnly(history.start)} ~</span>
                         </div>
                         <div className="flow-detail-text">{history.description}</div>
                       </div>
