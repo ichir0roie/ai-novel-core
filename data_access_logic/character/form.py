@@ -37,7 +37,6 @@ class CharacterForm(Draft):
 
     id: int | None = None
     name: str | None = None
-    text: str | None = None
     kind: str | None = None
     main_character: bool | None = None
     start: Timestamp | None = None
@@ -45,6 +44,8 @@ class CharacterForm(Draft):
     location_id: int | None = None
     # GUI は期間ごとの行の配列で渡す。生まれるときの値なので先頭の行だけを使う
     parameters: list[CharacterParameterForm] = []
+    # 人物像・役どころの下書き。行の説明を核として AI に渡す(期間は見ない)
+    histories: list[CharacterHistoryRow] = []
 
     @field_validator("parameters", mode="before")
     @classmethod
@@ -54,7 +55,6 @@ class CharacterForm(Draft):
 
 class CharacterCreateForm(Form):
     name: str | None = None
-    text: str | None = None
     kind: str = CHARACTER_KIND_PERSON
     confirmed: ConfirmStatus = ConfirmStatus.APPROVED
     main_character: bool = False
@@ -72,7 +72,6 @@ class CharacterCreateForm(Form):
 class CharacterUpdateForm(Form):
     id: int
     name: str | None = None
-    text: str | None = None
     kind: str | None = None
     confirmed: ConfirmStatus | None = None
     main_character: bool | None = None

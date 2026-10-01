@@ -17,9 +17,7 @@ from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import age_at, cast_event_ids, cast_of, mentioned_of, relations_at
-from data_access_logic.character.models import CastCandidateSerialized
-from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character.cast import candidate_at, cast_event_ids, cast_of, mentioned_of, relations_at
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
 from data_access_logic.episode.models import (
@@ -33,8 +31,7 @@ from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
 from data_access_logic.style_preference.form import StyleTarget
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Character, Episode, EpisodeCharacter
-from db.stamp import Stamp
+from db.schema import Episode, EpisodeCharacter
 
 
 def _episode(s: Session, episode_id: int) -> Episode:
@@ -69,10 +66,6 @@ def _guide(s: Session) -> str:
     ])
 
 
-def _sheet(character: Character, time: Stamp) -> CastCandidateSerialized:
-    return CastCandidateSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time))
-
-
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
     """本文の材料を読む前に、プロットから登場人物・場所を決める材料。要約を使わないので AI は呼ばない。"""
     episode = _episode(s, episode_id)
@@ -87,9 +80,9 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
         main_episode=main_episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         child_locations=known_locations(s, location_id),
-        cast=[_sheet(character, time) for character in characters],
-        mentioned=[_sheet(character, time) for character in mentioned],
-        candidates=[_sheet(character, time) for character in candidates],
+        cast=[candidate_at(character, time) for character in characters],
+        mentioned=[candidate_at(character, time) for character in mentioned],
+        candidates=[candidate_at(character, time) for character in candidates],
         appearances=appearances(s, episode, [*characters, *mentioned]),
     )
 

@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import Modal from "@/components/Modal";
 import { runEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
 import { useTable } from "@/lib/meta";
-import { ageAt, stampOrder } from "@/lib/stamp";
+import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 type History = { start: string | null; end: string | null; description: string };
@@ -18,7 +16,7 @@ type CharacterSheet = Record<string, unknown> & {
   name: string | null;
   start: string | null;
   end: string | null;
-  text: string | null;
+  // `time` の時点に掛かる行だけ(時点が無ければすべて)
   histories: History[];
   location: { location_name: string | null } | null;
 };
@@ -53,13 +51,13 @@ function LevelMeter({ column, value }: { column: ColumnMeta; value: unknown }) {
 
 type Props = {
   characterId: number;
-  // 話の開始。この時点のパラメータ・年齢・居場所を出し、この時点までに始まった来歴を出す
+  // 話の開始。この時点のパラメータ・年齢・居場所と、この時点に掛かる説明・来歴を出す
   time: unknown;
   onClose: () => void;
 };
 
 /** 人物の基本の列・その時点のパラメータ・来歴を、大きなモーダルで見る(閲覧専用)。並びは人物詳細(RecordForm)と同じで、
- * 左に欄とパラメータ、右に本文とその下の期間ごとの説明を置き、左右それぞれがスクロールする(モーダル全体はスクロールしない)。 */
+ * 左に欄とパラメータ、右に期間ごとの説明(説明・来歴)を置き、左右それぞれがスクロールする(モーダル全体はスクロールしない)。 */
 export default function CharacterSheetModal({ characterId, time, onClose }: Props) {
   const meta = useTable("character");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
@@ -85,10 +83,8 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
     .filter((c) => c.key !== "start" && c.key !== "end");
   const historyLabel = meta?.child_lists.find((c) => c.name === "histories")?.label ?? "histories";
   const age = sheet ? ageAt(sheet.start, at) : null;
-  // 早い順に並べ、話の時点までに始まっているものだけを出す(時点が無ければすべて)
-  const histories = (sheet?.histories ?? [])
-    .filter((history) => at === null || stampOrder(history.start) <= stampOrder(at))
-    .sort((a, b) => stampOrder(a.start) - stampOrder(b.start));
+  // 時点で絞り、早い順に並べるのは core(`histories_at`)
+  const histories = sheet?.histories ?? [];
 
   const actions = (
     <>
@@ -148,12 +144,6 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
           </div>
 
           <div className="record-text">
-            <div className="field section auto">
-              <label>{column("text")?.label ?? "text"}</label>
-              <div className="section markdown-preview auto sheet-text">
-                {sheet.text ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{sheet.text}</ReactMarkdown> : <span className="hint">{T.characterSheet.noText}</span>}
-              </div>
-            </div>
             <div className="field wide">
               <label>{historyLabel}</label>
               {histories.length === 0 ? (

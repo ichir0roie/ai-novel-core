@@ -8,7 +8,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from db.schema import (
     CHARACTER_KIND_PERSON,
-    Base, Character, CharacterParameter, CharacterLocation, Episode, Event, EventCharacter,
+    Base, Character, CharacterHistory, CharacterParameter, CharacterLocation, Episode, Event, EventCharacter,
     Idea, Location, Story,
 )
 from db.stamp import Stamp
@@ -131,7 +131,6 @@ class CharacterFactory(_ModelFactory):
     name = factory.Faker("name", locale=_LOCALE)
     kind = factory.Faker("random_element", elements=_CHARACTER_KINDS)
     main_character = factory.Faker("pybool")
-    text = _text()
 
     start = _optional_stamp()
     end = _end_after_start()
@@ -169,6 +168,16 @@ class CharacterParameterFactory(_ModelFactory):
     flexibility_of_values = _personality()
     sensitivity = _personality()
     imagination = _personality()
+
+
+class CharacterHistoryFactory(_ModelFactory):
+    class Meta:
+        model = CharacterHistory
+
+    character_id = _pool(Character, "CharacterFactory")
+    start = _optional_stamp()
+    end = _end_after_start()
+    description = _text()
 
 
 class EventFactory(_ModelFactory):
@@ -250,6 +259,7 @@ ALL_FACTORIES = (
     LocationFactory,
     CharacterFactory,
     CharacterParameterFactory,
+    CharacterHistoryFactory,
     EventFactory,
     EventCharacterFactory,
     CharacterLocationFactory,

@@ -5,8 +5,9 @@ from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.models import (
-    CastSerialized, CharacterRelationLine, MentionedSerialized, ParticipantSerialized,
+    CastCandidateSerialized, CastSerialized, CharacterRelationLine, MentionedSerialized, ParticipantSerialized,
 )
+from data_access_logic.character.histories import histories_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import events_of, summarized_events
 from data_access_logic.query import common_query
@@ -44,6 +45,7 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
             character=character,
             age=age_at(character, time),
             parameters=parameters_at(character, time),
+            histories=histories_at(character, time),
             recent_events=list(reversed(events_of(s, _recent_events_select(character, time)))),
         )
         for character in characters
@@ -52,9 +54,15 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
 
 def mentioned_of(characters: list[Character], time: Stamp) -> list[MentionedSerialized]:
     return [
-        MentionedSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time))
+        MentionedSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time),
+                            histories=histories_at(character, time))
         for character in characters
     ]
+
+
+def candidate_at(character: Character, time: Stamp) -> CastCandidateSerialized:
+    return CastCandidateSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time),
+                                   histories=histories_at(character, time))
 
 
 def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) -> list[CastSerialized]:
@@ -69,6 +77,7 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
             character=character,
             age=age_at(character, time),
             parameters=parameters_at(character, time),
+            histories=histories_at(character, time),
             relations=relations_at(s, [character], time),
             recent_events=s.scalars(
                 common_query.events_of_character_select(character.id, until=time, limit=RECENT_EVENT_LIMIT)

@@ -403,15 +403,15 @@ PERSON_PARAMETER_COLUMNS = (
 )
 
 
-class Character(EventSeededMixin, MemeSeededMixin, TextBase):
+class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
+    人物の説明・来歴は本文の列を持たず、すべて期間ごとの `CharacterHistory` に積む。
     """
 
     __tablename__ = "character"
-
-    text: Mapped[str | None] = mapped_column(String, nullable=True, sort_order=10000)
+    TEXT_COLUMNS = ()
 
     name: Mapped[str | None] = mapped_column(String, sort_order=210)
     kind: Mapped[str] = mapped_column(
@@ -434,7 +434,7 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
     # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生・死亡も専用の列を持たず、
     # `parameters` の一番早く始まる行の start・一番後に始まる行の end として表す(下の `start` / `end`)。
-    # 人物の説明の変化は期間ごとに CharacterHistory が持ち、入口では `histories` の配列で出し入れする
+    # 人物の説明・来歴は期間ごとに CharacterHistory が持ち、入口では `histories` の配列で出し入れする
     # (Idea の `recognitions` と同じ扱い)。
     CHILD_LISTS = ("parameters", "locations", "histories")
     def _last_parameter(self) -> "CharacterParameter | None":
@@ -599,10 +599,12 @@ class CharacterRelation(TextBase):
 
 
 class CharacterHistory(Base):
-    """人物の説明(来歴)を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
+    """人物の説明・来歴を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
 
-    `character.text` 自体は書き換えず、時が進むにつれて変わった立場・境遇などを
-    `start` から `end` の手前までの期間ごとに `description` として積む。
+    人物は本文の列を持たない。期間を限らない行に人物の芯(説明・meme・行動原理)を置き、
+    時が進むにつれて起きたこと・変わった立場・境遇などを、起きた時を `start` にした行として書き足す。
+    ある時刻の話・出来事には、その時刻に掛かる行だけを渡す(`data_access_logic/character/histories.py`)ので、
+    先の時刻の行を書き足しても、それより前の話・出来事には効かない。
     """
 
     __tablename__ = "character_history"
@@ -616,6 +618,9 @@ class CharacterHistory(Base):
     description: Mapped[str] = mapped_column(String, nullable=False, comment="この期間での説明", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
+
+    def covers(self, time: Stamp) -> bool:
+        return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
 
 
 class Idea(MemeSeededMixin, TextBase):

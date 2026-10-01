@@ -61,11 +61,11 @@ class CharacterHead(Material):
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow]
     locations: list[CharacterLocationRow]
-    histories: list[CharacterHistoryRow]
 
 
 class CharacterRecord(CharacterHead):
-    text: str | None = None
+    # すべての行。話・出来事に渡すときは、その時刻に掛かる行だけに絞る(`histories_at`)
+    histories: list[CharacterHistoryRow]
 
 
 class CharacterLocationRecord(Material):

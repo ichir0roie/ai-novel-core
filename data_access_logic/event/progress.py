@@ -14,7 +14,7 @@ from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from ai.instructions.event_writing import (
-    CHARACTER_NOTE_LIMIT, CHARACTER_NOTE_SEPARATOR, CHARACTER_TEXT_UPDATE_INSTRUCTION, EVENT_AGE_INSTRUCTION,
+    CHARACTER_TEXT_UPDATE_INSTRUCTION, EVENT_AGE_INSTRUCTION,
     EVENT_PROGRESSION_INSTRUCTION, EVENT_RECORD_INSTRUCTION, RECENT_EVENT_LIMIT,
 )
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION, fill_name_placeholder
@@ -29,7 +29,7 @@ from data_access_logic.event.summary import events_of
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.query import common_query, story_creation_query, world_creation_query
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Character, CharacterLocation, ConfirmStatus, Event, EventCharacter, Location
+from db.schema import Character, CharacterHistory, CharacterLocation, ConfirmStatus, Event, EventCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -175,16 +175,6 @@ def record_draft(
     return draft
 
 
-def _append_note(record: Character, note: str) -> None:
-    if not record.text:
-        record.text = note
-        return
-    base, *notes = record.text.split(CHARACTER_NOTE_SEPARATOR)
-    notes.append(note)
-    notes = notes[-(CHARACTER_NOTE_LIMIT - 1):] if CHARACTER_NOTE_LIMIT > 1 else []
-    record.text = CHARACTER_NOTE_SEPARATOR.join([base, *notes])
-
-
 def save_progress(
     s: Session,
     location_id: int,
@@ -233,8 +223,9 @@ def save_progress(
         if character is None or not update.text:
             continue
         note = fill_name_placeholder(update.text, character.name or "")
-        _append_note(character, note)
-        update_notes.append(f"{character.name}: text+={note}")
+        # 出来事の時刻から始まる行にするので、それより前の出来事・話には効かない
+        character.histories.append(CharacterHistory(start=time, description=note))
+        update_notes.append(f"{character.name}: histories+={note}")
 
     location = s.get_one(Location, location_id)
     location_notes = []

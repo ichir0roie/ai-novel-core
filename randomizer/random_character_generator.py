@@ -59,7 +59,6 @@ class CharacterFactory(factory.Factory):
         model = CharacterCreateForm
 
     name = factory.Sequence(lambda n: f"仮名{n}")
-    text = ""
     kind = CHARACTER_KIND_PERSON
 
     parameters = factory.LazyFunction(lambda: [ParameterFactory.build()])

@@ -7,9 +7,10 @@ from typing import Any
 from pydantic import SerializeAsAny, model_serializer
 from sqlalchemy.orm import Session
 
+from data_access_logic.character.histories import histories_at
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.parameters import parameters_at
-from data_access_logic.character.record import CharacterHead, CharacterRecord
+from data_access_logic.character.record import CharacterHead, CharacterHistoryRow
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.event.reading import EventRowHead, events_of
 from data_access_logic.material import Material, Timestamp
@@ -26,8 +27,10 @@ class LocationAt(Material):
 class CharacterSheet(Material):
     """人物の列に、ある時刻の名字・体格・口調・性格(`parameters_at`)を同じ段に並べて出す。"""
 
-    character: SerializeAsAny[CharacterHead]
+    character: CharacterHead
     parameters_at: CharacterParameterValues
+    # その時刻に掛かる説明・来歴(時刻を渡さなければすべて)
+    histories: list[CharacterHistoryRow]
     location: LocationAt | None = None
     recent_events: list[SerializeAsAny[EventRowHead]]
 
@@ -58,9 +61,10 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
     at = common_query.span(until)[1] if until is not None else Stamp(99999, 12, 31, 23, 59, 59)
 
     return CharacterSheet(
-        character=(CharacterRecord if text else CharacterHead).model_validate(character),
+        character=CharacterHead.model_validate(character),
         # 時刻を渡さないときは、期間を限らない値だけを重ねる
         parameters_at=parameters_at(character, None if until is None else at),
+        histories=histories_at(character, None if until is None else at) if text else [],
         location=_location_at(s, character_id, at),
         recent_events=events_of(
             s, common_query.events_of_character_select, character_id, until=None if until is None else at,
