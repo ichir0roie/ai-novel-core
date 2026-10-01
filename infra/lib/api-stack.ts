@@ -7,7 +7,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
-import { api, appDatabaseUser, databaseName, parameterPrefix } from "./config.js";
+import { api, appDatabaseUser, databaseName, migration, migrationDatabaseUser, parameterPrefix } from "./config.js";
 import type { NovelData } from "./data-stack.js";
 
 interface NovelApiStackProps extends StackProps {
@@ -52,6 +52,9 @@ export class NovelApiStack extends Stack {
     });
 
     const repository = ecr.Repository.fromRepositoryName(this, "ApiRepository", api.repositoryName);
+    const vpcSubnets: ec2.SubnetSelection = props.functionSubnetIds
+      ? { subnets: props.functionSubnetIds.map((subnetId, i) => ec2.Subnet.fromSubnetId(this, `Subnet${i}`, subnetId)) }
+      : { subnetType: ec2.SubnetType.PRIVATE_ISOLATED };
     // CI が差し替えたイメージは、template の ImageUri(repo:main)が変わらない限り cdk deploy で戻らない
     const fn = new lambda.DockerImageFunction(this, "Function", {
       functionName: api.functionName,
@@ -64,9 +67,7 @@ export class NovelApiStack extends Stack {
       role: functionRole,
       logGroup,
       vpc,
-      vpcSubnets: props.functionSubnetIds
-        ? { subnets: props.functionSubnetIds.map((subnetId, i) => ec2.Subnet.fromSubnetId(this, `Subnet${i}`, subnetId)) }
-        : { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets,
       securityGroups: [functionSecurityGroup],
       environment: {
         DEM_DATABASE_URL:
@@ -95,6 +96,43 @@ export class NovelApiStack extends Stack {
       stringValue: amplifyComputeRole.roleArn,
     });
     new CfnOutput(this, "AmplifyComputeRoleArn", { value: amplifyComputeRole.roleArn });
+
+    // マイグレーションだけを流す関数。表の持ち主のロール(novel_migrator)で IAM データベース認証で繋ぐ。
+    // URL は持たせず、CI(.github/workflows/deploy-api.yml)が直に invoke する
+    const migrationRole = new iam.Role(this, "MigrationFunctionRole", {
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole")],
+    });
+    migrationRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["rds-db:connect"],
+      resources: [
+        `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.resourceId}/${migrationDatabaseUser}`,
+      ],
+    }));
+    const migrationLogGroup = new logs.LogGroup(this, "MigrationFunctionLogGroup", {
+      retention: logs.RetentionDays.TWO_WEEKS,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    const migrationFunction = new lambda.DockerImageFunction(this, "MigrationFunction", {
+      functionName: migration.functionName,
+      code: lambda.DockerImageCode.fromEcr(repository, { tagOrDigest: api.imageTag, cmd: migration.command }),
+      architecture: lambda.Architecture.X86_64,
+      memorySize: 1024,
+      timeout: Duration.minutes(15),
+      // 二つのマイグレーションが同時に流れないようにする
+      reservedConcurrentExecutions: 1,
+      role: migrationRole,
+      logGroup: migrationLogGroup,
+      vpc,
+      vpcSubnets,
+      securityGroups: [functionSecurityGroup],
+      environment: {
+        DEM_DATABASE_URL:
+          `postgresql+psycopg://${migrationDatabaseUser}@${db.endpoint}:${db.port}/${databaseName}?sslmode=require`,
+        DEM_DATABASE_IAM_AUTH: "1",
+      },
+    });
+    new CfnOutput(this, "MigrationFunctionName", { value: migrationFunction.functionName });
   }
 }
 

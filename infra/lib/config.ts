@@ -71,6 +71,15 @@ export const api = {
   imageTag: "main",
 };
 
+// マイグレーションだけを流す関数。API と同じイメージを、コマンドだけ差し替えて動かす(db/migration_app.py)。
+// CI が main へのマージごとに、API より先にイメージを差し替えて呼ぶ
+export const migration = {
+  functionName: "novel-migrate",
+  command: ["python", "-m", "uvicorn", "db.migration_app:app", "--host", "0.0.0.0", "--port", "8080"],
+};
+
 export const databaseName = "novel";
 // アプリが使う db のロール。行の読み書きだけを許す(infra/sql/novel_app.sql)
 export const appDatabaseUser = "novel_app";
+// マイグレーションを流す db のロール。表の持ち主(infra/sql/novel_migrator.sql)
+export const migrationDatabaseUser = "novel_migrator";

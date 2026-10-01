@@ -1,4 +1,4 @@
-# main に API(gui/api)と、それが読むコードの変更が入ったら、Lambda のコンテナを作り直して差し替える。
+# main に API(gui/api)と、それが読むコードの変更が入ったら、Lambda のコンテナを作り直し、db のマイグレーションを流してから差し替える。
 # AWS へは OIDC で一時的な権限をもらう(鍵を GitHub に置かない)。設定の手順は `.docs/ci-cd.md`。
 # リポジトリの変数(Settings → Secrets and variables → Actions → Variables)が無ければ何もしない(フォーク・設定前)。
 # ロールの ARN と関数 URL は、公開のログに出さないよう秘密(Secrets)から読む。job の if は秘密を読めないので変数で判定する。
@@ -59,6 +59,23 @@ jobs:
           docker buildx build --platform linux/amd64 --provenance=false \
             -f infra/lambda/Dockerfile -t "$REPOSITORY:${{ github.sha }}" -t "$REPOSITORY:main" --push .
           echo "IMAGE=$REPOSITORY:${{ github.sha }}" >> "$GITHUB_ENV"
+
+      # db を先に、API を後に変える(列を足す変更で、新しい API がまだ無い列を読まないように)。
+      # マイグレーションの関数(novel-migrate)を同じイメージに差し替えて呼び、イメージに入っている版まで流す。
+      # 関数の名前の変数が無ければ(関数を作る前・フォーク)飛ばす
+      - name: migrate db
+        if: vars.MIGRATION_FUNCTION_NAME != ''
+        env:
+          FUNCTION: ${{ vars.MIGRATION_FUNCTION_NAME }}
+        run: |
+          aws lambda update-function-code --function-name "$FUNCTION" \
+            --image-uri "$IMAGE" --output text --query 'LastUpdateStatus'
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION"
+          aws lambda invoke --function-name "$FUNCTION" --cli-read-timeout 0 \
+            --cli-binary-format raw-in-base64-out --payload '{}' result.json > invoke.json
+          cat result.json; echo
+          if jq -e '.FunctionError' invoke.json > /dev/null; then exit 1; fi
+          jq -e '.after != null and .after == .head' result.json > /dev/null
 
       - name: update lambda
         run: |

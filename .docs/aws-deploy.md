@@ -73,7 +73,7 @@ npx cdk deploy    # 当てる
 | --- | --- |
 | `NovelData` | 手元の道具とほかのスタックが引く値を、SSM パラメータ `/novel/*` に置く(db のエンドポイント・ポート・db 名・マスターの秘密の ARN、踏み台と EC2 Instance Connect Endpoint の ID)。標準のパラメータなので料金は掛からない |
 | `NovelCi` | ECR リポジトリ `novel-api`、GitHub の OIDC プロバイダ、CI のロール `github-ai-novel-core-deploy`([ci-cd.md](ci-cd.md)) |
-| `NovelApi` | Lambda `novel-api`(VPC の中)・関数 URL・セキュリティグループ・実行ロール・ログの出し先(保存 2 週間。CloudWatch Logs の無料枠に収める)。関数 URL は SSM の `/novel/api/function-url` にも出す |
+| `NovelApi` | Lambda `novel-api`(VPC の中)・関数 URL・セキュリティグループ・実行ロール・ログの出し先(保存 2 週間。CloudWatch Logs の無料枠に収める)。関数 URL は SSM の `/novel/api/function-url` にも出す。マイグレーションだけを流す Lambda `novel-migrate`(同じイメージでコマンドだけ違う。URL は持たない。[ci-cd.md](ci-cd.md#マイグレーション)) |
 | `NovelAuth` | 画面のログインに使う Cognito のユーザープール(料金区分 Lite。月 1 万人まで無料)と、画面用のアプリクライアント。ID は SSM の `/novel/auth/user-pool-id`・`/novel/auth/user-pool-client-id` に出す |
 
 ## 手元から db へ繋ぐ
@@ -86,7 +86,7 @@ npx cdk deploy    # 当てる
 
 ```
 .venv/bin/python -m tool.aws.rds --serve   # ふだん用。127.0.0.1:15432 に転送を張り続ける
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # マスターで流す
+.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # マスターで流す(ふだんは CI が当てる)
 .venv/bin/python -m tool.aws.rds --database postgres -- psql
 .venv/bin/python -m tool.aws.rds          # マスターで繋いだまま $SHELL を開く。exit で閉じる
 ```
@@ -148,6 +148,8 @@ npx cdk deploy    # 当てる
 確かめ: `curl <関数 URL>/api/ping` が `{"ok":true}`、`curl -H 'x-novel-api-key: …' <関数 URL>/api/health` が `"dialect":"postgresql"`。
 
 db のロール `novel_app`(行の読み書きだけ。IAM データベース認証で繋ぐ)は、マスターで `infra/sql/novel_app.sql` を流して作る。
+続けて、マイグレーションを流すロール `novel_migrator`(表の持ち主。IAM データベース認証で繋ぐ)を `infra/sql/novel_migrator.sql` で作る
+(マスターが持っていた表の持ち主を移す。[ci-cd.md](ci-cd.md#マイグレーション))。
 
 ## 画面(Amplify)(これから作る)
 
