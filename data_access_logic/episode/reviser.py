@@ -64,7 +64,7 @@ def revision_targets(s: Session, episode_id: int) -> SummaryTargets:
     episode = _episode(s, episode_id)
     main_episode = RevisedEpisode.model_validate(episode)
     return SummaryTargets(
-        episode_ids=past_episode_ids(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        episode_ids=past_episode_ids(s, episode, cast_characters(episode), constants.EPISODE_FULL_TEXT_COUNT),
         event_ids=cast_event_ids(s, cast_characters(episode), main_episode.start),
     )
 
@@ -78,7 +78,7 @@ def revision_material(s: Session, episode_id: int) -> EpisodeRevisionMaterialSer
     return EpisodeRevisionMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        past_episodes=past_episodes(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, main_episode.start),

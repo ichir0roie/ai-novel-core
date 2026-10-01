@@ -10,7 +10,7 @@ from data_access_logic.character.models import (
 from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized
 from data_access_logic.location.models import LocationMaterial
-from data_access_logic.material import Material
+from data_access_logic.material import Material, Named
 from db.stamp import Stamp
 
 
@@ -29,8 +29,25 @@ class EpisodeBase(Material):
 
 
 class PastEpisode(EpisodeBase):
+    id: int
     start: Stamp | None = None
     summary_text: str
+    # 章・外伝をまたいで、人物が関わった話も渡すので、どの作品の話かを添える
+    story: Named | None = None
+
+
+class AppearedEpisode(EpisodeBase):
+    id: int
+    start: Stamp | None = None
+    story: Named
+
+
+class CharacterEpisode(Material):
+    """人物が関わった話(`episode_character` の一行)。"""
+
+    character_id: int
+    mentioned: bool
+    episode: AppearedEpisode
 
 
 class RecentEpisode(EpisodeBase):
@@ -84,8 +101,17 @@ class RevisedEpisode(EpisodeBase):
 
 def _past_episodes(past_episodes: list[PastEpisode]) -> list[dict[str, Any]]:
     return [
-        {"題": past.title, "時刻": str(past.start) if past.start else None, "概要": past.summary_text}
+        {"作品": past.story.name if past.story else None, "題": past.title,
+         "時刻": str(past.start) if past.start else None, "概要": past.summary_text}
         for past in past_episodes
+    ]
+
+
+def _appearances(appearances: list[CharacterEpisode], character_id: int) -> list[dict[str, Any]]:
+    return [
+        {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
+         "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
+        for link in appearances if link.character_id == character_id
     ]
 
 
@@ -299,6 +325,8 @@ class EpisodeBrief(Material):
     mentioned: list[MentionedMaterial]
     # 登場人物のどれかが片側にいる関係
     relations: list[CharacterRelationLine]
+    # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
+    appearances: list[CharacterEpisode]
     # 古い順
     location_events: list[EventMaterial]
     later_events: list[EventMaterial]
@@ -326,7 +354,8 @@ class EpisodeBriefSerialized(EpisodeBrief):
         return {
             "書き方": self.guide,
             "作品": _story(self.story),
-            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
+            "前の話の概要(古い順)": [{"話id": past.id, **entry}
+                                     for past, entry in zip(self.past_episodes, _past_episodes(self.past_episodes))],
             "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
             "この話": {
                 "話id": episode.id,
@@ -336,7 +365,9 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "同期": episode.synced,
                 "場所(広い順)": [_place(location) for location in self.locations],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
-                "登場人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.cast],
+                "登場人物": [{"人物id": member.character.id, **member.model_dump(),
+                          "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
+                         for member in self.cast],
                 "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
                 "プロット": episode.plot_text,
@@ -367,6 +398,8 @@ class EpisodeCasting(Material):
     mentioned: list[CastCandidate]
     # 登場人物・名前だけ出る人物のどちらでもない、登場人物と関係のある人物・話の場所にいる人物
     candidates: list[CastCandidate]
+    # 登場人物・名前だけ出る人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
+    appearances: list[CharacterEpisode]
 
 
 class EpisodeCastingSerialized(EpisodeCasting):
@@ -390,8 +423,10 @@ class EpisodeCastingSerialized(EpisodeCasting):
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
                 "プロット": episode.plot_text,
             },
-            "登場人物": [member.model_dump() for member in self.cast],
-            "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
+            "登場人物": [{**member.model_dump(), "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
+                     for member in self.cast],
+            "名前だけ出る人物": [{**member.model_dump(), "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
+                         for member in self.mentioned],
             "登場人物の候補": [member.model_dump() for member in self.candidates],
             "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
         }

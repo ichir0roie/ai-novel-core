@@ -26,7 +26,7 @@ from data_access_logic.episode.models import (
     BriefEpisode, CastingEpisode, EpisodeBriefSerialized, EpisodeCastingSerialized, StoryMaterial,
 )
 from data_access_logic.episode.plot_completer import known_locations
-from data_access_logic.episode.summary import past_episode_ids, past_episodes, recent_episodes
+from data_access_logic.episode.summary import appearances, past_episode_ids, past_episodes, recent_episodes
 from data_access_logic.episode.writer import later_events_select, location_events_select
 from data_access_logic.event.summary import events_of
 from data_access_logic.query import common_query
@@ -90,6 +90,7 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
         cast=[_sheet(character, time) for character in characters],
         mentioned=[_sheet(character, time) for character in mentioned],
         candidates=[_sheet(character, time) for character in candidates],
+        appearances=appearances(s, episode, [*characters, *mentioned]),
     )
 
 
@@ -102,7 +103,7 @@ def brief_targets(s: Session, episode_id: int) -> SummaryTargets:
                        if location_id is not None else [])
     later_events = s.scalars(later_events_select(location_id, characters, main_episode.start)).all()
     return SummaryTargets(
-        episode_ids=past_episode_ids(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        episode_ids=past_episode_ids(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
         event_ids=[*cast_event_ids(s, characters, main_episode.start),
                    *(event.id for event in location_events), *(event.id for event in later_events)],
     )
@@ -118,12 +119,13 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
+        past_episodes=past_episodes(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned_in(episode), time),
         relations=relations_at(s, characters, time),
+        appearances=appearances(s, episode, characters),
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],
         later_events=events_of(s, later_events_select(location_id, characters, time)),

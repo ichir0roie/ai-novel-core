@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from pydantic import Field, computed_field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic.entrypoint import record_of
 from data_access_logic.episode.record import EpisodeHead, EpisodeRecord, EpisodeRow
 from data_access_logic.material import Material, Named, Timestamp
 from data_access_logic.query import common_query
-from db.schema import Story
+from db.schema import Episode, Story
 from db.stamp import Stamp
 
 
@@ -26,6 +27,25 @@ class UnsyncedEpisode(EpisodeTitle):
     @property
     def story_name(self) -> str | None:
         return None if self.story is None else self.story.name
+
+
+class EpisodeText(Material):
+    id: int
+    story: Named
+    title: str
+    start: Timestamp | None = None
+    plot_text: str
+    main_text: str
+    summary_text: str | None = None
+
+
+def episode_texts(s: Session, episode_ids: list[int]) -> list[EpisodeText]:
+    """渡した順ではなく、時刻の順に返す。"""
+    rows = s.scalars(
+        select(Episode).where(Episode.id.in_(episode_ids)).options(joinedload(Episode.story))
+        .order_by(Episode.start.nulls_last(), Episode.id).execution_options(populate_existing=True)
+    ).all()
+    return [EpisodeText.model_validate(row) for row in rows]
 
 
 def episodes(s: Session, story_id: int, count: int = 10, before: Stamp | str | None = None,

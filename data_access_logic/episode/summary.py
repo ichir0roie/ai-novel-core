@@ -1,13 +1,13 @@
-from sqlalchemy import Select, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, or_, select
+from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.episode.models import (
-    EpisodeSource, EpisodeSourceSerialized, EpisodeSummaryDraft, EpisodeSummarySource, PastEpisode, RecentEpisode,
+    CharacterEpisode, EpisodeSource, EpisodeSourceSerialized, EpisodeSummaryDraft, EpisodeSummarySource, PastEpisode,
+    RecentEpisode,
 )
-from data_access_logic.query import common_query
-from db.schema import Episode, summary_source_hash
+from db.schema import Character, Episode, EpisodeCharacter, summary_source_hash
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -71,44 +71,74 @@ def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> Episode | Non
     return episode
 
 
-# 章・外伝に分けた作品でも筋を切らないよう、一番上の作品とその子孫の話をまとめて時刻の順に見る
-def _past_episodes_select(s: Session, episode: Episode) -> Select[Episode]:
-    query = (
-        select(Episode)
-        .where(
-            Episode.story_id.in_(common_query.story_family_ids(s, episode.story_id)),
-            Episode.id != episode.id,
-            Episode.main_text != "",
-        )
-        .order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
-    )
+def _before[Q: Select](query: Q, episode: Episode) -> Q:
+    """この話より前の、本文のある話に絞る。"""
+    query = query.where(Episode.id != episode.id, Episode.main_text != "")
     if episode.start is not None:
         query = query.where(Episode.start <= episode.start)
     return query
 
 
+def _past(query: Select[Episode], episode: Episode) -> Select[Episode]:
+    """新しい順。"""
+    return _before(query, episode).order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
+
+
+def _story_past_select(episode: Episode) -> Select[Episode]:
+    return _past(select(Episode).where(Episode.story_id == episode.story_id), episode)
+
+
+def _related_ids_select(characters: list[Character]) -> Select[int]:
+    """人物が登場するか名前が出る話(作品を問わない)。"""
+    return select(EpisodeCharacter.episode_id).where(
+        EpisodeCharacter.character_id.in_([character.id for character in characters]))
+
+
 def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
-    return s.scalars(_past_episodes_select(s, episode).limit(1)).first()
+    return s.scalars(_story_past_select(episode).limit(1)).first()
 
 
-# 直前の話(新しい順に `constants.EPISODE_FULL_TEXT_COUNT` 話)は校正済みとみなし、文体の見本を兼ねて本文ごと渡す。古い順
+def _recent_rows(s: Session, episode: Episode, full_text_count: int) -> list[Episode]:
+    return list(s.scalars(_story_past_select(episode).limit(full_text_count)).all())
+
+
+# 同じ作品の直前の話(新しい順に `constants.EPISODE_FULL_TEXT_COUNT` 話)は校正済みとみなし、文体の見本を兼ねて本文ごと渡す。古い順
 def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
-    rows = s.scalars(_past_episodes_select(s, episode).limit(constants.EPISODE_FULL_TEXT_COUNT)).all()
+    rows = _recent_rows(s, episode, constants.EPISODE_FULL_TEXT_COUNT)
     return [RecentEpisode.model_validate(row) for row in reversed(rows)]
 
 
-def past_episode_ids(s: Session, episode: Episode, skipped_count: int) -> list[int]:
-    """`summarized_episodes` が概要で渡す話(概要を揃えておく話)。"""
-    return list(s.scalars(_past_episodes_select(s, episode).offset(skipped_count).with_only_columns(Episode.id)).all())
+def _summarized_select(s: Session, episode: Episode, characters: list[Character], full_text_count: int) -> Select[Episode]:
+    """同じ作品のすべての話と、登場人物が関わるすべての話(重ならない)。本文で渡す直前の `full_text_count` 話は除く。"""
+    recent_ids = [row.id for row in _recent_rows(s, episode, full_text_count)]
+    return _past(
+        select(Episode).where(
+            or_(Episode.story_id == episode.story_id, Episode.id.in_(_related_ids_select(characters))),
+            Episode.id.not_in(recent_ids)),
+        episode)
 
 
-# 新しい方から `skipped_count` 話を除いた、それより前の話すべてを概要で渡す。古い順。概要はそのときのまま読む(作り直さない)
-def past_episodes(s: Session, episode: Episode, skipped_count: int) -> list[PastEpisode]:
-    rows = s.scalars(_past_episodes_select(s, episode).offset(skipped_count)).all()
+def past_episode_ids(s: Session, episode: Episode, characters: list[Character], full_text_count: int) -> list[int]:
+    """`past_episodes` が概要で渡す話(概要を揃えておく話)。"""
+    return list(s.scalars(
+        _summarized_select(s, episode, characters, full_text_count).with_only_columns(Episode.id)).all())
+
+
+# 古い順。概要はそのときのまま読む(作り直さない)
+def past_episodes(s: Session, episode: Episode, characters: list[Character], full_text_count: int) -> list[PastEpisode]:
+    rows = s.scalars(
+        _summarized_select(s, episode, characters, full_text_count).options(joinedload(Episode.story))
+        .execution_options(populate_existing=True)).all()
     return [PastEpisode.model_validate(row) for row in reversed(rows) if row.summary_text is not None]
 
 
-def summarized_episodes(s: Session, ai: AIClient, episode: Episode, skipped_count: int) -> list[PastEpisode]:
-    for past in s.scalars(_past_episodes_select(s, episode).offset(skipped_count)).all():
-        summarize(s, ai, past)
-    return past_episodes(s, episode, skipped_count)
+def appearances(s: Session, episode: Episode, characters: list[Character]) -> list[CharacterEpisode]:
+    """人物ごとの、この話より前に関わった話(作品を問わない)。古い順。"""
+    links = s.scalars(
+        _before(select(EpisodeCharacter).join(EpisodeCharacter.episode), episode)
+        .where(EpisodeCharacter.character_id.in_([character.id for character in characters]))
+        .options(joinedload(EpisodeCharacter.episode).joinedload(Episode.story))
+        .order_by(Episode.start.nulls_last(), Episode.id)
+        .execution_options(populate_existing=True)
+    ).all()
+    return [CharacterEpisode.model_validate(link) for link in links]

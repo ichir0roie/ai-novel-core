@@ -119,7 +119,10 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「話の要約を作り直して」「要約がおかしい」 | `episode.rewrite_episode_summary.RewriteEpisodeSummary(episode_ids)`。本文が変わっていなくても、話の概要(`episode.summary_text`)を AI に作り直させ、一件ごとに commit する。本文が変わったときの作り直しは `CommitEpisode` などが自動で行うので、これは中身の崩れた要約を直すとき用 |
 | 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | `event.generate_event.GenerateEvent(event=EventForm(location_id=…, time=…, name="〇〇な場面"))`。当事者はその時刻にそこにいて手の空いたサブキャラクターから選ぶ(下の「出来事の生成」)。当事者を決めるなら `character_ids` |
 | 「このプロットで話を書いて」「〇〇と△△が出る話を 11579/03/02 で」「この枠に本文を書いて」 | スキル `episode`。このセッションの Claude が `ReadEpisodeCasting` でプロットから登場人物・場所を推測して `CastEpisode` で結び、そのあと材料を `ReadEpisodeBrief` で読んで自分で本文を書き、`CommitEpisode`(`synced=True`)で確定する(新しい話は先に `CommitEpisode` で枠を足す)。生成関数に書かせると頼まれたときだけ `episode.generate_episode.GenerateEpisode(episode=EpisodeForm(story_id=…, plot_text="…", start="11579/03/02", character_ids=[…]))`(`id=40` を渡せばその枠へ書く。本文のモデルは `model` / `effort`。下の「話の生成」) |
-| 「この話の登場人物・場所を決める材料を読ませて」 | `episode.read_episode_casting.ReadEpisodeCasting(episode_id)`。この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(プロット・本文に名前が出る人物・登場人物と関係のある人物・話の場所にいる人物)・話の場所の中の既知の場所を、日本語の見出しと id 付きで返す。AI は呼ばない。時刻が空なら止まる |
+| 「この話の登場人物・場所を決める材料を読ませて」 | `episode.read_episode_casting.ReadEpisodeCasting(episode_id)`。この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(プロット・本文に名前が出る人物・登場人物と関係のある人物・話の場所にいる人物)・話の場所の中の既知の場所と、登場人物・名前だけ出る人物それぞれがこの話より前に関わった話(作品を問わない)を、日本語の見出しと id 付きで返す。AI は呼ばない。時刻が空なら止まる |
+| 「人物を消して」 | `character.delete_character.DeleteCharacter(character_id)`。期間ごとの値・説明の変化・出自と居場所・相関・結んだアイデア・話に名前だけ出る行も消す。出来事の当事者か、話の登場人物・視点になっている人物は止まる |
+| 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文・概要を時刻の順に返す |
+| 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
 | 「この話の登場人物・場所を結んで」 | `episode.cast_episode.CastEpisode(episode_id, character_ids, location_id=None, viewpoint_character_id=None)`。登場人物(`episode_character`)をまるごと置き換え、登場人物と視点の人物を承認し、名前だけ出る人物を拾い直す。場所・視点は渡したときだけ書く。同期フラグは変えない |
 | 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の `shared` / `episode` の行)・作品・前の話(直前の五話は本文、それより前は概要)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から引くので、先に `CastEpisode` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
 
@@ -374,9 +377,11 @@ AI の結果を書き戻したとき、`CommitEpisode` / `CastEpisode` で確定
 登場人物の `character_ids` は `mentioned` でない行だけで、置き換えても `mentioned` の行は残す(登場人物にした人物の行だけ消す)。
 本文・プロット・枠を書く材料には「名前だけ出る人物」として、その時点の歳・種別・口調・人物像を渡す(直近の出来事・相関は渡さない)。
 話のレコードでは `mentioned_character_ids` に並ぶ。
-前の話は、作品の中でこの話の時刻より前の話を渡す。作品が章・外伝として親の作品の子になっていれば、親をたどった一番上の作品と
-その子孫(`common_query.story_family_ids`)の話を、まとめて時刻の順に見る。作品の筋書きも、親の作品を「親の作品」としてたどって渡す。直前の五話(`constants.EPISODE_FULL_TEXT_COUNT`)は校正済みとみなし、
-文体の見本を兼ねて本文ごと渡す。それより前の話はすべて概要で渡す。枠を作るとき(`framer`)は本文を渡さず、前の話をすべて概要で渡す。
+前の話は、この話の時刻より前の、本文のある話から選ぶ(`data_access_logic/episode/summary.py`)。
+同じ作品の直前の五話(`constants.EPISODE_FULL_TEXT_COUNT`)は校正済みとみなし、文体の見本を兼ねて本文ごと渡す。
+概要では、同じ作品のすべての話と、登場人物が関わった(`episode_character` に登場か名前だけの行がある)すべての話を、作品を問わず
+重ならないように合わせて渡す(本文で渡す五話は除く)。章・外伝をまたぐ話には作品名を添える。作品の筋書きは、親の作品を「親の作品」としてたどって渡す。
+枠を作るとき(`framer`)は本文を渡さず、前の話をすべて概要で渡す。
 概要の無い話は書く前に作る(本文が変わっていなければ作り直さない)。
 登場人物ごとに、その時点の歳・人となり・口調・相関・直近の出来事(要約)を渡す。話の場所(無ければ作品の立つ場所)の
 直近の出来事と、その場所か登場人物に掛かる「この時点より後に既に決まっている出来事」も渡し、矛盾させない。

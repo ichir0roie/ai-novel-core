@@ -36,6 +36,9 @@ CastEpisode(<話id>, character_ids=[<人物id>, ...], location_id=<場所id>, vi
 "
 ```
 
+人物の関わった話を本文まで読む: `episode.read_episode_texts.ReadEpisodeTexts([<話id>, ...])`(長いのでファイルへ書き出す)。
+名前だけ出る人物を拾い直す: `episode.refresh_mentions.RefreshMentions()`(すべての話。`episode_ids` で絞れる)。
+
 本文の材料を読む(結んだあとに読む。`<scratchpad>` はセッションのスクラッチパッド):
 
 ```
