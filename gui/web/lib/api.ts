@@ -105,6 +105,10 @@ export const runEntrance = (id: string, args: Rec, background = false) =>
 /** アイデアを消す(下位のアイデアが残っていると失敗する)。`idea.delete_idea.DeleteIdea` を呼ぶ。 */
 export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.DeleteIdea", { idea_id: ideaId });
 
+/** 話を消す(登場人物・踏まえたアイデアとの中間テーブルの行も消える)。`episode.delete_episode.DeleteEpisode` を呼ぶ。 */
+export const deleteEpisode = (episodeId: number) =>
+  runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
+
 export const getJobs = () => api<components["schemas"]["JobList"]>("/api/jobs");
 
 export const getJob = (id: string) => api<JobInfo>(`/api/jobs/${id}`);
