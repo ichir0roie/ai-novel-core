@@ -53,8 +53,8 @@ RDS に無い。db を触る作業の前に食い違いを見つけたら、ユ�
 .venv/bin/python -m alembic -c db/alembic/alembic.ini heads
 ```
 
-手で当てるときは表を変えるのでマスターで流す(`db/alembic/env.py` が表の持ち主の `novel_migrator` に切り替える):
-`.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head`
+手で当てるときは表を変えるので、同じ転送のまま、表の持ち主の `novel_migrator` に IAM 認証で入って流す(URL のユーザ名だけを替える。downgrade も同じ):
+`DEM_DATABASE_URL='postgresql+psycopg://novel_migrator@127.0.0.1:15432/novel?sslmode=require' .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head`
 
 ## 他のセッションとの同時作業
 

@@ -1,8 +1,8 @@
 -- マイグレーションを流す db のロール novel_migrator。表の持ち主にし、表を作る・変える権限(DDL)を持たせる。
 -- パスワードは持たせず、IAM データベース認証(rds_iam)で繋ぐ。CI が main へのマージごとに呼ぶ Lambda(novel-migrate)が、このロールで
 -- alembic upgrade head を流す(.docs/ci-cd.md の「マイグレーション」)。何度流しても同じ結果になる。
--- マスターで、infra/sql/novel_app.sql の後に、リポジトリのルートから:
---   .venv/bin/python -m tool.aws.rds -- psql -v ON_ERROR_STOP=1 -f infra/sql/novel_migrator.sql
+-- マスターで、infra/sql/novel_app.sql の後に、リポジトリのルートから一つのトランザクションで(-1):
+--   .venv/bin/python -m tool.aws.rds -- psql -1 -v ON_ERROR_STOP=1 -f infra/sql/novel_migrator.sql
 
 DO $$
 BEGIN
@@ -13,9 +13,11 @@ END
 $$;
 ALTER ROLE novel_migrator LOGIN NOCREATEDB NOCREATEROLE PASSWORD NULL;
 GRANT rds_iam TO novel_migrator;
--- マスターも持ち主の権限で表を扱えるようにし(手元からのマイグレーションは db/alembic/env.py がこのロールに SET ROLE する)、
--- 下の既定の権限を novel_migrator のために掛けられるようにする
-GRANT novel_migrator TO :"USER";
+-- 持ち主を移す・既定の権限を掛けるには、マスターが novel_migrator の権限を受け継いでいなければならない。
+-- 一員のまま残すと、マスターも rds_iam を持つ側に数えられ(継承を外しても)、パスワードで入れなくなる。
+-- そこで、このトランザクションの間だけ一員にし、終わりに外す
+GRANT novel_migrator TO :"USER" WITH INHERIT TRUE, SET TRUE;
+SET lock_timeout = '10s';
 
 GRANT CONNECT ON DATABASE :"DBNAME" TO novel_migrator;
 GRANT USAGE, CREATE ON SCHEMA public TO novel_migrator;
@@ -53,3 +55,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE novel_migrator IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO novel_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE novel_migrator IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO novel_app;
+
+REVOKE novel_migrator FROM :"USER";

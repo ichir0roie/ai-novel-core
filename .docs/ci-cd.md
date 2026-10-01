@@ -83,12 +83,14 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 
 - GitHub Actions には db への道も、マスターの秘密も渡さない。CI ができるのは、`main` のイメージを `novel-migrate` に入れて呼ぶことだけ
 - マイグレーションの中身は、PR のレビューで見てからマージする
-- 手元から当てるとき(CI を待たずに当てる・downgrade する)は、これまでどおりマスターで流す。`db/alembic/env.py` が、表の持ち主が
-  `novel_migrator` の db ではそのロールに `SET ROLE` するので、手元から作った表の持ち主も揃う
+- 手元から当てるとき(CI を待たずに当てる・downgrade する)は、転送(`tool.aws.rds --serve`)越しに `novel_migrator` へ IAM 認証で入って流す。
+  手元の AWS CLI の権限に、`novel_migrator` への `rds-db:connect` が要る
+- マスターは `novel_migrator` の一員にしない。RDS は `rds_iam` を持つロールの一員を(継承を外しても)IAM 認証だけに絞るので、
+  マスターがパスワードで入れなくなる。`novel_migrator.sql` は、持ち主を移す間だけマスターを一員にし、同じトランザクションの終わりに外す
 
 ```
-.venv/bin/python -m alembic -c db/alembic/alembic.ini current                                   # 版を見るだけなら、ふだんの接続でよい
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # 手で当てるのはマスターで
+.venv/bin/python -m alembic -c db/alembic/alembic.ini current   # 版を見るだけなら、ふだんの接続でよい
+DEM_DATABASE_URL='postgresql+psycopg://novel_migrator@127.0.0.1:15432/novel?sslmode=require' .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # 手で当てる
 ```
 
 当て忘れ・失敗は、web のセッションの `web_session.check_api` が版の食い違いとして報告する。
@@ -99,7 +101,7 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 2. マスターで `infra/sql/novel_migrator.sql` を流す(ロールを作り、マスターが持っていた表の持ち主を移す)
 
    ```
-   .venv/bin/python -m tool.aws.rds -- psql -v ON_ERROR_STOP=1 -f infra/sql/novel_migrator.sql
+   .venv/bin/python -m tool.aws.rds -- psql -1 -v ON_ERROR_STOP=1 -f infra/sql/novel_migrator.sql
    ```
 
 3. リポジトリの変数 `MIGRATION_FUNCTION_NAME` に `novel-migrate` を置く。以降の `main` へのマージから CI が当てる。

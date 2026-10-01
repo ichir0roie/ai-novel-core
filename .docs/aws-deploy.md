@@ -86,7 +86,6 @@ npx cdk deploy    # 当てる
 
 ```
 .venv/bin/python -m tool.aws.rds --serve   # ふだん用。127.0.0.1:15432 に転送を張り続ける
-.venv/bin/python -m tool.aws.rds -- .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # マスターで流す(ふだんは CI が当てる)
 .venv/bin/python -m tool.aws.rds --database postgres -- psql
 .venv/bin/python -m tool.aws.rds          # マスターで繋いだまま $SHELL を開く。exit で閉じる
 ```
