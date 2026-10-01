@@ -8,7 +8,7 @@ import RecordForm from "@/components/RecordForm";
 import { useRevisePanel } from "@/components/RevisePanel";
 import { invalidateAllOptions, invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
-import { diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
+import { deleteEpisode, diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
 import { PageTitle, useTable } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
@@ -83,6 +83,21 @@ export default function RecordPage() {
     }
   };
 
+  const remove = async () => {
+    if (!loaded || !window.confirm(T.record.confirmDeleteEpisode(loaded.label || `id=${id}`))) return;
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      await deleteEpisode(Number(id));
+      invalidateOptions(table);
+      openPage(`/tables/${table}?story_id=${loaded.record.story_id}`);
+    } catch (e) {
+      setError(T.record.deleteFailed(e instanceof Error ? e.message : String(e)));
+      setBusy(false);
+    }
+  };
+
   const generatePanel = useGeneratePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
   const revisePanel = useRevisePanel({ table, meta, draft: value, mode: "edit", onDone: generated, beforeRun: () => save(false), disabled: busy });
 
@@ -142,6 +157,11 @@ export default function RecordPage() {
                   {revisePanel?.toggle}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
+                  {table === "episode" && (
+                    <button className="danger" onClick={() => void remove()} disabled={busy}>
+                      {T.record.delete}
+                    </button>
+                  )}
                 </div>
               </div>
             }
