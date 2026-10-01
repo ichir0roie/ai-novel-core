@@ -31,7 +31,7 @@ Claude はユーザへの返答を常に日本語で書く。
 | web のセッションで db を読み書きするとき(id・行を引く、入口・AI の入口を呼ぶ) | `.claude/docs/web-db.md` |
 | テストをしてと明確に依頼されたとき | `.claude/docs/testing.md` |
 | テスト・動作確認で GUI(API・画面)を動かすとき | `.claude/docs/gui.md` |
-| ミームを扱うとき、本文・人物の `text` を書くとき | `.claude/docs/meme.md` |
+| ミームを扱うとき、本文・人物の説明・来歴(`histories`)を書くとき | `.claude/docs/meme.md` |
 | 列名・型を確かめるとき、`db/schema.py` やマイグレーションを変えるとき | `.claude/docs/schema.md` |
 | db を読む処理・AI とやり取りする処理(pydantic のマテリアル・出力モデル)を書く・直すとき、リファクタするとき | `.claude/docs/data-access.md` |
 | PostgreSQL(`DEM_DATABASE_URL`)・AWS へのデプロイ・GitHub Actions・AI の待ち行列(`ai_task`)と web のセッションで回す仕組み(`web_session/`・`steps.py`)を扱うとき | `.docs/README.md` から当たる文書 |

@@ -29,11 +29,9 @@ class CommitCharacter(CommitEntrypoint):
         form.write_to(record)
         record.parameters = replaced_rows([], form.parameters, CharacterParameter)
         record.histories = replaced_rows([], form.histories, CharacterHistory)
-        # 誕生・死亡は列を持たず parameters の行で表す(db/schema.py の Character.start / .end)。
+        # 誕生は列を持たず parameters の一番早く始まる行の start で表す(db/schema.py の Character.start)。
         if form.start is not None:
             record.start = form.start
-        if form.end is not None:
-            record.end = form.end
         s.add(record)
         s.flush()  # CharacterLocation の character_id に使う id を先に確定させる
         if form.location_id is not None:

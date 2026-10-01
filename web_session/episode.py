@@ -13,7 +13,6 @@ import random
 from ai.claude_code import ai_client
 from ai.claude_code.ai_client import EPISODE_EFFORT, EPISODE_MODEL, PLOT_EFFORT, PLOT_MODEL
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.form import CharacterForm
 from data_access_logic.episode import caster, framer, plot_completer, reviser, writer
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeForm
@@ -56,7 +55,7 @@ def _add_characters(
     for candidate in candidates:
         # 人物は一人ごとに書き戻すので、途中で止まっても作った人物は残る
         record = character.generate(ai, rng, location_id, time, True,
-                                    CharacterForm(name=candidate.called, text=candidate.text), plot_text)
+                                    plot_completer.character_draft(candidate), plot_text)
         if record is None:
             logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
             continue

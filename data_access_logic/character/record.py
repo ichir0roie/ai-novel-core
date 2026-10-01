@@ -12,7 +12,6 @@ class _ChildRow(Form):
 
 class CharacterParameterRow(_ChildRow):
     start: Timestamp | None = None
-    end: Timestamp | None = None
     family_name: str | None = None
     sex: str | None = None
     height: float | None = None
@@ -43,8 +42,8 @@ class CharacterLocationRow(_ChildRow):
 
 
 class CharacterHistoryRow(_ChildRow):
-    start: Timestamp | None = None
-    end: Timestamp | None = None
+    # 年。同じ年のことは一行にまとめる
+    start: int | None = None
     description: str
 
 
@@ -56,16 +55,17 @@ class CharacterHead(Material):
     main_character: bool
     event_seeded: bool
     meme_seeded: bool
-    # 誕生・死亡は列を持たず、parameters の行から決まる(`Character.start` / `.end`)
+    # 誕生は列を持たず、parameters の一番早く始まる行の start(`Character.start`)
     start: Timestamp | None = None
+    # 没年
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow]
     locations: list[CharacterLocationRow]
-    histories: list[CharacterHistoryRow]
 
 
 class CharacterRecord(CharacterHead):
-    text: str | None = None
+    # すべての行。話・出来事に渡すときは、その時刻に掛かる行だけに絞る(`histories_at`)
+    histories: list[CharacterHistoryRow]
 
 
 class CharacterLocationRecord(Material):

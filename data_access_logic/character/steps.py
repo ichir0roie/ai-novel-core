@@ -9,7 +9,7 @@ from data_access_logic.character import generator
 from data_access_logic.character.generate_character import generation_time as decide_time
 from data_access_logic.character.generate_characters import check_locations
 from data_access_logic.character.generator_models import BirthSources, CharacterCreation, CompletionTarget
-from data_access_logic.character.record import CharacterRecord
+from data_access_logic.character.record import CharacterHistoryRow, CharacterRecord
 from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.step import RowId, RowIds, db_step
 from db.stamp import Stamp
@@ -27,10 +27,10 @@ class BirthSourcesForm(BaseModel):
     person: bool
 
 
-class CompletedTextForm(BaseModel):
+class CompletedHistoriesForm(BaseModel):
     id: int
-    text: str
-    # 本文が踏まえたアイデア
+    histories: list[CharacterHistoryRow]
+    # 説明が踏まえたアイデア
     ideas: list[IdeaMaterial]
 
 
@@ -60,5 +60,5 @@ def completion_target(s: Session, form: RowId) -> CompletionTarget:
 
 
 @db_step
-def save_completed_text(s: Session, form: CompletedTextForm) -> CharacterRecord:
-    return CharacterRecord.model_validate(generator.save_completed_text(s, form.id, form.text, form.ideas))
+def save_completed_histories(s: Session, form: CompletedHistoriesForm) -> CharacterRecord:
+    return CharacterRecord.model_validate(generator.save_completed_histories(s, form.id, form.histories, form.ideas))

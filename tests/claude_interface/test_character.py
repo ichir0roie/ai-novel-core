@@ -29,21 +29,20 @@ _LEVELS = {
 }
 
 
-def _parameter_row(start: str, end: str | None) -> CharacterParameterRow:
+def _parameter_row(start: str) -> CharacterParameterRow:
     return CharacterParameterRow(
-        start=start, end=end, family_name="北原", sex="女", height=158.0, build="小柄", first_person="あたし",
+        start=start, family_name="北原", sex="女", height=158.0, build="小柄", first_person="あたし",
         second_person="あんた", third_person="あいつ", tone="砕けた", dialect="西の訛り", **_LEVELS)
 
 
 def test_commit_character(shown, world):
     result = shown(CommitCharacter(CharacterCreateForm(
-        name="北原ミツ", text="市の香辛料売り", kind="人物", confirmed=ConfirmStatus.PENDING, main_character=True,
+        name="北原ミツ", kind="人物", confirmed=ConfirmStatus.PENDING, main_character=True,
         event_seeded=True, meme_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
-        parameters=[_parameter_row("1180/05/06", "1250/01/01")],
-        histories=[CharacterHistoryRow(start="1195/01/01", end="1210/01/01", description="市で店を開く")])))
+        parameters=[_parameter_row("1180/05/06")],
+        histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
 
     assert result["name"] == "北原ミツ"
-    assert result["text"] == "市の香辛料売り"
     assert result["confirmed"] == "未確認"
     assert result["main_character"] is True
     assert result["start"] == "1180/05/06 00:00:00"
@@ -76,10 +75,9 @@ def test_commit_character_relation(shown, world):
 
 
 def test_create_random_character(shown):
-    result = shown(CreateRandomCharacter(name="乱数の人", text="乱数で作った人", main_character=True))
+    result = shown(CreateRandomCharacter(name="乱数の人", main_character=True))
 
     assert result["name"] == "乱数の人"
-    assert result["text"] == "乱数で作った人"
     assert result["main_character"] is True
     # 返した形のまま確定する入口の引数に渡せる
     CharacterCreateForm.model_validate(result)
@@ -88,8 +86,9 @@ def test_create_random_character(shown):
 def test_generate_character(shown, world, mock_ai):
     result = shown(GenerateCharacter(
         character=CharacterForm(
-            name="生成の人", text="市に流れ着いた楽師", kind="人物", main_character=True, start="1180/01/01",
+            name="生成の人", kind="人物", main_character=True, start="1180/01/01",
             end="1260/01/01", location_id=world.location_id,
+            histories=[CharacterHistoryRow(description="市に流れ着いた楽師")],
             parameters=[CharacterParameterForm(
                 family_name="南条", sex="男", build="大柄", first_person="俺", second_person="お前",
                 third_person="奴", tone="荒い", dialect="港言葉", **_LEVELS)]),
@@ -129,6 +128,8 @@ def test_read_character(shown, world):
 
     assert result["id"] == world.character_ids[0]
     assert result["name"] == "テスト太郎"
+    # その時刻に掛かる行だけを、始まりの古い順に出す
+    assert [history["description"] for history in result["histories"]] == ["テスト太郎の説明", "テスト太郎の来歴"]
 
 
 def test_read_surroundings(shown, world):
@@ -142,14 +143,13 @@ def test_read_surroundings(shown, world):
 
 def test_update_character(shown, world):
     result = shown(UpdateCharacter(CharacterUpdateForm(
-        id=world.character_ids[1], name="テスト花代", text="改名した", kind="人物", confirmed=ConfirmStatus.REJECTED,
+        id=world.character_ids[1], name="テスト花代", kind="人物", confirmed=ConfirmStatus.REJECTED,
         main_character=True, event_seeded=False, meme_seeded=False, start="1171/02/03", end="1261/04/05",
-        parameters=[_parameter_row("1171/02/03", "1261/04/05")],
+        parameters=[_parameter_row("1171/02/03")],
         locations=[CharacterLocationRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
-        histories=[CharacterHistoryRow(start="1200/01/01", end=None, description="改名して村へ移った")])))
+        histories=[CharacterHistoryRow(start=1200, description="改名して村へ移った")])))
 
     assert result["name"] == "テスト花代"
-    assert result["text"] == "改名した"
     assert result["confirmed"] == "非承認"
     assert result["main_character"] is True
     assert (result["event_seeded"], result["meme_seeded"]) == (False, False)

@@ -22,7 +22,8 @@ from data_access_logic.meme.models import (
     DrawnMeme, MemeCategory, MemeDraft, MemesDraft, MemeText, PooledMeme,
 )
 from data_access_logic.query import meme_query
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section, row_of, source_of
+from data_access_logic.character.histories import plot_of
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
 from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
 
 logger = logging.getLogger(__name__)
@@ -67,14 +68,14 @@ _CLASSIFY_SYSTEM_PROMPT = f"""\
 {_CATEGORY_GUIDE}"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は `# plot` の節だけを使う。"""
+    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は説明・来歴の各行の `# plot` の節だけを使う。"""
     sources: list[SourceText] = []
     for idea in s.scalars(meme_query.unseeded_select(Idea)).all():
         sources.append(source_of(idea, "アイデア", idea.text))
     for oracle in s.scalars(meme_query.unseeded_select(Oracle)).all():
         sources.append(source_of(oracle, "覚え書き", oracle.text))
     for character in s.scalars(meme_query.unseeded_select(Character)).all():
-        sources.append(source_of(character, "人物の筋書き", plot_section(character.text)))
+        sources.append(source_of(character, "人物の筋書き", plot_of(character)))
     for event in s.scalars(meme_query.unseeded_select(Event)).all():
         sources.append(source_of(event, "出来事", event.text))
     return [source for source in sources if source.text.strip()]

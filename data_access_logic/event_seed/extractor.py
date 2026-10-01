@@ -19,7 +19,8 @@ from data_access_logic.event_seed.models import (
     ConsolidateDraft, ConsolidateRequestSerialized, SeedMerge, SeedPiles, SeedsDraft, StoredSeed,
 )
 from data_access_logic.query import event_seed_query
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, plot_section, row_of, source_of
+from data_access_logic.character.histories import plot_of
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
 from db.schema import Character, Episode, Event, EventSeed, Story
 
 logger = logging.getLogger(__name__)
@@ -41,14 +42,14 @@ _CONSOLIDATE_SYSTEM_PROMPT = """\
 - まとめる組が無ければ merges は空のリストにする。"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は `# plot` の節だけを使う。"""
+    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は説明・来歴の各行の `# plot` の節だけを使う。"""
     sources: list[SourceText] = []
     for story in s.scalars(event_seed_query.unseeded_select(Story)).all():
         sources.append(source_of(story, "作品の筋書き", story.text))
     for episode in s.scalars(event_seed_query.unseeded_select(Episode)).all():
         sources.append(source_of(episode, "話の骨組み", episode.plot_text.strip() or episode.main_text))
     for character in s.scalars(event_seed_query.unseeded_select(Character)).all():
-        sources.append(source_of(character, "人物の筋書き", plot_section(character.text)))
+        sources.append(source_of(character, "人物の筋書き", plot_of(character)))
     for event in s.scalars(event_seed_query.unseeded_select(Event)).all():
         sources.append(source_of(event, "出来事", event.text))
     return [source for source in sources if source.text.strip()]

@@ -3,7 +3,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from data_access_logic import constants
+from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.models import CharacterBase, CharacterParameterValues
+from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
@@ -22,6 +24,11 @@ class BirthLocationMaterial(LocationTextMaterial):
     parent: LocationMaterial | None = None
 
 
+class NearbyCharacter(CharacterBase):
+    # 生む時刻に掛かる説明・来歴(`histories_at`)
+    histories: list[CharacterHistoryRow]
+
+
 class CharacterBirthMaterial(Material):
     time: Stamp
     person: bool
@@ -33,7 +40,7 @@ class CharacterBirthMaterial(Material):
     # 筋書きから抜き出した立場のうち、サイコロで選んだもの
     element: str | None = None
     memes: list[DrawnMeme]
-    nearby_characters: list[CharacterBase]
+    nearby_characters: list[NearbyCharacter]
     # 人物なら、サイコロと作者の指定で決まっている値。決まっていない値は None
     parameters: CharacterParameterValues | None = None
     # 以下は決まっている値。None なら AI が決める
@@ -101,7 +108,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
             "体現する要素": self.element,
             "行動原理(ミーム)": [{"古今表裏": meme.position, "内容": meme.text} for meme in self.memes],
             "既にいる人物・対象": [
-                {"名前": character.name, "種別": character.kind, "説明": character.text}
+                {"名前": character.name, "種別": character.kind, "説明と来歴(古い順)": histories_for_prompt(character.histories)}
                 for character in self.nearby_characters],
             "性格": _personality(parameters) if parameters else None,
             "決まっている": {
@@ -126,7 +133,7 @@ class CharacterNameMaterial(Material):
     age: int
     parameters: CharacterParameterValues | None = None
     born_location: BirthLocationMaterial | None = None
-    nearby_characters: list[CharacterBase]
+    nearby_characters: list[NearbyCharacter]
     hint_name: str | None = None
 
 
@@ -370,7 +377,7 @@ class BirthSources(Material):
     stories: list[StoryPlotMaterial]
     # この時刻より後に始まる、まだ世に無い設定
     later_ideas: list[IdeaMaterial]
-    nearby_characters: list[CharacterBase]
+    nearby_characters: list[NearbyCharacter]
     # 引く元になるミーム(`meme.extractor.draw_from`)
     meme_pool: list[PooledMeme]
 
@@ -390,7 +397,8 @@ class CharacterCreation(Material):
 
     name: str
     kind: str
-    text: str
+    # 始まりの無い芯の一行と、来歴の節目ごとの行
+    histories: list[CharacterHistoryRow]
     main_character: bool
     parameters: CharacterParameterValues
     birth: Stamp
@@ -402,7 +410,7 @@ class CharacterCreation(Material):
 
 
 class CompletionTarget(Material):
-    """本文(text)を埋める人物・対象の、決まっている値。"""
+    """説明・来歴(histories)を埋める人物・対象の、決まっている値。"""
 
     id: int
     name: str | None = None

@@ -60,9 +60,9 @@ class World:
     event_seed_id: int
 
 
-def _parameter(start: str | None, end: str | None, sex: str) -> CharacterParameter:
+def _parameter(start: str | None, sex: str) -> CharacterParameter:
     return CharacterParameter(
-        start=start, end=end, family_name="テスト家", sex=sex, height=170.5, build="細身",
+        start=start, family_name="テスト家", sex=sex, height=170.5, build="細身",
         first_person="私", second_person="あなた", third_person="あの人", tone="丁寧", dialect="標準語",
         sincerity="高", curiosity="並", proactivity="低", cooperativeness="高", sociability="並",
         emotional_expression="低", self_esteem="並", self_efficacy="高", stress_resilience="並",
@@ -95,10 +95,11 @@ def world() -> Iterator[World]:
                       narration="三人称", state="執筆中", start="1200/01/01", end="1300/01/01", event_seeded=True)
         s.add(story)
         characters = [
-            Character(name=name, text=f"{name}の説明", kind="人物", confirmed=ConfirmStatus.APPROVED,
+            Character(name=name, kind="人物", confirmed=ConfirmStatus.APPROVED,
                       main_character=main, event_seeded=True, meme_seeded=True,
-                      parameters=[_parameter("1170/01/01", "1260/01/01", sex)],
-                      histories=[CharacterHistory(start="1190/01/01", end="1250/01/01", description=f"{name}の来歴")])
+                      end="1260/01/01", parameters=[_parameter("1170/01/01", sex)],
+                      histories=[CharacterHistory(description=f"{name}の説明"),
+                                 CharacterHistory(start=1190, description=f"{name}の来歴")])
             for name, sex, main in (("テスト太郎", "男", True), ("テスト花子", "女", False))]
         s.add_all(characters)
         s.flush()

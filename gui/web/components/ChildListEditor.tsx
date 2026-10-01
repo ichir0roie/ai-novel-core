@@ -34,6 +34,8 @@ function ReadValue({ column, value }: { column: ColumnMeta; value: unknown }) {
 /** 空なら "—"、あれば stamp の日付部分だけ("11579/03/02 10:00:00" → "11579/03/02")。 */
 function formatDateOnly(value: unknown): string {
   if (value == null || value === "") return "—";
+  // 人物の来歴の始まりは年だけの整数
+  if (typeof value === "number") return `${value}年`;
   return String(value).split(" ")[0];
 }
 
@@ -98,6 +100,16 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
     soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={period} row={row} /> });
     if (startAge && endAge) {
       const age: Chip = { key: "__age", label: "年齢", render: (row) => `${startAge.render(row)} ~ ${endAge.render(row)}` };
+      soloSpecs.push({ key: "__age", label: "", render: (row) => <SoloField chip={age} row={row} /> });
+    }
+  } else if (byKey.has("start")) {
+    // 終わりを持たない行(人物のパラメータ・来歴)は、始まりから先ずっと効く
+    consumed.add("start");
+    const startAge = extraColumns.find((e) => e.after === "start");
+    const since: Chip = { key: "__period", label: "期間", render: (row) => `${formatDateOnly(row.start)} ~` };
+    soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={since} row={row} /> });
+    if (startAge) {
+      const age: Chip = { key: "__age", label: "年齢", render: (row) => `${startAge.render(row)} ~` };
       soloSpecs.push({ key: "__age", label: "", render: (row) => <SoloField chip={age} row={row} /> });
     }
   }
@@ -187,7 +199,9 @@ function FlowCard({
   onRemove: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const hasPeriod = meta.columns.some((c) => c.key === "start") && meta.columns.some((c) => c.key === "end");
+  const startColumn = meta.columns.find((c) => c.key === "start");
+  const hasPeriod = startColumn !== undefined;
+  const hasEnd = meta.columns.some((c) => c.key === "end");
   const longColumns = meta.columns.filter((c) => CHILD_FREEFORM_TEXT_KEYS.has(c.key));
   // 1 行目は 番号 → 名前 → 期間 → それ以外の短い項目(場所など)の順に並べる。
   const nameColumn = meta.columns.find((c) => c.key === "name");
@@ -218,12 +232,16 @@ function FlowCard({
         {hasPeriod && (
           editing ? (
             <span className="flow-period-edit">
-              <StampInput value={(row.start as string | null) ?? null} onChange={(v) => onChange("start", v)} />
+              {startColumn?.type === "integer" ? (
+                <FieldInput column={startColumn} value={row.start} onChange={(v) => onChange("start", v)} compact />
+              ) : (
+                <StampInput value={(row.start as string | null) ?? null} onChange={(v) => onChange("start", v)} />
+              )}
               <span className="solo-sep">~</span>
-              <StampInput value={(row.end as string | null) ?? null} onChange={(v) => onChange("end", v)} />
+              {hasEnd && <StampInput value={(row.end as string | null) ?? null} onChange={(v) => onChange("end", v)} />}
             </span>
           ) : (
-            <span className="flow-period">{formatDateOnly(row.start)} ~ {formatDateOnly(row.end)}</span>
+            <span className="flow-period">{formatDateOnly(row.start)} ~ {hasEnd ? formatDateOnly(row.end) : ""}</span>
           )
         )}
         {otherLineColumns.map((column) => (

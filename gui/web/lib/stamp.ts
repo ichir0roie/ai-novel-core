@@ -3,6 +3,8 @@
 export type StampParts = { year: number; month: number; day: number; hour: number; minute: number; second: number };
 
 export function parseStamp(value: unknown): StampParts | null {
+  // 人物の来歴の始まりは年だけの整数
+  if (typeof value === "number") value = String(value);
   if (typeof value !== "string" || value.trim() === "") return null;
   const [year, month = 1, day = 1, hour = 0, minute = 0, second = 0] = value
     .trim()

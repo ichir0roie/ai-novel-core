@@ -21,6 +21,7 @@ from data_access_logic.label import clipped, label_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
+from db.child_lists import child_model
 from db.schema import Base, Character, ConfirmStatusType, Episode, Event, Story
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
@@ -138,13 +139,25 @@ def _ordering(model: type[Base], sort: str, order: str) -> list[ColumnElement[An
     return [key.is_(None), key.desc() if desc else key, model.id.desc() if desc else model.id]
 
 
+def _search_condition(spec: TableSpec, q: str) -> ColumnElement[bool]:
+    """`histories.description` のように点で区切った名前は、子の行のどれかの列に当たるかで見る。"""
+    conditions = []
+    for name in spec.search_columns:
+        relation, _, column = name.rpartition(".")
+        if relation:
+            child = child_model(spec.model, relation)
+            conditions.append(getattr(spec.model, relation).any(getattr(child, column).contains(q, autoescape=True)))
+        else:
+            conditions.append(getattr(spec.model, name).contains(q, autoescape=True))
+    return or_(*conditions)
+
+
 def list_records(s: Session, spec: TableSpec, q: str | None, limit: int, offset: int,
                  sort: str, order: str, filters: dict[str, str]) -> RecordList:
     model = spec.model
     conditions = []
     if q:
-        conditions.append(or_(*(getattr(model, name).contains(q, autoescape=True)
-                                for name in spec.search_columns)))
+        conditions.append(_search_condition(spec, q))
     for key, value in filters.items():
         column = model.__table__.columns.get(key)
         if column is None or value == "":
@@ -164,8 +177,7 @@ def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[in
     model = spec.model
     conditions = []
     if q:
-        conditions.append(or_(*(getattr(model, name).contains(q, autoescape=True)
-                                for name in spec.search_columns)))
+        conditions.append(_search_condition(spec, q))
     if ids:
         conditions.append(model.id.in_(ids))
     # 人物はメインキャラクターを先に並べる(話の登場人物・視点で選ぶことが多い)

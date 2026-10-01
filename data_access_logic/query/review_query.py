@@ -14,8 +14,9 @@ def pending_select(model: type[Character] | type[Event] | type[Idea] | type[Meme
 
 
 def text_models() -> list[type]:
-    """本文を持つテーブル(`ContentBase`)すべて"""
-    return [mapper.class_ for mapper in Base.registry.mappers if issubclass(mapper.class_, ContentBase)]
+    """本文の列を持つテーブル(`ContentBase` のうち `TEXT_COLUMNS` のあるもの)すべて"""
+    return [mapper.class_ for mapper in Base.registry.mappers
+            if issubclass(mapper.class_, ContentBase) and mapper.class_.TEXT_COLUMNS]
 
 
 def todo_select(model: type[ContentBase]) -> Select:

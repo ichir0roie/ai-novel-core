@@ -403,15 +403,15 @@ PERSON_PARAMETER_COLUMNS = (
 )
 
 
-class Character(EventSeededMixin, MemeSeededMixin, TextBase):
+class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
+    人物の説明・来歴は本文の列を持たず、すべて期間ごとの `CharacterHistory` に積む。
     """
 
     __tablename__ = "character"
-
-    text: Mapped[str | None] = mapped_column(String, nullable=True, sort_order=10000)
+    TEXT_COLUMNS = ()
 
     name: Mapped[str | None] = mapped_column(String, sort_order=210)
     kind: Mapped[str] = mapped_column(
@@ -429,19 +429,16 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
         comment="メインキャラクターか。"
         "出来事・筋書きのランダム生成は、この列が false(サブキャラクター)の人物・対象だけを対象にする",
         sort_order=240)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="没年(この時からはいない)。空なら死んでいない", sort_order=250)
 
     # 出自(生まれの場所)は別列を持たず、CharacterLocation の一番古い行として表す。
-    # 名字・体格・口調・性格は期間ごとに CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
-    # 入口では `parameters` / `locations` の配列で出し入れする。誕生・死亡も専用の列を持たず、
-    # `parameters` の一番早く始まる行の start・一番後に始まる行の end として表す(下の `start` / `end`)。
-    # 人物の説明の変化は期間ごとに CharacterHistory が持ち、入口では `histories` の配列で出し入れする
+    # 名字・体格・口調・性格は CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
+    # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
+    # `parameters` の一番早く始まる行の start として表す(下の `start`)。
+    # 人物の説明・来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
     # (Idea の `recognitions` と同じ扱い)。
     CHILD_LISTS = ("parameters", "locations", "histories")
-    def _last_parameter(self) -> "CharacterParameter | None":
-        if not self.parameters:
-            return None
-        bounded = [(row.start, row) for row in self.parameters if row.start is not None]
-        return max(bounded, key=lambda pair: pair[0])[1] if bounded else self.parameters[-1]
 
     @property
     def start(self) -> Stamp | None:
@@ -455,20 +452,6 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
         if not self.parameters:
             self.parameters.append(row)
         row.start = Stamp.parse(value)
-
-    @property
-    def end(self) -> Stamp | None:
-        """死亡。`parameters` の一番後に始まる行(=今も効いている行)の end。"""
-        last = self._last_parameter()
-        return last.end if last else None
-
-    @end.setter
-    def end(self, value) -> None:
-        last = self._last_parameter()
-        if last is None:
-            last = CharacterParameter()
-            self.parameters.append(last)
-        last.end = Stamp.parse(value)
 
     # relationships
 
@@ -490,10 +473,11 @@ class Character(EventSeededMixin, MemeSeededMixin, TextBase):
 
 
 class CharacterParameter(Base):
-    """人物の名字・体格・口調・性格を、期間ごとに一行で持つ。
+    """人物の名字・体格・口調・性格を、変わった時ごとに一行で持つ。
 
-    空の列は「この期間では決めない」。ある時刻の値は `data_access_logic/character/parameters.py` の `parameters_at` が、その時刻に掛かる行を
-    期間を限らない行から順に重ねて決める。名字・体格・口調は人物だけが持ち、人物以外の対象は空のまま。
+    行は `start` から先ずっと効き、終わりを持たない(後に始まる行が上書きする)。空の列は「この行では決めない」。
+    ある時刻の値は `data_access_logic/character/parameters.py` の `parameters_at` が、その時刻までに始まった行を
+    始まりの古い順に重ねて決める。名字・体格・口調は人物だけが持ち、人物以外の対象は空のまま。
     """
 
     __tablename__ = "character_parameter"
@@ -502,8 +486,6 @@ class CharacterParameter(Base):
         Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="この値が効き始める時。空なら初めから", sort_order=110)
-    end: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="この値が効き終わる時(この時からは効かない)。空なら終わりまで", sort_order=120)
 
     # --- 名字 -------------------------------------------------------------
     family_name: Mapped[str | None] = mapped_column(
@@ -552,11 +534,8 @@ class CharacterParameter(Base):
 
     character: Mapped[Character] = relationship(back_populates="parameters", lazy="noload")
 
-    def covers(self, time: Stamp | None) -> bool:
-        """時刻が空なら、期間を限らない行だけが掛かる。"""
-        if time is None:
-            return self.start is None and self.end is None
-        return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
+    def covers(self, time: Stamp) -> bool:
+        return self.start is None or self.start <= time
 
 
 class CharacterLocation(Base):
@@ -599,23 +578,27 @@ class CharacterRelation(TextBase):
 
 
 class CharacterHistory(Base):
-    """人物の説明(来歴)を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
+    """人物の説明・来歴を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
 
-    `character.text` 自体は書き換えず、時が進むにつれて変わった立場・境遇などを
-    `start` から `end` の手前までの期間ごとに `description` として積む。
+    人物は本文の列を持たない。始まりの無い行に人物の芯(説明・meme・行動原理)を置き、
+    時が進むにつれて起きたこと・変わった立場・境遇などを、起きた年を `start` にした行として書き足す。行は終わりを持たない。
+    行が増えすぎないよう、始まりは年単位にし、同じ年のことは一行にまとめる。
+    ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
+    先の時刻の行を書き足しても、それより前の話・出来事には効かない。
     """
 
     __tablename__ = "character_history"
 
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="この説明が効き始める時。空なら始まりを限らない", sort_order=110)
-    end: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="この説明が効き終わる時(この時からは効かない)。空なら終わりを限らない", sort_order=120)
-    description: Mapped[str] = mapped_column(String, nullable=False, comment="この期間での説明", sort_order=130)
+    start: Mapped[int | None] = mapped_column(
+        Integer, comment="この説明・来歴が効き始める年(起きた年)。空なら始まりを限らない", sort_order=110)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="説明・来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
+
+    def covers(self, time: Stamp) -> bool:
+        return self.start is None or self.start <= time.year
 
 
 class Idea(MemeSeededMixin, TextBase):

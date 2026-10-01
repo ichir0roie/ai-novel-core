@@ -23,6 +23,7 @@ from data_access_logic.character.cast import mentioned_of
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator import generate_character
 from data_access_logic.character.models import MentionedMaterial
+from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.episode.models import (
     EpisodeCastingDraft, EpisodeCastingRequestSerialized, EpisodeCharacterCandidateDraft, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodePlotDraft, EpisodePlotRequestSerialized,
@@ -146,6 +147,11 @@ def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidat
     return location
 
 
+def character_draft(candidate: EpisodeCharacterCandidateDraft) -> CharacterForm:
+    """候補の人物像と役どころを、作る人物の説明の下書きにする。"""
+    return CharacterForm(name=candidate.called, histories=[CharacterHistoryRow(description=candidate.text)])
+
+
 def add_characters(
     s: Session, ai: AIClient, episode_id: int, candidates: list[EpisodeCharacterCandidateDraft],
     location_id: int | None, time: Stamp, plot_text: str,
@@ -154,7 +160,7 @@ def add_characters(
     for candidate in candidates:
         # generate_character は一人ごとに commit するので、途中で止まっても作った人物は残る
         record = generate_character(
-            s, ai, rng, location_id, time, True, CharacterForm(name=candidate.called, text=candidate.text), plot_text)
+            s, ai, rng, location_id, time, True, character_draft(candidate), plot_text)
         if record is None:
             logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
             continue

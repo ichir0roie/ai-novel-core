@@ -1,4 +1,4 @@
-"""人物の名字・体格・口調・性格は、期間ごとの行(`character_parameter`)を重ねて決める。"""
+"""人物の名字・体格・口調・性格は、変わった時ごとの行(`character_parameter`)を重ねて決める。"""
 import random
 
 from pydantic import BaseModel
@@ -11,13 +11,9 @@ from db.stamp import Stamp
 _HEIGHT_RANGE_CM = (140.0, 195.0)
 
 
-def _bounds(row: CharacterParameter) -> int:
-    return (row.start is not None) + (row.end is not None)
-
-
 def _order(row: CharacterParameter) -> tuple:
-    # 期間を限る端が多い行ほど後に重ねて勝たせる。同じなら始まりの遅い行、後に足した行が勝つ
-    return _bounds(row), row.start.to_int() if row.start is not None else -1, row.id or 0
+    # 始まりの遅い行ほど後に重ねて勝たせる。同じなら後に足した行が勝つ
+    return row.start.to_int() if row.start is not None else -1, row.id or 0
 
 
 def overlay(values: CharacterParameterValues, row: BaseModel) -> None:
@@ -28,15 +24,12 @@ def overlay(values: CharacterParameterValues, row: BaseModel) -> None:
 
 
 def parameters_at(character: Character, time: Stamp | None) -> CharacterParameterValues:
-    """時刻に掛かる行を、期間を限らない行から順に重ねる。どの行も決めていない性格の軸は「並」。"""
+    """時刻までに始まった行を、始まりの古い順に重ねる。どの行も決めていない性格の軸は「並」。
+    時刻が空なら、始まりの無い行と一番早く始まる行(誕生の行)だけ、つまり生まれたときの値。"""
     rows = list(character.parameters)
     if time is None:
-        # 一番早く始まる行の start は誕生(`Character.start`)を、一番後に始まる行の end は
-        # 死亡(`Character.end`)を兼ねるので、`covers(None)`(期間を限らない行だけ)に絞ると、
-        # 誕生・死亡を持つだけの行(たいていは唯一の行)まで丸ごと外れてしまう。
-        # 代わりに、一番限る端が少ない(＝一番土台になる)行を採る。
-        least = min((_bounds(row) for row in rows), default=None)
-        selected = [row for row in rows if _bounds(row) == least]
+        born = character.start
+        selected = [row for row in rows if row.start is None or row.start == born]
     else:
         selected = [row for row in rows if row.covers(time)]
     values = CharacterParameterValues()
@@ -60,8 +53,8 @@ def without_person_values(values: CharacterParameterValues) -> CharacterParamete
     return values
 
 
-def parameter_row(values: CharacterParameterValues, start: Stamp | None, end: Stamp | None) -> CharacterParameter:
-    row = CharacterParameter(start=start, end=end)
+def parameter_row(values: CharacterParameterValues, start: Stamp | None) -> CharacterParameter:
+    row = CharacterParameter(start=start)
     for name, value in values:
         setattr(row, name, value)
     return row

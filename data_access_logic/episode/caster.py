@@ -15,9 +15,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import age_at
-from data_access_logic.character.models import CastCandidateSerialized
-from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character.cast import candidate_at
 from data_access_logic.episode.mentions import cast_characters, mentioned_characters
 from data_access_logic.episode.models import (
     EpisodeCastDraft, EpisodeCastMaterial, EpisodeCastMaterialSerialized, EpisodeCharacterCandidateDraft, StoryMaterial,
@@ -53,10 +51,6 @@ def _episode(s: Session, episode_id: int) -> Episode:
     if episode is None:
         raise ValueError(f"話 id={episode_id} が見つからない")
     return episode
-
-
-def _candidate(character: Character, time: Stamp) -> CastCandidateSerialized:
-    return CastCandidateSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time))
 
 
 def _related_ids(s: Session, cast_ids: set[int], time: Stamp) -> list[int]:
@@ -108,8 +102,8 @@ def cast_material(s: Session, episode_id: int) -> EpisodeCastMaterialSerialized:
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
-        cast=[_candidate(character, time) for character in cast],
-        candidates=[_candidate(character, time) for character in candidates],
+        cast=[candidate_at(character, time) for character in cast],
+        candidates=[candidate_at(character, time) for character in candidates],
     )
 
 

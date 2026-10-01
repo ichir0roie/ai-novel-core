@@ -38,26 +38,27 @@ def generate(
     return call(character_steps.save_character, generator.character_creation(ai, decided, ideas, born_location_id, form))
 
 
-def _complete_text(ai: AIClient, rng: random.Random, character_id: int) -> CharacterRecord:
+def _complete_histories(ai: AIClient, rng: random.Random, character_id: int) -> CharacterRecord:
     target = call(character_steps.completion_target, RowId(id=character_id))
     sources = call(character_steps.birth_sources, character_steps.BirthSourcesForm(
         born_location_id=target.born_location_id, time=target.time, person=target.person))
     material, content = generator.completion_content(ai, rng, target, sources)
     ideas = call(idea_steps.resolve_ideas, idea_steps.ResolveForm(
         keywords=keywords_of(content.text, ai, target.time), location_id=target.born_location_id, time=target.time))
-    return call(character_steps.save_completed_text, character_steps.CompletedTextForm(
-        id=character_id, text=generator.completed_text(ai, target, material, content, ideas), ideas=ideas.linked))
+    return call(character_steps.save_completed_histories, character_steps.CompletedHistoriesForm(
+        id=character_id, histories=generator.completed_histories(ai, target, material, content, ideas),
+        ideas=ideas.linked))
 
 
 def generate_character(
     character: CharacterForm | None = None, time: Stamp | str | None = None, seed: int | None = None,
     plot_text: str | None = None, ai: AIClient = ai_client,
 ) -> CharacterRecord:
-    """`GenerateCharacter` に当たる。`id` を渡せば、その人物の本文(text)が空のときに限り本文だけを埋める。"""
+    """`GenerateCharacter` に当たる。`id` を渡せば、その人物の説明・来歴(histories)が無いときに限り説明・来歴だけを埋める。"""
     form = character or CharacterForm()
     rng = random.Random(seed)
     if form.id is not None:
-        return _complete_text(ai, rng, form.id)
+        return _complete_histories(ai, rng, form.id)
     decided_time = call(character_steps.generation_time, character_steps.GenerationTimeForm(
         location_id=form.location_id, time=None if time is None else str(time)))
     person = (form.kind or CHARACTER_KIND_PERSON) == CHARACTER_KIND_PERSON

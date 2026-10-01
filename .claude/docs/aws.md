@@ -22,7 +22,8 @@ core(ai-novel-core)は公開リポジトリで、誰がクローンしても、�
 
 | 場所 | db への道 | db のロール | 持つ鍵 |
 | --- | --- | --- | --- |
-| 手元(CLI・VS Code) | 踏み台越しの転送(`tool.aws.rds --serve`、127.0.0.1:15432)。ふだんの読み書きは IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`)。マイグレーションなど DDL が要る作業は `tool.aws.rds --` 越しにマスターで | `novel_app`(ふだん)/ マスター(DDL) | 手元の AWS CLI の権限(`rds-db:connect`・マスターの秘密の読み取り) |
+| 手元(CLI・VS Code) | 踏み台越しの転送(`tool.aws.rds --serve`、127.0.0.1:15432)。ふだんの読み書きは IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`)。手で当てるマイグレーションなど DDL が要る作業は `tool.aws.rds --` 越しにマスターで | `novel_app`(ふだん)/ マスター(DDL) | 手元の AWS CLI の権限(`rds-db:connect`・マスターの秘密の読み取り) |
+| Lambda(`novel-migrate`) | VPC の中から psycopg で直に。IAM データベース認証。CI が `main` へのマージごとに呼び、`alembic upgrade head` だけを流す | `novel_migrator`(表の持ち主) | 実行ロールの `rds-db:connect` |
 | Lambda(`novel-api`) | VPC の中から psycopg で直に。IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`) | `novel_app`(行の読み書きだけ) | 実行ロールの `rds-db:connect` |
 | web のセッション(Claude Code on the web) | db には繋がない。`novel-api` の API のエンドポイントだけを呼ぶ | 無し | web 用の API の合言葉だけ |
 
@@ -30,12 +31,14 @@ web のセッションでは、環境変数 `CLAUDE_CODE_REMOTE` が `true` に�
 
 ## 決まり
 
-1. マイグレーション(`alembic upgrade`)を AWS の db に当てるのは、手元から `tool.aws.rds` 越しにだけ行う。
-   web のセッション・Lambda・GitHub Actions からは当てない。当てるのはユーザに言われてからにし、前にマイグレーションの中身をユーザに見せる
+1. マイグレーションは、`main` へのマージで CI(`deploy-api.yml`)が Lambda `novel-migrate` を呼んで AWS の db に当てる(`.docs/ci-cd.md` の「マイグレーション」)。
+   中身は PR のレビューで見せる。手で当てる(CI を待たない・downgrade する)のは、ユーザに言われてから手元の `tool.aws.rds` 越しにだけ行う。
+   web のセッション・API の Lambda からは当てない。GitHub Actions に db への道やマスターの秘密を渡さない
 2. web のセッションでは、db に直に繋がず API を呼ぶ(手順と決まりは `.claude/docs/web-db.md`)
 3. API に、任意の SQL や、表を丸ごと消すような操作を受ける口を作らない。公開するのは `data_access_logic` の入口と、画面のための決まった操作だけ
-4. `novel_app` に表を作る・変える権限(DDL)を与えない。表の形を変えるのはマイグレーションだけで、マスターで流す。
-   これから増える表への `novel_app` の権限は、マスターに掛けた既定の権限(`infra/sql/novel_app.sql`)で付くので、マイグレーションをマスター以外で流さない
+4. `novel_app` に表を作る・変える権限(DDL)を与えない。表の形を変えるのはマイグレーションだけで、表の持ち主の `novel_migrator` で流す
+   (手元からマスターで流しても、`db/alembic/env.py` が `novel_migrator` に `SET ROLE` する)。
+   これから増える表への `novel_app` の権限は、`novel_migrator` に掛けた既定の権限(`infra/sql/novel_migrator.sql`)で付く
 5. AWS の資源は `infra/` の CDK で持つ。コンソールや CLI で直に作らない・変えない(状態を調べる読み取りはよい)。
    `cdk deploy` や資源を変える操作は、ユーザに承認を得てから行う。費用を抑えるため、NAT ゲートウェイや VPC のインターフェースエンドポイントを足さない
 6. 鍵は呼ぶ側ごとに分ける。API の合言葉は、画面(Amplify)用と web 用で別にする。web の環境に置くのは web 用の合言葉だけで、
