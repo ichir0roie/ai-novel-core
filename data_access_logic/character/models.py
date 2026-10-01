@@ -14,6 +14,7 @@ class CharacterBase(Material):
 
 
 class CharacterMaterial(CharacterBase):
+    id: int
     confirmed: ConfirmStatus
 
     @field_validator("confirmed")

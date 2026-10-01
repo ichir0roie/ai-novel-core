@@ -7,6 +7,7 @@ from ai.instructions.style import layout_novel_text
 from data_access_logic.ai_entrypoint import CommitAndRefresh
 from data_access_logic.entrypoint import record_of
 from data_access_logic.episode.form import EpisodeCommitForm, set_characters
+from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.query import common_query
 from db.schema import Character, Episode, Location, Story
@@ -41,4 +42,5 @@ class CommitEpisode(CommitAndRefresh):
         # 渡されなければ既存の登場人物はそのまま
         if form.character_ids is not None:
             set_characters(s, record.id, form.character_ids)
+        save_mentions(s, record.id)
         return record_of(s, EpisodeRecord, record)

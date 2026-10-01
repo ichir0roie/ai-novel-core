@@ -26,6 +26,7 @@ FLOWS: dict[str, Callable[..., Any]] = {
     "episode.complete_plot.CompletePlot": episode.complete_plot,
     "episode.generate_episode.GenerateEpisode": episode.generate_episode,
     "episode.generate_frame.GenerateFrame": episode.generate_frame,
+    "episode.read_episode_brief.ReadEpisodeBrief": episode.read_episode_brief,
     "episode.revise_episode.ReviseEpisode": episode.revise_episode,
     "episode.rewrite_episode_summary.RewriteEpisodeSummary": episode.rewrite_episode_summary,
     "event.commit_event.CommitEvent": commit.commit_event,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""話の生成・推敲・プロット補完・概要の作り直しを、API 越しに回す。
+"""話の生成・推敲・プロット補完・概要の作り直しと、Claude が自分で書くための材料の読み出しを、API 越しに回す。
 
 引数は `data_access_logic/episode/` の入口(`GenerateEpisode` など)と同じ。db の段は `data_access_logic/episode/steps.py`、
 AI の段は `writer` / `framer` / `reviser` / `plot_completer` の `*_draft`。
@@ -17,7 +17,7 @@ from data_access_logic.character.form import CharacterForm
 from data_access_logic.episode import caster, framer, plot_completer, reviser, writer
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeForm
-from data_access_logic.episode.models import EpisodeCharacterCandidateDraft, EpisodeMaterial
+from data_access_logic.episode.models import EpisodeBriefSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
@@ -176,6 +176,12 @@ def complete_plot(
             episode_id=saved.id, candidate=casting.location, parent_id=location_id))
     logger.info(f"{material.story.name} 話 id={saved.id} のプロットを補完した")
     return _record(saved.id)
+
+
+def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
+    """`ReadEpisodeBrief` に当たる。"""
+    refresh(ai, call(episode_steps.brief_targets, RowId(id=episode_id)))
+    return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, RowId(id=episode_id)))
 
 
 def rewrite_episode_summary(episode_ids: list[int], ai: AIClient = ai_client) -> list[EpisodeSummaryRecord]:

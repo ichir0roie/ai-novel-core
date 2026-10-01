@@ -78,12 +78,12 @@ def _location_id(episode: Episode) -> int | None:
     return episode.location_id or episode.story.location_id
 
 
-def _location_events_select(location_id: int, start: Stamp) -> Select[Event]:
+def location_events_select(location_id: int, start: Stamp) -> Select[Event]:
     return (common_query.events_of_location_select(location_id, until=start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
             .where(Event.confirmed == ConfirmStatus.APPROVED))
 
 
-def _later_events_select(location_id: int | None, characters: list[Character], start: Stamp) -> Select[Event]:
+def later_events_select(location_id: int | None, characters: list[Character], start: Stamp) -> Select[Event]:
     return common_query.events_after_select(
         location_id, [character.id for character in characters], start, limit=constants.LATER_EVENT_LIMIT)
 
@@ -93,9 +93,9 @@ def writing_targets(s: Session, episode_id: int) -> WritingTargets:
     main_episode = TargetEpisode.model_validate(episode)
     location_id = _location_id(episode)
     characters = cast_characters(episode)
-    location_events = (s.scalars(_location_events_select(location_id, main_episode.start)).all()
+    location_events = (s.scalars(location_events_select(location_id, main_episode.start)).all()
                        if location_id is not None else [])
-    later_events = s.scalars(_later_events_select(location_id, characters, main_episode.start)).all()
+    later_events = s.scalars(later_events_select(location_id, characters, main_episode.start)).all()
     return WritingTargets(
         episode_ids=past_episode_ids(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
         event_ids=[*cast_event_ids(s, characters, main_episode.start),
@@ -120,9 +120,9 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaTerm]) -> E
         cast=cast_of(s, characters, main_episode.start),
         mentioned=mentioned_of(mentioned_in(episode), main_episode.start),
         relations=relations_at(s, characters, main_episode.start),
-        location_events=list(reversed(events_of(s, _location_events_select(location_id, main_episode.start))))
+        location_events=list(reversed(events_of(s, location_events_select(location_id, main_episode.start))))
         if location_id is not None else [],
-        later_events=events_of(s, _later_events_select(location_id, characters, main_episode.start)),
+        later_events=events_of(s, later_events_select(location_id, characters, main_episode.start)),
         ideas=resolve_ideas(s, keywords, location_id, main_episode.start),
     )
 
