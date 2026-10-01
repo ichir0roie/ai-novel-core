@@ -294,13 +294,9 @@ class EpisodeBrief(Material):
     recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
-    # 話の場所の直下にある場所
-    child_locations: list[LocationMaterial]
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
     mentioned: list[MentionedMaterial]
-    # 登場人物・名前だけ出る人物のどちらでもない、登場人物と関係のある人物・話の場所にいる人物
-    candidates: list[CastCandidate]
     # 登場人物のどれかが片側にいる関係
     relations: list[CharacterRelationLine]
     # 古い順
@@ -319,11 +315,10 @@ class EpisodeBriefSerialized(EpisodeBrief):
 
     cast: list[CastSerialized]
     mentioned: list[MentionedSerialized]
-    candidates: list[CastCandidateSerialized]
     location_events: list[EventSerialized]
     later_events: list[EventSerialized]
 
-    # 読んだ Claude が書いたあとに登場人物・場所・視点を id で直すので、AI へ渡す形と違って id を残す
+    # 読んだ Claude が登場人物・場所・視点を id で直すので、AI へ渡す形と違って id を残す
     @model_serializer
     def _for_claude(self) -> dict[str, Any]:
         episode = self.main_episode
@@ -347,10 +342,58 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
             },
-            "登場人物の候補": [member.model_dump() for member in self.candidates],
-            "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
             "この場所の直近の出来事(古い順)": [event.model_dump() for event in self.location_events],
             "この時点より後に既に決まっている出来事": [event.model_dump() for event in self.later_events],
+        }
+
+
+class CastingEpisode(EpisodeBase):
+    id: int
+    start: Stamp
+    plot_text: str
+    viewpoint_character: CharacterMaterial | None = None
+
+
+class EpisodeCasting(Material):
+    """本文の材料を読む前に、登場人物・場所を決める材料。"""
+
+    main_episode: CastingEpisode
+    # 話の場所(無ければ作品の立つ場所)とその親。広い順
+    locations: list[LocationMaterial]
+    # 話の場所の直下にある場所
+    child_locations: list[LocationMaterial]
+    cast: list[CastCandidate]
+    # 登場人物でなく、プロット・本文に名前が出るだけの人物
+    mentioned: list[CastCandidate]
+    # 登場人物・名前だけ出る人物のどちらでもない、登場人物と関係のある人物・話の場所にいる人物
+    candidates: list[CastCandidate]
+
+
+class EpisodeCastingSerialized(EpisodeCasting):
+    """このセッションの Claude が読む形に整形する。"""
+
+    cast: list[CastCandidateSerialized]
+    mentioned: list[CastCandidateSerialized]
+    candidates: list[CastCandidateSerialized]
+
+    # 読んだ Claude が登場人物・場所・視点を id で結ぶので、AI へ渡す形と違って id を残す
+    @model_serializer
+    def _for_claude(self) -> dict[str, Any]:
+        episode = self.main_episode
+        viewpoint = episode.viewpoint_character
+        return {
+            "この話": {
+                "話id": episode.id,
+                "題": episode.title,
+                "時刻": str(episode.start),
+                "場所(広い順)": [_place(location) for location in self.locations],
+                "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
+                "プロット": episode.plot_text,
+            },
+            "登場人物": [member.model_dump() for member in self.cast],
+            "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
+            "登場人物の候補": [member.model_dump() for member in self.candidates],
+            "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
         }
 
 

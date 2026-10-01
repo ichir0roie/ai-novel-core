@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """話の本文を、`claude -p` の生成関数に任せず、このセッションの Claude が自分で書く・直すための材料。
 
-材料を読むだけで、書いた本文・登場人物・場所は Claude が `CommitEpisode` などの入口で確定する(スキル `episode` / `revise-episode`)。
-db だけの段(`brief_targets` → 要約を揃える → `episode_brief`)に分けてある。
+本文の材料(登場人物の直近の出来事・関係、場所の出来事)は話に結んだ登場人物・場所から引くので、先に `episode_casting` で
+登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
+本文は Claude が `CommitEpisode` で確定する。
+本文の材料は db だけの段(`brief_targets` → 要約を揃える → `episode_brief`)に分けてある。
 手元では `read_brief` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
 """
 from __future__ import annotations
@@ -20,7 +22,9 @@ from data_access_logic.character.models import CastCandidateSerialized
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
-from data_access_logic.episode.models import BriefEpisode, EpisodeBriefSerialized, StoryMaterial
+from data_access_logic.episode.models import (
+    BriefEpisode, CastingEpisode, EpisodeBriefSerialized, EpisodeCastingSerialized, StoryMaterial,
+)
 from data_access_logic.episode.plot_completer import known_locations
 from data_access_logic.episode.summary import past_episode_ids, past_episodes, recent_episodes
 from data_access_logic.episode.writer import later_events_select, location_events_select
@@ -29,7 +33,8 @@ from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
 from data_access_logic.style_preference.form import StyleTarget
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Episode, EpisodeCharacter
+from db.schema import Character, Episode, EpisodeCharacter
+from db.stamp import Stamp
 
 
 def _episode(s: Session, episode_id: int) -> Episode:
@@ -64,6 +69,30 @@ def _guide(s: Session) -> str:
     ])
 
 
+def _sheet(character: Character, time: Stamp) -> CastCandidateSerialized:
+    return CastCandidateSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time))
+
+
+def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
+    """本文の材料を読む前に、プロットから登場人物・場所を決める材料。要約を使わないので AI は呼ばない。"""
+    episode = _episode(s, episode_id)
+    main_episode = CastingEpisode.model_validate(episode)
+    time = main_episode.start
+    location_id = _location_id(episode)
+    characters = cast_characters(episode)
+    mentioned = mentioned_in(episode)
+    candidates = candidate_characters(
+        s, episode, {character.id for character in [*characters, *mentioned]}, location_id, time)
+    return EpisodeCastingSerialized(
+        main_episode=main_episode,
+        locations=common_query.location_path(s, location_id) if location_id is not None else [],
+        child_locations=known_locations(s, location_id),
+        cast=[_sheet(character, time) for character in characters],
+        mentioned=[_sheet(character, time) for character in mentioned],
+        candidates=[_sheet(character, time) for character in candidates],
+    )
+
+
 def brief_targets(s: Session, episode_id: int) -> SummaryTargets:
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)
@@ -86,21 +115,14 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
     time = main_episode.start
     location_id = _location_id(episode)
     characters = cast_characters(episode)
-    mentioned = mentioned_in(episode)
-    candidates = candidate_characters(
-        s, episode, {character.id for character in [*characters, *mentioned]}, location_id, time)
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
         past_episodes=past_episodes(s, episode, constants.EPISODE_FULL_TEXT_COUNT),
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
-        child_locations=known_locations(s, location_id),
         cast=cast_of(s, characters, time),
-        mentioned=mentioned_of(mentioned, time),
-        candidates=[CastCandidateSerialized(character=character, age=age_at(character, time),
-                                            parameters=parameters_at(character, time))
-                    for character in candidates],
+        mentioned=mentioned_of(mentioned_in(episode), time),
         relations=relations_at(s, characters, time),
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],

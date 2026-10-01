@@ -23,7 +23,20 @@ print('EPISODE_ID', CommitEpisode(EpisodeCommitForm(
 "
 ```
 
-材料を読む(`<scratchpad>` はセッションのスクラッチパッド):
+登場人物・場所を決める材料を読み、決めたら結ぶ:
+
+```
+.venv/bin/python -c "
+from data_access_logic.episode.read_episode_casting import ReadEpisodeCasting
+ReadEpisodeCasting(<話id>).show()
+"
+.venv/bin/python -c "
+from data_access_logic.episode.cast_episode import CastEpisode
+CastEpisode(<話id>, character_ids=[<人物id>, ...], location_id=<場所id>, viewpoint_character_id=<人物id>).show()
+"
+```
+
+本文の材料を読む(結んだあとに読む。`<scratchpad>` はセッションのスクラッチパッド):
 
 ```
 .venv/bin/python -c "
@@ -45,7 +58,7 @@ from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm
 CommitEpisode(EpisodeCommitForm(
     id=<話id>, title='<題>', main_text=Path('<scratchpad>/episode_<話id>.txt').read_text(encoding='utf-8'),
-    character_ids=[<人物id>, ...], location_id=<場所id>, viewpoint_character_id=<人物id>, synced=True)).run()
+    synced=True)).run()
 "
 ```
 
