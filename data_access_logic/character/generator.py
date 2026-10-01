@@ -248,8 +248,12 @@ def _polished(ai: AIClient, draft: str, ideas: IdeaContextMaterial) -> str:
 
 
 def _history(items: list[HistoryItemDraft], born_year: int, age: int) -> list[CharacterHistoryRow]:
-    rows = sorted((item for item in items if item.text.strip() and item.age <= age), key=lambda item: item.age)
-    return [CharacterHistoryRow(start=Stamp(born_year + item.age), description=item.text.strip()) for item in rows]
+    """同じ歳の節目は一行にまとめる。"""
+    by_year: dict[int, list[str]] = {}
+    for item in sorted(items, key=lambda item: item.age):
+        if item.text.strip() and item.age <= age:
+            by_year.setdefault(born_year + item.age, []).append(item.text.strip())
+    return [CharacterHistoryRow(start=year, description="\n".join(texts)) for year, texts in by_year.items()]
 
 
 def _histories(

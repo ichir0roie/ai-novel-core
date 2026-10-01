@@ -581,7 +581,8 @@ class CharacterHistory(Base):
     """人物の説明・来歴を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
 
     人物は本文の列を持たない。始まりの無い行に人物の芯(説明・meme・行動原理)を置き、
-    時が進むにつれて起きたこと・変わった立場・境遇などを、起きた時を `start` にした行として書き足す。行は終わりを持たない。
+    時が進むにつれて起きたこと・変わった立場・境遇などを、起きた年を `start` にした行として書き足す。行は終わりを持たない。
+    行が増えすぎないよう、始まりは年単位にし、同じ年のことは一行にまとめる。
     ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
     """
@@ -590,14 +591,14 @@ class CharacterHistory(Base):
 
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="この説明・来歴が効き始める時(起きた時)。空なら始まりを限らない", sort_order=110)
+    start: Mapped[int | None] = mapped_column(
+        Integer, comment="この説明・来歴が効き始める年(起きた年)。空なら始まりを限らない", sort_order=110)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="説明・来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is None or self.start <= time
+        return self.start is None or self.start <= time.year
 
 
 class Idea(MemeSeededMixin, TextBase):

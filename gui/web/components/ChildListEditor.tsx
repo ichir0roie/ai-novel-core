@@ -34,6 +34,8 @@ function ReadValue({ column, value }: { column: ColumnMeta; value: unknown }) {
 /** 空なら "—"、あれば stamp の日付部分だけ("11579/03/02 10:00:00" → "11579/03/02")。 */
 function formatDateOnly(value: unknown): string {
   if (value == null || value === "") return "—";
+  // 人物の来歴の始まりは年だけの整数
+  if (typeof value === "number") return `${value}年`;
   return String(value).split(" ")[0];
 }
 
@@ -197,7 +199,8 @@ function FlowCard({
   onRemove: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const hasPeriod = meta.columns.some((c) => c.key === "start");
+  const startColumn = meta.columns.find((c) => c.key === "start");
+  const hasPeriod = startColumn !== undefined;
   const hasEnd = meta.columns.some((c) => c.key === "end");
   const longColumns = meta.columns.filter((c) => CHILD_FREEFORM_TEXT_KEYS.has(c.key));
   // 1 行目は 番号 → 名前 → 期間 → それ以外の短い項目(場所など)の順に並べる。
@@ -229,7 +232,11 @@ function FlowCard({
         {hasPeriod && (
           editing ? (
             <span className="flow-period-edit">
-              <StampInput value={(row.start as string | null) ?? null} onChange={(v) => onChange("start", v)} />
+              {startColumn?.type === "integer" ? (
+                <FieldInput column={startColumn} value={row.start} onChange={(v) => onChange("start", v)} compact />
+              ) : (
+                <StampInput value={(row.start as string | null) ?? null} onChange={(v) => onChange("start", v)} />
+              )}
               <span className="solo-sep">~</span>
               {hasEnd && <StampInput value={(row.end as string | null) ?? null} onChange={(v) => onChange("end", v)} />}
             </span>

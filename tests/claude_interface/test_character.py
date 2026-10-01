@@ -40,7 +40,7 @@ def test_commit_character(shown, world):
         name="北原ミツ", kind="人物", confirmed=ConfirmStatus.PENDING, main_character=True,
         event_seeded=True, meme_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
         parameters=[_parameter_row("1180/05/06")],
-        histories=[CharacterHistoryRow(start="1195/01/01", description="市で店を開く")])))
+        histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
 
     assert result["name"] == "北原ミツ"
     assert result["confirmed"] == "未確認"
@@ -147,7 +147,7 @@ def test_update_character(shown, world):
         main_character=True, event_seeded=False, meme_seeded=False, start="1171/02/03", end="1261/04/05",
         parameters=[_parameter_row("1171/02/03")],
         locations=[CharacterLocationRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
-        histories=[CharacterHistoryRow(start="1200/01/01", description="改名して村へ移った")])))
+        histories=[CharacterHistoryRow(start=1200, description="改名して村へ移った")])))
 
     assert result["name"] == "テスト花代"
     assert result["confirmed"] == "非承認"

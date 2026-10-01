@@ -59,9 +59,10 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 9. **設定を結ぶ**: 5 で引いて本文が踏まえたアイデアがあれば `LinkIdeas(idea_ids, episode_id=…)`
 10. **人物の設定に足す(確定のあと)**: 本文で起きたことのうち、サブキャラクター(`main_character` が false)の立場・仕事・住まい・
    人間関係・主要人物との関わりが変わった所や、その人物が見た・知ったことを、その人物の来歴(`histories`)に
-   この話の時刻を `start` にした行として足す。今の行は時刻を渡さない `ReadCharacter(character_id)` の `histories` で
-   すべて読み、その末尾に足した配列を `UpdateCharacter(CharacterUpdateForm(id=…, histories=[…]))` で渡す(配列はまるごと置き換わる)。
-   すでにある行は書き換えず、足すだけにする。この話の時刻より後のこと(後年の立場・死・予定)は書かない(`data_access_logic/readme.md` の「人物の来歴」)。
+   足す。`start` はこの話の年(整数)で、その年の行があればその説明の末尾に改行して書き足し、無ければその年の行を足す(一年に一行)。
+   今の行は時刻を渡さない `ReadCharacter(character_id)` の `histories` ですべて読み、足した配列を
+   `UpdateCharacter(CharacterUpdateForm(id=…, histories=[…]))` で渡す(配列はまるごと置き換わる)。
+   すでにある説明は書き換えず、足すだけにする。この話の時刻より後のこと(後年の立場・死・予定)は書かない(`data_access_logic/readme.md` の「人物の来歴」)。
    主要人物の設定は作者が書くので触らない。人物の設定と本文が食い違っていれば、足す前にユーザに報告する
 
 ## 書くとき
@@ -80,7 +81,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
   「登場人物の候補」から選び、`CastEpisode` の `character_ids` に全員を渡す(渡すとまるごと置き換わる)。
   話題・回想・噂に名前が出るだけの人物は入れない(`mentioned=true` の行として自動で拾われる)。群衆・名前の要らない通りすがりも入れない
 - 呼び名が違っても(役職・続柄・あだ名など)、人物像から同じ人物と分かれば既存の人物を使う
-- db にいない人物が要るなら、`CommitCharacter`(説明は `histories` の始まりの無い一行に書き、`.claude/docs/meme.md` に従う。来歴の節目はその年を `start` にした行にし、サブキャラクターの来歴はこの話の時刻までにする)か、
+- db にいない人物が要るなら、`CommitCharacter`(説明は `histories` の始まりの無い一行に書き、`.claude/docs/meme.md` に従う。来歴の節目はその年(整数)を `start` にした行にし、サブキャラクターの来歴はこの話の時刻までにする)か、
   AI に組ませるなら `GenerateCharacter(CharacterForm(name=…, histories=[{'description': <人物像と役どころ>}], location_id=…), time=<話の時刻>, plot_text=<話のプロット>)`
   で作ってから `character_ids` に入れる(プロットを渡すと、その時刻・場所で役どころを果たせる年齢になる)。作品・場所・時刻に馴染む人物にする
 - 場所: 主な舞台が材料の場所より細かければ、「この場所の中の既知の場所」から選んで `location_id` にする。

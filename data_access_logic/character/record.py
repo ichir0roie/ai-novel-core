@@ -42,7 +42,8 @@ class CharacterLocationRow(_ChildRow):
 
 
 class CharacterHistoryRow(_ChildRow):
-    start: Timestamp | None = None
+    # 年。同じ年のことは一行にまとめる
+    start: int | None = None
     description: str
 
 

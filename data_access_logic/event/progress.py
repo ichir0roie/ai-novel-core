@@ -21,6 +21,7 @@ from ai.instructions.naming import PLACE_NAMING_INSTRUCTION, fill_name_placehold
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
+from data_access_logic.character.histories import add_history
 from data_access_logic.event.progress_models import (
     CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, LocationSituationMaterial,
     LocationSituationSerialized, RecordRequestSerialized,
@@ -29,7 +30,7 @@ from data_access_logic.event.summary import events_of
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.query import common_query, story_creation_query, world_creation_query
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Character, CharacterHistory, CharacterLocation, ConfirmStatus, Event, EventCharacter, Location
+from db.schema import Character, CharacterLocation, ConfirmStatus, Event, EventCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -223,8 +224,8 @@ def save_progress(
         if character is None or not update.text:
             continue
         note = fill_name_placeholder(update.text, character.name or "")
-        # 出来事の時刻から始まる行にするので、それより前の出来事・話には効かない
-        character.histories.append(CharacterHistory(start=time, description=note))
+        # 出来事の年から始まる行にするので、それより前の出来事・話には効かない
+        add_history(character, time.year, note)
         update_notes.append(f"{character.name}: histories+={note}")
 
     location = s.get_one(Location, location_id)

@@ -8,7 +8,7 @@ import { useTable } from "@/lib/meta";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-type History = { start: string | null; description: string };
+type History = { start: number | null; description: string };
 
 /** `character.read_character.ReadCharacter` の結果。人物の列に、`time` の時点で重ねたパラメータが同じ段に並ぶ
  * (`data_access_logic/character/reading.py` の `CharacterSheet`)。 */
@@ -25,11 +25,6 @@ function shown(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? T.yes : T.no;
   return String(value);
-}
-
-// 人物詳細の「期間ごとの説明」の札と同じく、期間は日付の部分だけ出す
-function dateOnly(value: string | null): string {
-  return value ? value.split(" ")[0] : "—";
 }
 
 /** 性格の軸(無/低/並/高/必)を、選択肢の何段目かで塗る。 */
@@ -155,7 +150,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
                       <div key={i} className="flow-card sheet-history">
                         <div className="flow-line">
                           <span className="flow-index">#{i + 1}</span>
-                          <span className="flow-period">{dateOnly(history.start)} ~</span>
+                          <span className="flow-period">{history.start === null ? "—" : `${history.start}年`} ~</span>
                         </div>
                         <div className="flow-detail-text">{history.description}</div>
                       </div>

@@ -7,17 +7,26 @@ from db.schema import Character, CharacterHistory
 from db.stamp import Stamp
 
 
-def _start(row: CharacterHistory) -> int:
-    return row.start.to_int() if row.start is not None else -1
+def _start(row: CharacterHistory) -> float:
+    return row.start if row.start is not None else float("-inf")
 
 
 def histories_at(character: Character, time: Stamp | None) -> list[CharacterHistoryRow]:
-    """時刻までに始まった行を、始まりの古い順に返す。時刻が空ならすべての行(作者が読むとき)。
+    """時刻の年までに始まった行を、始まりの古い順に返す。時刻が空ならすべての行(作者が読むとき)。
 
     時刻より後に始まる行を外すので、先のことを書き足しても、それより前の話・出来事には効かない。
     """
     rows = [row for row in character.histories if time is None or row.covers(time)]
     return [CharacterHistoryRow.model_validate(row) for row in sorted(rows, key=_start)]
+
+
+def add_history(character: Character, year: int, description: str) -> None:
+    """その年の行があれば、その説明に一文を書き足す(行を増やしすぎない)。無ければ、その年から始まる行を足す。"""
+    row = next((row for row in character.histories if row.start == year), None)
+    if row is None:
+        character.histories.append(CharacterHistory(start=year, description=description))
+    else:
+        row.description = f"{row.description}\n{description}"
 
 
 def plot_of(character: Character) -> str:
@@ -27,5 +36,5 @@ def plot_of(character: Character) -> str:
 
 
 def histories_for_prompt(histories: list[CharacterHistoryRow]) -> list[dict[str, Any]]:
-    return [{"いつから": str(history.start) if history.start else None, "説明": history.description}
+    return [{"いつから": f"{history.start}年" if history.start is not None else None, "説明": history.description}
             for history in histories]

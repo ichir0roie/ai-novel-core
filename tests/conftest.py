@@ -99,7 +99,7 @@ def world() -> Iterator[World]:
                       main_character=main, event_seeded=True, meme_seeded=True,
                       end="1260/01/01", parameters=[_parameter("1170/01/01", sex)],
                       histories=[CharacterHistory(description=f"{name}の説明"),
-                                 CharacterHistory(start="1190/01/01", description=f"{name}の来歴")])
+                                 CharacterHistory(start=1190, description=f"{name}の来歴")])
             for name, sex, main in (("テスト太郎", "男", True), ("テスト花子", "女", False))]
         s.add_all(characters)
         s.flush()

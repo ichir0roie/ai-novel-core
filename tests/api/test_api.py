@@ -90,7 +90,7 @@ def test_create_record(client, world):
                         "cooperativeness": "低", "sociability": "無", "emotional_expression": "並",
                         "self_esteem": "高", "self_efficacy": "並", "stress_resilience": "低",
                         "flexibility_of_values": "高", "sensitivity": "並", "imagination": "高"}],
-        "histories": [{"start": "1200/01/01", "description": "都の役所に勤める"}]})
+        "histories": [{"start": 1200, "description": "都の役所に勤める"}]})
 
     assert response.status_code == 201
     body = response.json()
