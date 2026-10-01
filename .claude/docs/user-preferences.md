@@ -15,3 +15,5 @@
 入口の `GenerateEpisode` / `ReviseEpisode` は、`shared_style_extra` / `style_extra` を省かれると
 `style_preference` から読む(`data_access_logic/style_preference/extras.py`。web のセッションは段 `style_preference.steps.style_extras` 越し)。
 行が無ければ空のまま動く。明示して渡した値(空文字を含む)は db の値より優先する。
+このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の
+「書き方」に、システム固有の文体と `style_preference` の `shared` / `episode` の行を合わせた文面が入る(`data_access_logic/episode/brief.py`)。

@@ -6,13 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import record_of
-from data_access_logic.episode import caster, framer, plot_completer, reviser, writer
+from data_access_logic.episode import brief, caster, framer, plot_completer, reviser, writer
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, save_frame
 from data_access_logic.episode.models import (
-    EpisodeCastMaterial, EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
+    EpisodeBrief, EpisodeCastMaterial, EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
     EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
@@ -154,6 +154,16 @@ def revision_material(s: Session, form: RowId) -> EpisodeRevisionMaterial:
 @db_step
 def save_revision(s: Session, form: RevisionForm) -> None:
     reviser.save_revision(s, form.episode_id, form.draft, form.instruction)
+
+
+@db_step
+def brief_targets(s: Session, form: RowId) -> SummaryTargets:
+    return brief.brief_targets(s, form.id)
+
+
+@db_step
+def episode_brief(s: Session, form: RowId) -> EpisodeBrief:
+    return brief.episode_brief(s, form.id)
 
 
 @db_step

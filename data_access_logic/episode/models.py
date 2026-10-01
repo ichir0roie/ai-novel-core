@@ -275,6 +275,85 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
         }
 
 
+class BriefEpisode(EpisodeBase):
+    id: int
+    start: Stamp
+    end: Stamp | None = None
+    synced: bool
+    plot_text: str
+    main_text: str
+    viewpoint_character: CharacterMaterial | None = None
+
+
+class EpisodeBrief(Material):
+    story: StoryMaterial
+    main_episode: BriefEpisode
+    # 直前の話より前の話。古い順
+    past_episodes: list[PastEpisode]
+    # 直前の話。古い順
+    recent_episodes: list[RecentEpisode]
+    # 話の場所(無ければ作品の立つ場所)とその親。広い順
+    locations: list[LocationMaterial]
+    # 話の場所の直下にある場所
+    child_locations: list[LocationMaterial]
+    cast: list[CastMaterial]
+    # 登場人物でなく、プロット・本文に名前が出るだけの人物
+    mentioned: list[MentionedMaterial]
+    # 登場人物・名前だけ出る人物のどちらでもない、登場人物と関係のある人物・話の場所にいる人物
+    candidates: list[CastCandidate]
+    # 登場人物のどれかが片側にいる関係
+    relations: list[CharacterRelationLine]
+    # 古い順
+    location_events: list[EventMaterial]
+    later_events: list[EventMaterial]
+    # 書き方の決まり(システム固有の文体と、世界ごとの好み `style_preference`)
+    guide: str
+
+
+def _place(location: LocationMaterial) -> dict[str, Any]:
+    return {"場所id": location.id, "名前": location.name, "種別": location.kind}
+
+
+class EpisodeBriefSerialized(EpisodeBrief):
+    """このセッションの Claude が読む形に整形する。"""
+
+    cast: list[CastSerialized]
+    mentioned: list[MentionedSerialized]
+    candidates: list[CastCandidateSerialized]
+    location_events: list[EventSerialized]
+    later_events: list[EventSerialized]
+
+    # 読んだ Claude が書いたあとに登場人物・場所・視点を id で直すので、AI へ渡す形と違って id を残す
+    @model_serializer
+    def _for_claude(self) -> dict[str, Any]:
+        episode = self.main_episode
+        viewpoint = episode.viewpoint_character
+        return {
+            "書き方": self.guide,
+            "作品": _story(self.story),
+            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
+            "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
+            "この話": {
+                "話id": episode.id,
+                "題": episode.title,
+                "時刻": str(episode.start),
+                "終わり": str(episode.end) if episode.end else None,
+                "同期": episode.synced,
+                "場所(広い順)": [_place(location) for location in self.locations],
+                "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
+                "登場人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.cast],
+                "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.mentioned],
+                "登場人物の関係": relations_for_prompt(self.relations),
+                "プロット": episode.plot_text,
+                "今の本文": episode.main_text,
+            },
+            "登場人物の候補": [member.model_dump() for member in self.candidates],
+            "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
+            "この場所の直近の出来事(古い順)": [event.model_dump() for event in self.location_events],
+            "この時点より後に既に決まっている出来事": [event.model_dump() for event in self.later_events],
+        }
+
+
 class EpisodeFrameMaterial(Material):
     story: StoryMaterial
     main_episode: FrameEpisode

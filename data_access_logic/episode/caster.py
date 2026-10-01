@@ -77,25 +77,33 @@ def _resident_ids(s: Session, location_id: int | None, time: Stamp) -> list[int]
     return list(s.scalars(common_query.resident_character_ids_select(location_ids, time)).all())
 
 
-def cast_material(s: Session, episode_id: int) -> EpisodeCastMaterialSerialized:
-    """候補は、プロットに名前が出る人物・登場人物と関係のある人物・話の場所(とその中)にいる人物。"""
-    episode = _episode(s, episode_id)
-    main_episode = TargetEpisode.model_validate(episode)
-    time = main_episode.start
-    location_id = episode.location_id or episode.story.location_id
-    cast = cast_characters(episode)
-    cast_ids = {character.id for character in cast}
+def candidate_characters(
+    s: Session, episode: Episode, excluded_ids: set[int], location_id: int | None, time: Stamp,
+) -> list[Character]:
+    """プロット・本文に名前が出る人物・登場人物と関係のある人物・話の場所(とその中)にいる、承認済みの人物。
+
+    `episode` は `episode_characters` と `EpisodeCharacter.character` を読んだもの。"""
+    cast_ids = {character.id for character in cast_characters(episode)}
     candidate_ids = [
         *(character.id for character in mentioned_characters(s, episode, cast_ids)),
         *_related_ids(s, cast_ids, time),
         *_resident_ids(s, location_id, time),
     ]
-    candidates = s.scalars(
+    return list(s.scalars(
         select(Character)
-        .where(Character.id.in_([character_id for character_id in candidate_ids if character_id not in cast_ids]),
+        .where(Character.id.in_([character_id for character_id in candidate_ids if character_id not in excluded_ids]),
                Character.confirmed == ConfirmStatus.APPROVED)
         .order_by(Character.id)
-    ).all()
+    ).all())
+
+
+def cast_material(s: Session, episode_id: int) -> EpisodeCastMaterialSerialized:
+    episode = _episode(s, episode_id)
+    main_episode = TargetEpisode.model_validate(episode)
+    time = main_episode.start
+    location_id = episode.location_id or episode.story.location_id
+    cast = cast_characters(episode)
+    candidates = candidate_characters(s, episode, {character.id for character in cast}, location_id, time)
     return EpisodeCastMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,

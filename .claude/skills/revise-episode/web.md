@@ -1,39 +1,29 @@
 # web のセッションでの回し方(`CLAUDE_CODE_REMOTE=true`)
 
-db には繋がない。読むのは API の `curl`、書き直しは入口と同じ処理の web の流れ(`web_session.episode.revise_episode`)で、
-AI(`claude -p`)はこのセッションで回し、db の読み書きだけを API に頼む。決まりは `.claude/docs/web-db.md`。
+入口の呼び方(材料を読む・本文を確定する・人物と場所を足す)は `.claude/skills/episode/web.md` のとおり。ここには推敲で違う所だけを書く。
 
-`curl` では合言葉を環境変数のまま渡し、値を出さない。下の `$api` / `$h` は毎回のコマンドの頭で置く。
+## 話を引く
 
-```
-api="${NOVEL_API_URL%/}"; h="x-novel-api-key: $NOVEL_API_KEY"
-```
-
-## 人物・話を引く
-
-- その作品の話の並び(`start` 順)は一度に取る:
+- その作品の話の並び(`start` 順)は一度に取る。「エピソード5」のように番号で頼まれたら、この順で数える:
   `curl -sS -H "$h" "$api/api/tables/episode/records?story_id=<作品id>&sort=start&order=asc&limit=500" | jq -c '.items[] | {id, title, start, character_ids}'`
-- 対象の話の本文: `curl -sS -H "$h" "$api/api/tables/episode/records/<episodeのid>" | jq -r '.record.main_text'`
-- 本文に出る名前から人物 id を引く: `curl -sS -G -H "$h" "$api/api/tables/character/options" --data-urlencode 'q=<名>' | jq -c '.items[] | {id, label}'`
-  (`q` は名前のほか本文にも当たるので、`label` を見て選ぶ)
 
-## 回す
+## 確定する
+
+本文に加えて、`plot_text`(「## 推敲」の節に指示を足したもの)と `synced`(材料の「同期」の値)を渡す:
 
 ```
 .venv/bin/python -c "
+from pathlib import Path
 from data_access_logic.logs import configure_logging
-from data_access_logic.episode.form import EpisodeForm
-from web_session.episode import revise_episode
+from web_session.flows import run
 configure_logging()
-episode = revise_episode(EpisodeForm(id=<episodeのid>), '''<直す指示>''', character_ids=[<人物id>, ...],
-    model=None, effort=None)
-print('EPISODE_ID', episode.id)
+record = run('episode.commit_episode.CommitEpisode', {'episode': {
+    'id': <話id>, 'main_text': Path('<scratchpad>/episode_<話id>.txt').read_text(encoding='utf-8'),
+    'plot_text': Path('<scratchpad>/plot_<話id>.txt').read_text(encoding='utf-8'), 'synced': <True|False>}})
+print('EPISODE_ID', record['id'], record['letters'])
 "
 ```
 
-API に届かない(`ApiError`)・版が食い違うときは、`.venv/bin/python -m web_session.check_api` の出力をそのまま報告して止める
-(見るところは `.docs/web-session.md` の「確かめる」の表)。
-
 ## 報告のために読む
 
-`EPISODE_ID` の話を上の「対象の話の本文」の `curl` で読む(字数は `.record.letters`)。
+`curl -sS -H "$h" "$api/api/tables/episode/records/<EPISODE_ID>" | jq '.record | {title, letters, location_id, character_ids}'`

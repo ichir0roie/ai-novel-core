@@ -1,27 +1,28 @@
 # 手元での回し方(`CLAUDE_CODE_REMOTE` が `true` でない)
 
-db の決まりは `.claude/docs/db.md`(転送が張れていないとき・版の食い違いもそこ)。
+入口の呼び方(材料を読む・本文を確定する・人物と場所を足す)は `.claude/skills/episode/local.md` のとおり。ここには推敲で違う所だけを書く。
 
-## 人物・話を引く
+## 話を引く
 
 - その作品の話の並びは `episode.read_episodes.ReadEpisodes(story_id, count=..., text=False)` で一度に取る
   (`start` 順で返るので、並びを確かめる select を別に打ち直さない)
-- 対象の話の本文に出る名前から人物 id を引く(`select id, name from character where name like '%<名>%'`)
+- 「エピソード5」のように番号で頼まれたら、この並びの順で数える
 
-## 回す
+## 確定する
 
-リポジトリのルートの `.venv` の python で回す(db は SessionStart フックが渡す `DEM_DATABASE_URL`)。
+本文に加えて、`plot_text`(「## 推敲」の節に指示を足したもの)と `synced`(材料の「同期」の値)を渡す:
 
 ```
 .venv/bin/python -c "
-from data_access_logic.episode.form import EpisodeForm
-from data_access_logic.episode.revise_episode import ReviseEpisode
-episode = ReviseEpisode(EpisodeForm(id=<episodeのid>), '''<直す指示>''', character_ids=[<人物id>, ...],
-    model=None, effort=None).run()
-print('EPISODE_ID', episode['id'])
+from pathlib import Path
+from data_access_logic.episode.commit_episode import CommitEpisode
+from data_access_logic.episode.form import EpisodeCommitForm
+CommitEpisode(EpisodeCommitForm(
+    id=<話id>, main_text=Path('<scratchpad>/episode_<話id>.txt').read_text(encoding='utf-8'),
+    plot_text=Path('<scratchpad>/plot_<話id>.txt').read_text(encoding='utf-8'), synced=<True|False>)).run()
 "
 ```
 
 ## 報告のために読む
 
-`EPISODE_ID` の話を db から読む(`select title, letters, main_text from episode where id = <id>`)。
+話を db から読む(`select title, letters, location_id from episode where id = <id>`)。
