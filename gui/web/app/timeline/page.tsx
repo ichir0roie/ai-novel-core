@@ -9,7 +9,7 @@ import Tooltip, { useTooltip } from "@/components/Tooltip";
 import TreeReferenceSelect from "@/components/TreeReferenceSelect";
 import { getTimeline, labelOf, updateRecord, type Labels, type Rec, type TimelineResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
-import { dayNumber, formatStamp, fromDayNumber, pad2, parseStamp, shiftDays } from "@/lib/stamp";
+import { dayNumber, formatStamp, fromDayNumber, parseStamp, shiftDays } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 // 画面の幅に見せる期間(日数)。全期間はこの縮尺で横に並べ、スクロールで見て回る
@@ -19,8 +19,6 @@ const LANE_HEIGHT = 26;
 const ITEM_GAP = 6;
 // end の無い札が段に取る幅(px)。名前はこの幅から、同じ段の次の札の手前まで(長くても名前の幅まで)伸ばす
 const POINT_MIN_PX = 48;
-// 目盛りどうしの最小の間隔(px)。これより詰まる刻みは使わない
-const MIN_TICK_PX = 64;
 // スクロールが止まってから中心の時刻を URL に書くまでの間(ms)
 const SCROLL_SETTLE_MS = 200;
 // ドラッグとクリックを分けるしきい値(px)
@@ -91,17 +89,15 @@ function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; 
 
 /**
  * 縮尺 `pxPerDay` で札が占めない区間(日の単位)。札は少なくともその日いっぱいを占め、札の幅は px なので縮尺が上がるほど占める日数は減る。
- * 期間の帯は頭(名前の札)と終わりの日だけを占めるとみなす。何年も続く帯が間を全部埋めると、全期間の軸がどこも詰められず長くなりすぎる。
- * `keep` の区間も占めるとみなす(飛ばした先の中心の前後を、札が無くても詰めずに見せる)
+ * 期間の帯は頭(名前の札)と終わりの日だけを占めるとみなす。何年も続く帯が間を全部埋めると、全期間の軸がどこも詰められず長くなりすぎる
  */
-function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[], keep: [number, number] | null): { from: number; to: number }[] {
+function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[]): { from: number; to: number }[] {
   const margin = OCCUPY_MARGIN_PX / pxPerDay;
   const occupied = items
     .flatMap((item) => {
       const head = Math.max(item.start + 1, item.start + labelWidth(item.label) / pxPerDay);
       return item.end === null || item.end <= head ? [[item.start, Math.max(head, item.end ?? head)]] : [[item.start, head], [item.end - 1, item.end]];
     })
-    .concat(keep ? [keep] : [])
     .map(([from, to]) => [Math.max(since, from - margin), Math.min(until, to + margin)])
     .filter(([from, to]) => from < to)
     .sort((a, b) => a[0] - b[0]);
@@ -121,11 +117,10 @@ function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[]
 
 /**
  * 時刻と横の位置の対応。縮尺は `pxPerDay` に決めておき、lo〜hi の中で話・出来事の無い広い区間だけを幅 {@link GAP_PX} の帯に詰める。
- * lo〜hi の外(前後の余白)と `anchor` の前後の画面の半分ずつは詰めない。詰めて画面の幅より短くなったら、後ろへ延ばして画面を埋める。
+ * lo〜hi の外(前後の余白)は詰めない。詰めて画面の幅より短くなったら、後ろへ延ばして画面を埋める。
  */
-function compress(since: number, until: number, lo: number, hi: number, anchor: number | null, pxPerDay: number, viewport: number, items: Item[]): Scale {
-  const half = viewport / 2 / pxPerDay;
-  const empties = emptiesAt(lo, hi, pxPerDay, items, anchor === null ? null : [anchor - half, anchor + half]).filter((g) => (g.to - g.from) * pxPerDay > MIN_GAP_PX);
+function compress(since: number, until: number, lo: number, hi: number, pxPerDay: number, viewport: number, items: Item[]): Scale {
+  const empties = emptiesAt(lo, hi, pxPerDay, items).filter((g) => (g.to - g.from) * pxPerDay > MIN_GAP_PX);
   const gaps: Gap[] = [];
   const knots: [number, number][] = [[since, 0]];
   let x = 0;
@@ -165,40 +160,17 @@ function tickLabelWidth(label: string): number {
   return 4 + label.length * 8;
 }
 
-function ticks(since: number, until: number, pxPerDay: number): Tick[] {
-  const result: Tick[] = [];
-  for (const days of [1, 2, 7, 14]) {
-    if (days * pxPerDay < MIN_TICK_PX) continue;
-    for (let day = Math.ceil(since); day <= until; day += days) {
-      const p = fromDayNumber(day);
-      const yearStart = p.month === 1 && p.day === 1;
-      result.push({ at: day, label: yearStart ? `${p.year}/01/01` : `${pad2(p.month)}/${pad2(p.day)}`, major: p.day === 1 });
-    }
-    return result;
-  }
-  const first = fromDayNumber(since);
-  for (const months of [1, 2, 3, 6]) {
-    if (months * 30.4 * pxPerDay < MIN_TICK_PX) continue;
-    let year = first.year;
-    let month = Math.ceil(first.month / months) * months + 1 - months;
-    for (;;) {
-      if (month > 12) {
-        year += 1;
-        month -= 12;
-      }
-      const at = dayNumber({ year, month, day: 1, hour: 0, minute: 0, second: 0 });
-      if (at > until) return result;
-      if (at >= since) result.push({ at, label: `${year}/${pad2(month)}`, major: month === 1 });
-      month += months;
-    }
-  }
-  const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
-  const years = steps.find((step) => step * 365.2 * pxPerDay >= MIN_TICK_PX) ?? steps[steps.length - 1];
-  for (let year = Math.ceil(first.year / years) * years; ; year += years) {
-    const at = dayNumber({ year, month: 1, day: 1, hour: 0, minute: 0, second: 0 });
-    if (at > until) return result;
-    if (at >= since) result.push({ at, label: String(year), major: year % (years * 5) === 0 });
-  }
+/** 札の開始日ごとの目盛り。年が変わる所を太くする */
+function startTicks(items: Item[]): Tick[] {
+  let year: number | null = null;
+  return [...new Set(items.map((item) => item.start))]
+    .sort((a, b) => a - b)
+    .map((at) => {
+      const { year: y } = fromDayNumber(at);
+      const major = y !== year;
+      year = y;
+      return { at, label: String(y), major };
+    });
 }
 
 /** 時刻を日の単位に丸める。期間はその日の始めから、終わりの日の終わりまで */
@@ -378,7 +350,7 @@ export default function TimelinePage() {
       hi = Math.max(hi, item.end ?? item.start + 1);
     }
     if (box.viewport === 0 || lo > hi) return null;
-    return compress(Math.floor(lo - span / 2), Math.ceil(hi + span / 2), lo, hi, anchor, box.viewport / span, box.viewport, items);
+    return compress(Math.floor(lo - span / 2), Math.ceil(hi + span / 2), lo, hi, box.viewport / span, box.viewport, items);
   }, [anchor, items, span, box.viewport]);
   const pxPerDay = scale?.pxPerDay ?? 0;
   const toX = useCallback((day: number) => scale?.toX(day) ?? 0, [scale]);
@@ -433,19 +405,17 @@ export default function TimelinePage() {
 
   const axisTicks = useMemo(() => {
     if (!scale) return [];
-    // 詰めた帯の間ごとに刻む。帯の中は目盛りを置かないので、全期間を一日ずつ回らずに済む
-    const bounds = [scale.since, ...scale.gaps.flatMap((g) => [g.from, g.to]), scale.until];
-    const all: Tick[] = [];
-    for (let i = 0; i < bounds.length; i += 2) all.push(...ticks(bounds[i], bounds[i + 1], scale.pxPerDay));
-    // 年の入った目盛り(11572/01/01)は日の間隔より長いことがあるので、前の文字に掛かる目盛りは文字を出さない
+    // 年の文字は、その年でまだ出していなければ出す。前の文字・詰めた帯に掛かるときは、同じ年の次の目盛りに回す
     let labelEnd = -Infinity;
-    return all.map((tick) => {
+    let shownYear: string | null = null;
+    return startTicks(items).map((tick) => {
       const x = scale.toX(tick.at);
-      if (x < labelEnd || scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX)) return { ...tick, label: "" };
+      if (tick.label === shownYear || x < labelEnd || scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX)) return { ...tick, label: "" };
+      shownYear = tick.label;
       labelEnd = x + tickLabelWidth(tick.label);
       return tick;
     });
-  }, [scale]);
+  }, [scale, items]);
 
   /** 横に dx px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
   const daysAt = (item: Item, dx: number) => (pxPerDay > 0 ? Math.round(fromX(toX(item.start) + dx) - item.start) : 0);
