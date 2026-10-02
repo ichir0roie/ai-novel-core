@@ -77,6 +77,7 @@ export const T = {
     save: "Save",
     emptySection: "(empty — click to edit)",
     ageAt: "Age",
+    ageInYear: (age: number) => `(age ${age})`,
     delete: "Delete",
     confirmDeleteEpisode: (label: string) =>
       `Delete episode "${label}"? Its cast and idea links are removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,

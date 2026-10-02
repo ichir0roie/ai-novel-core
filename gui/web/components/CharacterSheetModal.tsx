@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import Modal from "@/components/Modal";
 import { runEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
 import { useTable } from "@/lib/meta";
-import { ageAt } from "@/lib/stamp";
+import { ageAt, ageInYear } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 type History = { start: number | null; description: string };
@@ -156,15 +156,19 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
               ) : (
                 <div className="childlist flow">
                   <div className="flowlist">
-                    {histories.map((history, i) => (
-                      <div key={i} className="flow-card sheet-history">
-                        <div className="flow-line">
-                          <span className="flow-index">#{i + 1}</span>
-                          <span className="flow-period">{history.start === null ? T.characterSheet.undated : `${history.start}年 ~`}</span>
+                    {histories.map((history, i) => {
+                      const historyAge = ageInYear(sheet.start, history.start);
+                      return (
+                        <div key={i} className="flow-card sheet-history">
+                          <div className="flow-line">
+                            <span className="flow-index">#{i + 1}</span>
+                            <span className="flow-period">{history.start === null ? T.characterSheet.undated : `${history.start}年 ~`}</span>
+                            {historyAge !== null && <span className="flow-period">{T.record.ageInYear(historyAge)}</span>}
+                          </div>
+                          <div className="flow-detail-text">{history.description}</div>
                         </div>
-                        <div className="flow-detail-text">{history.description}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

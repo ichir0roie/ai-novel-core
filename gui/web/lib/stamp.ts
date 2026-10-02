@@ -31,6 +31,14 @@ export function ageAt(born: unknown, at: unknown): number | null {
   return a.year - b.year - (hadBirthday ? 0 : 1);
 }
 
+/** `born` に生まれた者が `year` 年のうちに迎える歳。人物の来歴の始まりは年だけなので、誕生日の前後は見ない。生まれる前の年は null。 */
+export function ageInYear(born: unknown, year: unknown): number | null {
+  const b = parseStamp(born);
+  const y = parseStamp(year);
+  if (!b || !y || y.year < b.year) return null;
+  return y.year - b.year;
+}
+
 // --- ここから、カレンダー形式のポップアップ選択(StampInput)向けの計算 -----------------
 // `db/stamp.py` の Stamp と同じ規則(西暦の続きの暦。うるう年以外は月ごとの日数が固定)を
 // ここでも小さく再現する。ピッカーの表示にだけ使うので、Stamp.parse ほど厳密な検査はしない。

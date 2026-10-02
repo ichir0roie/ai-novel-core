@@ -187,10 +187,11 @@ function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMe
  * 1 行目に短い項目(番号・期間・呼び名・場所など)を横に並べ、2 行目に自由記述(注釈)を
  * 行数ぶんの高さの textarea(編集時)またはそのままの文章(表示時)で出す。 */
 function FlowCard({
-  meta, row, index, editing, onEdit, onStopEdit, onChange, onRemove,
+  meta, row, index, extraColumns, editing, onEdit, onStopEdit, onChange, onRemove,
 }: {
   meta: ChildListMeta;
   row: Rec;
+  extraColumns: ExtraColumn[];
   index: number;
   editing: boolean;
   onEdit: () => void;
@@ -244,6 +245,9 @@ function FlowCard({
             <span className="flow-period">{formatDateOnly(row.start)} ~ {hasEnd ? formatDateOnly(row.end) : ""}</span>
           )
         )}
+        {extraColumns.filter((extra) => extra.after === "start").map((extra) => (
+          <span key={extra.key} className="flow-period" title={extra.label}>{extra.render(row)}</span>
+        ))}
         {otherLineColumns.map((column) => (
           <div key={column.key} className="flow-field" title={column.comment ?? column.key}>
             {editing ? (
@@ -273,10 +277,11 @@ function FlowCard({
 }
 
 function FlowList({
-  meta, rows, editingIndex, onEdit, onStopEdit, onChange, onRemove,
+  meta, rows, extraColumns, editingIndex, onEdit, onStopEdit, onChange, onRemove,
 }: {
   meta: ChildListMeta;
   rows: Rec[];
+  extraColumns: ExtraColumn[];
   editingIndex: number | null;
   onEdit: (index: number) => void;
   onStopEdit: () => void;
@@ -291,6 +296,7 @@ function FlowList({
           meta={meta}
           row={row}
           index={index}
+          extraColumns={extraColumns}
           editing={editingIndex === index}
           onEdit={() => onEdit(index)}
           onStopEdit={onStopEdit}
@@ -321,6 +327,7 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
         <FlowList
           meta={meta}
           rows={rows}
+          extraColumns={extraColumns}
           editingIndex={editing}
           onEdit={setEditing}
           onStopEdit={() => setEditing(null)}
