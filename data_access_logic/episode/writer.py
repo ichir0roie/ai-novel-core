@@ -15,6 +15,7 @@ from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
+from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_event_ids, cast_of, mentioned_of, relations_at
@@ -41,7 +42,8 @@ def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
 あなたは日本語のライトノベルを書く作家です。
 作品・前の話・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この作品の話を一話ぶん書いてください。
 プロットは作者が決めたこの話の中身です。それを場面まで展開したものを本文にし、プロットに無い出来事を足さないでください。
-直前の話は本文で、それより前の話は概要で渡します。筋をそのまま受け継ぎ、語の選び方・言い回し・地の文とセリフの運びは直前の話の本文に揃えてください。直前の話の文をそのまま写さないでください。
+{PAST_EPISODES_INSTRUCTION}
+{STYLE_SAMPLE_INSTRUCTION}
 登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
 {EVENT_AGE_INSTRUCTION}
@@ -97,7 +99,7 @@ def writing_targets(s: Session, episode_id: int) -> WritingTargets:
                        if location_id is not None else [])
     later_events = s.scalars(later_events_select(location_id, characters, main_episode.start)).all()
     return WritingTargets(
-        episode_ids=past_episode_ids(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
+        episode_ids=past_episode_ids(s, episode, characters),
         event_ids=[*cast_event_ids(s, characters, main_episode.start),
                    *(event.id for event in location_events), *(event.id for event in later_events)],
         plot_text=main_episode.plot_text,
@@ -114,7 +116,7 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaTerm]) -> E
     return EpisodeMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
+        past_episodes=past_episodes(s, episode, characters),
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, main_episode.start),

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
+from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
@@ -45,7 +46,8 @@ _PLOT_SYSTEM_PROMPT = f"""\
 今のプロットに無い出来事は足さないでください。
 「作者の注文」が null でなければ、今のプロットに加えて作者が新しいプロットに望むこと(展開・焦点・雰囲気など)です。今のプロットと合わせて取り入れてください。注文が求める出来事は足してかまいません。
 場面に要るなら、登場人物にいない人物や、書く話の場所より細かい舞台(店・屋敷・部屋など)を出してかまいません。その人物・舞台には呼び名を付けてください。
-直前の話は本文で、それより前の話は概要で渡します。筋をそのまま受け継いでください。
+{PAST_EPISODES_INSTRUCTION}
+{STYLE_SAMPLE_INSTRUCTION}
 登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
 {EVENT_AGE_INSTRUCTION}

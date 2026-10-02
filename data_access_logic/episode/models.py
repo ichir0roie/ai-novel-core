@@ -39,6 +39,7 @@ class PastEpisode(EpisodeBase):
 class AppearedEpisode(EpisodeBase):
     id: int
     start: Stamp | None = None
+    summary_text: str | None = None
     story: Named
 
 
@@ -50,8 +51,9 @@ class CharacterEpisode(Material):
     episode: AppearedEpisode
 
 
-class RecentEpisode(EpisodeBase):
-    start: Stamp | None = None
+class RecentEpisode(Material):
+    """文体の見本にする話。中身を読み取らせないので、本文だけを持つ。"""
+
     main_text: str
 
 
@@ -107,19 +109,23 @@ def _past_episodes(past_episodes: list[PastEpisode]) -> list[dict[str, Any]]:
     ]
 
 
+def _appearance(link: CharacterEpisode) -> dict[str, Any]:
+    return {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
+            "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
+
+
 def _appearances(appearances: list[CharacterEpisode], character_id: int) -> list[dict[str, Any]]:
-    return [
-        {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
-         "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
-        for link in appearances if link.character_id == character_id
-    ]
+    return [_appearance(link) for link in appearances if link.character_id == character_id]
 
 
-def _recent_episodes(recent_episodes: list[RecentEpisode]) -> list[dict[str, Any]]:
-    return [
-        {"題": recent.title, "時刻": str(recent.start) if recent.start else None, "本文": recent.main_text}
-        for recent in recent_episodes
-    ]
+def _summarized_appearances(appearances: list[CharacterEpisode], character_id: int) -> list[dict[str, Any]]:
+    """概要は作り直さず、そのときのまま読む(まだ無ければ null)。"""
+    return [{**_appearance(link), "概要": link.episode.summary_text}
+            for link in appearances if link.character_id == character_id]
+
+
+def _style_samples(recent_episodes: list[RecentEpisode]) -> list[str]:
+    return [recent.main_text for recent in recent_episodes]
 
 
 def _location(locations: list[LocationMaterial]) -> str | None:
@@ -136,9 +142,9 @@ def _story(story: StoryMaterial) -> dict[str, Any]:
 class EpisodeMaterial(Material):
     story: StoryMaterial
     main_episode: TargetEpisode
-    # 直前の話より前の話。古い順
+    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 直前の話。古い順
+    # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
@@ -168,7 +174,7 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
         return {
             "作品": _story(self.story),
             "前の話の概要(古い順)": _past_episodes(self.past_episodes),
-            "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
+            "文体の見本(古い順)": _style_samples(self.recent_episodes),
             "書く話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
@@ -263,9 +269,9 @@ class EpisodeCastMaterialSerialized(EpisodeCastMaterial):
 class EpisodeRevisionMaterial(Material):
     story: StoryMaterial
     main_episode: RevisedEpisode
-    # 直前の話より前の話。古い順
+    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 直前の話。古い順
+    # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
@@ -288,7 +294,7 @@ class EpisodeRevisionMaterialSerialized(EpisodeRevisionMaterial):
         return {
             "作品": _story(self.story),
             "前の話の概要(古い順)": _past_episodes(self.past_episodes),
-            "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
+            "文体の見本(古い順)": _style_samples(self.recent_episodes),
             "直す話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
@@ -314,9 +320,9 @@ class BriefEpisode(EpisodeBase):
 class EpisodeBrief(Material):
     story: StoryMaterial
     main_episode: BriefEpisode
-    # 直前の話より前の話。古い順
+    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 直前の話。古い順
+    # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
@@ -356,7 +362,7 @@ class EpisodeBriefSerialized(EpisodeBrief):
             "作品": _story(self.story),
             "前の話の概要(古い順)": [{"話id": past.id, **entry}
                                      for past, entry in zip(self.past_episodes, _past_episodes(self.past_episodes))],
-            "直前の話の本文(古い順)": _recent_episodes(self.recent_episodes),
+            "文体の見本(古い順)": _style_samples(self.recent_episodes),
             "この話": {
                 "話id": episode.id,
                 "題": episode.title,
@@ -423,9 +429,11 @@ class EpisodeCastingSerialized(EpisodeCasting):
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
                 "プロット": episode.plot_text,
             },
-            "登場人物": [{**member.model_dump(), "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
+            "登場人物": [{**member.model_dump(),
+                      "関わった話(古い順)": _summarized_appearances(self.appearances, member.character.id)}
                      for member in self.cast],
-            "名前だけ出る人物": [{**member.model_dump(), "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
+            "名前だけ出る人物": [{**member.model_dump(),
+                          "関わった話(古い順)": _summarized_appearances(self.appearances, member.character.id)}
                          for member in self.mentioned],
             "登場人物の候補": [member.model_dump() for member in self.candidates],
             "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
