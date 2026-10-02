@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { Rec, TableMeta } from "@/lib/api";
 import ChildListEditor, { type ExtraColumn } from "./ChildListEditor";
+import EpisodeCharacters from "./EpisodeCharacters";
 import FieldInput from "./FieldInput";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
 import { ageAt, ageInYear } from "@/lib/stamp";
@@ -126,8 +127,20 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 <span className="key">{column.key}</span>
                 {column.required && <span className="hint">{T.required}</span>}
               </label>
-              <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
-                defaultIds={column.key === "viewpoint_character_id" ? locationCharacterIds : null} />
+              {meta.name === "episode" && column.key === "character_ids" ? (
+                // 全人物のチェック欄は縦に長く、下のプロットを押し縮めるので、ボタンからモーダルで選ぶ
+                <div className="episode-characters-field">
+                  <EpisodeCharacters
+                    characterIds={(value.character_ids as number[] | null) ?? []}
+                    onChange={(ids) => set("character_ids", ids)}
+                    episodeStart={value.start}
+                    episodeLocationId={value.location_id}
+                  />
+                </div>
+              ) : (
+                <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
+                  defaultIds={column.key === "viewpoint_character_id" ? locationCharacterIds : null} />
+              )}
             </div>
           ))}
         </div>

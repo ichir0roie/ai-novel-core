@@ -336,6 +336,7 @@ button.ghost { background: transparent; }
 .related ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
 .related.context-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
+.episode-characters-field { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
 /* 登場人物の名前。押すと人物のモーダル(CharacterSheetModal)を開く */
 :is(.episode-characters-summary, .episode-sheet-character) button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
