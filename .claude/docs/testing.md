@@ -2,6 +2,18 @@
 
 テストをしてと明確に依頼されたら、そのとき要るテストを `tests/` に書いて実行する(`.venv/bin/python -m pytest tests`)。
 
+## 単体テストと網羅テスト
+
+`CLAUDE.md` の「実装からプルリクまで」の順で回す。
+
+- 単体テスト: 実装の途中に、デバッグのために直している所だけを確かめる(`pytest tests/<file>::<test>`、関数を一つ呼ぶ、画面を一枚撮るなど)。いつ回してもよい
+- 網羅テスト: ユーザが実装を認めてから、プルリクの前に一度回す。変えた所に関わるものを全部回し、全部通ってからプルリクを作る
+  - python を変えたとき: `.venv/bin/python -m pytest tests`、ルートで `uvx ruff check .` と `npx pyright --pythonpath .venv/bin/python`
+  - 画面(`gui/web`)を変えたとき: `gui/web` で `npm run typecheck` と `npm run lint`、テスト用の db で起こした画面での動作確認(`.claude/docs/gui.md`)
+  - 落ちたものがあれば直して、網羅テストを回し直す。変えた所と関わりの無い所で落ちるときは、その旨をユーザに伝える
+
+## テストの db
+
 **テスト・デバッグ・動作確認(GUI・API を起こして見る、スクショを撮る、行を足して試す)の db は、手元でも web のセッションでも、
 必ず手元の PostGIS のテスト用の db(`novel_test`)にする。本番の RDS(手元の転送 `DEM_DATABASE_URL`・web の API `NOVEL_API_URL`)には
 読むだけの確かめでも向けない。** 試しの行を本番に足すと作品の中身に混ざる。

@@ -6,7 +6,8 @@
   作業を終えても自分からはしない(ユーザは VS Code タスク `git push` でコミット・push する)。
   今いるブランチで作業し、worktree は「worktree で作業して」と頼まれたときだけ切る
 - web のセッション(`CLAUDE_CODE_REMOTE=true`): セッションの指示(作業するブランチ・コミット・push・PR の作成)に従う。
-  GitHub の操作は `gh` ではなく GitHub の MCP のツールで行う
+  ただし PR を作るのは、`CLAUDE.md` の「実装からプルリクまで」のとおり、ユーザが実装を認め、網羅テストが通ってから。
+  それまでは push しても PR は作らない。GitHub の操作は `gh` ではなく GitHub の MCP のツールで行う
 
 どちらでも守ること:
 
