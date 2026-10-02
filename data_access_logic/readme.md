@@ -68,7 +68,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「判断待ちの一覧」                   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO |
 | 「場所を足して」                     | `location.create_random_location.CreateRandomLocation()` で下書き → 内容を決めて `location.commit_location.CommitLocation(location)` |
 | 「人物を足して」                     | `character.create_random_character.CreateRandomCharacter()` → `character.commit_character.CommitCharacter(character)`。説明(人物の芯)は `text` に書く。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`text` の `# meme` 節と `# 行動原理` 節に書く(下の「人物が持つミーム」)。来歴の節目は、その年から始まる `histories` の行に一件ずつ書く(下の「人物の来歴」。サブキャラクターは世界の書き進めた所より後を書かない) |
-| 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
+| 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。場所の種別ごとの人数の上限(下の「世界の広がりと制約」)に達した場所には、上限までしか足さない。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
 | 「出来事を足して」                   | `event.create_random_event.CreateRandomEvent()` → `event.commit_event.CommitEvent(event)` |
 | 「この下書きから人物を AI に作らせて」「GUI の AI で作成/補完(人物)」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None, plot_text=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢(0〜90歳。渡さなければ 0〜40歳)にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、没年は `main_character` を立てて渡したときだけ持たせる。`character` の `text` と `histories` の各行の説明は、人物像・役どころの下書きとして核にする。`character` に `id` を渡せば(GUI の詳細画面)、その人物の芯(`text`)が空のときに限り、決まっている名前・属性・出自を核に芯と来歴だけを書いて埋める(来歴の節目は今の行に足す。他の欄は変えない) |
 | 「この下書きから出来事を AI に作らせて」「GUI の AI で作成/補完(出来事)」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None)`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、名前・場所・当事者から記録の本文だけを書いて埋める(`data_access_logic/event/writer.py`。他の欄は変えない) |
@@ -252,6 +252,20 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 引き方: 分類ごとに 0〜2 件。人物は 信条・欲求・境遇、人物以外の対象は 信条・欲求・集団 から引く。
   理(世界の法則)は引かない(`data_access_logic/constants.py` の `MEME_*`)
 - 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う
+
+## 世界の広がりと制約
+
+承認の段は置かない。生んだ人物・出来事・アイデア・ミームは、足したその時から検索・生成・話の材料に出て、世界は作者の手を離れて広がっていく。
+その代わり、崩れないよう、人物の自動生成(`data_access_logic/character/generator.py`)は足す前に次の構造と制約を通す。
+
+- 居場所: 生成した場所を、その一件の居場所(`character_location`)として生まれた時から今まで続く行で足す。中身を決める AI には、
+  今の住まい・仕事場もその場所(かその中)に置かせる(筋書きが別の場所の役どころを示していても、その場所で担う形に移させる)
+- 世界との検め(`consistency.py`): 清書した説明・行動原理・来歴を、居場所・現在の時刻・まだ無い設定・既にいる人物や対象と照らして
+  AI に検めさせ、食い違いがあればそこだけ直させる(直した食い違いはログに出す)
+- 名付け(`naming.py`): 居場所と中身から名前の候補を `NAME_CANDIDATE_COUNT`(10)個 AI に出させ、同じ場所(居場所とその上位・配下)に
+  いる人物・対象と同じ名を除いて、サイコロで一つ選ぶ。作者が名を指定したときは、その名(か近い響き)をそのまま使う
+- 人数の上限: ランダムに人物を足す `GenerateCharacters` は、場所にじかにいる人物・対象を種別ごとの上限
+  (`constants.RESIDENT_LIMITS`。無い種別は `DEFAULT_RESIDENT_LIMIT`)までしか足さない。話の役どころから作る人物は限らない
 
 ## 中間段(下書き → 語の洗い出し → 清書)
 

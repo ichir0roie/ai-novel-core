@@ -1,4 +1,9 @@
 """claude が CLI から `show()` で呼ぶ、人物(`data_access_logic/character/`)の入口。"""
+import random
+
+import pytest
+
+from data_access_logic import constants
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.commit_character_location import CommitCharacterLocation
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
@@ -8,7 +13,9 @@ from data_access_logic.character.form import (
     CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
 )
 from data_access_logic.character.generate_character import GenerateCharacter
-from data_access_logic.character.generate_characters import GenerateCharacters
+from data_access_logic.character.generate_characters import GenerateCharacters, resident_rooms
+from data_access_logic.character.generator_models import CharacterNameMaterialSerialized, PersonNameDraft
+from data_access_logic.character.naming import PersonNameCandidates, named
 from data_access_logic.character.list_character_relations import ListCharacterRelations
 from data_access_logic.character.list_characters import ListCharacters
 from data_access_logic.character.read_character import ReadCharacter
@@ -17,7 +24,7 @@ from data_access_logic.character.record import CharacterHistoryRow, CharacterPar
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
-from db.schema import PersonalityLevel
+from db.schema import PersonalityLevel, Stamp, get_env_session
 
 _LEVELS = {
     "sincerity": PersonalityLevel.HIGH, "curiosity": PersonalityLevel.LOW, "proactivity": PersonalityLevel.MUST,
@@ -109,6 +116,44 @@ def test_generate_characters(shown, world, mock_ai):
     assert len(result) == 2
     assert {row["location_id"] for row in result} == {world.location_id}
     assert mock_ai.calls
+
+
+def test_generate_characters_stops_at_resident_limit(shown, world, mock_ai, monkeypatch: pytest.MonkeyPatch):
+    with get_env_session() as s:
+        monkeypatch.setattr(constants, "RESIDENT_LIMITS", {"都市": 1000})
+        residents = 1000 - resident_rooms(s, [world.location_id], Stamp.parse("1200/04/01"))[world.location_id]
+    monkeypatch.setattr(constants, "RESIDENT_LIMITS", {"都市": residents + 1})
+
+    result = shown(GenerateCharacters(
+        location_ids=[world.location_id], time="1200/04/01", count=(3, 3), person=True, seed=2))
+
+    assert len(result) == 1
+
+
+class _NamingAI:
+    def __init__(self, names: list[str]):
+        self.names = names
+
+    def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
+        return PersonNameCandidates(candidates=[PersonNameDraft(name=name, family_name="") for name in self.names])
+
+
+def test_named_avoids_names_in_the_same_place():
+    material = CharacterNameMaterialSerialized(kind="人物", text="市の荷運び", age=30, avoided_names=["ジャコモ", "グイド"])
+    ai = _NamingAI(["ジャコモ", "グイド", "ルカ", "ルカ", "エリオ"])
+
+    drafts = [named(ai, random.Random(seed), material, True) for seed in range(20)]
+
+    assert {draft.name for draft in drafts if draft is not None} == {"ルカ", "エリオ"}
+
+
+def test_named_keeps_the_authors_name():
+    material = CharacterNameMaterialSerialized(kind="人物", text="市の荷運び", age=30, avoided_names=["ジャコモ"],
+                                               hint_name="ジャコモ")
+
+    draft = named(_NamingAI(["ジャコモ", "ルカ"]), random.Random(0), material, True)
+
+    assert draft is not None and draft.name == "ジャコモ"
 
 
 def test_list_character_relations(shown, world):

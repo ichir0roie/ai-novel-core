@@ -279,6 +279,14 @@ def resident_character_ids_select(location_ids: Collection[int], until: Stamp) -
             .order_by(CharacterLocation.character_id))
 
 
+def resident_names_select(location_ids: Collection[int], until: Stamp) -> Select:
+    return (select(Character.name).distinct()
+            .join(CharacterLocation, CharacterLocation.character_id == Character.id)
+            .where(CharacterLocation.location_id.in_(list(location_ids)), alive_at(CharacterLocation, until),
+                   Character.name.is_not(None))
+            .order_by(Character.name))
+
+
 def character_select(character_id: int) -> Select:
     return select(Character).where(Character.id == character_id)
 
