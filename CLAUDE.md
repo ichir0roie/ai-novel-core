@@ -28,7 +28,7 @@ Claude はユーザへの返答を常に日本語で書く。
 1. 実装する。途中でデバッグのための単体テスト(直している所だけを確かめるテスト・小さな実行)は回してよい
 2. 実装したら、UI の画像(画面を変えたとき。テスト用の db で起こして撮る)と、変えた処理の場所(`ファイル:行`)を示し、
    実装の内容をユーザに確かめてもらう。直す指示があれば 1 に戻る
-3. ユーザが実装を認めてから、網羅テストを回す(`.claude/docs/testing.md` の「網羅テスト」)。網羅テストは実装が済むまで回さない
+3. ユーザが実装を認めてから、網羅テストを回す(`.claude/docs/testing.md` の「単体テストと網羅テスト」)。網羅テストは実装が済むまで回さない
 4. 網羅テストが通ってから、プルリクを作る。それより前には作らない
 
 - 網羅テストの最中やそのあとに見つけた不具合を直したら、2 に戻って直した所を示し直す(黙ってプルリクに足さない)
@@ -54,8 +54,8 @@ Claude はユーザへの返答を常に日本語で書く。
 | ミームを扱うとき、本文・人物の芯(`text`)・来歴(`histories`)を書くとき | `.claude/docs/meme.md` |
 | 列名・型を確かめるとき、`db/schema.py` やマイグレーションを変えるとき | `.claude/docs/schema.md` |
 | db を読む処理・AI とやり取りする処理(pydantic のマテリアル・出力モデル)を書く・直すとき、リファクタするとき | `.claude/docs/data-access.md` |
-| PostgreSQL(`DEM_DATABASE_URL`)・AWS へのデプロイ・GitHub Actions・AI の待ち行列(`ai_task`)と web のセッションで回す仕組み(`web_session/`・`steps.py`)を扱うとき | `.docs/README.md` から当たる文書 |
-| AWS の db・資源に触れるとき、API(Lambda)の段・web の流れ(`web_session/`)のコードを書くとき | `.claude/docs/aws.md` |
+| AWS の db・資源に触れるとき、API(Lambda)の段・web の流れ(`web_session/`)・AI の待ち行列(`ai_task`)のコードを書くとき | `.claude/docs/aws.md`(仕組みの詳しい説明は `.docs/README.md` から当たる) |
+| PostgreSQL の構成・AWS へのデプロイ・GitHub Actions を調べる・直すとき | `.docs/README.md` から当たる文書 |
 
 # コーディング規約
 

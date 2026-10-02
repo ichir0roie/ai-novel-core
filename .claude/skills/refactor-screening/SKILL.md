@@ -3,14 +3,15 @@ name: refactor-screening
 description: core リポジトリ全体を定期的にスクリーニングし、処理の共通化・シンプルな実装・余計な機能が無いかを確認してリファクタリングする。実装がモックに合わせて不自然に分岐していないかも見る。見つけて直したら core に PR を作る(直接 main へは入れない)。「リファクタのスクリーニング」「定期リファクタ」「コードの健全性チェック」「core を整理して」などの依頼で使う。
 ---
 
-`CLAUDE.md` のルールに従う。対象はこのリポジトリ全体(`ai/` `db/` `gui/` `data_access_logic/` など)。
+`CLAUDE.md` のルールに従う。ただし `CLAUDE.md` の「実装からプルリクまで」の 2(ユーザに示して認めてもらう)は、
+このスキルでは PR のレビューで代え、網羅テストは認めを待たずに PR の前に回す。対象はこのリポジトリ全体(`ai/` `db/` `gui/` `data_access_logic/` など)。
 db の行(RDS)は変更しない。
 
 手順は手元(`CLAUDE_CODE_REMOTE` が `true` でない)向けに書いてある。web のセッション(`CLAUDE_CODE_REMOTE=true`)では次のように読み替える。
 
 - 1 の worktree は切らない。セッションが指定したブランチで、リポジトリのルートのまま作業する(5 の worktree の後始末も要らない)
-- 4 の本番を写したテスト用の db は作れない(RDS に繋がない)。`tool.test.mock_ai_client` とコードを読むことで確かめ、
-  写した db で確かめていないことを PR と報告に書く
+- 4 の本番を写したテスト用の db は作れない(RDS に繋がない)。schema から作ってモックの行を足した `novel_test`(`.claude/docs/testing.md`)で確かめ、
+  本番の写しで確かめていないことを PR と報告に書く
 - 5 の PR は `gh` ではなく GitHub の MCP のツールで作る
 
 ## 1. 作業場所を用意する
@@ -44,17 +45,15 @@ git worktree add ../core-refactor -b refactor/screening-<YYYYMMDD>
 
 ## 3. テストの扱い
 
-- テストは一度すべて消してある。テストを書いて回すのは、ユーザーに頼まれたときだけ
-  (`.claude/docs/testing.md`)
+- 新しいテストを書くのは、ユーザーに頼まれたときだけ。既存の `tests/` は網羅テストとして回す(`.claude/docs/testing.md`)
 - 実装がモックに合わせて不自然に分岐していないかは見る(モックの都合で残っている使われない引数など)
-- データベースのマイグレーション(alembic のリビジョン)にはテストを書かない。`schema.py` を変えたときだけ
-  `alembic check` を手で打って確かめる
+- `schema.py` を変えたときの確かめ方は `.claude/docs/schema.md` の「マイグレーション」
 
 ## 4. 直して確かめる
 
 - 見つけた項目のうち選別したものを直す。一度に大きく変えすぎず、レビューできる粒度に留める
-- 直す前後で、`tool.test.copy_production_db` で本番を写したテスト用の db と `tool.test.mock_ai_client` を使い、
-  直した入口の結果・AI に渡すプロンプトが変わっていないかを確かめる
+- 直す前後で、テスト用の db と `tool.test.mock_ai_client` を使い、直した入口の結果・AI に渡すプロンプトが変わっていないかを確かめる
+- PR の前に網羅テスト(`.claude/docs/testing.md`)を回し、全部通す
 - 直す前後で、`gui/api/interface.py` が `inspect.signature` で読む入口の引数構成や、
   `UnknownRecordError`/`ValueError` のような呼び出し側が見る例外の型を変えていないか確認する
   (変える場合は gui 側・呼び出し元も一緒に直す)

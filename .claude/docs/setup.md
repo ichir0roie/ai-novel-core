@@ -1,7 +1,7 @@
 # 環境構築
 
-このリポジトリ(`ai-novel-core`)だけで動く。作品の中身(話・人物・設定)は db(AWS の RDS)にだけ置き、リポジトリには入れない。
-以前の世界リポジトリ(`my-novel-world`)と SQLite の `novel.db` は使わない(`novel.db` は RDS へ写し終え、世界リポジトリはアーカイブした)。
+このリポジトリ(`ai-novel-core`)だけで動く。以前の世界リポジトリ(`my-novel-world`)と SQLite の `novel.db` は使わない
+(`novel.db` は RDS へ写し終え、世界リポジトリはアーカイブした)。
 
 ## python
 
@@ -44,11 +44,9 @@ uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.tx
 | `DEM_DEV_DATABASE_URL` | 開発用の空の PostgreSQL + PostGIS(`infra_local/postgis.sh`)。テストの db もこのサーバーに作る | `.vscode` は固定の値。Claude Code では渡さず、テスト(`tool.test`)が要ったときに用意する |
 | `PYTHONUTF8` | `1`(Windows の文字化け除け。`.claude/docs/encoding.md`) | 同上 |
 
-- 手元から RDS へは、踏み台越しの転送(`.venv/bin/python -m tool.aws.rds --serve`)を張って繋ぐ。SessionStart フックが裏で起こし、
-  VS Code ではタスク「db tunnel」で起こす。繋ぎ方の決まりは `.claude/docs/db.md`、AWS の側は `.claude/docs/aws.md`
-- `DEM_DATABASE_URL` が無くても import はできる(web のセッションは db に繋がず、表の定義だけを使う)。繋いだ時点で止まる
-- web のセッション(`CLAUDE_CODE_REMOTE=true`)は RDS に繋がない。API を通す(`.docs/web-session.md`)
-- テストは `DEM_DATABASE_URL` を手元の PostGIS のテスト用の db に差し替える(`.claude/docs/testing.md`)
+- 手元から RDS へは踏み台越しの転送で繋ぐ(VS Code ではタスク「db tunnel」で起こす。決まりは `.claude/docs/db.md`)。
+  web のセッションは RDS に繋がず API を通す(`.claude/docs/web-db.md`)。テストは `novel_test` に差し替える(`.claude/docs/testing.md`)
+- `DEM_DATABASE_URL` が無くても import はできる(web のセッションは表の定義だけを使う)。繋いだ時点で止まる
 
 ## git
 

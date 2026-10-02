@@ -7,13 +7,12 @@
 
 ## これまでにつまずいた所
 
-場面ごとの手順は各文書にある(画面は `gui.md`、テスト用の db は `testing.md`、web の API は `web-db.md`、`.venv` は `setup.md`)。
+場面ごとのものは各文書にある(画面は `gui.md`、テスト用の db・PostGIS の停止は `testing.md`、web の API は `web-db.md`、`.venv`・uv は `setup.md`)。
 どの場面でも起きるものをここに置く。
 
 - exit 144 でシェルごと止まった: `pkill -f` / `pgrep -f` のパターンが自分のシェルにも当たった。一字を `[]` で囲む(`'[n]ext dev'`)
 - 使い捨てのスクリプトで import が落ちた: スクラッチパッドのファイル名が標準ライブラリを隠した(`inspect.py` など)。`check_<対象>.py` のように名付ける
 - 一括置換が当たらないまま進んだ: python の `str.replace` は当たらなくても黙る。`assert t.count(old) == 1` を付けて、当たらなければ止める
-- 列名を推測して `UndefinedColumn` になった: 列名は書く前に `.claude/docs/schema.md`・`db/schema.py` で確かめる(`episode` の題は `title`)
 - auto mode の判定が返らず(no verdict)ツールが止まった: 一時的なもの。少し置いて同じ呼び出しをやり直す
 - 裏で回しているコマンドを止めたい: `pkill` ではなく、そのタスクの id で `TaskStop` する。残りが無いかは `pgrep -af '[g]enerate_episode'` などで見る
 - `npm ci`・`pip`・`curl` がプロキシで落ちた(`proxy`・`403`・TLS): `/root/.ccr/README.md` と `curl -sS "$HTTPS_PROXY/__agentproxy/status"` を見て、

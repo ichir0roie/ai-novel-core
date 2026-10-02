@@ -3,7 +3,7 @@
 db は AWS の RDS(PostgreSQL + PostGIS)ただ一つ。手元の作業も、画面(Amplify)と web のセッションと同じ db を読み書きする。
 ここは手元で db に直に繋ぐときの決まり。web のセッションは db に繋がないので、代わりに `.claude/docs/web-db.md` を読む。
 ユーザは `gui/` の GUI(FastAPI + Next.js。起動は `gui/readme.md`)で見て直す(ページは `/tables/<table>/<id>`)。
-**テスト・デバッグ・動作確認では、この道(RDS)を使わず、必ず手元の PostGIS のテスト用の db(`novel_test`)を使う(`.claude/docs/testing.md`)。**
+テスト・デバッグ・動作確認ではこの道を使わない(`CLAUDE.md` の「デバッグ・テストの db」)。
 Claude は入口越しに db だけで作業を完結させ、報告は db を読んで行う。
 
 ## 手元からの道
@@ -20,7 +20,7 @@ python はリポジトリのルートの `.venv/bin/python` で呼べば、そ�
 - `connection refused` で落ちたら、転送がまだ張れていない(踏み台が止まっていれば起こすのに 1 分ほどかかる)か、落ちている。
   `.cache/rds-tunnel.log` を見て、無ければ `.venv/bin/python -m tool.aws.rds --serve` を `run_in_background` で起こす
 - 転送は EC2 Instance Connect Endpoint の都合で 1 時間ごとに切れ、`--serve` が張り直す。その間に落ちた処理はやり直す
-- 止めるのは `pkill -f 'tool.aws.rds --serve'`(自分で起こした踏み台も止まる)。ユーザに頼まれたときだけ止める
+- 止めるのは `pkill -f '[t]ool.aws.rds --serve'`(自分で起こした踏み台も止まる)。ユーザに頼まれたときだけ止める
 
 ## 読み書きの決まり
 
@@ -46,8 +46,8 @@ with engine.connect() as c:
 ## マイグレーションの確認
 
 db の版は、コードの版(`alembic heads`)と揃っていなければならない。`core` の変更で列が増えていると、db を読む入口が
-`column ... does not exist` で止まる。RDS へは `main` へのマージで CI が当てるので、まだマージしていないブランチのマイグレーションは
-RDS に無い。db を触る作業の前に食い違いを見つけたら、ユーザに伝える(手で当てるのはユーザに言われてから。`.claude/docs/aws.md` の決まり 1)。
+`column ... does not exist` で止まる。まだマージしていないブランチのマイグレーションは RDS に無い(当て方は `.claude/docs/aws.md` の決まり 1)。
+db を触る作業の前に食い違いを見つけたら、ユーザに伝える。
 
 ```
 .venv/bin/python -m alembic -c db/alembic/alembic.ini current   # novel_app でも版は読める

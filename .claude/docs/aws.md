@@ -27,24 +27,21 @@ core(ai-novel-core)は公開リポジトリで、誰がクローンしても、�
 | Lambda(`novel-api`) | VPC の中から psycopg で直に。IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`) | `novel_app`(行の読み書きだけ) | 実行ロールの `rds-db:connect` |
 | web のセッション(Claude Code on the web) | db には繋がない。`novel-api` の API のエンドポイントだけを呼ぶ | 無し | web 用の API の合言葉だけ |
 
-web のセッションでは、環境変数 `CLAUDE_CODE_REMOTE` が `true` になっている。
-
 ## 決まり
 
 1. マイグレーションは、`main` へのマージで CI(`deploy-api.yml`)が Lambda `novel-migrate` を呼んで AWS の db に当てる(`.docs/ci-cd.md` の「マイグレーション」)。
    中身は PR のレビューで見せる。手で当てる(CI を待たない・downgrade する)のは、ユーザに言われてから手元から `novel_migrator` でだけ行う(`.claude/docs/db.md` の「マイグレーションの確認」)。
    web のセッション・API の Lambda からは当てない。GitHub Actions に db への道やマスターの秘密を渡さない
-2. web のセッションでは、db に直に繋がず API を呼ぶ(手順と決まりは `.claude/docs/web-db.md`)
-3. API に、任意の SQL や、表を丸ごと消すような操作を受ける口を作らない。公開するのは `data_access_logic` の入口と、画面のための決まった操作だけ
-4. `novel_app` に表を作る・変える権限(DDL)を与えない。表の形を変えるのはマイグレーションだけで、表の持ち主の `novel_migrator` で流す
+2. API に、任意の SQL や、表を丸ごと消すような操作を受ける口を作らない。公開するのは `data_access_logic` の入口と、画面のための決まった操作だけ
+3. `novel_app` に表を作る・変える権限(DDL)を与えない。表の形を変えるのはマイグレーションだけで、表の持ち主の `novel_migrator` で流す
    (手元から当てるときも `novel_migrator` で入る。マスターは表の持ち主でないので、マスターで alembic を流しても表を変えられない。
    マスターを `novel_migrator` の一員にしない。RDS が `rds_iam` を持つ側に数え、マスターがパスワードで入れなくなる)。
    これから増える表への `novel_app` の権限は、`novel_migrator` に掛けた既定の権限(`infra/sql/novel_migrator.sql`)で付く
-5. AWS の資源は `infra/` の CDK で持つ。コンソールや CLI で直に作らない・変えない(状態を調べる読み取りはよい)。
+4. AWS の資源は `infra/` の CDK で持つ。コンソールや CLI で直に作らない・変えない(状態を調べる読み取りはよい)。
    `cdk deploy` や資源を変える操作は、ユーザに承認を得てから行う。費用を抑えるため、NAT ゲートウェイや VPC のインターフェースエンドポイントを足さない
-6. 鍵は呼ぶ側ごとに分ける。API の合言葉は、画面(Amplify)用と web 用で別にする。web の環境に置くのは web 用の合言葉だけで、
+5. 鍵は呼ぶ側ごとに分ける。API の合言葉は、画面(Amplify)用と web 用で別にする。web の環境に置くのは web 用の合言葉だけで、
    db のパスワードや AWS のアクセスキーは置かない
-7. 関数 URL は SSM の `/novel/api/function-url`、合言葉は `/novel/api-keys/<gui|web>` から引く。合言葉の値はログや報告にも出さない
+6. 関数 URL は SSM の `/novel/api/function-url`、合言葉は `/novel/api-keys/<gui|web>` から引く。合言葉の値はログや報告にも出さない
 
 ## web から AI の入口を回す形
 
