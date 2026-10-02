@@ -271,8 +271,11 @@ export const T = {
     addEvent: "Add event",
     moved: (label: string, at: string) => `Moved "${label}" to ${at}`,
     moveFailed: (error: string) => `Could not move: ${error}`,
+    gap: "No episodes or events (squeezed)",
+    skipped: (days: number) =>
+      days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
     truncated: (limit: number) => `Only the first ${limit} episodes / events are shown. Narrow the span to see the rest.`,
-    hint: "Drag an item sideways to change its date (time of day stays). Click an item to edit it, or empty space to add an episode or event there.",
+    hint: "The axis is in days; items on the same day are stacked in time order. Drag an item sideways to change its date (time of day stays). Click an item to edit it, or empty space to add an episode or event there. Stretches with no episodes or events are squeezed into hatched bands.",
     openPage: "Open as page",
     edit: (label: string, name: string) => `${label}: ${name}`,
   },
