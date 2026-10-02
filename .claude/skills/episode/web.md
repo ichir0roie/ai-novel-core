@@ -1,10 +1,12 @@
 # web のセッションでの回し方(`CLAUDE_CODE_REMOTE=true`)
 
-db には繋がない。読むのは API の `curl`、入口は web の流れ(`web_session.flows.run`)で呼ぶ。claude を叩く入口
-(`ReadEpisodeCasting` / `ReadEpisodeBrief` の要約の作り直し・`CommitEpisode` の概要・ミーム)は AI をこのセッションで回し、db の読み書きだけを API に頼む。
-db だけの入口(`ReadEpisodeTexts`・`RefreshMentions`・`CastEpisode`・`ResolveTerms`・`CommitCharacter`・`CommitLocation`・`LinkIdeas`)は同じ `run` でそのまま API に流れる。決まりは `.claude/docs/web-db.md`。
+決まりは `.claude/docs/web-db.md`。
 
-`curl` では合言葉を環境変数のまま渡し、値を出さない。下の `$api` / `$h` は毎回のコマンドの頭で置く。
+- db には繋がない。読むのは API の `curl`、入口は web の流れ(`web_session.flows.run`)で呼ぶ
+- claude を叩く入口(`ReadEpisodeCasting` / `ReadEpisodeBrief` の要約の作り直し・`CommitEpisode` の概要・ミーム)は、AI をこのセッションで回し、db の読み書きだけを API に頼む
+- db だけの入口(`ReadEpisodeTexts`・`RefreshMentions`・`CastEpisode`・`ResolveTerms`・`CommitCharacter`・`CommitLocation`・`LinkIdeas`)は、同じ `run` でそのまま API に流れる
+- `curl` では合言葉を環境変数のまま渡し、値を出さない
+- 下の `$api` / `$h` は、毎回のコマンドの頭で置く:
 
 ```
 api="${NOVEL_API_URL%/}"; h="x-novel-api-key: $NOVEL_API_KEY"
@@ -12,7 +14,7 @@ api="${NOVEL_API_URL%/}"; h="x-novel-api-key: $NOVEL_API_KEY"
 
 ## id・話を引く
 
-- 作品 id・人物 id・場所 id は名前から引く(`<表>` は `story` / `character` / `location`。`q` は名前のほか本文にも当たるので、`label` を見て選ぶ):
+- 作品 id・人物 id・場所 id は名前から引く(`<表>` は `story` / `character` / `location`。`q` は本文にも当たるので、`label` を見て選ぶ):
   `curl -sS -G -H "$h" "$api/api/tables/<表>/options" --data-urlencode 'q=<名>' | jq -c '.items[] | {id, label}'`
 - 同じ時刻の話が無いかは、作品の話の並び(`start` 順)で確かめる:
   `curl -sS -H "$h" "$api/api/tables/episode/records?story_id=<作品id>&sort=start&order=asc&limit=500" | jq -c '.items[] | {id, title, start, letters}'`
@@ -62,10 +64,8 @@ print('EPISODE_ID', record['id'], record['letters'])
 "
 ```
 
-API に届かない(`ApiError`)・版が食い違う・段が無いと返るときは、`.venv/bin/python -m web_session.check_api` の出力をそのまま報告して止める
-(見るところは `.docs/web-session.md` の「確かめる」の表)。
+API に届かない(`ApiError`)・版が食い違う・段が無いと返るときは、`.venv/bin/python -m web_session.check_api` の出力をそのまま報告して止める(見るところは `.docs/web-session.md` の「確かめる」の表)。
 
 ## 報告のために読む
 
-`curl -sS -H "$h" "$api/api/tables/episode/records/<EPISODE_ID>" | jq '.record | {title, start, viewpoint_character_id, location_id, letters, main_text}'`
-(あらすじは本文から短くまとめる)。
+`curl -sS -H "$h" "$api/api/tables/episode/records/<EPISODE_ID>" | jq '.record | {title, start, viewpoint_character_id, location_id, letters, main_text}'`(あらすじは本文から短くまとめる)。

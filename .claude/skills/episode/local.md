@@ -1,7 +1,7 @@
 # 手元での回し方(`CLAUDE_CODE_REMOTE` が `true` でない)
 
-db の決まりは `.claude/docs/db.md`(転送が張れていないとき・版の食い違いもそこ)。
-リポジトリのルートの `.venv` の python で回す(db は SessionStart フックが渡す `DEM_DATABASE_URL`)。
+- db の決まりは `.claude/docs/db.md`(転送が張れていないとき・版の食い違いもそこ)
+- ルートの `.venv` の python で回す(db は SessionStart フックが渡す `DEM_DATABASE_URL`)
 
 ## id・話を引く
 
@@ -36,9 +36,6 @@ CastEpisode(<話id>, character_ids=[<人物id>, ...], location_id=<場所id>, vi
 "
 ```
 
-人物の関わった話を本文まで読む: `episode.read_episode_texts.ReadEpisodeTexts([<話id>, ...])`(長いのでファイルへ書き出す)。
-名前だけ出る人物を拾い直す: `episode.refresh_mentions.RefreshMentions()`(すべての話。`episode_ids` で絞れる)。
-
 本文の材料を読む(結んだあとに読む。`<scratchpad>` はセッションのスクラッチパッド):
 
 ```
@@ -48,11 +45,7 @@ ReadEpisodeBrief(<話id>).show()
 " > <scratchpad>/brief_<話id>.json
 ```
 
-設定を引く: `idea.resolve_terms.ResolveTerms([IdeaTerm(keyword=…, variants=[…], description=…, kind=…)], location_id=…, time='<話の時刻>')`
-(`IdeaTerm` は `data_access_logic.idea.models`)。人物・場所を足す: `character.commit_character.CommitCharacter(CharacterCreateForm(...))` /
-`location.commit_location.CommitLocation(LocationCreateForm(...))`(フォームは `data_access_logic/readme.md` の表)。
-
-本文を確定する(本文はファイルから読む):
+本文を確定する(本文はファイルから読む。変えない欄は渡さない。渡した欄だけが直る):
 
 ```
 .venv/bin/python -c "
@@ -65,7 +58,13 @@ CommitEpisode(EpisodeCommitForm(
 "
 ```
 
-変えない欄は渡さない(渡した欄だけが直る)。設定を結ぶ: `idea.link_ideas.LinkIdeas([<アイデアid>, ...], episode_id=<話id>)`。
+ほかの入口:
+
+- 人物の関わった話を本文まで読む: `episode.read_episode_texts.ReadEpisodeTexts([<話id>, ...])`(長いのでファイルへ書き出す)
+- 名前だけ出る人物を拾い直す: `episode.refresh_mentions.RefreshMentions()`(すべての話。`episode_ids` で絞れる)
+- 設定を引く: `idea.resolve_terms.ResolveTerms([IdeaTerm(keyword=…, variants=[…], description=…, kind=…)], location_id=…, time='<話の時刻>')`(`IdeaTerm` は `data_access_logic.idea.models`)
+- 人物・場所を足す: `character.commit_character.CommitCharacter(CharacterCreateForm(...))` / `location.commit_location.CommitLocation(LocationCreateForm(...))`(フォームは `data_access_logic/readme.md` の表)
+- 設定を結ぶ: `idea.link_ideas.LinkIdeas([<アイデアid>, ...], episode_id=<話id>)`
 
 ## 報告のために読む
 
