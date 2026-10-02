@@ -31,13 +31,13 @@ from data_access_logic.map.geometry import BEARINGS
 from data_access_logic.map.render_svg import COLORS, render_svg
 from db.schema import AiTask, engine, get_env_session
 from db.stamp import Stamp
-from gui.api import generate, interface, meta, records, review
+from gui.api import generate, interface, meta, records, review, timeline
 from gui.api.claude_env import ClaudeCommandForbidden, claude_available, claude_mode, require_claude_code
 from gui.api.jobs import runner
 from gui.api.models import (
     CharacterLocationsResponse, Created, Decision, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
     JobList, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary,
-    RunRequest, RunResult, TablesResponse,
+    RunRequest, RunResult, TablesResponse, TimelineResponse,
 )
 from gui.api.tables import spec_of
 
@@ -299,6 +299,18 @@ def location_characters(location_id: int, time: str, s: Session = Depends(sessio
     if at is None:
         raise ValueError("時刻が空")
     return LocationCharactersResponse(character_ids=location_character_ids(s, location_id, at))
+
+
+@app.get("/api/timeline", response_model=TimelineResponse)
+def get_timeline(since: str, until: str, story_id: int | None = None, location_id: int | None = None,
+                 s: Session = Depends(session_dep)) -> TimelineResponse:
+    """`since`〜`until` に掛かる話と出来事。画面(`/timeline`)が時刻の軸に並べる"""
+    start, end = Stamp.parse(since), Stamp.parse(until)
+    if start is None or end is None:
+        raise ValueError("since・until が空")
+    if end < start:
+        raise ValueError("until が since より前")
+    return timeline.timeline(s, start, end, story_id=story_id, location_id=location_id)
 
 
 @app.get("/api/last_episode", response_model=EpisodeRecord | None)
