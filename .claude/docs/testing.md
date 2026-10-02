@@ -33,6 +33,11 @@
     件数・時期をそろえたいときは、`tool.test` を先に import した使い捨てのスクリプトで `randomizer.mock_factories` に値を渡して足す
   - `conftest.py` の `ensure_test_db` は空の db を写そうとして止まるので、pytest の前に行を足しておく
   - pytest を回すと行が足されるので、確かめに使う id は決め打ちせず、回すたびに引き直す
+  - pytest の出力は SQLAlchemy の警告(`noload` の非推奨)が長く続き、結果の行が埋もれる。結果だけを見るときは `-q -p no:warnings` を付ける
+- web の流れ(`web_session/`)を確かめるときは、テスト用の db に向けた API を手元に起こし(`.docs/claude-tasks.md` の「手元で確かめる」。
+  `NOVEL_API_KEYS` を渡さなければ合言葉を確かめない)、流れを回すコマンドには必ず `NOVEL_API_URL=http://127.0.0.1:18765` を付ける。
+  web のセッションの環境には本番の `NOVEL_API_URL` / `NOVEL_API_KEY` が入っているので、付け忘れると本番に書く。
+  AI は `tool.test.mock_ai_client.MockAIClient` を `ai` に渡す。どの段が呼ばれたかは API のログ(`POST /api/steps/<段の id>`)で確かめる
   - セッションの途中で PostGIS が止まっていることがある(`connection refused`)。`infra_local/postgis.sh` を回し直せば立ち上がり、db の中身は残る
 - `conftest.py` はテストの始めに `tool.test.ensure_test_db` を回す。テスト用の db が無いか空のときだけ写し、行があればそのまま使う
   (前のテストで足した行も残る)。作り直すのは `.venv/bin/python -m tool.test.recreate_db`(VS Code はタスク「test db recreate」。
