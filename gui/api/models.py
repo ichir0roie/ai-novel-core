@@ -184,8 +184,6 @@ class TimelineBlock(BaseModel):
 class TimelineResponse(BaseModel):
     episode: TimelineBlock
     event: TimelineBlock
-    # それぞれの件数の上限。届いていれば期間を狭めないと全部は出ない
-    limit: int
 
 
 class Health(BaseModel):

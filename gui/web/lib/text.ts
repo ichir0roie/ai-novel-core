@@ -274,8 +274,7 @@ export const T = {
     gap: "No episodes or events (squeezed)",
     skipped: (days: number) =>
       days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
-    truncated: (limit: number) => `Only the first ${limit} episodes / events are shown. Narrow the span to see the rest.`,
-    hint: "The axis is in days; items on the same day are stacked in time order. Drag an item sideways to change its date (time of day stays). Click an item to edit it, or empty space to add an episode or event there. Stretches with no episodes or events are squeezed into hatched bands.",
+    hint: "The whole timeline is laid out on one axis: scroll sideways with the scrollbar, the mouse wheel or the Earlier / Later buttons (wheel over the row names, or with Shift, scrolls up and down). Span sets how many days fit in the view. The axis is in days; items on the same day are stacked in time order. Vertical lines mark the days items start on, labelled with the year. Drag an item sideways to change its date (time of day stays). Click an item to edit it, or empty space to add an episode or event there. Stretches with no episodes or events are squeezed into hatched bands.",
     openPage: "Open as page",
     edit: (label: string, name: string) => `${label}: ${name}`,
   },

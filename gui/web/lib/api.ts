@@ -145,8 +145,8 @@ export const getLastEpisode = (storyId: number) =>
 
 export type TimelineResponse = components["schemas"]["TimelineResponse"];
 
-export const getTimeline = (params: { since: string; until: string; story_id?: number | null; location_id?: number | null }) => {
-  const query = new URLSearchParams({ since: params.since, until: params.until });
+export const getTimeline = (params: { story_id?: number | null; location_id?: number | null }) => {
+  const query = new URLSearchParams();
   if (params.story_id != null) query.set("story_id", String(params.story_id));
   if (params.location_id != null) query.set("location_id", String(params.location_id));
   return api<TimelineResponse>(`/api/timeline?${query}`);
