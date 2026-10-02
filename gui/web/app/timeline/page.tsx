@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import EpisodeSheetModal from "@/components/EpisodeSheetModal";
 import RecordModal from "@/components/RecordModal";
 import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
@@ -51,7 +52,6 @@ type Gap = { from: number; to: number; x: number };
 type Scale = { since: number; until: number; width: number; pxPerDay: number; gaps: Gap[]; toX: (day: number) => number; fromX: (x: number) => number };
 
 type Drag = { item: Item; startX: number; dx: number };
-type ModalState = { id?: number; initial?: Rec };
 
 function dayOf(value: unknown): number | null {
   const parts = parseStamp(value);
@@ -293,7 +293,9 @@ export default function TimelinePage() {
   const [drag, setDrag] = useState<Drag | null>(null);
   // 保存を待つあいだ、落とした所に置いておく
   const [pending, setPending] = useState<{ key: string; days: number } | null>(null);
-  const [modal, setModal] = useState<ModalState | null>(null);
+  // 押した話(閲覧専用で見る)と、空いた所を押して足す話の初期値
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [adding, setAdding] = useState<Rec | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // スクロールの位置を合わせ済みの中心(at)と軸(scale)。スクロールから URL へ書いた at はここに入れ、位置を合わせ直さない
@@ -507,7 +509,7 @@ export default function TimelinePage() {
     const dx = e.clientX - drag.startX;
     setDrag(null);
     if (Math.abs(dx) <= DRAG_THRESHOLD) {
-      setModal({ id: item.id });
+      setViewing(item.id);
       return;
     }
     const days = daysAt(item, dx);
@@ -522,7 +524,7 @@ export default function TimelinePage() {
     const story = row.storyId ?? storyId;
     if (story !== null) initial.story_id = story;
     if (locationId !== null) initial.location_id = locationId;
-    setModal({ initial });
+    setAdding(initial);
   };
 
   const tooltipLines = (item: Item) => {
@@ -674,14 +676,14 @@ export default function TimelinePage() {
         </div>
       )}
       <div className="hint timeline-hint">{T.timeline.hint}</div>
-      {modal && (
+      {viewing !== null && <EpisodeSheetModal episodeId={viewing} onClose={() => setViewing(null)} />}
+      {adding && (
         <RecordModal
           table="episode"
-          id={modal.id}
-          initial={modal.initial}
-          onClose={() => setModal(null)}
+          initial={adding}
+          onClose={() => setAdding(null)}
           onSaved={() => {
-            setModal(null);
+            setAdding(null);
             setVersion((v) => v + 1);
           }}
         />

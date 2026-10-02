@@ -15,6 +15,7 @@ export const T = {
 
   loading: "Loading…",
   openRecord: "Open record",
+  close: "Close",
   required: "required",
   none: "(none)",
   select: "Select",
@@ -271,9 +272,16 @@ export const T = {
     gap: "No episodes (squeezed)",
     skipped: (days: number) =>
       days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
-    hint: "The whole timeline is laid out on one axis: scroll sideways with the scrollbar, the mouse wheel or the Earlier / Later buttons (wheel over the row names, or with Shift, scrolls up and down). Span sets how many days fit in the view. The axis is in days; episodes on the same day are stacked in time order. Vertical lines mark the days episodes start on, labelled with the year. Drag an episode sideways to change its date (time of day stays). Click an episode to edit it, or empty space to add an episode to that row's story there. Stretches with no episodes are squeezed into hatched bands. Rows form a tree of stories under their parent story; every story gets a row even with no episodes yet (with a location filter, only stories with episodes there). ▸ / ▾ folds any row, chapters included; a folded row shrinks to one line and shows its episodes and its descendants' as small markers (hover for details).",
+    hint: "The whole timeline is laid out on one axis: scroll sideways with the scrollbar, the mouse wheel or the Earlier / Later buttons (wheel over the row names, or with Shift, scrolls up and down). Span sets how many days fit in the view. The axis is in days; episodes on the same day are stacked in time order. Vertical lines mark the days episodes start on, labelled with the year. Drag an episode sideways to change its date (time of day stays). Click an episode to view it (read-only, with its characters' ages and relations; open it in a new tab to edit), or empty space to add an episode to that row's story there. Stretches with no episodes are squeezed into hatched bands. Rows form a tree of stories under their parent story; every story gets a row even with no episodes yet (with a location filter, only stories with episodes there). ▸ / ▾ folds any row, chapters included; a folded row shrinks to one line and shows its episodes and its descendants' as small markers (hover for details).",
     openPage: "Open as page",
-    edit: (label: string, name: string) => `${label}: ${name}`,
+    openInNewTab: "Open in new tab",
+  },
+
+  episodeSheet: {
+    characters: (n: number, at: string | null) => `Characters (${n})${at ? ` at ${at}` : ""}`,
+    relation: (partner: string, relation: string) => `→ ${partner}: ${relation}`,
+    noRelations: "(no relations)",
+    mentioned: (names: string) => `Mentioned only: ${names}`,
   },
 
   stamp: {

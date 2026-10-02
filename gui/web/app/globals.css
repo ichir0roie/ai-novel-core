@@ -338,8 +338,8 @@ button.ghost { background: transparent; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
 /* 登場人物の名前。押すと人物のモーダル(CharacterSheetModal)を開く */
-.episode-characters-summary button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
-.episode-characters-summary button.character-open:hover { text-decoration: underline; }
+:is(.episode-characters-summary, .episode-sheet-character) button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
+:is(.episode-characters-summary, .episode-sheet-character) button.character-open:hover { text-decoration: underline; }
 
 /* 人物のモーダル(CharacterSheetModal)。人物詳細と同じ .record.split で、左に欄とパラメータ、右に本文と期間ごとの説明。
    モーダルの高さを決めて本体はスクロールさせず、左右(.record-side / .record-text)がそれぞれスクロールする */
@@ -630,3 +630,12 @@ button.ghost { background: transparent; }
   .timeline-hint { display: none; }
   .timeline { --timeline-label: 96px; border-width: 1px 0 0; border-radius: 0; }
 }
+/* タイムラインで押した話を見るモーダル(EpisodeSheetModal)。人物の閲覧モーダルの並び(character-sheet)に、登場人物ごとの歳と関係を足す */
+.episode-sheet h3 { margin-top: 1rem; }
+.episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
+.episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
+.episode-sheet-relations { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.episode-sheet-relation { border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.45rem; font-size: 0.85rem; color: var(--muted); }
+.episode-sheet-relation.here { color: inherit; border-color: var(--accent); }
+.episode-sheet-mentioned { margin-top: 0.6rem; }
+.sheet-plain { white-space: pre-wrap; }
