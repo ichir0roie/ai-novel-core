@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""ミームを手で足す入口。抜き出し(`ExtractMemes`)ではなくユーザが書いたものなので、
-`confirmed` を渡さなければ 承認 で入れる。"""
+"""ミームを手で足す入口。"""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session

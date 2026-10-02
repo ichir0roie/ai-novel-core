@@ -11,7 +11,6 @@ from data_access_logic.idea.record import IdeaRecognitionRow
 from data_access_logic.idea.resolve_terms import ResolveTerms
 from data_access_logic.idea.search_ideas import SearchIdeas
 from data_access_logic.idea.update_idea import UpdateIdea
-from db.schema import ConfirmStatus
 
 
 def test_check_facts(shown, world, mock_ai, monkeypatch):
@@ -34,14 +33,14 @@ def test_check_facts(shown, world, mock_ai, monkeypatch):
 
 def test_commit_idea(shown, world, mock_ai):
     result = shown(CommitIdea(IdeaCreateForm(
-        name="テスト飛空艇", kind="技術", text="空を渡る船", confirmed=ConfirmStatus.PENDING, location_id=world.location_id,
+        name="テスト飛空艇", kind="技術", text="空を渡る船", location_id=world.location_id,
         start="1190/01/01", end="1290/01/01", parent_idea_id=world.idea_id, meme_seeded=False,
         recognitions=[IdeaRecognitionRow(location_id=world.location_id, start="1195/01/01", end="1250/01/01",
                                          name="空舟", detail="都の俗称")]),
         fact_check=True))
 
     record = result["record"]
-    assert (record["name"], record["kind"], record["confirmed"]) == ("テスト飛空艇", "技術", "未確認")
+    assert (record["name"], record["kind"]) == ("テスト飛空艇", "技術")
     assert record["text"].startswith("空を渡る船")
     assert (record["location_id"], record["parent_idea_id"]) == (world.location_id, world.idea_id)
     assert (record["start"], record["end"]) == ("1190/01/01 00:00:00", "1290/01/01 00:00:00")
@@ -81,7 +80,6 @@ def test_resolve_terms(shown, world):
 
     assert world.idea_id in result["hits"]
     assert [candidate["name"] for candidate in result["candidates"]] == ["テスト新語"]
-    assert result["candidates"][0]["confirmed"] == "未確認"
 
 
 def test_search_ideas(shown, world):
@@ -96,14 +94,13 @@ def test_search_ideas(shown, world):
 
 def test_update_idea(shown, world):
     result = shown(UpdateIdea(IdeaUpdateForm(
-        id=world.child_idea_id, name="テスト魔導機関", kind="機関", text="炉を改めた機関", confirmed=ConfirmStatus.APPROVED,
+        id=world.child_idea_id, name="テスト魔導機関", kind="機関", text="炉を改めた機関",
         location_id=world.neighbor_id, start="1150/01/01", end="1250/01/01", parent_idea_id=world.idea_id,
         meme_seeded=False,
         recognitions=[IdeaRecognitionRow(location_id=world.neighbor_id, start="1160/01/01", end=None,
                                          name="釜", detail="村での呼び名")])))
 
     assert (result["name"], result["kind"], result["text"]) == ("テスト魔導機関", "機関", "炉を改めた機関")
-    assert result["confirmed"] == "承認"
     assert (result["location_id"], result["parent_idea_id"]) == (world.neighbor_id, world.idea_id)
     assert (result["start"], result["end"]) == ("1150/01/01 00:00:00", "1250/01/01 00:00:00")
     assert result["meme_seeded"] is False

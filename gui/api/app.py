@@ -31,12 +31,12 @@ from data_access_logic.map.geometry import BEARINGS
 from data_access_logic.map.render_svg import COLORS, render_svg
 from db.schema import AiTask, engine, get_env_session
 from db.stamp import Stamp
-from gui.api import generate, interface, meta, records, review, timeline
+from gui.api import generate, interface, meta, records, timeline
 from gui.api.claude_env import ClaudeCommandForbidden, claude_available, claude_mode, require_claude_code
 from gui.api.jobs import runner
 from gui.api.models import (
-    CharacterLocationsResponse, Created, Decision, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
-    JobList, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse, ReviewNext, ReviewSummary,
+    CharacterLocationsResponse, Created, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
+    JobList, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
     RunRequest, RunResult, TablesResponse, TimelineResponse,
 )
 from gui.api.tables import spec_of
@@ -106,7 +106,7 @@ async def _bad_value(_request: Request, error: ValueError):
 
 @app.exception_handler(StatementError)
 async def _bad_bound_value(_request: Request, error: StatementError):
-    # 列の型(Stamp・confirmed)が bind で弾いた値。SQLAlchemy が ValueError を包んで投げる
+    # 列の型(Stamp)が bind で弾いた値。SQLAlchemy が ValueError を包んで投げる
     if isinstance(error.orig, ValueError):
         return JSONResponse(status_code=400, content={"detail": str(error.orig)})
     return JSONResponse(status_code=500, content={"detail": str(error)})
@@ -193,25 +193,6 @@ def update_record(table: str, record_id: int, data: dict[str, Any],
     spec = spec_of(table)
     with s.begin():
         record = records.update_record(s, spec, record_id, data)
-    return records.response_of(s, spec, record)
-
-
-@app.get("/api/review", response_model=ReviewSummary)
-def review_summary(s: Session = Depends(session_dep)) -> ReviewSummary:
-    return review.summary(s)
-
-
-@app.get("/api/review/{table}/next", response_model=ReviewNext)
-def review_next(table: str, after: int = Query(0, ge=0), s: Session = Depends(session_dep)) -> ReviewNext:
-    return review.next_pending(s, review.review_spec(table), after=after)
-
-
-@app.post("/api/review/{table}/{record_id}", response_model=RecordResponse)
-def review_decide(table: str, record_id: int, decision: Decision,
-                  s: Session = Depends(session_dep)) -> RecordResponse:
-    spec = review.review_spec(table)
-    with s.begin():
-        record = review.decide(s, spec, record_id, decision.decision, decision.changes)
     return records.response_of(s, spec, record)
 
 

@@ -31,7 +31,7 @@ from data_access_logic.idea.models import IdeaMaterial, IdeaTerm
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Character, ConfirmStatus, Episode, EpisodeCharacter, Event
+from db.schema import Character, Episode, EpisodeCharacter, Event
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -81,8 +81,7 @@ def _location_id(episode: Episode) -> int | None:
 
 
 def location_events_select(location_id: int, start: Stamp) -> Select[Event]:
-    return (common_query.events_of_location_select(location_id, until=start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
-            .where(Event.confirmed == ConfirmStatus.APPROVED))
+    return common_query.events_of_location_select(location_id, until=start, limit=constants.EPISODE_PLACE_EVENT_LIMIT)
 
 
 def later_events_select(location_id: int | None, characters: list[Character], start: Stamp) -> Select[Event]:

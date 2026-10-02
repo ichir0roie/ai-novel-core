@@ -11,7 +11,7 @@ from data_access_logic.character.histories import histories_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import events_of, summarized_events
 from data_access_logic.query import common_query
-from db.schema import Character, ConfirmStatus, Event
+from db.schema import Character, Event
 from db.stamp import Stamp
 
 
@@ -28,9 +28,7 @@ def relations_at(s: Session, characters: list[Character], time: Stamp) -> list[C
 
 
 def _recent_events_select(character: Character, time: Stamp) -> Select[Event]:
-    # 話に使うのは、ユーザが確かめた(`confirmed=承認`)出来事だけ
-    return (common_query.events_of_character_select(character.id, until=time, limit=constants.EPISODE_CHARACTER_EVENT_LIMIT)
-            .where(Event.confirmed == ConfirmStatus.APPROVED))
+    return common_query.events_of_character_select(character.id, until=time, limit=constants.EPISODE_CHARACTER_EVENT_LIMIT)
 
 
 def cast_event_ids(s: Session, characters: list[Character], time: Stamp) -> list[int]:

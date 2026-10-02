@@ -10,25 +10,23 @@ from data_access_logic.oracle.commit_oracle import CommitOracle
 from data_access_logic.oracle.form import OracleCreateForm, OracleUpdateForm
 from data_access_logic.oracle.update_oracle import UpdateOracle
 from data_access_logic.review.list_pending_reviews import ListPendingReviews
-from db.schema import ConfirmStatus, MemeCategory
+from db.schema import MemeCategory
 
 
 def test_commit_meme(shown):
     result = shown(CommitMeme(MemeCreateForm(
-        text="約束は命より重い", category=MemeCategory.BELIEF, confirmed=ConfirmStatus.PENDING)))
+        text="約束は命より重い", category=MemeCategory.BELIEF)))
 
-    assert (result["text"], result["category"], result["confirmed"]) == ("約束は命より重い", "信条", "未確認")
+    assert (result["text"], result["category"]) == ("約束は命より重い", "信条")
 
 
 def test_delete_meme(shown, world):
     result = shown(DeleteMeme(meme_id=world.meme_id))
 
-    assert result == {"id": world.meme_id, "category": "信条", "confirmed": "未確認", "text": "テストの信条"}
+    assert result == {"id": world.meme_id, "category": "信条", "text": "テストの信条"}
 
 
 def test_draw_memes(shown, world):
-    UpdateMeme(MemeUpdateForm(id=world.meme_id, confirmed=ConfirmStatus.APPROVED)).run()
-
     result = shown(DrawMemes(person=True, seed=4))
 
     assert isinstance(result, list)
@@ -54,9 +52,9 @@ def test_refresh_generated_content(shown, world, mock_ai):
 
 def test_update_meme(shown, world):
     result = shown(UpdateMeme(MemeUpdateForm(
-        id=world.meme_id, text="約束は守る", category=MemeCategory.LAW, confirmed=ConfirmStatus.APPROVED)))
+        id=world.meme_id, text="約束は守る", category=MemeCategory.LAW)))
 
-    assert result == {"id": world.meme_id, "category": "理", "confirmed": "承認", "text": "約束は守る"}
+    assert result == {"id": world.meme_id, "category": "理", "text": "約束は守る"}
 
 
 def test_commit_oracle(shown, mock_ai):
@@ -78,7 +76,9 @@ def test_update_oracle(shown, world):
 
 
 def test_list_pending_reviews(shown, world):
+    UpdateMeme(MemeUpdateForm(id=world.meme_id, text="TODO: 言い回しを確かめる")).run()
+
     result = shown(ListPendingReviews())
 
     assert {"key", "kind", "title", "detail"} <= set(result[0])
-    assert any("テスト魔導炉" in item["title"] for item in result)
+    assert f"todo:meme:{world.meme_id}" in [item["key"] for item in result]

@@ -61,8 +61,6 @@ type Props = {
   defaultIds?: number[] | null;
 };
 
-const STATUS_CLASS: Record<string, string> = { 承認: "approve", 非承認: "reject", 未確認: "pending" };
-
 function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
   const [text, setText] = useState(value == null ? "" : JSON.stringify(value, null, 2));
   const [error, setError] = useState<string | null>(null);
@@ -107,17 +105,6 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
   }
   if (column.references) {
     return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} />;
-  }
-  if (column.type === "confirm") {
-    return (
-      <div className="segment">
-        {(column.choices ?? []).map((choice) => (
-          <button key={choice} type="button" className={`${value === choice ? "on" : ""} ${STATUS_CLASS[choice] ?? ""}`} onClick={() => onChange(choice)}>
-            {choice}
-          </button>
-        ))}
-      </div>
-    );
   }
   if (column.choices) {
     // 値がまだ無ければ、選択肢の既定値(column.default)を初期選択にする(何も選ばず実行すれば、

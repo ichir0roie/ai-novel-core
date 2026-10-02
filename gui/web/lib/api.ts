@@ -7,10 +7,7 @@ export type ColumnMeta = components["schemas"]["ColumnMeta"];
 export type ChildListMeta = components["schemas"]["ChildListMeta"];
 export type RecordList = components["schemas"]["RecordList"];
 export type RecordResponse = components["schemas"]["RecordResponse"];
-export type ReviewSummary = components["schemas"]["ReviewSummary"];
-export type ReviewNext = components["schemas"]["ReviewNext"];
 export type Option = components["schemas"]["Option"];
-export type ConfirmStatus = components["schemas"]["ConfirmStatus"];
 export type ClaudeMode = components["schemas"]["TablesResponse"]["claude_mode"] & string;
 export type Labels = Record<string, Record<string, string>>;
 export type Rec = Record<string, unknown>;
@@ -63,17 +60,6 @@ export const getOptions = (table: string, q?: string) => {
   if (q) params.set("q", q);
   return api<components["schemas"]["OptionList"]>(`/api/tables/${table}/options?${params}`);
 };
-
-export const getReviewSummary = () => api<ReviewSummary>("/api/review");
-
-export const getReviewNext = (table: string, after = 0) =>
-  api<ReviewNext>(`/api/review/${table}/next?after=${after}`);
-
-export const decideReview = (table: string, id: number, decision: ConfirmStatus, changes: Rec) =>
-  api<RecordResponse>(`/api/review/${table}/${id}`, {
-    method: "POST",
-    body: JSON.stringify({ decision, changes }),
-  });
 
 /** 読んだときの値から変わった欄だけを返す(入口は「渡した欄だけ直す」)。 */
 export function diff(initial: Rec, current: Rec): Rec {

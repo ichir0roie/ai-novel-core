@@ -3,14 +3,9 @@ from __future__ import annotations
 
 from sqlalchemy import Select, or_, select
 
-from db.schema import Base, Character, ConfirmStatus, ContentBase, Episode, Event, Idea, Meme
+from db.schema import Base, ContentBase, Episode
 
 TODO_MARK = "TODO"
-
-
-def pending_select(model: type[Character] | type[Event] | type[Idea] | type[Meme]) -> Select:
-    """まだ確かめていない候補(`confirmed=未確認`)。退けた(非承認)ものは含めない。"""
-    return select(model).where(model.confirmed == ConfirmStatus.PENDING).order_by(model.id)
 
 
 def text_models() -> list[type]:

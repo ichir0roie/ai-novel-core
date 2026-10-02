@@ -5,7 +5,6 @@ import type { Rec } from "./api";
 export type IdeaNode = {
   id: number;
   name: string | null;
-  confirmed: string | null;
   children: IdeaNode[];
 };
 
@@ -24,7 +23,6 @@ export function buildIdeaTree(ideas: Rec[]): IdeaNode[] {
   const node = (idea: Rec): IdeaNode => ({
     id: Number(idea.id),
     name: str(idea.name),
-    confirmed: str(idea.confirmed),
     children: (childrenOf.get(Number(idea.id)) ?? []).map(node),
   });
   return (childrenOf.get(null) ?? []).map(node);

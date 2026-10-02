@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """人物・人物以外の対象(国・組織・集団・物)を一件生む。中身(説明・年齢・口調)→ 設定を踏まえた清書 → 名付け、の順に AI に決めさせる。
 
-名前は中身が決まったあとに、その内容から連想して決める。生んだ人物は `confirmed=未確認` で足す。
+名前は中身が決まったあとに、その内容から連想して決める。
 
 db だけの段(`birth_sources` → 語をアイデアと照らす `resolve_ideas` → `save_character`)と、AI・乱数だけの段
 (`character_content` → `character_creation`)に分けてある。手元では `generate_character` がつなぎ、
@@ -42,7 +42,7 @@ from data_access_logic.query import common_query, dictionary_query, story_creati
 from data_access_logic.story.models import StoryPlotMaterial
 from db.child_lists import replaced_rows
 from db.schema import (
-    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, ConfirmStatus, Location,
+    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, Location,
 )
 from db.stamp import Stamp
 
@@ -367,7 +367,6 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
         kind=creation.kind,
         text=creation.writing.text,
         main_character=creation.main_character,
-        confirmed=ConfirmStatus.PENDING,
         end=creation.end,
         # 生まれた時点で決める値なので、誕生から効く一行だけを持つ
         parameters=[parameter_row(creation.parameters, creation.birth)],

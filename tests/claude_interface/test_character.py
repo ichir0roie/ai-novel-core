@@ -17,7 +17,7 @@ from data_access_logic.character.record import CharacterHistoryRow, CharacterPar
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
-from db.schema import ConfirmStatus, PersonalityLevel
+from db.schema import PersonalityLevel
 
 _LEVELS = {
     "sincerity": PersonalityLevel.HIGH, "curiosity": PersonalityLevel.LOW, "proactivity": PersonalityLevel.MUST,
@@ -37,14 +37,13 @@ def _parameter_row(start: str) -> CharacterParameterRow:
 
 def test_commit_character(shown, world):
     result = shown(CommitCharacter(CharacterCreateForm(
-        name="北原ミツ", text="市の香辛料売り", kind="人物", confirmed=ConfirmStatus.PENDING, main_character=True,
+        name="北原ミツ", text="市の香辛料売り", kind="人物", main_character=True,
         event_seeded=True, meme_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
         parameters=[_parameter_row("1180/05/06")],
         histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
 
     assert result["name"] == "北原ミツ"
     assert result["text"] == "市の香辛料売り"
-    assert result["confirmed"] == "未確認"
     assert result["main_character"] is True
     assert result["start"] == "1180/05/06 00:00:00"
     assert result["end"] == "1250/01/01 00:00:00"
@@ -152,7 +151,7 @@ def test_read_surroundings(shown, world):
 
 def test_update_character(shown, world):
     result = shown(UpdateCharacter(CharacterUpdateForm(
-        id=world.character_ids[1], name="テスト花代", text="改名した", kind="人物", confirmed=ConfirmStatus.REJECTED,
+        id=world.character_ids[1], name="テスト花代", text="改名した", kind="人物",
         main_character=True, event_seeded=False, meme_seeded=False, start="1171/02/03", end="1261/04/05",
         parameters=[_parameter_row("1171/02/03")],
         locations=[CharacterLocationRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
@@ -160,7 +159,6 @@ def test_update_character(shown, world):
 
     assert result["name"] == "テスト花代"
     assert result["text"] == "改名した"
-    assert result["confirmed"] == "非承認"
     assert result["main_character"] is True
     assert (result["event_seeded"], result["meme_seeded"]) == (False, False)
     assert (result["start"], result["end"]) == ("1171/02/03 00:00:00", "1261/04/05 00:00:00")

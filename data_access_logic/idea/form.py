@@ -2,14 +2,12 @@ from pydantic import Field
 
 from data_access_logic.idea.record import IdeaRecognitionRow
 from data_access_logic.material import Form, Timestamp
-from db.schema import ConfirmStatus
 
 
 class IdeaCreateForm(Form):
     name: str = Field(min_length=1)
     kind: str = Field(min_length=1)
     text: str = ""
-    confirmed: ConfirmStatus = ConfirmStatus.APPROVED
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
@@ -24,7 +22,6 @@ class IdeaUpdateForm(Form):
     name: str | None = None
     kind: str | None = None
     text: str | None = None
-    confirmed: ConfirmStatus | None = None
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None

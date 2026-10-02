@@ -2,7 +2,6 @@
 
 db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAPI)と画面(`gui/web`、Next.js)の二つ。
 
-- 未確認のアイデア・ミームを一件ずつ出し、直しながら「承認」「非承認」を付けて次へ進むレビュー画面
 - 本文を持つテーブル(作品・話・人物・人物相関・出来事・場所・アイデア・ミーム・覚え書き・文体の好み)の一覧・表示・修正・追加
 - 作品の一覧(`/tables/story`)は既定で、作品の親子(`parent_story_id`)の木。行の Move ボタンで移動モードに入り、親にする作品をクリックして付け替える。
   作品・話の一覧 API を引いてブラウザ側で組む(`gui/web/lib/storyTree.ts`)。`?view=list` で表に切り替える。
@@ -30,14 +29,14 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
 
 ## 構成の決め方
 
-列の定義(`db/schema.py`)、値の型(`Stamp`・`confirmed`)、確定・修正のときの検証(実在確認・別名の制約・
+列の定義(`db/schema.py`)、値の型(`Stamp`)、確定・修正のときの検証(実在確認・別名の制約・
 子の行の扱い)はすべて python 側にある。Next.js から db を直接開くと、その全部を
 TypeScript にもう一度書くことになり、正が二つになる。そのため API は FastAPI で python 側に置き、
 書き込みは `data_access_logic/` の入口(`execute(s)`)を通す。画面は列の情報を
 `GET /api/tables` から受け取って組み立てるので、列を足しても画面のコードは変えなくてよい。
 型は FastAPI の OpenAPI(`gui/api/openapi.json`)から `gui/web/lib/openapi.d.ts` を生成して合わせる。
 画面に出す文言(ボタン・見出し・状態表示など、英語)は `gui/web/lib/text.ts` の `T` に集め、ページ・コンポーネントには直書きしない。
-db の値(承認/非承認/未確認、場所の category など)と API から来るテーブル名・列名のラベルは文言ではないので、`T` には置かない。
+db の値(場所の category など)と API から来るテーブル名・列名のラベルは文言ではないので、`T` には置かない。
 
 入口の `run()` ではなく `execute(s)` を呼ぶのは、`run()` が確定のあとに AI(`claude -p`)で
 要約・ミーム・検証を作る段を持ち、GUI の一回の操作で待てる長さではないため。その分は
@@ -90,9 +89,6 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | POST | `/api/tables/{table}/records` | 追加。確定の入口(`CommitIdea` など)の `execute` を通す |
 | PATCH | `/api/tables/{table}/records/{id}` | 修正。渡した欄だけ直す(`UpdateIdea` などの `execute`) |
 | GET | `/api/tables/{table}/options?q=` | 参照先を選ぶための id と名前 |
-| GET | `/api/review` | 未確認・承認・非承認の件数 |
-| GET | `/api/review/{table}/next?after=` | 次の未確認(`after` より後の id。末尾を過ぎたら先頭へ) |
-| POST | `/api/review/{table}/{id}` | `{"decision": "承認"/"非承認"/"未確認", "changes": {...}}`。直しと同時に確認を付ける |
 | GET | `/api/interface` | 入口の一覧(領域・引数・`claude` を叩くか・db に書くか)と、claude を叩く入口を呼べるか(`claude_available`)・その扱い(`claude_mode`) |
 | POST | `/api/interface/{id}` | `{"args": {...}, "background": false}`。`id` は `location.list_locations.ListLocations` のような「領域.ファイル.クラス」。`claude` を叩く入口と `background` は job の id を 202 で返す |
 | POST | `/api/tables/{table}/generate/{key}` | 「AI で作成」「AI で補完」。`{"draft": {欄の値}, "args": {…}}`。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す(下書きに `id` があれば、その行の空の本文だけを埋める)入口(`Generate*`)を裏の job で回し、job の id を 202 で返す。生成器の `key` と `args` の欄は `/api/tables` の `generators` にある。Claude Code の環境でだけ(外なら 403) |

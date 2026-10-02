@@ -13,7 +13,7 @@ from data_access_logic.episode.read_episodes import ReadEpisodes
 from data_access_logic.episode.revise_episode import ReviseEpisode
 from data_access_logic.episode.rewrite_episode_summary import RewriteEpisodeSummary
 from data_access_logic.episode.set_episode_synced import SetEpisodeSynced
-from db.schema import Character, ConfirmStatus, Episode, Location, get_env_session, summary_source_hash
+from db.schema import Character, Episode, Location, get_env_session, summary_source_hash
 
 
 def test_commit_episode(shown, world, mock_ai):
@@ -107,8 +107,7 @@ def test_complete_plot_adds_missing(shown, world, mock_ai, monkeypatch):
     assert result["character_ids"][0] == world.character_ids[0]
     assert len(result["character_ids"]) == 2
     with get_env_session() as s:
-        added = s.get_one(Character, result["character_ids"][1])
-        assert added.confirmed == ConfirmStatus.APPROVED
+        assert s.get(Character, result["character_ids"][1]) is not None
         location = s.get_one(Location, result["location_id"])
         assert (location.name, location.parent_id) == ("ミナト亭", world.location_id)
 

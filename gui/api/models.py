@@ -8,9 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from data_access_logic.character.relation_graph import RelationGraph
 from data_access_logic.map.collect import PlanetMap
-from db.schema import ConfirmStatus
 
-ColumnType = Literal["integer", "number", "boolean", "string", "stamp", "json", "confirm", "id_list"]
+ColumnType = Literal["integer", "number", "boolean", "string", "stamp", "json", "id_list"]
 
 
 class ColumnMeta(BaseModel):
@@ -77,7 +76,6 @@ class TableMeta(BaseModel):
     label_column: str | None
     columns: list[ColumnMeta]
     child_lists: list[ChildListMeta]
-    reviewable: bool
     count: int
     generators: list[GeneratorMeta] = Field(default_factory=list)
     # 一覧の既定の並び
@@ -124,32 +122,6 @@ class Option(BaseModel):
 
 class OptionList(BaseModel):
     items: list[Option]
-
-
-class ReviewTable(BaseModel):
-    table: str
-    label: str
-    pending: int
-    approved: int
-    rejected: int
-
-
-class ReviewSummary(BaseModel):
-    tables: list[ReviewTable]
-
-
-class ReviewNext(BaseModel):
-    record: dict[str, Any] | None
-    label: str | None
-    remaining: int
-    labels: dict[str, dict[int, str]] = Field(default_factory=dict)
-    related: dict[str, Any] = Field(default_factory=dict)
-
-
-class Decision(BaseModel):
-    decision: ConfirmStatus
-    # 承認・非承認と同時に直す欄
-    changes: dict[str, Any] = Field(default_factory=dict)
 
 
 class MapsResponse(BaseModel):

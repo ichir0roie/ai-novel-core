@@ -4,10 +4,9 @@ from __future__ import annotations
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from data_access_logic.idea.links import appearances
 from data_access_logic.label import label_of
 from data_access_logic.query import review_query
-from db.schema import Base, Idea, Meme, Story
+from db.schema import Base, Story
 
 
 class PendingReview(BaseModel):
@@ -21,48 +20,6 @@ class PendingReview(BaseModel):
 def gui_path(record: Base) -> str:
     """GUI(`gui/`)で開く場所"""
     return f"gui: /tables/{type(record).__tablename__}/{record.id}"
-
-
-def _appearances(s: Session, idea: Idea) -> str:
-    places = [f"{place.table}「{place.label}」(id={place.id})" for place in appearances(s, idea.id)]
-    return "、".join(places) or "(結んだ本文なし)"
-
-
-def candidate_items(s: Session) -> list[PendingReview]:
-    items = []
-    for idea in s.scalars(review_query.pending_select(Idea)).all():
-        items.append(PendingReview(
-            key=f"idea:{idea.id}",
-            kind="候補",
-            title=f"アイデア候補「{idea.name}」を確定・統合・削除する",
-            detail="\n".join([
-                idea.text or "(説明なし)",
-                f"出てきた所: {_appearances(s, idea)}",
-                gui_path(idea),
-                f"種別: {idea.kind}",
-                f"確定: GUI のレビュー画面で承認する / 退ける: 非承認にする / "
-                f"統合: MergeIdea({idea.id}, 統合先の id) / 削除: DeleteIdea({idea.id})",
-            ]),
-        ))
-    return items
-
-
-def unconfirmed_meme_items(s: Session) -> list[PendingReview]:
-    items = []
-    for meme in s.scalars(review_query.pending_select(Meme)).all():
-        items.append(PendingReview(
-            key=f"meme:{meme.id}",
-            kind="候補",
-            title=f"ミーム候補「{meme.text}」を確かめる・直す・消す",
-            detail="\n".join([
-                meme.text,
-                f"分類: {meme.category or '(未分類)'}",
-                gui_path(meme),
-                f"確定: GUI のレビュー画面で承認する(確定するまで人物へ引く対象に出ない) / 退ける: 非承認にする / "
-                f"直す: UpdateMeme(MemeUpdateForm(id={meme.id}, ...)) / 削除: DeleteMeme({meme.id})",
-            ]),
-        ))
-    return items
 
 
 def unsynced_episode_items(s: Session) -> list[PendingReview]:

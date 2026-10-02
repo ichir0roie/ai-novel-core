@@ -54,7 +54,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
    - `CommitEpisode` に `id`・`plot_text` を渡して入れる(プロットに名前の出る人物が、名前だけ出る人物として拾われる)
 4. **登場人物・場所を推測して結ぶ**(下の「登場人物・場所」)
    - `ReadEpisodeCasting` を読み直し、プロットで台詞・行動のある人物と主な舞台を決める。候補に無い人物・場所は作る
-   - `CastEpisode(episode_id, character_ids=[…], location_id=…, viewpoint_character_id=…)` で結ぶ(登場人物はまるごと置き換わり、結んだ人物は承認され、名前だけ出る人物は拾い直される。同期フラグは変えない)
+   - `CastEpisode(episode_id, character_ids=[…], location_id=…, viewpoint_character_id=…)` で結ぶ(登場人物はまるごと置き換わり、名前だけ出る人物は拾い直される。同期フラグは変えない)
    - 足した人物に関わった話があれば、2 と同じく読む
 5. **設定を引く(要るとき)**
    - プロットに出る固有の語(呼称・制度・道具・病など)を自分で挙げ、`ResolveTerms` でアイデアと照らす。当たらなかった語は候補のアイデアとして足される

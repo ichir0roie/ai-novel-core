@@ -4,7 +4,7 @@ from pydantic import Field, field_validator, model_validator
 
 from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
 from data_access_logic.material import Draft, Form, References, Timestamp
-from db.schema import CHARACTER_KIND_PERSON, ConfirmStatus, PersonalityLevel
+from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
 
 
 class CharacterParameterForm(Draft):
@@ -59,7 +59,6 @@ class CharacterCreateForm(Form):
     name: str | None = None
     text: str | None = None
     kind: str = CHARACTER_KIND_PERSON
-    confirmed: ConfirmStatus = ConfirmStatus.APPROVED
     main_character: bool = False
     event_seeded: bool = False
     meme_seeded: bool = False
@@ -77,7 +76,6 @@ class CharacterUpdateForm(Form):
     name: str | None = None
     text: str | None = None
     kind: str | None = None
-    confirmed: ConfirmStatus | None = None
     main_character: bool | None = None
     event_seeded: bool | None = None
     meme_seeded: bool | None = None

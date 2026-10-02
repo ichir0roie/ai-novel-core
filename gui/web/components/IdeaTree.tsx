@@ -66,7 +66,6 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
             </button>
           )}
           <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
-          {node.confirmed && node.confirmed !== "承認" && <span className="chip">{node.confirmed}</span>}
           <button
             type="button"
             className="tree-move-btn"

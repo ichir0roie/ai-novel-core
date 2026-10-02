@@ -4,14 +4,13 @@ from pydantic import Field, computed_field, model_validator
 from sqlalchemy.orm import selectinload
 
 from data_access_logic.material import Material, Timestamp
-from db.schema import ConfirmStatus, Event
+from db.schema import Event
 
 
 class EventColumns(Material):
     id: int
     name: str
     hidden: bool
-    confirmed: ConfirmStatus
     time: Timestamp
     parent_event_id: int | None = None
     location_id: int | None = None

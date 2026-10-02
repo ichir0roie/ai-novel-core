@@ -24,7 +24,7 @@ from data_access_logic.meme.models import (
 from data_access_logic.query import meme_query
 from data_access_logic.character.histories import plot_of
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
-from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
+from db.schema import MEME_CATEGORIES, Character, Event, Idea, Meme, Oracle
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +199,7 @@ def meme_pool(s: Session, categories: tuple[str, ...]) -> list[PooledMeme]:
         PooledMeme.model_validate(meme)
         for category in categories
         for meme in s.scalars(
-            select(Meme).where(Meme.category == category, Meme.confirmed == ConfirmStatus.APPROVED).order_by(Meme.id)
+            select(Meme).where(Meme.category == category).order_by(Meme.id)
         ).all()
     ]
 
