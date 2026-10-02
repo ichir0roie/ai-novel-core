@@ -3,6 +3,7 @@
 db は AWS の RDS(PostgreSQL + PostGIS)ただ一つ。手元の作業も、画面(Amplify)と web のセッションと同じ db を読み書きする。
 ここは手元で db に直に繋ぐときの決まり。web のセッションは db に繋がないので、代わりに `.claude/docs/web-db.md` を読む。
 ユーザは `gui/` の GUI(FastAPI + Next.js。起動は `gui/readme.md`)で見て直す(ページは `/tables/<table>/<id>`)。
+**テスト・デバッグ・動作確認では、この道(RDS)を使わず、必ず手元の PostGIS のテスト用の db(`novel_test`)を使う(`.claude/docs/testing.md`)。**
 Claude は入口越しに db だけで作業を完結させ、報告は db を読んで行う。
 
 ## 手元からの道

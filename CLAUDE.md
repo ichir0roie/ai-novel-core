@@ -15,6 +15,12 @@ Claude はユーザへの返答を常に日本語で書く。
 | 手元(CLI・VS Code) | `true` でない | `.venv` を用意し、RDS への転送を起こして `DEM_DATABASE_URL` を渡す | 入口越しに直に読み書きする | 頼まれたときだけ |
 | web のセッション(Claude Code on the web) | `true` | `.venv` を裏で用意する(python のコマンドだけ用意が済むまで待たされる) | 繋がない。API 越しに読み書きする | セッションの指示に従う |
 
+# デバッグ・テストの db
+
+**デバッグ・テスト・動作確認(GUI を起こして見る・スクショを撮る・行を足して試す)で db を読み書きするときは、
+手元でも web のセッションでも、必ず手元の PostGIS のテスト用の db(`novel_test`)を使う。
+本番の RDS(手元の転送・web の API)には決して向けない。** 用意の仕方は `.claude/docs/testing.md`。
+
 # 条件付きのドキュメント
 
 次の表の条件に当てはまる作業をするときは、始める前に対応するファイルを Read し、それに従う。
@@ -29,7 +35,7 @@ Claude はユーザへの返答を常に日本語で書く。
 | git でコミット・push・merge・ブランチ操作をするとき、worktree で作業してと頼まれたとき | `.claude/docs/git.md` |
 | 手元で db を読み書きするとき(入口の呼び出し・作成、マイグレーションの確認、他のセッションとの同時作業を含む) | `.claude/docs/db.md` |
 | web のセッションで db を読み書きするとき(id・行を引く、入口・AI の入口を呼ぶ) | `.claude/docs/web-db.md` |
-| テストをしてと明確に依頼されたとき | `.claude/docs/testing.md` |
+| テストをしてと明確に依頼されたとき、デバッグ・動作確認で db を読み書きするとき | `.claude/docs/testing.md` |
 | テスト・動作確認で GUI(API・画面)を動かすとき | `.claude/docs/gui.md` |
 | ミームを扱うとき、本文・人物の芯(`text`)・来歴(`histories`)を書くとき | `.claude/docs/meme.md` |
 | 列名・型を確かめるとき、`db/schema.py` やマイグレーションを変えるとき | `.claude/docs/schema.md` |

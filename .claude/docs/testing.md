@@ -2,13 +2,22 @@
 
 テストをしてと明確に依頼されたら、そのとき要るテストを `tests/` に書いて実行する(`.venv/bin/python -m pytest tests`)。
 
+**テスト・デバッグ・動作確認(GUI・API を起こして見る、スクショを撮る、行を足して試す)の db は、手元でも web のセッションでも、
+必ず手元の PostGIS のテスト用の db(`novel_test`)にする。本番の RDS(手元の転送 `DEM_DATABASE_URL`・web の API `NOVEL_API_URL`)には
+読むだけの確かめでも向けない。** 試しの行を本番に足すと作品の中身に混ざる。
+
 - テストは手元の PostGIS のテスト用の db(`novel_test`。開発用の db と同じサーバー)だけを読み書きする。書くときは
   `tests/conftest.py` で `tool.test` を先に読んで固定する。本番の RDS には書き込まない(`tool.test` は、テスト用の db が
   手元のサーバーを指していなければ止まる)。`DEM_DEV_DATABASE_URL` が無ければ、`tool.test` がその場で `infra_local/postgis.sh` を回して用意する
 - テスト用の db は空から作らず、本番の RDS を写して作る(`tool.test.copy_production_db`)。写し元は手元の転送越しの RDS なので、
   転送(`tool.aws.rds --serve`)が要る。手で動きを確かめるときも、これで写した db を使う。
-  web のセッション(`CLAUDE_CODE_REMOTE=true`)は RDS に繋がないので写せない(`DEM_DATABASE_URL` が無いと止まる)。
-  テスト用の db が空なら、その旨をユーザに伝え、手元で回すかを尋ねる
+  web のセッション(`CLAUDE_CODE_REMOTE=true`)は RDS に繋がないので写せない(`DEM_DATABASE_URL` が無いと止まる)
+- web のセッションでは、PostGIS を `infra_local/postgis.sh` で入れ、空の `novel_test` を schema から作って、要る行を足して使う。
+  本番の写しでなければ確かめられないことなら、その旨をユーザに伝え、手元で回すかを尋ねる
+  - 用意: `dev=$(bash infra_local/postgis.sh .venv/bin/python) && .venv/bin/python -m db.postgres.init_db --url "${dev%/*}/novel_test" --create-database`
+  - 行を足す: `DEM_DEV_DATABASE_URL=$dev .venv/bin/python -m tool.test.seed_mock_db --n 100`(全部の表にモックの行)。
+    件数・時期をそろえたいときは、`tool.test` を先に import した使い捨てのスクリプトで `randomizer.mock_factories` に値を渡して足す
+  - `conftest.py` の `ensure_test_db` は空の db を写そうとして止まるので、pytest の前に行を足しておく
 - `conftest.py` はテストの始めに `tool.test.ensure_test_db` を回す。テスト用の db が無いか空のときだけ写し、行があればそのまま使う
   (前のテストで足した行も残る)。作り直すのは `.venv/bin/python -m tool.test.recreate_db`(VS Code はタスク「test db recreate」。
   `seed_mock_db --recreate` も写し直す)。マイグレーションを足したあと、版の食い違いの警告が出たときも作り直す
