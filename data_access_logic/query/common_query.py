@@ -89,9 +89,10 @@ def story_path_ids(s: Session, story_id: int) -> list[int]:
     return list(reversed(path))
 
 
-def story_family_ids(s: Session, story_id: int) -> list[int]:
-    """一番上の作品とその子孫(章・外伝)の id。章をまたいで前の話を読むのに使う"""
-    found = story_path_ids(s, story_id)[:1]
+def descendant_story_ids(s: Session, story_id: int) -> list[int]:
+    """この作品とその子孫(章・外伝)の id。何段あるか分からないので一段ずつたどる。"""
+    get_row(s, Story, story_id)
+    found = [story_id]
     frontier = found
     while frontier:
         children = s.scalars(
@@ -100,6 +101,11 @@ def story_family_ids(s: Session, story_id: int) -> list[int]:
         found = found + children
         frontier = children
     return found
+
+
+def story_family_ids(s: Session, story_id: int) -> list[int]:
+    """一番上の作品とその子孫(章・外伝)の id。章をまたいで前の話を読むのに使う"""
+    return descendant_story_ids(s, story_path_ids(s, story_id)[0])
 
 
 def idea_scope_ids(s: Session, location_id: int) -> list[int]:
