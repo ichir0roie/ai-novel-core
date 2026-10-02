@@ -384,7 +384,7 @@ export interface paths {
         };
         /**
          * Get Timeline
-         * @description `since`〜`until` に掛かる話と出来事。画面(`/timeline`)が時刻の軸に並べる
+         * @description 全期間の話と出来事。画面(`/timeline`)が時刻の軸に並べる
          */
         get: operations["get_timeline_api_timeline_get"];
         put?: never;
@@ -986,8 +986,6 @@ export interface components {
         TimelineResponse: {
             episode: components["schemas"]["TimelineBlock"];
             event: components["schemas"]["TimelineBlock"];
-            /** Limit */
-            limit: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -1643,9 +1641,7 @@ export interface operations {
     };
     get_timeline_api_timeline_get: {
         parameters: {
-            query: {
-                since: string;
-                until: string;
+            query?: {
                 story_id?: number | null;
                 location_id?: number | null;
             };

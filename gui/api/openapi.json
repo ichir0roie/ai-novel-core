@@ -930,27 +930,9 @@
     "/api/timeline": {
       "get": {
         "summary": "Get Timeline",
-        "description": "`since`〜`until` に掛かる話と出来事。画面(`/timeline`)が時刻の軸に並べる",
+        "description": "全期間の話と出来事。画面(`/timeline`)が時刻の軸に並べる",
         "operationId": "get_timeline_api_timeline_get",
         "parameters": [
-          {
-            "name": "since",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Since"
-            }
-          },
-          {
-            "name": "until",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Until"
-            }
-          },
           {
             "name": "story_id",
             "in": "query",
@@ -2629,17 +2611,12 @@
           },
           "event": {
             "$ref": "#/components/schemas/TimelineBlock"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit"
           }
         },
         "type": "object",
         "required": [
           "episode",
-          "event",
-          "limit"
+          "event"
         ],
         "title": "TimelineResponse"
       },

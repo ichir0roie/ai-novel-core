@@ -302,15 +302,10 @@ def location_characters(location_id: int, time: str, s: Session = Depends(sessio
 
 
 @app.get("/api/timeline", response_model=TimelineResponse)
-def get_timeline(since: str, until: str, story_id: int | None = None, location_id: int | None = None,
+def get_timeline(story_id: int | None = None, location_id: int | None = None,
                  s: Session = Depends(session_dep)) -> TimelineResponse:
-    """`since`〜`until` に掛かる話と出来事。画面(`/timeline`)が時刻の軸に並べる"""
-    start, end = Stamp.parse(since), Stamp.parse(until)
-    if start is None or end is None:
-        raise ValueError("since・until が空")
-    if end < start:
-        raise ValueError("until が since より前")
-    return timeline.timeline(s, start, end, story_id=story_id, location_id=location_id)
+    """全期間の話と出来事。画面(`/timeline`)が時刻の軸に並べる"""
+    return timeline.timeline(s, story_id=story_id, location_id=location_id)
 
 
 @app.get("/api/last_episode", response_model=EpisodeRecord | None)
