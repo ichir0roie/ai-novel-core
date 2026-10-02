@@ -521,9 +521,12 @@ export default function TimelinePage() {
 
   const renderRow = (row: Row) => (
     <div key={row.key} className="timeline-row">
-      <div className="timeline-label" title={row.label} style={{ paddingLeft: `calc(0.3rem + ${row.depth * 0.9}rem)` }}>
+      {/* 段の名前の欄のどこを押しても開閉する。ボタンのクリック(キーボードで押したときも)はこの欄まで上がってくる */}
+      <div className={`timeline-label ${row.foldable ? "foldable" : ""}`} title={row.label}
+        style={{ paddingLeft: `calc(0.3rem + ${row.depth * 0.9}rem)` }}
+        onClick={row.foldable ? () => setOpen(row.key, !row.open) : undefined}>
         {row.foldable ? (
-          <button type="button" className="timeline-toggle" aria-expanded={row.open} onClick={() => setOpen(row.key, !row.open)}>
+          <button type="button" className="timeline-toggle" aria-expanded={row.open}>
             {row.open ? "▾" : "▸"}
           </button>
         ) : (

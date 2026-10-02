@@ -575,6 +575,8 @@ button.ghost { background: transparent; }
   position: sticky; left: 0; z-index: 4; width: var(--timeline-label); flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel);
   border-right: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.timeline-label.foldable { cursor: pointer; user-select: none; }
+.timeline-label.foldable:hover { background: color-mix(in srgb, var(--line) 35%, var(--panel)); }
 /* 段の木の開閉。子の無い段も同じ幅を空けて、名前の頭をそろえる */
 .timeline-toggle { display: inline-block; width: 1rem; padding: 0; border: 0; background: none; color: var(--muted); font-size: 0.75rem; text-align: left; cursor: pointer; }
 /* hidden だと段がスクロールの基準になり、札の名前の sticky が効かない */
