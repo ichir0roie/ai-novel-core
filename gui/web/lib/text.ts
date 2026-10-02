@@ -32,6 +32,7 @@ export const T = {
   nav: {
     menu: "Menu",
     endpoints: "Endpoints",
+    timeline: "Timeline",
     review: (label: string) => `${label} review`,
     search: "Jump to a page (type a table or page name)",
     noMatch: "No matching page",
@@ -249,6 +250,29 @@ export const T = {
     altDiffUnknown: "elevation diff unknown",
     sameAltitude: "same altitude",
     altDiff: (up: boolean, m: number) => `${up ? "up" : "down"} ${m.toLocaleString()} m`,
+  },
+
+  timeline: {
+    title: "Timeline",
+    centeredOn: (at: string) => `Timeline around ${at}`,
+    center: "Center",
+    span: "Span",
+    spanOf: (days: number) =>
+      days >= 365 ? `${Math.round(days / 365)} year${days >= 730 ? "s" : ""}` : days >= 28 ? `${Math.round(days / 30.4)} month${days >= 56 ? "s" : ""}` : `${days} days`,
+    earlier: "◀ Earlier",
+    later: "Later ▶",
+    story: "Story",
+    location: "Location",
+    episodes: "Episodes",
+    events: "Events",
+    addEpisode: "Add episode",
+    addEvent: "Add event",
+    moved: (label: string, at: string) => `Moved "${label}" to ${at}`,
+    moveFailed: (error: string) => `Could not move: ${error}`,
+    truncated: (limit: number) => `Only the first ${limit} episodes / events are shown. Narrow the span to see the rest.`,
+    hint: "Drag an item sideways to change its date (time of day stays). Click an item to edit it, or empty space to add an episode or event there.",
+    openPage: "Open as page",
+    edit: (label: string, name: string) => `${label}: ${name}`,
   },
 
   stamp: {

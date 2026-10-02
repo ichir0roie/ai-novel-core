@@ -927,6 +927,87 @@
         }
       }
     },
+    "/api/timeline": {
+      "get": {
+        "summary": "Get Timeline",
+        "description": "`since`〜`until` に掛かる話と出来事。画面(`/timeline`)が時刻の軸に並べる",
+        "operationId": "get_timeline_api_timeline_get",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Since"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Until"
+            }
+          },
+          {
+            "name": "story_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Story Id"
+            }
+          },
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/last_episode": {
       "get": {
         "summary": "Last Episode",
@@ -2513,6 +2594,54 @@
           "tables"
         ],
         "title": "TablesResponse"
+      },
+      "TimelineBlock": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "labels": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Labels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "TimelineBlock"
+      },
+      "TimelineResponse": {
+        "properties": {
+          "episode": {
+            "$ref": "#/components/schemas/TimelineBlock"
+          },
+          "event": {
+            "$ref": "#/components/schemas/TimelineBlock"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "episode",
+          "event",
+          "limit"
+        ],
+        "title": "TimelineResponse"
       },
       "ValidationError": {
         "properties": {

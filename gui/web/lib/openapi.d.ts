@@ -375,6 +375,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timeline
+         * @description `since`〜`until` に掛かる話と出来事。画面(`/timeline`)が時刻の軸に並べる
+         */
+        get: operations["get_timeline_api_timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/last_episode": {
         parameters: {
             query?: never;
@@ -948,6 +968,26 @@ export interface components {
              * @enum {string}
              */
             claude_mode: "direct" | "queue" | "off";
+        };
+        /** TimelineBlock */
+        TimelineBlock: {
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Labels */
+            labels?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+        };
+        /** TimelineResponse */
+        TimelineResponse: {
+            episode: components["schemas"]["TimelineBlock"];
+            event: components["schemas"]["TimelineBlock"];
+            /** Limit */
+            limit: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -1588,6 +1628,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationCharactersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_timeline_api_timeline_get: {
+        parameters: {
+            query: {
+                since: string;
+                until: string;
+                story_id?: number | null;
+                location_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineResponse"];
                 };
             };
             /** @description Validation Error */

@@ -143,6 +143,15 @@ export type EpisodeRecord = components["schemas"]["EpisodeRecord"];
 export const getLastEpisode = (storyId: number) =>
   api<EpisodeRecord | null>(`/api/last_episode?${new URLSearchParams({ story_id: String(storyId) })}`);
 
+export type TimelineResponse = components["schemas"]["TimelineResponse"];
+
+export const getTimeline = (params: { since: string; until: string; story_id?: number | null; location_id?: number | null }) => {
+  const query = new URLSearchParams({ since: params.since, until: params.until });
+  if (params.story_id != null) query.set("story_id", String(params.story_id));
+  if (params.location_id != null) query.set("location_id", String(params.location_id));
+  return api<TimelineResponse>(`/api/timeline?${query}`);
+};
+
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {
   const items: Rec[] = [];

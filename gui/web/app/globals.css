@@ -558,3 +558,52 @@ button.ghost { background: transparent; }
   .endpoints > :first-child { max-height: 40dvh; overflow: auto; }
   .viz-body { grid-template-rows: minmax(0, 1fr) 45%; gap: 0.6rem; }
 }
+
+/* タイムライン(/timeline)。左に段の名前、右に時刻の軸。話は作品ごとの段、出来事は一つの段に、重ならないよう下へ積む */
+.timeline-center-input { display: inline-flex; align-items: center; gap: 0.4rem; }
+.timeline-center-input input[type="text"] { width: 12.5rem; }
+.timeline-filter { display: inline-flex; align-items: center; gap: 0.4rem; }
+.timeline { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.timeline-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.timeline-row { display: flex; border-bottom: 1px solid var(--line); }
+.timeline-label { width: 150px; flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; border-right: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-track { position: relative; flex: 1; min-width: 0; overflow: hidden; cursor: cell; }
+.timeline-axis { flex-shrink: 0; }
+.timeline-axis .timeline-track { height: 28px; cursor: default; }
+.timeline-section { padding: 0.2rem 0.6rem; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--chip); border-bottom: 1px solid var(--line); }
+.timeline-tick { position: absolute; top: 0; bottom: 0; padding: 4px 0 0 4px; border-left: 1px solid var(--line); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.timeline-tick.major { border-left-color: var(--muted); color: var(--ink); font-weight: 600; }
+.timeline-grid { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--line) 60%, transparent); pointer-events: none; }
+.timeline-grid.major { border-left-color: var(--line); }
+.timeline-center { position: absolute; top: 0; bottom: 0; border-left: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); pointer-events: none; }
+.timeline-item {
+  position: absolute; height: 22px; padding: 0 6px; border: 1px solid; border-radius: 4px; font-size: 0.8rem; line-height: 20px;
+  cursor: grab; user-select: none; touch-action: none; white-space: nowrap; z-index: 1;
+}
+.timeline-item.episode { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-color: var(--accent); }
+.timeline-item.event { background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border-color: var(--warn); }
+/* 一点の時刻は左端の太線がその時刻 */
+.timeline-item.point { border-left-width: 3px; }
+.timeline-item.unconfirmed { border-style: dashed; }
+.timeline-item.rejected { opacity: 0.45; text-decoration: line-through; }
+.timeline-item.dragging { cursor: grabbing; z-index: 3; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); }
+.timeline-item.saving { opacity: 0.6; }
+.timeline-item:hover { z-index: 2; }
+.timeline-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; pointer-events: none; }
+.timeline-item.episode .timeline-bar { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.timeline-item.event .timeline-bar { background: color-mix(in srgb, var(--warn) 30%, transparent); }
+.timeline-text { position: relative; display: block; overflow: hidden; text-overflow: ellipsis; }
+.timeline-item.dragging .timeline-text { overflow: visible; }
+.timeline-target { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
+/* 空の所をクリックしたときに出す、足すボタンの吹き出し */
+.timeline-add {
+  position: fixed; z-index: 25; display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem 0.6rem; white-space: nowrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+/* タイムラインから開く編集・追加のモーダル。人物のモーダルと同じく、左右の欄がそれぞれスクロールする */
+.modal.wide:has(.record-modal) { height: 90dvh; }
+.modal-body:has(> .record-modal) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.record-modal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+@media (max-width: 640px) {
+  .timeline-label { width: 90px; }
+}

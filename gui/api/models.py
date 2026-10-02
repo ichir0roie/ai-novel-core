@@ -175,6 +175,19 @@ class LocationCharactersResponse(BaseModel):
     character_ids: list[int]
 
 
+class TimelineBlock(BaseModel):
+    # 一覧(`RecordList`)の一行と同じ形
+    items: list[dict[str, Any]]
+    labels: dict[str, dict[int, str]] = Field(default_factory=dict)
+
+
+class TimelineResponse(BaseModel):
+    episode: TimelineBlock
+    event: TimelineBlock
+    # それぞれの件数の上限。届いていれば期間を狭めないと全部は出ない
+    limit: int
+
+
 class Health(BaseModel):
     dialect: str
     claude_mode: ClaudeModeName

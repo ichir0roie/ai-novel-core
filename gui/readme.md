@@ -10,6 +10,10 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
 - 星ごとの地図(`/maps`)と人物相関図(`/relations`)。元データは `/api/maps` `/api/relations`。ナビには出さず、
   場所の詳細から `/maps?location=<id>`(その場所を中心に置いて描く)へ、人物の詳細から `/relations?character=<id>`
   (その人物に関わる関係だけを描く)へ飛ぶ
+- タイムライン(`/timeline?at=<時刻>&span=<日数>&story_id=&location_id=`)。中心の時刻の前後 `span` 日に掛かる話(作品ごとの段)と
+  出来事を時刻の軸に並べる。元データは `/api/timeline`。札を横へドラッグすると、その日数だけ日付をずらして保存する(時・分・秒はそのまま。
+  話は開始・終了、出来事は時刻・開始・終了を同じだけ動かす。話は手で直したのと同じく同期フラグが外れる)。札のクリックで編集、空の所のクリックで
+  「Add episode」「Add event」を出し、どちらもモーダル(`RecordModal`)で開く(押した時刻・段の作品を初期値にする)。`at` を省けば最後の話の時刻を中心にする
 - `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
   `claude` コマンドを叩くものは Claude Code の環境(`CLAUDECODE=1`)で起こした API でだけ、裏の job として走る
   (Lambda など claude の無い所では、待ち行列に積んで、頼まれた Claude Code on the web のセッションが回す。`NOVEL_CLAUDE_MODE`、`.docs/claude-tasks.md`)
@@ -86,6 +90,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/ping` | 起きているかだけ(`NOVEL_API_KEYS` があっても合言葉なしで通す) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
 | GET | `/api/maps/{planet_id}.svg` | 星ひとつの地図(svg)。場所の座標・領域から python で描く |
+| GET | `/api/timeline?since=&until=&story_id=&location_id=` | `since`〜`until` に掛かる話(開始〜終了。終了が空なら開始の一点。開始の無い話は出さない)と出来事(時刻、または開始〜終了)。`story_id` は話だけを、`location_id` はその場所と下位の場所で両方を絞る。それぞれ 500 件まで。画面 `/timeline` が描く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
