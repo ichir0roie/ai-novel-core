@@ -17,6 +17,8 @@ const SPANS = [3, 7, 31, 92, 365, 3650, 36500];
 const DEFAULT_SPAN = 31;
 const LANE_HEIGHT = 26;
 const ITEM_GAP = 6;
+// end の無い札が段に取る幅(px)。名前はこの幅から、同じ段の次の札の手前まで(長くても名前の幅まで)伸ばす
+const POINT_MIN_PX = 48;
 // 目盛りどうしの最小の間隔(px)。これより詰まる刻みは使わない
 const MIN_TICK_PX = 64;
 // スクロールが止まってから中心の時刻を URL に書くまでの間(ms)
@@ -60,7 +62,10 @@ function labelWidth(label: string): number {
   return Math.min(240, width);
 }
 
-/** 重ならないよう、左から順に空いている一番上の段へ置く。同じ日の札は同じ位置なので、時刻の順に縦へ並ぶ */
+/**
+ * 重ならないよう、左から順に空いている一番上の段へ置く。同じ日の札は同じ位置なので、時刻の順に縦へ並ぶ。
+ * end の無い札は幅 {@link POINT_MIN_PX} だけ取って置き、置いたあとで同じ段の次の札の手前まで(名前の幅を上限に)広げる
+ */
 function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; lanes: number } {
   const laneEnds: number[] = [];
   const placed = [...items]
@@ -69,11 +74,18 @@ function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; 
       const x = toX(item.start);
       const barWidth = item.end === null ? 0 : Math.max(0, toX(item.end) - x);
       const width = Math.max(barWidth, labelWidth(item.label));
+      const occupy = item.end === null ? Math.min(width, POINT_MIN_PX) : width;
       let lane = laneEnds.findIndex((end) => end <= x);
       if (lane < 0) lane = laneEnds.length;
-      laneEnds[lane] = x + width + ITEM_GAP;
+      laneEnds[lane] = x + occupy + ITEM_GAP;
       return { ...item, x, width, barWidth, lane };
     });
+  const nextX = new Map<number, number>();
+  for (const item of [...placed].reverse()) {
+    const next = nextX.get(item.lane);
+    if (item.end === null && next !== undefined) item.width = Math.max(Math.min(item.width, POINT_MIN_PX), Math.min(item.width, next - ITEM_GAP - item.x));
+    nextX.set(item.lane, item.x);
+  }
   return { placed, lanes: Math.max(1, laneEnds.length) };
 }
 
