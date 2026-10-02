@@ -616,9 +616,6 @@ button.ghost { background: transparent; }
 .timeline-item.dragging .timeline-text { overflow: visible; }
 .timeline-target { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
 /* タイムラインから開く編集・追加のモーダル。人物のモーダルと同じく、左右の欄がそれぞれスクロールする */
-.modal.wide:has(.record-modal) { height: 90dvh; }
-.modal-body:has(> .record-modal) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.record-modal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .timeline-hint { margin-top: 0.4rem; }
 /* スマホは表を広く見せる。説明は出さず、操作は横へスクロールする一行にまとめ、表は画面の端まで使う */
 @media (max-width: 640px) {
