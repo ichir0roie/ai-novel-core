@@ -12,6 +12,7 @@ export const T = {
 
   loading: "Loading…",
   openRecord: "Open record",
+  close: "Close",
   required: "required",
   none: "(none)",
   select: "Select",
@@ -59,7 +60,6 @@ export const T = {
 
   record: {
     clickToEdit: "Click to edit",
-    writtenByAi: "Written by AI",
     saved: (keys: string[]) => `Saved (${join(keys)})`,
     changed: (keys: string[]) => `Changed: ${join(keys)}`,
     noChanges: "No changes",
@@ -91,34 +91,13 @@ export const T = {
       meme: "Memes",
       review: "Review",
       fact_check: "Fact check",
-      time_keeper: "Resident loop (claude)",
     } as Record<string, string>,
     writesDb: "writes db",
-    claudeOnly: "Endpoints that run the claude command can only be called from an API started inside Claude Code (CLAUDECODE=1)",
-    outsideClaude: "This API is running outside Claude Code, so endpoints that run claude (resident loop, post-approval AI) cannot be called",
-    queueMode: "This API queues endpoints that run claude (and background runs): a Claude Code on the web session runs them when you ask it to (skill run-ai-tasks). Their progress shows in the job list below",
     running: "Running…",
     run: "Run",
-    runInBackground: "Run in background",
     jsonHint: 'Write dicts and arrays as JSON (e.g. {"id": 3, "kind": "概念"} / [1, 2])',
     searchPlaceholder: "Search endpoints",
     selectOne: "Select an endpoint on the left",
-    jobs: "Background jobs",
-    noJobs: "None yet",
-    columns: { status: "Status", entrance: "Endpoint", args: "Args", result: "Result / error", time: "Time" },
-  },
-
-  generate: {
-    close: "Close",
-    noAddedId: (result: unknown) => `Cannot find id of the added row: ${JSON.stringify(result)}`,
-    failed: "Failed",
-    description: (mode: "create" | "edit") =>
-      `Generate with AI: the AI rebuilds every field around what you entered and ${mode === "create" ? "adds the row" : "writes the record"} (entered values may not survive as-is). Takes several minutes`,
-    unavailable: "Generate with AI is off on this API (start it inside Claude Code with CLAUDECODE=1, or queue for a Claude Code on the web session with NOVEL_CLAUDE_MODE=queue)",
-    queued:
-      "On this API, Generate with AI goes to a queue: a Claude Code on the web session runs it when you ask it to (skill run-ai-tasks). You can leave this page; the result also appears in the job list on the Endpoints page",
-    inProgress: (jobId: string, status: string) =>
-      `AI is generating… (job ${jobId}, ${status}). The job continues if you leave this page. The result is also visible in the job list on the Endpoints page`,
   },
 
   related: {
@@ -192,6 +171,11 @@ export const T = {
     deleteFailed: (error: string) => `Could not delete: ${error}`,
   },
 
+  picker: {
+    count: (n: number) => `${n} selected`,
+    done: "Done",
+  },
+
   treeSelect: {
     collapse: "Collapse",
     expand: "Expand",
@@ -246,9 +230,18 @@ export const T = {
     gap: "No episodes (squeezed)",
     skipped: (days: number) =>
       days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
-    hint: "The whole timeline is laid out on one axis: scroll sideways with the scrollbar, the mouse wheel or the Earlier / Later buttons (wheel over the row names, or with Shift, scrolls up and down). Span sets how many days fit in the view. The axis is in days; episodes on the same day are stacked in time order. Vertical lines mark the days episodes start on, labelled with the year. Drag an episode sideways to change its date (time of day stays). Click an episode to edit it, or empty space to add an episode to that row's story there. Stretches with no episodes are squeezed into hatched bands. Rows form a tree of stories under their parent story. ▸ / ▾ folds any row, chapters included; a folded row shrinks to one line and shows its episodes and its descendants' as small markers (hover for details).",
-    openPage: "Open as page",
-    edit: (label: string, name: string) => `${label}: ${name}`,
+    hint: "The whole timeline is laid out on one axis: scroll sideways with the scrollbar, the mouse wheel or the Earlier / Later buttons (wheel over the row names, or with Shift, scrolls up and down). Span sets how many days fit in the view. The axis is in days; episodes on the same day are stacked in time order. Vertical lines mark the days episodes start on, labelled with the year. Drag an episode sideways to change its date (time of day stays). Click an episode to view it (read-only, with its characters' ages and relations; open it in a new tab to edit), or empty space to add an episode to that row's story there (set its start time, then the new-episode page opens in a new tab). Stretches with no episodes are squeezed into hatched bands. Rows form a tree of stories under their parent story; every story gets a row even with no episodes yet (with a location filter, only stories with episodes there). ▸ / ▾ folds any row, chapters included; a folded row shrinks to one line and shows its episodes and its descendants' as small markers (hover for details).",
+    openInNewTab: "Open in new tab",
+    newEpisode: "New episode",
+    newEpisodeIn: (story: string) => `Story: ${story}`,
+    newEpisodeStart: "Start",
+  },
+
+  episodeSheet: {
+    characters: (n: number, at: string | null) => `Characters (${n})${at ? ` at ${at}` : ""}`,
+    relation: (partner: string, relation: string) => `→ ${partner}: ${relation}`,
+    noRelations: "(no relations)",
+    mentioned: (names: string) => `Mentioned only: ${names}`,
   },
 
   stamp: {

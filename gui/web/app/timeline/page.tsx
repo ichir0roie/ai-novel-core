@@ -2,7 +2,9 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import RecordModal from "@/components/RecordModal";
+import EpisodeSheetModal from "@/components/EpisodeSheetModal";
+import NewEpisodeModal from "@/components/NewEpisodeModal";
+import { ChoicePicker } from "@/components/Picker";
 import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
@@ -51,7 +53,6 @@ type Gap = { from: number; to: number; x: number };
 type Scale = { since: number; until: number; width: number; pxPerDay: number; gaps: Gap[]; toX: (day: number) => number; fromX: (x: number) => number };
 
 type Drag = { item: Item; startX: number; dx: number };
-type ModalState = { id?: number; initial?: Rec };
 
 function dayOf(value: unknown): number | null {
   const parts = parseStamp(value);
@@ -200,12 +201,16 @@ function shifted(item: Item, days: number): Rec {
 }
 
 /**
- * 作品の木。話のある作品(と絞り込んだ作品)と、その祖先の作品を段にする。親が段に無い作品は根に置く。
- * 読み直しても段が入れ替わらないよう、兄弟は作品の id 順に並べる
+ * 作品の木。話の無い作品も段にする(作品で絞ったときは、その作品と子孫の作品)。場所で絞ったときは、その場所の話のある作品だけにする。
+ * 段にする作品の祖先の作品も段にする。親が段に無い作品は根に置く。読み直しても段が入れ替わらないよう、兄弟は作品の id 順に並べる
  */
-function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, labels: Labels): Group[] {
+function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, locationId: number | null,
+  labels: Labels): Group[] {
   const byStory = new Map<number, Item[]>();
   if (storyId !== null) byStory.set(storyId, []);
+  if (locationId === null) {
+    for (const id of stories.keys()) if (storyId === null || descendsFrom(id, storyId, stories)) byStory.set(id, []);
+  }
   for (const item of episodes) {
     const story = item.record.story_id as number;
     byStory.set(story, [...(byStory.get(story) ?? []), item]);
@@ -234,6 +239,16 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
   };
   roots.forEach(reach);
   return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort((a, b) => a - b)].map(node);
+}
+
+/** 作品 `id` が `ancestor` か、その子孫か。親を循環してたどる作品でも止まる */
+function descendsFrom(id: number, ancestor: number, stories: Map<number, StoryInfo>): boolean {
+  const seen = new Set<number>();
+  for (let at: number | null = id; at !== null && !seen.has(at); at = stories.get(at)?.parent ?? null) {
+    if (at === ancestor) return true;
+    seen.add(at);
+  }
+  return false;
 }
 
 /** 段の木を、開いた段の子だけをたどって並べる。閉じた段には子孫の札をまとめて置く */
@@ -267,7 +282,7 @@ export default function TimelinePage() {
 
   const [draft, setDraft] = useState<string | null>(at);
   const [data, setData] = useState<TimelineResponse | null>(null);
-  // 段の木を組むための作品の名前と親。話の無い祖先の作品も段に出すので、全部の作品を引く
+  // 段の木を組むための作品の名前と親。話の無い作品も段に出すので、全部の作品を引く
   const [stories, setStories] = useState<Map<number, StoryInfo> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -279,7 +294,9 @@ export default function TimelinePage() {
   const [drag, setDrag] = useState<Drag | null>(null);
   // 保存を待つあいだ、落とした所に置いておく
   const [pending, setPending] = useState<{ key: string; days: number } | null>(null);
-  const [modal, setModal] = useState<ModalState | null>(null);
+  // 押した話(閲覧専用で見る)と、空いた所を押して足す話の初期値・作品の名前
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [adding, setAdding] = useState<{ initial: Rec; storyLabel: string | null } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // スクロールの位置を合わせ済みの中心(at)と軸(scale)。スクロールから URL へ書いた at はここに入れ、位置を合わせ直さない
@@ -434,10 +451,10 @@ export default function TimelinePage() {
 
   const rows = useMemo(() => {
     if (!stories || !scale) return [];
-    const rows = flatten(storyGroups(items, stories, storyId, labels), 0, isOpen, toX);
+    const rows = flatten(storyGroups(items, stories, storyId, locationId, labels), 0, isOpen, toX);
     if (rows.length === 0) rows.push({ key: "story-none", label: "", storyId: null, items: [], lanes: 1, depth: 0, foldable: false, open: true });
     return rows;
-  }, [stories, scale, items, storyId, labels, isOpen, toX]);
+  }, [stories, scale, items, storyId, locationId, labels, isOpen, toX]);
 
   const axisTicks = useMemo(() => {
     if (!scale) return [];
@@ -493,14 +510,14 @@ export default function TimelinePage() {
     const dx = e.clientX - drag.startX;
     setDrag(null);
     if (Math.abs(dx) <= DRAG_THRESHOLD) {
-      setModal({ id: item.id });
+      setViewing(item.id);
       return;
     }
     const days = daysAt(item, dx);
     if (days !== 0) void move(item, days);
   };
 
-  /** 空いた所を押したら、その日・その段の作品で話を足す */
+  /** 空いた所を押したら、その日・その段の作品で話を足す(時刻を直して、追加ページを別タブに開く) */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (pxPerDay === 0) return;
     const snapped = Math.floor(fromX(e.clientX - e.currentTarget.getBoundingClientRect().left));
@@ -508,7 +525,7 @@ export default function TimelinePage() {
     const story = row.storyId ?? storyId;
     if (story !== null) initial.story_id = story;
     if (locationId !== null) initial.location_id = locationId;
-    setModal({ initial });
+    setAdding({ initial, storyLabel: story === null ? null : stories?.get(story)?.name ?? labels.story_id?.[story] ?? null });
   };
 
   const tooltipLines = (item: Item) => {
@@ -602,22 +619,24 @@ export default function TimelinePage() {
           />
         </form>
         <button type="button" onClick={() => shift(1)} disabled={center === null}>{T.timeline.later}</button>
-        <label className="hint">
-          {T.timeline.span}{" "}
-          <select value={span} onChange={(e) => navigate({ span: Number(e.target.value) })}>
-            {SPANS.map((days) => (
-              <option key={days} value={days}>{T.timeline.spanOf(days)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="hint timeline-filter">
+        <div className="hint timeline-filter">
+          {T.timeline.span}
+          <ChoicePicker
+            title={T.timeline.span}
+            choices={SPANS.map((days) => ({ value: days, label: T.timeline.spanOf(days) }))}
+            value={span}
+            onChange={(days) => navigate({ span: days })}
+            placeholder={T.select}
+          />
+        </div>
+        <div className="hint timeline-filter">
           {T.timeline.story}
-          <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => navigate({ story_id: value })} />
-        </label>
-        <label className="hint timeline-filter">
+          <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => navigate({ story_id: value })} title={T.timeline.story} />
+        </div>
+        <div className="hint timeline-filter">
           {T.timeline.location}
-          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => navigate({ location_id: value })} />
-        </label>
+          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => navigate({ location_id: value })} title={T.timeline.location} />
+        </div>
       </div>
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}
@@ -660,18 +679,8 @@ export default function TimelinePage() {
         </div>
       )}
       <div className="hint timeline-hint">{T.timeline.hint}</div>
-      {modal && (
-        <RecordModal
-          table="episode"
-          id={modal.id}
-          initial={modal.initial}
-          onClose={() => setModal(null)}
-          onSaved={() => {
-            setModal(null);
-            setVersion((v) => v + 1);
-          }}
-        />
-      )}
+      {viewing !== null && <EpisodeSheetModal episodeId={viewing} onClose={() => setViewing(null)} />}
+      {adding && <NewEpisodeModal initial={adding.initial} storyLabel={adding.storyLabel} onClose={() => setAdding(null)} />}
       <Tooltip tip={tip} />
     </div>
   );

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""待ち行列(`ai_task`)の入口の id から、それに当たる web の流れを引いて回す。
+"""入口の id から、それに当たる web の流れを引いて回す(web のセッションの Claude が入口を呼ぶ口)。
 
 claude を叩く入口(`gui/api/interface.py` の `claude` が立つもの)は、どれもここに流れを持つ。
-db だけの入口(`background` で積まれたもの)は、API の入口(`/api/interface/{id}`)をそのまま呼ぶ。
+db だけの入口は、API の入口(`/api/interface/{id}`)をそのまま呼ぶ。
 """
 from __future__ import annotations
 
@@ -24,11 +24,9 @@ FLOWS: dict[str, Callable[..., Any]] = {
     "character.generate_characters.GenerateCharacters": character.generate_characters,
     "episode.commit_episode.CommitEpisode": commit.commit_episode,
     "episode.complete_plot.CompletePlot": episode.complete_plot,
-    "episode.generate_episode.GenerateEpisode": episode.generate_episode,
     "episode.generate_frame.GenerateFrame": episode.generate_frame,
     "episode.read_episode_brief.ReadEpisodeBrief": episode.read_episode_brief,
     "episode.read_episode_casting.ReadEpisodeCasting": episode.read_episode_casting,
-    "episode.revise_episode.ReviseEpisode": episode.revise_episode,
     "episode.rewrite_episode_summary.RewriteEpisodeSummary": episode.rewrite_episode_summary,
     "event.commit_event.CommitEvent": commit.commit_event,
     "event.generate_event.GenerateEvent": event.generate_event,

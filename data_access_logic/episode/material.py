@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""自動生成なので `synced` は立てて確定する(`schema.py` の `Episode.synced` の注記どおり)。
-
-db だけの段(`writing_targets` → 要約を揃える → `episode_material` → `save_episode`)と、AI だけの段(`episode_draft`)に分けてある。
-手元では `write_episode` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
-"""
+"""話のプロットを書き直す材料(`writing_targets` → 要約を揃える → `episode_material`)。プロット補完(`plot_completer`)が使う。"""
 from __future__ import annotations
 
 import logging
@@ -11,45 +7,22 @@ import logging
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ai.instructions import style
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
-from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
 from data_access_logic import constants
-from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_event_ids, cast_of, mentioned_of, relations_at
 from data_access_logic.episode.models import (
-    EpisodeDraft, EpisodeMaterial, EpisodeMaterialSerialized, StoryMaterial, TargetEpisode,
+    EpisodeMaterialSerialized, StoryMaterial, TargetEpisode,
 )
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
 from data_access_logic.episode.summary import past_episode_ids, past_episodes, recent_episodes
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
-from data_access_logic.idea.links import link
-from data_access_logic.idea.models import IdeaMaterial, IdeaTerm
-from data_access_logic.idea.search import keywords_of
+from data_access_logic.idea.models import IdeaTerm
 from data_access_logic.query import common_query
-from data_access_logic.summary_targets import SummaryTargets, refresh
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Episode, EpisodeCharacter, Event
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
-
-
-def _system_prompt(shared_style_extra: str, style_extra: str) -> str:
-    return f"""\
-あなたは日本語のライトノベルを書く作家です。
-作品・前の話・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この作品の話を一話ぶん書いてください。
-プロットは作者が決めたこの話の中身です。それを場面まで展開したものを本文にし、プロットに無い出来事を足さないでください。
-{PAST_EPISODES_INSTRUCTION}
-{STYLE_SAMPLE_INSTRUCTION}
-登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
-{EVENT_AGE_INSTRUCTION}
-{MENTIONED_INSTRUCTION}
-{IDEA_CONTEXT_INSTRUCTION}
-{style.style_instruction("episode", shared_extra=shared_style_extra, extra=style_extra)}"""
 
 
 class WritingTargets(SummaryTargets):
@@ -126,52 +99,3 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaTerm]) -> E
         later_events=events_of(s, later_events_select(location_id, characters, main_episode.start)),
         ideas=resolve_ideas(s, keywords, location_id, main_episode.start),
     )
-
-
-def episode_draft(
-    ai: AIClient, material: EpisodeMaterial, model: str, effort: str, shared_style_extra: str = "", style_extra: str = "",
-) -> EpisodeDraft | None:
-    """`model` / `effort` は本文を書く呼び出しにだけ渡す(Claude で本文だけ別のモデルにするため)。"""
-    prompt = "\n".join([
-        EpisodeMaterialSerialized.model_validate(material).model_dump_json(indent=2),
-        "この話を書いてください。",
-    ])
-    return ai.generate(
-        prompt, EpisodeDraft, system=_system_prompt(shared_style_extra, style_extra),
-        timeout=constants.EPISODE_TIMEOUT, model=model, effort=effort)
-
-
-def save_episode(s: Session, episode_id: int, draft: EpisodeDraft, ideas: list[IdeaMaterial]) -> Episode:
-    record = s.get_one(Episode, episode_id)
-    # 作者が決めた題は残し、空のときだけ本文を書いたときの題で埋める
-    record.title = record.title.strip() or draft.title
-    record.synced = True
-    record.main_text = draft.main_text
-    s.flush()
-    link(s, record, ideas)
-    logger.info(f"「{record.title}」 id={record.id} {record.letters}字")
-    return record
-
-
-def write_episode(
-    s: Session,
-    ai: AIClient,
-    episode_id: int,
-    model: str,
-    effort: str,
-    shared_style_extra: str = "",
-    style_extra: str = "",
-) -> Episode | None:
-    targets = writing_targets(s, episode_id)
-    refresh(s, ai, targets)
-    material = episode_material(s, episode_id, keywords_of(targets.plot_text, ai, targets.start))
-    # AI が洗い出した語から足した候補は、この後の生成が失敗しても残す
-    s.commit()
-
-    draft = episode_draft(ai, material, model, effort, shared_style_extra, style_extra)
-    if draft is None:
-        logger.warning(f"{material.story.name}: 本文が得られなかったので見送り")
-        return None
-    record = save_episode(s, episode_id, draft, material.ideas.linked)
-    s.commit()
-    return record

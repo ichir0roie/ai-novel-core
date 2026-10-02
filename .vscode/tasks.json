@@ -37,9 +37,7 @@
         "env": {
           "PYTHONUTF8": "1",
           "DEM_DATABASE_URL": "postgresql+psycopg://novel_app@127.0.0.1:15432/novel?sslmode=require",
-          "DEM_DATABASE_IAM_AUTH": "1",
-          // claude コマンドを叩く入口(gui/api/claude_env.py の判定)を、このタスクから起こした API でも通す
-          "CLAUDECODE": "1"
+          "DEM_DATABASE_IAM_AUTH": "1"
         }
       },
       // npm は nvm で入れており、nvm は ~/.bashrc(対話シェルでだけ読まれる)で PATH に足されるので、対話モードで起こす

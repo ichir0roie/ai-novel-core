@@ -309,65 +309,6 @@
         }
       }
     },
-    "/api/tables/{table}/generate/{generator}": {
-      "post": {
-        "summary": "Generate Record",
-        "description": "「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。\nclaude を叩くので Claude Code の環境でだけ、裏の job として走る。結果(足した行)は `/api/jobs/{id}` で引く",
-        "operationId": "generate_record_api_tables__table__generate__generator__post",
-        "parameters": [
-          {
-            "name": "table",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Table"
-            }
-          },
-          {
-            "name": "generator",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Generator"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobInfo"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/tables/{table}/records/{record_id}": {
       "get": {
         "summary": "Get Record",
@@ -477,7 +418,7 @@
     "/api/interface": {
       "get": {
         "summary": "List Entrances",
-        "description": "入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る",
+        "description": "db だけの入口の一覧。claude を叩く入口は出さない(Claude のセッションが自分で呼ぶ)",
         "operationId": "list_entrances_api_interface_get",
         "responses": {
           "200": {
@@ -496,7 +437,6 @@
     "/api/interface/{entrance_id}": {
       "post": {
         "summary": "Run Entrance",
-        "description": "入口を呼ぶ。`claude` を叩く入口(と `background` を立てた呼び出し)は job の id を 202 で返し、結果は `/api/jobs/{id}` で引く",
         "operationId": "run_entrance_api_interface__entrance_id__post",
         "parameters": [
           {
@@ -525,15 +465,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/RunResult"
-                    },
-                    {
-                      "$ref": "#/components/schemas/JobInfo"
-                    }
-                  ],
-                  "title": "Response Run Entrance Api Interface  Entrance Id  Post"
+                  "$ref": "#/components/schemas/RunResult"
                 }
               }
             }
@@ -583,64 +515,6 @@
               "application/json": {
                 "schema": {
                   "title": "Response Run Step Api Steps  Step Id  Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/jobs": {
-      "get": {
-        "summary": "List Jobs",
-        "description": "このプロセスの job と、待ち行列(`ai_task`)の新しい行を、新しい順に",
-        "operationId": "list_jobs_api_jobs_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobList"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/jobs/{job_id}": {
-      "get": {
-        "summary": "Get Job",
-        "operationId": "get_job_api_jobs__job_id__get",
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobInfo"
                 }
               }
             }
@@ -1089,26 +963,11 @@
             },
             "type": "array",
             "title": "Entrances"
-          },
-          "claude_available": {
-            "type": "boolean",
-            "title": "Claude Available"
-          },
-          "claude_mode": {
-            "type": "string",
-            "enum": [
-              "direct",
-              "queue",
-              "off"
-            ],
-            "title": "Claude Mode",
-            "default": "off"
           }
         },
         "type": "object",
         "required": [
-          "entrances",
-          "claude_available"
+          "entrances"
         ],
         "title": "EntranceList"
       },
@@ -1137,10 +996,6 @@
             "type": "array",
             "title": "Params"
           },
-          "claude": {
-            "type": "boolean",
-            "title": "Claude"
-          },
           "writes": {
             "type": "boolean",
             "title": "Writes"
@@ -1153,7 +1008,6 @@
           "name",
           "doc",
           "params",
-          "claude",
           "writes"
         ],
         "title": "EntranceMeta"
@@ -1313,95 +1167,6 @@
         ],
         "title": "EpisodeRecord"
       },
-      "GenerateRequest": {
-        "properties": {
-          "draft": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Draft"
-          },
-          "args": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Args"
-          }
-        },
-        "type": "object",
-        "title": "GenerateRequest"
-      },
-      "GeneratorMeta": {
-        "properties": {
-          "key": {
-            "type": "string",
-            "title": "Key"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "entrance": {
-            "type": "string",
-            "title": "Entrance"
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "create",
-              "edit",
-              "both"
-            ],
-            "title": "Mode"
-          },
-          "when_empty": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "When Empty"
-          },
-          "when_not_empty": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "When Not Empty"
-          },
-          "params": {
-            "items": {
-              "$ref": "#/components/schemas/ColumnMeta"
-            },
-            "type": "array",
-            "title": "Params"
-          },
-          "panel": {
-            "type": "boolean",
-            "title": "Panel",
-            "default": false
-          },
-          "separate": {
-            "type": "boolean",
-            "title": "Separate",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "key",
-          "label",
-          "entrance",
-          "mode"
-        ],
-        "title": "GeneratorMeta",
-        "description": "「AI で作成」のボタン。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。"
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1420,115 +1185,13 @@
           "dialect": {
             "type": "string",
             "title": "Dialect"
-          },
-          "claude_mode": {
-            "type": "string",
-            "enum": [
-              "direct",
-              "queue",
-              "off"
-            ],
-            "title": "Claude Mode"
           }
         },
         "type": "object",
         "required": [
-          "dialect",
-          "claude_mode"
+          "dialect"
         ],
         "title": "Health"
-      },
-      "JobInfo": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "entrance": {
-            "type": "string",
-            "title": "Entrance"
-          },
-          "args": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Args"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "running",
-              "done",
-              "failed"
-            ],
-            "title": "Status"
-          },
-          "result": {
-            "title": "Result"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "finished_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "entrance",
-          "args",
-          "status",
-          "created_at"
-        ],
-        "title": "JobInfo"
-      },
-      "JobList": {
-        "properties": {
-          "jobs": {
-            "items": {
-              "$ref": "#/components/schemas/JobInfo"
-            },
-            "type": "array",
-            "title": "Jobs"
-          }
-        },
-        "type": "object",
-        "required": [
-          "jobs"
-        ],
-        "title": "JobList"
       },
       "LocationCharactersResponse": {
         "properties": {
@@ -2187,11 +1850,6 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Args"
-          },
-          "background": {
-            "type": "boolean",
-            "title": "Background",
-            "default": false
           }
         },
         "type": "object",
@@ -2252,13 +1910,6 @@
             "type": "integer",
             "title": "Count"
           },
-          "generators": {
-            "items": {
-              "$ref": "#/components/schemas/GeneratorMeta"
-            },
-            "type": "array",
-            "title": "Generators"
-          },
           "sort": {
             "type": "string",
             "title": "Sort",
@@ -2293,21 +1944,6 @@
             },
             "type": "array",
             "title": "Tables"
-          },
-          "claude_available": {
-            "type": "boolean",
-            "title": "Claude Available",
-            "default": false
-          },
-          "claude_mode": {
-            "type": "string",
-            "enum": [
-              "direct",
-              "queue",
-              "off"
-            ],
-            "title": "Claude Mode",
-            "default": "off"
           }
         },
         "type": "object",

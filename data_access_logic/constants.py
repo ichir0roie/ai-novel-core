@@ -72,8 +72,6 @@ MEME_POSITIONS = {
 }
 
 # data_access_logic/episode
-# 本文を一話ぶん書かせるので、断片の JSON より長く待つ秒数。
-EPISODE_TIMEOUT = 900.0
 # プロット補完で、プロットを書き直させるのを待つ秒数。
 EPISODE_PLOT_TIMEOUT = 300.0
 # 書き直したプロットから、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。

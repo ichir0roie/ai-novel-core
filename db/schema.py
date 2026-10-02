@@ -4,10 +4,9 @@ from __future__ import annotations
 import enum
 import hashlib
 import os
-from datetime import datetime, timezone
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Integer, String, DECIMAL, JSON, TypeDecorator,
+    BigInteger, Boolean, Integer, String, DECIMAL, JSON, TypeDecorator,
     create_engine,
     ForeignKey,
     UniqueConstraint,
@@ -676,7 +675,7 @@ class EpisodeCharacter(Base):
     mentioned: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
         comment="この話に登場せず、プロット・本文に名前が出るだけの人物か。"
-                "推敲・プロット補完・枠の生成のたびに、プロット・本文から拾い直す",
+                "話の確定・プロット補完・枠の生成のたびに、プロット・本文から拾い直す",
         sort_order=120)
 
     episode: Mapped["Episode"] = relationship(back_populates="episode_characters", lazy="noload")
@@ -711,44 +710,6 @@ class CharacterIdea(Base):
 
     character_id: Mapped[int] = mapped_column(Integer, ForeignKey("character.id"), index=True, sort_order=100)
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
-
-
-def utc_now() -> datetime:
-    # SQLite の DateTime は時差を持てないので、どちらの db でも時差を落とした UTC で持つ
-    return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-class AiTaskStatus(enum.StrEnum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
-
-
-class AiTask(Base):
-    """claude を叩く入口の呼び出しを、後で Claude Code on the web のセッションが拾って回すための待ち行列。
-
-    claude の無い環境(Lambda の API)で「AI で作成」などを押すと、呼び出しをここに積むだけで返す
-    (`gui/api/claude_env.py` の `queue` モード)。`web_session/run_ai_tasks.py` が古い順に拾って回す。
-    """
-
-    __tablename__ = "ai_task"
-
-    entrance: Mapped[str] = mapped_column(
-        String, nullable=False, comment="呼ぶ入口(`gui/api/interface.py` の id。例: episode.generate_episode.GenerateEpisode)",
-        sort_order=100)
-    args: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, comment="入口に渡す引数(JSON)", sort_order=110)
-    status: Mapped[str] = mapped_column(
-        String, nullable=False, default=AiTaskStatus.QUEUED, index=True,
-        comment="queued / running / done / failed", sort_order=120)
-    attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0",
-        comment="拾った回数。回したセッションが途中で止まって拾い直すたびに増え、上限を超えたら failed にする", sort_order=125)
-    result: Mapped[dict | list | None] = mapped_column(JSON(none_as_null=True), comment="入口の結果(JSON)", sort_order=130)
-    error: Mapped[str | None] = mapped_column(String, comment="落ちた理由", sort_order=140)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now, sort_order=160)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=180)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=190)
 
 
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、

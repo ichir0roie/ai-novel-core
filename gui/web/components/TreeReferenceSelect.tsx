@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import Modal from "./Modal";
+import { PickerToggle } from "./Picker";
 import { RecordLink, useOptions } from "./ReferenceSelect";
 import { buildOptionTree, type OptionNode } from "@/lib/optionTree";
 import { useTreeOpen } from "@/lib/treeOpen";
@@ -12,6 +14,8 @@ type Props = {
   nullable: boolean;
   onChange: (value: number | null) => void;
   disabled?: boolean;
+  // 選ぶモーダルの見出し(欄の名前)
+  title?: string;
 };
 
 type OpenState = ReturnType<typeof useTreeOpen>;
@@ -71,30 +75,13 @@ function matchedSubtrees(nodes: OptionNode[], matches: (node: OptionNode) => boo
   return nodes.flatMap((node) => (matches(node) ? [node] : matchedSubtrees(node.children, matches)));
 }
 
-/** 場所・アイデアのように親子を持つテーブルの参照選択。ポップアップに親子のツリーを表示し、
+/** 場所・アイデアのように親子を持つテーブルの参照選択。押すとモーダルに親子のツリーを大きく表示し、
  * クリックした行を選ぶ。絞り込み文字列があるあいだは、一致した行とその子孫だけのツリーにする。 */
-export default function TreeReferenceSelect({ table, value, nullable, onChange, disabled }: Props) {
+export default function TreeReferenceSelect({ table, value, nullable, onChange, disabled, title }: Props) {
   const options = useOptions(table);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
   const openState = useTreeOpen(`select:${table}`);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   const tree = useMemo(() => buildOptionTree(options), [options]);
   const current = options.find((o) => o.id === value);
@@ -104,42 +91,39 @@ export default function TreeReferenceSelect({ table, value, nullable, onChange, 
     [tree, q],
   );
 
-  const pick = (id: number | null) => {
-    onChange(id);
+  const close = () => {
     setOpen(false);
     setFilter("");
   };
+  const pick = (id: number | null) => {
+    onChange(id);
+    close();
+  };
 
   return (
-    <div className="tree-select" ref={containerRef}>
-      <button type="button" className="tree-select-toggle" onClick={() => setOpen((v) => !v)} disabled={disabled}>
-        {current ? `${current.id}: ${current.label}` : value !== null ? `id ${value}` : nullable ? T.none : T.select}
-        {" ▾"}
-      </button>
+    <div className="picker">
+      <PickerToggle
+        label={current ? `${current.id}: ${current.label}` : value !== null ? `id ${value}` : nullable ? T.none : T.select}
+        empty={value === null}
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+      />
       {value !== null && <RecordLink table={table} id={value} />}
       {open && (
-        <div className="tree-select-popup">
-          <input
-            type="text"
-            placeholder={T.filter}
-            value={filter}
-            autoFocus
-            onChange={(e) => setFilter(e.target.value)}
-          />
+        <Modal title={title ?? T.select} onClose={close}>
+          <input type="text" className="picker-filter" placeholder={T.filter} value={filter} autoFocus onChange={(e) => setFilter(e.target.value)} />
           {nullable && !q && (
-            <button type="button" className="tree-select-label tree-select-none" onClick={() => pick(null)}>
+            <button type="button" className={`tree-select-label tree-select-none ${value === null ? "selected" : ""}`} onClick={() => pick(null)}>
               {T.none}
             </button>
           )}
-          <div className="tree-select-scroll">
-            <ul className="tree tree-root">
-              {shown.map((node) => (
-                <NodeRow key={node.id} node={node} depth={0} selectedId={value} openState={openState} onPick={pick} />
-              ))}
-              {q && shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
-            </ul>
-          </div>
-        </div>
+          <ul className="tree tree-root tree-select-tree">
+            {shown.map((node) => (
+              <NodeRow key={node.id} node={node} depth={0} selectedId={value} openState={openState} onPick={pick} />
+            ))}
+            {q && shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
+          </ul>
+        </Modal>
       )}
     </div>
   );

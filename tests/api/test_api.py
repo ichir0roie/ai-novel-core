@@ -1,5 +1,4 @@
 """GUI の API(`gui/api/app.py`)。エンドポイントごとに、なるべく多くの値を渡す一件を通す。"""
-import time
 from collections.abc import Iterator
 
 import pytest
@@ -14,23 +13,6 @@ def client() -> Iterator[TestClient]:
         yield test_client
 
 
-@pytest.fixture
-def in_claude_code(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`claude` を叩く入口は Claude Code の環境(`CLAUDECODE=1`)でだけ通る。AI はモックに差し替えてある。"""
-    monkeypatch.setenv("CLAUDECODE", "1")
-
-
-def _finished(client: TestClient, job_id: str) -> dict:
-    """裏の job が終わるまで待つ(モックの AI なので数秒で終わる)。"""
-    deadline = time.monotonic() + 60
-    while time.monotonic() < deadline:
-        job = client.get(f"/api/jobs/{job_id}").json()
-        if job["status"] in ("done", "failed"):
-            return job
-        time.sleep(0.1)
-    raise AssertionError(f"job {job_id} が終わらない")
-
-
 def test_health(client):
     response = client.get("/api/health")
 
@@ -39,16 +21,14 @@ def test_health(client):
     assert health["dialect"] == "postgresql"
 
 
-def test_tables(client, world, in_claude_code):
+def test_tables(client, world):
     response = client.get("/api/tables")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["claude_available"] is True
     tables = {table["name"]: table for table in body["tables"]}
     assert set(tables) == {"story", "episode", "character", "character_relation", "event", "location", "idea",
                            "meme", "oracle", "style_preference"}
-    assert [generator["key"] for generator in tables["episode"]["generators"]] == ["frame", "plot", "episode", "revise"]
     assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
 
 
@@ -103,25 +83,6 @@ def test_create_record(client, world):
     assert body["label"] == "API の人"
 
 
-def test_generate_record(client, world, in_claude_code, mock_ai):
-    response = client.post("/api/tables/episode/generate/episode", json={
-        "draft": {"story_id": world.story_id, "title": "API の話", "plot_text": "API から書く話",
-                  "start": "1200/04/03 09:00:00", "end": "1200/04/03 12:00:00",
-                  "viewpoint_character_id": world.character_ids[1], "location_id": world.location_id,
-                  "character_ids": world.character_ids},
-        "args": {"model": "claude-haiku-4-5", "effort": "low"}})
-
-    assert response.status_code == 202
-    job = _finished(client, response.json()["id"])
-    assert job["status"] == "done", job["error"]
-    assert job["entrance"] == "episode.generate_episode.GenerateEpisode"
-    result = job["result"]
-    assert (result["story_id"], result["plot_text"]) == (world.story_id, "API から書く話")
-    assert result["viewpoint_character_id"] == world.character_ids[1]
-    assert result["character_ids"] == world.character_ids
-    assert result["main_text"]
-
-
 def test_get_record(client, world):
     response = client.get(f"/api/tables/episode/records/{world.episode_id}")
 
@@ -153,26 +114,24 @@ def test_update_record(client, world):
     assert record["character_ids"] == world.character_ids
 
 
-def test_list_entrances(client, in_claude_code):
+def test_list_entrances(client):
     response = client.get("/api/interface")
 
     assert response.status_code == 200
-    body = response.json()
-    assert body["claude_available"] is True
-    entrances = {entrance["id"]: entrance for entrance in body["entrances"]}
+    entrances = {entrance["id"]: entrance for entrance in response.json()["entrances"]}
     start_story = entrances["story.start_story.StartStory"]
-    assert (start_story["claude"], start_story["writes"]) == (False, False)
+    assert start_story["writes"] is False
     assert [param["name"] for param in start_story["params"]] == [
         "story_id", "time", "episodes", "count", "reach", "levels", "skip_sync"]
-    commit_event = entrances["event.commit_event.CommitEvent"]
-    assert (commit_event["claude"], commit_event["writes"]) == (True, True)
+    assert entrances["episode.delete_episode.DeleteEpisode"]["writes"] is True
+    # claude を叩く入口は出さない
+    assert "event.commit_event.CommitEvent" not in entrances
 
 
 def test_run_entrance(client, world):
     response = client.post("/api/interface/story.start_story.StartStory", json={
         "args": {"story_id": world.story_id, "time": "1200/04/02", "episodes": 5, "count": 3, "reach": 30,
-                 "levels": 2, "skip_sync": True},
-        "background": False})
+                 "levels": 2, "skip_sync": True}})
 
     assert response.status_code == 200
     body = response.json()
@@ -184,32 +143,10 @@ def test_run_entrance(client, world):
     assert result["brief"] is not None
 
 
-def test_list_jobs(client, world):
-    submitted = client.post("/api/interface/episode.read_episodes.ReadEpisodes", json={
-        "args": {"story_id": world.story_id, "count": 3, "before": "1200/12/31", "text": False}, "background": True})
-    assert submitted.status_code == 202
-    job_id = submitted.json()["id"]
-    _finished(client, job_id)
+def test_run_claude_entrance(client, world):
+    response = client.post("/api/interface/event.commit_event.CommitEvent", json={"args": {}})
 
-    response = client.get("/api/jobs")
-
-    assert response.status_code == 200
-    jobs = {job["id"]: job for job in response.json()["jobs"]}
-    assert jobs[job_id]["entrance"] == "episode.read_episodes.ReadEpisodes"
-    assert jobs[job_id]["status"] == "done"
-
-
-def test_get_job(client, world):
-    submitted = client.post("/api/interface/event.read_events.ReadEvents", json={
-        "args": {"location_id": world.location_id, "limit": 5, "until": "1200/12/31"}, "background": True})
-    assert submitted.status_code == 202
-
-    job = _finished(client, submitted.json()["id"])
-
-    assert job["status"] == "done", job["error"]
-    assert job["args"] == {"location_id": world.location_id, "limit": 5, "until": "1200/12/31"}
-    assert job["started_at"] is not None and job["finished_at"] is not None
-    assert {world.event_id, world.child_event_id} <= {event["id"] for event in job["result"]}
+    assert response.status_code == 403
 
 
 def test_maps(client, world):

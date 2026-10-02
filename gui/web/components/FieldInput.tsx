@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
 import MarkdownField from "./MarkdownField";
+import { ChoicePicker } from "./Picker";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
 import StampInput from "./StampInput";
 import TreeReferenceSelect from "./TreeReferenceSelect";
 import { T } from "@/lib/text";
 
-// 親子を持つテーブル(場所・アイデア)は、プルダウンではなくツリーで選ばせる
+// 親子を持つテーブル(場所・アイデア)は、一覧ではなくツリーで選ばせる
 const TREE_REFERENCE_TABLES = new Set(["location", "idea"]);
 
 /** 子の行の列のうち、自由記述で長い文になりがちな列名(体格・口調・方言・呼び名の注釈など)。
@@ -98,27 +99,27 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
   }
 
   if (column.type === "id_list" && column.references) {
-    return <ReferenceMultiSelect table={column.references} value={(value as number[] | null) ?? []} onChange={onChange} />;
+    return <ReferenceMultiSelect table={column.references} value={(value as number[] | null) ?? []} onChange={onChange} title={column.label} />;
   }
   if (column.references && TREE_REFERENCE_TABLES.has(column.references)) {
-    return <TreeReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} />;
+    return <TreeReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} title={column.label} />;
   }
   if (column.references) {
-    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} />;
+    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} title={column.label} />;
   }
   if (column.choices) {
-    // 値がまだ無ければ、選択肢の既定値(column.default)を初期選択にする(何も選ばず実行すれば、
+    // 値がまだ無ければ、選択肢の既定値(column.default)を選んだものとして出す(何も選ばず実行すれば、
     // 入口側もこの既定値を使うので見た目と動きが揃う)
-    const shown = (value as string | null) ?? column.default ?? "";
+    const shown = (value as string | null) ?? column.default ?? null;
     return (
-      <select value={shown} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
-        <option value="">{column.nullable ? column.comment ?? T.none : T.select}</option>
-        {column.choices.map((choice) => (
-          <option key={choice} value={choice}>
-            {choice === column.default ? `${choice} (default)` : choice}
-          </option>
-        ))}
-      </select>
+      <ChoicePicker
+        title={column.label}
+        choices={column.choices.map((choice) => ({ value: choice, label: choice === column.default ? `${choice} (default)` : choice }))}
+        value={shown}
+        onChange={onChange}
+        emptyLabel={column.nullable ? T.none : undefined}
+        placeholder={column.nullable ? column.comment ?? T.none : T.select}
+      />
     );
   }
   if (column.type === "boolean") {

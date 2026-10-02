@@ -9,14 +9,13 @@ FROM public.ecr.aws/docker/library/python:3.14-slim
 
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
-# db は DEM_DATABASE_URL(CDK が置く)。claude を叩く入口は待ち行列に積み、頼まれた Claude Code on the web のセッションが回す(NOVEL_CLAUDE_MODE=queue)
+# db は DEM_DATABASE_URL(CDK が置く)。claude を叩く入口は API からは呼べない(Claude のセッションが web_session/ の流れで回す)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONUTF8=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080 \
     AWS_LWA_READINESS_CHECK_PATH=/api/ping \
-    PYTHONPATH=/var/task \
-    NOVEL_CLAUDE_MODE=queue
+    PYTHONPATH=/var/task
 
 WORKDIR /var/task
 

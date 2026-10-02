@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   title: string;
@@ -13,18 +14,39 @@ type Props = {
   compact?: boolean;
 };
 
-/** 中央に浮かぶ汎用モーダル。背景クリックか Escape で閉じる。 */
+// 開いているモーダルの重なり順。選択のモーダルは別のモーダルの中からも開くので、Escape は一番上のものだけを閉じる
+const stack: symbol[] = [];
+
+/** 中央に浮かぶ汎用モーダル。背景クリックか Escape で閉じる。
+ * 親の枠(表の行・別のモーダル)に切られないよう body の直下へ描く。 */
 export default function Modal({ title, onClose, children, actions, wide, compact }: Props) {
+  const close = useRef(onClose);
   useEffect(() => {
+    close.current = onClose;
+  });
+
+  useEffect(() => {
+    const id = Symbol();
+    stack.push(id);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && stack[stack.length - 1] === id) close.current();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      stack.splice(stack.indexOf(id), 1);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
+  return createPortal(
+    // portal の中のクリックも React の木では親へ伝わるので、背景・中身のどちらでも止める
+    <div
+      className="modal-backdrop"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
       <div className={`modal ${wide ? "wide" : ""} ${compact ? "compact" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{title}</h2>
@@ -35,6 +57,7 @@ export default function Modal({ title, onClose, children, actions, wide, compact
         <div className="modal-body">{children}</div>
         {actions && <div className="modal-actions">{actions}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

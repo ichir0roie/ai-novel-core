@@ -4,7 +4,7 @@
 退けた(非承認の)アイデアは、結んだ本文(出来事・話・人物)と呼び名ごと消す。下位のアイデアは、消すアイデアの上位へ繋ぎ直す。
 
 Revision ID: 3b9c1e5d7a42
-Revises: e7f2aa3d09df
+Revises: 491ed94816d6
 Create Date: 2026-10-02 18:00:00.000000
 
 """
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '3b9c1e5d7a42'
-down_revision: Union[str, Sequence[str], None] = 'e7f2aa3d09df'
+down_revision: Union[str, Sequence[str], None] = '491ed94816d6'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

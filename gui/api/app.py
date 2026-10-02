@@ -17,7 +17,6 @@ from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
 from data_access_logic import step
-from data_access_logic.ai_task import queue
 from data_access_logic.character.latest_locations import latest_location_ids
 from data_access_logic.character.location_characters import location_character_ids
 from data_access_logic.character.relation_graph import relation_graph
@@ -29,14 +28,11 @@ from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OP
 from data_access_logic.map.collect import planet_maps
 from data_access_logic.map.geometry import BEARINGS
 from data_access_logic.map.render_svg import COLORS, render_svg
-from db.schema import AiTask, engine, get_env_session
+from db.schema import engine, get_env_session
 from db.stamp import Stamp
-from gui.api import generate, interface, meta, records, timeline
-from gui.api.claude_env import ClaudeCommandForbidden, claude_available, claude_mode, require_claude_code
-from gui.api.jobs import runner
+from gui.api import interface, meta, records, timeline
 from gui.api.models import (
-    CharacterLocationsResponse, Created, EntranceList, EntranceMeta, GenerateRequest, Health, JobInfo,
-    JobList, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
+    CharacterLocationsResponse, Created, EntranceList, EntranceMeta, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
     RunRequest, RunResult, TablesResponse, TimelineResponse,
 )
 from gui.api.tables import spec_of
@@ -94,8 +90,8 @@ async def _unknown_record(_request: Request, error: UnknownRecordError):
     return JSONResponse(status_code=404, content={"detail": str(error)})
 
 
-@app.exception_handler(ClaudeCommandForbidden)
-async def _claude_forbidden(_request: Request, error: ClaudeCommandForbidden):
+@app.exception_handler(interface.ClaudeEntranceForbidden)
+async def _claude_forbidden(_request: Request, error: interface.ClaudeEntranceForbidden):
     return JSONResponse(status_code=403, content={"detail": str(error)})
 
 
@@ -126,12 +122,12 @@ def ping() -> dict[str, bool]:
 
 @app.get("/api/health", response_model=Health)
 def health() -> Health:
-    return Health(dialect=engine.dialect.name, claude_mode=claude_mode())
+    return Health(dialect=engine.dialect.name)
 
 
 @app.get("/api/tables", response_model=TablesResponse)
 def tables(s: Session = Depends(session_dep)) -> TablesResponse:
-    return TablesResponse(tables=meta.all_tables(s), claude_available=claude_available(), claude_mode=claude_mode())
+    return TablesResponse(tables=meta.all_tables(s))
 
 
 @app.get("/api/tables/{table}/records", response_model=RecordList)
@@ -161,27 +157,6 @@ def create_record(table: str, data: dict[str, Any], s: Session = Depends(session
     return records.response_of(s, spec, record)
 
 
-@app.post("/api/tables/{table}/generate/{generator}", response_model=JobInfo, status_code=202)
-def generate_record(table: str, generator: str, request: GenerateRequest) -> JobInfo:
-    """「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。
-    claude を叩くので Claude Code の環境でだけ、裏の job として走る。結果(足した行)は `/api/jobs/{id}` で引く"""
-    spec = generate.generator_of(spec_of(table).name, generator)
-    entrance = interface.entrance_of(spec.entrance)
-    require_claude_code(entrance.id)
-    args = generate.build_args(spec, request.draft, request.args)
-    return _submit(entrance, args, interface.prepare(entrance, args))
-
-
-def _submit(entrance: interface.Entrance, args: dict[str, Any], arguments: dict[str, Any]) -> JobInfo:
-    """裏で回す。`queue` モードでは待ち行列に積むだけで返し、Claude Code on the web のセッションが後で回す
-    (Lambda は応答のあとに走り続けられない)。"""
-    if claude_mode() == "queue":
-        with get_env_session() as s, s.begin():
-            return JobInfo.model_validate(queue.job_view(queue.enqueue(s, entrance.id, args)))
-    job = runner.submit(entrance.id, args, lambda: interface.call(entrance, arguments))
-    return JobInfo.model_validate(job)
-
-
 @app.get("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
 def get_record(table: str, record_id: int, s: Session = Depends(session_dep)) -> RecordResponse:
     return records.get_record(s, spec_of(table), record_id)
@@ -198,22 +173,15 @@ def update_record(table: str, record_id: int, data: dict[str, Any],
 
 @app.get("/api/interface", response_model=EntranceList)
 def list_entrances() -> EntranceList:
-    """入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る"""
-    return EntranceList(entrances=[EntranceMeta.model_validate(entrance) for entrance in interface.ENTRANCES.values()],
-                        claude_available=claude_available(), claude_mode=claude_mode())
+    """db だけの入口の一覧。claude を叩く入口は出さない(Claude のセッションが自分で呼ぶ)"""
+    return EntranceList(entrances=[EntranceMeta.model_validate(entrance) for entrance in interface.ENTRANCES.values()
+                                   if not entrance.claude])
 
 
-@app.post("/api/interface/{entrance_id}", response_model=RunResult | JobInfo)
-def run_entrance(entrance_id: str, request: RunRequest, response: Response) -> RunResult | JobInfo:
-    """入口を呼ぶ。`claude` を叩く入口(と `background` を立てた呼び出し)は job の id を 202 で返し、結果は `/api/jobs/{id}` で引く"""
-    entrance = interface.entrance_of(entrance_id)
-    if entrance.claude:
-        require_claude_code(entrance.id)
-    arguments = interface.prepare(entrance, request.args)
-    if entrance.claude or request.background:
-        response.status_code = 202
-        return _submit(entrance, request.args, arguments)
-    return RunResult(entrance=entrance.id, result=interface.call(entrance, arguments))
+@app.post("/api/interface/{entrance_id}", response_model=RunResult)
+def run_entrance(entrance_id: str, request: RunRequest) -> RunResult:
+    entrance = interface.db_entrance_of(entrance_id)
+    return RunResult(entrance=entrance.id, result=interface.call(entrance, interface.prepare(entrance, request.args)))
 
 
 @app.post("/api/steps/{step_id}")
@@ -221,27 +189,6 @@ def run_step(step_id: str, body: Any = Body(None)) -> Any:
     """db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、
     流れと AI を自分で持ったまま db に触る所だけを頼む"""
     return step.run_json(step_id, body)
-
-
-@app.get("/api/jobs", response_model=JobList)
-def list_jobs(s: Session = Depends(session_dep)) -> JobList:
-    """このプロセスの job と、待ち行列(`ai_task`)の新しい行を、新しい順に"""
-    jobs = [JobInfo.model_validate(job) for job in runner.list()]
-    jobs += [JobInfo.model_validate(queue.job_view(task)) for task in queue.recent(s)]
-    return JobList(jobs=sorted(jobs, key=lambda job: job.created_at, reverse=True))
-
-
-@app.get("/api/jobs/{job_id}", response_model=JobInfo)
-def get_job(job_id: str, s: Session = Depends(session_dep)) -> JobInfo:
-    task_id = queue.task_id_of(job_id)
-    if task_id is not None:
-        task = s.get(AiTask, task_id)
-        if task is not None:
-            return JobInfo.model_validate(queue.job_view(task))
-    job = runner.get(job_id)
-    if job is None:
-        raise UnknownRecordError(f"job が無い: {job_id}")
-    return JobInfo.model_validate(job)
 
 
 @app.get("/api/maps", response_model=MapsResponse)

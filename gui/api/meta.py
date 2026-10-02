@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
 from db.schema import PolygonType, StampType
-from gui.api import generate
 from gui.api.fields import choices_of, field_meta
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
@@ -149,8 +148,7 @@ def table_meta(s: Session, spec: TableSpec) -> TableMeta:
     count = s.scalar(select(func.count()).select_from(spec.model)) or 0
     return TableMeta(name=spec.name, label=spec.label, label_column=LABEL_COLUMNS[spec.model],
                      columns=table_columns(spec), child_lists=child_lists(spec),
-                     count=count, sort=spec.sort, order=spec.order,
-                     generators=[generator.to_meta() for generator in generate.generators_of(spec.name)])
+                     count=count, sort=spec.sort, order=spec.order)
 
 
 def all_tables(s: Session) -> list[TableMeta]:
