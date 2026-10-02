@@ -3,9 +3,10 @@
 import { useState, type ReactNode } from "react";
 import type { Rec, TableMeta } from "@/lib/api";
 import ChildListEditor, { type ExtraColumn } from "./ChildListEditor";
+import EpisodeCharacters from "./EpisodeCharacters";
 import FieldInput from "./FieldInput";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
-import { ageAt } from "@/lib/stamp";
+import { ageAt, ageInYear } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 /** 期間ごとの居場所・パラメータの開始・終了それぞれの隣に、その時点の人物の年齢を出す(人物の start が生年)。
@@ -21,6 +22,17 @@ function formatAge(age: number | null): string {
   return age === null ? "—" : String(age);
 }
 
+/** 来歴の始まりの年の隣に、その年に迎える歳を出す(年が未定・生年が無いときは出さない)。 */
+export function historyAgeColumns(birth: unknown): ExtraColumn[] {
+  return [{
+    key: "start_age", after: "start", label: T.record.ageAt,
+    render: (row) => {
+      const age = ageInYear(birth, row.start);
+      return age === null ? null : T.record.ageInYear(age);
+    },
+  }];
+}
+
 type Props = {
   meta: TableMeta;
   value: Rec;
@@ -34,13 +46,6 @@ type Props = {
   side?: ReactNode;
   /** 左の欄の一番下に置く保存系のボタン列 */
   actions?: ReactNode;
-  /** 「AI で作成」で開く欄({@link import("./GeneratePanel").useGeneratePanel} の `body`。
-   * 開くボタン(`toggle`)は呼び出し側が actions(保存系のボタン列)に置く。
-   * 本文(section)があれば右側で本文の 9 割ほどを使い、無ければ左の欄の保存ボタンの隣に出す */
-  generate?: ReactNode;
-  /** 「AI で推敲する」で開く欄({@link import("./RevisePanel").useRevisePanel} の `body`)。
-   * 開くボタン(`toggle`)は呼び出し側が actions に置く。左の欄の一番下、保存ボタンの下で大半(7 割ほど)を使う */
-  revise?: ReactNode;
 };
 
 /** 見出しとして出す名前の欄。クリックすると入力欄になり、Enter・Esc・フォーカスが外れると見出しに戻る。 */
@@ -70,11 +75,8 @@ function EditableTitle({ value, placeholder, onChange }: { value: string; placeh
 }
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
- * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。
- * 「AI で作成」「AI で推敲する」を開くボタンは常に save の隣(actions)に置き、開いた欄(generate/revise)だけを
- * ここで置く。本文があれば AI で作成の欄は右側(本文の 9 割)、推敲の欄は左側の一番下(7 割ほど)に開く。
- * 本文が無いテーブル(推敲の対象外)では、AI で作成の欄は左の欄の保存ボタンの隣に出す。 */
-export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, generate, revise }: Props) {
+ * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
+export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   // 名前の欄は見出しで直し、id は見出しの横に出すので、フォームには並べない
@@ -115,8 +117,20 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 <span className="key">{column.key}</span>
                 {column.required && <span className="hint">{T.required}</span>}
               </label>
-              <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
-                defaultIds={column.key === "viewpoint_character_id" ? locationCharacterIds : null} />
+              {meta.name === "episode" && column.key === "character_ids" ? (
+                // 全人物のチェック欄は縦に長く、下のプロットを押し縮めるので、ボタンからモーダルで選ぶ
+                <div className="episode-characters-field">
+                  <EpisodeCharacters
+                    characterIds={(value.character_ids as number[] | null) ?? []}
+                    onChange={(ids) => set("character_ids", ids)}
+                    episodeStart={value.start}
+                    episodeLocationId={value.location_id}
+                  />
+                </div>
+              ) : (
+                <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
+                  defaultIds={column.key === "viewpoint_character_id" ? locationCharacterIds : null} />
+              )}
             </div>
           ))}
         </div>
@@ -144,13 +158,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
             <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
           </div>
         ))}
-        {revise}
-        {(actions || (sections.length === 0 && generate)) && (
-          <div className="record-actions">
-            {actions}
-            {sections.length === 0 && generate && <div className="generate-body">{generate}</div>}
-          </div>
-        )}
+        {actions && <div className="record-actions">{actions}</div>}
       </div>
       {sections.length > 0 && (
         <div className="record-text">
@@ -174,10 +182,10 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 meta={child}
                 rows={(value[child.name] as Rec[] | undefined) ?? []}
                 onChange={(rows) => set(child.name, rows)}
+                extraColumns={meta.name === "character" && child.name === "histories" ? historyAgeColumns(value.start) : undefined}
               />
             </div>
           ))}
-          {generate && <div className="generate-right">{generate}</div>}
         </div>
       )}
     </div>

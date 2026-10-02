@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
-from db.schema import ConfirmStatusType, PolygonType, StampType
-from gui.api import generate
+from db.schema import PolygonType, StampType
 from gui.api.fields import choices_of, field_meta
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
@@ -21,7 +20,7 @@ from gui.api.tables import TABLES, TableSpec
 # コメントより短い、フォームに出す見出し
 _LABELS = {
     "id": "id", "name": "名前", "kind": "種別", "text": "本文", "start": "開始", "end": "終了",
-    "title": "題", "plot_text": "プロット", "main_text": "本文", "category": "分類", "confirmed": "確認",
+    "title": "題", "plot_text": "プロット", "main_text": "本文", "category": "分類",
     "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
     "character_id": "人物", "character_1_id": "人物 1", "character_2_id": "人物 2", "relation": "関係",
     "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
@@ -53,8 +52,6 @@ def _column_type(column: Column) -> str:
     kind = column.type
     if isinstance(kind, StampType):
         return "stamp"
-    if isinstance(kind, ConfirmStatusType):
-        return "confirm"
     if isinstance(kind, (PolygonType, JSON)):
         return "json"
     if isinstance(kind, Boolean):
@@ -151,8 +148,7 @@ def table_meta(s: Session, spec: TableSpec) -> TableMeta:
     count = s.scalar(select(func.count()).select_from(spec.model)) or 0
     return TableMeta(name=spec.name, label=spec.label, label_column=LABEL_COLUMNS[spec.model],
                      columns=table_columns(spec), child_lists=child_lists(spec),
-                     reviewable=spec.reviewable, count=count, sort=spec.sort, order=spec.order,
-                     generators=[generator.to_meta() for generator in generate.generators_of(spec.name)])
+                     count=count, sort=spec.sort, order=spec.order)
 
 
 def all_tables(s: Session) -> list[TableMeta]:
@@ -161,5 +157,5 @@ def all_tables(s: Session) -> list[TableMeta]:
 
 _LABELS["parameters"] = "期間ごとのパラメータ"
 _LABELS["locations"] = "期間ごとの居場所"
-_LABELS["histories"] = "期間ごとの説明"
+_LABELS["histories"] = "来歴"
 _LABELS["recognitions"] = "場所・時代ごとの呼び名"

@@ -4,8 +4,8 @@
 本文の材料(登場人物の直近の出来事・関係、場所の出来事)は話に結んだ登場人物・場所から引くので、先に `episode_casting` で
 登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
 本文は Claude が `CommitEpisode` で確定する。
-本文の材料は db だけの段(`brief_targets` → 要約を揃える → `episode_brief`)に分けてある。
-手元では `read_brief` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える → `episode_casting` / `episode_brief`)に分けてある。
+手元では `read_casting` / `read_brief` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from data_access_logic import constants
+from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import candidate_at, cast_event_ids, cast_of, mentioned_of, relations_at
 from data_access_logic.episode.caster import candidate_characters
@@ -25,7 +25,7 @@ from data_access_logic.episode.models import (
 )
 from data_access_logic.episode.plot_completer import known_locations
 from data_access_logic.episode.summary import appearances, past_episode_ids, past_episodes, recent_episodes
-from data_access_logic.episode.writer import later_events_select, location_events_select
+from data_access_logic.episode.material import later_events_select, location_events_select
 from data_access_logic.event.summary import events_of
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
@@ -62,12 +62,21 @@ def _guide(s: Session) -> str:
     return "\n".join([
         EVENT_AGE_INSTRUCTION,
         MENTIONED_INSTRUCTION,
+        PAST_EPISODES_INSTRUCTION,
+        STYLE_SAMPLE_INSTRUCTION,
         style.style_instruction("episode", shared_extra=extras.shared, extra=extras.own),
     ])
 
 
+def casting_targets(s: Session, episode_id: int) -> SummaryTargets:
+    """登場人物・名前だけ出る人物が関わった話(`episode_casting` が概要を付ける話)。"""
+    episode = _episode(s, episode_id)
+    links = appearances(s, episode, [*cast_characters(episode), *mentioned_in(episode)])
+    return SummaryTargets(episode_ids=[link.episode.id for link in links])
+
+
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
-    """本文の材料を読む前に、プロットから登場人物・場所を決める材料。要約を使わないので AI は呼ばない。"""
+    """本文の材料を読む前に、プロットから登場人物・場所を決める材料。要約は揃えてある前提でそのまま読む。"""
     episode = _episode(s, episode_id)
     main_episode = CastingEpisode.model_validate(episode)
     time = main_episode.start
@@ -96,7 +105,7 @@ def brief_targets(s: Session, episode_id: int) -> SummaryTargets:
                        if location_id is not None else [])
     later_events = s.scalars(later_events_select(location_id, characters, main_episode.start)).all()
     return SummaryTargets(
-        episode_ids=past_episode_ids(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
+        episode_ids=past_episode_ids(s, episode, characters),
         event_ids=[*cast_event_ids(s, characters, main_episode.start),
                    *(event.id for event in location_events), *(event.id for event in later_events)],
     )
@@ -112,7 +121,7 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, characters, constants.EPISODE_FULL_TEXT_COUNT),
+        past_episodes=past_episodes(s, episode, characters),
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, time),
@@ -124,6 +133,11 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
         later_events=events_of(s, later_events_select(location_id, characters, time)),
         guide=_guide(s),
     )
+
+
+def read_casting(s: Session, ai: AIClient, episode_id: int) -> EpisodeCastingSerialized:
+    refresh(s, ai, casting_targets(s, episode_id))
+    return episode_casting(s, episode_id)
 
 
 def read_brief(s: Session, ai: AIClient, episode_id: int) -> EpisodeBriefSerialized:

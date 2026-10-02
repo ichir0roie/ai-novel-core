@@ -8,14 +8,13 @@ from data_access_logic.episode.form import set_characters
 from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.query import common_query
-from db.schema import Character, ConfirmStatus, Episode, Location
+from db.schema import Character, Episode, Location
 
 
 class CastEpisode(CommitEntrypoint):
     """本文を書く前に、Claude がプロットから決めた登場人物・場所・視点を話に結ぶ。
 
     登場人物(`episode_character`)は `character_ids` でまるごと置き換え、名前だけ出る人物はプロット・本文から拾い直す。
-    登場人物と視点の人物は、この話の本文に書く人物なので承認する(未確認の人物は本文の材料に出せない)。
     `location_id` / `viewpoint_character_id` は渡したときだけ書く。同期フラグ(`synced`)は変えない。
     """
 
@@ -31,11 +30,8 @@ class CastEpisode(CommitEntrypoint):
     def execute(self, s: Session) -> EpisodeRecord:
         self.check_exists(s, Location, self.location_id, "location_id")
         record = common_query.get_row(s, Episode, self.episode_id)
-        approved_ids = list(self.character_ids)
-        if self.viewpoint_character_id is not None:
-            approved_ids.append(self.viewpoint_character_id)
-        for character_id in approved_ids:
-            common_query.get_row(s, Character, character_id).confirmed = ConfirmStatus.APPROVED
+        for character_id in [*self.character_ids, self.viewpoint_character_id]:
+            self.check_exists(s, Character, character_id, "character_id")
         if self.location_id is not None:
             record.location_id = self.location_id
         if self.viewpoint_character_id is not None:

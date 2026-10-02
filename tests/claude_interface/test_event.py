@@ -9,19 +9,18 @@ from data_access_logic.event.read_events import ReadEvents
 from data_access_logic.event.update_event import UpdateEvent
 from data_access_logic.event_seed.form import EventSeedUpdateForm
 from data_access_logic.event_seed.update_event_seed import UpdateEventSeed
-from db.schema import ConfirmStatus
 
 
 def test_commit_event(shown, world, mock_ai):
     result = shown(CommitEvent(EventCreateForm(
         name="テスト祭", time="1200/05/01 10:00:00", text="祭が開かれた", hidden=True,
-        confirmed=ConfirmStatus.PENDING, parent_event_id=world.event_id, location_id=world.location_id,
+        parent_event_id=world.event_id, location_id=world.location_id,
         start="1200/05/01", end="1200/05/03", event_seeded=True, meme_seeded=True,
         character_ids=world.character_ids)))
 
     assert (result["name"], result["text"]) == ("テスト祭", "祭が開かれた")
     assert result["time"] == "1200/05/01 10:00:00"
-    assert (result["hidden"], result["confirmed"]) == (True, "未確認")
+    assert result["hidden"] is True
     assert (result["parent_event_id"], result["location_id"]) == (world.event_id, world.location_id)
     assert (result["start"], result["end"]) == ("1200/05/01 00:00:00", "1200/05/03 00:00:00")
     assert (result["event_seeded"], result["meme_seeded"]) == (True, True)
@@ -73,13 +72,13 @@ def test_read_events(shown, world):
 def test_update_event(shown, world, mock_ai):
     result = shown(UpdateEvent(EventUpdateForm(
         id=world.child_event_id, name="テスト大取引", time="1200/04/01 16:00:00", text="大きな取引がまとまった",
-        hidden=True, confirmed=ConfirmStatus.REJECTED, parent_event_id=world.event_id, location_id=world.neighbor_id,
+        hidden=True, parent_event_id=world.event_id, location_id=world.neighbor_id,
         start="1200/04/01 16:00:00", end="1200/04/01 17:00:00", event_seeded=False, meme_seeded=False,
         character_ids=[world.character_ids[1]])))
 
     assert (result["name"], result["text"]) == ("テスト大取引", "大きな取引がまとまった")
     assert result["time"] == "1200/04/01 16:00:00"
-    assert (result["hidden"], result["confirmed"]) == (True, "非承認")
+    assert result["hidden"] is True
     assert (result["parent_event_id"], result["location_id"]) == (world.event_id, world.neighbor_id)
     assert (result["start"], result["end"]) == ("1200/04/01 16:00:00", "1200/04/01 17:00:00")
     assert result["character_ids"] == [world.character_ids[1]]

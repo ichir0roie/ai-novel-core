@@ -2,8 +2,8 @@
 """`data_access_logic/<領域>/` の入口を API から呼ぶ。
 
 入口の一覧は import 時にディレクトリを歩いて集める(`data_access_logic/readme.md` の表と同じ「領域.ファイル.クラス」で呼ぶ)。
-`claude -p` を回すもの(確定のあとに AI を回す `run()` を持つ入口、AI を受け取る入口)は
-`claude=True` にし、Claude Code の環境でだけ、裏の job として走らせる。
+`claude -p` を回すもの(確定のあとに AI を回す `run()` を持つ入口、AI を受け取る入口)は `claude=True` にし、
+API からは呼ばせない(Claude のセッションが、手元は `show()`、web は `web_session/flows.py` で呼ぶ)。
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class Entrance:
     name: str
     doc: str
     params: tuple[Param, ...]
-    claude: bool     # claude コマンドを叩く(裏の job として、Claude Code の環境でだけ走る)
+    claude: bool     # claude コマンドを叩く(API からは呼ばせない)
     writes: bool     # db に書く
     target: type[Entrypoint]
 
@@ -116,6 +116,20 @@ def entrance_of(entrance_id: str) -> Entrance:
     return entrance
 
 
+class ClaudeEntranceForbidden(PermissionError):
+    pass
+
+
+def db_entrance_of(entrance_id: str) -> Entrance:
+    """API から呼べる入口(claude を叩かないもの)。"""
+    entrance = entrance_of(entrance_id)
+    if entrance.claude:
+        raise ClaudeEntranceForbidden(
+            f"{entrance.id} は claude コマンドを叩くので API からは呼べない。Claude のセッションから呼ぶ"
+            "(手元は `show()`、web のセッションは `web_session/flows.py`)")
+    return entrance
+
+
 def _has_model(annotation: Any) -> bool:
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return True
@@ -124,7 +138,7 @@ def _has_model(annotation: Any) -> bool:
 
 def prepare(entrance: Entrance, args: dict[str, Any]) -> dict[str, Any]:
     """JSON で来た引数を入口の signature に当て、型が pydantic のモデルの引数はモデルに読み込む。
-    食い違いは ValueError にして 400 へ(裏の job にする前に確かめる)。"""
+    食い違いは ValueError にして 400 へ。"""
     target = entrance.target
     try:
         inspect.signature(target).bind(**args)

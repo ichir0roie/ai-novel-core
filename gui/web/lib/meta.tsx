@@ -1,14 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { getTables, type ClaudeMode, type TableMeta } from "./api";
+import { getTables, type TableMeta } from "./api";
 import { T } from "./text";
 
 type MetaContextValue = {
   tables: TableMeta[];
-  /** 「AI で作成」を押せるか(false なら使えない)。API がその場で回すか(direct)、待ち行列に積むか(queue) */
-  claudeAvailable: boolean;
-  claudeMode: ClaudeMode;
   error: string | null;
   loading: boolean;
   reload: () => Promise<void>;
@@ -16,8 +13,6 @@ type MetaContextValue = {
 
 const MetaContext = createContext<MetaContextValue>({
   tables: [],
-  claudeAvailable: false,
-  claudeMode: "off",
   error: null,
   loading: true,
   reload: async () => {},
@@ -25,8 +20,6 @@ const MetaContext = createContext<MetaContextValue>({
 
 export function MetaProvider({ children }: { children: ReactNode }) {
   const [tables, setTables] = useState<TableMeta[]>([]);
-  const [claudeAvailable, setClaudeAvailable] = useState(false);
-  const [claudeMode, setClaudeMode] = useState<ClaudeMode>("off");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,8 +28,6 @@ export function MetaProvider({ children }: { children: ReactNode }) {
     try {
       const result = await getTables();
       setTables(result.tables);
-      setClaudeAvailable(result.claude_available ?? false);
-      setClaudeMode(result.claude_mode ?? "off");
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -49,7 +40,7 @@ export function MetaProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   return (
-    <MetaContext.Provider value={{ tables, claudeAvailable, claudeMode, error, loading, reload }}>{children}</MetaContext.Provider>
+    <MetaContext.Provider value={{ tables, error, loading, reload }}>{children}</MetaContext.Provider>
   );
 }
 

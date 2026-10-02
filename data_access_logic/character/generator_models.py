@@ -25,7 +25,7 @@ class BirthLocationMaterial(LocationTextMaterial):
 
 
 class NearbyCharacter(CharacterBase):
-    # 生む時刻に掛かる説明・来歴(`histories_at`)
+    # 生む時刻までに起きた来歴(`histories_at`)
     histories: list[CharacterHistoryRow]
 
 
@@ -41,6 +41,8 @@ class CharacterBirthMaterial(Material):
     element: str | None = None
     memes: list[DrawnMeme]
     nearby_characters: list[NearbyCharacter]
+    # 同じ場所にいる人物・対象の名。中身の段には渡さず、名付けで避ける
+    resident_names: list[str]
     # 人物なら、サイコロと作者の指定で決まっている値。決まっていない値は None
     parameters: CharacterParameterValues | None = None
     # 以下は決まっている値。None なら AI が決める
@@ -108,7 +110,8 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
             "体現する要素": self.element,
             "行動原理(ミーム)": [{"古今表裏": meme.position, "内容": meme.text} for meme in self.memes],
             "既にいる人物・対象": [
-                {"名前": character.name, "種別": character.kind, "説明と来歴(古い順)": histories_for_prompt(character.histories)}
+                {"名前": character.name, "種別": character.kind, "説明": character.text,
+                 "来歴(古い順)": histories_for_prompt(character.histories)}
                 for character in self.nearby_characters],
             "性格": _personality(parameters) if parameters else None,
             "決まっている": {
@@ -133,7 +136,8 @@ class CharacterNameMaterial(Material):
     age: int
     parameters: CharacterParameterValues | None = None
     born_location: BirthLocationMaterial | None = None
-    nearby_characters: list[NearbyCharacter]
+    # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
+    avoided_names: list[str]
     hint_name: str | None = None
 
 
@@ -156,7 +160,7 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
             "口調": parameters.tone if parameters else None,
             "方言": parameters.dialect if parameters else None,
             "居場所": _born_location(self.born_location),
-            "既にいる人物・対象の名": [character.name for character in self.nearby_characters],
+            "同じ場所にいる人物・対象の名": self.avoided_names,
             "作者が付けたい名": self.hint_name,
         }
 
@@ -378,6 +382,8 @@ class BirthSources(Material):
     # この時刻より後に始まる、まだ世に無い設定
     later_ideas: list[IdeaMaterial]
     nearby_characters: list[NearbyCharacter]
+    # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
+    resident_names: list[str]
     # 引く元になるミーム(`meme.extractor.draw_from`)
     meme_pool: list[PooledMeme]
 
@@ -392,13 +398,21 @@ class CharacterContent(Material):
     parameters: CharacterParameterValues
 
 
+class CharacterWriting(Material):
+    """生んだ人物・対象の芯と来歴。"""
+
+    # 芯(説明・meme・行動原理)
+    text: str
+    # 来歴の節目ごとの行(起きた年から始まる)
+    histories: list[CharacterHistoryRow]
+
+
 class CharacterCreation(Material):
     """生んだ人物・対象として足す値。"""
 
     name: str
     kind: str
-    # 始まりの無い芯の一行と、来歴の節目ごとの行
-    histories: list[CharacterHistoryRow]
+    writing: CharacterWriting
     main_character: bool
     parameters: CharacterParameterValues
     birth: Stamp
@@ -410,7 +424,7 @@ class CharacterCreation(Material):
 
 
 class CompletionTarget(Material):
-    """説明・来歴(histories)を埋める人物・対象の、決まっている値。"""
+    """芯(text)を埋める人物・対象の、決まっている値。"""
 
     id: int
     name: str | None = None

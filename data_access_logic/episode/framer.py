@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""本文は書かない(`writer.write_episode` で別に書く)。
+"""本文は書かない(本文はスキル `episode` でこのセッションの Claude が書く)。
 
 db だけの段(`framing_targets` → 要約を揃える → `frame_material` → `save_frame_draft`)と、AI だけの段(`frame_draft`)に分けてある。
 手元では `frame_episode` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
@@ -75,7 +75,7 @@ def framing_targets(s: Session, episode_id: int) -> SummaryTargets:
     episode = _episode(s, episode_id)
     time = _time(s, episode)
     return SummaryTargets(
-        episode_ids=past_episode_ids(s, episode, cast_characters(episode), 0),
+        episode_ids=past_episode_ids(s, episode, cast_characters(episode)),
         event_ids=[*cast_event_ids(s, cast_characters(episode), time),
                    *(event.id for event in s.scalars(_later_events_select(episode, time)).all())],
     )
@@ -90,7 +90,7 @@ def frame_material(s: Session, episode_id: int) -> EpisodeFrameMaterialSerialize
     return EpisodeFrameMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=FrameEpisode.model_validate(episode),
-        past_episodes=past_episodes(s, episode, characters, 0),
+        past_episodes=past_episodes(s, episode, characters),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned_in(episode), time),

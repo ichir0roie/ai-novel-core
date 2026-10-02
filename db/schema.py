@@ -4,10 +4,9 @@ from __future__ import annotations
 import enum
 import hashlib
 import os
-from datetime import datetime, timezone
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Integer, String, DECIMAL, JSON, TypeDecorator,
+    BigInteger, Boolean, Integer, String, DECIMAL, JSON, TypeDecorator,
     create_engine,
     ForeignKey,
     UniqueConstraint,
@@ -72,59 +71,6 @@ class PolygonType(TypeDecorator):
 
     def process_bind_param(self, value, dialect):
         return parse_polygon(value)
-
-
-class ConfirmStatus(enum.StrEnum):
-    """アイデア・ミームの `confirmed` 列の値。ユーザが確かめたかを三段で持つ。
-
-    - 未確認: 本文から自動で足した直後の候補。検索・生成・人物へ引く対象に出ない
-    - 承認: ユーザが確かめた。使ってよい
-    - 非承認: ユーザが退けた。使わないが、同じ語をまた候補に足さないよう行は残す
-    """
-    PENDING = "未確認"
-    APPROVED = "承認"
-    REJECTED = "非承認"
-
-
-CONFIRM_STATUSES = tuple(status.value for status in ConfirmStatus)
-
-# 三段にする前の bool の書き方(true/false)からの読み替え
-_CONFIRM_LEGACY = {True: ConfirmStatus.APPROVED, False: ConfirmStatus.PENDING,
-                   "true": ConfirmStatus.APPROVED, "false": ConfirmStatus.PENDING,
-                   "1": ConfirmStatus.APPROVED, "0": ConfirmStatus.PENDING}
-
-
-def parse_confirm_status(value) -> str | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, ConfirmStatus):
-        return value.value
-    if isinstance(value, bool) or (isinstance(value, int) and value in (0, 1)):
-        return _CONFIRM_LEGACY[bool(value)].value
-    text = str(value).strip()
-    if text in CONFIRM_STATUSES:
-        return text
-    legacy = _CONFIRM_LEGACY.get(text.lower())
-    if legacy is not None:
-        return legacy.value
-    raise ValueError(f"confirmed は {'/'.join(CONFIRM_STATUSES)} のいずれか: {value!r}")
-
-
-class ConfirmStatusType(TypeDecorator):
-    """`confirmed` 列。db には値の文字列(未確認/承認/非承認)で持ち、以前の bool も受け取る。"""
-
-    impl = String
-    cache_ok = True
-
-    def process_bind_param(self, value, dialect):
-        return parse_confirm_status(value)
-
-    def process_result_value(self, value, dialect):
-        # マイグレーション前の db(1/0)を読んでも落ちないよう、読むときも読み替える
-        try:
-            return parse_confirm_status(value)
-        except ValueError:
-            return value
 
 
 class Base(DeclarativeBase):
@@ -223,12 +169,6 @@ class Event(EventSeededMixin, MemeSeededMixin, TextBase):
     name: Mapped[str] = mapped_column(String, sort_order=200)
     # 断面(ReadBrief)に出すかどうかだけを持つ。分類は name/text の書き方で表す。
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, sort_order=210)
-    confirmed: Mapped[str] = mapped_column(
-        ConfirmStatusType, default=ConfirmStatus.APPROVED, nullable=False,
-        comment=f"ユーザが確かめた出来事として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
-                "ランダム生成の直後は 未確認 で、話・筋書きには使われない。"
-                "確かめたら 承認、無かったことにするなら 非承認 にする",
-        sort_order=215)
     time: Mapped[Stamp] = mapped_column(StampType, index=True, sort_order=220)
 
     parent_event_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("event.id"), sort_order=230)
@@ -310,12 +250,6 @@ class Meme(TextBase):
         String, nullable=True,
         comment=f"分類。{'/'.join(MEME_CATEGORIES)} のいずれか。空なら次の抽出で AI が振る",
         sort_order=200)
-    confirmed: Mapped[str] = mapped_column(
-        ConfirmStatusType, default=ConfirmStatus.PENDING, nullable=False,
-        comment=f"ユーザが確かめた考え方として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
-                "本文から自動で抜き出した直後は 未確認 で、人物へ引く・書き込む対象に出ない。"
-                "レビューで確かめたら 承認、退けたら 非承認 にする",
-        sort_order=205)
 
 
 class Oracle(MemeSeededMixin, TextBase):
@@ -407,22 +341,18 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
-    人物の説明・来歴は本文の列を持たず、すべて期間ごとの `CharacterHistory` に積む。
+    人物の芯(説明・meme・行動原理・plot)は `text` に、年ごとの来歴は `CharacterHistory` に持つ。
     """
 
     __tablename__ = "character"
-    TEXT_COLUMNS = ()
+
+    text: Mapped[str | None] = mapped_column(
+        String, nullable=True, comment="人物の芯(説明・meme・行動原理・plot)。いつの話・出来事にも渡す", sort_order=10000)
 
     name: Mapped[str | None] = mapped_column(String, sort_order=210)
     kind: Mapped[str] = mapped_column(
         String, default=CHARACTER_KIND_PERSON, nullable=False,
         comment="種別。「人物」か、人物以外の対象(国・組織・商会・氏族・集団・物など)", sort_order=230)
-    confirmed: Mapped[str] = mapped_column(
-        ConfirmStatusType, default=ConfirmStatus.APPROVED, nullable=False,
-        comment=f"ユーザが確かめた人物・対象として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
-                "ランダム生成の直後は 未確認 で、話・筋書きには使われない。"
-                "確かめたら 承認、無かったことにするなら 非承認 にする",
-        sort_order=235)
 
     main_character: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
@@ -436,8 +366,8 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     # 名字・体格・口調・性格は CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
-    # 人物の説明・来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `recognitions` と同じ扱い)。
+    # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
+    # (Idea の `notes` と同じく、基本の本文に時代ごとの行を足す形)。
     CHILD_LISTS = ("parameters", "locations", "histories")
 
     @property
@@ -578,13 +508,13 @@ class CharacterRelation(TextBase):
 
 
 class CharacterHistory(Base):
-    """人物の説明・来歴を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
+    """人物の来歴を、起きた年ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
-    人物は本文の列を持たない。始まりの無い行に人物の芯(説明・meme・行動原理)を置き、
     時が進むにつれて起きたこと・変わった立場・境遇などを、起きた年を `start` にした行として書き足す。行は終わりを持たない。
     行が増えすぎないよう、始まりは年単位にし、同じ年のことは一行にまとめる。
     ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
+    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出し、話・出来事には渡さない。
     """
 
     __tablename__ = "character_history"
@@ -592,13 +522,14 @@ class CharacterHistory(Base):
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
     start: Mapped[int | None] = mapped_column(
-        Integer, comment="この説明・来歴が効き始める年(起きた年)。空なら始まりを限らない", sort_order=110)
-    description: Mapped[str] = mapped_column(String, nullable=False, comment="説明・来歴", sort_order=130)
+        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
+        sort_order=110)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is None or self.start <= time.year
+        return self.start is not None and self.start <= time.year
 
 
 class Idea(MemeSeededMixin, TextBase):
@@ -606,12 +537,6 @@ class Idea(MemeSeededMixin, TextBase):
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
-    confirmed: Mapped[str] = mapped_column(
-        ConfirmStatusType, default=ConfirmStatus.APPROVED, nullable=False,
-        comment=f"確かめた設定として使ってよいか。{'/'.join(CONFIRM_STATUSES)} のいずれか。"
-                "本文から自動で足した候補は 未確認 で、検索・生成には出ない。"
-                "確かめたら 承認、設定ではないと退けたら 非承認 にする",
-        sort_order=215)
 
     location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"), index=True,
@@ -750,7 +675,7 @@ class EpisodeCharacter(Base):
     mentioned: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
         comment="この話に登場せず、プロット・本文に名前が出るだけの人物か。"
-                "推敲・プロット補完・枠の生成のたびに、プロット・本文から拾い直す",
+                "話の確定・プロット補完・枠の生成のたびに、プロット・本文から拾い直す",
         sort_order=120)
 
     episode: Mapped["Episode"] = relationship(back_populates="episode_characters", lazy="noload")
@@ -785,44 +710,6 @@ class CharacterIdea(Base):
 
     character_id: Mapped[int] = mapped_column(Integer, ForeignKey("character.id"), index=True, sort_order=100)
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
-
-
-def utc_now() -> datetime:
-    # SQLite の DateTime は時差を持てないので、どちらの db でも時差を落とした UTC で持つ
-    return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-class AiTaskStatus(enum.StrEnum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
-
-
-class AiTask(Base):
-    """claude を叩く入口の呼び出しを、後で Claude Code on the web のセッションが拾って回すための待ち行列。
-
-    claude の無い環境(Lambda の API)で「AI で作成」などを押すと、呼び出しをここに積むだけで返す
-    (`gui/api/claude_env.py` の `queue` モード)。`web_session/run_ai_tasks.py` が古い順に拾って回す。
-    """
-
-    __tablename__ = "ai_task"
-
-    entrance: Mapped[str] = mapped_column(
-        String, nullable=False, comment="呼ぶ入口(`gui/api/interface.py` の id。例: episode.generate_episode.GenerateEpisode)",
-        sort_order=100)
-    args: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, comment="入口に渡す引数(JSON)", sort_order=110)
-    status: Mapped[str] = mapped_column(
-        String, nullable=False, default=AiTaskStatus.QUEUED, index=True,
-        comment="queued / running / done / failed", sort_order=120)
-    attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0",
-        comment="拾った回数。回したセッションが途中で止まって拾い直すたびに増え、上限を超えたら failed にする", sort_order=125)
-    result: Mapped[dict | list | None] = mapped_column(JSON(none_as_null=True), comment="入口の結果(JSON)", sort_order=130)
-    error: Mapped[str | None] = mapped_column(String, comment="落ちた理由", sort_order=140)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utc_now, sort_order=160)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=180)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, sort_order=190)
 
 
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、

@@ -23,8 +23,8 @@ from data_access_logic.meme.models import (
 )
 from data_access_logic.query import meme_query
 from data_access_logic.character.histories import plot_of
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
-from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
+from db.schema import MEME_CATEGORIES, Character, Event, Idea, Meme, Oracle
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ _CLASSIFY_SYSTEM_PROMPT = f"""\
 {_CATEGORY_GUIDE}"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は説明・来歴の各行の `# plot` の節だけを使う。"""
+    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は芯(`text`)の `# plot` の節だけを使う。"""
     sources: list[SourceText] = []
     for idea in s.scalars(meme_query.unseeded_select(Idea)).all():
         sources.append(source_of(idea, "アイデア", idea.text))
@@ -199,7 +199,7 @@ def meme_pool(s: Session, categories: tuple[str, ...]) -> list[PooledMeme]:
         PooledMeme.model_validate(meme)
         for category in categories
         for meme in s.scalars(
-            select(Meme).where(Meme.category == category, Meme.confirmed == ConfirmStatus.APPROVED).order_by(Meme.id)
+            select(Meme).where(Meme.category == category).order_by(Meme.id)
         ).all()
     ]
 
@@ -212,7 +212,7 @@ def draw_from(rng: random.Random, pool: list[PooledMeme], categories: tuple[str,
         count = min(rng.randint(*constants.MEME_DRAW_RANGE), len(memes))
         for meme in rng.sample(memes, count):
             drawn.append(DrawnMeme(id=meme.id, position=rng.choice(list(constants.MEME_POSITIONS)),
-                                   category=meme.category, text=meme.text))
+                                   category=meme.category, text=strip_fact_check(meme.text)))
     return drawn
 
 

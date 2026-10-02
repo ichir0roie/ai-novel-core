@@ -6,7 +6,7 @@ from collections.abc import Collection
 from sqlalchemy import ColumnElement, Select, and_, false, or_, select, true
 
 from data_access_logic.query.period import alive_at
-from db.schema import ConfirmStatus, Idea, IdeaRecognition
+from db.schema import Idea, IdeaRecognition
 from db.stamp import Stamp
 
 
@@ -42,12 +42,11 @@ def recognitions_select(essence_ids: Collection[int], location_ids: Collection[i
             .order_by(IdeaRecognition.start.desc().nulls_last(), IdeaRecognition.id))
 
 
-def ideas_by_terms_select(terms: Collection[str], location_ids: Collection[int] | None = None, time: Stamp | None = None,
-                          confirmed_only: bool = True) -> Select:
+def ideas_by_terms_select(terms: Collection[str], location_ids: Collection[int] | None = None,
+                          time: Stamp | None = None) -> Select:
     """名前か本文(基本の本文、その場所・時代の作中の呼び名 `IdeaRecognition`)に
     `terms` のどれかを含むアイデア。呼び名を左外部結合するので、呼び名の無いアイデアも
-    (基本の本文で当たれば)漏れない。`confirmed_only` を false にすると、
-    まだ確かめていない候補(`confirmed=未確認`)も含める。"""
+    (基本の本文で当たれば)漏れない。"""
     terms = [term for term in terms if term]
     if not terms:
         return select(Idea).where(false())
@@ -59,27 +58,21 @@ def ideas_by_terms_select(terms: Collection[str], location_ids: Collection[int] 
         or_(*(IdeaRecognition.name.contains(term, autoescape=True) for term in terms),
            *(IdeaRecognition.detail.contains(term, autoescape=True) for term in terms)),
         recognition_in_scope(location_ids, time))
-    conditions = [or_(essence_hit, recognition_hit)]
-    if confirmed_only:
-        conditions.append(Idea.confirmed == ConfirmStatus.APPROVED)
     return (select(Idea)
             .outerjoin(IdeaRecognition, IdeaRecognition.idea_id == Idea.id)
-            .where(*conditions)
+            .where(or_(essence_hit, recognition_hit))
             .distinct()
             .order_by(Idea.id))
 
 
-def ideas_by_parent_select(parent_ids: Collection[int], location_ids: Collection[int] | None = None, time: Stamp | None = None,
-                           confirmed_only: bool = True) -> Select:
-    conditions = [Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(location_ids, time)]
-    if confirmed_only:
-        conditions.append(Idea.confirmed == ConfirmStatus.APPROVED)
-    return select(Idea).where(*conditions).order_by(Idea.id)
+def ideas_by_parent_select(parent_ids: Collection[int], location_ids: Collection[int] | None = None,
+                           time: Stamp | None = None) -> Select:
+    return (select(Idea).where(Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(location_ids, time))
+            .order_by(Idea.id))
 
 
 def later_ideas_select(location_ids: Collection[int], time: Stamp) -> Select:
-    """`time` より後に始まる、`location_ids` の場所で効く確定済みのアイデア。"""
+    """`time` より後に始まる、`location_ids` の場所で効くアイデア。"""
     return (select(Idea)
-            .where(Idea.location_id.in_(list(location_ids)),
-                   Idea.start > time, Idea.confirmed == ConfirmStatus.APPROVED)
+            .where(Idea.location_id.in_(list(location_ids)), Idea.start > time)
             .order_by(Idea.start, Idea.id))

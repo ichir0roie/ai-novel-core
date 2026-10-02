@@ -90,27 +90,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/tables/{table}/generate/{generator}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate Record
-         * @description 「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。
-         *     claude を叩くので Claude Code の環境でだけ、裏の job として走る。結果(足した行)は `/api/jobs/{id}` で引く
-         */
-        post: operations["generate_record_api_tables__table__generate__generator__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/tables/{table}/records/{record_id}": {
         parameters: {
             query?: never;
@@ -129,57 +108,6 @@ export interface paths {
         patch: operations["update_record_api_tables__table__records__record_id__patch"];
         trace?: never;
     };
-    "/api/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Review Summary */
-        get: operations["review_summary_api_review_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/review/{table}/next": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Review Next */
-        get: operations["review_next_api_review__table__next_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/review/{table}/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Review Decide */
-        post: operations["review_decide_api_review__table___record_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/interface": {
         parameters: {
             query?: never;
@@ -189,7 +117,7 @@ export interface paths {
         };
         /**
          * List Entrances
-         * @description 入口の一覧。`claude` が立つものは Claude Code の環境でだけ、裏の job として走る
+         * @description db だけの入口の一覧。claude を叩く入口は出さない(Claude のセッションが自分で呼ぶ)
          */
         get: operations["list_entrances_api_interface_get"];
         put?: never;
@@ -209,10 +137,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Run Entrance
-         * @description 入口を呼ぶ。`claude` を叩く入口(と `background` を立てた呼び出し)は job の id を 202 で返し、結果は `/api/jobs/{id}` で引く
-         */
+        /** Run Entrance */
         post: operations["run_entrance_api_interface__entrance_id__post"];
         delete?: never;
         options?: never;
@@ -235,43 +160,6 @@ export interface paths {
          *     流れと AI を自分で持ったまま db に触る所だけを頼む
          */
         post: operations["run_step_api_steps__step_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Jobs
-         * @description このプロセスの job と、待ち行列(`ai_task`)の新しい行を、新しい順に
-         */
-        get: operations["list_jobs_api_jobs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/jobs/{job_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Job */
-        get: operations["get_job_api_jobs__job_id__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -375,6 +263,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timeline
+         * @description 全期間の話。画面(`/timeline`)が時刻の軸に並べる
+         */
+        get: operations["get_timeline_api_timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/last_episode": {
         parameters: {
             query?: never;
@@ -431,7 +339,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "integer" | "number" | "boolean" | "string" | "stamp" | "json" | "confirm" | "id_list";
+            type: "integer" | "number" | "boolean" | "string" | "stamp" | "json" | "id_list";
             /** Nullable */
             nullable: boolean;
             /** Required */
@@ -470,36 +378,10 @@ export interface components {
             /** Comment */
             comment?: string | null;
         };
-        /**
-         * ConfirmStatus
-         * @description アイデア・ミームの `confirmed` 列の値。ユーザが確かめたかを三段で持つ。
-         *
-         *     - 未確認: 本文から自動で足した直後の候補。検索・生成・人物へ引く対象に出ない
-         *     - 承認: ユーザが確かめた。使ってよい
-         *     - 非承認: ユーザが退けた。使わないが、同じ語をまた候補に足さないよう行は残す
-         * @enum {string}
-         */
-        ConfirmStatus: "未確認" | "承認" | "非承認";
-        /** Decision */
-        Decision: {
-            decision: components["schemas"]["ConfirmStatus"];
-            /** Changes */
-            changes?: {
-                [key: string]: unknown;
-            };
-        };
         /** EntranceList */
         EntranceList: {
             /** Entrances */
             entrances: components["schemas"]["EntranceMeta"][];
-            /** Claude Available */
-            claude_available: boolean;
-            /**
-             * Claude Mode
-             * @default off
-             * @enum {string}
-             */
-            claude_mode: "direct" | "queue" | "off";
         };
         /** EntranceMeta */
         EntranceMeta: {
@@ -513,8 +395,6 @@ export interface components {
             doc: string;
             /** Params */
             params: components["schemas"]["EntranceParam"][];
-            /** Claude */
-            claude: boolean;
             /** Writes */
             writes: boolean;
         };
@@ -576,50 +456,6 @@ export interface components {
              */
             readonly mentioned_character_ids: number[];
         };
-        /** GenerateRequest */
-        GenerateRequest: {
-            /** Draft */
-            draft?: {
-                [key: string]: unknown;
-            };
-            /** Args */
-            args?: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * GeneratorMeta
-         * @description 「AI で作成」のボタン。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。
-         */
-        GeneratorMeta: {
-            /** Key */
-            key: string;
-            /** Label */
-            label: string;
-            /** Entrance */
-            entrance: string;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "create" | "edit" | "both";
-            /** When Empty */
-            when_empty?: string | null;
-            /** When Not Empty */
-            when_not_empty?: string | null;
-            /** Params */
-            params?: components["schemas"]["ColumnMeta"][];
-            /**
-             * Panel
-             * @default false
-             */
-            panel: boolean;
-            /**
-             * Separate
-             * @default false
-             */
-            separate: boolean;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -629,42 +465,6 @@ export interface components {
         Health: {
             /** Dialect */
             dialect: string;
-            /**
-             * Claude Mode
-             * @enum {string}
-             */
-            claude_mode: "direct" | "queue" | "off";
-        };
-        /** JobInfo */
-        JobInfo: {
-            /** Id */
-            id: string;
-            /** Entrance */
-            entrance: string;
-            /** Args */
-            args: {
-                [key: string]: unknown;
-            };
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "running" | "done" | "failed";
-            /** Result */
-            result?: unknown;
-            /** Error */
-            error?: string | null;
-            /** Created At */
-            created_at: string;
-            /** Started At */
-            started_at?: string | null;
-            /** Finished At */
-            finished_at?: string | null;
-        };
-        /** JobList */
-        JobList: {
-            /** Jobs */
-            jobs: components["schemas"]["JobInfo"][];
         };
         /** LocationCharactersResponse */
         LocationCharactersResponse: {
@@ -845,56 +645,12 @@ export interface components {
             /** Colors */
             colors: string[];
         };
-        /** ReviewNext */
-        ReviewNext: {
-            /** Record */
-            record: {
-                [key: string]: unknown;
-            } | null;
-            /** Label */
-            label: string | null;
-            /** Remaining */
-            remaining: number;
-            /** Labels */
-            labels?: {
-                [key: string]: {
-                    [key: string]: string;
-                };
-            };
-            /** Related */
-            related?: {
-                [key: string]: unknown;
-            };
-        };
-        /** ReviewSummary */
-        ReviewSummary: {
-            /** Tables */
-            tables: components["schemas"]["ReviewTable"][];
-        };
-        /** ReviewTable */
-        ReviewTable: {
-            /** Table */
-            table: string;
-            /** Label */
-            label: string;
-            /** Pending */
-            pending: number;
-            /** Approved */
-            approved: number;
-            /** Rejected */
-            rejected: number;
-        };
         /** RunRequest */
         RunRequest: {
             /** Args */
             args?: {
                 [key: string]: unknown;
             };
-            /**
-             * Background
-             * @default false
-             */
-            background: boolean;
         };
         /** RunResult */
         RunResult: {
@@ -915,12 +671,8 @@ export interface components {
             columns: components["schemas"]["ColumnMeta"][];
             /** Child Lists */
             child_lists: components["schemas"]["ChildListMeta"][];
-            /** Reviewable */
-            reviewable: boolean;
             /** Count */
             count: number;
-            /** Generators */
-            generators?: components["schemas"]["GeneratorMeta"][];
             /**
              * Sort
              * @default id
@@ -937,17 +689,19 @@ export interface components {
         TablesResponse: {
             /** Tables */
             tables: components["schemas"]["TableMeta"][];
-            /**
-             * Claude Available
-             * @default false
-             */
-            claude_available: boolean;
-            /**
-             * Claude Mode
-             * @default off
-             * @enum {string}
-             */
-            claude_mode: "direct" | "queue" | "off";
+        };
+        /** TimelineResponse */
+        TimelineResponse: {
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Labels */
+            labels?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
         };
         /** ValidationError */
         ValidationError: {
@@ -1142,42 +896,6 @@ export interface operations {
             };
         };
     };
-    generate_record_api_tables__table__generate__generator__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table: string;
-                generator: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_record_api_tables__table__records__record_id__get: {
         parameters: {
             query?: never;
@@ -1248,95 +966,6 @@ export interface operations {
             };
         };
     };
-    review_summary_api_review_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewSummary"];
-                };
-            };
-        };
-    };
-    review_next_api_review__table__next_get: {
-        parameters: {
-            query?: {
-                after?: number;
-            };
-            header?: never;
-            path: {
-                table: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewNext"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    review_decide_api_review__table___record_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table: string;
-                record_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Decision"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_entrances_api_interface_get: {
         parameters: {
             query?: never;
@@ -1378,7 +1007,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunResult"] | components["schemas"]["JobInfo"];
+                    "application/json": components["schemas"]["RunResult"];
                 };
             };
             /** @description Validation Error */
@@ -1414,57 +1043,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_jobs_api_jobs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobList"];
-                };
-            };
-        };
-    };
-    get_job_api_jobs__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobInfo"];
                 };
             };
             /** @description Validation Error */
@@ -1588,6 +1166,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationCharactersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_timeline_api_timeline_get: {
+        parameters: {
+            query?: {
+                story_id?: number | null;
+                location_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineResponse"];
                 };
             };
             /** @description Validation Error */

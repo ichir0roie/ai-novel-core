@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
@@ -18,7 +17,9 @@ from ai.claude_code import ai_client
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
 from data_access_logic.meme.extractor import refresh as refresh_memes
 from data_access_logic.material import Material
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
+from data_access_logic.source_text import (
+    FACT_CHECK_HEADING, SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check,
+)
 from db.schema import Idea, Meme, Oracle, Session
 
 logger = logging.getLogger(__name__)
@@ -29,16 +30,6 @@ DEFAULT_DLAB_TOOLS = "mcp__d-lab"
 TIMEOUT = 900.0
 # 一度の呼び出しで検めさせる本文の字数の上限。一件でこれを超えるものは一件だけで渡す。
 BATCH_LETTERS = 3000
-
-# 検証結果は本文の末尾にこの見出しの節として持つ(別の列は持たない)。空ならまだ検めていない。
-FACT_CHECK_HEADING = "# 検証結果"
-_FACT_CHECK_SECTION = re.compile(r"\n*^#[ \t]*検証結果[ \t]*\n.*\Z", re.M | re.S)
-
-
-def strip_fact_check(text: str | None) -> str:
-    """本文から検証結果の節を取り除いた、素の本文を返す。"""
-    return _FACT_CHECK_SECTION.sub("", text or "").rstrip()
-
 
 def _append_fact_check(text: str | None, fact_check: str) -> str:
     base = strip_fact_check(text)

@@ -1,7 +1,6 @@
 from pydantic import ConfigDict
 
 from data_access_logic.material import Form, Material, Timestamp
-from db.schema import ConfirmStatus
 
 
 class IdeaRecognitionRow(Form):
@@ -20,7 +19,6 @@ class IdeaRecord(Material):
     id: int
     name: str
     kind: str
-    confirmed: ConfirmStatus
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None

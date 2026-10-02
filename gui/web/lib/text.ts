@@ -1,12 +1,9 @@
-import type { ConfirmStatus } from "@/lib/api";
-
 // 画面に出す文言はすべてここに置き、ページ・コンポーネントは文言を直書きしない。
-// db の値(承認/非承認/未確認、場所の category など)は文言ではなく値なので、ここには置かない。
+// db の値(場所の category など)は文言ではなく値なので、ここには置かない。
 
 const join = (keys: string[]) => keys.join(", ");
 const dash = (v: unknown) => (v == null ? "-" : String(v));
 const span = (start: unknown, end: unknown) => (start == null && end == null ? "" : `${start ?? ""} – ${end ?? ""}`);
-const confirmWord: Record<ConfirmStatus, string> = { 承認: "approved", 非承認: "rejected", 未確認: "pending" };
 
 export const T = {
   appName: "novel db",
@@ -15,6 +12,7 @@ export const T = {
 
   loading: "Loading…",
   openRecord: "Open record",
+  close: "Close",
   required: "required",
   none: "(none)",
   select: "Select",
@@ -27,22 +25,18 @@ export const T = {
   cannotReachApi: (error: string) => `Cannot reach API: ${error} (check that uvicorn is running)`,
   signInRequired: "Sign in required.",
   span,
-  confirmWord,
 
   nav: {
     menu: "Menu",
     endpoints: "Endpoints",
-    review: (label: string) => `${label} review`,
+    timeline: "Timeline",
     search: "Jump to a page (type a table or page name)",
     noMatch: "No matching page",
     searchHint: "Ctrl+K: search pages",
   },
 
   home: {
-    title: "Review",
-    tables: "Tables",
-    pending: (label: string) => `${label}: pending`,
-    counts: (approved: number, rejected: number) => `approved ${approved} / rejected ${rejected}`,
+    title: "Tables",
   },
 
   list: {
@@ -55,7 +49,6 @@ export const T = {
     empty: "(empty)",
     searchPlaceholder: "Search name / text",
     search: "Search",
-    all: "All",
     removeFilter: "Remove this filter",
     filterBy: (label: string) => `Filter by this ${label}`,
     name: "Name",
@@ -67,7 +60,6 @@ export const T = {
 
   record: {
     clickToEdit: "Click to edit",
-    writtenByAi: "Written by AI",
     saved: (keys: string[]) => `Saved (${join(keys)})`,
     changed: (keys: string[]) => `Changed: ${join(keys)}`,
     noChanges: "No changes",
@@ -76,6 +68,7 @@ export const T = {
     save: "Save",
     emptySection: "(empty — click to edit)",
     ageAt: "Age",
+    ageInYear: (age: number) => `(age ${age})`,
     delete: "Delete",
     confirmDeleteEpisode: (label: string) =>
       `Delete episode "${label}"? Its cast and idea links are removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,
@@ -88,22 +81,6 @@ export const T = {
     add: "Add",
   },
 
-  review: {
-    title: (label: string) => `Review: ${label}`,
-    done: (id: number, decision: ConfirmStatus | null) => `id=${id}: ${decision ? confirmWord[decision] : "saved"}`,
-    noneLeft: (label: string) => `No pending ${label} left. `,
-    rejectedList: "Rejected list",
-    tableList: (label: string) => `${label} list`,
-    remaining: (n: number | string) => `${n} remaining`,
-    keyApprove: "approve",
-    keyReject: "reject",
-    keySkip: "skip",
-    reject: "Reject",
-    skip: "Skip",
-    saveOnly: "Save only",
-    approve: "Approve",
-  },
-
   endpoints: {
     title: "Call endpoint",
     area: {
@@ -114,34 +91,13 @@ export const T = {
       meme: "Memes",
       review: "Review",
       fact_check: "Fact check",
-      time_keeper: "Resident loop (claude)",
     } as Record<string, string>,
     writesDb: "writes db",
-    claudeOnly: "Endpoints that run the claude command can only be called from an API started inside Claude Code (CLAUDECODE=1)",
-    outsideClaude: "This API is running outside Claude Code, so endpoints that run claude (resident loop, post-approval AI) cannot be called",
-    queueMode: "This API queues endpoints that run claude (and background runs): a Claude Code on the web session runs them when you ask it to (skill run-ai-tasks). Their progress shows in the job list below",
     running: "Running…",
     run: "Run",
-    runInBackground: "Run in background",
     jsonHint: 'Write dicts and arrays as JSON (e.g. {"id": 3, "kind": "概念"} / [1, 2])',
     searchPlaceholder: "Search endpoints",
     selectOne: "Select an endpoint on the left",
-    jobs: "Background jobs",
-    noJobs: "None yet",
-    columns: { status: "Status", entrance: "Endpoint", args: "Args", result: "Result / error", time: "Time" },
-  },
-
-  generate: {
-    close: "Close",
-    noAddedId: (result: unknown) => `Cannot find id of the added row: ${JSON.stringify(result)}`,
-    failed: "Failed",
-    description: (mode: "create" | "edit") =>
-      `Generate with AI: the AI rebuilds every field around what you entered and ${mode === "create" ? "adds the row" : "writes the record"} (entered values may not survive as-is). Takes several minutes`,
-    unavailable: "Generate with AI is off on this API (start it inside Claude Code with CLAUDECODE=1, or queue for a Claude Code on the web session with NOVEL_CLAUDE_MODE=queue)",
-    queued:
-      "On this API, Generate with AI goes to a queue: a Claude Code on the web session runs it when you ask it to (skill run-ai-tasks). You can leave this page; the result also appears in the job list on the Endpoints page",
-    inProgress: (jobId: string, status: string) =>
-      `AI is generating… (job ${jobId}, ${status}). The job continues if you leave this page. The result is also visible in the job list on the Endpoints page`,
   },
 
   related: {
@@ -171,7 +127,9 @@ export const T = {
     died: "Died",
     age: "Age",
     location: "Location",
+    noText: "(no text)",
     noHistory: "(no history)",
+    undated: "Year undecided",
   },
 
   storyTree: {
@@ -213,6 +171,11 @@ export const T = {
     deleteFailed: (error: string) => `Could not delete: ${error}`,
   },
 
+  picker: {
+    count: (n: number) => `${n} selected`,
+    done: "Done",
+  },
+
   treeSelect: {
     collapse: "Collapse",
     expand: "Expand",
@@ -249,6 +212,36 @@ export const T = {
     altDiffUnknown: "elevation diff unknown",
     sameAltitude: "same altitude",
     altDiff: (up: boolean, m: number) => `${up ? "up" : "down"} ${m.toLocaleString()} m`,
+  },
+
+  timeline: {
+    title: "Timeline",
+    centeredOn: (at: string) => `Timeline around ${at}`,
+    center: "Center",
+    span: "Span",
+    spanOf: (days: number) =>
+      days >= 365 ? `${Math.round(days / 365)} year${days >= 730 ? "s" : ""}` : days >= 28 ? `${Math.round(days / 30.4)} month${days >= 56 ? "s" : ""}` : `${days} days`,
+    earlier: "◀ Earlier",
+    later: "Later ▶",
+    story: "Story",
+    location: "Location",
+    moved: (label: string, at: string) => `Moved "${label}" to ${at}`,
+    moveFailed: (error: string) => `Could not move: ${error}`,
+    gap: "No episodes (squeezed)",
+    skipped: (days: number) =>
+      days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
+    hint: "The whole timeline is laid out on one axis: scroll sideways with the scrollbar, the mouse wheel or the Earlier / Later buttons (wheel over the row names, or with Shift, scrolls up and down). Span sets how many days fit in the view. The axis is in days; episodes on the same day are stacked in time order. Vertical lines mark the days episodes start on, labelled with the year. Drag an episode sideways to change its date (time of day stays). Click an episode to view it (read-only, with its characters' ages and relations; open it in a new tab to edit), or empty space to add an episode to that row's story there (set its start time, then the new-episode page opens in a new tab). Stretches with no episodes are squeezed into hatched bands. Rows form a tree of stories under their parent story; every story gets a row even with no episodes yet (with a location filter, only stories with episodes there). ▸ / ▾ folds any row, chapters included; a folded row shrinks to one line and shows its episodes and its descendants' as small markers (hover for details).",
+    openInNewTab: "Open in new tab",
+    newEpisode: "New episode",
+    newEpisodeIn: (story: string) => `Story: ${story}`,
+    newEpisodeStart: "Start",
+  },
+
+  episodeSheet: {
+    characters: (n: number, at: string | null) => `Characters (${n})${at ? ` at ${at}` : ""}`,
+    relation: (partner: string, relation: string) => `→ ${partner}: ${relation}`,
+    noRelations: "(no relations)",
+    mentioned: (names: string) => `Mentioned only: ${names}`,
   },
 
   stamp: {

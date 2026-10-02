@@ -3,7 +3,6 @@ from typing import Annotated, Any
 from pydantic import Field, field_validator
 
 from data_access_logic.material import Draft, Form, References, Timestamp
-from db.schema import ConfirmStatus
 
 
 class EventForm(Draft):
@@ -37,7 +36,6 @@ class EventCreateForm(Form):
     time: Timestamp
     text: str = ""
     hidden: bool = False
-    confirmed: ConfirmStatus = ConfirmStatus.APPROVED
     parent_event_id: int | None = None
     location_id: int | None = None
     start: Timestamp | None = None
@@ -54,7 +52,6 @@ class EventUpdateForm(Form):
     time: Timestamp | None = None
     text: str | None = None
     hidden: bool | None = None
-    confirmed: ConfirmStatus | None = None
     parent_event_id: int | None = None
     location_id: int | None = None
     start: Timestamp | None = None

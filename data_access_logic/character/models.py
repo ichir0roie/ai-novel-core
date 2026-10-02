@@ -1,29 +1,23 @@
 from typing import Any
 
-from pydantic import field_validator, model_serializer
+from pydantic import model_serializer
 
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.material import Material
-from db.schema import ConfirmStatus, PersonalityLevel
+from db.schema import PersonalityLevel
 
 
 class CharacterBase(Material):
     name: str | None = None
     kind: str
+    # 人物の芯(説明・meme・行動原理・plot)。いつの話・出来事にも渡す
+    text: str | None = None
 
 
 class CharacterMaterial(CharacterBase):
     id: int
-    confirmed: ConfirmStatus
-
-    @field_validator("confirmed")
-    @classmethod
-    def _approved_only(cls, value: ConfirmStatus) -> ConfirmStatus:
-        if value != ConfirmStatus.APPROVED:
-            raise ValueError("ユーザが承認していない人物は話に出せない")
-        return value
 
 
 class ParticipantCharacter(CharacterBase):
@@ -71,7 +65,7 @@ class CharacterAt(Material):
 
     age: int | None = None
     parameters: CharacterParameterValues
-    # その時刻に掛かる説明・来歴(`histories_at`)。先の時刻の行は入らない
+    # その時刻までに起きた来歴(`histories_at`)。先の時刻の行と、年の決まっていない行は入らない
     histories: list[CharacterHistoryRow]
 
 
@@ -113,7 +107,8 @@ def _sheet(character: CharacterBase, at: CharacterAt) -> dict[str, Any]:
         "三人称": parameters.third_person,
         "口調": parameters.tone,
         "方言": parameters.dialect,
-        "人物像と来歴(古い順)": histories_for_prompt(at.histories),
+        "人物像": character.text,
+        "来歴(古い順)": histories_for_prompt(at.histories),
     }
 
 

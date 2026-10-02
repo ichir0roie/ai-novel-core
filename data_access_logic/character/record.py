@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
 from data_access_logic.material import Form, Material, Timestamp
-from db.schema import ConfirmStatus, PersonalityLevel
+from db.schema import PersonalityLevel
 
 
 class _ChildRow(Form):
@@ -42,7 +42,7 @@ class CharacterLocationRow(_ChildRow):
 
 
 class CharacterHistoryRow(_ChildRow):
-    # 年。同じ年のことは一行にまとめる
+    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
     start: int | None = None
     description: str
 
@@ -51,7 +51,6 @@ class CharacterHead(Material):
     id: int
     name: str | None = None
     kind: str
-    confirmed: ConfirmStatus
     main_character: bool
     event_seeded: bool
     meme_seeded: bool
@@ -64,7 +63,9 @@ class CharacterHead(Material):
 
 
 class CharacterRecord(CharacterHead):
-    # すべての行。話・出来事に渡すときは、その時刻に掛かる行だけに絞る(`histories_at`)
+    # 人物の芯(説明・meme・行動原理・plot)
+    text: str | None = None
+    # すべての来歴の行。話・出来事に渡すときは、その時刻までに起きた行だけに絞る(`histories_at`)
     histories: list[CharacterHistoryRow]
 
 

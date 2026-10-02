@@ -5,12 +5,23 @@ from __future__ import annotations
 GENERATION_CHARACTER_AGE_RANGE = (0, 40)
 # 話のプロットの役どころから生む人物(上役・老人など)は、時の流れの中で生む人物より年かさまで要る
 SCENE_CHARACTER_AGE_RANGE = (0, 90)
-# 命名時の重複回避に渡す「既にいる人物・対象」の上限。born_location とその祖先
+# 中身を決めるときに説明ごと渡す「既にいる人物・対象」の上限。born_location とその祖先
 # (国・大陸まで)全体の居住者を対象にするため、世界が育つほど際限なく
-# 増える。上限が無いとプロンプトが肥大化し続ける。
+# 増える。上限が無いとプロンプトが肥大化し続ける(名付けで避ける名は、名前だけなので上限を置かない)。
 NEARBY_CHARACTER_LIMIT = 20
+# data_access_logic/character/naming
+# AI に出させる名前の候補の数。この中からサイコロで選ぶ
+NAME_CANDIDATE_COUNT = 10
 
 NON_PERSON_KINDS = ("国", "組織", "商会", "氏族", "集団", "物")
+
+# data_access_logic/character/generate_characters
+# 場所の種別(location.kind)ごとに、その場所にじかにいる(配下の場所は数えない)人物・対象の上限。
+# ランダムに人物を足す(GenerateCharacters)とき、上限に達した場所には足さない。話の役どころから作る人物は限らない。
+# 世界が作者の手を離れて広がっても、一つの場所に名のある人物が溢れて扱いきれなくならないようにする
+RESIDENT_LIMITS = {"都市": 40, "町": 30, "国": 30, "村": 20}
+# RESIDENT_LIMITS に無い種別(森・洞窟・湖・大陸など)の上限
+DEFAULT_RESIDENT_LIMIT = 10
 
 # data_access_logic/event/progress
 # 移動先候補(_move_destinations)をどこまで拾うか。read_cast の既定
@@ -61,14 +72,12 @@ MEME_POSITIONS = {
 }
 
 # data_access_logic/episode
-# 本文を一話ぶん書かせるので、断片の JSON より長く待つ秒数。
-EPISODE_TIMEOUT = 900.0
 # プロット補完で、プロットを書き直させるのを待つ秒数。
 EPISODE_PLOT_TIMEOUT = 300.0
 # 書き直したプロットから、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
 EPISODE_CASTING_TIMEOUT = 300.0
-# 本文をまるごと渡す直前の話の本数。それより前の話は、作品の中のすべてを概要で渡す。
-EPISODE_FULL_TEXT_COUNT = 5
+# 文体の見本として本文を渡す、同じ作品の直前の話の本数。話の中身は、この話より前のすべての話の概要で渡す。
+EPISODE_STYLE_SAMPLE_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """話に名前だけ出る人物(`episode_character.mentioned`)を、プロット・本文から拾い直す。
 
-登場人物(`mentioned` でない行)は作者が決めるので触らない。拾うのは、承認済みの人物・対象のうち、
+登場人物(`mentioned` でない行)は作者が決めるので触らない。拾うのは、人物・対象のうち、
 登場人物でなく、名前がプロット・本文に語として出るもの。
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from db.schema import Character, ConfirmStatus, Episode, EpisodeCharacter
+from db.schema import Character, Episode, EpisodeCharacter
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def mentioned_characters(s: Session, episode: Episode, cast_ids: set[int]) -> li
     text = "\n".join([episode.plot_text, episode.main_text])
     candidates = s.scalars(
         select(Character)
-        .where(Character.confirmed == ConfirmStatus.APPROVED, Character.name.is_not(None))
+        .where(Character.name.is_not(None))
         .order_by(Character.id)
     ).all()
     return [

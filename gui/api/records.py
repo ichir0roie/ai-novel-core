@@ -22,7 +22,7 @@ from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
 from db.child_lists import child_model
-from db.schema import Base, Character, ConfirmStatusType, Episode, Event, Story
+from db.schema import Base, Character, Episode, Event, Story
 from gui.api.models import Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
 
@@ -119,8 +119,6 @@ def reference_labels(s: Session, spec: TableSpec, records: list[Material]) -> La
 def _filter_value(column: Column, value: str) -> Any:
     if value == "null":
         return None
-    if isinstance(column.type, ConfirmStatusType):
-        return value
     python_type = getattr(column.type, "python_type", str)
     if python_type is bool:
         return value.lower() in ("1", "true", "yes", "on")

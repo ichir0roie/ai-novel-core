@@ -7,11 +7,7 @@ export type ColumnMeta = components["schemas"]["ColumnMeta"];
 export type ChildListMeta = components["schemas"]["ChildListMeta"];
 export type RecordList = components["schemas"]["RecordList"];
 export type RecordResponse = components["schemas"]["RecordResponse"];
-export type ReviewSummary = components["schemas"]["ReviewSummary"];
-export type ReviewNext = components["schemas"]["ReviewNext"];
 export type Option = components["schemas"]["Option"];
-export type ConfirmStatus = components["schemas"]["ConfirmStatus"];
-export type ClaudeMode = components["schemas"]["TablesResponse"]["claude_mode"] & string;
 export type Labels = Record<string, Record<string, string>>;
 export type Rec = Record<string, unknown>;
 
@@ -64,17 +60,6 @@ export const getOptions = (table: string, q?: string) => {
   return api<components["schemas"]["OptionList"]>(`/api/tables/${table}/options?${params}`);
 };
 
-export const getReviewSummary = () => api<ReviewSummary>("/api/review");
-
-export const getReviewNext = (table: string, after = 0) =>
-  api<ReviewNext>(`/api/review/${table}/next?after=${after}`);
-
-export const decideReview = (table: string, id: number, decision: ConfirmStatus, changes: Rec) =>
-  api<RecordResponse>(`/api/review/${table}/${id}`, {
-    method: "POST",
-    body: JSON.stringify({ decision, changes }),
-  });
-
 /** 読んだときの値から変わった欄だけを返す(入口は「渡した欄だけ直す」)。 */
 export function diff(initial: Rec, current: Rec): Rec {
   const changes: Rec = {};
@@ -94,13 +79,12 @@ export function labelOf(labels: Labels | undefined, column: string, id: unknown)
 
 export type EntranceMeta = components["schemas"]["EntranceMeta"];
 export type EntranceList = components["schemas"]["EntranceList"];
-export type JobInfo = components["schemas"]["JobInfo"];
 export type RunResult = components["schemas"]["RunResult"];
 
 export const getEntrances = () => api<EntranceList>("/api/interface");
 
-export const runEntrance = (id: string, args: Rec, background = false) =>
-  api<RunResult | JobInfo>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args, background }) });
+export const runEntrance = (id: string, args: Rec) =>
+  api<RunResult>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args }) });
 
 /** アイデアを消す(下位のアイデアが残っていると失敗する)。`idea.delete_idea.DeleteIdea` を呼ぶ。 */
 export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.DeleteIdea", { idea_id: ideaId });
@@ -108,16 +92,6 @@ export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.Dele
 /** 話を消す(登場人物・踏まえたアイデアとの中間テーブルの行も消える)。`episode.delete_episode.DeleteEpisode` を呼ぶ。 */
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
-
-export const getJobs = () => api<components["schemas"]["JobList"]>("/api/jobs");
-
-export const getJob = (id: string) => api<JobInfo>(`/api/jobs/${id}`);
-
-export type GeneratorMeta = components["schemas"]["GeneratorMeta"];
-
-/** 「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。claude を叩くので裏の job(202)になる。 */
-export const generateRecord = (table: string, generator: string, draft: Rec, args: Rec) =>
-  api<JobInfo>(`/api/tables/${table}/generate/${generator}`, { method: "POST", body: JSON.stringify({ draft, args }) });
 
 export type MapsResponse = components["schemas"]["MapsResponse"];
 export type PlanetMap = components["schemas"]["PlanetMap"];
@@ -142,6 +116,15 @@ export type EpisodeRecord = components["schemas"]["EpisodeRecord"];
 
 export const getLastEpisode = (storyId: number) =>
   api<EpisodeRecord | null>(`/api/last_episode?${new URLSearchParams({ story_id: String(storyId) })}`);
+
+export type TimelineResponse = components["schemas"]["TimelineResponse"];
+
+export const getTimeline = (params: { story_id?: number | null; location_id?: number | null }) => {
+  const query = new URLSearchParams();
+  if (params.story_id != null) query.set("story_id", String(params.story_id));
+  if (params.location_id != null) query.set("location_id", String(params.location_id));
+  return api<TimelineResponse>(`/api/timeline?${query}`);
+};
 
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {

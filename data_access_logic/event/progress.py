@@ -30,7 +30,7 @@ from data_access_logic.event.summary import events_of
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.query import common_query, story_creation_query, world_creation_query
 from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Character, CharacterLocation, ConfirmStatus, Event, EventCharacter, Location
+from db.schema import Character, CharacterLocation, Event, EventCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -185,7 +185,6 @@ def save_progress(
     destinations: list[LocationMaterial],
     draft: EventRecordDraft,
 ) -> Event:
-    """起こした出来事は `confirmed=未確認` で足す。"""
     by_id = {character.id: character for character in characters}
     involved_ids = list(dict.fromkeys(character_id for character_id in draft.character_ids if character_id in by_id))
     if focus is not None and focus.id not in involved_ids:
@@ -213,7 +212,6 @@ def save_progress(
         location_id=location_id,
         start=time,
         end=end,
-        confirmed=ConfirmStatus.PENDING,
         event_characters=[EventCharacter(character_id=character_id) for character_id in involved_ids],
     )
     s.add(record)

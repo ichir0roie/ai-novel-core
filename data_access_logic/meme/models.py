@@ -7,8 +7,6 @@ from db.schema import MEME_CATEGORIES
 
 
 class PooledMeme(Material):
-    """引く元になる、承認済みのミーム。"""
-
     id: int
     category: str | None = None
     text: str

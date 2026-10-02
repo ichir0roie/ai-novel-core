@@ -6,17 +6,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import record_of
-from data_access_logic.episode import brief, caster, framer, plot_completer, reviser, writer
+from data_access_logic.episode import brief, framer, material, plot_completer
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, save_frame
 from data_access_logic.episode.models import (
-    EpisodeBrief, EpisodeCastMaterial, EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
-    EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeSummarySource,
+    EpisodeBrief, EpisodeCasting, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
+    EpisodeMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
-from data_access_logic.idea.models import IdeaMaterial, IdeaTerm
+from data_access_logic.idea.models import IdeaTerm
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.step import RowId, db_step
 from data_access_logic.summary_targets import SummaryTargets
@@ -49,23 +49,10 @@ class MaterialForm(BaseModel):
     keywords: list[IdeaTerm]
 
 
-class WrittenForm(BaseModel):
-    episode_id: int
-    draft: EpisodeDraft
-    # 本文が踏まえたアイデア
-    ideas: list[IdeaMaterial]
-
-
 class FrameForm(BaseModel):
     episode_id: int
     draft: EpisodeFrameDraft
     start: Stamp
-
-
-class RevisionForm(BaseModel):
-    episode_id: int
-    draft: EpisodeRevisionDraft
-    instruction: str
 
 
 class PlotForm(BaseModel):
@@ -112,18 +99,13 @@ def write_summary(s: Session, form: SummaryForm) -> EpisodeSummaryRecord:
 
 
 @db_step
-def writing_targets(s: Session, form: RowId) -> writer.WritingTargets:
-    return writer.writing_targets(s, form.id)
+def writing_targets(s: Session, form: RowId) -> material.WritingTargets:
+    return material.writing_targets(s, form.id)
 
 
 @db_step
 def episode_material(s: Session, form: MaterialForm) -> EpisodeMaterial:
-    return writer.episode_material(s, form.episode_id, form.keywords)
-
-
-@db_step
-def save_episode(s: Session, form: WrittenForm) -> None:
-    writer.save_episode(s, form.episode_id, form.draft, form.ideas)
+    return material.episode_material(s, form.episode_id, form.keywords)
 
 
 @db_step
@@ -142,18 +124,13 @@ def save_frame_draft(s: Session, form: FrameForm) -> None:
 
 
 @db_step
-def revision_targets(s: Session, form: RowId) -> SummaryTargets:
-    return reviser.revision_targets(s, form.id)
+def casting_targets(s: Session, form: RowId) -> SummaryTargets:
+    return brief.casting_targets(s, form.id)
 
 
 @db_step
-def revision_material(s: Session, form: RowId) -> EpisodeRevisionMaterial:
-    return reviser.revision_material(s, form.id)
-
-
-@db_step
-def save_revision(s: Session, form: RevisionForm) -> None:
-    reviser.save_revision(s, form.episode_id, form.draft, form.instruction)
+def episode_casting(s: Session, form: RowId) -> EpisodeCasting:
+    return brief.episode_casting(s, form.id)
 
 
 @db_step
@@ -174,11 +151,6 @@ def save_plot(s: Session, form: PlotForm) -> None:
 @db_step
 def known_locations(s: Session, form: LocationScope) -> list[LocationMaterial]:
     return plot_completer.known_locations(s, form.location_id)
-
-
-@db_step
-def cast_material(s: Session, form: RowId) -> EpisodeCastMaterial:
-    return caster.cast_material(s, form.id)
 
 
 @db_step

@@ -31,6 +31,14 @@ export function ageAt(born: unknown, at: unknown): number | null {
   return a.year - b.year - (hadBirthday ? 0 : 1);
 }
 
+/** `born` に生まれた者が `year` 年のうちに迎える歳。人物の来歴の始まりは年だけなので、誕生日の前後は見ない。生まれる前の年は null。 */
+export function ageInYear(born: unknown, year: unknown): number | null {
+  const b = parseStamp(born);
+  const y = parseStamp(year);
+  if (!b || !y || y.year < b.year) return null;
+  return y.year - b.year;
+}
+
 // --- ここから、カレンダー形式のポップアップ選択(StampInput)向けの計算 -----------------
 // `db/stamp.py` の Stamp と同じ規則(西暦の続きの暦。うるう年以外は月ごとの日数が固定)を
 // ここでも小さく再現する。ピッカーの表示にだけ使うので、Stamp.parse ほど厳密な検査はしない。
@@ -72,4 +80,52 @@ export function formatStamp(p: StampParts): string {
 export function clampDay(p: StampParts): StampParts {
   const max = daysInMonth(p.year, p.month);
   return p.day > max ? { ...p, day: max } : p;
+}
+
+// --- ここから、時刻を数直線に置く計算(タイムライン) ------------------------------------
+// `db/stamp.py` の `plus_days` と同じ通算日(1 年 1 月 1 日が 1)。時・分・秒は日の端数にする
+
+function daysBeforeYear(year: number): number {
+  const y = year - 1;
+  return 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400);
+}
+
+function ordinalOf(year: number, month: number, day: number): number {
+  return daysBeforeYear(year) + DAYS_BEFORE_MONTH[month - 1] + (month > 2 && isLeapYear(year) ? 1 : 0) + day;
+}
+
+function fromOrdinal(ordinal: number): { year: number; month: number; day: number } {
+  let year = Math.floor((ordinal * 400) / 146097) + 1;
+  while (daysBeforeYear(year) >= ordinal) year -= 1;
+  while (daysBeforeYear(year + 1) < ordinal) year += 1;
+  let day = ordinal - daysBeforeYear(year);
+  let month = 1;
+  while (day > daysInMonth(year, month)) {
+    day -= daysInMonth(year, month);
+    month += 1;
+  }
+  return { year, month, day };
+}
+
+/** 通算日に時刻の端数を足した数。差がそのまま日数になる。 */
+export function dayNumber(p: StampParts): number {
+  return ordinalOf(p.year, p.month, p.day) + (p.hour * 3600 + p.minute * 60 + p.second) / 86400;
+}
+
+/** {@link dayNumber} の逆。秒より細かい端数は丸める。 */
+export function fromDayNumber(n: number): StampParts {
+  let ordinal = Math.floor(n);
+  let seconds = Math.round((n - ordinal) * 86400);
+  if (seconds >= 86400) {
+    ordinal += 1;
+    seconds -= 86400;
+  }
+  return { ...fromOrdinal(ordinal), hour: Math.floor(seconds / 3600), minute: Math.floor(seconds / 60) % 60, second: seconds % 60 };
+}
+
+/** `days` 日後(負なら前)。時・分・秒はそのまま。空なら空のまま。 */
+export function shiftDays(value: unknown, days: number): string | null {
+  const p = parseStamp(value);
+  if (!p) return null;
+  return formatStamp({ ...p, ...fromOrdinal(ordinalOf(p.year, p.month, p.day) + days) });
 }

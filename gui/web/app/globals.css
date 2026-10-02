@@ -63,7 +63,6 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .nav a { color: var(--ink); }
 .nav a.active { color: var(--accent); font-weight: 600; }
 .nav .group { display: flex; flex-direction: column; gap: 0.8rem; }
-.nav .badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.7rem; margin-left: 0.3rem; }
 .nav .hint { color: var(--muted); font-size: 0.8rem; }
 
 /* Ctrl+K の検索付きメニュー */
@@ -158,8 +157,6 @@ button.ghost { background: transparent; }
 .segment button { border: 0; border-radius: 0; padding: 0.35rem 0.8rem; }
 .segment button + button { border-left: 1px solid var(--line); }
 .segment button.on { background: var(--accent); color: var(--accent-ink); }
-.segment button.on.reject { background: var(--danger); color: #fff; }
-.segment button.on.pending { background: var(--warn); color: #fff; }
 
 .chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 .chip { background: var(--chip); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; border: 1px solid transparent; cursor: pointer; }
@@ -199,16 +196,10 @@ button.ghost { background: transparent; }
 .record-text .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
 /* textarea は overflow: visible を無視して auto 扱いにするブラウザの仕様があり、その結果 flex アイテムとしての
    自動最小サイズが中身の高さではなく 0 相当になって、上の flex: none が無いと JS が付けた高さを無視して縮む */
-/* 「AI で作成」。押すと本文の右側で大半(9 割ほど)を使って開く。閉じているあいだは何も置かない(body が null) */
-.generate-right { flex: 9 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.generate-right > .panel.generate { flex: 1; min-height: 0; overflow: auto; margin: 0; }
 /* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使う。
-   推敲欄を開いていないとき左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
+   左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
    (保存ボタンを見るのに左の欄ごとスクロールしなくてよい)。最低でも見出し+数行は見える高さは残す */
 .record-side .field.section.side { flex: 1 1 28rem; min-height: 8rem; }
-/* ただし推敲欄を開いているときは、指示を書くのにキーテキストを見比べるので潰さない。
-   28rem を割り込みそうなら(足りなければ)左の欄ごとスクロールする側に戻す */
-.record-side:has(.revise-panel.open) .field.section.side { flex-shrink: 0; min-height: 28rem; }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
   flex: 1; height: auto; min-height: 0; resize: none; overflow: auto;
 }
@@ -220,36 +211,16 @@ button.ghost { background: transparent; }
   .record-text textarea.section, .record-text .markdown-preview { height: auto; min-height: 40rem; resize: vertical; }
   .record-side .field.section.side { flex: none; }
   .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 28rem; resize: vertical; }
-  .revise-panel.open { flex: none; min-height: 0; }
-  .revise-body textarea.section, .revise-body .markdown-preview { height: auto; min-height: 32rem; resize: vertical; }
-  .generate-right { flex: none; }
 }
 
-/* 「AI で推敲する」。開くボタンは save の隣(actionbar)に置き、押すと指示テキストを大きく書ける
-   専用パネルがここに開く(本文を見ながら指示を書きたいので、左の欄の大半(7 割ほど)を使う) */
-.revise-panel { display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; margin-top: 0.75rem; }
-/* flex-shrink を 0 にして、置き場所(record-side)が狭くても本文欄の下(20rem)より縮めない。
-   縮められる余地が無ければ record-side 自体がスクロールして受け止める(場面欄の 28rem と同じ考え方) */
-.revise-panel.open { flex: 7 0 auto; min-height: 18rem; }
-.revise-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-shrink: 0; }
-.revise-body { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.6rem; }
-.revise-body .field.section { flex: 1 0 auto; min-height: 20rem; }
-.revise-body textarea.section, .revise-body .markdown-preview { height: 100%; min-height: 20rem; resize: none; overflow: auto; }
-.revise-fields { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; flex-shrink: 0; }
-.revise-fields .field { min-width: 10rem; }
-
-/* 保存系のボタンと「AI で作成」パネルを、左の欄の一番下にまとめて隣り合わせに置く(フロートさせず、通常の流れの末尾) */
+/* 保存系のボタンを、左の欄の一番下に置く(フロートさせず、通常の流れの末尾) */
 .record-actions { margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
-/* 帯は中のボタンを折り返して縮める(縮めないと、左の欄より広いとき右へはみ出す)。「AI で作成」と並べて入らなければ、flex-wrap で次の行へ送られる */
+/* 帯は中のボタンを折り返して縮める(縮めないと、左の欄より広いとき右へはみ出す) */
 .record-actions > .actionbar { flex: 0 1 auto; min-width: 0; margin-top: 0; }
-.record-actions > .generate-body { flex: 1; min-width: 260px; }
-.record-actions > .generate-body:empty { display: none; }
 
 .actionbar { flex-shrink: 0; margin-top: 0.75rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 1.25rem; display: flex; gap: 0.6rem; align-items: center; }
 .actionbar .inner { width: 100%; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .actionbar .spacer { flex: 1; }
-/* 「AI で作成」「AI で推敲する」の開閉ボタン(押しているあいだだけ強調) */
-.actionbar button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .actionbar .meta { color: var(--muted); font-size: 0.85rem; }
 
 .childlist table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -330,16 +301,15 @@ button.ghost { background: transparent; }
 .stamp-time label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); flex: 1; }
 .stamp-preview { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); text-align: center; }
 
-.multi { border: 1px solid var(--line); border-radius: 6px; padding: 0.3rem 0.5rem; max-height: 12rem; overflow: auto; background: var(--panel); }
-.multi label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 
 .related ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
 .related.context-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
+.episode-characters-field { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
 /* 登場人物の名前。押すと人物のモーダル(CharacterSheetModal)を開く */
-.episode-characters-summary button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
-.episode-characters-summary button.character-open:hover { text-decoration: underline; }
+:is(.episode-characters-summary, .episode-sheet-character) button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
+:is(.episode-characters-summary, .episode-sheet-character) button.character-open:hover { text-decoration: underline; }
 
 /* 人物のモーダル(CharacterSheetModal)。人物詳細と同じ .record.split で、左に欄とパラメータ、右に本文と期間ごとの説明。
    モーダルの高さを決めて本体はスクロールさせず、左右(.record-side / .record-text)がそれぞれスクロールする */
@@ -358,12 +328,13 @@ button.ghost { background: transparent; }
 .sheet-level-cell.on { background: var(--accent); }
 .sheet-level-value { width: 1.2rem; text-align: center; font-size: 0.85rem; }
 /* 閲覧専用なので、本文・札のクリックで編集に入る見た目(カーソル・ホバー)を外す */
+.character-sheet div.markdown-preview.sheet-text { cursor: default; }
+.character-sheet div.markdown-preview.sheet-text:hover { border-color: var(--line); }
 .childlist.flow .flow-card.sheet-history { cursor: default; }
 .childlist.flow .flow-card.sheet-history:hover { background: none; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
 /* 選択欄の横に置く、選んだ行のページへのリンク(RecordLink) */
 .record-link { align-self: center; white-space: nowrap; font-size: 0.85rem; }
-.tree-select > .record-link { margin-left: 0.4rem; }
 .jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }
 .jump-title { font-size: 1.6rem; font-weight: 700; }
@@ -399,23 +370,6 @@ button.ghost { background: transparent; }
 @media (max-width: 800px) {
   .viz-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40%; }
 }
-
-/* 「AI で作成」。保存ボタンの並び(.record-actions)の中で、その隣に置く */
-.generate-body > .panel.generate { margin: 0; padding: 0.7rem 0.9rem; }
-.panel.generate .form { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem 1rem; }
-.panel.generate .multi { max-height: 16rem; }
-.generate-buttons { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; }
-.panel.generate .form .generate-buttons { grid-column: span 2; margin-top: 0; align-self: end; }
-.generate-stack { display: flex; flex-direction: column; gap: 0.5rem; }
-.generate-row { display: flex; gap: 0.6rem 1rem; align-items: flex-end; flex-wrap: wrap; }
-.generate-row .field { flex: 1 1 10rem; }
-.generate-row .generate-buttons { margin-top: 0; }
-/* 生成パネルは本文側(.record-text)に出るので、本文の高さの指定を外して注文の欄を行数ぶんの高さにする */
-.panel.generate .field.section.auto { flex: none; min-height: 0; }
-.panel.generate .field.section.auto textarea.section,
-.panel.generate .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
-/* 注文は一行ずつ書くので、空行を挟まない改行もプレビューで改行のまま出す(マークダウンの既定では一段落につながる) */
-.panel.generate .field.section.auto .markdown-preview :is(p, li) { white-space: pre-line; }
 
 /* 作品一覧(作品の親子の木)・人物一覧(場所の木に人物をぶら下げる)のツリー */
 .tree { list-style: none; margin: 0; padding: 0; }
@@ -485,16 +439,23 @@ button.ghost { background: transparent; }
 }
 .tree-root-drop:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* 場所・アイデアのプルダウンをツリーで選ばせる(ReferenceTreeSelect) */
-.tree-select { position: relative; display: inline-block; }
-.tree-select-toggle { min-width: 12rem; max-width: 100%; text-align: left; }
-.tree-select-popup {
-  position: absolute; z-index: 20; top: 100%; left: 0; margin-top: 0.2rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  padding: 0.5rem; width: 22rem; max-width: 90vw; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-}
-.tree-select-popup input[type="text"] { width: 100%; }
-.tree-select-scroll { max-height: 16rem; overflow-y: auto; margin-top: 0.4rem; }
+/* プルダウンの代わりの選択(Picker)。ボタンに今の値を出し、押すとモーダルに選択肢を大きく並べる */
+.picker { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; min-width: 0; }
+.picker-toggle { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 10rem; max-width: 100%; text-align: left; }
+.picker-toggle.empty { color: var(--muted); }
+.picker-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-caret { color: var(--muted); font-size: 0.8rem; }
+.picker-summary { color: var(--muted); font-size: 0.85rem; }
+.picker-filter { width: 100%; margin-bottom: 0.7rem; }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.4rem; }
+.picker-option { display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; overflow-wrap: anywhere; }
+.picker-option:hover { border-color: var(--accent); }
+.picker-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); font-weight: 600; }
+.picker-option.none { color: var(--muted); }
+.picker > .record-link { margin-left: 0.2rem; }
+/* 場所・アイデアはツリーで選ぶ(TreeReferenceSelect のモーダルの中) */
+.tree-select-tree .tree-select-row { padding: 0.15rem 0; }
+.tree-select-tree .tree-select-label { padding: 0.35rem 0.5rem; }
 .tree-select-row { display: flex; align-items: center; gap: 0.2rem; }
 .tree-select-label {
   background: none; border: none; text-align: left; padding: 0.15rem 0.3rem; cursor: pointer;
@@ -541,8 +502,6 @@ button.ghost { background: transparent; }
   .record { gap: 0.9rem; }
   .record-text textarea.section, .record-text .markdown-preview { min-height: 60dvh; }
   .actionbar { padding: 0.6rem 0.7rem; }
-  /* 生成パネルの注文欄は 1 列になるので、2 列ぶんを取ると見えない列が増えて横にはみ出す */
-  .panel.generate .form .generate-buttons { grid-column: 1 / -1; }
 
   .modal-backdrop { padding: 0.5rem; }
   .modal.wide:has(.character-sheet) { height: 95dvh; }
@@ -558,3 +517,79 @@ button.ghost { background: transparent; }
   .endpoints > :first-child { max-height: 40dvh; overflow: auto; }
   .viz-body { grid-template-rows: minmax(0, 1fr) 45%; gap: 0.6rem; }
 }
+
+/* タイムライン(/timeline)。左に段の名前、右に時刻の軸。話は作品ごとの段、出来事は一つの段に、重ならないよう下へ積む。
+   全期間の軸を一つの欄で縦横にスクロールし、段の名前は左に、目盛りの欄は上に貼り付ける */
+.timeline-center-input { display: inline-flex; align-items: center; gap: 0.4rem; }
+.timeline-center-input input[type="text"] { width: 12.5rem; }
+.timeline-filter { display: inline-flex; align-items: center; gap: 0.4rem; }
+.timeline { --timeline-label: 220px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.timeline-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-x: contain; }
+.timeline-body { position: relative; width: max-content; }
+.timeline-lines { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.timeline-row { display: flex; width: max-content; border-bottom: 1px solid var(--line); }
+.timeline-label {
+  position: sticky; left: 0; z-index: 4; width: var(--timeline-label); flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel);
+  border-right: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 段の木の開閉。子の無い段も同じ幅を空けて、名前の頭をそろえる */
+.timeline-toggle { display: inline-block; width: 1rem; padding: 0; border: 0; background: none; color: var(--muted); font-size: 0.75rem; text-align: left; cursor: pointer; }
+/* hidden だと段がスクロールの基準になり、札の名前の sticky が効かない */
+.timeline-track { position: relative; flex-shrink: 0; overflow: clip; cursor: cell; }
+.timeline-axis { position: sticky; top: 0; z-index: 5; background: var(--panel); }
+.timeline-axis .timeline-track { height: 28px; cursor: default; }
+.timeline-tick { position: absolute; top: 0; bottom: 0; padding: 4px 0 0 4px; border-left: 1px solid var(--line); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.timeline-tick.major { border-left-color: var(--muted); color: var(--ink); font-weight: 600; }
+.timeline-grid { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--line) 60%, transparent); pointer-events: none; }
+.timeline-grid.major { border-left-color: var(--line); }
+/* 話の無い区間を詰めた帯。目盛りの欄には詰めた長さを出す */
+.timeline-gap {
+  position: absolute; top: 0; bottom: 0; pointer-events: none; border-left: 1px dashed var(--line); border-right: 1px dashed var(--line);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--line) 70%, transparent) 0 2px, transparent 2px 7px);
+}
+.timeline-axis .timeline-gap {
+  pointer-events: auto; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: var(--muted); white-space: nowrap;
+}
+.timeline-center { position: absolute; top: 0; bottom: 0; z-index: 6; border-left: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); pointer-events: none; }
+.timeline-item {
+  position: absolute; height: 22px; padding: 0 6px; border: 1px solid; border-radius: 4px; font-size: 0.8rem; line-height: 20px;
+  cursor: grab; user-select: none; touch-action: none; white-space: nowrap; z-index: 1;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-color: var(--accent);
+}
+/* 一点の時刻は左端の太線がその時刻 */
+.timeline-item.point { border-left-width: 3px; }
+/* 閉じた段の札は、名前の無い印にする */
+.timeline-item.folded { padding: 0; }
+.timeline-item.folded.dragging .timeline-text { padding: 0 6px; }
+.timeline-item.dragging { cursor: grabbing; z-index: 3; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); }
+.timeline-item.saving { opacity: 0.6; }
+.timeline-item:hover { z-index: 2; }
+.timeline-bar {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* 長い帯の頭が左へ隠れても、名前は見えている所の左端に残す */
+.timeline-text { position: sticky; left: calc(var(--timeline-label) + 6px); display: inline-block; max-width: 100%; vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
+.timeline-item.dragging .timeline-text { overflow: visible; }
+.timeline-target { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
+/* タイムラインから開く編集・追加のモーダル。人物のモーダルと同じく、左右の欄がそれぞれスクロールする */
+.timeline-hint { margin-top: 0.4rem; }
+/* スマホは表を広く見せる。説明は出さず、操作は横へスクロールする一行にまとめ、表は画面の端まで使う */
+@media (max-width: 640px) {
+  main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
+  .timeline-page > .toolbar { flex-wrap: nowrap; overflow-x: auto; margin: 0; padding: 6px 8px; gap: 0.4rem; }
+  .timeline-page > .toolbar > * { flex-shrink: 0; }
+  .timeline-page > .toolbar h1 { display: none; }
+  .timeline-page > .status { margin: 0 8px 6px; }
+  .timeline-hint { display: none; }
+  .timeline { --timeline-label: 96px; border-width: 1px 0 0; border-radius: 0; }
+}
+/* タイムラインで押した話を見るモーダル(EpisodeSheetModal)。人物の閲覧モーダルの並び(character-sheet)に、登場人物ごとの歳と関係を足す */
+.episode-sheet h3 { margin-top: 1rem; }
+.episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
+.episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
+.episode-sheet-relations { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.episode-sheet-relation { border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.45rem; font-size: 0.85rem; color: var(--muted); }
+.episode-sheet-relation.here { color: inherit; border-color: var(--accent); }
+.episode-sheet-mentioned { margin-top: 0.6rem; }
+.sheet-plain { white-space: pre-wrap; }

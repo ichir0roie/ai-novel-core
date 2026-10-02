@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -8,6 +10,8 @@ from data_access_logic.episode.models import (
     RecentEpisode,
 )
 from db.schema import Character, Episode, EpisodeCharacter, summary_source_hash
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -65,6 +69,7 @@ def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> Episode | Non
         return None
     draft = summary_draft(ai, episode)
     if draft is None:
+        logger.warning(f"話 id={episode.id} の概要を作れなかった(AI が答えなかった)")
         return None
     write_summary(s, episode.id, summary_source_hash(text), draft.summary_text)
     s.commit()
@@ -98,36 +103,30 @@ def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
     return s.scalars(_story_past_select(episode).limit(1)).first()
 
 
-def _recent_rows(s: Session, episode: Episode, full_text_count: int) -> list[Episode]:
-    return list(s.scalars(_story_past_select(episode).limit(full_text_count)).all())
-
-
-# 同じ作品の直前の話(新しい順に `constants.EPISODE_FULL_TEXT_COUNT` 話)は校正済みとみなし、文体の見本を兼ねて本文ごと渡す。古い順
+# 同じ作品の直前の話(新しい順に `constants.EPISODE_STYLE_SAMPLE_COUNT` 話)は、文体の見本としてだけ本文を渡す。古い順
 def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
-    rows = _recent_rows(s, episode, constants.EPISODE_FULL_TEXT_COUNT)
+    rows = s.scalars(_story_past_select(episode).limit(constants.EPISODE_STYLE_SAMPLE_COUNT)).all()
     return [RecentEpisode.model_validate(row) for row in reversed(rows)]
 
 
-def _summarized_select(s: Session, episode: Episode, characters: list[Character], full_text_count: int) -> Select[Episode]:
-    """同じ作品のすべての話と、登場人物が関わるすべての話(重ならない)。本文で渡す直前の `full_text_count` 話は除く。"""
-    recent_ids = [row.id for row in _recent_rows(s, episode, full_text_count)]
+def _summarized_select(episode: Episode, characters: list[Character]) -> Select[Episode]:
+    """同じ作品のすべての話と、登場人物が関わるすべての話(重ならない)。
+    直前の話の本文は文体の見本にしか使わせないので、その中身もここの概要で渡す。"""
     return _past(
         select(Episode).where(
-            or_(Episode.story_id == episode.story_id, Episode.id.in_(_related_ids_select(characters))),
-            Episode.id.not_in(recent_ids)),
+            or_(Episode.story_id == episode.story_id, Episode.id.in_(_related_ids_select(characters)))),
         episode)
 
 
-def past_episode_ids(s: Session, episode: Episode, characters: list[Character], full_text_count: int) -> list[int]:
+def past_episode_ids(s: Session, episode: Episode, characters: list[Character]) -> list[int]:
     """`past_episodes` が概要で渡す話(概要を揃えておく話)。"""
-    return list(s.scalars(
-        _summarized_select(s, episode, characters, full_text_count).with_only_columns(Episode.id)).all())
+    return list(s.scalars(_summarized_select(episode, characters).with_only_columns(Episode.id)).all())
 
 
 # 古い順。概要はそのときのまま読む(作り直さない)
-def past_episodes(s: Session, episode: Episode, characters: list[Character], full_text_count: int) -> list[PastEpisode]:
+def past_episodes(s: Session, episode: Episode, characters: list[Character]) -> list[PastEpisode]:
     rows = s.scalars(
-        _summarized_select(s, episode, characters, full_text_count).options(joinedload(Episode.story))
+        _summarized_select(episode, characters).options(joinedload(Episode.story))
         .execution_options(populate_existing=True)).all()
     return [PastEpisode.model_validate(row) for row in reversed(rows) if row.summary_text is not None]
 

@@ -4,7 +4,7 @@ from pydantic import Field, field_validator, model_validator
 
 from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
 from data_access_logic.material import Draft, Form, References, Timestamp
-from db.schema import CHARACTER_KIND_PERSON, ConfirmStatus, PersonalityLevel
+from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
 
 
 class CharacterParameterForm(Draft):
@@ -37,6 +37,8 @@ class CharacterForm(Draft):
 
     id: int | None = None
     name: str | None = None
+    # 人物像・役どころの下書き。核として AI に渡す
+    text: str | None = None
     kind: str | None = None
     main_character: bool | None = None
     start: Timestamp | None = None
@@ -44,7 +46,7 @@ class CharacterForm(Draft):
     location_id: int | None = None
     # GUI は期間ごとの行の配列で渡す。生まれるときの値なので先頭の行だけを使う
     parameters: list[CharacterParameterForm] = []
-    # 人物像・役どころの下書き。行の説明を核として AI に渡す(期間は見ない)
+    # 来歴の下書き。行の説明も核として AI に渡す(年は見ない)
     histories: list[CharacterHistoryRow] = []
 
     @field_validator("parameters", mode="before")
@@ -55,8 +57,8 @@ class CharacterForm(Draft):
 
 class CharacterCreateForm(Form):
     name: str | None = None
+    text: str | None = None
     kind: str = CHARACTER_KIND_PERSON
-    confirmed: ConfirmStatus = ConfirmStatus.APPROVED
     main_character: bool = False
     event_seeded: bool = False
     meme_seeded: bool = False
@@ -72,8 +74,8 @@ class CharacterCreateForm(Form):
 class CharacterUpdateForm(Form):
     id: int
     name: str | None = None
+    text: str | None = None
     kind: str | None = None
-    confirmed: ConfirmStatus | None = None
     main_character: bool | None = None
     event_seeded: bool | None = None
     meme_seeded: bool | None = None

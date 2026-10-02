@@ -15,7 +15,6 @@ function CharacterRow({ character }: { character: TreeCharacter }) {
       <Link href={`/tables/character/${character.id}`}>{character.name}</Link>
       <span className="tree-meta">
         {character.kind && character.kind !== "人物" && <span className="chip">{character.kind}</span>}
-        {character.confirmed && character.confirmed !== "承認" && <span className="chip">{character.confirmed}</span>}
       </span>
     </li>
   );

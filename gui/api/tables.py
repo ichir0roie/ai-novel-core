@@ -68,8 +68,6 @@ class TableSpec:
     record_model: type[Material]
     # 一覧の検索(部分一致)で見る列
     search_columns: tuple[str, ...]
-    # `confirmed` を持ち、レビュー画面の対象になるか
-    reviewable: bool = False
     # 一覧の既定の並び(列名と向き)
     sort: str = "id"
     order: str = "desc"
@@ -84,18 +82,18 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
               EpisodeRecord, ("title", "plot_text"), sort="start", order="desc"),
     TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
-              CharacterUpdateForm, CharacterRecord, ("name", "histories.description"), reviewable=True),
+              CharacterUpdateForm, CharacterRecord, ("name", "text", "histories.description")),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,
               UpdateCharacterRelation, CharacterRelationCreateForm, CharacterRelationUpdateForm,
               CharacterRelationRecord, ("relation", "text")),
     TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, EventRecord,
-              ("name", "text"), reviewable=True),
+              ("name", "text")),
     TableSpec("location", "場所", Location, CommitLocation, UpdateLocation, LocationCreateForm, LocationUpdateForm,
               LocationRecord, ("name", "text"), tree_parent_column="parent_id"),
     TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, IdeaCreateForm, IdeaUpdateForm, IdeaRecord,
-              ("name", "text"), reviewable=True, tree_parent_column="parent_idea_id"),
+              ("name", "text"), tree_parent_column="parent_idea_id"),
     TableSpec("meme", "ミーム", Meme, CommitMeme, UpdateMeme, MemeCreateForm, MemeUpdateForm, MemeRecord,
-              ("text",), reviewable=True),
+              ("text",)),
     TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, OracleCreateForm, OracleUpdateForm,
               OracleRecord, ("title", "text")),
     TableSpec("style_preference", "文体の好み", StylePreference, CommitStylePreference, UpdateStylePreference,

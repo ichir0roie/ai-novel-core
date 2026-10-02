@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.query import common_query
-from db.schema import ConfirmStatus, Idea
+from db.schema import Idea
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def find_or_create_classification(s: Session, kind: str, location_id: int | None
     if existing is not None:
         return existing
     classification = Idea(
-        name=kind, kind=kind, confirmed=ConfirmStatus.APPROVED, parent_idea_id=anchor.id,
+        name=kind, kind=kind, parent_idea_id=anchor.id,
         location_id=anchor.location_id, text=f'{anchor.name}における「{kind}」のアイデアをまとめる分類。')
     s.add(classification)
     s.flush()

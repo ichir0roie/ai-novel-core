@@ -14,7 +14,7 @@ import { T } from "@/lib/text";
 
 const PAGE = 50;
 // 列名の query として扱わない(絞り込みのチップに出さない)もの
-const RESERVED = new Set(["q", "limit", "offset", "sort", "order", "confirmed"]);
+const RESERVED = new Set(["q", "limit", "offset", "sort", "order"]);
 
 export default function TablePage() {
   const openPage = useOpenPage();
@@ -71,7 +71,6 @@ export default function TablePage() {
 
   if (!meta || !params) return <div className="status info">{T.loading}</div>;
   const columns = listColumns(meta);
-  const confirmColumn = meta.columns.find((c) => c.type === "confirm");
   const offset = Number(params.get("offset") ?? 0);
   const total = data?.total ?? 0;
   const sort = params.get("sort") ?? meta.sort;
@@ -157,15 +156,6 @@ export default function TablePage() {
           <input type="search" placeholder={T.list.searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
           <button type="submit">{T.list.search}</button>
         </form>
-        {confirmColumn && (
-          <span className="chips">
-            {["", ...(confirmColumn.choices ?? [])].map((choice) => (
-              <button key={choice} type="button" className={`chip ${(search.get("confirmed") ?? "") === choice ? "on" : ""}`} onClick={() => setParam("confirmed", choice)}>
-                {choice || T.list.all}
-              </button>
-            ))}
-          </span>
-        )}
         {filters.length > 0 && (
           <span className="chips">
             {filters.map(([key, value]) => (
