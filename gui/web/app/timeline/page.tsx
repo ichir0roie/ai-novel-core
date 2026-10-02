@@ -361,24 +361,38 @@ export default function TimelinePage() {
     if (center === null) return;
     if (at !== aligned.current.at) {
       aligned.current = { at, scale: null };
-      setAnchor(center);
+      // 中心を含む軸に組み直してから合わせる。今の軸の外ならスクロールが端で止まってしまう
+      if (anchor !== center) {
+        setAnchor(center);
+        return;
+      }
     }
     const element = scrollRef.current;
     if (!element || !scale || aligned.current.scale === scale) return;
     aligned.current.scale = scale;
     element.scrollLeft = scale.toX(center) - box.viewport / 2;
-  }, [at, center, scale, box.viewport]);
+  }, [at, center, anchor, scale, box.viewport]);
+
+  // スクロールが止まったときに読む今の値。待つあいだに軸が組み直されることがあるので、スクロールした時の値は使わない
+  const latest = useRef({ scale, viewport: box.viewport, at, center, navigate });
+  useLayoutEffect(() => {
+    latest.current = { scale, viewport: box.viewport, at, center, navigate };
+  });
 
   const onScroll = () => {
     setAddMenu(null);
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(() => {
       const element = scrollRef.current;
-      if (!element || !scale) return;
-      const value = formatStamp(fromDayNumber(scale.fromX(element.scrollLeft + box.viewport / 2)));
-      if (value === at) return;
+      const now = latest.current;
+      if (!element || !now.scale) return;
+      const middle = element.scrollLeft + now.viewport / 2;
+      // 今の中心がもう真ん中にあれば書かない。詰めた帯の上は 1px で何日も進むので、書き直すと入れた時刻からずれる
+      if (now.center !== null && Math.abs(now.scale.toX(now.center) - middle) < 1) return;
+      const value = formatStamp(fromDayNumber(now.scale.fromX(middle)));
+      if (value === now.at) return;
       aligned.current.at = value;
-      navigate({ at: value });
+      now.navigate({ at: value });
     }, SCROLL_SETTLE_MS);
   };
 
