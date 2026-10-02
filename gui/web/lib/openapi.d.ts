@@ -384,7 +384,7 @@ export interface paths {
         };
         /**
          * Get Timeline
-         * @description 全期間の話と出来事。画面(`/timeline`)が時刻の軸に並べる
+         * @description 全期間の話。画面(`/timeline`)が時刻の軸に並べる
          */
         get: operations["get_timeline_api_timeline_get"];
         put?: never;
@@ -969,8 +969,8 @@ export interface components {
              */
             claude_mode: "direct" | "queue" | "off";
         };
-        /** TimelineBlock */
-        TimelineBlock: {
+        /** TimelineResponse */
+        TimelineResponse: {
             /** Items */
             items: {
                 [key: string]: unknown;
@@ -981,11 +981,6 @@ export interface components {
                     [key: string]: string;
                 };
             };
-        };
-        /** TimelineResponse */
-        TimelineResponse: {
-            episode: components["schemas"]["TimelineBlock"];
-            event: components["schemas"]["TimelineBlock"];
         };
         /** ValidationError */
         ValidationError: {
