@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import EpisodeSheetModal from "@/components/EpisodeSheetModal";
 import NewEpisodeModal from "@/components/NewEpisodeModal";
+import { ChoicePicker } from "@/components/Picker";
 import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
@@ -618,22 +619,24 @@ export default function TimelinePage() {
           />
         </form>
         <button type="button" onClick={() => shift(1)} disabled={center === null}>{T.timeline.later}</button>
-        <label className="hint">
-          {T.timeline.span}{" "}
-          <select value={span} onChange={(e) => navigate({ span: Number(e.target.value) })}>
-            {SPANS.map((days) => (
-              <option key={days} value={days}>{T.timeline.spanOf(days)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="hint timeline-filter">
+        <div className="hint timeline-filter">
+          {T.timeline.span}
+          <ChoicePicker
+            title={T.timeline.span}
+            choices={SPANS.map((days) => ({ value: days, label: T.timeline.spanOf(days) }))}
+            value={span}
+            onChange={(days) => navigate({ span: days })}
+            placeholder={T.select}
+          />
+        </div>
+        <div className="hint timeline-filter">
           {T.timeline.story}
-          <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => navigate({ story_id: value })} />
-        </label>
-        <label className="hint timeline-filter">
+          <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => navigate({ story_id: value })} title={T.timeline.story} />
+        </div>
+        <div className="hint timeline-filter">
           {T.timeline.location}
-          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => navigate({ location_id: value })} />
-        </label>
+          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => navigate({ location_id: value })} title={T.timeline.location} />
+        </div>
       </div>
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}

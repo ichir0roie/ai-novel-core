@@ -218,6 +218,11 @@ export const T = {
     deleteFailed: (error: string) => `Could not delete: ${error}`,
   },
 
+  picker: {
+    count: (n: number) => `${n} selected`,
+    done: "Done",
+  },
+
   treeSelect: {
     collapse: "Collapse",
     expand: "Expand",
