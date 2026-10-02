@@ -79,7 +79,7 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 | --- | --- |
 | Lambda `novel-migrate` | API と同じイメージを、コマンドだけ `db/migration_app.py` に差し替えて動かす。Lambda Web Adapter が `aws lambda invoke` を `POST /events` に流し、`alembic upgrade head` を流して `{"before", "after", "head"}` を返す。呼び出しの中身は見ないので、イメージに入っている版まで当てる以外のことはできない。同時に一つしか動かない(予約の同時実行 1)。タイムアウト 15 分 |
 | db のロール `novel_migrator` | 表の持ち主。IAM データベース認証で繋ぐ(パスワードを持たない)。`novel_migrator` が作った表・連番には、既定の権限で `novel_app` の行の読み書きが付く(`infra/sql/novel_migrator.sql`) |
-| CI(`deploy-api.yml` の `migrate db`) | `novel-migrate` を新しいイメージに差し替えて呼び、`after` が `head` と同じでなければ止まる(API は差し替えない)。ログは CloudWatch Logs の `novel-migrate` のロググループ |
+| CI(`deploy-api.yml` の `migrate db`) | `novel-migrate` を新しいイメージに差し替えて呼び、`after` が `head` と同じでなければ止まる(API は差し替えない)。返事は 16 分まで待つ(TCP の keepalive で無通信の接続が切られないようにしている)。ログは CloudWatch Logs の `novel-migrate` のロググループ |
 
 - GitHub Actions には db への道も、マスターの秘密も渡さない。CI ができるのは、`main` のイメージを `novel-migrate` に入れて呼ぶことだけ
 - マイグレーションの中身は、PR のレビューで見てからマージする

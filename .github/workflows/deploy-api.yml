@@ -31,6 +31,7 @@ jobs:
   deploy:
     if: vars.LAMBDA_FUNCTION_NAME != ''
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       IMAGE_TAG: ${{ github.sha }}
     steps:
@@ -62,16 +63,21 @@ jobs:
 
       # db を先に、API を後に変える(列を足す変更で、新しい API がまだ無い列を読まないように)。
       # マイグレーションの関数(novel-migrate)を同じイメージに差し替えて呼び、イメージに入っている版まで流す。
-      # 関数の名前の変数が無ければ(関数を作る前・フォーク)飛ばす
+      # 関数の名前の変数が無ければ(関数を作る前・フォーク)飛ばす。
+      # 呼び出しは返事まで何も流れないので、長いマイグレーションでは途中の経路が無通信の接続を黙って切り、
+      # CLI が待ち続ける(2026-10-02 に 9 分のマイグレーションで 6 時間待った)。keepalive を短くして接続を保ち、
+      # それでも切れたときは Lambda のタイムアウト(15 分)を過ぎたところで諦める
       - name: migrate db
         if: vars.MIGRATION_FUNCTION_NAME != ''
         env:
           FUNCTION: ${{ vars.MIGRATION_FUNCTION_NAME }}
         run: |
+          sudo sysctl -q -w net.ipv4.tcp_keepalive_time=60 net.ipv4.tcp_keepalive_intvl=30
+          aws configure set tcp_keepalive true
           aws lambda update-function-code --function-name "$FUNCTION" \
             --image-uri "$IMAGE" --output text --query 'LastUpdateStatus'
           aws lambda wait function-updated-v2 --function-name "$FUNCTION"
-          aws lambda invoke --function-name "$FUNCTION" --cli-read-timeout 0 \
+          aws lambda invoke --function-name "$FUNCTION" --cli-read-timeout 960 \
             --cli-binary-format raw-in-base64-out --payload '{}' result.json > invoke.json
           cat result.json; echo
           if jq -e '.FunctionError' invoke.json > /dev/null; then exit 1; fi
