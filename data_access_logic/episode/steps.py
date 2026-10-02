@@ -12,7 +12,7 @@ from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, save_frame
 from data_access_logic.episode.models import (
-    EpisodeBrief, EpisodeCastMaterial, EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
+    EpisodeBrief, EpisodeCasting, EpisodeCastMaterial, EpisodeDraft, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft, EpisodeMaterial,
     EpisodeRevisionDraft, EpisodeRevisionMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
@@ -154,6 +154,16 @@ def revision_material(s: Session, form: RowId) -> EpisodeRevisionMaterial:
 @db_step
 def save_revision(s: Session, form: RevisionForm) -> None:
     reviser.save_revision(s, form.episode_id, form.draft, form.instruction)
+
+
+@db_step
+def casting_targets(s: Session, form: RowId) -> SummaryTargets:
+    return brief.casting_targets(s, form.id)
+
+
+@db_step
+def episode_casting(s: Session, form: RowId) -> EpisodeCasting:
+    return brief.episode_casting(s, form.id)
 
 
 @db_step

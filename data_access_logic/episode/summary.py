@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -8,6 +10,8 @@ from data_access_logic.episode.models import (
     RecentEpisode,
 )
 from db.schema import Character, Episode, EpisodeCharacter, summary_source_hash
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -65,6 +69,7 @@ def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> Episode | Non
         return None
     draft = summary_draft(ai, episode)
     if draft is None:
+        logger.warning(f"話 id={episode.id} の概要を作れなかった(AI が答えなかった)")
         return None
     write_summary(s, episode.id, summary_source_hash(text), draft.summary_text)
     s.commit()

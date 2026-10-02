@@ -1,8 +1,8 @@
 # web のセッションでの回し方(`CLAUDE_CODE_REMOTE=true`)
 
 db には繋がない。読むのは API の `curl`、入口は web の流れ(`web_session.flows.run`)で呼ぶ。claude を叩く入口
-(`ReadEpisodeBrief` の要約の作り直し・`CommitEpisode` の概要・ミーム)は AI をこのセッションで回し、db の読み書きだけを API に頼む。
-db だけの入口(`ReadEpisodeCasting`・`ReadEpisodeTexts`・`RefreshMentions`・`CastEpisode`・`ResolveTerms`・`CommitCharacter`・`CommitLocation`・`LinkIdeas`)は同じ `run` でそのまま API に流れる。決まりは `.claude/docs/web-db.md`。
+(`ReadEpisodeCasting` / `ReadEpisodeBrief` の要約の作り直し・`CommitEpisode` の概要・ミーム)は AI をこのセッションで回し、db の読み書きだけを API に頼む。
+db だけの入口(`ReadEpisodeTexts`・`RefreshMentions`・`CastEpisode`・`ResolveTerms`・`CommitCharacter`・`CommitLocation`・`LinkIdeas`)は同じ `run` でそのまま API に流れる。決まりは `.claude/docs/web-db.md`。
 
 `curl` では合言葉を環境変数のまま渡し、値を出さない。下の `$api` / `$h` は毎回のコマンドの頭で置く。
 
