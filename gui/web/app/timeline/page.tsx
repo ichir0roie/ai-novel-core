@@ -28,9 +28,7 @@ const MARKER_PX = 8;
 const SCROLL_SETTLE_MS = 200;
 // ドラッグとクリックを分けるしきい値(px)
 const DRAG_THRESHOLD = 4;
-const ADD_MENU_WIDTH = 190;
-const ADD_MENU_HEIGHT = 120;
-// 話・出来事の無い区間を詰めた帯の幅(px)。これより広く空く区間だけ詰める
+// 話の無い区間を詰めた帯の幅(px)。これより広く空く区間だけ詰める
 const GAP_PX = 40;
 const MIN_GAP_PX = 2 * GAP_PX;
 // 札の前後に空けておく余白(px)。札のすぐ脇から帯にならないようにする
@@ -39,15 +37,13 @@ const OCCUPY_MARGIN_PX = 24;
 const TICK_LABEL_PX = 48;
 const FULL_STAMP = /^\d+\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/;
 
-type Kind = "episode" | "event";
 // 軸は日の単位。start・end は日の境目に丸めた通算日で、at は丸める前の時刻(同じ日の中の並び順に使う)
-type Item = { kind: Kind; key: string; id: number; label: string; record: Rec; labels: Labels; at: number; start: number; end: number | null };
+type Item = { key: string; id: number; label: string; record: Rec; at: number; start: number; end: number | null };
 type Placed = Item & { x: number; width: number; barWidth: number; lane: number };
-// 段の木。段は作品(その話を持つ)か、子を持つ出来事(その子の出来事を持つ)か、親の無い出来事
-type Group = { key: string; label: string; storyId: number | null; parentEventId: number | null; items: Item[]; children: Group[] };
+// 段の木。段は作品で、その話を持つ
+type Group = { key: string; label: string; storyId: number | null; items: Item[]; children: Group[] };
 // open は段の札(と子の段)を出しているか。閉じた段は子孫の札もまとめて、名前の無い印で一行に置く。foldable が false の段は開閉しない
-type Row = { key: string; label: string; storyId: number | null; parentEventId: number | null; items: Placed[]; lanes: number;
-  depth: number; foldable: boolean; open: boolean };
+type Row = { key: string; label: string; storyId: number | null; items: Placed[]; lanes: number; depth: number; foldable: boolean; open: boolean };
 type StoryInfo = { name: string; parent: number | null };
 type Tick = { at: number; label: string; major: boolean };
 type Gap = { from: number; to: number; x: number };
@@ -55,8 +51,7 @@ type Gap = { from: number; to: number; x: number };
 type Scale = { since: number; until: number; width: number; pxPerDay: number; gaps: Gap[]; toX: (day: number) => number; fromX: (x: number) => number };
 
 type Drag = { item: Item; startX: number; dx: number };
-type AddMenu = { x: number; y: number; at: string; storyId: number | null; parentEventId: number | null };
-type ModalState = { table: Kind; id?: number; initial?: Rec };
+type ModalState = { id?: number; initial?: Rec };
 
 function dayOf(value: unknown): number | null {
   const parts = parseStamp(value);
@@ -123,7 +118,7 @@ function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[]
 }
 
 /**
- * 時刻と横の位置の対応。縮尺は `pxPerDay` に決めておき、lo〜hi の中で話・出来事の無い広い区間だけを幅 {@link GAP_PX} の帯に詰める。
+ * 時刻と横の位置の対応。縮尺は `pxPerDay` に決めておき、lo〜hi の中で話の無い広い区間だけを幅 {@link GAP_PX} の帯に詰める。
  * lo〜hi の外(前後の余白)は詰めない。詰めて画面の幅より短くなったら、後ろへ延ばして画面を埋める。
  */
 function compress(since: number, until: number, lo: number, hi: number, pxPerDay: number, viewport: number, items: Item[]): Scale {
@@ -188,30 +183,19 @@ function daySpan(start: number, end: number | null): { at: number; start: number
 
 function itemsOf(data: TimelineResponse): Item[] {
   const items: Item[] = [];
-  for (const record of data.episode.items) {
+  for (const record of data.items) {
     const start = dayOf(record.start);
     if (start === null) continue;
-    items.push({ kind: "episode", key: `episode-${record.id}`, id: record.id as number, label: String(record.label || `id=${record.id}`),
-      record, labels: data.episode.labels ?? {}, ...daySpan(start, dayOf(record.end)) });
-  }
-  for (const record of data.event.items) {
-    const time = dayOf(record.time);
-    if (time === null) continue;
-    // 期間(start〜end)を持つ出来事は帯にする
-    const start = dayOf(record.start);
-    const end = dayOf(record.end);
-    const span = start !== null && end !== null && end >= start;
-    items.push({ kind: "event", key: `event-${record.id}`, id: record.id as number, label: String(record.label || `id=${record.id}`),
-      record, labels: data.event.labels ?? {}, ...daySpan(span ? start : time, span ? end : null) });
+    items.push({ key: `episode-${record.id}`, id: record.id as number, label: String(record.label || `id=${record.id}`),
+      record, ...daySpan(start, dayOf(record.end)) });
   }
   return items;
 }
 
-/** 日付をずらしたときに直す欄。話は開始・終了、出来事は時刻・開始・終了を同じ日数だけ動かす。 */
+/** 日付をずらしたときに直す欄。開始・終了を同じ日数だけ動かす。 */
 function shifted(item: Item, days: number): Rec {
-  const keys = item.kind === "episode" ? ["start", "end"] : ["time", "start", "end"];
   const changes: Rec = {};
-  for (const key of keys) if (item.record[key] != null) changes[key] = shiftDays(item.record[key], days);
+  for (const key of ["start", "end"]) if (item.record[key] != null) changes[key] = shiftDays(item.record[key], days);
   return changes;
 }
 
@@ -238,7 +222,7 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
   }
   const node = (id: number): Group => {
     const name = stories.get(id)?.name ?? labels.story_id?.[id];
-    return { key: `story-${id}`, label: name ? `${name} (${id})` : String(id), storyId: id, parentEventId: null,
+    return { key: `story-${id}`, label: name ? `${name} (${id})` : String(id), storyId: id,
       items: byStory.get(id) ?? [], children: (childrenOf.get(id) ?? []).map(node) };
   };
   // 親を循環してたどる作品は根から届かないので、届かなかった分を根に足す
@@ -252,52 +236,21 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
   return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort((a, b) => a - b)].map(node);
 }
 
-/**
- * 出来事の木。根の段に親の無い出来事を置き、子を持つ出来事ごとにその子を置く段を、親の出来事の段の下に作る。
- * 親が絞り込みで外れた出来事は、その親の名前の段を根の段の下に作って置く
- */
-function eventGroup(events: Item[], labels: Labels): Group {
-  const ids = new Set(events.map((item) => item.id));
-  const childrenOf = new Map<number | null, Item[]>();
-  for (const item of [...events].sort(byTime)) {
-    const parent = typeof item.record.parent_event_id === "number" ? item.record.parent_event_id : null;
-    childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), item]);
-  }
-  const placed = new Set<number | null>();
-  const group = (id: number, label: string): Group => {
-    placed.add(id);
-    const items = childrenOf.get(id) ?? [];
-    return { key: `event-${id}`, label, storyId: null, parentEventId: id, items, children: branches(items) };
-  };
-  const branches = (items: Item[]): Group[] =>
-    items.filter((item) => childrenOf.has(item.id) && !placed.has(item.id)).map((item) => group(item.id, item.label));
-  const root = childrenOf.get(null) ?? [];
-  const children = branches(root);
-  const missing = [...childrenOf.keys()].filter((id): id is number => id !== null && !ids.has(id));
-  children.push(...missing.map((id) => group(id, labelOf(labels, "parent_event_id", id))));
-  // 親を循環してたどる出来事は根から届かないので、根の段に置く
-  const stray = events.filter((item) => item.record.parent_event_id != null && !placed.has(item.record.parent_event_id as number));
-  return { key: "events", label: T.timeline.topLevel, storyId: null, parentEventId: null, items: [...root, ...stray], children };
-}
-
 /** 段の木を、開いた段の子だけをたどって並べる。閉じた段には子孫の札をまとめて置く */
 function flatten(groups: Group[], depth: number, isOpen: (key: string) => boolean, toX: (day: number) => number): Row[] {
   const all = (g: Group): Item[] => [...g.items, ...g.children.flatMap(all)];
   return groups.flatMap((g) => {
     const open = isOpen(g.key);
     const { placed, lanes } = pack(open ? g.items : all(g), toX, !open);
-    const row: Row = { key: g.key, label: g.label, storyId: g.storyId, parentEventId: g.parentEventId, items: placed, lanes, depth,
-      foldable: true, open };
+    const row: Row = { key: g.key, label: g.label, storyId: g.storyId, items: placed, lanes, depth, foldable: true, open };
     return open ? [row, ...flatten(g.children, depth + 1, isOpen, toX)] : [row];
   });
 }
 
-/** 中心の時刻を省いて開いたら、最後の話(無ければ最後の出来事)の時刻を中心にする。どちらも無ければ 1 年。API は時刻の順に返す */
+/** 中心の時刻を省いて開いたら、最後の話の時刻を中心にする。無ければ 1 年。API は時刻の順に返す */
 function defaultCenter(data: TimelineResponse): string {
-  const episode = data.episode.items.at(-1)?.start;
+  const episode = data.items.at(-1)?.start;
   if (episode) return String(episode);
-  const event = data.event.items.at(-1)?.time;
-  if (event) return String(event);
   return formatStamp({ year: 1, month: 1, day: 1, hour: 0, minute: 0, second: 0 });
 }
 
@@ -326,9 +279,7 @@ export default function TimelinePage() {
   const [drag, setDrag] = useState<Drag | null>(null);
   // 保存を待つあいだ、落とした所に置いておく
   const [pending, setPending] = useState<{ key: string; days: number } | null>(null);
-  const [addMenu, setAddMenu] = useState<AddMenu | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // スクロールの位置を合わせ済みの中心(at)と軸(scale)。スクロールから URL へ書いた at はここに入れ、位置を合わせ直さない
@@ -419,22 +370,6 @@ export default function TimelinePage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!addMenu) return;
-    const onDown = (e: globalThis.PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setAddMenu(null);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAddMenu(null);
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [addMenu]);
-
   useEffect(() => () => {
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
   }, []);
@@ -480,7 +415,6 @@ export default function TimelinePage() {
   });
 
   const onScroll = () => {
-    setAddMenu(null);
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(() => {
       const element = scrollRef.current;
@@ -496,15 +430,14 @@ export default function TimelinePage() {
     }, SCROLL_SETTLE_MS);
   };
 
+  const labels = useMemo(() => data?.labels ?? {}, [data]);
+
   const rows = useMemo(() => {
-    if (!data || !stories || !scale) return { episodes: [] as Row[], events: [] as Row[] };
-    const episodes = flatten(storyGroups(items.filter((i) => i.kind === "episode"), stories, storyId, data.episode.labels ?? {}), 0, isOpen, toX);
-    if (episodes.length === 0) {
-      episodes.push({ key: "story-none", label: "", storyId: null, parentEventId: null, items: [], lanes: 1, depth: 0, foldable: false, open: true });
-    }
-    const events = flatten([eventGroup(items.filter((i) => i.kind === "event"), data.event.labels ?? {})], 0, isOpen, toX);
-    return { episodes, events };
-  }, [data, stories, scale, items, storyId, isOpen, toX]);
+    if (!stories || !scale) return [];
+    const rows = flatten(storyGroups(items, stories, storyId, labels), 0, isOpen, toX);
+    if (rows.length === 0) rows.push({ key: "story-none", label: "", storyId: null, items: [], lanes: 1, depth: 0, foldable: false, open: true });
+    return rows;
+  }, [stories, scale, items, storyId, labels, isOpen, toX]);
 
   const axisTicks = useMemo(() => {
     if (!scale) return [];
@@ -534,8 +467,8 @@ export default function TimelinePage() {
     setPending({ key: item.key, days });
     setMessage(null);
     try {
-      await updateRecord(item.kind, item.id, changes);
-      setMessage(T.timeline.moved(item.label, String(changes.start ?? changes.time)));
+      await updateRecord("episode", item.id, changes);
+      setMessage(T.timeline.moved(item.label, String(changes.start)));
     } catch (e) {
       setError(T.timeline.moveFailed(e instanceof Error ? e.message : String(e)));
     }
@@ -560,39 +493,28 @@ export default function TimelinePage() {
     const dx = e.clientX - drag.startX;
     setDrag(null);
     if (Math.abs(dx) <= DRAG_THRESHOLD) {
-      setModal({ table: item.kind, id: item.id });
+      setModal({ id: item.id });
       return;
     }
     const days = daysAt(item, dx);
     if (days !== 0) void move(item, days);
   };
 
+  /** 空いた所を押したら、その日・その段の作品で話を足す */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (pxPerDay === 0) return;
     const snapped = Math.floor(fromX(e.clientX - e.currentTarget.getBoundingClientRect().left));
-    // 画面の端で押しても吹き出しがはみ出さないよう、内側へ寄せる
-    setAddMenu({ x: Math.min(e.clientX, window.innerWidth - ADD_MENU_WIDTH), y: Math.min(e.clientY, window.innerHeight - ADD_MENU_HEIGHT),
-      at: formatStamp(fromDayNumber(snapped)), storyId: row.storyId, parentEventId: row.parentEventId });
-  };
-
-  const openAdd = (table: Kind) => {
-    if (!addMenu) return;
-    const initial: Rec = table === "episode" ? { start: addMenu.at } : { time: addMenu.at };
-    const story = addMenu.storyId ?? storyId;
-    if (table === "episode" && story !== null) initial.story_id = story;
-    if (table === "event" && addMenu.parentEventId !== null) initial.parent_event_id = addMenu.parentEventId;
+    const initial: Rec = { start: formatStamp(fromDayNumber(snapped)) };
+    const story = row.storyId ?? storyId;
+    if (story !== null) initial.story_id = story;
     if (locationId !== null) initial.location_id = locationId;
-    setAddMenu(null);
-    setModal({ table, initial });
+    setModal({ initial });
   };
 
   const tooltipLines = (item: Item) => {
     const r = item.record;
-    return item.kind === "episode"
-      ? [item.label, T.span(r.start, r.end) || String(r.start), labelOf(item.labels, "story_id", r.story_id),
-         r.location_id != null && labelOf(item.labels, "location_id", r.location_id), String(r.preview ?? "")]
-      : [item.label, String(r.time), r.start != null && T.span(r.start, r.end), String(r.confirmed ?? ""),
-         r.location_id != null && labelOf(item.labels, "location_id", r.location_id), String(r.preview ?? "")];
+    return [`${item.label} (id=${item.id})`, T.span(r.start, r.end) || String(r.start), labelOf(labels, "story_id", r.story_id),
+      r.location_id != null && labelOf(labels, "location_id", r.location_id), String(r.preview ?? "")];
   };
 
   const gapLines = (g: Gap) => [T.timeline.gap, `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`];
@@ -616,13 +538,11 @@ export default function TimelinePage() {
           const days = dragDays(item);
           const dragging = drag?.item.key === item.key;
           const className = [
-            "timeline-item", item.kind,
+            "timeline-item",
             item.end === null ? "point" : "",
             row.open ? "" : "folded",
             dragging ? "dragging" : "",
             pending?.key === item.key ? "saving" : "",
-            item.record.confirmed === "未確認" ? "unconfirmed" : "",
-            item.record.confirmed === "非承認" ? "rejected" : "",
           ].join(" ");
           const target = days !== 0 && shifted(item, days);
           const offset = days ? toX(item.start + days) - item.x : 0;
@@ -643,7 +563,7 @@ export default function TimelinePage() {
               {item.barWidth > 0 && <span className="timeline-bar" style={{ width: item.barWidth }} />}
               <span className="timeline-text">
                 {row.open && item.label}
-                {target && <span className="timeline-target"> → {String(target.start ?? target.time)}</span>}
+                {target && <span className="timeline-target"> → {String(target.start)}</span>}
               </span>
             </div>
           );
@@ -732,10 +652,7 @@ export default function TimelinePage() {
                   <div key={tick.at} className={`timeline-grid ${tick.major ? "major" : ""}`} style={{ left: toX(tick.at) }} />
                 ))}
               </div>
-              <div className="timeline-section" style={{ width: box.label + box.viewport }}>{T.timeline.episodes}</div>
-              {rows.episodes.map(renderRow)}
-              <div className="timeline-section" style={{ width: box.label + box.viewport }}>{T.timeline.events}</div>
-              {rows.events.map(renderRow)}
+              {rows.map(renderRow)}
             </div>
           </div>
           {/* 画面の真ん中の線。スクロールが止まると、ここの時刻が中心(URL の at)になる */}
@@ -743,16 +660,9 @@ export default function TimelinePage() {
         </div>
       )}
       <div className="hint" style={{ marginTop: "0.4rem" }}>{T.timeline.hint}</div>
-      {addMenu && (
-        <div ref={menuRef} className="timeline-add" style={{ left: addMenu.x, top: addMenu.y }}>
-          <span className="hint">{addMenu.at}</span>
-          <button type="button" onClick={() => openAdd("episode")}>{T.timeline.addEpisode}</button>
-          <button type="button" onClick={() => openAdd("event")}>{T.timeline.addEvent}</button>
-        </div>
-      )}
       {modal && (
         <RecordModal
-          table={modal.table}
+          table="episode"
           id={modal.id}
           initial={modal.initial}
           onClose={() => setModal(null)}

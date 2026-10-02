@@ -930,7 +930,7 @@
     "/api/timeline": {
       "get": {
         "summary": "Get Timeline",
-        "description": "全期間の話と出来事。画面(`/timeline`)が時刻の軸に並べる",
+        "description": "全期間の話。画面(`/timeline`)が時刻の軸に並べる",
         "operationId": "get_timeline_api_timeline_get",
         "parameters": [
           {
@@ -2577,7 +2577,7 @@
         ],
         "title": "TablesResponse"
       },
-      "TimelineBlock": {
+      "TimelineResponse": {
         "properties": {
           "items": {
             "items": {
@@ -2601,22 +2601,6 @@
         "type": "object",
         "required": [
           "items"
-        ],
-        "title": "TimelineBlock"
-      },
-      "TimelineResponse": {
-        "properties": {
-          "episode": {
-            "$ref": "#/components/schemas/TimelineBlock"
-          },
-          "event": {
-            "$ref": "#/components/schemas/TimelineBlock"
-          }
-        },
-        "type": "object",
-        "required": [
-          "episode",
-          "event"
         ],
         "title": "TimelineResponse"
       },
