@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- MyNovelWorld の紋章。上の谷が M、下の山が W、内に N。Android の丸い切り抜き(中央 80%)に収まる大きさにしてある -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#2a2118"/>
+      <stop offset="1" stop-color="#0d0b09"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g fill="none" stroke="#c9a454" transform="translate(256 256) scale(0.92) translate(-256 -256)">
+    <circle cx="256" cy="256" r="214" stroke-width="5"/>
+    <circle cx="256" cy="256" r="196" stroke-width="2"/>
+    <circle cx="256" cy="256" r="205" stroke-width="3" stroke-dasharray="2 14"/>
+    <path d="M256 70 L417 349 L95 349 Z M256 442 L95 163 L417 163 Z" stroke-width="2" opacity="0.4"/>
+    <g fill="#c9a454" stroke="none">
+      <circle cx="256" cy="70" r="6"/><circle cx="417" cy="349" r="6"/><circle cx="95" cy="349" r="6"/>
+      <circle cx="256" cy="442" r="6"/><circle cx="95" cy="163" r="6"/><circle cx="417" cy="163" r="6"/>
+    </g>
+    <path d="M168 150 L256 212 L344 150 L344 362 L256 300 L168 362 Z" stroke-width="17" stroke-linejoin="miter" stroke-miterlimit="10"/>
+    <path d="M218 290 L218 222 L294 290 L294 222" stroke-width="10" stroke-linejoin="miter" stroke-miterlimit="10"/>
+  </g>
+</svg>
