@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.character import generator
 from data_access_logic.character.generate_character import generation_time as decide_time
-from data_access_logic.character.generate_characters import check_locations
+from data_access_logic.character.generate_characters import check_locations, resident_rooms
 from data_access_logic.character.generator_models import BirthSources, CharacterCreation, CharacterWriting, CompletionTarget
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.idea.models import IdeaMaterial
@@ -27,6 +27,11 @@ class BirthSourcesForm(BaseModel):
     person: bool
 
 
+class ResidentRoomsForm(BaseModel):
+    location_ids: list[int]
+    time: Stamp
+
+
 class CompletedTextForm(BaseModel):
     id: int
     writing: CharacterWriting
@@ -42,6 +47,11 @@ def generation_time(s: Session, form: GenerationTimeForm) -> Stamp:
 @db_step
 def check_generation_locations(s: Session, form: RowIds) -> None:
     check_locations(s, form.ids)
+
+
+@db_step
+def generation_rooms(s: Session, form: ResidentRoomsForm) -> dict[int, int]:
+    return resident_rooms(s, form.location_ids, form.time)
 
 
 @db_step

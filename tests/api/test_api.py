@@ -61,7 +61,7 @@ def test_list_options(client, world):
 
 def test_create_record(client, world):
     response = client.post("/api/tables/character/records", json={
-        "name": "API の人", "text": "API から足した人物", "kind": "人物", "confirmed": "未確認", "main_character": True,
+        "name": "API の人", "text": "API から足した人物", "kind": "人物", "main_character": True,
         "event_seeded": True, "meme_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
         "end": "1255/06/07",
         "parameters": [{"start": "1181/02/03", "family_name": "東雲", "sex": "女", "height": 162.5,
@@ -75,7 +75,7 @@ def test_create_record(client, world):
     assert response.status_code == 201
     body = response.json()
     record = body["record"]
-    assert (record["name"], record["text"], record["confirmed"]) == ("API の人", "API から足した人物", "未確認")
+    assert (record["name"], record["text"]) == ("API の人", "API から足した人物")
     assert (record["start"], record["end"]) == ("1181/02/03 00:00:00", "1255/06/07 00:00:00")
     assert record["parameters"][0]["curiosity"] == "必"
     assert record["locations"][0]["location_id"] == world.location_id
@@ -100,55 +100,18 @@ def test_get_record(client, world):
 def test_update_record(client, world):
     response = client.patch(f"/api/tables/event/records/{world.child_event_id}", json={
         "name": "API で直した取引", "time": "1200/04/01 16:30:00", "text": "API で直した", "hidden": True,
-        "confirmed": "非承認", "parent_event_id": world.event_id, "location_id": world.neighbor_id,
+        "parent_event_id": world.event_id, "location_id": world.neighbor_id,
         "start": "1200/04/01 16:30:00", "end": "1200/04/01 18:00:00", "event_seeded": False, "meme_seeded": False,
         "character_ids": world.character_ids})
 
     assert response.status_code == 200
     record = response.json()["record"]
-    assert (record["name"], record["text"], record["confirmed"]) == ("API で直した取引", "API で直した", "非承認")
+    assert (record["name"], record["text"]) == ("API で直した取引", "API で直した")
     assert (record["time"], record["end"]) == ("1200/04/01 16:30:00", "1200/04/01 18:00:00")
     assert (record["hidden"], record["parent_event_id"], record["location_id"]) == (True, world.event_id,
                                                                                     world.neighbor_id)
     assert (record["event_seeded"], record["meme_seeded"]) == (False, False)
     assert record["character_ids"] == world.character_ids
-
-
-def test_review_summary(client, world):
-    response = client.get("/api/review")
-
-    assert response.status_code == 200
-    tables = {table["table"]: table for table in response.json()["tables"]}
-    assert set(tables) == {"character", "event", "idea", "meme"}
-    assert tables["idea"]["pending"] >= 1
-    assert tables["meme"]["pending"] >= 1
-
-
-def test_review_next(client, world):
-    response = client.get("/api/review/idea/next", params={"after": world.idea_id})
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["record"]["id"] == world.child_idea_id
-    assert body["label"] == "テスト魔導炉"
-    assert body["remaining"] >= 1
-    assert body["labels"]["parent_idea_id"] == {str(world.idea_id): "テスト魔導"}
-
-
-def test_review_decide(client, world):
-    response = client.post(f"/api/review/idea/{world.child_idea_id}", json={
-        "decision": "承認",
-        "changes": {"name": "承認した魔導炉", "kind": "装置", "text": "直して承認した", "location_id": world.neighbor_id,
-                    "start": "1150/01/01", "end": "1250/01/01", "meme_seeded": False,
-                    "recognitions": [{"location_id": world.neighbor_id, "start": "1160/01/01", "end": None,
-                                      "name": "炉", "detail": "村での呼び名"}]}})
-
-    assert response.status_code == 200
-    record = response.json()["record"]
-    assert (record["confirmed"], record["name"], record["kind"]) == ("承認", "承認した魔導炉", "装置")
-    assert (record["text"], record["location_id"]) == ("直して承認した", world.neighbor_id)
-    assert (record["start"], record["end"]) == ("1150/01/01 00:00:00", "1250/01/01 00:00:00")
-    assert [recognition["name"] for recognition in record["recognitions"]] == ["炉"]
 
 
 def test_list_entrances(client):

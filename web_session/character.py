@@ -13,6 +13,7 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.character import generator
 from data_access_logic.character import steps as character_steps
 from data_access_logic.character.form import CharacterForm
+from data_access_logic.character.generate_characters import capped_count
 from data_access_logic.character.record import CharacterRecord, GeneratedCharacter
 from data_access_logic.idea import steps as idea_steps
 from data_access_logic.idea.search import keywords_of
@@ -35,7 +36,7 @@ def generate(
         return None
     ideas = call(idea_steps.resolve_ideas, idea_steps.ResolveForm(
         keywords=keywords_of(decided.content.text, ai, time), location_id=born_location_id, time=time))
-    return call(character_steps.save_character, generator.character_creation(ai, decided, ideas, born_location_id, form))
+    return call(character_steps.save_character, generator.character_creation(ai, rng, decided, ideas, born_location_id, form))
 
 
 def _complete_text(ai: AIClient, rng: random.Random, character_id: int) -> CharacterRecord:
@@ -76,10 +77,12 @@ def generate_characters(
     at = Stamp.parse(time)
     if at is None:
         raise ValueError("time(現在の時刻)が空")
+    rooms = call(character_steps.generation_rooms,
+                 character_steps.ResidentRoomsForm(location_ids=location_ids, time=at))
     rng = random.Random(seed)
     created = []
     for location_id in location_ids:
-        for _ in range(rng.randint(*count)):
+        for _ in range(capped_count(rng, count, location_id, rooms[location_id])):
             record = generate(ai, rng, location_id, at, person)
             if record is not None:
                 created.append(GeneratedCharacter(id=record.id, name=record.name, location_id=location_id))

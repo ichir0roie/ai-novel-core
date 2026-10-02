@@ -63,7 +63,6 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .nav a { color: var(--ink); }
 .nav a.active { color: var(--accent); font-weight: 600; }
 .nav .group { display: flex; flex-direction: column; gap: 0.8rem; }
-.nav .badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.7rem; margin-left: 0.3rem; }
 .nav .hint { color: var(--muted); font-size: 0.8rem; }
 
 /* Ctrl+K の検索付きメニュー */
@@ -158,8 +157,6 @@ button.ghost { background: transparent; }
 .segment button { border: 0; border-radius: 0; padding: 0.35rem 0.8rem; }
 .segment button + button { border-left: 1px solid var(--line); }
 .segment button.on { background: var(--accent); color: var(--accent-ink); }
-.segment button.on.reject { background: var(--danger); color: #fff; }
-.segment button.on.pending { background: var(--warn); color: #fff; }
 
 .chips { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 .chip { background: var(--chip); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; border: 1px solid transparent; cursor: pointer; }

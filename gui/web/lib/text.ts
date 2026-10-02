@@ -1,12 +1,9 @@
-import type { ConfirmStatus } from "@/lib/api";
-
 // 画面に出す文言はすべてここに置き、ページ・コンポーネントは文言を直書きしない。
-// db の値(承認/非承認/未確認、場所の category など)は文言ではなく値なので、ここには置かない。
+// db の値(場所の category など)は文言ではなく値なので、ここには置かない。
 
 const join = (keys: string[]) => keys.join(", ");
 const dash = (v: unknown) => (v == null ? "-" : String(v));
 const span = (start: unknown, end: unknown) => (start == null && end == null ? "" : `${start ?? ""} – ${end ?? ""}`);
-const confirmWord: Record<ConfirmStatus, string> = { 承認: "approved", 非承認: "rejected", 未確認: "pending" };
 
 export const T = {
   appName: "novel db",
@@ -28,23 +25,18 @@ export const T = {
   cannotReachApi: (error: string) => `Cannot reach API: ${error} (check that uvicorn is running)`,
   signInRequired: "Sign in required.",
   span,
-  confirmWord,
 
   nav: {
     menu: "Menu",
     endpoints: "Endpoints",
     timeline: "Timeline",
-    review: (label: string) => `${label} review`,
     search: "Jump to a page (type a table or page name)",
     noMatch: "No matching page",
     searchHint: "Ctrl+K: search pages",
   },
 
   home: {
-    title: "Review",
-    tables: "Tables",
-    pending: (label: string) => `${label}: pending`,
-    counts: (approved: number, rejected: number) => `approved ${approved} / rejected ${rejected}`,
+    title: "Tables",
   },
 
   list: {
@@ -57,7 +49,6 @@ export const T = {
     empty: "(empty)",
     searchPlaceholder: "Search name / text",
     search: "Search",
-    all: "All",
     removeFilter: "Remove this filter",
     filterBy: (label: string) => `Filter by this ${label}`,
     name: "Name",
@@ -88,22 +79,6 @@ export const T = {
     title: (label: string) => `New ${label}`,
     cancel: "Cancel",
     add: "Add",
-  },
-
-  review: {
-    title: (label: string) => `Review: ${label}`,
-    done: (id: number, decision: ConfirmStatus | null) => `id=${id}: ${decision ? confirmWord[decision] : "saved"}`,
-    noneLeft: (label: string) => `No pending ${label} left. `,
-    rejectedList: "Rejected list",
-    tableList: (label: string) => `${label} list`,
-    remaining: (n: number | string) => `${n} remaining`,
-    keyApprove: "approve",
-    keyReject: "reject",
-    keySkip: "skip",
-    reject: "Reject",
-    skip: "Skip",
-    saveOnly: "Save only",
-    approve: "Approve",
   },
 
   endpoints: {

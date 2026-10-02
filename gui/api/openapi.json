@@ -415,132 +415,6 @@
         }
       }
     },
-    "/api/review": {
-      "get": {
-        "summary": "Review Summary",
-        "operationId": "review_summary_api_review_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReviewSummary"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/review/{table}/next": {
-      "get": {
-        "summary": "Review Next",
-        "operationId": "review_next_api_review__table__next_get",
-        "parameters": [
-          {
-            "name": "table",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Table"
-            }
-          },
-          {
-            "name": "after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "After"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReviewNext"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/review/{table}/{record_id}": {
-      "post": {
-        "summary": "Review Decide",
-        "operationId": "review_decide_api_review__table___record_id__post",
-        "parameters": [
-          {
-            "name": "table",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Table"
-            }
-          },
-          {
-            "name": "record_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Record Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Decision"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecordResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/interface": {
       "get": {
         "summary": "List Entrances",
@@ -986,7 +860,6 @@
               "string",
               "stamp",
               "json",
-              "confirm",
               "id_list"
             ],
             "title": "Type"
@@ -1081,33 +954,6 @@
           "required"
         ],
         "title": "ColumnMeta"
-      },
-      "ConfirmStatus": {
-        "type": "string",
-        "enum": [
-          "未確認",
-          "承認",
-          "非承認"
-        ],
-        "title": "ConfirmStatus",
-        "description": "アイデア・ミームの `confirmed` 列の値。ユーザが確かめたかを三段で持つ。\n\n- 未確認: 本文から自動で足した直後の候補。検索・生成・人物へ引く対象に出ない\n- 承認: ユーザが確かめた。使ってよい\n- 非承認: ユーザが退けた。使わないが、同じ語をまた候補に足さないよう行は残す"
-      },
-      "Decision": {
-        "properties": {
-          "decision": {
-            "$ref": "#/components/schemas/ConfirmStatus"
-          },
-          "changes": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Changes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "decision"
-        ],
-        "title": "Decision"
       },
       "EntranceList": {
         "properties": {
@@ -1998,108 +1844,6 @@
         ],
         "title": "RelationsResponse"
       },
-      "ReviewNext": {
-        "properties": {
-          "record": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Record"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "remaining": {
-            "type": "integer",
-            "title": "Remaining"
-          },
-          "labels": {
-            "additionalProperties": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "type": "object",
-            "title": "Labels"
-          },
-          "related": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Related"
-          }
-        },
-        "type": "object",
-        "required": [
-          "record",
-          "label",
-          "remaining"
-        ],
-        "title": "ReviewNext"
-      },
-      "ReviewSummary": {
-        "properties": {
-          "tables": {
-            "items": {
-              "$ref": "#/components/schemas/ReviewTable"
-            },
-            "type": "array",
-            "title": "Tables"
-          }
-        },
-        "type": "object",
-        "required": [
-          "tables"
-        ],
-        "title": "ReviewSummary"
-      },
-      "ReviewTable": {
-        "properties": {
-          "table": {
-            "type": "string",
-            "title": "Table"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "pending": {
-            "type": "integer",
-            "title": "Pending"
-          },
-          "approved": {
-            "type": "integer",
-            "title": "Approved"
-          },
-          "rejected": {
-            "type": "integer",
-            "title": "Rejected"
-          }
-        },
-        "type": "object",
-        "required": [
-          "table",
-          "label",
-          "pending",
-          "approved",
-          "rejected"
-        ],
-        "title": "ReviewTable"
-      },
       "RunRequest": {
         "properties": {
           "args": {
@@ -2162,10 +1906,6 @@
             "type": "array",
             "title": "Child Lists"
           },
-          "reviewable": {
-            "type": "boolean",
-            "title": "Reviewable"
-          },
           "count": {
             "type": "integer",
             "title": "Count"
@@ -2192,7 +1932,6 @@
           "label_column",
           "columns",
           "child_lists",
-          "reviewable",
           "count"
         ],
         "title": "TableMeta"

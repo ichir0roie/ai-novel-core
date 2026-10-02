@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validat
 
 from data_access_logic import constants
 from data_access_logic.material import Material
-from db.schema import ConfirmStatus
 from db.stamp import Stamp, StampError
 
 
@@ -13,7 +12,6 @@ class IdeaMaterial(Material):
     id: int
     name: str
     kind: str
-    confirmed: ConfirmStatus
     text: str | None = None
     start: Stamp | None = None
     parent_idea_id: int | None = None
@@ -150,7 +148,7 @@ class RelatedIdeaMaterial(Material):
 class IdeaContextMaterial(Material):
     # 下書きの語が当たったアイデア
     hits: list[IdeaMaterial]
-    # どのアイデアにも当たらなかった造語から足した、未確認のアイデア
+    # どのアイデアにも当たらなかった造語から足したアイデア
     candidates: list[IdeaMaterial]
     # 清書に渡す。hits(時期の決まったもの)とその上位・下位
     related: list[RelatedIdeaMaterial]

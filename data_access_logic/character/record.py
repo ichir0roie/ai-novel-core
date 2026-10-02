@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
 from data_access_logic.material import Form, Material, Timestamp
-from db.schema import ConfirmStatus, PersonalityLevel
+from db.schema import PersonalityLevel
 
 
 class _ChildRow(Form):
@@ -51,7 +51,6 @@ class CharacterHead(Material):
     id: int
     name: str | None = None
     kind: str
-    confirmed: ConfirmStatus
     main_character: bool
     event_seeded: bool
     meme_seeded: bool

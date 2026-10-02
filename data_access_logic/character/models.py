@@ -1,12 +1,12 @@
 from typing import Any
 
-from pydantic import field_validator, model_serializer
+from pydantic import model_serializer
 
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.material import Material
-from db.schema import ConfirmStatus, PersonalityLevel
+from db.schema import PersonalityLevel
 
 
 class CharacterBase(Material):
@@ -18,14 +18,6 @@ class CharacterBase(Material):
 
 class CharacterMaterial(CharacterBase):
     id: int
-    confirmed: ConfirmStatus
-
-    @field_validator("confirmed")
-    @classmethod
-    def _approved_only(cls, value: ConfirmStatus) -> ConfirmStatus:
-        if value != ConfirmStatus.APPROVED:
-            raise ValueError("ユーザが承認していない人物は話に出せない")
-        return value
 
 
 class ParticipantCharacter(CharacterBase):

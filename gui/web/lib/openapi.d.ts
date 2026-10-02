@@ -108,57 +108,6 @@ export interface paths {
         patch: operations["update_record_api_tables__table__records__record_id__patch"];
         trace?: never;
     };
-    "/api/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Review Summary */
-        get: operations["review_summary_api_review_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/review/{table}/next": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Review Next */
-        get: operations["review_next_api_review__table__next_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/review/{table}/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Review Decide */
-        post: operations["review_decide_api_review__table___record_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/interface": {
         parameters: {
             query?: never;
@@ -390,7 +339,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "integer" | "number" | "boolean" | "string" | "stamp" | "json" | "confirm" | "id_list";
+            type: "integer" | "number" | "boolean" | "string" | "stamp" | "json" | "id_list";
             /** Nullable */
             nullable: boolean;
             /** Required */
@@ -428,24 +377,6 @@ export interface components {
             create_only: boolean;
             /** Comment */
             comment?: string | null;
-        };
-        /**
-         * ConfirmStatus
-         * @description アイデア・ミームの `confirmed` 列の値。ユーザが確かめたかを三段で持つ。
-         *
-         *     - 未確認: 本文から自動で足した直後の候補。検索・生成・人物へ引く対象に出ない
-         *     - 承認: ユーザが確かめた。使ってよい
-         *     - 非承認: ユーザが退けた。使わないが、同じ語をまた候補に足さないよう行は残す
-         * @enum {string}
-         */
-        ConfirmStatus: "未確認" | "承認" | "非承認";
-        /** Decision */
-        Decision: {
-            decision: components["schemas"]["ConfirmStatus"];
-            /** Changes */
-            changes?: {
-                [key: string]: unknown;
-            };
         };
         /** EntranceList */
         EntranceList: {
@@ -714,45 +645,6 @@ export interface components {
             /** Colors */
             colors: string[];
         };
-        /** ReviewNext */
-        ReviewNext: {
-            /** Record */
-            record: {
-                [key: string]: unknown;
-            } | null;
-            /** Label */
-            label: string | null;
-            /** Remaining */
-            remaining: number;
-            /** Labels */
-            labels?: {
-                [key: string]: {
-                    [key: string]: string;
-                };
-            };
-            /** Related */
-            related?: {
-                [key: string]: unknown;
-            };
-        };
-        /** ReviewSummary */
-        ReviewSummary: {
-            /** Tables */
-            tables: components["schemas"]["ReviewTable"][];
-        };
-        /** ReviewTable */
-        ReviewTable: {
-            /** Table */
-            table: string;
-            /** Label */
-            label: string;
-            /** Pending */
-            pending: number;
-            /** Approved */
-            approved: number;
-            /** Rejected */
-            rejected: number;
-        };
         /** RunRequest */
         RunRequest: {
             /** Args */
@@ -779,8 +671,6 @@ export interface components {
             columns: components["schemas"]["ColumnMeta"][];
             /** Child Lists */
             child_lists: components["schemas"]["ChildListMeta"][];
-            /** Reviewable */
-            reviewable: boolean;
             /** Count */
             count: number;
             /**
@@ -1053,95 +943,6 @@ export interface operations {
                 "application/json": {
                     [key: string]: unknown;
                 };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    review_summary_api_review_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewSummary"];
-                };
-            };
-        };
-    };
-    review_next_api_review__table__next_get: {
-        parameters: {
-            query?: {
-                after?: number;
-            };
-            header?: never;
-            path: {
-                table: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReviewNext"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    review_decide_api_review__table___record_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                table: string;
-                record_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Decision"];
             };
         };
         responses: {

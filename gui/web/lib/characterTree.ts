@@ -7,7 +7,6 @@ export type TreeCharacter = {
   id: number;
   name: string;
   kind: string | null;
-  confirmed: string | null;
 };
 
 export type TreeNode = {
@@ -44,7 +43,7 @@ export function buildCharacterTree(
     const id = Number(character.id);
     const entry: TreeCharacter = {
       id, name: String(character.name ?? character.label ?? `id ${id}`),
-      kind: str(character.kind), confirmed: str(character.confirmed),
+      kind: str(character.kind),
     };
     const at = characterLocations[String(id)];
     if (at === undefined || !known.has(at)) unplaced.push(entry);

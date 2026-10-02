@@ -7,14 +7,13 @@ from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic.query import common_query
 from data_access_logic.query.period import alive_at
-from db.schema import Character, CharacterLocation, ConfirmStatus, Event, Location
+from db.schema import Character, CharacterLocation, Event, Location
 from db.stamp import Stamp
 
 
 def character_around_event(
     s: Session, character_id: int, time: Stamp, reach: int = 60,
 ) -> tuple[Sequence[Character], Sequence[Event]]:
-    """話の材料(周りの人物・出来事)なので、ユーザが確かめた(`confirmed=承認`)ものだけに絞る。"""
     character_location_ids = select(CharacterLocation.location_id).where(
         CharacterLocation.character_id == character_id, alive_at(CharacterLocation, time))
 
@@ -32,14 +31,12 @@ def character_around_event(
             CharacterLocation.character_id == Character.id,
             CharacterLocation.location_id.in_(location_ids),
             alive_at(CharacterLocation, time)))
-        .where(Character.confirmed == ConfirmStatus.APPROVED)
     ).all()
     since = Stamp(max(1, time.year - reach))
     events = s.scalars(
         select(Event)
         .options(*common_query.EVENT_LOAD_OPTIONS)
-        .where(Event.location_id.in_(location_ids), Event.time <= time, Event.time >= since,
-               Event.confirmed == ConfirmStatus.APPROVED)
+        .where(Event.location_id.in_(location_ids), Event.time <= time, Event.time >= since)
         .order_by(Event.time.desc(), Event.id.desc())
     ).all()
 

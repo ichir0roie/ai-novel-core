@@ -33,7 +33,7 @@ from data_access_logic.episode.material import episode_material, writing_targets
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.summary_targets import refresh
-from db.schema import Character, ConfirmStatus, Episode, EpisodeCharacter, Location
+from db.schema import Character, Episode, EpisodeCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -121,10 +121,8 @@ def casting_draft(
 
 
 def add_cast_member(s: Session, episode_id: int, character_id: int) -> None:
-    """未確認の人物は話に出せない(`CharacterMaterial`)。この話の本文に書く人物なので承認して足す。
-    名前だけ出る人物(`mentioned`)の行があれば、登場人物の行に置き換える。"""
+    """名前だけ出る人物(`mentioned`)の行があれば、登場人物の行に置き換える。"""
     record = s.get_one(Character, character_id)
-    record.confirmed = ConfirmStatus.APPROVED
     s.execute(delete(EpisodeCharacter).where(
         EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.character_id == character_id))
     s.add(EpisodeCharacter(episode_id=episode_id, character_id=character_id))

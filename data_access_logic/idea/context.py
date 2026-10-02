@@ -1,8 +1,7 @@
 """下書き(一段目)と清書(二段目)のあいだに挟む中間段。
 
 下書きから語を洗い出してアイデアと照らし、当たったアイデアとその上位・下位を清書に渡す。
-どのアイデアにも当たらなかった固有の語(`coined`)は、未確認のアイデアとして足す(候補)。
-候補は確かめる(`confirmed` を 承認 にする)まで検索・清書には出ない。退けた(非承認)語は候補にも足さない。
+どのアイデアにも当たらなかった固有の語(`coined`)は、新しいアイデアとして足す(候補)。足した候補は、次からの検索・清書に出る。
 """
 
 import logging
@@ -17,7 +16,7 @@ from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.models import IdeaContextSerialized, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms
 from data_access_logic.idea.search import keywords_of, search, spellings
 from data_access_logic.query import common_query, dictionary_query
-from db.schema import Character, ConfirmStatus, Idea, Location
+from db.schema import Character, Idea, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -31,17 +30,10 @@ def _dated(ideas: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
 
 
 def _candidate(s: Session, term: IdeaTerm, location_id: int | None) -> Idea | None:
-    existing = s.scalar(
-        select(Idea)
-        .where(
-            Idea.confirmed != ConfirmStatus.APPROVED,
-            Idea.name.in_(spellings(term.keyword)),
-        )
-        .order_by(Idea.id)
-    )
+    # 場所・時刻の外にあって検索に当たらなかった同じ名前のアイデアは、二重に足さずそれを結ぶ
+    existing = s.scalar(select(Idea).where(Idea.name.in_(spellings(term.keyword))).order_by(Idea.id))
     if existing is not None:
-        # 退けた語(非承認)は設定ではないと決めたものなので、候補に戻さず結びもしない
-        return None if existing.confirmed == ConfirmStatus.REJECTED else existing
+        return existing
 
     if (s.scalar(select(Character.id).where(Character.name == term.keyword).limit(1)) is not None
             or s.scalar(select(Location.id).where(Location.name == term.keyword).limit(1)) is not None):
@@ -53,7 +45,6 @@ def _candidate(s: Session, term: IdeaTerm, location_id: int | None) -> Idea | No
     candidate = Idea(
         name=term.keyword,
         kind=term.kind,
-        confirmed=ConfirmStatus.PENDING,
         text=term.description,
         location_id=locations[0].id if locations else None,
         start=term.start,

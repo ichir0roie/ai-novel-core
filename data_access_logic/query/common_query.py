@@ -12,7 +12,7 @@ from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
 from data_access_logic.query.period import alive_at
 from db.schema import (
-    Base, Character, CharacterLocation, CharacterRelation, ConfirmStatus, Episode, Event, EventCharacter, Idea, Location,
+    Base, Character, CharacterLocation, CharacterRelation, Episode, Event, EventCharacter, Idea, Location,
     Story,
 )
 from db.stamp import Stamp, StampError
@@ -273,13 +273,18 @@ def latest_character_event_select(character_id: int, until: Stamp | None = None)
 
 
 def resident_character_ids_select(location_ids: Collection[int], until: Stamp) -> Select:
-    """話・断面に出す顔ぶれなので、ユーザが確かめた(`confirmed=承認`)人物・対象だけに絞る。"""
     return (select(CharacterLocation.character_id).distinct()
-            .join(Character, Character.id == CharacterLocation.character_id)
-            .where(CharacterLocation.location_id.in_(list(location_ids)), alive_at(CharacterLocation, until),
-                   Character.confirmed == ConfirmStatus.APPROVED)
+            .where(CharacterLocation.location_id.in_(list(location_ids)), alive_at(CharacterLocation, until))
             # DISTINCT の並びは db 次第(PostgreSQL は崩れる)なので、id の順に決める
             .order_by(CharacterLocation.character_id))
+
+
+def resident_names_select(location_ids: Collection[int], until: Stamp) -> Select:
+    return (select(Character.name).distinct()
+            .join(CharacterLocation, CharacterLocation.character_id == Character.id)
+            .where(CharacterLocation.location_id.in_(list(location_ids)), alive_at(CharacterLocation, until),
+                   Character.name.is_not(None))
+            .order_by(Character.name))
 
 
 def character_select(character_id: int) -> Select:
@@ -335,7 +340,7 @@ def unsynced_episodes_select(story_id: int | None = None) -> Select:
 
 def ideas_select(location_ids: Collection[int] | None, time: Stamp | None = None) -> Select:
     return (select(Idea)
-            .where(dictionary_query.idea_in_scope(location_ids, time), Idea.confirmed == ConfirmStatus.APPROVED)
+            .where(dictionary_query.idea_in_scope(location_ids, time))
             .order_by(Idea.id))
 
 

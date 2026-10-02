@@ -41,6 +41,8 @@ class CharacterBirthMaterial(Material):
     element: str | None = None
     memes: list[DrawnMeme]
     nearby_characters: list[NearbyCharacter]
+    # 同じ場所にいる人物・対象の名。中身の段には渡さず、名付けで避ける
+    resident_names: list[str]
     # 人物なら、サイコロと作者の指定で決まっている値。決まっていない値は None
     parameters: CharacterParameterValues | None = None
     # 以下は決まっている値。None なら AI が決める
@@ -134,7 +136,8 @@ class CharacterNameMaterial(Material):
     age: int
     parameters: CharacterParameterValues | None = None
     born_location: BirthLocationMaterial | None = None
-    nearby_characters: list[NearbyCharacter]
+    # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
+    avoided_names: list[str]
     hint_name: str | None = None
 
 
@@ -157,7 +160,7 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
             "口調": parameters.tone if parameters else None,
             "方言": parameters.dialect if parameters else None,
             "居場所": _born_location(self.born_location),
-            "既にいる人物・対象の名": [character.name for character in self.nearby_characters],
+            "同じ場所にいる人物・対象の名": self.avoided_names,
             "作者が付けたい名": self.hint_name,
         }
 
@@ -379,6 +382,8 @@ class BirthSources(Material):
     # この時刻より後に始まる、まだ世に無い設定
     later_ideas: list[IdeaMaterial]
     nearby_characters: list[NearbyCharacter]
+    # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
+    resident_names: list[str]
     # 引く元になるミーム(`meme.extractor.draw_from`)
     meme_pool: list[PooledMeme]
 
