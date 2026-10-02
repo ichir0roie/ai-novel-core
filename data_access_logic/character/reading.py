@@ -29,7 +29,9 @@ class CharacterSheet(Material):
 
     character: CharacterHead
     parameters_at: CharacterParameterValues
-    # その時刻に掛かる説明・来歴(時刻を渡さなければすべて)
+    # 人物の芯(説明・meme・行動原理・plot)
+    text: str | None = None
+    # その時刻までに起きた来歴(時刻を渡さなければ、年の決まっていない行も含めてすべて)
     histories: list[CharacterHistoryRow]
     location: LocationAt | None = None
     recent_events: list[SerializeAsAny[EventRowHead]]
@@ -64,6 +66,7 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
         character=CharacterHead.model_validate(character),
         # 時刻を渡さないときは、生まれたときの値だけを重ねる
         parameters_at=parameters_at(character, None if until is None else at),
+        text=character.text if text else None,
         histories=histories_at(character, None if until is None else at) if text else [],
         location=_location_at(s, character_id, at),
         recent_events=events_of(

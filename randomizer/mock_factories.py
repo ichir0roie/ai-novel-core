@@ -131,6 +131,7 @@ class CharacterFactory(_ModelFactory):
     name = factory.Faker("name", locale=_LOCALE)
     kind = factory.Faker("random_element", elements=_CHARACTER_KINDS)
     main_character = factory.Faker("pybool")
+    text = _text()
 
     start = _optional_stamp()
     end = _end_after_start()
@@ -174,7 +175,8 @@ class CharacterHistoryFactory(_ModelFactory):
         model = CharacterHistory
 
     character_id = _pool(Character, "CharacterFactory")
-    start = _optional_stamp()
+    # 起きた年。空なら年未定
+    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp().year)
     description = _text()
 
 

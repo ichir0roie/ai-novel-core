@@ -407,11 +407,13 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
-    人物の説明・来歴は本文の列を持たず、すべて期間ごとの `CharacterHistory` に積む。
+    人物の芯(説明・meme・行動原理・plot)は `text` に、年ごとの来歴は `CharacterHistory` に持つ。
     """
 
     __tablename__ = "character"
-    TEXT_COLUMNS = ()
+
+    text: Mapped[str | None] = mapped_column(
+        String, nullable=True, comment="人物の芯(説明・meme・行動原理・plot)。いつの話・出来事にも渡す", sort_order=10000)
 
     name: Mapped[str | None] = mapped_column(String, sort_order=210)
     kind: Mapped[str] = mapped_column(
@@ -436,8 +438,8 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     # 名字・体格・口調・性格は CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
-    # 人物の説明・来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `recognitions` と同じ扱い)。
+    # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
+    # (Idea の `notes` と同じく、基本の本文に時代ごとの行を足す形)。
     CHILD_LISTS = ("parameters", "locations", "histories")
 
     @property
@@ -578,13 +580,13 @@ class CharacterRelation(TextBase):
 
 
 class CharacterHistory(Base):
-    """人物の説明・来歴を、期間ごとの一行で持つ。`IdeaRecognition` と同じ扱いの子テーブル。
+    """人物の来歴を、起きた年ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
-    人物は本文の列を持たない。始まりの無い行に人物の芯(説明・meme・行動原理)を置き、
     時が進むにつれて起きたこと・変わった立場・境遇などを、起きた年を `start` にした行として書き足す。行は終わりを持たない。
     行が増えすぎないよう、始まりは年単位にし、同じ年のことは一行にまとめる。
     ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
+    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出し、話・出来事には渡さない。
     """
 
     __tablename__ = "character_history"
@@ -592,13 +594,14 @@ class CharacterHistory(Base):
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
     start: Mapped[int | None] = mapped_column(
-        Integer, comment="この説明・来歴が効き始める年(起きた年)。空なら始まりを限らない", sort_order=110)
-    description: Mapped[str] = mapped_column(String, nullable=False, comment="説明・来歴", sort_order=130)
+        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
+        sort_order=110)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is None or self.start <= time.year
+        return self.start is not None and self.start <= time.year
 
 
 class Idea(MemeSeededMixin, TextBase):

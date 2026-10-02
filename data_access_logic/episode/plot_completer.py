@@ -23,7 +23,6 @@ from data_access_logic.character.cast import mentioned_of
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator import generate_character
 from data_access_logic.character.models import MentionedMaterial
-from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.episode.models import (
     EpisodeCastingDraft, EpisodeCastingRequestSerialized, EpisodeCharacterCandidateDraft, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodePlotDraft, EpisodePlotRequestSerialized,
@@ -149,7 +148,7 @@ def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidat
 
 def character_draft(candidate: EpisodeCharacterCandidateDraft) -> CharacterForm:
     """候補の人物像と役どころを、作る人物の説明の下書きにする。"""
-    return CharacterForm(name=candidate.called, histories=[CharacterHistoryRow(description=candidate.text)])
+    return CharacterForm(name=candidate.called, text=candidate.text)
 
 
 def add_characters(

@@ -42,7 +42,7 @@ _CONSOLIDATE_SYSTEM_PROMPT = """\
 - まとめる組が無ければ merges は空のリストにする。"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は説明・来歴の各行の `# plot` の節だけを使う。"""
+    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は芯(`text`)の `# plot` の節だけを使う。"""
     sources: list[SourceText] = []
     for story in s.scalars(event_seed_query.unseeded_select(Story)).all():
         sources.append(source_of(story, "作品の筋書き", story.text))

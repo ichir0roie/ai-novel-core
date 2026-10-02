@@ -40,9 +40,9 @@ print(json.dumps(run('<入口の id>', {<引数>}), ensure_ascii=False, indent=2
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
 | 本文の材料を読む(結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}`。出力を `> <scratchpad>/brief_<話id>.json` へ書き出して Read する |
 | 設定を引く | `idea.resolve_terms.ResolveTerms` | `{'terms': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
-| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'start': …, 'location_id': …, 'histories': [{'description': <説明>}, {'start': <年の整数>, 'description': <来歴の節目>}]}}` |
+| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
 | 人物の来歴を読む | `character.read_character.ReadCharacter` | `{'character_id': …}`(時刻を渡さず、すべての行を読む) |
-| 人物の来歴に足す | `character.update_character.UpdateCharacter` | `{'character': {'id': …, 'histories': [<今の行すべて。話の年の行があればその説明に書き足す>, {'start': <話の年の整数>, 'description': …}]}}` |
+| 人物の来歴に足す | `character.update_character.UpdateCharacter` | `{'character': {'id': …, 'histories': [<今の行すべて(年の決まっていない行も残す)。話の年の行があればその説明に書き足す>, {'start': <話の年の整数>, 'description': …}]}}` |
 | 場所を足す | `location.commit_location.CommitLocation` | `{'location': {'name': …, 'kind': …, 'text': …, 'parent_id': …}}` |
 | 本文を確定する | `episode.commit_episode.CommitEpisode` | 下の例 |
 | 設定を結ぶ | `idea.link_ideas.LinkIdeas` | `{'idea_ids': […], 'episode_id': …}` |

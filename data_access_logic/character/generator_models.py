@@ -25,7 +25,7 @@ class BirthLocationMaterial(LocationTextMaterial):
 
 
 class NearbyCharacter(CharacterBase):
-    # 生む時刻に掛かる説明・来歴(`histories_at`)
+    # 生む時刻までに起きた来歴(`histories_at`)
     histories: list[CharacterHistoryRow]
 
 
@@ -108,7 +108,8 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
             "体現する要素": self.element,
             "行動原理(ミーム)": [{"古今表裏": meme.position, "内容": meme.text} for meme in self.memes],
             "既にいる人物・対象": [
-                {"名前": character.name, "種別": character.kind, "説明と来歴(古い順)": histories_for_prompt(character.histories)}
+                {"名前": character.name, "種別": character.kind, "説明": character.text,
+                 "来歴(古い順)": histories_for_prompt(character.histories)}
                 for character in self.nearby_characters],
             "性格": _personality(parameters) if parameters else None,
             "決まっている": {
@@ -392,13 +393,21 @@ class CharacterContent(Material):
     parameters: CharacterParameterValues
 
 
+class CharacterWriting(Material):
+    """生んだ人物・対象の芯と来歴。"""
+
+    # 芯(説明・meme・行動原理)
+    text: str
+    # 来歴の節目ごとの行(起きた年から始まる)
+    histories: list[CharacterHistoryRow]
+
+
 class CharacterCreation(Material):
     """生んだ人物・対象として足す値。"""
 
     name: str
     kind: str
-    # 始まりの無い芯の一行と、来歴の節目ごとの行
-    histories: list[CharacterHistoryRow]
+    writing: CharacterWriting
     main_character: bool
     parameters: CharacterParameterValues
     birth: Stamp
@@ -410,7 +419,7 @@ class CharacterCreation(Material):
 
 
 class CompletionTarget(Material):
-    """説明・来歴(histories)を埋める人物・対象の、決まっている値。"""
+    """芯(text)を埋める人物・対象の、決まっている値。"""
 
     id: int
     name: str | None = None

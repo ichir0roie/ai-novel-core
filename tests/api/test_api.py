@@ -81,7 +81,7 @@ def test_list_options(client, world):
 
 def test_create_record(client, world):
     response = client.post("/api/tables/character/records", json={
-        "name": "API の人", "kind": "人物", "confirmed": "未確認", "main_character": True,
+        "name": "API の人", "text": "API から足した人物", "kind": "人物", "confirmed": "未確認", "main_character": True,
         "event_seeded": True, "meme_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
         "end": "1255/06/07",
         "parameters": [{"start": "1181/02/03", "family_name": "東雲", "sex": "女", "height": 162.5,
@@ -95,7 +95,7 @@ def test_create_record(client, world):
     assert response.status_code == 201
     body = response.json()
     record = body["record"]
-    assert (record["name"], record["confirmed"]) == ("API の人", "未確認")
+    assert (record["name"], record["text"], record["confirmed"]) == ("API の人", "API から足した人物", "未確認")
     assert (record["start"], record["end"]) == ("1181/02/03 00:00:00", "1255/06/07 00:00:00")
     assert record["parameters"][0]["curiosity"] == "必"
     assert record["locations"][0]["location_id"] == world.location_id

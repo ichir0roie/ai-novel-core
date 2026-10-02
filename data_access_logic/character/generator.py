@@ -24,11 +24,11 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.generator_models import (
     BirthLocationMaterial, BirthSources, CharacterBirthMaterialSerialized, CharacterContent, CharacterCreation,
-    CharacterNameMaterialSerialized, CompletionTarget, HistoryItemDraft, NameDraft, NearbyCharacter, NonPersonContentDraft,
+    CharacterNameMaterialSerialized, CharacterWriting, CompletionTarget, HistoryItemDraft, NameDraft, NearbyCharacter, NonPersonContentDraft,
     PersonContentDraft, PersonNameDraft, PolishDraft, PolishRequestSerialized, ScenePersonContentDraft,
     StoryElementsDraft, StoryElementsRequestSerialized,
 )
-from data_access_logic.character.histories import histories_at
+from data_access_logic.character.histories import add_history, histories_at
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
 from data_access_logic.character.record import CharacterHistoryRow
@@ -183,7 +183,7 @@ def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person:
         born_location=BirthLocationMaterial.model_validate(born_location) if born_location is not None else None,
         stories=[StoryPlotMaterial.model_validate(story) for story in stories],
         later_ideas=[IdeaMaterial.model_validate(idea) for idea in later_ideas],
-        nearby_characters=[NearbyCharacter(name=character.name, kind=character.kind,
+        nearby_characters=[NearbyCharacter(name=character.name, kind=character.kind, text=character.text,
                                            histories=histories_at(character, time))
                            for character in _nearby_characters(s, born_location_id, time)],
         meme_pool=meme_pool(s, _meme_categories(person)),
@@ -193,7 +193,8 @@ def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person:
 def _hint_text(form: CharacterForm | None) -> str | None:
     if form is None:
         return None
-    return "\n\n".join(history.description for history in form.histories) or None
+    texts = [form.text or "", *(history.description for history in form.histories)]
+    return "\n\n".join(text for text in texts if text.strip()) or None
 
 
 def _birth_material(
@@ -256,21 +257,19 @@ def _history(items: list[HistoryItemDraft], born_year: int, age: int) -> list[Ch
     return [CharacterHistoryRow(start=year, description="\n".join(texts)) for year, texts in by_year.items()]
 
 
-def _histories(
+def _writing(
     text: str, content: PersonContentDraft | NonPersonContentDraft, memes: list[DrawnMeme], time: Stamp,
     age: int | None, name: str,
-) -> list[CharacterHistoryRow]:
-    """芯(説明・meme・行動原理)は始まりの無い一行に、来歴の節目は、その年から始まる行に一件ずつ置く。"""
+) -> CharacterWriting:
+    """芯(説明・meme・行動原理)は `text` に、来歴の節目は、その年から始まる行に置く。"""
     if memes:
         text += "\n\n# meme\n" + "\n".join(f"- {drawn.position}: {drawn.text}" for drawn in memes)
         if content.principle:
             text += f"\n\n# 行動原理\n{content.principle}"
-    rows = [CharacterHistoryRow(description=text)]
-    if isinstance(content, PersonContentDraft) and age is not None:
-        rows += _history(content.history, time.year - age, age)
+    rows = _history(content.history, time.year - age, age) if isinstance(content, PersonContentDraft) and age is not None else []
     for row in rows:
         row.description = fill_name_placeholder(row.description, name)
-    return rows
+    return CharacterWriting(text=fill_name_placeholder(text, name), histories=rows)
 
 
 def _name(ai: AIClient, material: CharacterNameMaterialSerialized, person: bool) -> PersonNameDraft | NameDraft | None:
@@ -351,7 +350,7 @@ def character_creation(
     return CharacterCreation(
         name=name,
         kind=decided.kind,
-        histories=_histories(text, decided.content, material.memes, material.time, decided.age, name),
+        writing=_writing(text, decided.content, material.memes, material.time, decided.age, name),
         main_character=bool(form.main_character) if form and form.main_character is not None else False,
         parameters=parameters,
         birth=Stamp(material.time.year - decided.age),
@@ -366,12 +365,13 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
     record = Character(
         name=creation.name,
         kind=creation.kind,
+        text=creation.writing.text,
         main_character=creation.main_character,
         confirmed=ConfirmStatus.PENDING,
         end=creation.end,
         # 生まれた時点で決める値なので、誕生から効く一行だけを持つ
         parameters=[parameter_row(creation.parameters, creation.birth)],
-        histories=replaced_rows([], creation.histories, CharacterHistory),
+        histories=replaced_rows([], creation.writing.histories, CharacterHistory),
     )
     s.add(record)
     s.flush()
@@ -408,8 +408,8 @@ def generate_character(
 
 def completion_target(s: Session, character_id: int) -> CompletionTarget:
     record = s.get_one(Character, character_id)
-    if record.histories:
-        raise ValueError("histories(説明・来歴)はすでにある")
+    if (record.text or "").strip():
+        raise ValueError("text はすでに埋まっている")
     time = s.scalar(common_query.latest_time_select()) or record.start
     if time is None:
         raise ValueError("time が決められない(世界にまだ出来事が無く、record.start も空)")
@@ -426,7 +426,7 @@ def completion_target(s: Session, character_id: int) -> CompletionTarget:
 def completion_content(
     ai: AIClient, rng: random.Random, target: CompletionTarget, sources: BirthSources,
 ) -> tuple[CharacterBirthMaterialSerialized, PersonContentDraft | NonPersonContentDraft]:
-    """決まっている名前・属性・出自を核に、説明・来歴だけを AI に書かせる。"""
+    """決まっている名前・属性・出自を核に、説明と来歴だけを AI に書かせる。"""
     material = _birth_material(
         ai, rng, sources, target.time, target.person, target.parameters, target.name,
         None if target.person else target.kind, target.age, None)
@@ -437,33 +437,34 @@ def completion_content(
     return material, content
 
 
-def completed_histories(
+def completed_text(
     ai: AIClient, target: CompletionTarget, material: CharacterBirthMaterialSerialized,
     content: PersonContentDraft | NonPersonContentDraft, ideas: IdeaContextMaterial,
-) -> list[CharacterHistoryRow]:
-    return _histories(_polished(ai, content.text, ideas), content, material.memes, target.time, target.age,
-                      target.name or "")
+) -> CharacterWriting:
+    return _writing(_polished(ai, content.text, ideas), content, material.memes, target.time, target.age,
+                    target.name or "")
 
 
-def save_completed_histories(
-    s: Session, character_id: int, histories: list[CharacterHistoryRow], ideas: list[IdeaMaterial],
-) -> Character:
+def save_completed_text(s: Session, character_id: int, writing: CharacterWriting, ideas: list[IdeaMaterial]) -> Character:
+    """芯を `text` に書き、来歴の節目は今の行に足す(同じ年の行があればその説明に書き足す)。"""
     record = s.get_one(Character, character_id)
-    record.histories = replaced_rows([], histories, CharacterHistory)
+    record.text = writing.text
+    for row in writing.histories:
+        if row.start is not None:
+            add_history(record, row.start, row.description)
     link(s, record, ideas)
     s.flush()
     return record
 
 
-def complete_histories(s: Session, ai: AIClient, rng: random.Random, character_id: int) -> Character:
-    """人物・対象の説明・来歴(histories)が一行も無いとき、決まっている名前・属性・出自を核に AI に説明・来歴だけを書かせて埋める。
+def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: int) -> Character:
+    """人物・対象の芯(text)が空のとき、決まっている名前・属性・出自を核に AI に説明と来歴だけを書かせて埋める。
     性別・体格・口調・性格・種別・生年・没年・名前は変えない。"""
     target = completion_target(s, character_id)
     material, content = completion_content(
         ai, rng, target, birth_sources(s, target.born_location_id, target.time, target.person))
     ideas = resolve_ideas(s, keywords_of(content.text, ai, target.time), target.born_location_id, target.time)
     s.commit()
-    record = save_completed_histories(
-        s, character_id, completed_histories(ai, target, material, content, ideas), ideas.linked)
+    record = save_completed_text(s, character_id, completed_text(ai, target, material, content, ideas), ideas.linked)
     s.commit()
     return record

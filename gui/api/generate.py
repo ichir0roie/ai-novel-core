@@ -61,7 +61,7 @@ GENERATORS: tuple[Generator, ...] = (
               params=(ColumnMeta(key="time", label="現在の時刻", type="stamp", nullable=True, required=False,
                                  comment="この時刻に生きている人物として作る。空なら世界の最新の出来事の時刻"),)),
     Generator("character", "complete", "AI で補完", "character.generate_character.GenerateCharacter", "character",
-              mode="edit", when_empty="histories"),
+              mode="edit", when_empty="text"),
     Generator("event", "ai", "AI で作成", "event.generate_event.GenerateEvent", "event"),
     Generator("event", "complete", "AI で補完", "event.generate_event.GenerateEvent", "event",
               mode="edit", when_empty="text"),

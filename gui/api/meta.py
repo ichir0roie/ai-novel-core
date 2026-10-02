@@ -161,5 +161,5 @@ def all_tables(s: Session) -> list[TableMeta]:
 
 _LABELS["parameters"] = "期間ごとのパラメータ"
 _LABELS["locations"] = "期間ごとの居場所"
-_LABELS["histories"] = "期間ごとの説明"
+_LABELS["histories"] = "来歴"
 _LABELS["recognitions"] = "場所・時代ごとの呼び名"
