@@ -11,14 +11,27 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 - 作品の筋の検討(どう進めるか)を頼まれたら、作品(`story`)の `text` に留める。話(episode)の枠は頼まれたときだけ作る
 - ユーザに尋ねるのは、頼まれた範囲を越える判断(大筋を変える・時刻を動かすなど)だけ。プロットに要る人物・場所は尋ねずに作り、報告に含める
 
-## 回し方(場所で分ける)
+## 入口
 
-入口の呼び方と id・話の引き方は場所で違う。環境変数 `CLAUDE_CODE_REMOTE` を見て、当たる方だけを Read する。
+入口は id と引数で呼ぶ。呼び方・行の引き方は、手元は `.claude/docs/db.md`、web のセッションは `.claude/docs/web-db.md`(自分の場所の方だけ読む)。
+`ReadEpisodeCasting`・`ReadEpisodeBrief`・`CommitEpisode` は AI を回すので数分かかることがある(web では `run_in_background`)。
 
-| `CLAUDE_CODE_REMOTE` | 読むファイル | 形 |
+| すること | 入口の id | 引数 |
 | --- | --- | --- |
-| `true` でない(手元) | `.claude/skills/episode/local.md` | db に直に繋ぎ、入口を python で呼ぶ |
-| `true`(web のセッション) | `.claude/skills/episode/web.md` | db には繋がず、同じ入口を API 越しに回す(`web_session/`) |
+| 話の枠を足す・プロットを入れる・本文を確定する | `episode.commit_episode.CommitEpisode` | `{'episode': {…}}`。新しい枠は `{'story_id': …, 'start': '<年/月/日>', 'character_ids': […], 'plot_text': …}`、既存の話は `'id': …` と変える欄だけ(渡した欄だけが直る) |
+| 登場人物・場所を決める材料を読む | `episode.read_episode_casting.ReadEpisodeCasting` | `{'episode_id': …}` |
+| 話を id で読む(本文まで) | `episode.read_episode_texts.ReadEpisodeTexts` | `{'episode_ids': […]}` |
+| 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
+| 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
+| 本文の材料を読む(結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
+| 設定を引く | `idea.resolve_terms.ResolveTerms` | `{'terms': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
+| 設定を結ぶ | `idea.link_ideas.LinkIdeas` | `{'idea_ids': […], 'episode_id': …}` |
+| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
+| 人物を AI に組ませて足す | `character.generate_character.GenerateCharacter` | `{'character': {'name': …, 'text': <人物像と役どころ>, 'location_id': …}, 'time': '<話の時刻>', 'plot_text': <話のプロット>}` |
+| 人物の来歴を読む | `character.read_character.ReadCharacter` | `{'character_id': …}`(時刻を渡さず、すべての行を読む) |
+| 人物の来歴に足す | `character.update_character.UpdateCharacter` | `{'character': {'id': …, 'histories': [<今の行すべて>, …]}}`(配列はまるごと置き換わる) |
+| 場所を足す | `location.commit_location.CommitLocation` | `{'location': {'name': …, 'kind': …, 'text': …, 'parent_id': …}}` |
+| 作品の話の並び(`start` 順) | `episode.read_episodes.ReadEpisodes` | `{'story_id': …, 'count': 500, 'text': False}` |
 
 ## 流れ
 
@@ -38,7 +51,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
    - 関わった話が本文と比べて少なすぎる(名前が出ているのに挙がらない)ときは、`RefreshMentions()` で名前だけ出る人物を拾い直してから読み直す
 3. **プロットを書いて入れる**
    - 読んだ話と食い違わないように、`data_access_logic/readme.md` の「補足:」の行(見出しではない)の下にある `## 場面` / `## 狙い` の形で書く
-   - `CommitEpisode(EpisodeCommitForm(id=…, plot_text=…))` で入れる(プロットに名前の出る人物が、名前だけ出る人物として拾われる)
+   - `CommitEpisode` に `id`・`plot_text` を渡して入れる(プロットに名前の出る人物が、名前だけ出る人物として拾われる)
 4. **登場人物・場所を推測して結ぶ**(下の「登場人物・場所」)
    - `ReadEpisodeCasting` を読み直し、プロットで台詞・行動のある人物と主な舞台を決める。候補に無い人物・場所は作る
    - `CastEpisode(episode_id, character_ids=[…], location_id=…, viewpoint_character_id=…)` で結ぶ(登場人物はまるごと置き換わり、結んだ人物は承認され、名前だけ出る人物は拾い直される。同期フラグは変えない)
@@ -55,7 +68,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 7. **本文を書く**(下の「書くとき」)
    - 書いた本文はスクラッチパッドのファイルに置く
    - 書くうちに登場人物・場所を変えたくなったら、4 の `CastEpisode` で結び直し、6 を読み直してから書き続ける
-8. **確定する**: `CommitEpisode(EpisodeCommitForm(id=…, title=…, main_text=<ファイルの中身>, synced=True))`
+8. **確定する**: `CommitEpisode` に `id`・`title`・`main_text`(ファイルの中身)・`synced=True` を渡す
    - `synced=True` は自動で書いた話の扱い(渡さないと手で直した話として false になる)
    - 題は、作者が決めた題があればそのまま、空なら付ける
    - 登場人物・場所は 4 で結んであるので渡さなくてよい
@@ -66,7 +79,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
     - 本文で変わった立場・仕事・住まい・人間関係・主要人物との関わりと、その人物が見た・知ったことを、来歴(`histories`)に足す
     - 今の行は、時刻を渡さない `ReadCharacter(character_id)` の `histories` ですべて読む(年の決まっていない `start` が空の行も残す)
     - `start` はこの話の年(整数)。その年の行があればその説明の末尾に改行して書き足し、無ければその年の行を足す(一年に一行)
-    - 足した配列を `UpdateCharacter(CharacterUpdateForm(id=…, histories=[…]))` で渡す(配列はまるごと置き換わる)。すでにある説明は書き換えず、足すだけにする
+    - 足した配列を `UpdateCharacter` で渡す(配列はまるごと置き換わる)。すでにある説明は書き換えず、足すだけにする
     - この話の時刻より後のこと(後年の立場・死・予定)は書かない(`data_access_logic/readme.md` の「人物の来歴」)
     - 人物の設定と本文が食い違っていれば、足す前にユーザに報告する
 
@@ -77,7 +90,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 - 筋・人物の立場・関係は前の話の概要から受け継ぐ。語の選び方・言い回し・地の文とセリフの運びは文体の見本に揃える(見本の中身は読み取らず、文を写さない)
 - 登場人物の直近の出来事はこの話の前に済んだこと。「この時点より後に既に決まっている出来事」と矛盾させず、先回りしない
 - 前の話に出ていない人物は初登場として、外見・性格を描く
-- `.claude/docs/meme.md` も読む。生物・医療・兵器の話題は `ai/instructions/sensitive.py` の決まりに沿って、物語に要る抽象度にとどめる
+- ミームは `CLAUDE.md` の決まりに従う。生物・医療・兵器の話題は `ai/instructions/sensitive.py` の決まりに沿って、物語に要る抽象度にとどめる
 - 字数の指定は無い。中身に合わせる
 
 ## 登場人物・場所
@@ -86,13 +99,13 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 - 話題・回想・噂に名前が出るだけの人物は入れない(`mentioned=true` の行として自動で拾われる)。群衆・名前の要らない通りすがりも入れない
 - 呼び名が違っても(役職・続柄・あだ名など)、人物像から同じ人物と分かれば既存の人物を使う
 - db にいない人物が要るなら、作ってから `character_ids` に入れる。作品・場所・時刻に馴染む人物にする
-  - `CommitCharacter`: 説明は `text` に書き、`.claude/docs/meme.md` に従う。来歴の節目はその年(整数)を `start` にした行にし、サブキャラクターの来歴はこの話の時刻までにする
-  - AI に組ませるなら `GenerateCharacter(CharacterForm(name=…, text=<人物像と役どころ>, location_id=…), time=<話の時刻>, plot_text=<話のプロット>)`(プロットを渡すと、その時刻・場所で役どころを果たせる年齢になる)
-- 場所: 主な舞台が材料の場所より細かければ、「この場所の中の既知の場所」から選んで `location_id` にする。無ければ `CommitLocation(LocationCreateForm(name=…, kind=…, text=…, parent_id=<材料の一番細かい場所id>))` で足す
+  - `CommitCharacter`: 説明は `text` に書く。来歴の節目はその年(整数)を `start` にした行にし、サブキャラクターの来歴はこの話の時刻までにする
+  - AI に組ませるなら `GenerateCharacter`(プロットを渡すと、その時刻・場所で役どころを果たせる年齢になる)
+- 場所: 主な舞台が材料の場所より細かければ、「この場所の中の既知の場所」から選んで `location_id` にする。無ければ `CommitLocation` で足す(`parent_id` は材料の一番細かい場所id)
 - 視点(`viewpoint_character_id`)は、頼まれたかプロットで決まっているときだけ入れる
 
 ## 報告する
 
-- 終わったら書いた話を読み(読み方は回し方のファイル)、題・時刻・視点・字数(`letters`)・あらすじ・足した人物・場所・結んだ設定・来歴に足した人物を短く報告する。本文・プロット・材料のような長いものは返答に貼らない
+- 終わったら書いた話の行(`episode`)を読み、題・時刻・視点・字数(`letters`)・あらすじ・足した人物・場所・結んだ設定・来歴に足した人物を短く報告する。本文・プロット・材料のような長いものは返答に貼らない
 - すでに本文のある話を書き直す・書き足す(推敲する)ときは、スキル `revise-episode` を使う
 - GUI の「AI で本文まで書く」ボタン(待ち行列からスキル `run-ai-tasks` で回る)は、これまでどおり生成関数 `GenerateEpisode` を使う

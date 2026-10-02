@@ -27,7 +27,31 @@ SessionStart フックが踏み台越しの転送(`tool.aws.rds --serve`、127.0
 - 操作の前に、マニュアルの `data_access_logic/readme.md` の「依頼内容 → 呼ぶコード」の対応表を引き、依頼に当たる入口を呼ぶ
 - 対応する入口が無ければ、readme の「作り方」に沿って作ってから行う。同じ作業のうちに readme の対応表へ行を足す(表に無い入口は次から見えない)
 - 読み取り(`select`)だけなら入口を通さず、SQLAlchemy で好きに覗いてよい。書き込み(`insert` `update` `delete`)は必ず入口越し
-- 調査用の読み取り例:
+
+## 入口を呼ぶ
+
+入口は id と引数(dict。フォームも dict で書く)で呼ぶ。id と引数は、スキルや `data_access_logic/readme.md` の表のもの(web のセッションと同じ):
+
+```
+.venv/bin/python -c "
+import json
+from pathlib import Path
+from data_access_logic.logs import configure_logging
+from gui.api import interface
+configure_logging()
+e = interface.entrance_of('<入口の id>')
+print(json.dumps(interface.call(e, interface.prepare(e, {<引数>})), ensure_ascii=False, indent=2))
+"
+```
+
+- 長い出力は `> <scratchpad>/<名>.json` へ書き出して Read する
+- 本文・プロットのような長い文字列は、スクラッチパッドのファイルに置き、引数の中で `Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')` と読む
+
+## 行を引く
+
+- id を名前から引く: `select id, name from <表> where name like '%<名>%'`(`<表>` は `story` / `character` / `location`)
+- 作品の話の並び: `select id, title, start, letters from episode where story_id = <作品id> order by start`
+- 読み取りの例:
 
 ```
 .venv/bin/python -c "

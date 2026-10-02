@@ -1,18 +1,19 @@
 # 作業指針
 
-Claude はユーザへの返答を常に日本語で書く。
-
-作品の中身は db(AWS の RDS)にだけあり、このリポジトリには無い。
-プロット・時刻・登場人物を決めた話(プロットと本文をまとめて持つ `episode`)はスキル `episode` の手順で回す。
+- Claude はユーザへの返答を常に日本語で書く。
+- 作品の中身(話・人物・設定)は db(AWS の RDS)にだけ置く。リポジトリには入れない
+- 話(`episode`)を書くのはスキル `episode`、書き直すのはスキル `revise-episode`
+- ミーム(`meme`)は、ユーザが GUI で `confirmed=承認` にするまで本文・人物の芯(`text`)・来歴(`histories`)へ書き込まない
+  (抜き出した直後は `未確認` で、`DrawMemes` にも生成の文脈にも出ない)
 
 # 作業する場所
 
-場所は環境変数 `CLAUDE_CODE_REMOTE` で見分ける。場所を限った行(下の表)と、場所ごとに分けたスキルの手順は、自分の場所のものだけを読む。
+場所は環境変数 `CLAUDE_CODE_REMOTE` で見分ける。場所を限った決まり・手順は、自分の場所のものだけを読む。
 
-| 場所 | `CLAUDE_CODE_REMOTE` | SessionStart フック(`.claude/hooks/session-start.sh`) | db | git |
-| --- | --- | --- | --- | --- |
-| 手元(CLI・VS Code) | `true` でない | `.venv` を用意し、RDS への転送を起こして `DEM_DATABASE_URL` を渡す | 入口越しに直に読み書きする | 頼まれたときだけ |
-| web のセッション(Claude Code on the web) | `true` | `.venv` を裏で用意する(python のコマンドだけ用意が済むまで待たされる) | 繋がない。API 越しに読み書きする | セッションの指示に従う |
+| 場所 | `CLAUDE_CODE_REMOTE` | SessionStart フック(`.claude/hooks/session-start.sh`) | db |
+| --- | --- | --- | --- |
+| 手元(CLI・VS Code) | `true` でない | `.venv` を用意し、RDS への転送を起こして `DEM_DATABASE_URL` を渡す | 入口越しに直に読み書きする(`.claude/docs/db.md`) |
+| web のセッション(Claude Code on the web) | `true` | `.venv` を裏で用意する(python のコマンドだけ用意が済むまで待たされる) | 繋がない。API 越しに読み書きする(`.claude/docs/web-db.md`) |
 
 # デバッグ・テストの db
 
@@ -32,26 +33,29 @@ Claude はユーザへの返答を常に日本語で書く。
 - 実装の途中に回した typecheck・lint は網羅テストに数えない
 - ユーザが手順の順番を言ったら(「〜を確認して、その後〜」)、その順に進める
 
+# git
+
+- git のコマンドはリポジトリのルートで打つ
+- 手元: コミット・push・merge・PR・ブランチ・worktree は頼まれたときだけ。作業を終えても自分からしない(ユーザは VS Code タスク `git push` でコミット・push する)。worktree は「worktree で作業して」と頼まれたときだけ切る
+- web のセッション: セッションの指示(作業するブランチ・コミット・push)に従う。返答を終える前に、変えたものをコミットして指示のブランチへ push する(未コミットの変更を残すと Stop フックに止められる)。PR は上の順が来るまで作らない
+- GitHub の操作は `gh` ではなく GitHub の MCP のツールで行う。`merge_pull_request` などに渡す `sha` は 40 桁(`git rev-parse HEAD`)
+- 公開リポジトリなので、コミットの前に `.claude/docs/aws.md` の「core は公開リポジトリ」の grep で、構築の値が紛れていないか確かめる
+- 作業中の変更は、ユーザが捨ててよいと言うまで捨てない(`git checkout -- .`・`git reset --hard`・`git stash drop` をしない)。取り消しか作り直しか読み切れないときは尋ねる
+- 「まて」「ストップ」で止まっているあいだに Stop フックがコミットを求めたら、捨てずに WIP としてコミットして push する
+
 # 条件付きのドキュメント
 
-次の作業を始める前に、対応するファイルを Read して従う。当てはまらなければ読まなくてよい。パスはリポジトリのルートから。
+次の作業を始める前に、対応するファイルを Read して従う。パスはリポジトリのルートから。
 
-| 条件 | 読むファイル |
+| 作業 | 読むファイル |
 | --- | --- |
-| コマンドの実行でエラーが出た | `.claude/docs/command-errors.md` |
-| AI へ渡す文面・生成関数を足す・直す、世界ごとの好み(舞台設定・文体の癖)を足す・直す・渡す、スキルから生成関数を呼ぶ | `.claude/docs/user-preferences.md` |
-| ファイルを読み書きするコードを書く、日本語を出すコマンドを打つ | `.claude/docs/encoding.md` |
-| リポジトリの構成・環境変数を扱う、python・pytest・alembic を動かす、`.venv` を用意する | `.claude/docs/setup.md` |
-| git でコミット・push・merge・ブランチ操作をする、worktree での作業を頼まれた | `.claude/docs/git.md` |
-| 手元で db を読み書きする(入口の呼び出し・作成、マイグレーションの確認、他のセッションとの同時作業を含む) | `.claude/docs/db.md` |
-| web のセッションで db を読み書きする(id・行を引く、入口・AI の入口を呼ぶ) | `.claude/docs/web-db.md` |
-| テストを明確に頼まれた、網羅テストを回す、デバッグ・動作確認で db を読み書きする | `.claude/docs/testing.md` |
-| テスト・動作確認で GUI(API・画面)を動かす | `.claude/docs/gui.md` |
-| ミームを扱う、本文・人物の芯(`text`)・来歴(`histories`)を書く | `.claude/docs/meme.md` |
-| 列名・型を確かめる、`db/schema.py` やマイグレーションを変える | `.claude/docs/schema.md` |
-| db を読む処理・AI とやり取りする処理(pydantic のマテリアル・出力モデル)を書く・直す、リファクタする | `.claude/docs/data-access.md` |
+| `.venv`・python・pytest・alembic を動かす、環境変数・文字コードを扱う、コマンドがエラーになった | `.claude/docs/setup.md` |
+| 手元で db を読み書きする・入口を呼ぶ | `.claude/docs/db.md` |
+| web のセッションで db を読み書きする・入口を呼ぶ | `.claude/docs/web-db.md` |
+| テスト・デバッグ・動作確認をする(GUI を起こすときも) | `.claude/docs/testing.md` |
+| db・AI とやり取りするコード、`db/schema.py`・マイグレーション、AI へ渡す文面・世界ごとの好みを書く・直す、列名を確かめる | `.claude/docs/data-access.md` |
+| AWS の資源に触れる、API(Lambda)の段・web の流れ(`web_session/`)・待ち行列(`ai_task`)のコードを書く | `.claude/docs/aws.md` |
 | PostgreSQL の構成・AWS へのデプロイ・GitHub Actions を調べる・直す | `.docs/README.md` から当たる文書 |
-| AWS の db・資源に触れる、API(Lambda)の段・web の流れ(`web_session/`)・AI の待ち行列(`ai_task`)のコードを書く | `.claude/docs/aws.md`(仕組みの詳しい説明は `.docs/README.md` から当たる) |
 
 # コーディング規約
 

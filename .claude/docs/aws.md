@@ -1,7 +1,7 @@
 # AWS の db・資源と、API・web の流れの形
 
-AWS の db(RDS for PostgreSQL、db `novel`)と資源に触れる作業、API(Lambda)の段と web のセッションの流れ(`web_session/`)のコードを書く作業の決まり。
-資源の構成と手順は `.docs/aws-deploy.md`、待ち行列と web のセッションで回す仕組みは `.docs/claude-tasks.md`、db を読み書きする手順は、web のセッションは `.claude/docs/web-db.md`、手元は `.claude/docs/db.md`。
+AWS の db(RDS for PostgreSQL、db `novel`)と資源、API(Lambda)の段、web の流れ(`web_session/`)の決まり。
+資源の構成・場所ごとの db のロールと鍵は `.docs/aws-deploy.md`、待ち行列と web で回す仕組みは `.docs/claude-tasks.md`。
 
 ## core は公開リポジトリ
 
@@ -15,15 +15,6 @@ core(ai-novel-core)は公開リポジトリ。誰がクローンしても、自�
 - 既存のリソースの ID が設定に無ければ、`infra/` のスタックが自分で作る(NAT の無い VPC、小さな RDS、踏み台と EC2 Instance Connect Endpoint)
 - CDK が手元に貯める `cdk.context.json` は、アカウントやリソースの ID を含むので git に入れない
 - core にコミットする前に、差分を `grep -E '[0-9]{12}|vpc-|subnet-|sg-|i-0|eice-|arn:aws|rds\.amazonaws\.com|lambda-url'` などで見て、構築の値が紛れていないか確かめる
-
-## 場所ごとの db への道
-
-| 場所 | db への道 | db のロール | 持つ鍵 |
-| --- | --- | --- | --- |
-| 手元(CLI・VS Code) | 踏み台越しの転送(`tool.aws.rds --serve`、127.0.0.1:15432)。ふだんは IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`)。手で当てるマイグレーションは同じ転送で `novel_migrator` に IAM 認証で。管理(ロールを作るなど)は `tool.aws.rds --` 越しにマスターで | `novel_app`(ふだん)/ `novel_migrator`(マイグレーション)/ マスター(管理) | 手元の AWS CLI の権限(`rds-db:connect`・マスターの秘密の読み取り) |
-| Lambda(`novel-migrate`) | VPC の中から psycopg で直に。IAM データベース認証。CI が `main` へのマージごとに呼び、`alembic upgrade head` だけを流す | `novel_migrator`(表の持ち主) | 実行ロールの `rds-db:connect` |
-| Lambda(`novel-api`) | VPC の中から psycopg で直に。IAM データベース認証(`DEM_DATABASE_IAM_AUTH=1`) | `novel_app`(行の読み書きだけ) | 実行ロールの `rds-db:connect` |
-| web のセッション(Claude Code on the web) | db には繋がない。`novel-api` の API のエンドポイントだけを呼ぶ | 無し | web 用の API の合言葉だけ |
 
 ## 決まり
 

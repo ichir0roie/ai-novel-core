@@ -41,7 +41,7 @@ git worktree add ../core-refactor -b refactor/screening-<YYYYMMDD>
 
 - 新しいテストは、ユーザーに頼まれたときだけ書く。既存の `tests/` は網羅テストとして回す(`.claude/docs/testing.md`)
 - 実装がモックに合わせて不自然に分岐していないかは見る(モックの都合で残っている使われない引数など)
-- `schema.py` を変えたときの確かめ方は `.claude/docs/schema.md` の「マイグレーション」
+- `schema.py` を変えたときの確かめ方は `.claude/docs/data-access.md` の「マイグレーション」
 
 ## 4. 直して確かめる
 

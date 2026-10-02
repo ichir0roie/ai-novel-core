@@ -1,4 +1,6 @@
-# db の読み取りと AI とのやり取り(pydantic)
+# db と AI のコード
+
+## 読み取りと AI とのやり取り(pydantic)
 
 見本は `data_access_logic/episode/` と `data_access_logic/idea/`。既存の処理を直すときもこの形へ寄せる。
 
@@ -28,3 +30,30 @@
   - 長い AI 呼び出しの前にも、それまでの保存分(話の枠など)を commit する
   - db だけの処理(`CommitEntrypoint` の `execute`)は入口のトランザクション(`s.begin()`)に任せ、中で commit しない
   - commit の後で ORM の行を使うときは、読み直すか先にマテリアルへ写しておく(commit で読み込んだ関連が期限切れになる)
+
+## schema
+
+- 列の定義は `db/schema.py` が唯一の正。列名・型は db に問い合わせず推測もせず、`db/schema.py` を Read して確かめる(`episode` の題は `title`。推測で書くと `UndefinedColumn` で落ちる)
+- NULL を持てる列で並べるときは NULL の向きを明示する(降順は `.nulls_last()`)。`DISTINCT` の結果を順番どおりに使うなら `order_by` を付ける
+- PostGIS の列は `db/postgres/postgis.py`(`.docs/postgres.md`)
+
+### マイグレーション
+
+- 置き場は `db/alembic/`。コマンド例は `db/alembic/README`
+- `schema.py` を変えたら alembic で `revision --autogenerate` → 内容確認 → `upgrade head`(手元の開発用の db に当てる)。AWS の db へ当てる決まりは `.claude/docs/aws.md` の決まり 1
+- 列を消す変更は、マージから API の差し替えまでの 1〜2 分だけ古い API が失敗しうる
+- 新しいマイグレーションの確かめに、空の db から `upgrade head` で一から上げない(古い版に PostgreSQL で通らないものがあり落ちる)。代わりに、変える前のコミットを `git worktree add --detach <スクラッチパッドの dir> <コミット>` で取り出し、その `db.postgres.init_db --url <テスト用のサーバーの別の db> --create-database` で表を作って版を付け、行を足してから、今のブランチで `alembic upgrade head` と `alembic check` を回す
+- マイグレーションのテスト(上げ下げの往復)は書かない
+
+## 世界ごとの好み(AI へ渡す文面)
+
+世界(ユーザー)ごとに違う「好み」(世界の舞台設定・既存の話から抽出した文体の癖など)は、`core`(このリポジトリ)に定数として持たない。
+
+- `core` の `ai/instructions/` の定数には、システム固有の値(どの世界でも成り立つ既定値。ラノベとしての基本文体など)だけを置く
+- ユーザーが追加する値は db の `style_preference` 表に、効く対象(`target`)ごとに一行で持つ。`shared` はどの対象にも、`episode` などはその対象だけに効く
+- 足す・直すのは、GUI の「文体の好み」の一覧か、入口 `style_preference.commit_style_preference.CommitStylePreference` / `update_style_preference.UpdateStylePreference`
+- 好みの値は、AI へ渡す文面を組む末端の生成関数(`ai/instructions/style.py` の `style_instruction()`、`data_access_logic/episode/` の `write_episode` など)に引数で渡す
+- `core` は「引数を渡さなければ空でよい(システム固有の値だけで成り立つ)」設計にする
+- 入口の `GenerateEpisode` / `ReviseEpisode` は、`shared_style_extra` / `style_extra` を省かれると `style_preference` から読む(`data_access_logic/style_preference/extras.py`。web のセッションは段 `style_preference.steps.style_extras` 越し)。行が無ければ空のまま動く
+- 明示して渡した値(空文字を含む)は db の値より優先する
+- このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の「書き方」に、システム固有の文体と `style_preference` の `shared` / `episode` の行を合わせた文面が入る(`data_access_logic/episode/brief.py`)
