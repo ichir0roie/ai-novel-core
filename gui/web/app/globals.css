@@ -606,6 +606,9 @@ button.ghost { background: transparent; }
 .timeline-item.event { background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border-color: var(--warn); }
 /* 一点の時刻は左端の太線がその時刻 */
 .timeline-item.point { border-left-width: 3px; }
+/* 閉じた段の札は、名前の無い印にする */
+.timeline-item.folded { padding: 0; }
+.timeline-item.folded.dragging .timeline-text { padding: 0 6px; }
 .timeline-item.unconfirmed { border-style: dashed; }
 .timeline-item.rejected { opacity: 0.45; text-decoration: line-through; }
 .timeline-item.dragging { cursor: grabbing; z-index: 3; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); }

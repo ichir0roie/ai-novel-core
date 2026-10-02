@@ -19,9 +19,11 @@ const DEFAULT_SPAN = 31;
 const LANE_HEIGHT = 26;
 // 作品の段の下に空けておく空の段の数。話を足すときにクリックする所を残す
 const STORY_SPARE_LANES = 1;
-const ITEM_GAP = 6;
 // 札の名前を見せる幅の上限(px)。長い題も最後まで読めるよう広く取る
 const LABEL_MAX_PX = 960;
+const ITEM_GAP = 6;
+// 閉じた段で、札の代わりに置く印の幅(px)
+const MARKER_PX = 8;
 // スクロールが止まってから中心の時刻を URL に書くまでの間(ms)
 const SCROLL_SETTLE_MS = 200;
 // ドラッグとクリックを分けるしきい値(px)
@@ -43,9 +45,9 @@ type Item = { kind: Kind; key: string; id: number; label: string; record: Rec; l
 type Placed = Item & { x: number; width: number; barWidth: number; lane: number };
 // 段の木。段は作品(その話を持つ)か、子を持つ出来事(その子の出来事を持つ)か、親の無い出来事
 type Group = { key: string; label: string; storyId: number | null; parentEventId: number | null; items: Item[]; children: Group[] };
-// open は子の段を出しているか。閉じた段には子孫の札もまとめて置く
+// open は段の札(と子の段)を出しているか。閉じた段は子孫の札もまとめて、名前の無い印で一行に置く。foldable が false の段は開閉しない
 type Row = { key: string; label: string; storyId: number | null; parentEventId: number | null; items: Placed[]; lanes: number;
-  depth: number; branch: boolean; open: boolean };
+  depth: number; foldable: boolean; open: boolean };
 type StoryInfo = { name: string; parent: number | null };
 type Tick = { at: number; label: string; major: boolean };
 type Gap = { from: number; to: number; x: number };
@@ -72,15 +74,17 @@ const byTime = (a: Item, b: Item) => a.start - b.start || a.at - b.at || a.id - 
 
 /**
  * 重ならないよう、左から順に空いている一番上の段へ置く。同じ日の札は同じ位置なので、時刻の順に縦へ並ぶ。
- * 札は名前の幅まで段を取るので、名前は次の札に切られない
+ * 札は名前の幅まで段を取るので、名前は次の札に切られない。
+ * 閉じた段(`folded`)は、札を名前の無い印にして一行にまとめる(印は重なってよい)
  */
-function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; lanes: number } {
+function pack(items: Item[], toX: (day: number) => number, folded: boolean): { placed: Placed[]; lanes: number } {
   const laneEnds: number[] = [];
   const placed = [...items]
     .sort(byTime)
     .map((item) => {
       const x = toX(item.start);
       const barWidth = item.end === null ? 0 : Math.max(0, toX(item.end) - x);
+      if (folded) return { ...item, x, width: Math.max(barWidth, MARKER_PX), barWidth, lane: 0 };
       const width = Math.max(barWidth, labelWidth(item.label));
       let lane = laneEnds.findIndex((end) => end <= x);
       if (lane < 0) lane = laneEnds.length;
@@ -280,10 +284,10 @@ function eventGroup(events: Item[], labels: Labels): Group {
 function flatten(groups: Group[], depth: number, isOpen: (key: string) => boolean, toX: (day: number) => number): Row[] {
   const all = (g: Group): Item[] => [...g.items, ...g.children.flatMap(all)];
   return groups.flatMap((g) => {
-    const branch = g.children.length > 0;
-    const open = branch && isOpen(g.key);
-    const { placed, lanes } = pack(open || !branch ? g.items : all(g), toX);
-    const row: Row = { key: g.key, label: g.label, storyId: g.storyId, parentEventId: g.parentEventId, items: placed, lanes, depth, branch, open };
+    const open = isOpen(g.key);
+    const { placed, lanes } = pack(open ? g.items : all(g), toX, !open);
+    const row: Row = { key: g.key, label: g.label, storyId: g.storyId, parentEventId: g.parentEventId, items: placed, lanes, depth,
+      foldable: true, open };
     return open ? [row, ...flatten(g.children, depth + 1, isOpen, toX)] : [row];
   });
 }
@@ -496,7 +500,7 @@ export default function TimelinePage() {
     if (!data || !stories || !scale) return { episodes: [] as Row[], events: [] as Row[] };
     const episodes = flatten(storyGroups(items.filter((i) => i.kind === "episode"), stories, storyId, data.episode.labels ?? {}), 0, isOpen, toX);
     if (episodes.length === 0) {
-      episodes.push({ key: "story-none", label: "", storyId: null, parentEventId: null, items: [], lanes: 1, depth: 0, branch: false, open: false });
+      episodes.push({ key: "story-none", label: "", storyId: null, parentEventId: null, items: [], lanes: 1, depth: 0, foldable: false, open: true });
     }
     const events = flatten([eventGroup(items.filter((i) => i.kind === "event"), data.event.labels ?? {})], 0, isOpen, toX);
     return { episodes, events };
@@ -596,7 +600,7 @@ export default function TimelinePage() {
   const renderRow = (row: Row) => (
     <div key={row.key} className="timeline-row">
       <div className="timeline-label" title={row.label} style={{ paddingLeft: `calc(0.3rem + ${row.depth * 0.9}rem)` }}>
-        {row.branch ? (
+        {row.foldable ? (
           <button type="button" className="timeline-toggle" aria-expanded={row.open} onClick={() => setOpen(row.key, !row.open)}>
             {row.open ? "▾" : "▸"}
           </button>
@@ -605,7 +609,8 @@ export default function TimelinePage() {
         )}
         {row.label}
       </div>
-      <div className="timeline-track" style={{ width: scale?.width, height: (row.lanes + (row.storyId !== null ? STORY_SPARE_LANES : 0)) * LANE_HEIGHT + 6 }}
+      <div className="timeline-track"
+        style={{ width: scale?.width, height: (row.lanes + (row.storyId !== null && row.open ? STORY_SPARE_LANES : 0)) * LANE_HEIGHT + 6 }}
         onClick={(e) => onTrackClick(e, row)}>
         {row.items.map((item) => {
           const days = dragDays(item);
@@ -613,6 +618,7 @@ export default function TimelinePage() {
           const className = [
             "timeline-item", item.kind,
             item.end === null ? "point" : "",
+            row.open ? "" : "folded",
             dragging ? "dragging" : "",
             pending?.key === item.key ? "saving" : "",
             item.record.confirmed === "未確認" ? "unconfirmed" : "",
@@ -636,7 +642,7 @@ export default function TimelinePage() {
             >
               {item.barWidth > 0 && <span className="timeline-bar" style={{ width: item.barWidth }} />}
               <span className="timeline-text">
-                {item.label}
+                {row.open && item.label}
                 {target && <span className="timeline-target"> → {String(target.start ?? target.time)}</span>}
               </span>
             </div>
