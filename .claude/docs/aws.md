@@ -1,7 +1,7 @@
 # AWS の db・資源と、API・web の流れの形
 
 AWS の db(RDS for PostgreSQL、db `novel`)と資源、API(Lambda)の段、web の流れ(`web_session/`)の決まり。
-資源の構成・場所ごとの db のロールと鍵は `.docs/aws-deploy.md`、待ち行列と web で回す仕組みは `.docs/claude-tasks.md`。
+資源の構成・場所ごとの db のロールと鍵は `.docs/aws-deploy.md`、web のセッションで AI を回す仕組みは `.docs/claude-tasks.md`。
 
 ## core は公開リポジトリ
 
@@ -40,10 +40,10 @@ web のセッションの側のコード(流れを持ち、`claude -p` を回し
 | --- | --- | --- |
 | 材料を読む・出力を書く | API(Lambda) | db の段。`data_access_logic/<領域>/steps.py` の `@db_step` の関数を、`POST /api/steps/{id}` が一つのトランザクションで回し、終わりに commit する |
 | AI を呼ぶ | web のセッション | `data_access_logic` の AI だけの関数(`*_draft` など)。材料を `*Serialized` に読み直して AI に渡す文面を作り、出力のモデルで受ける |
-| 流れ | web のセッション | `web_session/<領域>.py`。db の段を API で呼び(`web_session/api.py`)、間で AI の段を回す。入口と同じ引数を取り、待ち行列からは `web_session/flows.py` の対応表で引く |
+| 流れ | web のセッション | `web_session/<領域>.py`。db の段を API で呼び(`web_session/api.py`)、間で AI の段を回す。入口と同じ引数を取り、`web_session/flows.py` の対応表で引く |
 
 - 材料・出力・レスポンスは、どれも pydantic のモデルで受け渡す(`data-access.md` の方針)。API は受けた JSON を型注釈のモデルに validate してから使う。段の出力は土台のマテリアル(`*Serialized` でないもの)で宣言し、列のまま JSON にする
 - 「AI の結果は得たらすぐ commit する」境界を保つ。AI の結果を書き戻す段を一回呼ぶのが一つの commit。段の中では commit しない
 - 手元の入口も、同じ db だけの関数と AI だけの関数をつないで動く。違うのは、db の関数を自分のセッションで呼ぶか API で呼ぶかだけ
-- web のセッションで待ち行列を回すのは、ユーザに頼まれたとき(スキル `run-ai-tasks`)。スケジュールで起こすルーチンは使わない
+- web のセッションで後回しの AI の段を回すのは、ユーザに頼まれたとき(スキル `run-ai-tasks`)。スケジュールで起こすルーチンは使わない
 - claude を叩く入口を足したら、段と web の流れも足す(`.docs/claude-tasks.md` の「claude を叩く入口を足すとき」)

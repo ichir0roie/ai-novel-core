@@ -69,7 +69,6 @@ export const T = {
 
   record: {
     clickToEdit: "Click to edit",
-    writtenByAi: "Written by AI",
     saved: (keys: string[]) => `Saved (${join(keys)})`,
     changed: (keys: string[]) => `Changed: ${join(keys)}`,
     noChanges: "No changes",
@@ -117,34 +116,13 @@ export const T = {
       meme: "Memes",
       review: "Review",
       fact_check: "Fact check",
-      time_keeper: "Resident loop (claude)",
     } as Record<string, string>,
     writesDb: "writes db",
-    claudeOnly: "Endpoints that run the claude command can only be called from an API started inside Claude Code (CLAUDECODE=1)",
-    outsideClaude: "This API is running outside Claude Code, so endpoints that run claude (resident loop, post-approval AI) cannot be called",
-    queueMode: "This API queues endpoints that run claude (and background runs): a Claude Code on the web session runs them when you ask it to (skill run-ai-tasks). Their progress shows in the job list below",
     running: "Running…",
     run: "Run",
-    runInBackground: "Run in background",
     jsonHint: 'Write dicts and arrays as JSON (e.g. {"id": 3, "kind": "概念"} / [1, 2])',
     searchPlaceholder: "Search endpoints",
     selectOne: "Select an endpoint on the left",
-    jobs: "Background jobs",
-    noJobs: "None yet",
-    columns: { status: "Status", entrance: "Endpoint", args: "Args", result: "Result / error", time: "Time" },
-  },
-
-  generate: {
-    close: "Close",
-    noAddedId: (result: unknown) => `Cannot find id of the added row: ${JSON.stringify(result)}`,
-    failed: "Failed",
-    description: (mode: "create" | "edit") =>
-      `Generate with AI: the AI rebuilds every field around what you entered and ${mode === "create" ? "adds the row" : "writes the record"} (entered values may not survive as-is). Takes several minutes`,
-    unavailable: "Generate with AI is off on this API (start it inside Claude Code with CLAUDECODE=1, or queue for a Claude Code on the web session with NOVEL_CLAUDE_MODE=queue)",
-    queued:
-      "On this API, Generate with AI goes to a queue: a Claude Code on the web session runs it when you ask it to (skill run-ai-tasks). You can leave this page; the result also appears in the job list on the Endpoints page",
-    inProgress: (jobId: string, status: string) =>
-      `AI is generating… (job ${jobId}, ${status}). The job continues if you leave this page. The result is also visible in the job list on the Endpoints page`,
   },
 
   related: {

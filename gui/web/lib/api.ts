@@ -11,7 +11,6 @@ export type ReviewSummary = components["schemas"]["ReviewSummary"];
 export type ReviewNext = components["schemas"]["ReviewNext"];
 export type Option = components["schemas"]["Option"];
 export type ConfirmStatus = components["schemas"]["ConfirmStatus"];
-export type ClaudeMode = components["schemas"]["TablesResponse"]["claude_mode"] & string;
 export type Labels = Record<string, Record<string, string>>;
 export type Rec = Record<string, unknown>;
 
@@ -94,13 +93,12 @@ export function labelOf(labels: Labels | undefined, column: string, id: unknown)
 
 export type EntranceMeta = components["schemas"]["EntranceMeta"];
 export type EntranceList = components["schemas"]["EntranceList"];
-export type JobInfo = components["schemas"]["JobInfo"];
 export type RunResult = components["schemas"]["RunResult"];
 
 export const getEntrances = () => api<EntranceList>("/api/interface");
 
-export const runEntrance = (id: string, args: Rec, background = false) =>
-  api<RunResult | JobInfo>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args, background }) });
+export const runEntrance = (id: string, args: Rec) =>
+  api<RunResult>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args }) });
 
 /** アイデアを消す(下位のアイデアが残っていると失敗する)。`idea.delete_idea.DeleteIdea` を呼ぶ。 */
 export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.DeleteIdea", { idea_id: ideaId });
@@ -108,16 +106,6 @@ export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.Dele
 /** 話を消す(登場人物・踏まえたアイデアとの中間テーブルの行も消える)。`episode.delete_episode.DeleteEpisode` を呼ぶ。 */
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
-
-export const getJobs = () => api<components["schemas"]["JobList"]>("/api/jobs");
-
-export const getJob = (id: string) => api<JobInfo>(`/api/jobs/${id}`);
-
-export type GeneratorMeta = components["schemas"]["GeneratorMeta"];
-
-/** 「AI で作成」。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。claude を叩くので裏の job(202)になる。 */
-export const generateRecord = (table: string, generator: string, draft: Rec, args: Rec) =>
-  api<JobInfo>(`/api/tables/${table}/generate/${generator}`, { method: "POST", body: JSON.stringify({ draft, args }) });
 
 export type MapsResponse = components["schemas"]["MapsResponse"];
 export type PlanetMap = components["schemas"]["PlanetMap"];

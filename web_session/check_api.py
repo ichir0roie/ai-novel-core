@@ -3,7 +3,7 @@
 
     .venv/bin/python -m web_session.check_api
 
-繋ぐ先の API・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・待ち行列の件数・
+繋ぐ先の API・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・
 `claude` コマンドの有無を JSON で print し、届かないか版が食い違えば終了コード 1 で終わる。
 web の環境の設定(ネットワーク・環境変数)を変えたら、まずこれを回す(`.docs/web-session.md`)。
 """
@@ -18,7 +18,7 @@ from typing import Any
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-from data_access_logic.ai_task import steps
+from data_access_logic.system import steps
 from web_session.api import call
 
 _ALEMBIC_INI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db", "alembic", "alembic.ini")
