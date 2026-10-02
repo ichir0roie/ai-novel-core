@@ -21,8 +21,6 @@ const ITEM_GAP = 6;
 const MIN_TICK_PX = 64;
 // ドラッグとクリックを分けるしきい値(px)
 const DRAG_THRESHOLD = 4;
-// 一日がこれより広ければ、空の所のクリックを時の単位で丸める(狭ければ日の単位)
-const HOUR_SNAP_PX_PER_DAY = 240;
 const ADD_MENU_WIDTH = 190;
 const ADD_MENU_HEIGHT = 120;
 // 話・出来事の無い区間を詰めた帯の幅(px)。縮めない縮尺でこれより広く空く区間だけ詰める
@@ -36,7 +34,8 @@ const TICK_LABEL_PX = 48;
 const FULL_STAMP = /^\d+\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/;
 
 type Kind = "episode" | "event";
-type Item = { kind: Kind; key: string; id: number; label: string; record: Rec; labels: Labels; start: number; end: number | null };
+// 軸は日の単位。start・end は日の境目に丸めた通算日で、at は丸める前の時刻(同じ日の中の並び順に使う)
+type Item = { kind: Kind; key: string; id: number; label: string; record: Rec; labels: Labels; at: number; start: number; end: number | null };
 type Placed = Item & { x: number; width: number; barWidth: number; lane: number };
 type Row = { key: string; label: string; storyId: number | null; items: Placed[]; lanes: number };
 type Tick = { at: number; label: string; major: boolean };
@@ -59,11 +58,11 @@ function labelWidth(label: string): number {
   return Math.min(240, width);
 }
 
-/** 重ならないよう、左から順に空いている一番上の段へ置く。 */
+/** 重ならないよう、左から順に空いている一番上の段へ置く。同じ日の札は同じ位置なので、時刻の順に縦へ並ぶ */
 function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; lanes: number } {
   const laneEnds: number[] = [];
   const placed = [...items]
-    .sort((a, b) => a.start - b.start || a.id - b.id)
+    .sort((a, b) => a.start - b.start || a.at - b.at || a.id - b.id)
     .map((item) => {
       const x = toX(item.start);
       const barWidth = item.end === null ? 0 : Math.max(0, toX(item.end) - x);
@@ -76,20 +75,24 @@ function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; 
   return { placed, lanes: Math.max(1, laneEnds.length) };
 }
 
-/** 縮尺 `pxPerDay` で札が占めない区間。札の幅は px なので、縮尺が上がるほど占める日数は減る */
+/** 縮尺 `pxPerDay` で札が占めない区間(日の単位)。札は少なくともその日いっぱいを占め、札の幅は px なので縮尺が上がるほど占める日数は減る */
 function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[]): { from: number; to: number }[] {
   const margin = OCCUPY_MARGIN_PX / pxPerDay;
   const occupied = items
-    .map((item) => [Math.max(since, item.start - margin), Math.min(until, Math.max(item.end ?? item.start, item.start + labelWidth(item.label) / pxPerDay) + margin)])
+    .map((item) => [Math.max(since, item.start - margin), Math.min(until, Math.max(item.end ?? item.start + 1, item.start + labelWidth(item.label) / pxPerDay) + margin)])
     .filter(([from, to]) => from < to)
     .sort((a, b) => a[0] - b[0]);
   const empties: { from: number; to: number }[] = [];
   let cursor = since;
+  const push = (from: number, to: number) => {
+    const [a, b] = [Math.max(since, Math.ceil(from)), Math.min(until, Math.floor(to))];
+    if (b - a >= 1) empties.push({ from: a, to: b });
+  };
   for (const [from, to] of occupied) {
-    if (from > cursor) empties.push({ from: cursor, to: from });
+    if (from > cursor) push(cursor, from);
     cursor = Math.max(cursor, to);
   }
-  if (occupied.length > 0 && cursor < until) empties.push({ from: cursor, to: until });
+  if (occupied.length > 0 && cursor < until) push(cursor, until);
   return empties;
 }
 
@@ -156,14 +159,6 @@ function compress(since: number, until: number, width: number, items: Item[]): S
 
 function ticks(since: number, until: number, pxPerDay: number): Tick[] {
   const result: Tick[] = [];
-  for (const hours of [1, 2, 3, 6, 12]) {
-    if ((hours / 24) * pxPerDay < MIN_TICK_PX) continue;
-    for (let k = Math.ceil((since * 24) / hours); (k * hours) / 24 <= until; k++) {
-      const p = fromDayNumber((k * hours) / 24);
-      result.push({ at: (k * hours) / 24, label: p.hour === 0 ? `${pad2(p.month)}/${pad2(p.day)}` : `${pad2(p.hour)}:00`, major: p.hour === 0 });
-    }
-    return result;
-  }
   for (const days of [1, 2, 7, 14]) {
     if (days * pxPerDay < MIN_TICK_PX) continue;
     for (let day = Math.ceil(since); day <= until; day += days) {
@@ -198,13 +193,19 @@ function ticks(since: number, until: number, pxPerDay: number): Tick[] {
   }
 }
 
+/** 時刻を日の単位に丸める。期間はその日の始めから、終わりの日の終わりまで */
+function daySpan(start: number, end: number | null): { at: number; start: number; end: number | null } {
+  const from = Math.floor(start);
+  return { at: start, start: from, end: end === null ? null : Math.max(from + 1, Math.ceil(end)) };
+}
+
 function itemsOf(data: TimelineResponse): Item[] {
   const items: Item[] = [];
   for (const record of data.episode.items) {
     const start = dayOf(record.start);
     if (start === null) continue;
     items.push({ kind: "episode", key: `episode-${record.id}`, id: record.id as number, label: String(record.label || `id=${record.id}`),
-      record, labels: data.episode.labels ?? {}, start, end: dayOf(record.end) });
+      record, labels: data.episode.labels ?? {}, ...daySpan(start, dayOf(record.end)) });
   }
   for (const record of data.event.items) {
     const time = dayOf(record.time);
@@ -214,7 +215,7 @@ function itemsOf(data: TimelineResponse): Item[] {
     const end = dayOf(record.end);
     const span = start !== null && end !== null && end >= start;
     items.push({ kind: "event", key: `event-${record.id}`, id: record.id as number, label: String(record.label || `id=${record.id}`),
-      record, labels: data.event.labels ?? {}, start: span ? start : time, end: span ? end : null });
+      record, labels: data.event.labels ?? {}, ...daySpan(span ? start : time, span ? end : null) });
   }
   return items;
 }
@@ -342,7 +343,7 @@ export default function TimelinePage() {
     if (!data) return { episodes: [] as Row[], events: null as Row | null };
     const byStory = new Map<number, Item[]>();
     if (storyId !== null) byStory.set(storyId, []);
-    for (const item of items.filter((i) => i.kind === "episode").sort((a, b) => a.start - b.start)) {
+    for (const item of items.filter((i) => i.kind === "episode")) {
       const story = item.record.story_id as number;
       if (!byStory.has(story)) byStory.set(story, []);
       byStory.get(story)!.push(item);
@@ -418,8 +419,7 @@ export default function TimelinePage() {
 
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (since === null || pxPerDay === 0) return;
-    const day = fromX(e.clientX - e.currentTarget.getBoundingClientRect().left);
-    const snapped = pxPerDay >= HOUR_SNAP_PX_PER_DAY ? Math.floor(day * 24) / 24 : Math.floor(day);
+    const snapped = Math.floor(fromX(e.clientX - e.currentTarget.getBoundingClientRect().left));
     // 画面の端で押しても吹き出しがはみ出さないよう、内側へ寄せる
     setAddMenu({ x: Math.min(e.clientX, window.innerWidth - ADD_MENU_WIDTH), y: Math.min(e.clientY, window.innerHeight - ADD_MENU_HEIGHT),
       at: formatStamp(fromDayNumber(snapped)), storyId: row.storyId });
@@ -454,7 +454,7 @@ export default function TimelinePage() {
       {axisTicks.map((tick) => (
         <div key={tick.at} className={`timeline-grid ${tick.major ? "major" : ""}`} style={{ left: toX(tick.at) }} />
       ))}
-      {center !== null && <div className="timeline-center" style={{ left: toX(center) }} />}
+      {center !== null && <div className="timeline-center" style={{ left: toX(Math.floor(center)) }} />}
     </>
   );
 
@@ -570,7 +570,7 @@ export default function TimelinePage() {
                   {tick.label}
                 </div>
               ))}
-              {center !== null && <div className="timeline-center" style={{ left: toX(center) }} />}
+              {center !== null && <div className="timeline-center" style={{ left: toX(Math.floor(center)) }} />}
             </div>
           </div>
           <div className="timeline-body">
