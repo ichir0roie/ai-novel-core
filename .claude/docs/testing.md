@@ -9,7 +9,8 @@
 - 単体テスト: 実装の途中に、デバッグのために直している所だけを確かめる(`pytest tests/<file>::<test>`、関数を一つ呼ぶ、画面を一枚撮るなど)。いつ回してもよい
 - 網羅テスト: ユーザが実装を認めてから、プルリクの前に一度回す。変えた所に関わるものを全部回し、全部通ってからプルリクを作る
   - python を変えたとき: `.venv/bin/python -m pytest tests`、ルートで `uvx ruff check .` と `npx pyright --pythonpath .venv/bin/python`
-  - 画面(`gui/web`)を変えたとき: `gui/web` で `npm run typecheck` と `npm run lint`、テスト用の db で起こした画面での動作確認(`.claude/docs/gui.md`)
+  - 画面(`gui/web`)を変えたとき: `gui/web` で `npm run typecheck` と `npm run lint`(`gui/web/node_modules` が無ければ先に `npm ci`。
+    web のセッションは入っていないので、無いまま回すと `next` の型が見つからないと落ちる)、テスト用の db で起こした画面での動作確認(`.claude/docs/gui.md`)
   - 落ちたものがあれば直して、網羅テストを回し直す。変えた所と関わりの無い所で落ちるときは、その旨をユーザに伝える
 
 ## テストの db
@@ -27,9 +28,12 @@
 - web のセッションでは、PostGIS を `infra_local/postgis.sh` で入れ、空の `novel_test` を schema から作って、要る行を足して使う。
   本番の写しでなければ確かめられないことなら、その旨をユーザに伝え、手元で回すかを尋ねる
   - 用意: `dev=$(bash infra_local/postgis.sh .venv/bin/python) && .venv/bin/python -m db.postgres.init_db --url "${dev%/*}/novel_test" --create-database`
-  - 行を足す: `DEM_DEV_DATABASE_URL=$dev .venv/bin/python -m tool.test.seed_mock_db --n 100`(全部の表にモックの行)。
+  - 行を足す: `DEM_DEV_DATABASE_URL=$dev .venv/bin/python -m tool.test.seed_mock_db --n 100`(全部の表にモックの行。
+    ただし話と人物の結び `episode_character` と作品の親 `parent_story_id` は足さないので、登場人物・章の要る確かめは自分で足す)。
     件数・時期をそろえたいときは、`tool.test` を先に import した使い捨てのスクリプトで `randomizer.mock_factories` に値を渡して足す
   - `conftest.py` の `ensure_test_db` は空の db を写そうとして止まるので、pytest の前に行を足しておく
+  - pytest を回すと行が足されるので、確かめに使う id は決め打ちせず、回すたびに引き直す
+  - セッションの途中で PostGIS が止まっていることがある(`connection refused`)。`infra_local/postgis.sh` を回し直せば立ち上がり、db の中身は残る
 - `conftest.py` はテストの始めに `tool.test.ensure_test_db` を回す。テスト用の db が無いか空のときだけ写し、行があればそのまま使う
   (前のテストで足した行も残る)。作り直すのは `.venv/bin/python -m tool.test.recreate_db`(VS Code はタスク「test db recreate」。
   `seed_mock_db --recreate` も写し直す)。マイグレーションを足したあと、版の食い違いの警告が出たときも作り直す

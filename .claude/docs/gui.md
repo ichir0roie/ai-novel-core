@@ -17,4 +17,10 @@
   - API: `dev=${DEM_DEV_DATABASE_URL:-$(infra_local/postgis.sh .venv/bin/python)} && DEM_DATABASE_URL="${dev%/*}/novel_test" DEM_DATABASE_IAM_AUTH=0 .venv/bin/python -m uvicorn gui.api.app:app --port 18765`
   - API と画面: 同じ `DEM_DATABASE_URL` / `DEM_DATABASE_IAM_AUTH=0` を付けて上の `gui.dev` を起こす
 - web のセッションには `ss` が無い。`gui.dev` はポートを空けられずに止まるので、前に起こしたものは `pkill -f '[n]ext dev'` などで止めてから起こす
-- 画面を撮るときは Playwright(`executablePath: '/opt/pw-browsers/chromium'`)で開き、撮った画像は `SendUserFile` でユーザに見せられる
+- `pkill -f` のパターンは、必ず一字を `[]` で囲む(`pkill -f '[u]vicorn gui.api.app'`)。囲まないと、そのコマンドを回しているシェル自身にも
+  当たってシェルごと止まる(exit 144)。止まったかは `curl -s -o /dev/null -w '%{http_code}' <URL>` が `000` を返すかで確かめる
+- 画面は `http://localhost:13000` で開く。`127.0.0.1` で開くと `next dev` が開発用の資源を別の origin として拒み(`allowedDevOrigins`)、
+  画面が組み上がらない(ページは 200 を返すのに、`.timeline-item` などの要素がいつまでも出ない)
+- 画面を撮るときは Playwright(`executablePath: '/opt/pw-browsers/chromium'`)で開き、撮った画像は `SendUserFile` でユーザに見せられる。
+  `.venv` に python の playwright は無いので、スクラッチパッドで `npm i playwright-core` し、node のスクリプトで
+  `chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })` から開く
