@@ -566,7 +566,7 @@ button.ghost { background: transparent; }
 .timeline-center-input { display: inline-flex; align-items: center; gap: 0.4rem; }
 .timeline-center-input input[type="text"] { width: 12.5rem; }
 .timeline-filter { display: inline-flex; align-items: center; gap: 0.4rem; }
-.timeline { --timeline-label: 150px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.timeline { --timeline-label: 220px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .timeline-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-x: contain; }
 .timeline-body { position: relative; width: max-content; }
 .timeline-lines { position: absolute; top: 0; bottom: 0; pointer-events: none; }
@@ -575,6 +575,8 @@ button.ghost { background: transparent; }
   position: sticky; left: 0; z-index: 4; width: var(--timeline-label); flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel);
   border-right: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* 段の木の開閉。子の無い段も同じ幅を空けて、名前の頭をそろえる */
+.timeline-toggle { display: inline-block; width: 1rem; padding: 0; border: 0; background: none; color: var(--muted); font-size: 0.75rem; text-align: left; cursor: pointer; }
 /* hidden だと段がスクロールの基準になり、札の名前の sticky が効かない */
 .timeline-track { position: relative; flex-shrink: 0; overflow: clip; cursor: cell; }
 .timeline-axis { position: sticky; top: 0; z-index: 5; background: var(--panel); }
@@ -626,5 +628,5 @@ button.ghost { background: transparent; }
 .modal-body:has(> .record-modal) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .record-modal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 @media (max-width: 640px) {
-  .timeline { --timeline-label: 90px; }
+  .timeline { --timeline-label: 130px; }
 }
