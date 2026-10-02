@@ -6,8 +6,7 @@
 
 - python・pytest・alembic は、リポジトリのルートを cwd にし、ルートの `.venv/bin/python`(Windows は `.venv\Scripts\python.exe`)で呼ぶ
 - python の版は `.python-version`(3.14)に書く
-- `.venv` は SessionStart フック(`.claude/hooks/session-start.sh`)が用意する。web のセッションでは裏で用意し(ログは `.cache/session-setup.log`)、
-  python を使うコマンドだけを PreToolUse フック(`.claude/hooks/wait-setup.sh`)が用意の済むまで待たせる
+- `.venv` は SessionStart フック(`.claude/hooks/session-start.sh`)が用意する。web のセッションでは裏で用意し(ログは `.cache/session-setup.log`)、python を使うコマンドだけを PreToolUse フック(`.claude/hooks/wait-setup.sh`)が用意の済むまで待たせる
 - 手で用意するときは、uvx で新しめの uv を使う(python 本体は uv が取ってくる。古い uv は新しい版を知らない):
 
 ```
@@ -17,11 +16,9 @@ uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.tx
 
 - `.venv` に pip は入らない
 - 素の `uv`(`/root/.local/bin/uv` など)は使わない。古いことがあり、python の rc 版を選んで pydantic が落ちる。rc 版の `.venv` ができたら、上の uvx の uv で作り直す
-- `.venv` が無い(`.venv/bin/python: No such file or directory`)のは、SessionStart フックが走っていないとき(後から足したリポジトリ・コンテナが戻ったとき)。
-  web のセッションでは `CLAUDE_CODE_REMOTE=true bash .claude/hooks/session-start.sh` を手で回す
+- `.venv` が無い(`.venv/bin/python: No such file or directory`)のは、SessionStart フックが走っていないとき(後から足したリポジトリ・コンテナが戻ったとき)。web のセッションでは `CLAUDE_CODE_REMOTE=true bash .claude/hooks/session-start.sh` を手で回す
 - フック(`.claude/hooks/`)と `.claude/settings.json` は、書き換える前に何を変えるかをユーザに示して承認を取る(auto mode も自己の書き換えとして止める)
-- 書き換えたフックは、作業ツリーをスクラッチパッドに写し、`CLAUDE_CODE_REMOTE=true CLAUDE_ENV_FILE=<写しの中のファイル>` を付けて動かして確かめてから登録する。
-  確かめずに登録すると、このセッションのツールの呼び出しを待たせ続けることがある
+- 書き換えたフックは、作業ツリーをスクラッチパッドに写し、`CLAUDE_CODE_REMOTE=true CLAUDE_ENV_FILE=<写しの中のファイル>` を付けて動かして確かめてから登録する。確かめずに登録すると、このセッションのツールの呼び出しを待たせ続けることがある
 - `requirements.txt` は、依存の依存まで版とハッシュを固定したもの。手では書かない。直接使うパッケージは `requirements.in` に書き、そこから作る(`--universal` は Windows でも同じファイルで入れるため)
 - パッケージを足す・版を上げるときは、`requirements.in` を直してから:
 

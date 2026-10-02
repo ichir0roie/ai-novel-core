@@ -8,8 +8,7 @@
 
 ## 手元からの道
 
-SessionStart フックが踏み台越しの転送(`tool.aws.rds --serve`、127.0.0.1:15432)を裏で起こし、次の環境変数を渡す。
-ルートの `.venv/bin/python` で呼べば、そのまま RDS を読み書きする。
+SessionStart フックが踏み台越しの転送(`tool.aws.rds --serve`、127.0.0.1:15432)を裏で起こし、次の環境変数を渡す。ルートの `.venv/bin/python` で呼べば、そのまま RDS を読み書きする。
 
 | 環境変数 | 値 |
 | --- | --- |
@@ -17,10 +16,9 @@ SessionStart フックが踏み台越しの転送(`tool.aws.rds --serve`、127.0
 | `DEM_DATABASE_IAM_AUTH` | `1`(パスワードの代わりに IAM データベース認証のトークンで繋ぐ。パスワードはどこにも置かない) |
 
 - `novel_app` は行の読み書き(DML)だけができる。表を作る・変える(DDL)ことはできない
-- `connection refused` は、転送がまだ張れていない(踏み台が止まっていれば起こすのに 1 分ほどかかる)か、落ちている。
-  `.cache/rds-tunnel.log` を見て、無ければ `.venv/bin/python -m tool.aws.rds --serve` を `run_in_background` で起こす
+- `connection refused` は、転送がまだ張れていない(踏み台が止まっていれば起こすのに 1 分ほどかかる)か、落ちている。`.cache/rds-tunnel.log` を見て、無ければ `.venv/bin/python -m tool.aws.rds --serve` を `run_in_background` で起こす
 - 転送は EC2 Instance Connect Endpoint の都合で 1 時間ごとに切れ、`--serve` が張り直す。その間に落ちた処理はやり直す
-- 止めるのはユーザに頼まれたときだけ。止めるのは `pkill -f '[t]ool.aws.rds --serve'`(自分で起こした踏み台も止まる)
+- ユーザに頼まれたときだけ `pkill -f '[t]ool.aws.rds --serve'` で止める(自分で起こした踏み台も止まる)
 
 ## 読み書きの決まり
 
