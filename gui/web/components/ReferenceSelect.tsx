@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Modal from "./Modal";
+import { PickerModal, PickerToggle } from "./Picker";
 import { getOptions, type Option } from "@/lib/api";
 import { T } from "@/lib/text";
 
@@ -53,35 +55,37 @@ type Props = {
   disabled?: boolean;
   // 絞り込み欄が空のときに出す選択肢の id。null・省略なら全部出す
   defaultIds?: number[] | null;
+  // 選ぶモーダルの見出し(欄の名前)
+  title?: string;
 };
 
-export default function ReferenceSelect({ table, value, nullable, onChange, disabled, defaultIds }: Props) {
+/** 参照先の行を一つ選ぶ欄。ボタンに今の行を出し、押すとモーダルで大きく並べて選ぶ。 */
+export default function ReferenceSelect({ table, value, nullable, onChange, disabled, defaultIds, title }: Props) {
   const options = useOptions(table);
-  const [filter, setFilter] = useState("");
-  const shown = useMemo(() => {
-    const q = filter.trim();
-    const list = q ? options.filter((o) => o.label.includes(q) || String(o.id) === q)
-      : defaultIds ? options.filter((o) => defaultIds.includes(o.id)) : options;
-    // 今の値が絞り込みで消えないようにする
-    if (value !== null && !list.some((o) => o.id === value)) {
-      const current = options.find((o) => o.id === value);
-      if (current) return [current, ...list];
-    }
-    return list;
-  }, [options, filter, value, defaultIds]);
+  const [open, setOpen] = useState(false);
+  const choices = useMemo(() => options.map((o) => ({ value: o.id, label: `${o.id}: ${o.label}` })), [options]);
+  const current = choices.find((c) => c.value === value);
 
   return (
-    <div style={{ display: "flex", gap: "0.3rem" }}>
-      <input type="text" placeholder={T.filter} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: "8rem" }} disabled={disabled} />
-      <select value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} disabled={disabled}>
-        <option value="">{nullable ? T.none : T.select}</option>
-        {shown.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.id}: {o.label}
-          </option>
-        ))}
-      </select>
+    <div className="picker">
+      <PickerToggle
+        label={current?.label ?? (value !== null ? `id ${value}` : nullable ? T.none : T.select)}
+        empty={value === null}
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+      />
       {value !== null && <RecordLink table={table} id={value} />}
+      {open && (
+        <PickerModal
+          title={title ?? T.select}
+          choices={choices}
+          value={value}
+          onPick={onChange}
+          onClose={() => setOpen(false)}
+          emptyLabel={nullable ? T.none : undefined}
+          suggested={defaultIds}
+        />
+      )}
     </div>
   );
 }
@@ -99,26 +103,48 @@ type MultiProps = {
   table: string;
   value: number[];
   onChange: (value: number[]) => void;
+  title?: string;
 };
 
-export function ReferenceMultiSelect({ table, value, onChange }: MultiProps) {
+/** 参照先の行をいくつか選ぶ欄。ボタンの横に選んだ名前を並べ、押すとモーダルのチェック欄で選ぶ。 */
+export function ReferenceMultiSelect({ table, value, onChange, title }: MultiProps) {
   const options = useOptions(table);
+  const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const q = filter.trim();
-  const shown = options.filter((o) => !q || o.label.includes(q) || value.includes(o.id));
+  const selected = options.filter((o) => value.includes(o.id));
+  const shown = options.filter((o) => !q || o.label.includes(q) || String(o.id) === q || value.includes(o.id));
   const toggle = (id: number) => onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   return (
-    <div>
-      <input type="text" placeholder={T.filter} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "0.3rem" }} />
-      <div className="multi">
-        {shown.map((o) => (
-          <label key={o.id}>
-            <input type="checkbox" checked={value.includes(o.id)} onChange={() => toggle(o.id)} />
-            {o.id}: {o.label}
-          </label>
-        ))}
-        {shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
-      </div>
+    <div className="picker">
+      <PickerToggle label={T.picker.count(value.length)} empty={value.length === 0} onClick={() => setOpen(true)} />
+      <span className="picker-summary">{selected.map((o) => o.label).join(" / ")}</span>
+      {open && (
+        <Modal
+          title={title ?? T.select}
+          onClose={() => setOpen(false)}
+          wide
+          actions={
+            <>
+              <span className="spacer" />
+              <button type="button" className="primary" onClick={() => setOpen(false)}>
+                {T.picker.done}
+              </button>
+            </>
+          }
+        >
+          <input type="text" className="picker-filter" placeholder={T.filter} value={filter} autoFocus onChange={(e) => setFilter(e.target.value)} />
+          <div className="picker-grid">
+            {shown.map((o) => (
+              <label key={o.id} className={`picker-option ${value.includes(o.id) ? "selected" : ""}`}>
+                <input type="checkbox" checked={value.includes(o.id)} onChange={() => toggle(o.id)} />
+                {o.id}: {o.label}
+              </label>
+            ))}
+          </div>
+          {shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
+        </Modal>
+      )}
     </div>
   );
 }

@@ -60,17 +60,29 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
       </span>
       {viewing !== null && <CharacterSheetModal characterId={viewing} time={episodeStart} onClose={() => setViewing(null)} />}
       {open && (
-        <Modal title={T.episodeCharacters.modalTitle} onClose={() => setOpen(false)}>
-          <input type="text" placeholder={T.filter} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: "0.3rem" }} />
-          <div className="multi">
+        <Modal
+          title={T.episodeCharacters.modalTitle}
+          onClose={() => setOpen(false)}
+          wide
+          actions={
+            <>
+              <span className="spacer" />
+              <button type="button" className="primary" onClick={() => setOpen(false)}>
+                {T.picker.done}
+              </button>
+            </>
+          }
+        >
+          <input type="text" className="picker-filter" placeholder={T.filter} value={filter} autoFocus onChange={(e) => setFilter(e.target.value)} />
+          <div className="picker-grid">
             {shown.map((o) => (
-              <label key={o.id}>
+              <label key={o.id} className={`picker-option ${characterIds.includes(o.id) ? "selected" : ""}`}>
                 <input type="checkbox" checked={characterIds.includes(o.id)} onChange={() => toggle(o.id)} />
                 {labelWithAge(`${o.id}: ${o.label}`, o.born, episodeStart)}
               </label>
             ))}
-            {shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
           </div>
+          {shown.length === 0 && <span className="hint">{T.noCandidates}</span>}
         </Modal>
       )}
     </>

@@ -304,16 +304,15 @@ button.ghost { background: transparent; }
 .stamp-time label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); flex: 1; }
 .stamp-preview { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); text-align: center; }
 
-.multi { border: 1px solid var(--line); border-radius: 6px; padding: 0.3rem 0.5rem; max-height: 12rem; overflow: auto; background: var(--panel); }
-.multi label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 
 .related ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
 .related.context-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
+.episode-characters-field { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
 /* 登場人物の名前。押すと人物のモーダル(CharacterSheetModal)を開く */
-.episode-characters-summary button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
-.episode-characters-summary button.character-open:hover { text-decoration: underline; }
+:is(.episode-characters-summary, .episode-sheet-character) button.character-open { padding: 0; border: none; background: none; color: var(--accent); font: inherit; }
+:is(.episode-characters-summary, .episode-sheet-character) button.character-open:hover { text-decoration: underline; }
 
 /* 人物のモーダル(CharacterSheetModal)。人物詳細と同じ .record.split で、左に欄とパラメータ、右に本文と期間ごとの説明。
    モーダルの高さを決めて本体はスクロールさせず、左右(.record-side / .record-text)がそれぞれスクロールする */
@@ -339,7 +338,6 @@ button.ghost { background: transparent; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
 /* 選択欄の横に置く、選んだ行のページへのリンク(RecordLink) */
 .record-link { align-self: center; white-space: nowrap; font-size: 0.85rem; }
-.tree-select > .record-link { margin-left: 0.4rem; }
 .jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }
 .jump-title { font-size: 1.6rem; font-weight: 700; }
@@ -444,16 +442,23 @@ button.ghost { background: transparent; }
 }
 .tree-root-drop:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* 場所・アイデアのプルダウンをツリーで選ばせる(ReferenceTreeSelect) */
-.tree-select { position: relative; display: inline-block; }
-.tree-select-toggle { min-width: 12rem; max-width: 100%; text-align: left; }
-.tree-select-popup {
-  position: absolute; z-index: 20; top: 100%; left: 0; margin-top: 0.2rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  padding: 0.5rem; width: 22rem; max-width: 90vw; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-}
-.tree-select-popup input[type="text"] { width: 100%; }
-.tree-select-scroll { max-height: 16rem; overflow-y: auto; margin-top: 0.4rem; }
+/* プルダウンの代わりの選択(Picker)。ボタンに今の値を出し、押すとモーダルに選択肢を大きく並べる */
+.picker { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; min-width: 0; }
+.picker-toggle { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 10rem; max-width: 100%; text-align: left; }
+.picker-toggle.empty { color: var(--muted); }
+.picker-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-caret { color: var(--muted); font-size: 0.8rem; }
+.picker-summary { color: var(--muted); font-size: 0.85rem; }
+.picker-filter { width: 100%; margin-bottom: 0.7rem; }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.4rem; }
+.picker-option { display: flex; align-items: center; gap: 0.5rem; text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; overflow-wrap: anywhere; }
+.picker-option:hover { border-color: var(--accent); }
+.picker-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); font-weight: 600; }
+.picker-option.none { color: var(--muted); }
+.picker > .record-link { margin-left: 0.2rem; }
+/* 場所・アイデアはツリーで選ぶ(TreeReferenceSelect のモーダルの中) */
+.tree-select-tree .tree-select-row { padding: 0.15rem 0; }
+.tree-select-tree .tree-select-label { padding: 0.35rem 0.5rem; }
 .tree-select-row { display: flex; align-items: center; gap: 0.2rem; }
 .tree-select-label {
   background: none; border: none; text-align: left; padding: 0.15rem 0.3rem; cursor: pointer;
@@ -571,9 +576,6 @@ button.ghost { background: transparent; }
 .timeline-item.dragging .timeline-text { overflow: visible; }
 .timeline-target { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
 /* タイムラインから開く編集・追加のモーダル。人物のモーダルと同じく、左右の欄がそれぞれスクロールする */
-.modal.wide:has(.record-modal) { height: 90dvh; }
-.modal-body:has(> .record-modal) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.record-modal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .timeline-hint { margin-top: 0.4rem; }
 /* スマホは表を広く見せる。説明は出さず、操作は横へスクロールする一行にまとめ、表は画面の端まで使う */
 @media (max-width: 640px) {
@@ -585,3 +587,12 @@ button.ghost { background: transparent; }
   .timeline-hint { display: none; }
   .timeline { --timeline-label: 96px; border-width: 1px 0 0; border-radius: 0; }
 }
+/* タイムラインで押した話を見るモーダル(EpisodeSheetModal)。人物の閲覧モーダルの並び(character-sheet)に、登場人物ごとの歳と関係を足す */
+.episode-sheet h3 { margin-top: 1rem; }
+.episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
+.episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
+.episode-sheet-relations { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.episode-sheet-relation { border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.45rem; font-size: 0.85rem; color: var(--muted); }
+.episode-sheet-relation.here { color: inherit; border-color: var(--accent); }
+.episode-sheet-mentioned { margin-top: 0.6rem; }
+.sheet-plain { white-space: pre-wrap; }
