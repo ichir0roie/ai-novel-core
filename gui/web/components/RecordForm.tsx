@@ -5,7 +5,7 @@ import type { Rec, TableMeta } from "@/lib/api";
 import ChildListEditor, { type ExtraColumn } from "./ChildListEditor";
 import FieldInput from "./FieldInput";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
-import { ageAt } from "@/lib/stamp";
+import { ageAt, ageInYear } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 /** 期間ごとの居場所・パラメータの開始・終了それぞれの隣に、その時点の人物の年齢を出す(人物の start が生年)。
@@ -19,6 +19,17 @@ function ageColumns(birth: unknown): ExtraColumn[] {
 
 function formatAge(age: number | null): string {
   return age === null ? "—" : String(age);
+}
+
+/** 来歴の始まりの年の隣に、その年に迎える歳を出す(年が未定・生年が無いときは出さない)。 */
+export function historyAgeColumns(birth: unknown): ExtraColumn[] {
+  return [{
+    key: "start_age", after: "start", label: T.record.ageAt,
+    render: (row) => {
+      const age = ageInYear(birth, row.start);
+      return age === null ? null : T.record.ageInYear(age);
+    },
+  }];
 }
 
 type Props = {
@@ -174,6 +185,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 meta={child}
                 rows={(value[child.name] as Rec[] | undefined) ?? []}
                 onChange={(rows) => set(child.name, rows)}
+                extraColumns={meta.name === "character" && child.name === "histories" ? historyAgeColumns(value.start) : undefined}
               />
             </div>
           ))}
