@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // テスト・動作確認で起こす画面のビルド先(.claude/docs/gui.md)
+    ".next-test/**",
   ]),
 ]);
 

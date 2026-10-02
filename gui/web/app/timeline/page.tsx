@@ -157,6 +157,11 @@ function compress(since: number, until: number, width: number, items: Item[]): S
   return { pxPerDay, gaps, toX: (d) => along(d, 0), fromX: (px) => along(px, 1) };
 }
 
+/** 目盛りの文字の幅。左の余白に 4px、数字・区切りは 0.75rem で 8px ほどで見積もる */
+function tickLabelWidth(label: string): number {
+  return 4 + label.length * 8;
+}
+
 function ticks(since: number, until: number, pxPerDay: number): Tick[] {
   const result: Tick[] = [];
   for (const days of [1, 2, 7, 14]) {
@@ -362,11 +367,15 @@ export default function TimelinePage() {
 
   const axisTicks = useMemo(() => {
     if (since === null || until === null || pxPerDay === 0) return [];
+    // 年の入った目盛り(11572/01/01)は日の間隔より長いことがあるので、前の文字に掛かる目盛りは文字を出さない
+    let labelEnd = -Infinity;
     return ticks(since, until, pxPerDay)
       .filter((tick) => !scale.gaps.some((g) => tick.at > g.from && tick.at < g.to))
       .map((tick) => {
         const x = toX(tick.at);
-        return scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX) ? { ...tick, label: "" } : tick;
+        if (x < labelEnd || scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX)) return { ...tick, label: "" };
+        labelEnd = x + tickLabelWidth(tick.label);
+        return tick;
       });
   }, [since, until, pxPerDay, scale, toX]);
 
