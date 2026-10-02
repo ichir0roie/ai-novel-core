@@ -200,12 +200,16 @@ function shifted(item: Item, days: number): Rec {
 }
 
 /**
- * 作品の木。話のある作品(と絞り込んだ作品)と、その祖先の作品を段にする。親が段に無い作品は根に置く。
- * 読み直しても段が入れ替わらないよう、兄弟は作品の id 順に並べる
+ * 作品の木。話の無い作品も段にする(作品で絞ったときは、その作品と子孫の作品)。場所で絞ったときは、その場所の話のある作品だけにする。
+ * 段にする作品の祖先の作品も段にする。親が段に無い作品は根に置く。読み直しても段が入れ替わらないよう、兄弟は作品の id 順に並べる
  */
-function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, labels: Labels): Group[] {
+function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, locationId: number | null,
+  labels: Labels): Group[] {
   const byStory = new Map<number, Item[]>();
   if (storyId !== null) byStory.set(storyId, []);
+  if (locationId === null) {
+    for (const id of stories.keys()) if (storyId === null || descendsFrom(id, storyId, stories)) byStory.set(id, []);
+  }
   for (const item of episodes) {
     const story = item.record.story_id as number;
     byStory.set(story, [...(byStory.get(story) ?? []), item]);
@@ -234,6 +238,16 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
   };
   roots.forEach(reach);
   return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort((a, b) => a - b)].map(node);
+}
+
+/** 作品 `id` が `ancestor` か、その子孫か。親を循環してたどる作品でも止まる */
+function descendsFrom(id: number, ancestor: number, stories: Map<number, StoryInfo>): boolean {
+  const seen = new Set<number>();
+  for (let at: number | null = id; at !== null && !seen.has(at); at = stories.get(at)?.parent ?? null) {
+    if (at === ancestor) return true;
+    seen.add(at);
+  }
+  return false;
 }
 
 /** 段の木を、開いた段の子だけをたどって並べる。閉じた段には子孫の札をまとめて置く */
@@ -267,7 +281,7 @@ export default function TimelinePage() {
 
   const [draft, setDraft] = useState<string | null>(at);
   const [data, setData] = useState<TimelineResponse | null>(null);
-  // 段の木を組むための作品の名前と親。話の無い祖先の作品も段に出すので、全部の作品を引く
+  // 段の木を組むための作品の名前と親。話の無い作品も段に出すので、全部の作品を引く
   const [stories, setStories] = useState<Map<number, StoryInfo> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -434,10 +448,10 @@ export default function TimelinePage() {
 
   const rows = useMemo(() => {
     if (!stories || !scale) return [];
-    const rows = flatten(storyGroups(items, stories, storyId, labels), 0, isOpen, toX);
+    const rows = flatten(storyGroups(items, stories, storyId, locationId, labels), 0, isOpen, toX);
     if (rows.length === 0) rows.push({ key: "story-none", label: "", storyId: null, items: [], lanes: 1, depth: 0, foldable: false, open: true });
     return rows;
-  }, [stories, scale, items, storyId, labels, isOpen, toX]);
+  }, [stories, scale, items, storyId, locationId, labels, isOpen, toX]);
 
   const axisTicks = useMemo(() => {
     if (!scale) return [];
