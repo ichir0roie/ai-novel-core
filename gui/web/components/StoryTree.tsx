@@ -26,7 +26,6 @@ type MoveState = {
 };
 
 function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
-  const span = [node.start, node.end].filter(Boolean).join(" 〜 ");
   const inMoveMode = move.movingId !== null;
   const isSelf = move.movingId === node.id;
   return (
@@ -36,7 +35,6 @@ function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
       </Link>
       <span className="tree-meta">
         {node.state && <span className="chip">{node.state}</span>}
-        {span && <span>{span}</span>}
         <span>{T.storyTree.episodes(node.episodes)}</span>
         {node.children.length > 0 && <span>{T.storyTree.stories(node.children.length)}</span>}
       </span>

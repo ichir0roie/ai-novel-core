@@ -96,9 +96,9 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「ミームを引いて」                   | `meme.draw_memes.DrawMemes(person=True, seed=None)`。ミームから、分類ごとに 0〜2 件引き、それぞれに古今表裏を割り振って返す。db には書かない |
 | 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、まだ要約の無い出来事・話もすべて見て `event_summary` と話の `summary_text` を作る。`CommitEvent` / `CommitStory` / `CommitEpisode` は確定した一件だけを見るので、GUI から直した分などの取りこぼしを拾うのはこちら |
 | 「作品の一覧」                       | `story.list_stories.ListStories()`                                           |
-| 「話を書き始める」「次の話を書く」   | `story.start_story.StartStory(story_id)`。同期確認・見出し・直前の話・断面・顔ぶれを一度に出す |
+| 「話を書き始める」「次の話を書く」   | `story.start_story.StartStory(story_id, time=None)`。同期確認・見出し・直前の話・断面・顔ぶれを一度に出す。`time` を省けば作品の最後の話の時刻 |
 | 「前の話を読ませて」                 | `episode.read_episodes.ReadEpisodes(story_id, count=10, before=None, text=True)`。`before` は時刻で、start がそれより前の話に絞る |
-| 「その時点の顔ぶれは?」             | `story.read_cast.ReadCast(story_id, time=None)`                              |
+| 「その時点の顔ぶれは?」             | `story.read_cast.ReadCast(story_id, time=None)`。`time` を省けば作品の最後の話の時刻 |
 | 「その場所・その時点の様子は?」     | `story.read_brief.ReadBrief(location_id, time)`                                 |
 | 「この人物の周りで何が起きている?」 | `character.read_surroundings.ReadSurroundings(character_id, time)`               |
 | 「この人物を本文用にそろえて」       | `character.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと生まれたときの値)。変わった時ごとの行は `parameters`。芯は `text`。来歴(`histories`)は `time` の年までに起きた行だけを古い順に出す(`time` を省くと、年の決まっていない行も最後に含めてすべて) |

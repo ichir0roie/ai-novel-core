@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from data_access_logic.material import Form, Timestamp
+from data_access_logic.material import Form
 
 
 class StoryCreateForm(Form):
@@ -10,8 +10,6 @@ class StoryCreateForm(Form):
     location_id: int | None = None
     narration: str = ""
     state: str = ""
-    start: Timestamp | None = None
-    end: Timestamp | None = None
     event_seeded: bool = False
     parent_story_id: int | None = None
 
@@ -24,7 +22,5 @@ class StoryUpdateForm(Form):
     location_id: int | None = None
     narration: str | None = None
     state: str | None = None
-    start: Timestamp | None = None
-    end: Timestamp | None = None
     event_seeded: bool | None = None
     parent_story_id: int | None = None

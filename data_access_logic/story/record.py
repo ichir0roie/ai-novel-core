@@ -1,4 +1,4 @@
-from data_access_logic.material import Material, Timestamp
+from data_access_logic.material import Material
 
 
 class StoryRecord(Material):
@@ -8,8 +8,6 @@ class StoryRecord(Material):
     location_id: int | None = None
     narration: str
     state: str
-    start: Timestamp | None = None
-    end: Timestamp | None = None
     event_seeded: bool
     parent_story_id: int | None = None
     text: str

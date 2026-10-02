@@ -42,9 +42,10 @@ def span(when: Stamp | str | int) -> tuple[Stamp, Stamp]:
 def resolve_time(s: Session, when: Stamp | str | None, story: Story | None) -> tuple[Stamp, Stamp]:
     if when is not None:
         return span(when)
-    if story is not None and story.start is not None:
-        return span(story.start.year)
-    raise ValueError("時刻が決まらない(作品に立つ年が無いので time を渡す)")
+    latest = s.scalar(select(func.max(Episode.start)).where(Episode.story_id == story.id)) if story else None
+    if latest is not None:
+        return span(latest)
+    raise ValueError("時刻が決まらない(作品に時刻の決まった話が無いので time を渡す)")
 
 
 def get_row[M: Base](s: Session, model: type[M], id_: int) -> M:

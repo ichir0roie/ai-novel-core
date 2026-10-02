@@ -62,7 +62,7 @@ def _time(s: Session, episode: Episode) -> Stamp:
     if episode.start is not None:
         return episode.start
     latest = latest_past_episode(s, episode)
-    return (latest.start if latest is not None else None) or episode.story.start or Stamp(1)
+    return (latest.start if latest is not None else None) or Stamp(1)
 
 
 def _later_events_select(episode: Episode, time: Stamp) -> Select[Event]:

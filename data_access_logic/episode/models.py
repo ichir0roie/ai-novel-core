@@ -382,8 +382,6 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
         return {
             "作品": {
                 **_story(self.story),
-                "始まり": str(self.story.start) if self.story.start else None,
-                "終わり": str(self.story.end) if self.story.end else None,
                 "立つ場所": _location(self.locations),
             },
             "前の話の概要(古い順)": _past_episodes(self.past_episodes),
