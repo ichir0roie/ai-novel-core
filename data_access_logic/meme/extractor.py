@@ -23,7 +23,7 @@ from data_access_logic.meme.models import (
 )
 from data_access_logic.query import meme_query
 from data_access_logic.character.histories import plot_of
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
+from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
 from db.schema import MEME_CATEGORIES, Character, ConfirmStatus, Event, Idea, Meme, Oracle
 
 logger = logging.getLogger(__name__)
@@ -212,7 +212,7 @@ def draw_from(rng: random.Random, pool: list[PooledMeme], categories: tuple[str,
         count = min(rng.randint(*constants.MEME_DRAW_RANGE), len(memes))
         for meme in rng.sample(memes, count):
             drawn.append(DrawnMeme(id=meme.id, position=rng.choice(list(constants.MEME_POSITIONS)),
-                                   category=meme.category, text=meme.text))
+                                   category=meme.category, text=strip_fact_check(meme.text)))
     return drawn
 
 
