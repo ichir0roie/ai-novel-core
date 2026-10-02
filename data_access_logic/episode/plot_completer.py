@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""プロット補完。本文は書かない(`writer.write_episode` で別に書く)。
+"""プロット補完。本文は書かない(本文はスキル `episode` でこのセッションの Claude が書く)。
 
-材料は本文を書くときと同じ(`writer.writing_targets` → 要約を揃える → `writer.episode_material`)。
+材料は `material.writing_targets` → 要約を揃える → `material.episode_material`。
 AI だけの段(`plot_draft`・`casting_draft`)と db だけの段(`save_plot`・`known_locations`・`add_cast_member`・`add_location`)に分けてあり、
 手元では `complete_plot` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
 """
@@ -29,7 +29,7 @@ from data_access_logic.episode.models import (
     EpisodeMaterial, EpisodePlotDraft, EpisodePlotRequestSerialized,
 )
 from data_access_logic.episode.mentions import mentioned_in, save_mentions
-from data_access_logic.episode.writer import episode_material, writing_targets
+from data_access_logic.episode.material import episode_material, writing_targets
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.summary_targets import refresh

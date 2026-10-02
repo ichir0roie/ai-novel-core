@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""本文は書かない(`writer.write_episode` で別に書く)。
+"""本文は書かない(本文はスキル `episode` でこのセッションの Claude が書く)。
 
 db だけの段(`framing_targets` → 要約を揃える → `frame_material` → `save_frame_draft`)と、AI だけの段(`frame_draft`)に分けてある。
 手元では `frame_episode` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。

@@ -25,7 +25,7 @@ from data_access_logic.episode.models import (
 )
 from data_access_logic.episode.plot_completer import known_locations
 from data_access_logic.episode.summary import appearances, past_episode_ids, past_episodes, recent_episodes
-from data_access_logic.episode.writer import later_events_select, location_events_select
+from data_access_logic.episode.material import later_events_select, location_events_select
 from data_access_logic.event.summary import events_of
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras

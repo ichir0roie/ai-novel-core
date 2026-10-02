@@ -13,7 +13,7 @@ from data_access_logic.episode.record import EpisodeRecord
 
 class GenerateFrame(SessionEntrypoint):
     """作者の下書き(GUI の欄の値。`story_id` 以外は空でもよい)を核に、本文の無い話の枠(題・プロット・時刻)を
-    AI に決めさせて足す。`id` を渡せばその枠(本文の無い話)を決め直す。本文は `GenerateEpisode` で別に書く。
+    AI に決めさせて足す。`id` を渡せばその枠(本文の無い話)を決め直す。本文はスキル `episode` で Claude が書く。
 
     下書きは AI 呼び出しの前に枠として一度保存する。視点・場所は AI に決めさせず、下書きの値のまま残す。
     登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids` で、枠の

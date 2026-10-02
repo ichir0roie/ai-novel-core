@@ -54,6 +54,3 @@ API に届かない(`ApiError`)・版が食い違う・段が無いと返ると�
 - `.venv/bin/python -m web_session.check_api` を回し、出力と `.docs/web-session.md` の「確かめる」の表を見る
 - `ProxyError: 403`(プロキシが CONNECT を断った)なら、環境の Network access に API のホストが入っていない。`curl -sS "$HTTPS_PROXY/__agentproxy/status"` の失敗の記録で断られたホストを確かめ、許可先に足すようユーザに頼んで止まる(コードでは直せない)
 
-## 画面から積まれた AI の依頼
-
-画面(web)の AI のボタンは待ち行列(`ai_task`)に積むだけ。回すのはユーザに頼まれたとき(スキル `run-ai-tasks`)。

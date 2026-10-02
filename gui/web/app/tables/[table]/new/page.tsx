@@ -1,10 +1,9 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { useGeneratePanel } from "@/components/GeneratePanel";
+import { useEffect, useState } from "react";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
-import { invalidateAllOptions, invalidateOptions } from "@/components/ReferenceSelect";
+import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec } from "@/lib/api";
 import { useCopyFromLastEpisode } from "@/lib/lastEpisode";
 import { PageTitle, useMeta, useTable } from "@/lib/meta";
@@ -45,17 +44,6 @@ export default function NewRecordPage() {
 
   useCopyFromLastEpisode(value?.story_id, setValue, table === "episode");
 
-  const generated = useCallback(
-    (id: number) => {
-      invalidateAllOptions();
-      void reload();
-      openPage(`/tables/${table}/${id}`);
-    },
-    [table, reload, openPage],
-  );
-
-  const generatePanel = useGeneratePanel({ table, meta, draft: value ?? {}, mode: "create", onDone: generated, disabled: busy });
-
   if (!meta || value === null) return <div className="status info">{T.loading}</div>;
 
   const submit = async () => {
@@ -86,7 +74,6 @@ export default function NewRecordPage() {
           value={value}
           onChange={setValue}
           mode="create"
-          generate={generatePanel?.body}
           titleNote={T.create.title(meta.label)}
           header={error && <div className="status error">{error}</div>}
           actions={
@@ -98,7 +85,6 @@ export default function NewRecordPage() {
                 <button className="primary" onClick={submit} disabled={busy}>
                   {T.create.add}
                 </button>
-                {generatePanel?.toggle}
                 <span className="spacer" />
               </div>
             </div>

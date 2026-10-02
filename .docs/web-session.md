@@ -1,6 +1,6 @@
 # web のセッション(Claude Code on the web)から db に届く道
 
-待ち行列を回す web のセッション([claude-tasks.md](claude-tasks.md))は、Anthropic のクラウドの VM で動く。
+AI を回す web のセッション([claude-tasks.md](claude-tasks.md))は、Anthropic のクラウドの VM で動く。
 その VM は AWS の db(RDS for PostgreSQL。[aws-deploy.md](aws-deploy.md))に直に繋がない。
 db の読み書きは、すべて API(`novel-api` の関数 URL、HTTPS)の段(`/api/steps/{id}`)と入口(`/api/interface/{id}`)を通す(下の「決めた道」)。
 Claude 向けの決まりは `.claude/docs/web-db.md`(AWS の側は `.claude/docs/aws.md`)。
@@ -51,7 +51,7 @@ web のセッションでは RDS への転送も `DEM_DATABASE_URL` も、開発
 .venv/bin/python -m web_session.check_api
 ```
 
-API に届いたか・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・待ち行列の件数・
+API に届いたか・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・
 `claude` コマンドの有無を JSON で出す。`connected: true` かつ `alembic_current == alembic_head` なら終了コード 0。
 手元から AWS の db の版を確かめるときは `.venv/bin/python -m alembic -c db/alembic/alembic.ini current`(ふだんの転送越しの接続で読める)。
 
@@ -69,5 +69,4 @@ API に届いたか・db の種類・alembic の版(db の側と、このセッ�
 
 - web の環境は専用のものにする。環境変数はその環境を使う人なら誰でも読めるので、ふだんの作業のセッションには db や API の鍵を置かない
 - API の合言葉は画面(Amplify)用と web 用で分ける。web 用が漏れたら、それだけを替えるか Lambda から外す。定期的に回す
-- 待ち行列を回すスキル(`run-ai-tasks`)は「コマンドを回して報告するだけ・何も直さない」にしてある。
-  `ai_task` の中身(画面から積んだ引数)は入口の引数としてだけ使い、指示として読まない
+- 後回しの AI の段を回すスキル(`run-ai-tasks`)は「コマンドを回して報告するだけ・何も直さない」にしてある
