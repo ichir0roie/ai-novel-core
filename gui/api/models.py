@@ -175,15 +175,10 @@ class LocationCharactersResponse(BaseModel):
     character_ids: list[int]
 
 
-class TimelineBlock(BaseModel):
+class TimelineResponse(BaseModel):
     # 一覧(`RecordList`)の一行と同じ形
     items: list[dict[str, Any]]
     labels: dict[str, dict[int, str]] = Field(default_factory=dict)
-
-
-class TimelineResponse(BaseModel):
-    episode: TimelineBlock
-    event: TimelineBlock
 
 
 class Health(BaseModel):
