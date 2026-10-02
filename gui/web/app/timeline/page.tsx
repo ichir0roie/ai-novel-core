@@ -3,22 +3,25 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import RecordModal from "@/components/RecordModal";
-import ReferenceSelect, { useOptions } from "@/components/ReferenceSelect";
+import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import TreeReferenceSelect from "@/components/TreeReferenceSelect";
-import { getTimeline, labelOf, updateRecord, type Labels, type Rec, type TimelineResponse } from "@/lib/api";
+import { getTimeline, labelOf, listAllRecords, updateRecord, type Labels, type Rec, type TimelineResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
 import { dayNumber, formatStamp, fromDayNumber, parseStamp, shiftDays } from "@/lib/stamp";
 import { T } from "@/lib/text";
+import { useTreeOpen } from "@/lib/treeOpen";
 
 // 画面の幅に見せる期間(日数)。全期間はこの縮尺で横に並べ、スクロールで見て回る
 const SPANS = [3, 7, 31, 92, 365, 3650, 36500];
 const DEFAULT_SPAN = 31;
 const LANE_HEIGHT = 26;
+// 作品の段の下に空けておく空の段の数。話を足すときにクリックする所を残す
+const STORY_SPARE_LANES = 1;
 const ITEM_GAP = 6;
-// end の無い札が段に取る幅(px)。名前はこの幅から、同じ段の次の札の手前まで(長くても名前の幅まで)伸ばす
-const POINT_MIN_PX = 48;
+// 札の名前を見せる幅の上限(px)。長い題も最後まで読めるよう広く取る
+const LABEL_MAX_PX = 960;
 // スクロールが止まってから中心の時刻を URL に書くまでの間(ms)
 const SCROLL_SETTLE_MS = 200;
 // ドラッグとクリックを分けるしきい値(px)
@@ -38,14 +41,19 @@ type Kind = "episode" | "event";
 // 軸は日の単位。start・end は日の境目に丸めた通算日で、at は丸める前の時刻(同じ日の中の並び順に使う)
 type Item = { kind: Kind; key: string; id: number; label: string; record: Rec; labels: Labels; at: number; start: number; end: number | null };
 type Placed = Item & { x: number; width: number; barWidth: number; lane: number };
-type Row = { key: string; label: string; storyId: number | null; items: Placed[]; lanes: number };
+// 段の木。段は作品(その話を持つ)か、子を持つ出来事(その子の出来事を持つ)か、親の無い出来事
+type Group = { key: string; label: string; storyId: number | null; parentEventId: number | null; items: Item[]; children: Group[] };
+// open は子の段を出しているか。閉じた段には子孫の札もまとめて置く
+type Row = { key: string; label: string; storyId: number | null; parentEventId: number | null; items: Placed[]; lanes: number;
+  depth: number; branch: boolean; open: boolean };
+type StoryInfo = { name: string; parent: number | null };
 type Tick = { at: number; label: string; major: boolean };
 type Gap = { from: number; to: number; x: number };
 // since〜until が軸の全体で、width はその横幅(px)
 type Scale = { since: number; until: number; width: number; pxPerDay: number; gaps: Gap[]; toX: (day: number) => number; fromX: (x: number) => number };
 
 type Drag = { item: Item; startX: number; dx: number };
-type AddMenu = { x: number; y: number; at: string; storyId: number | null };
+type AddMenu = { x: number; y: number; at: string; storyId: number | null; parentEventId: number | null };
 type ModalState = { table: Kind; id?: number; initial?: Rec };
 
 function dayOf(value: unknown): number | null {
@@ -57,33 +65,28 @@ function dayOf(value: unknown): number | null {
 function labelWidth(label: string): number {
   let width = 22;
   for (const c of label) width += c.charCodeAt(0) > 0xff ? 14 : 8;
-  return Math.min(240, width);
+  return Math.min(LABEL_MAX_PX, width);
 }
+
+const byTime = (a: Item, b: Item) => a.start - b.start || a.at - b.at || a.id - b.id;
 
 /**
  * 重ならないよう、左から順に空いている一番上の段へ置く。同じ日の札は同じ位置なので、時刻の順に縦へ並ぶ。
- * end の無い札は幅 {@link POINT_MIN_PX} だけ取って置き、置いたあとで同じ段の次の札の手前まで(名前の幅を上限に)広げる
+ * 札は名前の幅まで段を取るので、名前は次の札に切られない
  */
 function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; lanes: number } {
   const laneEnds: number[] = [];
   const placed = [...items]
-    .sort((a, b) => a.start - b.start || a.at - b.at || a.id - b.id)
+    .sort(byTime)
     .map((item) => {
       const x = toX(item.start);
       const barWidth = item.end === null ? 0 : Math.max(0, toX(item.end) - x);
       const width = Math.max(barWidth, labelWidth(item.label));
-      const occupy = item.end === null ? Math.min(width, POINT_MIN_PX) : width;
       let lane = laneEnds.findIndex((end) => end <= x);
       if (lane < 0) lane = laneEnds.length;
-      laneEnds[lane] = x + occupy + ITEM_GAP;
+      laneEnds[lane] = x + width + ITEM_GAP;
       return { ...item, x, width, barWidth, lane };
     });
-  const nextX = new Map<number, number>();
-  for (const item of [...placed].reverse()) {
-    const next = nextX.get(item.lane);
-    if (item.end === null && next !== undefined) item.width = Math.max(Math.min(item.width, POINT_MIN_PX), Math.min(item.width, next - ITEM_GAP - item.x));
-    nextX.set(item.lane, item.x);
-  }
   return { placed, lanes: Math.max(1, laneEnds.length) };
 }
 
@@ -208,6 +211,83 @@ function shifted(item: Item, days: number): Rec {
   return changes;
 }
 
+/**
+ * 作品の木。話のある作品(と絞り込んだ作品)と、その祖先の作品を段にする。親が段に無い作品は根に置く。
+ * 読み直しても段が入れ替わらないよう、兄弟は作品の id 順に並べる
+ */
+function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, labels: Labels): Group[] {
+  const byStory = new Map<number, Item[]>();
+  if (storyId !== null) byStory.set(storyId, []);
+  for (const item of episodes) {
+    const story = item.record.story_id as number;
+    byStory.set(story, [...(byStory.get(story) ?? []), item]);
+  }
+  const shown = new Set<number>();
+  for (const id of byStory.keys()) {
+    for (let at: number | null = id; at !== null && !shown.has(at); at = stories.get(at)?.parent ?? null) shown.add(at);
+  }
+  const childrenOf = new Map<number | null, number[]>();
+  for (const id of [...shown].sort((a, b) => a - b)) {
+    const parent = stories.get(id)?.parent ?? null;
+    const key = parent !== null && shown.has(parent) ? parent : null;
+    childrenOf.set(key, [...(childrenOf.get(key) ?? []), id]);
+  }
+  const node = (id: number): Group => {
+    const name = stories.get(id)?.name ?? labels.story_id?.[id];
+    return { key: `story-${id}`, label: name ? `${name} (${id})` : String(id), storyId: id, parentEventId: null,
+      items: byStory.get(id) ?? [], children: (childrenOf.get(id) ?? []).map(node) };
+  };
+  // 親を循環してたどる作品は根から届かないので、届かなかった分を根に足す
+  const roots = childrenOf.get(null) ?? [];
+  const reached = new Set<number>();
+  const reach = (id: number) => {
+    reached.add(id);
+    (childrenOf.get(id) ?? []).forEach(reach);
+  };
+  roots.forEach(reach);
+  return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort((a, b) => a - b)].map(node);
+}
+
+/**
+ * 出来事の木。根の段に親の無い出来事を置き、子を持つ出来事ごとにその子を置く段を、親の出来事の段の下に作る。
+ * 親が絞り込みで外れた出来事は、その親の名前の段を根の段の下に作って置く
+ */
+function eventGroup(events: Item[], labels: Labels): Group {
+  const ids = new Set(events.map((item) => item.id));
+  const childrenOf = new Map<number | null, Item[]>();
+  for (const item of [...events].sort(byTime)) {
+    const parent = typeof item.record.parent_event_id === "number" ? item.record.parent_event_id : null;
+    childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), item]);
+  }
+  const placed = new Set<number | null>();
+  const group = (id: number, label: string): Group => {
+    placed.add(id);
+    const items = childrenOf.get(id) ?? [];
+    return { key: `event-${id}`, label, storyId: null, parentEventId: id, items, children: branches(items) };
+  };
+  const branches = (items: Item[]): Group[] =>
+    items.filter((item) => childrenOf.has(item.id) && !placed.has(item.id)).map((item) => group(item.id, item.label));
+  const root = childrenOf.get(null) ?? [];
+  const children = branches(root);
+  const missing = [...childrenOf.keys()].filter((id): id is number => id !== null && !ids.has(id));
+  children.push(...missing.map((id) => group(id, labelOf(labels, "parent_event_id", id))));
+  // 親を循環してたどる出来事は根から届かないので、根の段に置く
+  const stray = events.filter((item) => item.record.parent_event_id != null && !placed.has(item.record.parent_event_id as number));
+  return { key: "events", label: T.timeline.topLevel, storyId: null, parentEventId: null, items: [...root, ...stray], children };
+}
+
+/** 段の木を、開いた段の子だけをたどって並べる。閉じた段には子孫の札をまとめて置く */
+function flatten(groups: Group[], depth: number, isOpen: (key: string) => boolean, toX: (day: number) => number): Row[] {
+  const all = (g: Group): Item[] => [...g.items, ...g.children.flatMap(all)];
+  return groups.flatMap((g) => {
+    const branch = g.children.length > 0;
+    const open = branch && isOpen(g.key);
+    const { placed, lanes } = pack(open || !branch ? g.items : all(g), toX);
+    const row: Row = { key: g.key, label: g.label, storyId: g.storyId, parentEventId: g.parentEventId, items: placed, lanes, depth, branch, open };
+    return open ? [row, ...flatten(g.children, depth + 1, isOpen, toX)] : [row];
+  });
+}
+
 /** 中心の時刻を省いて開いたら、最後の話(無ければ最後の出来事)の時刻を中心にする。どちらも無ければ 1 年。API は時刻の順に返す */
 function defaultCenter(data: TimelineResponse): string {
   const episode = data.episode.items.at(-1)?.start;
@@ -230,6 +310,8 @@ export default function TimelinePage() {
 
   const [draft, setDraft] = useState<string | null>(at);
   const [data, setData] = useState<TimelineResponse | null>(null);
+  // 段の木を組むための作品の名前と親。話の無い祖先の作品も段に出すので、全部の作品を引く
+  const [stories, setStories] = useState<Map<number, StoryInfo> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -247,7 +329,7 @@ export default function TimelinePage() {
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // スクロールの位置を合わせ済みの中心(at)と軸(scale)。スクロールから URL へ書いた at はここに入れ、位置を合わせ直さない
   const aligned = useRef<{ at: string | null; scale: Scale | null }>({ at: null, scale: null });
-  const storyOptions = useOptions("story");
+  const { isOpen, setOpen } = useTreeOpen("timeline");
   const { tip, show, hide } = useTooltip();
 
   const navigate = useCallback(
@@ -272,6 +354,20 @@ export default function TimelinePage() {
     setShownAt(at);
     setDraft(at);
   }
+
+  useEffect(() => {
+    let alive = true;
+    listAllRecords("story")
+      .then((records) => {
+        if (!alive) return;
+        setStories(new Map(records.map((r) => [Number(r.id), {
+          name: String(r.name ?? r.label ?? ""), parent: typeof r.parent_story_id === "number" ? r.parent_story_id : null }])));
+      })
+      .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -397,25 +493,14 @@ export default function TimelinePage() {
   };
 
   const rows = useMemo(() => {
-    if (!data || !scale) return { episodes: [] as Row[], events: null as Row | null };
-    const byStory = new Map<number, Item[]>();
-    if (storyId !== null) byStory.set(storyId, []);
-    for (const item of items.filter((i) => i.kind === "episode")) {
-      const story = item.record.story_id as number;
-      if (!byStory.has(story)) byStory.set(story, []);
-      byStory.get(story)!.push(item);
+    if (!data || !stories || !scale) return { episodes: [] as Row[], events: [] as Row[] };
+    const episodes = flatten(storyGroups(items.filter((i) => i.kind === "episode"), stories, storyId, data.episode.labels ?? {}), 0, isOpen, toX);
+    if (episodes.length === 0) {
+      episodes.push({ key: "story-none", label: "", storyId: null, parentEventId: null, items: [], lanes: 1, depth: 0, branch: false, open: false });
     }
-    // 読み直しても段が入れ替わらないよう、作品の id 順に並べる
-    const episodes: Row[] = [...byStory.entries()].sort(([a], [b]) => a - b).map(([story, storyItems]) => {
-      const { placed, lanes } = pack(storyItems, toX);
-      // 絞り込んだ作品に話が無ければ、名前は選択肢から引く
-      const name = data.episode.labels?.story_id?.[story] ?? storyOptions.find((o) => o.id === story)?.label;
-      return { key: `story-${story}`, label: name ? `${name} (${story})` : String(story), storyId: story, items: placed, lanes };
-    });
-    if (episodes.length === 0) episodes.push({ key: "story-none", label: "", storyId: null, items: [], lanes: 1 });
-    const { placed, lanes } = pack(items.filter((i) => i.kind === "event"), toX);
-    return { episodes, events: { key: "events", label: "", storyId: null, items: placed, lanes } as Row };
-  }, [data, scale, items, storyId, storyOptions, toX]);
+    const events = flatten([eventGroup(items.filter((i) => i.kind === "event"), data.event.labels ?? {})], 0, isOpen, toX);
+    return { episodes, events };
+  }, [data, stories, scale, items, storyId, isOpen, toX]);
 
   const axisTicks = useMemo(() => {
     if (!scale) return [];
@@ -483,7 +568,7 @@ export default function TimelinePage() {
     const snapped = Math.floor(fromX(e.clientX - e.currentTarget.getBoundingClientRect().left));
     // 画面の端で押しても吹き出しがはみ出さないよう、内側へ寄せる
     setAddMenu({ x: Math.min(e.clientX, window.innerWidth - ADD_MENU_WIDTH), y: Math.min(e.clientY, window.innerHeight - ADD_MENU_HEIGHT),
-      at: formatStamp(fromDayNumber(snapped)), storyId: row.storyId });
+      at: formatStamp(fromDayNumber(snapped)), storyId: row.storyId, parentEventId: row.parentEventId });
   };
 
   const openAdd = (table: Kind) => {
@@ -491,6 +576,7 @@ export default function TimelinePage() {
     const initial: Rec = table === "episode" ? { start: addMenu.at } : { time: addMenu.at };
     const story = addMenu.storyId ?? storyId;
     if (table === "episode" && story !== null) initial.story_id = story;
+    if (table === "event" && addMenu.parentEventId !== null) initial.parent_event_id = addMenu.parentEventId;
     if (locationId !== null) initial.location_id = locationId;
     setAddMenu(null);
     setModal({ table, initial });
@@ -509,8 +595,18 @@ export default function TimelinePage() {
 
   const renderRow = (row: Row) => (
     <div key={row.key} className="timeline-row">
-      <div className="timeline-label" title={row.label}>{row.label}</div>
-      <div className="timeline-track" style={{ width: scale?.width, height: row.lanes * LANE_HEIGHT + 6 }} onClick={(e) => onTrackClick(e, row)}>
+      <div className="timeline-label" title={row.label} style={{ paddingLeft: `calc(0.3rem + ${row.depth * 0.9}rem)` }}>
+        {row.branch ? (
+          <button type="button" className="timeline-toggle" aria-expanded={row.open} onClick={() => setOpen(row.key, !row.open)}>
+            {row.open ? "▾" : "▸"}
+          </button>
+        ) : (
+          <span className="timeline-toggle" />
+        )}
+        {row.label}
+      </div>
+      <div className="timeline-track" style={{ width: scale?.width, height: (row.lanes + (row.storyId !== null ? STORY_SPARE_LANES : 0)) * LANE_HEIGHT + 6 }}
+        onClick={(e) => onTrackClick(e, row)}>
         {row.items.map((item) => {
           const days = dragDays(item);
           const dragging = drag?.item.key === item.key;
@@ -599,7 +695,7 @@ export default function TimelinePage() {
       </div>
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}
-      {!data ? (
+      {!data || !stories ? (
         !error && <div className="status info">{T.loading}</div>
       ) : (
         <div className="timeline" aria-busy={pending !== null}>
@@ -633,7 +729,7 @@ export default function TimelinePage() {
               <div className="timeline-section" style={{ width: box.label + box.viewport }}>{T.timeline.episodes}</div>
               {rows.episodes.map(renderRow)}
               <div className="timeline-section" style={{ width: box.label + box.viewport }}>{T.timeline.events}</div>
-              {rows.events && renderRow(rows.events)}
+              {rows.events.map(renderRow)}
             </div>
           </div>
           {/* 画面の真ん中の線。スクロールが止まると、ここの時刻が中心(URL の at)になる */}
