@@ -17,10 +17,10 @@ from gui.api.tables import spec_of
 def timeline(s: Session, story_id: int | None, location_id: int | None) -> TimelineResponse:
     """時刻を持つ全部の話(start〜end。end が空なら start の一点)。
     画面が全期間を一つの横に長い軸に並べ、スクロールで見て回るので期間では絞らない。
-    `story_id` はその作品で、`location_id` はその場所と下位の場所で絞る。時刻の無い話は置けないので出さない。"""
+    `story_id` はその作品と子孫の作品(章・外伝)で、`location_id` はその場所と下位の場所で絞る。時刻の無い話は置けないので出さない。"""
     conditions = [Episode.start.is_not(None)]
     if story_id is not None:
-        conditions.append(Episode.story_id == story_id)
+        conditions.append(Episode.story_id.in_(common_query.descendant_story_ids(s, story_id)))
     if location_id is not None:
         conditions.append(Episode.location_id.in_(common_query.descendant_location_ids(s, location_id)))
     episodes = s.scalars(loading(select(Episode).where(*conditions).order_by(Episode.start, Episode.id), EpisodeRecord)).all()
