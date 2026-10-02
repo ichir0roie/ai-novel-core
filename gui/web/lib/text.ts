@@ -171,7 +171,9 @@ export const T = {
     died: "Died",
     age: "Age",
     location: "Location",
+    noText: "(no text)",
     noHistory: "(no history)",
+    undated: "Year undecided",
   },
 
   storyTree: {

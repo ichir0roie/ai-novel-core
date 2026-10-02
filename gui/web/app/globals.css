@@ -358,6 +358,8 @@ button.ghost { background: transparent; }
 .sheet-level-cell.on { background: var(--accent); }
 .sheet-level-value { width: 1.2rem; text-align: center; font-size: 0.85rem; }
 /* 閲覧専用なので、本文・札のクリックで編集に入る見た目(カーソル・ホバー)を外す */
+.character-sheet div.markdown-preview.sheet-text { cursor: default; }
+.character-sheet div.markdown-preview.sheet-text:hover { border-color: var(--line); }
 .childlist.flow .flow-card.sheet-history { cursor: default; }
 .childlist.flow .flow-card.sheet-history:hover { background: none; }
 /* 作品から話の一覧へ飛ぶ大きなボタン */

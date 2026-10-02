@@ -68,7 +68,7 @@ _CLASSIFY_SYSTEM_PROMPT = f"""\
 {_CATEGORY_GUIDE}"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は説明・来歴の各行の `# plot` の節だけを使う。"""
+    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は芯(`text`)の `# plot` の節だけを使う。"""
     sources: list[SourceText] = []
     for idea in s.scalars(meme_query.unseeded_select(Idea)).all():
         sources.append(source_of(idea, "アイデア", idea.text))

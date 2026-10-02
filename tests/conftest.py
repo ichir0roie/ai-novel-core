@@ -95,11 +95,11 @@ def world() -> Iterator[World]:
                       narration="三人称", state="執筆中", start="1200/01/01", end="1300/01/01", event_seeded=True)
         s.add(story)
         characters = [
-            Character(name=name, kind="人物", confirmed=ConfirmStatus.APPROVED,
+            Character(name=name, text=f"{name}の説明", kind="人物", confirmed=ConfirmStatus.APPROVED,
                       main_character=main, event_seeded=True, meme_seeded=True,
                       end="1260/01/01", parameters=[_parameter("1170/01/01", sex)],
-                      histories=[CharacterHistory(description=f"{name}の説明"),
-                                 CharacterHistory(start=1190, description=f"{name}の来歴")])
+                      histories=[CharacterHistory(start=1190, description=f"{name}の来歴"),
+                                 CharacterHistory(description=f"{name}の年未定の構想")])
             for name, sex, main in (("テスト太郎", "男", True), ("テスト花子", "女", False))]
         s.add_all(characters)
         s.flush()

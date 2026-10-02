@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
-from data_access_logic.character.generator import complete_histories, generate_character
+from data_access_logic.character.generator import complete_text, generate_character
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.query import common_query
@@ -29,13 +29,13 @@ class GenerateCharacter(SessionEntrypoint):
     """作者の下書き(GUI の欄の値。全部空でもよい)を核に、人物を一人 AI に組み立てさせて足す。
 
     時の流れの中で生む人物と同じ自動生成(`generate_character`。性格・ミーム・来歴・名づけまで AI が決める)を、
-    下書きの名前・説明(`histories` の各行の説明)を核に、性別・体格・口調・性格・種別・生年・没年・メインキャラクターかを決まった値として回す。
+    下書きの名前・説明(`text` と `histories` の各行の説明)を核に、性別・体格・口調・性格・種別・生年・没年・メインキャラクターかを決まった値として回す。
     `time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、
     その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、
     没年はメインキャラクターに決めて渡したときだけ持たせる。
 
-    `id` を渡せば、その人物の説明・来歴(histories)が一行も無いときに限り、決まっている名前・属性・出自を核に AI に
-    説明・来歴だけを書かせて埋める(性別・体格・口調・性格・種別・生年・没年・名前は変えない)。
+    `id` を渡せば、その人物の芯(text)が空のときに限り、決まっている名前・属性・出自を核に AI に
+    説明と来歴だけを書かせて埋める(来歴の節目は今の行に足す。性別・体格・口調・性格・種別・生年・没年・名前は変えない)。
     """
 
     def __init__(self, character: CharacterForm | None = None, time: Stamp | str | None = None,
@@ -50,7 +50,7 @@ class GenerateCharacter(SessionEntrypoint):
         form = self.character
         rng = random.Random(self.seed)
         if form.id is not None:
-            return CharacterRecord.model_validate(complete_histories(s, self.ai, rng, form.id))
+            return CharacterRecord.model_validate(complete_text(s, self.ai, rng, form.id))
         time = generation_time(s, form.location_id, self.time)
         person = (form.kind or CHARACTER_KIND_PERSON) == CHARACTER_KIND_PERSON
         record = generate_character(s, self.ai, rng, form.location_id, time, person, form, self.plot_text)
