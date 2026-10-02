@@ -25,6 +25,14 @@ const DRAG_THRESHOLD = 4;
 const HOUR_SNAP_PX_PER_DAY = 240;
 const ADD_MENU_WIDTH = 190;
 const ADD_MENU_HEIGHT = 120;
+// 話・出来事の無い区間を詰めた帯の幅(px)。縮めない縮尺でこれより広く空く区間だけ詰める
+const GAP_PX = 40;
+const MIN_GAP_PX = 2 * GAP_PX;
+// 札の前後に空けておく余白(px)。札のすぐ脇から帯にならないようにする
+const OCCUPY_MARGIN_PX = 24;
+const MAX_ZOOM = 10;
+// 帯の直前・帯の左端の目盛りは、文字が帯に掛かるので文字を出さない
+const TICK_LABEL_PX = 48;
 const FULL_STAMP = /^\d+\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/;
 
 type Kind = "episode" | "event";
@@ -32,6 +40,8 @@ type Item = { kind: Kind; key: string; id: number; label: string; record: Rec; l
 type Placed = Item & { x: number; width: number; barWidth: number; lane: number };
 type Row = { key: string; label: string; storyId: number | null; items: Placed[]; lanes: number };
 type Tick = { at: number; label: string; major: boolean };
+type Gap = { from: number; to: number; x: number };
+type Scale = { pxPerDay: number; gaps: Gap[]; toX: (day: number) => number; fromX: (x: number) => number };
 
 type Drag = { item: Item; startX: number; dx: number };
 type AddMenu = { x: number; y: number; at: string; storyId: number | null };
@@ -64,6 +74,84 @@ function pack(items: Item[], toX: (day: number) => number): { placed: Placed[]; 
       return { ...item, x, width, barWidth, lane };
     });
   return { placed, lanes: Math.max(1, laneEnds.length) };
+}
+
+/** 縮尺 `pxPerDay` で札が占めない区間。札の幅は px なので、縮尺が上がるほど占める日数は減る */
+function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[]): { from: number; to: number }[] {
+  const margin = OCCUPY_MARGIN_PX / pxPerDay;
+  const occupied = items
+    .map((item) => [Math.max(since, item.start - margin), Math.min(until, Math.max(item.end ?? item.start, item.start + labelWidth(item.label) / pxPerDay) + margin)])
+    .filter(([from, to]) => from < to)
+    .sort((a, b) => a[0] - b[0]);
+  const empties: { from: number; to: number }[] = [];
+  let cursor = since;
+  for (const [from, to] of occupied) {
+    if (from > cursor) empties.push({ from: cursor, to: from });
+    cursor = Math.max(cursor, to);
+  }
+  if (occupied.length > 0 && cursor < until) empties.push({ from: cursor, to: until });
+  return empties;
+}
+
+/** 縮尺 `pxPerDay` で見て広い区間から詰め、詰めたあとの縮尺を返す。詰めるほど縮尺が上がってほかの区間も広く見えるので、増えなくなるまで繰り返す */
+function squeeze(since: number, until: number, width: number, pxPerDay: number, items: Item[]) {
+  const empties = emptiesAt(since, until, pxPerDay, items).sort((a, b) => b.to - b.from - (a.to - a.from));
+  const maxGaps = Math.floor(width / 2 / GAP_PX);
+  let count = 0;
+  let scale = pxPerDay;
+  for (;;) {
+    const next = Math.min(maxGaps, empties.filter((g) => (g.to - g.from) * scale > MIN_GAP_PX).length);
+    if (next <= count) break;
+    count = next;
+    scale = (width - count * GAP_PX) / (until - since - empties.slice(0, count).reduce((sum, g) => sum + g.to - g.from, 0));
+  }
+  return { empties: empties.slice(0, count), pxPerDay: count === 0 ? width / (until - since) : scale };
+}
+
+/**
+ * 時刻と横の位置の対応。話・出来事の無い区間は幅 {@link GAP_PX} の帯に詰め、残りの幅を中身のある区間に同じ縮尺で配る。
+ * 札が占める日数は縮尺で変わるので、詰めて上がった縮尺で測り直すのを落ち着くまで繰り返す。
+ * 中身が少ないと縮尺がいくらでも上がるので、詰める前の {@link MAX_ZOOM} 倍で測るのを止める。
+ */
+function compress(since: number, until: number, width: number, items: Item[]): Scale {
+  const base = width / (until - since);
+  let measured = base;
+  let result = { empties: [] as { from: number; to: number }[], pxPerDay: base };
+  for (let i = 0; base > 0 && i < 12; i++) {
+    result = squeeze(since, until, width, measured, items);
+    const next = Math.min(base * MAX_ZOOM, result.pxPerDay);
+    if (next <= measured * 1.05) break;
+    measured = next;
+  }
+  const { empties, pxPerDay } = result;
+
+  const gaps: Gap[] = [];
+  const knots: [number, number][] = [[since, 0]];
+  let x = 0;
+  let day = since;
+  for (const g of [...empties].sort((a, b) => a.from - b.from)) {
+    x += (g.from - day) * pxPerDay;
+    gaps.push({ ...g, x });
+    knots.push([g.from, x]);
+    x += GAP_PX;
+    knots.push([g.to, x]);
+    day = g.to;
+  }
+  knots.push([until, x + (until - day) * pxPerDay]);
+
+  // knots の from 列の値を to 列へ。端より外(期間の前から続く話など)は詰めない縮尺で延ばす
+  const along = (value: number, from: 0 | 1): number => {
+    const to = 1 - from;
+    const outside = from === 0 ? pxPerDay : 1 / pxPerDay;
+    const first = knots[0];
+    const last = knots[knots.length - 1];
+    if (value <= first[from]) return first[to] + (value - first[from]) * outside;
+    if (value >= last[from]) return last[to] + (value - last[from]) * outside;
+    const i = knots.findIndex((k) => k[from] > value);
+    const [a, b] = [knots[i - 1], knots[i]];
+    return a[to] + ((value - a[from]) * (b[to] - a[to])) / (b[from] - a[from]);
+  };
+  return { pxPerDay, gaps, toX: (d) => along(d, 0), fromX: (px) => along(px, 1) };
 }
 
 function ticks(since: number, until: number, pxPerDay: number): Tick[] {
@@ -243,12 +331,15 @@ export default function TimelinePage() {
     };
   }, [addMenu]);
 
-  const pxPerDay = width > 0 ? width / span : 0;
-  const toX = useCallback((day: number) => (day - (since ?? 0)) * pxPerDay, [since, pxPerDay]);
+  const items = useMemo(() => (data ? itemsOf(data) : []), [data]);
+  const scale = useMemo(
+    () => (since === null || until === null ? compress(0, span, 0, []) : compress(since, until, width, items)),
+    [since, until, span, width, items],
+  );
+  const { pxPerDay, toX, fromX } = scale;
 
   const rows = useMemo(() => {
     if (!data) return { episodes: [] as Row[], events: null as Row | null };
-    const items = itemsOf(data);
     const byStory = new Map<number, Item[]>();
     if (storyId !== null) byStory.set(storyId, []);
     for (const item of items.filter((i) => i.kind === "episode").sort((a, b) => a.start - b.start)) {
@@ -266,15 +357,23 @@ export default function TimelinePage() {
     if (episodes.length === 0) episodes.push({ key: "story-none", label: "", storyId: null, items: [], lanes: 1 });
     const { placed, lanes } = pack(items.filter((i) => i.kind === "event"), toX);
     return { episodes, events: { key: "events", label: "", storyId: null, items: placed, lanes } as Row };
-  }, [data, storyId, storyOptions, toX]);
+  }, [data, items, storyId, storyOptions, toX]);
 
-  const axisTicks = useMemo(
-    () => (since === null || until === null || pxPerDay === 0 ? [] : ticks(since, until, pxPerDay)),
-    [since, until, pxPerDay],
-  );
+  const axisTicks = useMemo(() => {
+    if (since === null || until === null || pxPerDay === 0) return [];
+    return ticks(since, until, pxPerDay)
+      .filter((tick) => !scale.gaps.some((g) => tick.at > g.from && tick.at < g.to))
+      .map((tick) => {
+        const x = toX(tick.at);
+        return scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX) ? { ...tick, label: "" } : tick;
+      });
+  }, [since, until, pxPerDay, scale, toX]);
+
+  /** 横に dx px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
+  const daysAt = (item: Item, dx: number) => (pxPerDay > 0 ? Math.round(fromX(toX(item.start) + dx) - item.start) : 0);
 
   const dragDays = (item: Item) => {
-    if (drag?.item.key === item.key && pxPerDay > 0) return Math.round(drag.dx / pxPerDay);
+    if (drag?.item.key === item.key) return daysAt(item, drag.dx);
     if (pending?.key === item.key) return pending.days;
     return 0;
   };
@@ -313,13 +412,13 @@ export default function TimelinePage() {
       setModal({ table: item.kind, id: item.id });
       return;
     }
-    const days = pxPerDay > 0 ? Math.round(dx / pxPerDay) : 0;
+    const days = daysAt(item, dx);
     if (days !== 0) void move(item, days);
   };
 
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (since === null || pxPerDay === 0) return;
-    const day = since + (e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerDay;
+    const day = fromX(e.clientX - e.currentTarget.getBoundingClientRect().left);
     const snapped = pxPerDay >= HOUR_SNAP_PX_PER_DAY ? Math.floor(day * 24) / 24 : Math.floor(day);
     // 画面の端で押しても吹き出しがはみ出さないよう、内側へ寄せる
     setAddMenu({ x: Math.min(e.clientX, window.innerWidth - ADD_MENU_WIDTH), y: Math.min(e.clientY, window.innerHeight - ADD_MENU_HEIGHT),
@@ -345,8 +444,13 @@ export default function TimelinePage() {
          r.location_id != null && labelOf(item.labels, "location_id", r.location_id), String(r.preview ?? "")];
   };
 
+  const gapLines = (g: Gap) => [T.timeline.gap, `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`];
+
   const renderTrackLines = () => (
     <>
+      {scale.gaps.map((g) => (
+        <div key={g.from} className="timeline-gap" style={{ left: g.x, width: GAP_PX }} />
+      ))}
       {axisTicks.map((tick) => (
         <div key={tick.at} className={`timeline-grid ${tick.major ? "major" : ""}`} style={{ left: toX(tick.at) }} />
       ))}
@@ -371,11 +475,12 @@ export default function TimelinePage() {
             item.record.confirmed === "非承認" ? "rejected" : "",
           ].join(" ");
           const target = days !== 0 && shifted(item, days);
+          const offset = days ? toX(item.start + days) - item.x : 0;
           return (
             <div
               key={item.key}
               className={className}
-              style={{ left: item.x, top: 3 + item.lane * LANE_HEIGHT, transform: days ? `translateX(${days * pxPerDay}px)` : undefined,
+              style={{ left: item.x, top: 3 + item.lane * LANE_HEIGHT, transform: offset ? `translateX(${offset}px)` : undefined,
                 ...(dragging ? { minWidth: item.width } : { width: item.width }) }}
               onPointerDown={(e) => onItemDown(e, item)}
               onPointerMove={onItemMove}
@@ -386,7 +491,7 @@ export default function TimelinePage() {
               onMouseLeave={hide}
             >
               {item.barWidth > 0 && <span className="timeline-bar" style={{ width: item.barWidth }} />}
-              <span className="timeline-text" style={{ paddingLeft: Math.max(0, -(item.x + days * pxPerDay)) }}>
+              <span className="timeline-text" style={{ paddingLeft: Math.max(0, -(item.x + offset)) }}>
                 {item.label}
                 {target && <span className="timeline-target"> → {String(target.start ?? target.time)}</span>}
               </span>
@@ -454,6 +559,12 @@ export default function TimelinePage() {
           <div className="timeline-row timeline-axis">
             <div className="timeline-label" />
             <div className="timeline-track" ref={axisRef}>
+              {scale.gaps.map((g) => (
+                <div key={g.from} className="timeline-gap" style={{ left: g.x, width: GAP_PX }}
+                  onMouseMove={(e) => show(e, gapLines(g))} onMouseLeave={hide}>
+                  {T.timeline.skipped(g.to - g.from)}
+                </div>
+              ))}
               {axisTicks.map((tick) => (
                 <div key={tick.at} className={`timeline-tick ${tick.major ? "major" : ""}`} style={{ left: toX(tick.at) }}>
                   {tick.label}

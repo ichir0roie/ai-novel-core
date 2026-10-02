@@ -577,6 +577,14 @@ button.ghost { background: transparent; }
 .timeline-tick.major { border-left-color: var(--muted); color: var(--ink); font-weight: 600; }
 .timeline-grid { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--line) 60%, transparent); pointer-events: none; }
 .timeline-grid.major { border-left-color: var(--line); }
+/* 話・出来事の無い区間を詰めた帯。目盛りの欄には詰めた長さを出す */
+.timeline-gap {
+  position: absolute; top: 0; bottom: 0; pointer-events: none; border-left: 1px dashed var(--line); border-right: 1px dashed var(--line);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--line) 70%, transparent) 0 2px, transparent 2px 7px);
+}
+.timeline-axis .timeline-gap {
+  pointer-events: auto; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: var(--muted); white-space: nowrap;
+}
 .timeline-center { position: absolute; top: 0; bottom: 0; border-left: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); pointer-events: none; }
 .timeline-item {
   position: absolute; height: 22px; padding: 0 6px; border: 1px solid; border-radius: 4px; font-size: 0.8rem; line-height: 20px;
