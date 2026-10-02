@@ -25,15 +25,18 @@
 - テスト用の db は空から作らず、本番の RDS を写して作る(`tool.test.copy_production_db`)。写し元は手元の転送越しの RDS なので、
   転送(`tool.aws.rds --serve`)が要る。手で動きを確かめるときも、これで写した db を使う。
   web のセッション(`CLAUDE_CODE_REMOTE=true`)は RDS に繋がないので写せない(`DEM_DATABASE_URL` が無いと止まる)
-- web のセッションでは、PostGIS を `infra_local/postgis.sh` で入れ、空の `novel_test` を schema から作って、要る行を足して使う。
+- web のセッションでも、テスト用の db は手元に作れる。「本番の db に繋げない」はテストを省く理由にならない。
+  PostGIS を `infra_local/postgis.sh` で入れ、空の `novel_test` を schema から作って、要る行を足して使う。
   本番の写しでなければ確かめられないことなら、その旨をユーザに伝え、手元で回すかを尋ねる
-  - 用意: `dev=$(bash infra_local/postgis.sh .venv/bin/python) && .venv/bin/python -m db.postgres.init_db --url "${dev%/*}/novel_test" --create-database`
+  - 用意: `dev=$(bash infra_local/postgis.sh .venv/bin/python) && .venv/bin/python -m db.postgres.init_db --url "${dev%/*}/novel_test" --create-database`。
+    `CREATE DATABASE novel_test TEMPLATE novel_dev` で写して作らない(連番が揃わず、行を足すと主キーが重なって落ちる)
   - 行を足す: `DEM_DEV_DATABASE_URL=$dev .venv/bin/python -m tool.test.seed_mock_db --n 100`(全部の表にモックの行。
     ただし話と人物の結び `episode_character` と作品の親 `parent_story_id` は足さないので、登場人物・章の要る確かめは自分で足す)。
     件数・時期をそろえたいときは、`tool.test` を先に import した使い捨てのスクリプトで `randomizer.mock_factories` に値を渡して足す
   - `conftest.py` の `ensure_test_db` は空の db を写そうとして止まるので、pytest の前に行を足しておく
   - pytest を回すと行が足されるので、確かめに使う id は決め打ちせず、回すたびに引き直す
   - pytest の出力は SQLAlchemy の警告(`noload` の非推奨)が長く続き、結果の行が埋もれる。結果だけを見るときは `-q -p no:warnings` を付ける
+- 新しい段・入口を確かめるために、マージやデプロイをして本番の API で試さない(本番に段が無くても、手元の API には今のコードの段がある)。
 - web の流れ(`web_session/`)を確かめるときは、テスト用の db に向けた API を手元に起こし(`.docs/claude-tasks.md` の「手元で確かめる」。
   `NOVEL_API_KEYS` を渡さなければ合言葉を確かめない)、流れを回すコマンドには必ず `NOVEL_API_URL=http://127.0.0.1:18765` を付ける。
   web のセッションの環境には本番の `NOVEL_API_URL` / `NOVEL_API_KEY` が入っているので、付け忘れると本番に書く。

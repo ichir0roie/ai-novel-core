@@ -15,7 +15,15 @@ uvx --from 'uv>=0.9' uv venv --python 3.14 .venv
 uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-`.venv` に pip は入らない。
+`.venv` に pip は入らない。素の `uv`(`/root/.local/bin/uv` など)は古いことがあり、python の rc 版を選んで pydantic が落ちるので使わない。
+rc 版の `.venv` ができてしまったら、上の uvx の uv で作り直す。
+
+`.venv` が無い(`.venv/bin/python: No such file or directory`)ときは、SessionStart フックが走っていない。後から足したリポジトリや、
+コンテナが戻ったときに起きる。web のセッションでは `CLAUDE_CODE_REMOTE=true bash .claude/hooks/session-start.sh` を手で回す。
+
+フック(`.claude/hooks/`)と `.claude/settings.json` は、書き換える前に何を変えるかをユーザに示して承認を取る(auto mode も自己の書き換えとして止める)。
+書き換えたフックは、作業ツリーをスクラッチパッドに写した上で(`CLAUDE_CODE_REMOTE=true CLAUDE_ENV_FILE=<写しの中のファイル>` を付けて)
+動かして確かめてから登録する。確かめずに登録すると、動いているこのセッションのツールの呼び出しを待たせ続けることがある。
 
 `requirements.txt` は、依存の依存まで版とハッシュを固定したもので、手では書かない。直接使うパッケージは `requirements.in` に書き、
 そこから作る(Windows でも同じファイルで入るよう `--universal` で作る)。パッケージを足す・版を上げるときは、`requirements.in` を直してから:
