@@ -619,6 +619,14 @@ button.ghost { background: transparent; }
 .modal.wide:has(.record-modal) { height: 90dvh; }
 .modal-body:has(> .record-modal) { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .record-modal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.timeline-hint { margin-top: 0.4rem; }
+/* スマホは表を広く見せる。説明は出さず、操作は横へスクロールする一行にまとめ、表は画面の端まで使う */
 @media (max-width: 640px) {
-  .timeline { --timeline-label: 130px; }
+  main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
+  .timeline-page > .toolbar { flex-wrap: nowrap; overflow-x: auto; margin: 0; padding: 6px 8px; gap: 0.4rem; }
+  .timeline-page > .toolbar > * { flex-shrink: 0; }
+  .timeline-page > .toolbar h1 { display: none; }
+  .timeline-page > .status { margin: 0 8px 6px; }
+  .timeline-hint { display: none; }
+  .timeline { --timeline-label: 96px; border-width: 1px 0 0; border-radius: 0; }
 }

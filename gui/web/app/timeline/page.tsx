@@ -580,7 +580,7 @@ export default function TimelinePage() {
   };
 
   return (
-    <div className="page-fill">
+    <div className="page-fill timeline-page">
       <PageTitle kind={T.timeline.title} record={at} />
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>{T.timeline.title}</h1>
@@ -659,7 +659,7 @@ export default function TimelinePage() {
           {scale && <div className="timeline-center" style={{ left: box.label + box.viewport / 2 }} />}
         </div>
       )}
-      <div className="hint" style={{ marginTop: "0.4rem" }}>{T.timeline.hint}</div>
+      <div className="hint timeline-hint">{T.timeline.hint}</div>
       {modal && (
         <RecordModal
           table="episode"
