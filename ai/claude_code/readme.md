@@ -1,7 +1,7 @@
 # claude_code
 
 生成を Claude Code(`claude -p`)にやらせるための client と、検証の処理。
-生成そのもの(人物・出来事・話)は `data_access_logic/` の入口(`GenerateCharacter` / `GenerateEvent` / `GenerateEpisode` など)にあり、
+生成そのもの(人物・出来事・話)は `data_access_logic/` の入口(`GenerateCharacter` / `GenerateEvent` / `GenerateFrame` など)にあり、
 AI を `ai` 引数(`data_access_logic/ai_client.py` の `AIClient`)で受け取る。既定はここの `ai_client`。
 
 ```
@@ -16,9 +16,7 @@ ai/claude_code/
 - 各呼び出しは `--tools ""`(道具なし。`tools=("WebSearch", "WebFetch")` を渡したときだけ、その道具を許す)・`--no-session-persistence`・`--system-prompt`
   で、単発の「プロンプト → JSON」に絞る。カレントは一時ディレクトリにして、
   このリポジトリの `CLAUDE.md` や設定を読み込ませない
-- モデルと effort は `ai_client.py` の `_MODEL`(`claude-opus-5-5`)・`_EFFORT`(`low`)を既定にし、`--model` `--effort` に渡す。
-  話の本文の生成(`GenerateEpisode`・`ReviseEpisode`)だけは
-  `EPISODE_MODEL`(`claude-opus-5-5`)・`EPISODE_EFFORT`(`high`)を渡す
+- モデルと effort は `ai_client.py` の `_MODEL`(`claude-opus-5-5`)・`_EFFORT`(`low`)を既定にし、`--model` `--effort` に渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
 
 ## 環境変数(`.env` でよい)

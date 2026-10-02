@@ -24,19 +24,9 @@ class ClaudeAIError(RuntimeError):
 _MODEL = "claude-opus-5-5"
 _EFFORT = "low"
 
-# 話の本文(Episode)だけは effort を上げて質を優先する。要約・ミーム・出来事などはすべて上の既定のまま。
-EPISODE_MODEL = "claude-opus-5-5"
-EPISODE_EFFORT = "high"
-# プロット補完(プロットの書き直しと、足りない人物・舞台の候補)は既定のまま。GUI の欄の既定値に使う。
+# プロット補完(プロットの書き直しと、足りない人物・舞台の候補)は既定のまま。
 PLOT_MODEL = _MODEL
 PLOT_EFFORT = _EFFORT
-
-# GUI の「本文のモデル」プルダウンに出す一覧(claude CLI の --model にそのまま渡せる名前)。
-# 一覧の更新は本ファイルの値だけを直せばよい(GUI 側は choices としてこの値をそのまま受け取る)。
-AVAILABLE_MODELS = (EPISODE_MODEL, "claude-fable-5-1", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5")
-
-# GUI の「本文の effort」プルダウンに出す一覧。claude CLI の --effort に渡せる値(--help の一覧)そのまま。
-AVAILABLE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 class _Reply(BaseModel):

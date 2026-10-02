@@ -11,7 +11,7 @@
 | 画面 | Amplify Hosting(SSR) | モノレポの `gui/web` だけを建てる(`amplify.yml`)。ブラウザは同じオリジンの `/api/*` を叩き、Next.js の route handler(`gui/web/app/api/[...path]/route.ts`)がサーバー側で API へ流す |
 | API | Lambda(コンテナ)+ 関数 URL | `infra/lambda/Dockerfile`。Lambda Web Adapter が Lambda のイベントを HTTP に直すので、アプリは uvicorn で起こすだけ。コードに Lambda 専用の分岐を持たない |
 | db | RDS for PostgreSQL(16 以上。db.t4g.micro 程度)+ PostGIS | private subnet に置き、公開しない。手元からは踏み台越しにだけ繋ぐ(下の「手元から db へ繋ぐ」)。Aurora ではないので Data API は無い |
-| AI | Claude Code on the web のセッション | Lambda には claude が無いので、AI のボタンは待ち行列に積むだけ(`NOVEL_CLAUDE_MODE=queue`)。頼まれたセッションが `claude -p` を回し、db には API の段(`/api/steps`)越しに触る。[claude-tasks.md](claude-tasks.md) |
+| AI | Claude Code on the web のセッション | Lambda には claude が無いので、画面に AI のボタンは無い。セッションが `claude -p` を回し、db には API の段(`/api/steps`)越しに触る。[claude-tasks.md](claude-tasks.md) |
 | リソースの管理 | `infra/`(AWS CDK) | コンソールで手で作らない。構築ごとの設定は core に書かず、SSM の `/novel/deploy/config` に置く(下の「構築ごとの設定」) |
 
 ### 構築ごとの設定
@@ -119,7 +119,7 @@ npx cdk deploy    # 当てる
 - private subnet から外へ出るには NAT ゲートウェイ(東京で月 $45 ほど)が要る。費用を抑えるため置かない。そのため:
   - db のパスワードは Secrets Manager から読めない(読むにはインターフェースエンドポイントが要り、月 $10 ほど掛かる)。
     IAM データベース認証を使う(接続の token は Lambda の中で署名して作るので、外へ出なくてよい)
-  - Lambda から外(`api.anthropic.com` など)も叩けない。AI の依頼は待ち行列に積むだけにし、web のセッションに頼んで回す([claude-tasks.md](claude-tasks.md))
+  - Lambda から外(`api.anthropic.com` など)も叩けない。AI は web のセッションが回す([claude-tasks.md](claude-tasks.md))
 
 ### 手順の骨組み
 
@@ -142,7 +142,6 @@ npx cdk deploy    # 当てる
 | `DEM_DATABASE_URL` | `postgresql+psycopg://novel_app@<RDS のエンドポイント>:5432/novel?sslmode=require`(パスワードは書かない) |
 | `DEM_DATABASE_IAM_AUTH` | `1`。接続を張るたびに IAM データベース認証の token を作り、パスワードの代わりに渡す |
 | `NOVEL_API_KEYS` | 呼ぶ側ごとの合言葉(`gui=<鍵>,web=<鍵>`)。それぞれ長い乱数(`openssl rand -hex 32`)。どの鍵で来たかをログに出す |
-| `NOVEL_CLAUDE_MODE` | `queue`(イメージの既定。AI のボタンを消すなら `off`) |
 
 確かめ: `curl <関数 URL>/api/ping` が `{"ok":true}`、`curl -H 'x-novel-api-key: …' <関数 URL>/api/health` が `"dialect":"postgresql"`。
 
@@ -221,5 +220,3 @@ API に任意の SQL を受ける口は作らず、公開するのは `data_acce
 | db | 同じ RDS(踏み台越しの転送、`novel_app` の IAM 認証) | RDS for PostgreSQL(db `novel`。VPC の中から、`novel_app` の IAM 認証) |
 | `/api/*` の流し先 | `NOVEL_API_URL` 既定 `http://127.0.0.1:8765` | Lambda の関数 URL |
 | 合言葉 | 無し(`NOVEL_API_KEY` 空) | 有り |
-| AI のボタン | その場で回す(`direct`) | 待ち行列に積む(`queue`) |
-| 裏の job | プロセスのメモリ | `ai_task` の行(Lambda は応答のあとに走り続けられないので、`background` の呼び出しも行に積む) |

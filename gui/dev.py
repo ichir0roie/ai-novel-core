@@ -9,7 +9,6 @@
     .venv/bin/python -m gui.dev --browser-only  # API・画面は起こさず、ブラウザだけ開く(すでに起きている前提)
 
 `gui/web/node_modules` が無ければ先に `npm install` を回す。
-API には `CLAUDECODE=1` を渡すので、Claude Code の外から起こしても claude を叩く入口が通る。
 ポートが既に使われていれば、それを聞いている処理(前回の起動の残りなど)を止めてから起こす。
 
 ブラウザは Brave があればそれを使い、プロファイルをリポジトリのルートの
@@ -240,8 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             api_args += ["--reload"]
             for source_dir in API_SOURCE_DIRS:
                 api_args += ["--reload-dir", os.path.join(CORE_DIR, source_dir)]
-        # ユーザが素のターミナルから起こしても、claude を叩く入口(AI で作成など)を通す(gui/api/claude_env.py)
-        return _popen(api_args, env={**os.environ, "CLAUDECODE": "1"})
+        return _popen(api_args)
 
     def spawn_web() -> subprocess.Popen:
         web_env = {**os.environ, "NOVEL_API_URL": f"http://127.0.0.1:{args.api_port}"}

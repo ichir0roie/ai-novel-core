@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useGeneratePanel } from "@/components/GeneratePanel";
 import RecordForm from "@/components/RecordForm";
-import { useRevisePanel } from "@/components/RevisePanel";
-import { invalidateAllOptions, invalidateOptions } from "@/components/ReferenceSelect";
+import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
 import { deleteEpisode, diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
 import { PageTitle, useTable } from "@/lib/meta";
@@ -51,12 +49,6 @@ export default function RecordPage() {
     void load();
   }, [load]);
 
-  const generated = useCallback(() => {
-    invalidateAllOptions();
-    setSaved(T.record.writtenByAi);
-    void load();
-  }, [load]);
-
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
 
@@ -98,9 +90,6 @@ export default function RecordPage() {
     }
   };
 
-  const generatePanel = useGeneratePanel({ table, meta, draft: value, mode: "edit", onDone: generated, disabled: busy });
-  const revisePanel = useRevisePanel({ table, meta, draft: value, mode: "edit", onDone: generated, beforeRun: () => save(false), disabled: busy });
-
   if (!meta) return <div className="status info">{T.loading}</div>;
 
   return (
@@ -125,8 +114,6 @@ export default function RecordPage() {
                 {saved && !error && <div className="status ok">{saved}</div>}
               </>
             }
-            generate={generatePanel?.body}
-            revise={revisePanel?.body}
             side={
               <Related
                 related={loaded.related ?? {}}
@@ -153,8 +140,6 @@ export default function RecordPage() {
                   <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
                     {T.record.save}
                   </button>
-                  {generatePanel?.toggle}
-                  {revisePanel?.toggle}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
                   {table === "episode" && (

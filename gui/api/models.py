@@ -51,26 +51,6 @@ class ChildListMeta(BaseModel):
     display: ChildListDisplay = "table"
 
 
-class GeneratorMeta(BaseModel):
-    """「AI で作成」のボタン。欄の値(下書き)を核に AI が全欄を組み立て直して行を足す。"""
-    key: str
-    label: str
-    # 呼ぶ入口(`/api/interface` の id)。claude を叩くので裏の job になる
-    entrance: str
-    # 足す画面(create)・直す画面(edit)・両方(both)のどこに出すか
-    mode: Literal["create", "edit", "both"]
-    # 直す画面では、この欄が空のときだけ出す(本文の無い話にだけ「本文を書く」を出すなど)
-    when_empty: str | None = None
-    # 直す画面では、この欄が空でないときだけ出す(本文のある話にだけ「推敲する」を出すなど)
-    when_not_empty: str | None = None
-    # 行の欄の外で受け取る指定(現在の時刻・登場人物など)
-    params: list[ColumnMeta] = Field(default_factory=list)
-    # true なら「AI で作成」の小さなボタン列(GeneratePanel)には出さず、専用の大きなパネル(RevisePanel)で出す
-    panel: bool = False
-    # true なら他の生成とボタン・欄を共にせず、自分だけの起動ボタンと欄で出す(同じ名前の欄(model など)を分けるため)
-    separate: bool = False
-
-
 class TableMeta(BaseModel):
     name: str
     label: str
@@ -79,21 +59,13 @@ class TableMeta(BaseModel):
     child_lists: list[ChildListMeta]
     reviewable: bool
     count: int
-    generators: list[GeneratorMeta] = Field(default_factory=list)
     # 一覧の既定の並び
     sort: str = "id"
     order: Literal["asc", "desc"] = "desc"
 
 
-# claude を叩く入口の扱い(`gui/api/claude_env.py`)。direct: その場で回す / queue: 待ち行列に積み web のセッションが回す / off: 使えない
-ClaudeModeName = Literal["direct", "queue", "off"]
-
-
 class TablesResponse(BaseModel):
     tables: list[TableMeta]
-    # 「AI で作成」を押せるか(false なら 403)。queue モードでも true
-    claude_available: bool = False
-    claude_mode: ClaudeModeName = "off"
 
 
 class RecordList(BaseModel):
@@ -183,7 +155,6 @@ class TimelineResponse(BaseModel):
 
 class Health(BaseModel):
     dialect: str
-    claude_mode: ClaudeModeName
 
 
 class Created(BaseModel):
@@ -207,28 +178,14 @@ class EntranceMeta(BaseModel):
     name: str
     doc: str
     params: list[EntranceParam]
-    # claude コマンドを叩く(Claude Code の環境でだけ、裏の job として走る)
-    claude: bool
     writes: bool
 
 
 class EntranceList(BaseModel):
     entrances: list[EntranceMeta]
-    # claude=true の入口を呼べるか(false なら 403)。queue モードでも true
-    claude_available: bool
-    claude_mode: ClaudeModeName = "off"
 
 
 class RunRequest(BaseModel):
-    args: dict[str, Any] = Field(default_factory=dict)
-    # true なら claude を叩かない入口も裏の job で走らせる
-    background: bool = False
-
-
-class GenerateRequest(BaseModel):
-    # 欄の値(下書き)。空の欄は省いてよい
-    draft: dict[str, Any] = Field(default_factory=dict)
-    # `GeneratorMeta.params` の値
     args: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -237,19 +194,3 @@ class RunResult(BaseModel):
     result: Any = None
 
 
-class JobInfo(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    entrance: str
-    args: dict[str, Any]
-    status: Literal["queued", "running", "done", "failed"]
-    result: Any = None
-    error: str | None = None
-    created_at: str
-    started_at: str | None = None
-    finished_at: str | None = None
-
-
-class JobList(BaseModel):
-    jobs: list[JobInfo]

@@ -199,16 +199,10 @@ button.ghost { background: transparent; }
 .record-text .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
 /* textarea は overflow: visible を無視して auto 扱いにするブラウザの仕様があり、その結果 flex アイテムとしての
    自動最小サイズが中身の高さではなく 0 相当になって、上の flex: none が無いと JS が付けた高さを無視して縮む */
-/* 「AI で作成」。押すと本文の右側で大半(9 割ほど)を使って開く。閉じているあいだは何も置かない(body が null) */
-.generate-right { flex: 9 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.generate-right > .panel.generate { flex: 1; min-height: 0; overflow: auto; margin: 0; }
 /* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使う。
-   推敲欄を開いていないとき左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
+   左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
    (保存ボタンを見るのに左の欄ごとスクロールしなくてよい)。最低でも見出し+数行は見える高さは残す */
 .record-side .field.section.side { flex: 1 1 28rem; min-height: 8rem; }
-/* ただし推敲欄を開いているときは、指示を書くのにキーテキストを見比べるので潰さない。
-   28rem を割り込みそうなら(足りなければ)左の欄ごとスクロールする側に戻す */
-.record-side:has(.revise-panel.open) .field.section.side { flex-shrink: 0; min-height: 28rem; }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
   flex: 1; height: auto; min-height: 0; resize: none; overflow: auto;
 }
@@ -220,36 +214,16 @@ button.ghost { background: transparent; }
   .record-text textarea.section, .record-text .markdown-preview { height: auto; min-height: 40rem; resize: vertical; }
   .record-side .field.section.side { flex: none; }
   .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 28rem; resize: vertical; }
-  .revise-panel.open { flex: none; min-height: 0; }
-  .revise-body textarea.section, .revise-body .markdown-preview { height: auto; min-height: 32rem; resize: vertical; }
-  .generate-right { flex: none; }
 }
 
-/* 「AI で推敲する」。開くボタンは save の隣(actionbar)に置き、押すと指示テキストを大きく書ける
-   専用パネルがここに開く(本文を見ながら指示を書きたいので、左の欄の大半(7 割ほど)を使う) */
-.revise-panel { display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; margin-top: 0.75rem; }
-/* flex-shrink を 0 にして、置き場所(record-side)が狭くても本文欄の下(20rem)より縮めない。
-   縮められる余地が無ければ record-side 自体がスクロールして受け止める(場面欄の 28rem と同じ考え方) */
-.revise-panel.open { flex: 7 0 auto; min-height: 18rem; }
-.revise-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-shrink: 0; }
-.revise-body { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.6rem; }
-.revise-body .field.section { flex: 1 0 auto; min-height: 20rem; }
-.revise-body textarea.section, .revise-body .markdown-preview { height: 100%; min-height: 20rem; resize: none; overflow: auto; }
-.revise-fields { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; flex-shrink: 0; }
-.revise-fields .field { min-width: 10rem; }
-
-/* 保存系のボタンと「AI で作成」パネルを、左の欄の一番下にまとめて隣り合わせに置く(フロートさせず、通常の流れの末尾) */
+/* 保存系のボタンを、左の欄の一番下に置く(フロートさせず、通常の流れの末尾) */
 .record-actions { margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
-/* 帯は中のボタンを折り返して縮める(縮めないと、左の欄より広いとき右へはみ出す)。「AI で作成」と並べて入らなければ、flex-wrap で次の行へ送られる */
+/* 帯は中のボタンを折り返して縮める(縮めないと、左の欄より広いとき右へはみ出す) */
 .record-actions > .actionbar { flex: 0 1 auto; min-width: 0; margin-top: 0; }
-.record-actions > .generate-body { flex: 1; min-width: 260px; }
-.record-actions > .generate-body:empty { display: none; }
 
 .actionbar { flex-shrink: 0; margin-top: 0.75rem; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 1.25rem; display: flex; gap: 0.6rem; align-items: center; }
 .actionbar .inner { width: 100%; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 .actionbar .spacer { flex: 1; }
-/* 「AI で作成」「AI で推敲する」の開閉ボタン(押しているあいだだけ強調) */
-.actionbar button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .actionbar .meta { color: var(--muted); font-size: 0.85rem; }
 
 .childlist table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -402,23 +376,6 @@ button.ghost { background: transparent; }
   .viz-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40%; }
 }
 
-/* 「AI で作成」。保存ボタンの並び(.record-actions)の中で、その隣に置く */
-.generate-body > .panel.generate { margin: 0; padding: 0.7rem 0.9rem; }
-.panel.generate .form { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem 1rem; }
-.panel.generate .multi { max-height: 16rem; }
-.generate-buttons { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; }
-.panel.generate .form .generate-buttons { grid-column: span 2; margin-top: 0; align-self: end; }
-.generate-stack { display: flex; flex-direction: column; gap: 0.5rem; }
-.generate-row { display: flex; gap: 0.6rem 1rem; align-items: flex-end; flex-wrap: wrap; }
-.generate-row .field { flex: 1 1 10rem; }
-.generate-row .generate-buttons { margin-top: 0; }
-/* 生成パネルは本文側(.record-text)に出るので、本文の高さの指定を外して注文の欄を行数ぶんの高さにする */
-.panel.generate .field.section.auto { flex: none; min-height: 0; }
-.panel.generate .field.section.auto textarea.section,
-.panel.generate .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
-/* 注文は一行ずつ書くので、空行を挟まない改行もプレビューで改行のまま出す(マークダウンの既定では一段落につながる) */
-.panel.generate .field.section.auto .markdown-preview :is(p, li) { white-space: pre-line; }
-
 /* 作品一覧(作品の親子の木)・人物一覧(場所の木に人物をぶら下げる)のツリー */
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree .tree { margin-left: 0.6rem; padding-left: 0.9rem; border-left: 1px solid var(--line); }
@@ -543,8 +500,6 @@ button.ghost { background: transparent; }
   .record { gap: 0.9rem; }
   .record-text textarea.section, .record-text .markdown-preview { min-height: 60dvh; }
   .actionbar { padding: 0.6rem 0.7rem; }
-  /* 生成パネルの注文欄は 1 列になるので、2 列ぶんを取ると見えない列が増えて横にはみ出す */
-  .panel.generate .form .generate-buttons { grid-column: 1 / -1; }
 
   .modal-backdrop { padding: 0.5rem; }
   .modal.wide:has(.character-sheet) { height: 95dvh; }
