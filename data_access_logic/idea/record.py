@@ -3,7 +3,7 @@ from pydantic import ConfigDict
 from data_access_logic.material import Form, Material, Timestamp
 
 
-class IdeaRecognitionRow(Form):
+class IdeaHistoryRow(Form):
     """アイデアの子の行(id と idea_id は持たない。行は配列の並びで決まる)。入口の引数とレスポンスの両方に使う。"""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
@@ -24,7 +24,7 @@ class IdeaRecord(Material):
     end: Timestamp | None = None
     parent_idea_id: int | None = None
     meme_seeded: bool
-    recognitions: list[IdeaRecognitionRow]
+    histories: list[IdeaHistoryRow]
     text: str
 
 

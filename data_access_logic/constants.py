@@ -88,7 +88,7 @@ EPISODE_PLACE_EVENT_LIMIT = 3
 RECAP_TIMEOUT = 300.0
 
 # data_access_logic/idea
-IDEA_TERMS_TIMEOUT = 300.0
+IDEA_DRAFTS_TIMEOUT = 300.0
 # 清書に渡すアイデアの上限(直接当たったものと、その上位・下位を合わせて)。
 IDEA_CONTEXT_LIMIT = 100
 # 清書に渡すアイデア一件の本文の字数の上限。

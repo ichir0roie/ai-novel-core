@@ -24,7 +24,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
 | 本文の材料を読む(登場人物・場所・設定を結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
-| 設定を引く | `idea.resolve_terms.ResolveTerms` | `{'terms': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
+| 設定を引く | `idea.resolve_ideas.ResolveIdeas` | `{'ideas': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
 | 設定を結ぶ | `idea.link_ideas.LinkIdeas` | `{'idea_ids': […], 'episode_id': …}` |
 | 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
 | 人物を AI に組ませて足す | `character.generate_character.GenerateCharacter` | `{'character': {'name': …, 'text': <人物像と役どころ>, 'location_id': …}, 'time': '<話の時刻>', 'plot_text': <話のプロット>}` |
@@ -36,7 +36,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 ## 流れ
 
 - **プロットを書く前に、出す人物が関わった話を読む**。人物の設定(芯の `text`・来歴の `histories`)だけを見て書かない(これまでの出来事は話の本文にしか無いことが多い)
-- **本文の材料を読む前に、登場人物・場所・設定(アイデア)を話に結ぶ**(材料は結んだ登場人物・場所・アイデアから引く。人物の関係と同じく、設定も話の時刻に効くものだけが出る)
+- **本文の材料を読む前に、登場人物・場所・設定(アイデア)を話に結ぶ**(材料は結んだ登場人物・場所・アイデアから引く。結んだ人物・アイデアは生没年・効く期間を問わず出し、来歴・履歴は話の時刻に効くものだけが出る)
 
 1. **話の行を用意する**
    - 本文の無い枠(id を頼まれた): その行を使う。時刻(`start`)が空なら、前後の話から決めて先に入れる
@@ -57,7 +57,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
    - `CastEpisode(episode_id, character_ids=[…], location_id=…, viewpoint_character_id=…)` で結ぶ(登場人物はまるごと置き換わり、名前だけ出る人物は拾い直される。同期フラグは変えない)
    - 足した人物に関わった話があれば、2 と同じく読む
 5. **設定を引いて結ぶ**
-   - プロットに出る固有の語(呼称・制度・道具・病など)を自分で挙げ、`ResolveTerms` でアイデアと照らす(`location_id` は 4 で結んだ場所、`time` は話の時刻)。当たらなかった語は候補のアイデアとして足される
+   - プロットに出る固有の語(呼称・制度・道具・病など)を自分で挙げ、`ResolveIdeas` でアイデアと照らす(`location_id` は 4 で結んだ場所、`time` は話の時刻)。当たらなかった語は候補のアイデアとして足される
    - 返った `ideas`(当たったものとその上位・下位)を読み、プロットが踏まえるものを選ぶ。プロットと食い違うものがあれば、プロットを直して 3 から入れ直す
    - 選んだアイデアと `candidates` の id を `LinkIdeas(idea_ids, episode_id=…)` で話に結ぶ(結んだものは足されるだけで外れない。踏まえないものは結ばない)
    - 固有の語が無ければ飛ばしてよい
@@ -66,7 +66,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
    - 文体の見本: 同じ作品の直前の五話の本文。文体だけを見て、中身(出来事・人物・設定)は読み取らない
    - 前の話の概要(話id つき): この話より前の同じ作品のすべての話と、登場人物が関わったすべての話(作品を問わない。重ならない)。文体の見本の五話も含む。話の中身はここから読む
    - この話・結んだ登場人物(直近の出来事・関わった話つき)・名前だけ出る人物・登場人物の関係・関係する設定・場所の直近の出来事・後に決まっている出来事
-   - 関係する設定: 話に結んだアイデアのうち、話の時刻に効くもの(`start` <= 時刻 < `end`)。名前は話の場所・時刻での作中の呼び名
+   - 関係する設定: 話に結んだアイデア(効く期間を問わない)。名前は、アイデアの履歴のうち話の場所・時刻に効く行の作中の呼び名(無ければ本質の名前)
    - 前の話・出来事の要約が古ければ、読む前に AI が作り直す(数分かかることがある)。概要で足りなければ `ReadEpisodeTexts` で本文を読む
 7. **本文を書く**(下の「書くとき」)
    - 書いた本文はスクラッチパッドのファイルに置く

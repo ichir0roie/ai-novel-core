@@ -17,7 +17,7 @@ class IdeaMaterial(Material):
     parent_idea_id: int | None = None
 
 
-class IdeaRecognitionMaterial(Material):
+class IdeaHistoryMaterial(Material):
     idea_id: int
     name: str
     detail: str | None = None
@@ -40,8 +40,9 @@ def _stamp_or_none(value: Any) -> Stamp | None:
         return None
 
 
-class IdeaTerm(Material):
-    """アイデアと照らす語。claude が渡す語も、AI が挙げた語(`IdeaTermDraft`)も、この形で扱う。"""
+class IdeaDraft(Material):
+    """下書きから挙げたアイデア。claude が渡すものも、AI が挙げたもの(`IdeaDraftByAI`)も、この形で扱う。
+    既存のアイデアに当たらなければ、この中身で候補のアイデアとして足す。"""
 
     keyword: str
     variants: list[str] = []
@@ -86,7 +87,7 @@ class IdeaTerm(Material):
         return _stamp_or_none(value)
 
     @model_validator(mode="after")
-    def _consistent(self) -> "IdeaTerm":
+    def _consistent(self) -> "IdeaDraft":
         self.variants = [variant for variant in dict.fromkeys(self.variants)
                          if len(variant) >= _MIN_VARIANT_LETTERS and variant != self.keyword]
         if self.start is not None and self.end is not None and self.end <= self.start:
@@ -94,20 +95,20 @@ class IdeaTerm(Material):
         return self
 
 
-def unique_terms(terms: list[IdeaTerm]) -> list[IdeaTerm]:
+def unique_ideas(ideas: list[IdeaDraft]) -> list[IdeaDraft]:
     """同じ keyword の語は、先に挙げたものだけを残す。"""
-    found: dict[str, IdeaTerm] = {}
-    for term in terms:
-        found.setdefault(term.keyword, term)
+    found: dict[str, IdeaDraft] = {}
+    for idea in ideas:
+        found.setdefault(idea.keyword, idea)
     return list(found.values())
 
 
-# AI には時期を文字列で書かせ、`IdeaTerm` のバリデータで `Stamp` に読む
+# AI には時期を文字列で書かせ、`IdeaDraft` のバリデータで `Stamp` に読む
 _StampText = Annotated[Stamp | None, WithJsonSchema({"anyOf": [{"type": "string"}, {"type": "null"}]})]
 
 
-class IdeaTermDraft(IdeaTerm):
-    # AI にはすべての欄を書かせる。整え方は `IdeaTerm` のバリデータのまま
+class IdeaDraftByAI(IdeaDraft):
+    # AI にはすべての欄を書かせる。整え方は `IdeaDraft` のバリデータのまま
     model_config = ConfigDict(extra="forbid")
 
     keyword: str = Field(description="語")
@@ -123,37 +124,37 @@ class IdeaTermDraft(IdeaTerm):
     end: _StampText = Field(description="その事柄が終わった・廃れた・そう呼ばれなくなった時期。文から分かるときだけ start と同じ形で書き、分からなければ null")
 
 
-class IdeaTermsDraft(BaseModel):
+class IdeaDraftsByAI(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    terms: list[IdeaTermDraft] = Field(description="設定資料と照らし合わせる語。0〜8 件")
+    ideas: list[IdeaDraftByAI] = Field(description="設定資料と照らし合わせる語。0〜8 件")
 
-    @field_validator("terms", mode="before")
+    @field_validator("ideas", mode="before")
     @classmethod
     def _without_blank_keyword(cls, value: Any) -> Any:
         # keyword が空白だけの語は、応答ごと捨てずにその語だけを落とす
         if not isinstance(value, list):
             return value
-        return [term for term in value
-                if not (isinstance(term, dict) and isinstance(term.get("keyword"), str) and not normalized(term["keyword"]))]
+        return [idea for idea in value
+                if not (isinstance(idea, dict) and isinstance(idea.get("keyword"), str) and not normalized(idea["keyword"]))]
 
 
 class RelatedIdeaMaterial(Material):
     idea: IdeaMaterial
     # その場所・時代で使う呼び名(`alias.called` が選んだ行)。無ければ本質の名前で呼ぶ
-    recognition: IdeaRecognitionMaterial | None = None
+    history: IdeaHistoryMaterial | None = None
 
 
 def idea_for_prompt(related: RelatedIdeaMaterial) -> dict[str, Any]:
-    idea, recognition = related.idea, related.recognition
+    idea, history = related.idea, related.history
     text = idea.text or ""
     if len(text) > constants.IDEA_CONTEXT_LETTERS:
         text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
     return {
-        "名前": recognition.name if recognition else idea.name,
+        "名前": history.name if history else idea.name,
         "種類": idea.kind,
-        "作中での受け止め方": recognition.detail if recognition else None,
+        "作中での受け止め方": history.detail if history else None,
         "内容": text,
     }
 

@@ -8,7 +8,7 @@ from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.form import IdeaCreateForm
 from data_access_logic.idea.record import IdeaRecord
 from db.child_lists import replaced_rows
-from db.schema import Idea, IdeaRecognition, Location
+from db.schema import Idea, IdeaHistory, Location
 
 
 class CommitIdea(CommitMemeSource):
@@ -31,7 +31,7 @@ class CommitIdea(CommitMemeSource):
             classification = find_or_create_classification(s, form.kind, form.location_id)
             if classification is not None:
                 record.parent_idea_id = classification.id
-        record.recognitions = replaced_rows([], form.recognitions, IdeaRecognition)
+        record.histories = replaced_rows([], form.histories, IdeaHistory)
         s.add(record)
         self.finalize(s, record)
         return IdeaRecord.model_validate(record)

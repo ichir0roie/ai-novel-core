@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.idea.models import IdeaHit, IdeaTerm, IdeaTermsDraft, normalized, unique_terms
+from data_access_logic.idea.models import IdeaHit, IdeaDraft, IdeaDraftsByAI, normalized, unique_ideas
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Idea
 from db.stamp import Stamp
@@ -30,7 +30,7 @@ _VARIANT_NAME_SCORE = 2
 _TEXT_SCORE = 1
 
 
-def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[IdeaTerm]:
+def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[IdeaDraft]:
     """`text` から、アイデアと照らす語とその言い換えを AI に挙げさせる。答えなければ空。
 
     `time`(文の時刻)を渡すと、それと文の中身から語ごとの `start` / `end` を決めさせる。
@@ -40,10 +40,10 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
     when = f"この文の時刻: {time}\n\n" if time is not None else ""
     decided = ai.generate(
         f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げてください。",
-        IdeaTermsDraft, system=_SYSTEM_PROMPT, timeout=constants.IDEA_TERMS_TIMEOUT)
+        IdeaDraftsByAI, system=_SYSTEM_PROMPT, timeout=constants.IDEA_DRAFTS_TIMEOUT)
     if decided is None:
         return []
-    return unique_terms(list(decided.terms))
+    return unique_ideas(list(decided.ideas))
 
 
 def _kana_swapped(text: str) -> str:
@@ -69,27 +69,27 @@ def _contains(haystack: str | None, needle: str) -> bool:
     return needle.casefold() in normalized(haystack).casefold()
 
 
-def _spelled(term: IdeaTerm) -> tuple[list[str], list[str]]:
-    keyword = spellings(term.keyword)
-    variants = [spelling for variant in term.variants for spelling in spellings(variant) if spelling not in keyword]
+def _spelled(idea: IdeaDraft) -> tuple[list[str], list[str]]:
+    keyword = spellings(idea.keyword)
+    variants = [spelling for variant in idea.variants for spelling in spellings(variant) if spelling not in keyword]
     return keyword, list(dict.fromkeys(variants))
 
 
 def _score(idea: Idea, keyword: list[str], variants: list[str]) -> int:
-    # 場所・時代を問わず、作中の呼び名(idea_recognition)にも本質と同じ強さで当たる
-    names = [idea.name, *(recognition.name for recognition in idea.recognitions)]
+    # 場所・時代を問わず、作中の呼び名(idea_history)にも本質と同じ強さで当たる
+    names = [idea.name, *(history.name for history in idea.histories)]
     if any(_contains(name, spelling) for name in names for spelling in keyword):
         return _NAME_SCORE
     if any(_contains(name, spelling) for name in names for spelling in variants):
         return _VARIANT_NAME_SCORE
-    texts = [idea.text, *(recognition.detail or "" for recognition in idea.recognitions)]
+    texts = [idea.text, *(history.detail or "" for history in idea.histories)]
     if any(_contains(text, spelling) for text in texts for spelling in keyword + variants):
         return _TEXT_SCORE
     return 0
 
 
 def search(
-    s: Session, keywords: list[IdeaTerm], location_id: int | None = None, time: Stamp | None = None,
+    s: Session, keywords: list[IdeaDraft], location_id: int | None = None, time: Stamp | None = None,
     limit: int | None = None,
 ) -> list[IdeaHit]:
     """キーワードと言い換えで引いたアイデアを、当たり方の強い順に返す。
@@ -99,15 +99,15 @@ def search(
     """
     location_ids = common_query.idea_scope_ids(s, location_id) if location_id is not None else None
     scores: dict[int, tuple[Idea, int, list[str]]] = {}
-    for term in unique_terms(keywords):
-        keyword, variants = _spelled(term)
-        for idea in s.scalars(dictionary_query.ideas_by_terms_select(
+    for idea_draft in unique_ideas(keywords):
+        keyword, variants = _spelled(idea_draft)
+        for idea in s.scalars(dictionary_query.ideas_by_keywords_select(
                 keyword + variants, location_ids, time)).all():
             score = _score(idea, keyword, variants)
             if not score:
                 continue
             _, total, matched = scores.get(idea.id, (idea, 0, []))
-            scores[idea.id] = (idea, total + score, [*matched, term.keyword])
+            scores[idea.id] = (idea, total + score, [*matched, idea_draft.keyword])
     ranked = sorted(scores.values(), key=lambda found: (-found[1], found[0].id))
     hits = [IdeaHit(idea=idea, score=score, keywords=matched) for idea, score, matched in ranked]
     return hits[:limit] if limit is not None else hits

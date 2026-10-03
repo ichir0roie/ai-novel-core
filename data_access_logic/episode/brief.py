@@ -2,7 +2,7 @@
 """話の本文を、`claude -p` の生成関数に任せず、このセッションの Claude が自分で書く・直すための材料。
 
 本文の材料(登場人物の直近の出来事・関係、場所の出来事、関係する設定)は話に結んだ登場人物・場所・アイデアから引くので、
-先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結び、プロットの語を `ResolveTerms` で
+先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結び、プロットの語を `ResolveIdeas` で
 アイデアと照らして `LinkIdeas` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
 本文は Claude が `CommitEpisode` で確定する。
 どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える → `episode_casting` / `episode_brief`)に分けてある。

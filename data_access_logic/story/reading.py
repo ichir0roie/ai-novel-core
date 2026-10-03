@@ -16,7 +16,7 @@ from data_access_logic.location.record import LocationRecord
 from data_access_logic.material import Material, Named, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
-from db.schema import Character, Event, Idea, IdeaRecognition, Location, Story
+from db.schema import Character, Event, Idea, IdeaHistory, Location, Story
 from db.stamp import Stamp
 
 
@@ -114,7 +114,7 @@ def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: 
     character_ids = residents(s, location_ids, until)
     ideas = s.scalars(
         common_query.ideas_select(common_query.idea_scope_ids(s, location_id), until)).all()
-    recognitions = called(s, [idea.id for idea in ideas], location_id, until)
+    histories = called(s, [idea.id for idea in ideas], location_id, until)
 
     characters = s.scalars(select(Character).where(Character.id.in_(character_ids))).all() if character_ids else []
     character_names = {character.id: character.name for character in characters}
@@ -126,17 +126,17 @@ def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: 
         reach=reach,
         open_events=visible(list(s.scalars(common_query.open_events_select(location_ids, until)).all())),
         recent_events=visible(recent),
-        ideas=[_brief_idea(idea, recognitions.get(idea.id)) for idea in ideas],
+        ideas=[_brief_idea(idea, histories.get(idea.id)) for idea in ideas],
         present_characters=[Named(id=id_, name=character_names[id_]) for id_ in character_ids],
     )
 
 
-def _brief_idea(idea: Idea, recognition: IdeaRecognition | None) -> BriefIdea:
+def _brief_idea(idea: Idea, history: IdeaHistory | None) -> BriefIdea:
     """その場所・時代の呼び名があればその名で、作中での受け止め方を本質の本文の前に置く。"""
-    if recognition is None:
+    if history is None:
         return BriefIdea(id=idea.id, name=idea.name, kind=idea.kind, text=idea.text)
-    return BriefIdea(id=idea.id, name=recognition.name, kind=idea.kind,
-                     text=" ".join(part for part in (recognition.detail, idea.text) if part))
+    return BriefIdea(id=idea.id, name=history.name, kind=idea.kind,
+                     text=" ".join(part for part in (history.detail, idea.text) if part))
 
 
 def cast(s: Session, story_id: int, when: Stamp | str | None = None, count: int = 5, levels: int = 1) -> Cast:
