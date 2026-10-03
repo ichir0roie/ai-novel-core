@@ -45,6 +45,8 @@ def turn_of(s: Session, episode_id: int, character_id: int) -> TurnState:
 
 def _seen(s: Session, own: EpisodeCharacterSession) -> list[SeenSerialized]:
     """前の自分の行からこの行までの、イベントの行とほかの人物の一手。初対面の相手は名前でなく見た目で渡す。"""
+    # TODO: その場にいない人物の一手・別の場所のイベントの行も見えてしまう。登場人物が別々の場所に分かれる話では、
+    #  語り部が要求に「見えない」と書いて補っている。行に場所を持たせて見える範囲を絞るかは、汎用の形が決まるまで保留
     assert own.character_id is not None
     previous = s.scalar(select(EpisodeCharacterSession.id)
                         .where(EpisodeCharacterSession.episode_id == own.episode_id,
