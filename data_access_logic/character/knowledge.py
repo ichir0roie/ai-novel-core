@@ -3,7 +3,7 @@
 本文・来歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、場所ならその時刻に
 その場所(配下も含む)に住む人物が、知った時刻から知る。アイデアの本文と履歴(呼び名)は、効く場所と期間に住む人物も知る。
 人物の来歴はその時刻までに起きた行だけ。
-人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
+人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と、知っていれば芯を渡す。plot はだれにも渡さない。
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pydantic import model_serializer
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from data_access_logic.character.cast import age_at
+from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, relations_for_prompt
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.idea.alias import called
@@ -202,8 +202,7 @@ def knowledge_of(s: Session, character_id: int, time: Stamp) -> KnowledgeSeriali
                      text=character.text if knows_oneself else None, meme=character.meme, principle=character.principle,
                      histories=known_histories(character.histories, viewer)),
         parameters=parameters_at(character, time),
-        relations=[CharacterRelationLine.model_validate(row)
-                   for row in s.execute(common_query.character_relations_at_select([character.id], time))],
+        relations=relations_at(s, [character], time),
         characters=[KnownCharacter(name=other.name, looks=appearance_of(other, time),
                                    text=other.text if knows(other.knowers, viewer) else None,
                                    histories=known_histories(other.histories, viewer))

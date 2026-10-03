@@ -5,11 +5,12 @@ from pydantic import ValidationError
 
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.delete_character import DeleteCharacter
-from data_access_logic.character.form import CharacterCreateForm, CharacterUpdateForm
+from data_access_logic.character.form import CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm
 from data_access_logic.character.read_appearance import ReadAppearance
 from data_access_logic.character.read_knowledge import ReadKnowledge
-from data_access_logic.character.record import CharacterHistoryRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
+from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode_session.add_turns import AddTurns
 from data_access_logic.episode_session.answer_turn import AnswerTurn
@@ -90,6 +91,19 @@ def test_read_knowledge(shown, world):
     idea = next(idea for idea in result["知っているアイデア"] if idea["名前"] == "テスト魔導")
     assert (idea["呼び名"], idea["説明"]) == ("テスト術", "テスト用の技術")
     assert [name["呼び名"] for name in idea["知っている呼び名"]] == ["テスト術", "村の隠し名"]
+
+
+def test_read_knowledge_relation_histories_until_the_time(shown, world):
+    shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, histories=[
+        CharacterRelationHistoryRow(start=1250, description="先に起きること"),
+        CharacterRelationHistoryRow(start=1190, description="市で再会する"),
+        CharacterRelationHistoryRow(description="年未定の構想")])))
+
+    result = shown(ReadKnowledge(character_id=world.character_ids[0], time="1200/01/01"))
+
+    relation = next(relation for relation in result["関係"] if relation["関係"] == "幼なじみ")
+    assert relation["説明"] == "同じ通りで育った"
+    assert [history["来歴"] for history in relation["来歴(古い順)"]] == ["市で再会する"]
 
 
 def test_read_knowledge_without_knowing(shown, world, mock_ai):

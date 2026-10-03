@@ -20,7 +20,9 @@ from data_access_logic.character.list_character_relations import ListCharacterRe
 from data_access_logic.character.list_characters import ListCharacters
 from data_access_logic.character.read_character import ReadCharacter
 from data_access_logic.character.read_surroundings import ReadSurroundings
-from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
+from data_access_logic.character.record import (
+    CharacterHistoryRow, CharacterLocationRow, CharacterParameterRow, CharacterRelationHistoryRow,
+)
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
@@ -73,12 +75,14 @@ def test_commit_character_location(shown, world):
 def test_commit_character_relation(shown, world):
     result = shown(CommitCharacterRelation(CharacterRelationCreateForm(
         character_1_id=world.character_ids[1], character_2_id=world.character_ids[0], relation="商売敵",
-        text="市で客を取り合う", start="1200/04/01", end="1210/01/01")))
+        text="市で客を取り合う", start="1200/04/01", end="1210/01/01",
+        histories=[CharacterRelationHistoryRow(start=1205, description="値下げで競り合う")])))
 
     assert (result["character_1_id"], result["character_2_id"]) == (world.character_ids[1], world.character_ids[0])
     assert result["relation"] == "商売敵"
     assert result["text"] == "市で客を取り合う"
     assert (result["start"], result["end"]) == ("1200/04/01 00:00:00", "1210/01/01 00:00:00")
+    assert result["histories"] == [{"start": 1205, "description": "値下げで競り合う"}]
 
 
 def test_create_random_character(shown):
@@ -225,8 +229,14 @@ def test_update_character_location(shown, world):
 def test_update_character_relation(shown, world):
     result = shown(UpdateCharacterRelation(CharacterRelationUpdateForm(
         id=world.relation_id, character_1_id=world.character_ids[1], character_2_id=world.character_ids[0],
-        relation="許嫁", text="親が決めた", start="1190/01/01", end="1205/01/01")))
+        relation="許嫁", text="親が決めた", start="1190/01/01", end="1205/01/01",
+        histories=[CharacterRelationHistoryRow(start=1195, description="縁談が流れかける")])))
 
     assert (result["character_1_id"], result["character_2_id"]) == (world.character_ids[1], world.character_ids[0])
     assert (result["relation"], result["text"]) == ("許嫁", "親が決めた")
     assert (result["start"], result["end"]) == ("1190/01/01 00:00:00", "1205/01/01 00:00:00")
+    assert result["histories"] == [{"start": 1195, "description": "縁談が流れかける"}]
+
+    # 来歴を渡さなければ、今の行はそのまま
+    result = shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, text="親が決めた縁")))
+    assert result["histories"] == [{"start": 1195, "description": "縁談が流れかける"}]

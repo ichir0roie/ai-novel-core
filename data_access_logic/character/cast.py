@@ -23,8 +23,18 @@ def age_at(character: Character, time: Stamp) -> int | None:
 
 
 def relations_at(s: Session, characters: list[Character], time: Stamp) -> list[CharacterRelationLine]:
-    rows = s.execute(common_query.character_relations_at_select([character.id for character in characters], time))
-    return [CharacterRelationLine.model_validate(row) for row in rows]
+    """`time` に続いている関係を、`time` の年までに起きた来歴だけを付けて返す。
+
+    関係の芯(`text`)は時期を限らないので、先のことは来歴の行に書けば、それより前の話・人物役には渡らない。
+    """
+    rows = s.scalars(common_query.character_relations_at_select([character.id for character in characters], time)).all()
+    return [
+        CharacterRelationLine(
+            character_1=row.character_1, character_2=row.character_2, relation=row.relation, text=row.text,
+            histories=sorted((history for history in row.histories if history.covers(time)),
+                             key=lambda history: history.start or 0))
+        for row in rows
+    ]
 
 
 def _recent_events_select(character: Character, time: Stamp) -> Select[Event]:

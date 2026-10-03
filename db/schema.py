@@ -541,7 +541,11 @@ class CharacterLocation(Base):
 
 
 class CharacterRelation(TextBase):
-    """`character_1_id` から見た `character_2_id` との関係を一行で持つ。"""
+    """`character_1_id` から見た `character_2_id` との関係を一行で持つ。
+
+    `text` は時期を限らない関係の芯(どういう間柄か)。関係の中で起きたこと・変わったことは、人物の来歴と同じく
+    起きた年ごとの行(CharacterRelationHistory)に積み、入口では `histories` の配列で出し入れする。
+    """
 
     __tablename__ = "character_relation"
 
@@ -563,6 +567,36 @@ class CharacterRelation(TextBase):
         foreign_keys="CharacterRelation.character_1_id", lazy="noload")
     character_2: Mapped["Character"] = relationship(
         foreign_keys="CharacterRelation.character_2_id", lazy="noload")
+
+    CHILD_LISTS = ("histories",)
+
+    histories: Mapped[list["CharacterRelationHistory"]] = relationship(
+        back_populates="relation_row", lazy="selectin", cascade="all, delete-orphan",
+        order_by="CharacterRelationHistory.start.desc().nulls_last()")
+
+
+class CharacterRelationHistory(Base):
+    """関係の来歴を、起きた年ごとの一行で持つ子テーブル。関係の芯は `CharacterRelation.text` に持つ。
+
+    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻の年までに始まった行だけを渡す
+    (`data_access_logic/character/cast.py` の `relations_at`)ので、先の時刻の行を書き足しても、それより前には効かない。
+    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
+    """
+
+    __tablename__ = "character_relation_history"
+
+    character_relation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character_relation.id"), index=True, nullable=False, sort_order=100)
+    start: Mapped[int | None] = mapped_column(
+        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・人物役には渡さない)",
+        sort_order=110)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=120)
+
+    # `relation` は関係の名前の列と重なるので、親の行は `relation_row` と呼ぶ
+    relation_row: Mapped[CharacterRelation] = relationship(back_populates="histories", lazy="noload")
+
+    def covers(self, time: Stamp) -> bool:
+        return self.start is not None and self.start <= time.year
 
 
 class CharacterHistory(Base):

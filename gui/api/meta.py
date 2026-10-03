@@ -38,6 +38,7 @@ _LABELS = {
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "character": {"parameters": "periodic", "locations": "periodic", "histories": "flow"},
     "idea": {"histories": "flow"},
+    "character_relation": {"histories": "flow"},
 }
 
 
