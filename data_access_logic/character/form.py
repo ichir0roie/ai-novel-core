@@ -2,7 +2,9 @@ from typing import Annotated, Any
 
 from pydantic import Field, field_validator, model_validator
 
-from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
+from data_access_logic.character.record import (
+    CharacterHistoryRow, CharacterLocationRow, CharacterParameterRow, CharacterRelationHistoryRow,
+)
 from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
@@ -122,6 +124,8 @@ class CharacterRelationCreateForm(Form):
     text: str = ""
     start: Timestamp | None = None
     end: Timestamp | None = None
+    # 関係の来歴(起きた年ごとの行)
+    histories: list[CharacterRelationHistoryRow] = []
 
     @model_validator(mode="after")
     def _two_characters(self) -> "CharacterRelationCreateForm":
@@ -138,3 +142,5 @@ class CharacterRelationUpdateForm(Form):
     text: str | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
+    # 渡せば来歴の行をまるごと置き換える
+    histories: list[CharacterRelationHistoryRow] | None = None

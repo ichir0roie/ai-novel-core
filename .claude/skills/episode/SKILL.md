@@ -112,7 +112,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 本文を確定したあと(手順 8 のあと)、語り部がセッションの行(`read --episode <id>`)を読み、話の中で人物が知ったことを db に残す。足すのは主要人物・サブキャラクターを問わない(手順 10 の来歴の書き足しとは別)。知った時刻(`start`)はその話の時刻にし、それより前の話には効かないようにする。
 
-- 初めて会って名乗り合った・言葉を交わした人物どうしには、関係(`character.commit_character_relation.CommitCharacterRelation`)を足す。`relation` は短い名前(「宿を貸した旅人」など)、`text` は会ったいきさつ、`start` は話の時刻
+- 初めて会って名乗り合った・言葉を交わした人物どうしには、関係(`character.commit_character_relation.CommitCharacterRelation`)を足す。`relation` は短い名前(「宿を貸した旅人」など)、`text` は時期を限らない間柄、`start` は話の時刻、会ったいきさつは `histories` にその年の行(`{'start': <年>, 'description': …}`)で書く。すでにある関係に話で起きたことを足すときも、`text` には書かず、その年の行に足す(`data_access_logic/readme.md` の「関係の芯と来歴」)
 - 話の中で明かされた来歴・芯(打ち明けた秘密・名乗った身の上)は、聞いた人物を、その行の知る相手(`knowers` に `{"knower_id": <聞いた人物>, "start": "<話の時刻>"}`)に足す。来歴の行は `UpdateCharacter` の `histories` の配列ごと、芯は `knowers` の配列ごと渡す(まるごと置き換わるので、今の行を時刻を渡さない `ReadCharacter` で読んでから足す)
 - 話の中で初めて知った設定(アイデア)も同じく、`UpdateIdea` の `knowers` に足す
 - 何を足したかを、報告に書く

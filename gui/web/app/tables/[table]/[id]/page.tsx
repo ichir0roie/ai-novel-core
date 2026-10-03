@@ -12,9 +12,9 @@ import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-/** start が空の行を最後に並べる子リスト。人物の来歴の空の start は「年未定」(`db/schema.py` の CharacterHistory.start)。
+/** start が空の行を最後に並べる子リスト。人物・関係の来歴の空の start は「年未定」(`db/schema.py` の CharacterHistory.start)。
  * ほかの子リストの空の start は「初めから」なので先頭に置く。 */
-const UNDATED_LAST: Record<string, string[]> = { character: ["histories"] };
+const UNDATED_LAST: Record<string, string[]> = { character: ["histories"], character_relation: ["histories"] };
 
 /** 期間ごとの行(各要素が start を持つ子リスト)を、その画面のためだけに start 昇順で並べ直す。 */
 function sortChildListsByStart(table: string, record: Rec): Rec {

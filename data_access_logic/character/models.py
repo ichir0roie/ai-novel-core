@@ -3,7 +3,7 @@ from typing import Any
 from pydantic import model_serializer
 
 from data_access_logic.character.histories import histories_for_prompt
-from data_access_logic.character.record import CharacterHistoryRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.material import Material
 from db.schema import PersonalityLevel
@@ -60,13 +60,20 @@ class CharacterParameterValues(Material):
     imagination: PersonalityLevel = PersonalityLevel.NORMAL
 
 
-class CharacterRelationLine(Material):
-    """`common_query.character_relations_at_select` の一行。name1 から見た name2 との関係。"""
+class RelationParty(Material):
+    name: str | None = None
 
-    name1: str | None = None
-    name2: str | None = None
+
+class CharacterRelationLine(Material):
+    """ある時刻に続いている関係。`character_1` から見た `character_2` との関係。"""
+
+    character_1: RelationParty
+    character_2: RelationParty
     relation: str
+    # 関係の芯(時期を限らない)
     text: str
+    # その時刻の年までに起きた来歴(古い順。`cast.relations_at`)。先の時刻の行と、年の決まっていない行は入らない
+    histories: list[CharacterRelationHistoryRow]
 
 
 class CharacterAt(Material):
@@ -127,7 +134,9 @@ def _sheet(character: CharacterWholeBase, at: CharacterAt) -> dict[str, Any]:
 
 def relations_for_prompt(relations: list[CharacterRelationLine]) -> list[dict[str, Any]]:
     return [
-        {"誰から": relation.name1, "誰へ": relation.name2, "関係": relation.relation, "説明": relation.text}
+        {"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation,
+         "説明": relation.text,
+         "来歴(古い順)": [{"年": history.start, "来歴": history.description} for history in relation.histories]}
         for relation in relations
     ]
 

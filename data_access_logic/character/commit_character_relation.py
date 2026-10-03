@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from data_access_logic.character.form import CharacterRelationCreateForm
 from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.entrypoint import CommitEntrypoint
-from db.schema import Character, CharacterRelation
+from db.child_lists import replaced_rows
+from db.schema import Character, CharacterRelation, CharacterRelationHistory
 
 
 class CommitCharacterRelation(CommitEntrypoint):
@@ -21,6 +22,7 @@ class CommitCharacterRelation(CommitEntrypoint):
 
         record = CharacterRelation()
         self.relation.write_to(record)
+        record.histories = replaced_rows([], self.relation.histories, CharacterRelationHistory)
         s.add(record)
         self.finalize(s, record)
         return CharacterRelationRecord.model_validate(record)
