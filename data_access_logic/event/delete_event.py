@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.event.record import DeletedEvent
 from data_access_logic.query import common_query
-from db.schema import Event, EventCharacter, EventIdea, EventSummary
+from db.schema import Event, EventCharacter, EventSummary
 
 
 class DeleteEvent(CommitEntrypoint):
@@ -25,7 +25,7 @@ class DeleteEvent(CommitEntrypoint):
 
         deleted = DeletedEvent.model_validate(record)
         # 関連は noload なので、cascade に頼らず中間テーブルと要約を先に消す
-        for model in (EventCharacter, EventIdea, EventSummary):
+        for model in (EventCharacter, EventSummary):
             s.execute(delete(model).where(model.event_id == record.id))
         s.delete(record)
         return deleted

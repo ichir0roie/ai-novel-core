@@ -1,7 +1,6 @@
 from pydantic import Field
 
 from data_access_logic.idea.record import IdeaHistoryRow
-from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Form, Timestamp
 
 
@@ -16,8 +15,6 @@ class IdeaCreateForm(Form):
     parent_idea_id: int | None = None
     meme_seeded: bool = False
     histories: list[IdeaHistoryRow] = []
-    # 本文(`text`)を知る相手。アイデアの効く場所と期間に住む人物は、渡さなくても知る
-    knowers: list[KnowerRow] = []
 
 
 class IdeaUpdateForm(Form):
@@ -32,5 +29,3 @@ class IdeaUpdateForm(Form):
     meme_seeded: bool | None = None
     # 渡すと配列をまるごと置き換える
     histories: list[IdeaHistoryRow] | None = None
-    # 渡すとまるごと置き換える
-    knowers: list[KnowerRow] | None = None

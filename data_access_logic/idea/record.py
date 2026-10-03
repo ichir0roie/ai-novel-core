@@ -29,8 +29,6 @@ class IdeaRecord(Material):
     parent_idea_id: int | None = None
     meme_seeded: bool
     histories: list[IdeaHistoryRow]
-    # 本文(`text`)を知る相手
-    knowers: list[KnowerRow]
     text: str
 
 

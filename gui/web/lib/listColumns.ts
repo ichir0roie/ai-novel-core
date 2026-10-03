@@ -3,10 +3,10 @@ import type { ColumnMeta, Labels, Rec, TableMeta } from "./api";
 
 // 一覧のテーブルには出さない列(id は別で出す。他は座標・フラグなど見ても意味が薄い)
 const HIDDEN = new Set(["id", "meme_seeded", "event_seeded", "polygon"]);
-// 話の一覧は作品の詳細から開く前提なので、作品の列は出さない
-const HIDDEN_BY_TABLE: Record<string, string[]> = { episode: ["story_id"] };
-// 本文のプレビュー列を出さないテーブル
-export const NO_PREVIEW = new Set(["episode"]);
+// 話の一覧は作品の詳細から開く前提なので、作品の列は出さない。ミームは本文だけを見て選んで消すので、分類も出さない
+const HIDDEN_BY_TABLE: Record<string, string[]> = { episode: ["story_id"], meme: ["category"] };
+// 本文のプレビュー列を出さないテーブル(ミームは名前の列が本文そのもの)
+export const NO_PREVIEW = new Set(["episode", "meme"]);
 
 export function listColumns(meta: TableMeta): ColumnMeta[] {
   const hidden = new Set([...HIDDEN, ...(HIDDEN_BY_TABLE[meta.name] ?? [])]);

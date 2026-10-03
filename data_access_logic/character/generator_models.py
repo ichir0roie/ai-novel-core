@@ -422,8 +422,6 @@ class CharacterCreation(Material):
     # 死亡していなければ空
     end: Stamp | None = None
     born_location_id: int | None = None
-    # 説明が踏まえたアイデア
-    ideas: list[IdeaMaterial]
 
 
 class CompletionTarget(Material):

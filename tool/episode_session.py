@@ -5,7 +5,7 @@
 返すものが来るまで表を一定の間隔で見て、来たら結果の JSON を出して終わる(待つあいだ Claude は考えない)。
 
     人物役: knowledge / wait-turn / answer
-    語り部: appearance / add / wait-answers / read / close
+    語り部: stage / appearance / add / wait-answers / read / close
 
     .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -63,9 +64,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    knowledge = commands.add_parser("knowledge", help="人物がその時刻に知ることのできるデータを読む")
+    knowledge = commands.add_parser("knowledge", help="人物が、話のセッションでいる時刻に知ることのできるデータを読む")
+    knowledge.add_argument("--episode", type=int, required=True)
     knowledge.add_argument("--character", type=int, required=True)
-    knowledge.add_argument("--time", required=True)
 
     wait = commands.add_parser("wait-turn", help="自分の番(turn)か話の終わり(closed)が来るまで待つ")
     wait.add_argument("--episode", type=int, required=True)
@@ -82,9 +83,13 @@ def main() -> None:
     appearance.add_argument("--character", type=int, required=True)
     appearance.add_argument("--time", required=True)
 
-    add = commands.add_parser("add", help="手番の要求の行を足す(JSON の配列のファイル: character_id・time・request)")
+    stage = commands.add_parser("stage", help="語り部が読む材料(プロット・場所・登場人物・関係・設定の表層)を読む")
+    stage.add_argument("--episode", type=int, required=True)
+
+    add = commands.add_parser("add", help="手番の要求の行を足す(JSON の配列: character_id・time・request)")
     add.add_argument("--episode", type=int, required=True)
-    add.add_argument("--turns", type=Path, required=True)
+    add.add_argument("--turns", required=True, help="JSON のファイル。- なら標準入力から読む")
+    add.add_argument("--wait", action="store_true", help="足したあと、手番がすべて埋まるまで待ち、足した行から後を返す")
 
     answers = commands.add_parser("wait-answers", help="手番がすべて埋まるまで待ち、--after より後の行を返す")
     answers.add_argument("--episode", type=int, required=True)
@@ -96,7 +101,7 @@ def main() -> None:
     close = commands.add_parser("close", help="出た人物すべてに終了の行を足す")
     close.add_argument("--episode", type=int, required=True)
 
-    for waiting in (wait, answers):
+    for waiting in (wait, answers, add):
         waiting.add_argument("--interval", type=float, default=1.0)
         waiting.add_argument("--timeout", type=float, default=3000.0)
 
@@ -104,7 +109,7 @@ def main() -> None:
     configure_logging()
     match args.command:
         case "knowledge":
-            result = call("character.read_knowledge.ReadKnowledge", {"character_id": args.character, "time": args.time})
+            result = call("character.read_knowledge.ReadKnowledge", {"episode_id": args.episode, "character_id": args.character})
         case "wait-turn":
             result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "answer":
@@ -113,9 +118,13 @@ def main() -> None:
                 "record_id": args.record, "answer": {name: value for name, value in fields.items() if value is not None}})
         case "appearance":
             result = call("character.read_appearance.ReadAppearance", {"character_id": args.character, "time": args.time})
+        case "stage":
+            result = call("episode_session.read_stage.ReadStage", {"episode_id": args.episode})
         case "add":
-            turns = json.loads(args.turns.read_text(encoding="utf-8"))
-            result = call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, "turns": turns})
+            text = sys.stdin.read() if args.turns == "-" else Path(args.turns).read_text(encoding="utf-8")
+            result = call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, "turns": json.loads(text)})
+            if args.wait and result:
+                result = wait_answers(args.episode, min(record["id"] for record in result) - 1, args.interval, args.timeout)
         case "wait-answers":
             result = wait_answers(args.episode, args.after, args.interval, args.timeout)
         case "read":

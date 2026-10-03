@@ -21,8 +21,16 @@ class SessionRecord(Material):
     aim: str | None = None
 
 
+class TurnRecord(Material):
+    """人物役が読む自分の番の行。時刻は渡さない(`character/knowledge.py`)。"""
+
+    id: int
+    request: str
+    closing: bool
+
+
 class TurnState(Material):
     # turn: いまこの人物が動く番 / waiting: ほかの人物の番か、まだ要求が無い / closed: 話が終わった
     status: Literal["turn", "waiting", "closed"]
     # turn と closed のときの、この人物の行
-    record: SessionRecord | None = None
+    record: TurnRecord | None = None

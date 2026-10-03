@@ -167,10 +167,6 @@ class IdeaContextMaterial(Material):
     # 清書に渡す。hits(時期の決まったもの)とその上位・下位
     related: list[RelatedIdeaMaterial]
 
-    @property
-    def linked(self) -> list[IdeaMaterial]:
-        return list({idea.id: idea for idea in self.hits + self.candidates}.values())
-
 
 class IdeaContextSerialized(IdeaContextMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""

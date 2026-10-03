@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
+import { deleteMemes, getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
 import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
@@ -15,6 +15,8 @@ import { T } from "@/lib/text";
 const PAGE = 50;
 // 列名の query として扱わない(絞り込みのチップに出さない)もの
 const RESERVED = new Set(["q", "limit", "offset", "sort", "order"]);
+// 一覧で選んでまとめて消せるテーブル。抜き出しで溜まるミームを、本文を見て間引く
+const BULK_DELETE: Partial<Record<string, (ids: number[]) => Promise<unknown>>> = { meme: deleteMemes };
 
 export default function TablePage() {
   const openPage = useOpenPage();
@@ -27,6 +29,10 @@ export default function TablePage() {
   const [q, setQ] = useState(search.get("q") ?? "");
   const storyId = table === "episode" ? search.get("story_id") : null;
   const [storyLabel, setStoryLabel] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [reload, setReload] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+  const bulkDelete = BULK_DELETE[table];
 
   // 並びの既定はテーブルごと(TableMeta.sort / order)。meta が来るまでは決められない
   const params = useMemo(() => {
@@ -41,8 +47,9 @@ export default function TablePage() {
   useEffect(() => {
     if (!params) return;
     setError(null);
+    setSelected(new Set());
     listRecords(table, params).then(setData).catch((e) => setError(e.message));
-  }, [table, params]);
+  }, [table, params, reload]);
 
   useEffect(() => {
     if (!storyId) return;
@@ -126,6 +133,28 @@ export default function TablePage() {
   const filters = [...search.entries()].filter(
     ([key]) => !RESERVED.has(key) && !(storyId && key === "story_id") && meta.columns.some((c) => c.key === key),
   );
+  const pageIds = (data?.items ?? []).map((item) => Number(item.id));
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggle = (id: number) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
+  const removeSelected = async () => {
+    if (!bulkDelete || selected.size === 0 || !window.confirm(T.list.confirmDeleteSelected(selected.size))) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await bulkDelete([...selected]);
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError(T.record.deleteFailed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filterLabel = (key: string, value: string) => {
     const column = meta.columns.find((c) => c.key === key)!;
     const shown = value === "null" ? T.list.empty : column.references ? labelOf(data?.labels, key, value) : value;
@@ -170,6 +199,11 @@ export default function TablePage() {
             {T.list.add}
           </button>
         </Link>
+        {bulkDelete && (
+          <button type="button" className="danger" disabled={selected.size === 0 || deleting} onClick={removeSelected}>
+            {T.list.deleteSelected(selected.size)}
+          </button>
+        )}
       </div>
       {error && <div className="status error">{error}</div>}
       <div className="scroll-x">
@@ -180,21 +214,46 @@ export default function TablePage() {
               {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
               {columns.map((c) => sortHeader(c.key, c.label))}
               {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
+              {bulkDelete && (
+                <th className="check">
+                  <input
+                    type="checkbox"
+                    title={T.list.selectAll}
+                    checked={allSelected}
+                    onChange={() => setSelected(allSelected ? new Set() : new Set(pageIds))}
+                  />
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {data?.items.map((item) => (
               <tr
                 key={String(item.id)}
-                className="row"
+                className={selected.has(Number(item.id)) ? "row selected" : "row"}
                 tabIndex={0}
-                onClick={(e) => openPage(`/tables/${table}/${item.id}`, e)}
+                // まとめて消せる一覧では、行のクリックは選ぶだけにして、詳細へは名前の文字から飛ぶ
+                onClick={(e) => (bulkDelete ? toggle(Number(item.id)) : openPage(`/tables/${table}/${item.id}`, e))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
                 }}
               >
                 <td>{String(item.id)}</td>
-                <td className="name">{String(item.label ?? "")}</td>
+                <td className="name">
+                  {bulkDelete ? (
+                    <span
+                      className="open"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openPage(`/tables/${table}/${item.id}`, e);
+                      }}
+                    >
+                      {String(item.label ?? "")}
+                    </span>
+                  ) : (
+                    String(item.label ?? "")
+                  )}
+                </td>
                 {columns.map((c) => (
                   <td key={c.key}>
                     {c.references && item[c.key] != null ? (
@@ -215,6 +274,18 @@ export default function TablePage() {
                   </td>
                 ))}
                 {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
+                {bulkDelete && (
+                  <td className="check">
+                    <input
+                      type="checkbox"
+                      title={T.list.select}
+                      checked={selected.has(Number(item.id))}
+                      // 行のクリックでも切り替わるので、二度切り替わらないよう止める
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggle(Number(item.id))}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

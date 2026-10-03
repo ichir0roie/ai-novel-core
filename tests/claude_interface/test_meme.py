@@ -1,4 +1,7 @@
 """claude が CLI から `show()` で呼ぶ、ミーム(`data_access_logic/meme/`)・覚え書き(`oracle/`)・レビュー(`review/`)の入口。"""
+import pytest
+
+from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.meme.commit_meme import CommitMeme
 from data_access_logic.meme.delete_meme import DeleteMeme
 from data_access_logic.meme.draw_memes import DrawMemes
@@ -21,9 +24,19 @@ def test_commit_meme(shown):
 
 
 def test_delete_meme(shown, world):
-    result = shown(DeleteMeme(meme_id=world.meme_id))
+    other = shown(CommitMeme(MemeCreateForm(text="一緒に消える信条", category=MemeCategory.BELIEF)))
 
-    assert result == {"id": world.meme_id, "category": "信条", "text": "テストの信条"}
+    result = shown(DeleteMeme(meme_ids=[world.meme_id, other["id"]]))
+
+    assert result == [{"id": world.meme_id, "category": "信条", "text": "テストの信条"},
+                      {"id": other["id"], "category": "信条", "text": "一緒に消える信条"}]
+
+
+def test_delete_meme_keeps_all_when_one_is_missing(shown, world):
+    with pytest.raises(UnknownRecordError):
+        DeleteMeme(meme_ids=[world.meme_id, 10**9]).run()
+
+    assert shown(DeleteMeme(meme_ids=[world.meme_id]))[0]["id"] == world.meme_id
 
 
 def test_draw_memes(shown, world):

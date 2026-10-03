@@ -1,7 +1,12 @@
 """人物がある時刻に知ることのできるデータ(人物役が自分で読む材料)と、会った相手から見て分かること。
 
+人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
+来歴の起きた年は、その時刻から何年前かで渡す。
+
 本文・来歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、場所ならその時刻に
-その場所(配下も含む)に住む人物が、知った時刻から知る。アイデアの本文と履歴(呼び名)は、効く場所と期間に住む人物も知る。
+その場所(配下も含む)に住む人物が、知った時刻から知る。
+アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけで、
+行の効く場所(空ならどこでも)と期間に住む人物と、行の知る相手に当たる人物が知る。
 人物の来歴はその時刻までに起きた行だけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と、知っていれば芯を渡す。plot はだれにも渡さない。
@@ -14,16 +19,15 @@ from typing import Any
 
 from pydantic import model_serializer
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic.character.cast import age_at, relations_at
-from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, relations_for_prompt
+from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
-from data_access_logic.idea.alias import called
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.query.period import alive_at
-from db.schema import Character, CharacterHistory, CharacterRelation, Idea, IdeaHistory, IdeaKnower, KnowerMixin
+from db.schema import Character, CharacterHistory, CharacterRelation, IdeaHistory, IdeaHistoryKnower, KnowerMixin
 from db.stamp import Stamp
 
 
@@ -50,24 +54,15 @@ def knows(knowers: Sequence[KnowerMixin], viewer: Viewer) -> bool:
                for knower in knowers)
 
 
-def _lives_in_effect(row: Idea | IdeaHistory, viewer: Viewer, anywhere: bool) -> bool:
-    """`anywhere` なら、効く場所が空の行はどこにも効く(履歴)。空でなければどこにも効かない(アイデア)。"""
-    place = row.location_id in viewer.location_ids or (anywhere and row.location_id is None)
+def _lives_in_effect(row: IdeaHistory, viewer: Viewer) -> bool:
+    """効く場所が空の行はどこにも効く。"""
+    place = row.location_id is None or row.location_id in viewer.location_ids
     return place and (row.start is None or row.start <= viewer.time) and (row.end is None or row.end > viewer.time)
-
-
-def _idea_known(idea: Idea, viewer: Viewer) -> bool:
-    return _lives_in_effect(idea, viewer, anywhere=False) or knows(idea.knowers, viewer)
 
 
 class KnownName(Material):
     name: str
     detail: str | None = None
-
-
-def known_names(rows: Sequence[IdeaHistory], viewer: Viewer) -> list[KnownName]:
-    return [KnownName.model_validate(row) for row in rows
-            if _lives_in_effect(row, viewer, anywhere=True) or knows(row.knowers, viewer)]
 
 
 class KnownHistory(Material):
@@ -81,8 +76,25 @@ def known_histories(rows: Sequence[CharacterHistory], viewer: Viewer) -> list[Kn
     return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
 
 
-def _histories_for_prompt(histories: list[KnownHistory]) -> list[dict[str, Any]]:
-    return [{"年": history.start, "来歴": history.description} for history in histories]
+def _ago(start: int | None, year: int) -> str | None:
+    """起きた年を、その時刻から何年前かで言う。"""
+    if start is None:
+        return None
+    return "今年" if start == year else f"{year - start}年前"
+
+
+def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[dict[str, Any]]:
+    return [{"いつ": _ago(history.start, year), "来歴": history.description} for history in histories]
+
+
+def _relations_for_prompt(relations: list[CharacterRelationLine], year: int) -> list[dict[str, Any]]:
+    return [
+        {"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation,
+         "説明": relation.text,
+         "来歴(古い順)": [{"いつ": _ago(history.start, year), "来歴": history.description}
+                         for history in relation.histories]}
+        for relation in relations
+    ]
 
 
 class AppearanceSerialized(Material):
@@ -124,12 +136,8 @@ class KnownCharacter(Material):
 
 
 class KnownIdea(Material):
-    name: str
     kind: str
-    # 住む場所・時代での呼び名(当てはまる呼び名が無ければ空)
-    called: str | None = None
-    text: str
-    # 知っている呼び名(履歴)
+    # 知っている履歴の行(作中の呼び名と受け止め方)
     names: list[KnownName]
 
 
@@ -146,22 +154,21 @@ class KnowledgeSerialized(Material):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        me, parameters = self.me, self.parameters
+        me, parameters, year = self.me, self.parameters, self.time.year
         return {
-            "時刻": str(self.time),
             "自分": {
                 "名前": me.name, **me.looks.model_dump(), "名字": parameters.family_name,
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
                 "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
-                "行動原理": me.principle, "来歴(古い順)": _histories_for_prompt(me.histories),
+                "行動原理": me.principle, "来歴(古い順)": _histories_for_prompt(me.histories, year),
             },
-            "関係": relations_for_prompt(self.relations),
+            "関係": _relations_for_prompt(self.relations, year),
             "知っている人物": [
                 {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
-                 "来歴(古い順)": _histories_for_prompt(character.histories)}
+                 "来歴(古い順)": _histories_for_prompt(character.histories, year)}
                 for character in self.characters],
             "知っているアイデア": [
-                {"名前": idea.name, "呼び名": idea.called, "種別": idea.kind, "説明": idea.text,
+                {"種別": idea.kind,
                  "知っている呼び名": [{"呼び名": name.name, "受け止め方": name.detail} for name in idea.names]}
                 for idea in self.ideas],
         }
@@ -177,18 +184,22 @@ def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
 
 
 def _ideas(s: Session, viewer: Viewer) -> list[KnownIdea]:
-    local = s.scalars(common_query.ideas_select(viewer.location_ids, viewer.time)).all() if viewer.location_ids else []
-    told = s.scalars(select(Idea).where(Idea.id.in_(
-        select(IdeaKnower.idea_id).where(or_(IdeaKnower.knower_id == viewer.character_id,
-                                             IdeaKnower.location_id.in_(viewer.location_ids)))))
-                     .order_by(Idea.id)).all()
-    ideas = [idea for idea in {idea.id: idea for idea in [*local, *told]}.values() if _idea_known(idea, viewer)]
-    names = called(s, [idea.id for idea in ideas], viewer.home_id, viewer.time)
-    return [
-        KnownIdea(name=idea.name, kind=idea.kind, called=names[idea.id].name if idea.id in names else None,
-                  text=idea.text, names=known_names(idea.histories, viewer))
-        for idea in ideas
-    ]
+    told = select(IdeaHistoryKnower.idea_history_id).where(or_(
+        IdeaHistoryKnower.knower_id == viewer.character_id, IdeaHistoryKnower.location_id.in_(list(viewer.location_ids))))
+    rows = s.scalars(
+        select(IdeaHistory)
+        .where(or_(IdeaHistory.location_id.is_(None), IdeaHistory.location_id.in_(list(viewer.location_ids)),
+                   IdeaHistory.id.in_(told)))
+        .options(joinedload(IdeaHistory.idea))
+        .order_by(IdeaHistory.idea_id, IdeaHistory.id)
+        .execution_options(populate_existing=True)).all()
+    known: dict[int, KnownIdea] = {}
+    for row in rows:
+        if not (_lives_in_effect(row, viewer) or knows(row.knowers, viewer)):
+            continue
+        idea = known.setdefault(row.idea_id, KnownIdea(kind=row.idea.kind, names=[]))
+        idea.names.append(KnownName.model_validate(row))
+    return list(known.values())
 
 
 def knowledge_of(s: Session, character_id: int, time: Stamp) -> KnowledgeSerialized:

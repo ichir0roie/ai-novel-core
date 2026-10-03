@@ -10,7 +10,7 @@
 アイデアにそろえ、その場所・時刻での呼び名を `called` に付ける。どれにも当たらなかった語は、`kind` の種別で
 新しいアイデアとして足し、`candidates` に返す。足した候補は語の `start` から `end` まで効く。
 `start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け、言えなければ省く(None)。`end` は分かるときだけ付ける。
-清書したら `idea.link_ideas.LinkIdeas` で、`hits` と `candidates` の id を清書したレコードに結ぶ。
+話の本文なら、清書したら `idea.link_ideas.LinkIdeas` で、`hits` と `candidates` の id を話に結ぶ。
 """
 from __future__ import annotations
 

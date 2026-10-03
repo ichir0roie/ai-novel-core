@@ -5,18 +5,16 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.character.knowledge import KnowledgeSerialized, knowledge_of
 from data_access_logic.entrypoint import SessionEntrypoint
-from db.stamp import Stamp
+from data_access_logic.episode_session.turns import actor_time
 
 
 class ReadKnowledge(SessionEntrypoint):
-    """人物がその時刻に知ることのできるデータを読む。本文・来歴は、公開のものと、その人物が知る人に入ったものだけ。"""
+    """人物役が、話のセッションでいる時刻に知ることのできるデータを読む。本文・来歴は、公開のものと、その人物が知る人に入ったものだけ。
+    時刻は人物役に渡さないので、その人物の一番新しい手番の行(無ければ話)から取る。"""
 
-    def __init__(self, character_id: int, time: Stamp | str):
+    def __init__(self, episode_id: int, character_id: int):
+        self.episode_id = episode_id
         self.character_id = character_id
-        self.time = time
 
     def execute(self, s: Session) -> KnowledgeSerialized:
-        time = Stamp.parse(self.time)
-        if time is None:
-            raise ValueError(f"時刻が読めない: {self.time!r}")
-        return knowledge_of(s, self.character_id, time)
+        return knowledge_of(s, self.character_id, actor_time(s, self.episode_id, self.character_id))

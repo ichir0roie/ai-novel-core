@@ -657,31 +657,17 @@ class Idea(MemeSeededMixin, TextBase):
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
-    # 場所・時代ごとの作中での呼び名は、人物の来歴と同じく履歴(IdeaHistory)として積む。GUI では histories に並ぶ。
-    # 本文を知る相手は `knowers` の配列で出し入れする。
-    CHILD_LISTS = ("histories", "knowers")
+    # 本文(`text`)は本質で、作者(語り部・生成)だけが読む。作中の人物が知ることは、場所・時代ごとの作中での呼び名と
+    # 受け止め方として、人物の来歴と同じく履歴(IdeaHistory)に積む。GUI では histories に並ぶ。
+    CHILD_LISTS = ("histories",)
 
     histories: Mapped[list["IdeaHistory"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
         order_by="IdeaHistory.start.desc().nulls_last()")
-    knowers: Mapped[list["IdeaKnower"]] = relationship(
-        back_populates="idea", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaKnower.id")
-
-
-class IdeaKnower(KnowerMixin, Base):
-    """アイデアの本文を知る相手。アイデアの効く場所(`Idea.location_id`)と期間に住む人物は、行が無くても知る。"""
-
-    __tablename__ = "idea_knower"
-    __table_args__ = _knower_args("idea_knower", "idea_id")
-
-    idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
-
-    idea: Mapped[Idea] = relationship(back_populates="knowers", lazy="noload")
-    knower: Mapped[Character | None] = relationship(lazy="noload")
 
 
 class IdeaHistory(Base):
-    """アイデアの履歴。作中での呼び名を、場所・時代ごとに一行で持つ。
+    """アイデアの履歴。作中での呼び名と受け止め方(作中の人物が知っていること)を、場所・時代ごとに一行で持つ。
 
     アイデアそのものは話に結べば効く期間を問わず読むが、履歴は話の時刻・場所に効く行だけを使う。
 
@@ -702,10 +688,12 @@ class IdeaHistory(Base):
     end: Mapped[Stamp | None] = mapped_column(
         StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=130)
     name: Mapped[str] = mapped_column(String, nullable=False, comment="この場所・時代での作中の呼び名", sort_order=140)
-    detail: Mapped[str | None] = mapped_column(String, comment="呼び名についての注釈(作中での受け止め方)", sort_order=150)
+    detail: Mapped[str | None] = mapped_column(
+        String, comment="作中での受け止め方(作中の人物が、このアイデアについて知っていること)", sort_order=150)
 
     idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
-    # 人物役(`data_access_logic/character/knowledge.py`)には、効く場所・期間に住む人物か、知る相手に当たる人物にだけ渡す
+    # 人物役(`data_access_logic/character/knowledge.py`)には、効く場所・期間に住む人物か、知る相手に当たる人物にだけ渡す。
+    # アイデアの本文は人物役に渡さないので、人物が知ることのできるアイデアはこの行だけ
     knowers: Mapped[list["IdeaHistoryKnower"]] = relationship(
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryKnower.id")
 
@@ -848,16 +836,6 @@ class EpisodeCharacterSession(Base):
     character: Mapped["Character"] = relationship(lazy="noload")
 
 
-class EventIdea(Base):
-    """出来事の本文が踏まえたアイデア。"""
-
-    __tablename__ = "event_idea"
-    __table_args__ = (UniqueConstraint("event_id", "idea_id"),)
-
-    event_id: Mapped[int] = mapped_column(Integer, ForeignKey("event.id"), index=True, sort_order=100)
-    idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
-
-
 class EpisodeIdea(Base):
     """話のプロットから引いて本文が踏まえたアイデア。"""
 
@@ -865,16 +843,6 @@ class EpisodeIdea(Base):
     __table_args__ = (UniqueConstraint("episode_id", "idea_id"),)
 
     episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
-    idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
-
-
-class CharacterIdea(Base):
-    """人物・対象の説明が踏まえたアイデア。"""
-
-    __tablename__ = "character_idea"
-    __table_args__ = (UniqueConstraint("character_id", "idea_id"),)
-
-    character_id: Mapped[int] = mapped_column(Integer, ForeignKey("character.id"), index=True, sort_order=100)
     idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 

@@ -60,7 +60,7 @@ def test_delete_idea(shown, world):
 def test_link_ideas(shown, world):
     result = shown(LinkIdeas(idea_ids=[world.idea_id, world.child_idea_id], episode_id=world.episode_id))
 
-    assert result == {"event_id": None, "episode_id": world.episode_id, "character_id": None, "linked": 2}
+    assert result == {"episode_id": world.episode_id, "linked": 2}
 
 
 def test_merge_idea(shown, world):

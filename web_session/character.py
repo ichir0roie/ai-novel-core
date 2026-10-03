@@ -47,7 +47,7 @@ def _complete_text(ai: AIClient, rng: random.Random, character_id: int) -> Chara
     ideas = call(idea_steps.resolve_ideas, idea_steps.ResolveForm(
         keywords=keywords_of(content.text, ai, target.time), location_id=target.born_location_id, time=target.time))
     return call(character_steps.save_completed_text, character_steps.CompletedTextForm(
-        id=character_id, writing=generator.completed_text(ai, target, material, content, ideas), ideas=ideas.linked))
+        id=character_id, writing=generator.completed_text(ai, target, material, content, ideas)))
 
 
 def generate_character(

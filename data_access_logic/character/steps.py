@@ -10,7 +10,6 @@ from data_access_logic.character.generate_character import generation_time as de
 from data_access_logic.character.generate_characters import check_locations, resident_rooms
 from data_access_logic.character.generator_models import BirthSources, CharacterCreation, CharacterWriting, CompletionTarget
 from data_access_logic.character.record import CharacterRecord
-from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.step import RowId, RowIds, db_step
 from db.stamp import Stamp
 
@@ -35,8 +34,6 @@ class ResidentRoomsForm(BaseModel):
 class CompletedTextForm(BaseModel):
     id: int
     writing: CharacterWriting
-    # 説明が踏まえたアイデア
-    ideas: list[IdeaMaterial]
 
 
 @db_step
@@ -71,4 +68,4 @@ def completion_target(s: Session, form: RowId) -> CompletionTarget:
 
 @db_step
 def save_completed_text(s: Session, form: CompletedTextForm) -> CharacterRecord:
-    return CharacterRecord.model_validate(generator.save_completed_text(s, form.id, form.writing, form.ideas))
+    return CharacterRecord.model_validate(generator.save_completed_text(s, form.id, form.writing))

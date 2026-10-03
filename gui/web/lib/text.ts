@@ -56,6 +56,10 @@ export const T = {
     prev: "Prev",
     next: "Next",
     range: (from: number, to: number, total: number) => `${from}–${to} of ${total}`,
+    selectAll: "Select all on this page",
+    select: "Select",
+    deleteSelected: (count: number) => `Delete selected (${count})`,
+    confirmDeleteSelected: (count: number) => `Delete ${count} selected rows? This cannot be undone.`,
   },
 
   record: {

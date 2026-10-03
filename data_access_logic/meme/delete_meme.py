@@ -10,13 +10,17 @@ from db.schema import Meme
 
 
 class DeleteMeme(CommitEntrypoint):
+    """ミームを消す。GUI の一覧で選んだものをまとめて消すので、id の配列で受ける。"""
+
     model = Meme
 
-    def __init__(self, meme_id: int):
-        self.meme_id = meme_id
+    def __init__(self, meme_ids: list[int]):
+        self.meme_ids = meme_ids
 
-    def execute(self, s: Session) -> MemeRecord:
-        record = common_query.get_row(s, Meme, self.meme_id)
-        deleted = MemeRecord.model_validate(record)
-        s.delete(record)
+    def execute(self, s: Session) -> list[MemeRecord]:
+        deleted = []
+        for meme_id in self.meme_ids:
+            record = common_query.get_row(s, Meme, meme_id)
+            deleted.append(MemeRecord.model_validate(record))
+            s.delete(record)
         return deleted

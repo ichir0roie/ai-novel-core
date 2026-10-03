@@ -35,7 +35,6 @@ from data_access_logic.character.naming import named
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.idea.context import resolve_ideas
-from data_access_logic.idea.links import link
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.meme.extractor import draw_from, meme_pool, position_legend
@@ -349,7 +348,6 @@ def character_creation(
         # 死は先の出来事なので、作者が主要人物に決めて渡したときだけ持たせる(サブキャラクターには持たせない)
         end=form.end if form and form.main_character else None,
         born_location_id=born_location_id,
-        ideas=ideas.linked,
     )
 
 
@@ -371,7 +369,6 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
     if creation.born_location_id is not None:
         s.add(CharacterLocation(character_id=record.id, location_id=creation.born_location_id,
                                 start=record.start, end=record.end))
-    link(s, record, creation.ideas)
     logger.info(f"足した: {record.name} id={record.id}")
     return record
 
@@ -439,7 +436,7 @@ def completed_text(
     return _writing(fixed, material.memes, target.time, target.age, target.name or "")
 
 
-def save_completed_text(s: Session, character_id: int, writing: CharacterWriting, ideas: list[IdeaMaterial]) -> Character:
+def save_completed_text(s: Session, character_id: int, writing: CharacterWriting) -> Character:
     """芯・ミーム・行動原理を書き、来歴の節目は今の行に足す(同じ年の行があればその説明に書き足す)。"""
     record = s.get_one(Character, character_id)
     record.text = writing.text
@@ -448,7 +445,6 @@ def save_completed_text(s: Session, character_id: int, writing: CharacterWriting
     for row in writing.histories:
         if row.start is not None:
             add_history(record, row.start, row.description)
-    link(s, record, ideas)
     s.flush()
     return record
 
@@ -461,6 +457,6 @@ def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: in
         ai, rng, target, birth_sources(s, target.born_location_id, target.time, target.person))
     ideas = resolve_ideas(s, keywords_of(content.text, ai, target.time), target.born_location_id, target.time)
     s.commit()
-    record = save_completed_text(s, character_id, completed_text(ai, target, material, content, ideas), ideas.linked)
+    record = save_completed_text(s, character_id, completed_text(ai, target, material, content, ideas))
     s.commit()
     return record

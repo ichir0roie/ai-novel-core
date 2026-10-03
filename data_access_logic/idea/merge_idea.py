@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """アイデア `source_id`(主に候補)を `target_id` へまとめる、claude が呼ぶ入口。
 
-`source_id` に結んであった出来事・話・人物と、`source_id` の履歴(`idea_history`。作中での呼び名)は
+`source_id` に結んであった話と、`source_id` の履歴(`idea_history`。作中での呼び名)は
 `target_id` へ付け替え、`source_id` は消す。
 """
 from __future__ import annotations
@@ -41,12 +41,6 @@ class MergeIdea(CommitEntrypoint):
         for history in list(source.histories):
             source.histories.remove(history)
             target.histories.append(history)
-        # 本文を知る相手は、統合先にまだいない相手だけ移す(同じ相手の行が重なると一意制約に当たる)
-        known = {(knower.knower_id, knower.location_id) for knower in target.knowers}
-        for knower in list(source.knowers):
-            source.knowers.remove(knower)
-            if (knower.knower_id, knower.location_id) not in known:
-                target.knowers.append(knower)
         merged = MergedIdea(merged=IdeaName.model_validate(source), into=IdeaName.model_validate(target),
                             links_moved=relink(s, source.id, target.id))
         s.delete(source)
