@@ -1,7 +1,8 @@
 """人物がある時刻に知ることのできるデータ(人物役が自分で読む材料)と、会った相手から見て分かること。
 
 本文・来歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、場所ならその時刻に
-その場所(配下も含む)に住む人物が、知った時刻から知る。アイデアは、効く場所と期間に住む人物も知る。来歴はその時刻までに起きた行だけ。
+その場所(配下も含む)に住む人物が、知った時刻から知る。アイデアの本文と履歴(呼び名)は、効く場所と期間に住む人物も知る。
+人物の来歴はその時刻までに起きた行だけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と、知っていれば芯を渡す。plot はだれにも渡さない。
 """
@@ -49,10 +50,24 @@ def knows(knowers: Sequence[KnowerMixin], viewer: Viewer) -> bool:
                for knower in knowers)
 
 
+def _lives_in_effect(row: Idea | IdeaHistory, viewer: Viewer, anywhere: bool) -> bool:
+    """`anywhere` なら、効く場所が空の行はどこにも効く(履歴)。空でなければどこにも効かない(アイデア)。"""
+    place = row.location_id in viewer.location_ids or (anywhere and row.location_id is None)
+    return place and (row.start is None or row.start <= viewer.time) and (row.end is None or row.end > viewer.time)
+
+
 def _idea_known(idea: Idea, viewer: Viewer) -> bool:
-    local = (idea.location_id in viewer.location_ids and (idea.start is None or idea.start <= viewer.time)
-             and (idea.end is None or idea.end > viewer.time))
-    return local or knows(idea.knowers, viewer)
+    return _lives_in_effect(idea, viewer, anywhere=False) or knows(idea.knowers, viewer)
+
+
+class KnownName(Material):
+    name: str
+    detail: str | None = None
+
+
+def known_names(rows: Sequence[IdeaHistory], viewer: Viewer) -> list[KnownName]:
+    return [KnownName.model_validate(row) for row in rows
+            if _lives_in_effect(row, viewer, anywhere=True) or knows(row.knowers, viewer)]
 
 
 class KnownHistory(Material):
@@ -60,7 +75,7 @@ class KnownHistory(Material):
     description: str
 
 
-def known_histories(rows: Sequence[CharacterHistory] | Sequence[IdeaHistory], viewer: Viewer) -> list[KnownHistory]:
+def known_histories(rows: Sequence[CharacterHistory], viewer: Viewer) -> list[KnownHistory]:
     """古い順。"""
     known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
     return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
@@ -111,10 +126,11 @@ class KnownCharacter(Material):
 class KnownIdea(Material):
     name: str
     kind: str
-    # その場所・時代での呼び名(当てはまる呼び名が無ければ空)
+    # 住む場所・時代での呼び名(当てはまる呼び名が無ければ空)
     called: str | None = None
     text: str
-    histories: list[KnownHistory]
+    # 知っている呼び名(履歴)
+    names: list[KnownName]
 
 
 class KnowledgeSerialized(Material):
@@ -146,7 +162,7 @@ class KnowledgeSerialized(Material):
                 for character in self.characters],
             "知っているアイデア": [
                 {"名前": idea.name, "呼び名": idea.called, "種別": idea.kind, "説明": idea.text,
-                 "来歴(古い順)": _histories_for_prompt(idea.histories)}
+                 "知っている呼び名": [{"呼び名": name.name, "受け止め方": name.detail} for name in idea.names]}
                 for idea in self.ideas],
         }
 
@@ -170,7 +186,7 @@ def _ideas(s: Session, viewer: Viewer) -> list[KnownIdea]:
     names = called(s, [idea.id for idea in ideas], viewer.home_id, viewer.time)
     return [
         KnownIdea(name=idea.name, kind=idea.kind, called=names[idea.id].name if idea.id in names else None,
-                  text=idea.text, histories=known_histories(idea.histories, viewer))
+                  text=idea.text, names=known_names(idea.histories, viewer))
         for idea in ideas
     ]
 

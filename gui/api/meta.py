@@ -37,7 +37,7 @@ _LABELS = {
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "character": {"parameters": "periodic", "locations": "periodic", "histories": "flow"},
-    "idea": {"recognitions": "flow", "histories": "flow"},
+    "idea": {"histories": "flow"},
 }
 
 
@@ -160,4 +160,3 @@ _LABELS["parameters"] = "期間ごとのパラメータ"
 _LABELS["locations"] = "期間ごとの居場所"
 _LABELS["histories"] = "来歴"
 _LABELS["knowers"] = "知る相手"
-_LABELS["recognitions"] = "場所・時代ごとの呼び名"

@@ -7,7 +7,7 @@ from data_access_logic.character.models import (
     MentionedMaterial, MentionedSerialized, relations_for_prompt,
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized
+from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, RelatedIdeaMaterial, idea_for_prompt
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material, Named
 from db.stamp import Stamp
@@ -247,6 +247,8 @@ class EpisodeBrief(Material):
     relations: list[CharacterRelationLine]
     # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
     appearances: list[CharacterEpisode]
+    # 話に結んだアイデア(`episode_idea`)。効く期間では絞らず、履歴(呼び名)は話の時刻・場所に効くもの
+    ideas: list[RelatedIdeaMaterial]
     # 古い順
     location_events: list[EventMaterial]
     later_events: list[EventMaterial]
@@ -290,6 +292,7 @@ class EpisodeBriefSerialized(EpisodeBrief):
                          for member in self.cast],
                 "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
+                "関係する設定": [{"アイデアid": related.idea.id, **idea_for_prompt(related)} for related in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
             },

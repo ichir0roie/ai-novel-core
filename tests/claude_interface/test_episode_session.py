@@ -73,9 +73,9 @@ def test_read_knowledge(shown, world):
             CharacterHistoryRow(start=1193, description="後で知る秘密", knowers=[KnowerRow(knower_id=taro, start="1201/01/01")]),
             CharacterHistoryRow(start=1250, description="先のこと", knowers=[KnowerRow(location_id=world.location_id)])])))
     shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
-        IdeaHistoryRow(start=1150, description="都に広まる", knowers=[KnowerRow(location_id=world.location_id)]),
-        IdeaHistoryRow(start=1160, description="炉の作り方は秘匿される", knowers=[KnowerRow(knower_id=taro)]),
-        IdeaHistoryRow(start=1170, description="誰も知らない欠陥")])))
+        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
+        IdeaHistoryRow(location_id=world.neighbor_id, name="村の隠し名", knowers=[KnowerRow(knower_id=taro)]),
+        IdeaHistoryRow(location_id=world.neighbor_id, name="誰も知らない名")])))
 
     result = shown(ReadKnowledge(character_id=taro, time="1200/01/01"))
 
@@ -89,7 +89,7 @@ def test_read_knowledge(shown, world):
     assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密"]
     idea = next(idea for idea in result["知っているアイデア"] if idea["名前"] == "テスト魔導")
     assert (idea["呼び名"], idea["説明"]) == ("テスト術", "テスト用の技術")
-    assert _histories(idea) == ["都に広まる", "炉の作り方は秘匿される"]
+    assert [name["呼び名"] for name in idea["知っている呼び名"]] == ["テスト術", "村の隠し名"]
 
 
 def test_read_knowledge_without_knowing(shown, world, mock_ai):

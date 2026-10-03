@@ -623,18 +623,15 @@ class Idea(MemeSeededMixin, TextBase):
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
-    # 場所・時代ごとの作中での呼び名は IdeaRecognition で、年ごとの来歴は IdeaHistory で積む。GUI ではそれぞれの配列に並ぶ。
-    CHILD_LISTS = ("recognitions", "histories", "knowers")
+    # 場所・時代ごとの作中での呼び名は、人物の来歴と同じく履歴(IdeaHistory)として積む。GUI では histories に並ぶ。
+    # 本文を知る相手は `knowers` の配列で出し入れする。
+    CHILD_LISTS = ("histories", "knowers")
 
-    recognitions: Mapped[list["IdeaRecognition"]] = relationship(
-        back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
-        order_by="IdeaRecognition.start.desc().nulls_last()")
     histories: Mapped[list["IdeaHistory"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
         order_by="IdeaHistory.start.desc().nulls_last()")
     knowers: Mapped[list["IdeaKnower"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaKnower.id")
-
 
 
 class IdeaKnower(KnowerMixin, Base):
@@ -649,15 +646,17 @@ class IdeaKnower(KnowerMixin, Base):
     knower: Mapped[Character | None] = relationship(lazy="noload")
 
 
-class IdeaRecognition(Base):
-    """アイデアの作中での呼び名を、場所・時代ごとに一行で持つ。
+class IdeaHistory(Base):
+    """アイデアの履歴。作中での呼び名を、場所・時代ごとに一行で持つ。
+
+    アイデアそのものは話に結べば効く期間を問わず読むが、履歴は話の時刻・場所に効く行だけを使う。
 
     `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
     当てはまる行が無ければ本質の `name` をそのまま使う(`data_access_logic/idea/alias.py` の `called`)。
     効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/idea_context.py`)。
     """
 
-    __tablename__ = "idea_recognition"
+    __tablename__ = "idea_history"
 
     idea_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
@@ -671,34 +670,14 @@ class IdeaRecognition(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, comment="この場所・時代での作中の呼び名", sort_order=140)
     detail: Mapped[str | None] = mapped_column(String, comment="呼び名についての注釈(作中での受け止め方)", sort_order=150)
 
-    idea: Mapped[Idea] = relationship(back_populates="recognitions", lazy="noload")
-
-
-class IdeaHistory(Base):
-    """アイデアの来歴(作られた・広まった・変わった・隠されたこと)を、起きた年ごとの一行で持つ子テーブル。
-    行の持ち方と時刻での絞り方は `CharacterHistory` と同じ。
-    """
-
-    __tablename__ = "idea_history"
-
-    idea_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[int | None] = mapped_column(
-        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
-        sort_order=110)
-    description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
-
     idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
+    # 人物役(`data_access_logic/character/knowledge.py`)には、効く場所・期間に住む人物か、知る相手に当たる人物にだけ渡す
     knowers: Mapped[list["IdeaHistoryKnower"]] = relationship(
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryKnower.id")
 
-    def covers(self, time: Stamp) -> bool:
-        return self.start is not None and self.start <= time.year
-
-
 
 class IdeaHistoryKnower(KnowerMixin, Base):
-    """アイデアの来歴の行を知る相手。"""
+    """アイデアの履歴(呼び名)の行を知る相手。効く場所・期間に住む人物は、行が無くても知る。"""
 
     __tablename__ = "idea_history_knower"
     __table_args__ = _knower_args("idea_history_knower", "idea_history_id")
