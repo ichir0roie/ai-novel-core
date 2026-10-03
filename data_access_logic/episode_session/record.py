@@ -34,3 +34,9 @@ class TurnState(Material):
     status: Literal["turn", "waiting", "closed"]
     # turn と closed のときの、この人物の行
     record: TurnRecord | None = None
+
+
+class SessionCleared(Material):
+    episode_id: int
+    # 消した行の数
+    deleted: int

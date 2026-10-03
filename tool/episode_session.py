@@ -6,6 +6,7 @@
 
     人物役: knowledge / wait-turn / answer
     語り部: stage / appearance / add / wait-answers / read / close
+    演じ直す前: clear
 
     .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
 """
@@ -101,6 +102,9 @@ def main() -> None:
     close = commands.add_parser("close", help="出た人物すべてに終了の行を足す")
     close.add_argument("--episode", type=int, required=True)
 
+    clear = commands.add_parser("clear", help="話のセッションの行をすべて消す(手番を演じ直す前に)")
+    clear.add_argument("--episode", type=int, required=True)
+
     for waiting in (wait, answers, add):
         waiting.add_argument("--interval", type=float, default=1.0)
         waiting.add_argument("--timeout", type=float, default=3000.0)
@@ -131,6 +135,8 @@ def main() -> None:
             result = call("episode_session.read_session.ReadSession", {"episode_id": args.episode})
         case "close":
             result = call("episode_session.close_session.CloseSession", {"episode_id": args.episode})
+        case "clear":
+            result = call("episode_session.clear_session.ClearSession", {"episode_id": args.episode})
         case _:
             parser.error(f"知らないコマンド: {args.command}")
     print(json.dumps(result, ensure_ascii=False, indent=2))

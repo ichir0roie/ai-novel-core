@@ -14,6 +14,7 @@ from data_access_logic.character.update_character_relation import UpdateCharacte
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode_session.add_turns import AddTurns
 from data_access_logic.episode_session.answer_turn import AnswerTurn
+from data_access_logic.episode_session.clear_session import ClearSession
 from data_access_logic.episode_session.close_session import CloseSession
 from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
 from data_access_logic.episode_session.read_session import ReadSession
@@ -226,6 +227,20 @@ def test_session_turns(shown, world):
 
     shown(DeleteEpisode(episode_id=world.episode_id))
     assert shown(ReadSession(episode_id=world.episode_id)) == []
+
+
+def test_clear_session_lets_the_actors_play_again(shown, world):
+    taro, hanako = world.character_ids
+    shown(AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=taro, request="市に着いた")]))
+    shown(CloseSession(episode_id=world.episode_id))
+
+    assert shown(ClearSession(episode_id=world.episode_id)) == {"episode_id": world.episode_id, "deleted": 2}
+    assert shown(ReadSession(episode_id=world.episode_id)) == []
+    # 前の終了の行が消えたので、新しい手番が回る
+    shown(AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=hanako, request="市に着いた")]))
+    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "turn"
+    with pytest.raises(ValueError, match="episode_id"):
+        ClearSession(episode_id=10**9).run()
 
 
 def test_wait_turn_returns_when_the_turn_comes(shown, world, monkeypatch: pytest.MonkeyPatch):
