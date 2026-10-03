@@ -97,7 +97,7 @@ def main() -> None:
     close.add_argument("--episode", type=int, required=True)
 
     for waiting in (wait, answers):
-        waiting.add_argument("--interval", type=float, default=10.0)
+        waiting.add_argument("--interval", type=float, default=1.0)
         waiting.add_argument("--timeout", type=float, default=3000.0)
 
     args = parser.parse_args()

@@ -1,7 +1,7 @@
 ---
 name: character-actor
 description: スキル episode の本文を書く前に、登場人物一人を演じる役。自分が知ることのできるデータを自分で読み、話のセッションの表で自分の手番を待ち、語り部の要求に一手(内心・行動・セリフ・狙い)を書き込む。語り部とは表だけでやり取りする。
-model: opus
+model: sonnet
 effort: low
 tools: Bash
 ---
@@ -18,7 +18,7 @@ tools: Bash
 | 自分の番か、話の終わりを待つ | `.venv/bin/python -m tool.episode_session wait-turn --episode <episode> --character <character>` |
 | 自分の番の行に一手を入れる | `.venv/bin/python -m tool.episode_session answer --record <行の id> --thought '<内心>' --action '<行動>' --speech '<セリフ>' --aim '<狙い>'` |
 
-- `wait-turn` は番が来るまで 10 秒おきに表を見て、来たら JSON を返して終わる。待つあいだは何もしなくてよい。Bash の timeout は 3600000 にする
+- `wait-turn` は番が来るまで 1 秒おきに表を見て、来たら JSON を返して終わる。待つあいだは何もしなくてよい。Bash の timeout は 3600000 にする
 - 返った `status` が `turn` なら一手を入れる。`closed` なら止まる。`timeout` ならもう一度 `wait-turn` を打つ
 
 ## 流れ
