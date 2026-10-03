@@ -8,17 +8,9 @@ from sqlalchemy.orm import Session
 from data_access_logic.material import Material
 from db.schema import Base
 
-_PLOT_SECTION = re.compile(r"^#[ \t]*plot[ \t]*\n(.*?)(?=^#[ \t]|\Z)", re.M | re.S)
-
 # 検証結果は本文の末尾にこの見出しの節として持つ(別の列は持たない)。空ならまだ検めていない。
 FACT_CHECK_HEADING = "# 検証結果"
 _FACT_CHECK_SECTION = re.compile(r"\n*^#[ \t]*検証結果[ \t]*\n.*\Z", re.M | re.S)
-
-
-def plot_section(text: str | None) -> str:
-    """人物の本文のうち `# plot` の節(その人物について進めたい筋書き)。"""
-    match = _PLOT_SECTION.search(text or "")
-    return match.group(1).strip() if match else ""
 
 
 def strip_fact_check(text: str | None) -> str:

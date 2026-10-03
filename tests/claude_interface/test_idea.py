@@ -45,7 +45,8 @@ def test_commit_idea(shown, world, mock_ai):
     assert (record["location_id"], record["parent_idea_id"]) == (world.location_id, world.idea_id)
     assert (record["start"], record["end"]) == ("1190/01/01 00:00:00", "1290/01/01 00:00:00")
     assert record["histories"] == [{"location_id": world.location_id, "start": "1195/01/01 00:00:00",
-                                       "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称"}]
+                                       "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称",
+                                       "knowers": []}]
     assert isinstance(result["memes_added"], int)
     assert mock_ai.calls
 

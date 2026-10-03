@@ -6,7 +6,8 @@ import hashlib
 import os
 
 from sqlalchemy import (
-    BigInteger, Boolean, Integer, String, DECIMAL, JSON, TypeDecorator,
+    BigInteger, Boolean, CheckConstraint, Integer, String, DECIMAL, JSON, TypeDecorator,
+    event,
     create_engine,
     ForeignKey,
     UniqueConstraint,
@@ -337,6 +338,25 @@ PERSON_PARAMETER_COLUMNS = (
 )
 
 
+class KnowerMixin:
+    """本文・来歴を知る相手と、知った時刻(`data_access_logic/character/knowledge.py`)。
+
+    知る相手は人物か場所のどちらか一方。場所なら、その時刻にその場所(配下も含む)に住む人物が知る。誰もが知ることは世界の場所で表す。
+    """
+
+    knower_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, comment="知る人物", sort_order=110)
+    location_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("location.id"), index=True,
+        comment="知る場所。その時刻にこの場所(配下も含む)に住む人物が知る", sort_order=120)
+    start: Mapped[Stamp | None] = mapped_column(StampType, comment="知った時刻。空なら初めから知っている", sort_order=130)
+
+
+def _knower_args(table: str, subject: str) -> tuple:
+    return (UniqueConstraint(subject, "knower_id"), UniqueConstraint(subject, "location_id"),
+            CheckConstraint("(knower_id IS NULL) <> (location_id IS NULL)", name=f"ck_{table}_one_knower"))
+
+
 class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
@@ -346,8 +366,21 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
 
     __tablename__ = "character"
 
+    # 長い文章の列。人物役(`data_access_logic/character/knowledge.py`)には、外見は会った相手に、芯は知る相手に、
+    # meme と行動原理は本人だけに渡り、plot はだれにも渡らない(作者だけが読む)
+    # 一覧の頭・呼び名には先頭の空でない列を使うので、芯を先に置く
+    TEXT_COLUMNS = ("text", "appearance", "meme", "principle", "plot")
+
+    appearance: Mapped[str | None] = mapped_column(
+        String, comment="外見。見て分かること(顔立ち・体つき・身なり・目に見える持ち物)", sort_order=9990)
     text: Mapped[str | None] = mapped_column(
-        String, nullable=True, comment="人物の芯(説明・meme・行動原理・plot)。いつの話・出来事にも渡す", sort_order=10000)
+        String, nullable=True, comment="人物の芯(経歴・立場・性格の説明)。いつの話・出来事にも渡す", sort_order=10000)
+    meme: Mapped[str | None] = mapped_column(
+        String, comment="持つミーム。`- <古今表裏>: <文面>` の箇条書き", sort_order=10010)
+    principle: Mapped[str | None] = mapped_column(
+        String, comment="行動原理(ミームどうしの関係と、その人物を動かすもの)", sort_order=10020)
+    plot: Mapped[str | None] = mapped_column(
+        String, comment="その人物について作者が進めたい筋書き", sort_order=10030)
 
     name: Mapped[str | None] = mapped_column(String, sort_order=210)
     kind: Mapped[str] = mapped_column(
@@ -367,8 +400,8 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
     # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。
-    CHILD_LISTS = ("parameters", "locations", "histories")
+    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。本文を知る相手は `knowers` の配列で出し入れする。
+    CHILD_LISTS = ("parameters", "locations", "histories", "knowers")
 
     @property
     def start(self) -> Stamp | None:
@@ -400,6 +433,31 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
         secondary="event_character", viewonly=True, lazy="noload",
         order_by="Event.start.desc().nulls_last()"
     )
+    knowers: Mapped[list["CharacterKnower"]] = relationship(
+        foreign_keys="CharacterKnower.character_id", back_populates="character", lazy="selectin",
+        cascade="all, delete-orphan", order_by="CharacterKnower.id")
+
+
+
+@event.listens_for(Character, "init")
+def _knows_oneself(target: Character, args, kwargs) -> None:
+    # 人物は自分の本文を知っている。本人も知らない本文(記憶を失った人物など)にするときは、知る相手から本人を外す
+    if "knowers" not in kwargs:
+        target.knowers = [CharacterKnower(knower=target)]
+
+
+class CharacterKnower(KnowerMixin, Base):
+    """人物の本文(`text`)を知る相手。"""
+
+    __tablename__ = "character_knower"
+    __table_args__ = _knower_args("character_knower", "character_id")
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知られる人物", sort_order=100)
+
+    character: Mapped[Character] = relationship(
+        foreign_keys="CharacterKnower.character_id", back_populates="knowers", lazy="noload")
+    knower: Mapped[Character | None] = relationship(foreign_keys="CharacterKnower.knower_id", lazy="noload")
 
 
 class CharacterParameter(Base):
@@ -527,9 +585,25 @@ class CharacterHistory(Base):
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
+    knowers: Mapped[list["CharacterHistoryKnower"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="CharacterHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
         return self.start is not None and self.start <= time.year
+
+
+
+class CharacterHistoryKnower(KnowerMixin, Base):
+    """人物の来歴の行を知る相手。"""
+
+    __tablename__ = "character_history_knower"
+    __table_args__ = _knower_args("character_history_knower", "character_history_id")
+
+    character_history_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character_history.id"), index=True, nullable=False, sort_order=100)
+
+    history: Mapped[CharacterHistory] = relationship(back_populates="knowers", lazy="noload")
+    knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
 class Idea(MemeSeededMixin, TextBase):
@@ -550,11 +624,26 @@ class Idea(MemeSeededMixin, TextBase):
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
     # 場所・時代ごとの作中での呼び名は、人物の来歴と同じく履歴(IdeaHistory)として積む。GUI では histories に並ぶ。
-    CHILD_LISTS = ("histories",)
+    # 本文を知る相手は `knowers` の配列で出し入れする。
+    CHILD_LISTS = ("histories", "knowers")
 
     histories: Mapped[list["IdeaHistory"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
         order_by="IdeaHistory.start.desc().nulls_last()")
+    knowers: Mapped[list["IdeaKnower"]] = relationship(
+        back_populates="idea", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaKnower.id")
+
+
+class IdeaKnower(KnowerMixin, Base):
+    """アイデアの本文を知る相手。アイデアの効く場所(`Idea.location_id`)と期間に住む人物は、行が無くても知る。"""
+
+    __tablename__ = "idea_knower"
+    __table_args__ = _knower_args("idea_knower", "idea_id")
+
+    idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
+
+    idea: Mapped[Idea] = relationship(back_populates="knowers", lazy="noload")
+    knower: Mapped[Character | None] = relationship(lazy="noload")
 
 
 class IdeaHistory(Base):
@@ -582,6 +671,22 @@ class IdeaHistory(Base):
     detail: Mapped[str | None] = mapped_column(String, comment="呼び名についての注釈(作中での受け止め方)", sort_order=150)
 
     idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
+    # 人物役(`data_access_logic/character/knowledge.py`)には、効く場所・期間に住む人物か、知る相手に当たる人物にだけ渡す
+    knowers: Mapped[list["IdeaHistoryKnower"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryKnower.id")
+
+
+class IdeaHistoryKnower(KnowerMixin, Base):
+    """アイデアの履歴(呼び名)の行を知る相手。効く場所・期間に住む人物は、行が無くても知る。"""
+
+    __tablename__ = "idea_history_knower"
+    __table_args__ = _knower_args("idea_history_knower", "idea_history_id")
+
+    idea_history_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("idea_history.id"), index=True, nullable=False, sort_order=100)
+
+    history: Mapped[IdeaHistory] = relationship(back_populates="knowers", lazy="noload")
+    knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
 class Story(EventSeededMixin, TextBase):
@@ -681,6 +786,34 @@ class EpisodeCharacter(Base):
     character: Mapped["Character"] = relationship(lazy="noload")
 
 
+class EpisodeCharacterSession(Base):
+    """話の本文を書く前に、語り部と人物役が場面を手番で進めた記録。語り部と人物役はこの表だけでやり取りする。
+
+    語り部が手番の人物に要求の行を足し、人物役がその行に行動を書き込む。手番は話の中で id の順に回り、
+    行動の書かれていない一番古い行の人物が、いま動く番(`data_access_logic/episode_session/`)。
+    """
+
+    __tablename__ = "episode_character_session"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="この手番で動く人物", sort_order=110)
+    time: Mapped[Stamp | None] = mapped_column(StampType, comment="この手番の作中の時刻", sort_order=120)
+    request: Mapped[str] = mapped_column(
+        String, nullable=False,
+        comment="語り部の要求。前の手番から、その人物に見える・聞こえるようになったこと(状況の差分)と、この手番で求めること",
+        sort_order=130)
+    closing: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, comment="話が終わった合図。人物役はこの行を読んだら止まる", sort_order=140)
+    thought: Mapped[str | None] = mapped_column(String, comment="人物の内心(言葉にしない思い)", sort_order=150)
+    action: Mapped[str | None] = mapped_column(
+        String, comment="人物の行動(外から見える動き)。空ならまだ動いていない", sort_order=160)
+    speech: Mapped[str | None] = mapped_column(String, comment="人物のセリフ", sort_order=170)
+    aim: Mapped[str | None] = mapped_column(String, comment="この手番での人物の狙い", sort_order=180)
+
+    character: Mapped["Character"] = relationship(lazy="noload")
+
+
 class EventIdea(Base):
     """出来事の本文が踏まえたアイデア。"""
 
@@ -749,7 +882,6 @@ def _use_iam_auth_token(engine) -> None:
     # RDS の IAM データベース認証のトークンは 15 分で切れるので、接続を張るたびに作る。
     # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む
     import boto3
-    from sqlalchemy import event
 
     rds = boto3.client("rds")
     signed_for: dict[tuple[str, int], tuple[str, int]] = {}

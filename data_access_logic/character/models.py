@@ -12,15 +12,24 @@ from db.schema import PersonalityLevel
 class CharacterBase(Material):
     name: str | None = None
     kind: str
-    # 人物の芯(説明・meme・行動原理・plot)。いつの話・出来事にも渡す
+    # 人物の芯(経歴・立場・性格の説明)。いつの話・出来事にも渡す
     text: str | None = None
 
 
-class CharacterMaterial(CharacterBase):
+class CharacterWholeBase(CharacterBase):
+    """作者の目で人物を書くときに渡す、本文のすべての列。"""
+
+    appearance: str | None = None
+    meme: str | None = None
+    principle: str | None = None
+    plot: str | None = None
+
+
+class CharacterMaterial(CharacterWholeBase):
     id: int
 
 
-class ParticipantCharacter(CharacterBase):
+class ParticipantCharacter(CharacterWholeBase):
     # 出来事の記録で、関わった人物・移動した人物を AI に id で選ばせる
     id: int
 
@@ -94,7 +103,7 @@ class ParticipantMaterial(CharacterAt):
     recent_events: list[EventBase]
 
 
-def _sheet(character: CharacterBase, at: CharacterAt) -> dict[str, Any]:
+def _sheet(character: CharacterWholeBase, at: CharacterAt) -> dict[str, Any]:
     parameters = at.parameters
     return {
         "名前": character.name,
@@ -107,7 +116,11 @@ def _sheet(character: CharacterBase, at: CharacterAt) -> dict[str, Any]:
         "三人称": parameters.third_person,
         "口調": parameters.tone,
         "方言": parameters.dialect,
+        "外見": character.appearance,
         "人物像": character.text,
+        "ミーム": character.meme,
+        "行動原理": character.principle,
+        "筋書き": character.plot,
         "来歴(古い順)": histories_for_prompt(at.histories),
     }
 

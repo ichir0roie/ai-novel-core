@@ -7,8 +7,8 @@ from data_access_logic.ai_entrypoint import CommitMemeSource
 from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.form import IdeaCreateForm
 from data_access_logic.idea.record import IdeaRecord
-from db.child_lists import replaced_rows
-from db.schema import Idea, IdeaHistory, Location
+from db.child_lists import replaced_histories, replaced_rows
+from db.schema import Idea, IdeaHistory, IdeaKnower, Location
 
 
 class CommitIdea(CommitMemeSource):
@@ -20,6 +20,7 @@ class CommitIdea(CommitMemeSource):
 
     def execute(self, s: Session) -> IdeaRecord:
         form = self.idea
+        self.check_knowers(s, form)
         self.check_exists(s, Location, form.location_id, "location_id")
         self.check_exists(s, Idea, form.parent_idea_id, "parent_idea_id")
 
@@ -31,7 +32,8 @@ class CommitIdea(CommitMemeSource):
             classification = find_or_create_classification(s, form.kind, form.location_id)
             if classification is not None:
                 record.parent_idea_id = classification.id
-        record.histories = replaced_rows([], form.histories, IdeaHistory)
+        record.histories = replaced_histories([], form.histories, IdeaHistory)
+        record.knowers = replaced_rows([], form.knowers, IdeaKnower)
         s.add(record)
         self.finalize(s, record)
         return IdeaRecord.model_validate(record)

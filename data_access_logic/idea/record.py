@@ -1,5 +1,6 @@
 from pydantic import ConfigDict
 
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Form, Material, Timestamp
 
 
@@ -13,6 +14,9 @@ class IdeaHistoryRow(Form):
     end: Timestamp | None = None
     name: str
     detail: str | None = None
+    # 知る相手(効く場所・期間に住む人物は、行が無くても知る)。渡さなければ、新しい行は行の無いまま、今ある行はそのまま
+    # (`db/child_lists.py` の `replaced_histories`)
+    knowers: list[KnowerRow] | None = None
 
 
 class IdeaRecord(Material):
@@ -25,6 +29,8 @@ class IdeaRecord(Material):
     parent_idea_id: int | None = None
     meme_seeded: bool
     histories: list[IdeaHistoryRow]
+    # 本文(`text`)を知る相手
+    knowers: list[KnowerRow]
     text: str
 
 

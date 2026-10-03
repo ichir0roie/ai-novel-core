@@ -19,7 +19,6 @@ from data_access_logic.event_seed.models import (
     ConsolidateDraft, ConsolidateRequestSerialized, SeedMerge, SeedPiles, SeedsDraft, StoredSeed,
 )
 from data_access_logic.query import event_seed_query
-from data_access_logic.character.histories import plot_of
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of
 from db.schema import Character, Episode, Event, EventSeed, Story
 
@@ -49,7 +48,7 @@ def pending_sources(s: Session) -> list[SourceText]:
     for episode in s.scalars(event_seed_query.unseeded_select(Episode)).all():
         sources.append(source_of(episode, "話の骨組み", episode.plot_text.strip() or episode.main_text))
     for character in s.scalars(event_seed_query.unseeded_select(Character)).all():
-        sources.append(source_of(character, "人物の筋書き", plot_of(character)))
+        sources.append(source_of(character, "人物の筋書き", character.plot or ""))
     for event in s.scalars(event_seed_query.unseeded_select(Event)).all():
         sources.append(source_of(event, "出来事", event.text))
     return [source for source in sources if source.text.strip()]

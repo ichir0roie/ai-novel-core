@@ -1,5 +1,6 @@
 from pydantic import ConfigDict
 
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Form, Material, Timestamp
 from db.schema import PersonalityLevel
 
@@ -45,6 +46,8 @@ class CharacterHistoryRow(_ChildRow):
     # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
     start: int | None = None
     description: str
+    # 知る相手。渡さなければ、新しい行は本人だけ、今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
+    knowers: list[KnowerRow] | None = None
 
 
 class CharacterHead(Material):
@@ -63,10 +66,16 @@ class CharacterHead(Material):
 
 
 class CharacterRecord(CharacterHead):
-    # 人物の芯(説明・meme・行動原理・plot)
+    appearance: str | None = None
+    # 人物の芯(経歴・立場・性格の説明)
     text: str | None = None
+    meme: str | None = None
+    principle: str | None = None
+    plot: str | None = None
     # すべての来歴の行。話・出来事に渡すときは、その時刻までに起きた行だけに絞る(`histories_at`)
     histories: list[CharacterHistoryRow]
+    # 本文(`text`)を知る相手
+    knowers: list[KnowerRow]
 
 
 class CharacterLocationRecord(Material):

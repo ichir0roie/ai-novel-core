@@ -41,6 +41,12 @@ class MergeIdea(CommitEntrypoint):
         for history in list(source.histories):
             source.histories.remove(history)
             target.histories.append(history)
+        # 本文を知る相手は、統合先にまだいない相手だけ移す(同じ相手の行が重なると一意制約に当たる)
+        known = {(knower.knower_id, knower.location_id) for knower in target.knowers}
+        for knower in list(source.knowers):
+            source.knowers.remove(knower)
+            if (knower.knower_id, knower.location_id) not in known:
+                target.knowers.append(knower)
         merged = MergedIdea(merged=IdeaName.model_validate(source), into=IdeaName.model_validate(target),
                             links_moved=relink(s, source.id, target.id))
         s.delete(source)

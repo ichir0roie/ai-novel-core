@@ -3,6 +3,7 @@ from typing import Annotated, Any
 from pydantic import Field, field_validator, model_validator
 
 from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
 
@@ -58,6 +59,10 @@ class CharacterForm(Draft):
 class CharacterCreateForm(Form):
     name: str | None = None
     text: str | None = None
+    appearance: str | None = None
+    meme: str | None = None
+    principle: str | None = None
+    plot: str | None = None
     kind: str = CHARACTER_KIND_PERSON
     main_character: bool = False
     event_seeded: bool = False
@@ -69,12 +74,18 @@ class CharacterCreateForm(Form):
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow] = []
     histories: list[CharacterHistoryRow] = []
+    # 本文(`text`)を知る相手。本人はいつも入るので、ここには本人のほかの相手を渡す
+    knowers: list[KnowerRow] = []
 
 
 class CharacterUpdateForm(Form):
     id: int
     name: str | None = None
     text: str | None = None
+    appearance: str | None = None
+    meme: str | None = None
+    principle: str | None = None
+    plot: str | None = None
     kind: str | None = None
     main_character: bool | None = None
     event_seeded: bool | None = None
@@ -85,6 +96,8 @@ class CharacterUpdateForm(Form):
     parameters: list[CharacterParameterRow] | None = None
     locations: list[CharacterLocationRow] | None = None
     histories: list[CharacterHistoryRow] | None = None
+    # 渡すとまるごと置き換える(本人も知る相手に入れるなら、本人の行も渡す)
+    knowers: list[KnowerRow] | None = None
 
 
 class CharacterLocationCreateForm(Form):
