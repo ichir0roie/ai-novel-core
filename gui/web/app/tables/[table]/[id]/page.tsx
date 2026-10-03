@@ -12,12 +12,25 @@ import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
+/** start が空の行を最後に並べる子リスト。人物の来歴の空の start は「年未定」(`db/schema.py` の CharacterHistory.start)。
+ * ほかの子リストの空の start は「初めから」なので先頭に置く。 */
+const UNDATED_LAST: Record<string, string[]> = { character: ["histories"] };
+
 /** 期間ごとの行(各要素が start を持つ子リスト)を、その画面のためだけに start 昇順で並べ直す。 */
-function sortChildListsByStart(record: Rec): Rec {
+function sortChildListsByStart(table: string, record: Rec): Rec {
   const sorted: Rec = { ...record };
   for (const [key, rows] of Object.entries(record)) {
     if (Array.isArray(rows) && rows.length > 0 && rows.every((row) => row && typeof row === "object" && "start" in row)) {
-      sorted[key] = [...rows].sort((a, b) => stampOrder((a as Rec).start) - stampOrder((b as Rec).start));
+      const undatedLast = UNDATED_LAST[table]?.includes(key) ?? false;
+      const order = (row: Rec) => {
+        const at = stampOrder(row.start);
+        return undatedLast && at === -Infinity ? Infinity : at;
+      };
+      sorted[key] = [...rows].sort((a, b) => {
+        const x = order(a as Rec);
+        const y = order(b as Rec);
+        return x === y ? 0 : x < y ? -1 : 1;
+      });
     }
   }
   return sorted;
@@ -37,7 +50,7 @@ export default function RecordPage() {
     setError(null);
     try {
       const result = await getRecord(table, id);
-      const record = sortChildListsByStart(result.record);
+      const record = sortChildListsByStart(table, result.record);
       setLoaded({ ...result, record });
       setValue(record);
     } catch (e) {
@@ -60,7 +73,7 @@ export default function RecordPage() {
     setSaved(null);
     try {
       const result = await updateRecord(table, id, changes);
-      const record = sortChildListsByStart(result.record);
+      const record = sortChildListsByStart(table, result.record);
       setLoaded({ ...result, record });
       setValue(record);
       invalidateOptions(table);
