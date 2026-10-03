@@ -4,7 +4,7 @@ from pydantic import Field, field_validator, model_validator
 
 from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterLocationRow
 from data_access_logic.material import Draft, Form, References, Timestamp
-from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
+from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel, Visibility
 
 
 class CharacterParameterForm(Draft):
@@ -69,6 +69,10 @@ class CharacterCreateForm(Form):
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow] = []
     histories: list[CharacterHistoryRow] = []
+    visibility: Visibility = Visibility.PUBLIC
+    # 本人はいつも知る人に入る。ここには本人のほかに知る人物を渡す
+    knower_ids: Annotated[list[int] | None, References("character")] = Field(
+        default=None, title="知る人", description="本文が非公開(visibility=private)のとき、本文を知る人物")
 
 
 class CharacterUpdateForm(Form):
@@ -85,6 +89,10 @@ class CharacterUpdateForm(Form):
     parameters: list[CharacterParameterRow] | None = None
     locations: list[CharacterLocationRow] | None = None
     histories: list[CharacterHistoryRow] | None = None
+    visibility: Visibility | None = None
+    # 渡すとまるごと置き換える(本人も知る人に入れるなら、本人の id も渡す)
+    knower_ids: Annotated[list[int] | None, References("character")] = Field(
+        default=None, title="知る人", description="本文が非公開(visibility=private)のとき、本文を知る人物")
 
 
 class CharacterLocationCreateForm(Form):

@@ -11,7 +11,9 @@ from typing import TypeVar
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 
-from db.schema import Character, CharacterHistory, CharacterHistoryCharacter, IdeaHistory, IdeaHistoryCharacter
+from db.schema import (
+    Character, CharacterHistory, CharacterHistoryKnower, CharacterKnower, Idea, IdeaHistory, IdeaHistoryKnower, IdeaKnower,
+)
 
 Child = TypeVar("Child")
 History = TypeVar("History", CharacterHistory, IdeaHistory)
@@ -52,22 +54,27 @@ def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], ch
                 setattr(target, name, value)
         knower_ids = getattr(row, "knower_ids")
         if knower_ids is not None:
-            _set_knowers(target, list(dict.fromkeys(knower_ids)))
+            set_knowers(target, knower_ids)
         elif index >= len(current) and owner is not None:
-            _set_knowers(target, [owner])
+            set_knowers(target, [owner])
         replaced.append(target)
     return replaced
 
 
-def _set_knowers(history: CharacterHistory | IdeaHistory, knowers: Sequence[int | Character]) -> None:
-    """残る人の行を使い回す(消して足し直すと、同じ組の挿入が削除より先に走って一意制約に当たる)。
+def set_knowers(row: CharacterHistory | IdeaHistory | Character | Idea, knowers: Sequence[int | Character]) -> None:
+    """知る人をまるごと置き換える。残る人の行は使い回す(消して足し直すと、同じ組の挿入が削除より先に走って一意制約に当たる)。
     まだ id の無い人物(足している最中の本人)は行そのもので渡す。"""
-    def kept_or_new[Knower: (CharacterHistoryCharacter, IdeaHistoryCharacter)](
+    def kept_or_new[Knower: (CharacterHistoryKnower, IdeaHistoryKnower, CharacterKnower, IdeaKnower)](
             current: Sequence[Knower], model: type[Knower]) -> list[Knower]:
-        by_id = {knower.character_id: knower for knower in current}
-        return [model(character=knower) if isinstance(knower, Character) else by_id.get(knower) or model(character_id=knower)
-                for knower in knowers]
-    if isinstance(history, CharacterHistory):
-        history.knowers = kept_or_new(history.knowers, CharacterHistoryCharacter)
-    else:
-        history.knowers = kept_or_new(history.knowers, IdeaHistoryCharacter)
+        by_id = {knower.knower_id: knower for knower in current}
+        return [model(knower=knower) if isinstance(knower, Character) else by_id.get(knower) or model(knower_id=knower)
+                for knower in dict.fromkeys(knowers)]
+    match row:
+        case CharacterHistory():
+            row.knowers = kept_or_new(row.knowers, CharacterHistoryKnower)
+        case IdeaHistory():
+            row.knowers = kept_or_new(row.knowers, IdeaHistoryKnower)
+        case Character():
+            row.knowers = kept_or_new(row.knowers, CharacterKnower)
+        case Idea():
+            row.knowers = kept_or_new(row.knowers, IdeaKnower)

@@ -7,6 +7,7 @@ import os
 
 from sqlalchemy import (
     BigInteger, Boolean, Enum, Integer, String, DECIMAL, JSON, TypeDecorator,
+    event,
     create_engine,
     ForeignKey,
     UniqueConstraint,
@@ -337,6 +338,21 @@ PERSON_PARAMETER_COLUMNS = (
 )
 
 
+class Visibility(enum.StrEnum):
+    """本文・来歴の公開度。人物がある時刻に知ることのできるデータ(`data_access_logic/character/knowledge.py`)を絞る。"""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+
+def _visibility_column(default: Visibility, knowers_table: str, sort_order: int) -> Mapped[Visibility]:
+    return mapped_column(
+        Enum(Visibility, native_enum=False, length=16, values_callable=lambda members: [member.value for member in members]),
+        default=default, server_default=default.value, nullable=False,
+        comment=f"公開度。public は誰でも知りうる。private は知る人({knowers_table})に入った人物だけが知る",
+        sort_order=sort_order)
+
+
 class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
@@ -361,6 +377,7 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
         sort_order=240)
     end: Mapped[Stamp | None] = mapped_column(
         StampType, comment="没年(この時からはいない)。空なら死んでいない", sort_order=250)
+    visibility: Mapped[Visibility] = _visibility_column(Visibility.PUBLIC, "character_knower", 260)
 
     # 出自(生まれの場所)は別列を持たず、CharacterLocation の一番古い行として表す。
     # 名字・体格・口調・性格は CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
@@ -400,6 +417,35 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
         secondary="event_character", viewonly=True, lazy="noload",
         order_by="Event.start.desc().nulls_last()"
     )
+    knowers: Mapped[list["CharacterKnower"]] = relationship(
+        foreign_keys="CharacterKnower.character_id", back_populates="character", lazy="selectin",
+        cascade="all, delete-orphan", order_by="CharacterKnower.id")
+
+    @property
+    def knower_ids(self) -> list[int]:
+        return [knower.knower_id for knower in self.knowers]
+
+
+@event.listens_for(Character, "init")
+def _knows_oneself(target: Character, args, kwargs) -> None:
+    # 人物は自分の本文を知っている。本人も知らない本文(記憶を失った人物など)にするときは、知る人から本人を外す
+    if "knowers" not in kwargs:
+        target.knowers = [CharacterKnower(knower=target)]
+
+
+class CharacterKnower(Base):
+    """非公開の人物の本文を知る人物。"""
+
+    __tablename__ = "character_knower"
+    __table_args__ = (UniqueConstraint("character_id", "knower_id"),)
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知られる人物", sort_order=100)
+    knower_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知る人物", sort_order=110)
+
+    character: Mapped[Character] = relationship(foreign_keys=[character_id], back_populates="knowers", lazy="noload")
+    knower: Mapped[Character] = relationship(foreign_keys=[knower_id], lazy="noload")
 
 
 class CharacterParameter(Base):
@@ -507,21 +553,6 @@ class CharacterRelation(TextBase):
         foreign_keys="CharacterRelation.character_2_id", lazy="noload")
 
 
-class Visibility(enum.StrEnum):
-    """来歴の公開度。"""
-
-    PUBLIC = "public"
-    PRIVATE = "private"
-
-
-def _visibility_column(knowers_table: str, sort_order: int) -> Mapped[Visibility]:
-    return mapped_column(
-        Enum(Visibility, native_enum=False, length=16, values_callable=lambda members: [member.value for member in members]),
-        default=Visibility.PRIVATE, server_default=Visibility.PRIVATE.value, nullable=False,
-        comment=f"公開度。public は誰でも知りうる。private は知る人({knowers_table})に入った人物だけが知る",
-        sort_order=sort_order)
-
-
 class CharacterHistory(Base):
     """人物の来歴を、起きた年ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
@@ -539,34 +570,34 @@ class CharacterHistory(Base):
     start: Mapped[int | None] = mapped_column(
         Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
         sort_order=110)
-    visibility: Mapped[Visibility] = _visibility_column("character_history_character", 120)
+    visibility: Mapped[Visibility] = _visibility_column(Visibility.PRIVATE, "character_history_knower", 120)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
-    knowers: Mapped[list["CharacterHistoryCharacter"]] = relationship(
-        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="CharacterHistoryCharacter.id")
+    knowers: Mapped[list["CharacterHistoryKnower"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="CharacterHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
         return self.start is not None and self.start <= time.year
 
     @property
     def knower_ids(self) -> list[int]:
-        return [knower.character_id for knower in self.knowers]
+        return [knower.knower_id for knower in self.knowers]
 
 
-class CharacterHistoryCharacter(Base):
+class CharacterHistoryKnower(Base):
     """非公開の人物の来歴を知る人物。"""
 
-    __tablename__ = "character_history_character"
-    __table_args__ = (UniqueConstraint("character_history_id", "character_id"),)
+    __tablename__ = "character_history_knower"
+    __table_args__ = (UniqueConstraint("character_history_id", "knower_id"),)
 
     character_history_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character_history.id"), index=True, nullable=False, sort_order=100)
-    character_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=110)
+    knower_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知る人物", sort_order=110)
 
     history: Mapped[CharacterHistory] = relationship(back_populates="knowers", lazy="noload")
-    character: Mapped["Character"] = relationship(lazy="noload")
+    knower: Mapped["Character"] = relationship(lazy="noload")
 
 
 class Idea(MemeSeededMixin, TextBase):
@@ -585,6 +616,7 @@ class Idea(MemeSeededMixin, TextBase):
 
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
+    visibility: Mapped[Visibility] = _visibility_column(Visibility.PUBLIC, "idea_knower", 260)
 
     # 場所・時代ごとの作中での呼び名は IdeaRecognition で、年ごとの来歴は IdeaHistory で積む。GUI ではそれぞれの配列に並ぶ。
     CHILD_LISTS = ("recognitions", "histories")
@@ -595,6 +627,26 @@ class Idea(MemeSeededMixin, TextBase):
     histories: Mapped[list["IdeaHistory"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
         order_by="IdeaHistory.start.desc().nulls_last()")
+    knowers: Mapped[list["IdeaKnower"]] = relationship(
+        back_populates="idea", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaKnower.id")
+
+    @property
+    def knower_ids(self) -> list[int]:
+        return [knower.knower_id for knower in self.knowers]
+
+
+class IdeaKnower(Base):
+    """非公開のアイデアの本文を知る人物。"""
+
+    __tablename__ = "idea_knower"
+    __table_args__ = (UniqueConstraint("idea_id", "knower_id"),)
+
+    idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
+    knower_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知る人物", sort_order=110)
+
+    idea: Mapped[Idea] = relationship(back_populates="knowers", lazy="noload")
+    knower: Mapped[Character] = relationship(lazy="noload")
 
 
 class IdeaRecognition(Base):
@@ -634,34 +686,34 @@ class IdeaHistory(Base):
     start: Mapped[int | None] = mapped_column(
         Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
         sort_order=110)
-    visibility: Mapped[Visibility] = _visibility_column("idea_history_character", 120)
+    visibility: Mapped[Visibility] = _visibility_column(Visibility.PRIVATE, "idea_history_knower", 120)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
-    knowers: Mapped[list["IdeaHistoryCharacter"]] = relationship(
-        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryCharacter.id")
+    knowers: Mapped[list["IdeaHistoryKnower"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
         return self.start is not None and self.start <= time.year
 
     @property
     def knower_ids(self) -> list[int]:
-        return [knower.character_id for knower in self.knowers]
+        return [knower.knower_id for knower in self.knowers]
 
 
-class IdeaHistoryCharacter(Base):
+class IdeaHistoryKnower(Base):
     """非公開のアイデアの来歴を知る人物。"""
 
-    __tablename__ = "idea_history_character"
-    __table_args__ = (UniqueConstraint("idea_history_id", "character_id"),)
+    __tablename__ = "idea_history_knower"
+    __table_args__ = (UniqueConstraint("idea_history_id", "knower_id"),)
 
     idea_history_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("idea_history.id"), index=True, nullable=False, sort_order=100)
-    character_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=110)
+    knower_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知る人物", sort_order=110)
 
     history: Mapped[IdeaHistory] = relationship(back_populates="knowers", lazy="noload")
-    character: Mapped["Character"] = relationship(lazy="noload")
+    knower: Mapped["Character"] = relationship(lazy="noload")
 
 
 class Story(EventSeededMixin, TextBase):
@@ -857,7 +909,6 @@ def _use_iam_auth_token(engine) -> None:
     # RDS の IAM データベース認証のトークンは 15 分で切れるので、接続を張るたびに作る。
     # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む
     import boto3
-    from sqlalchemy import event
 
     rds = boto3.client("rds")
     signed_for: dict[tuple[str, int], tuple[str, int]] = {}

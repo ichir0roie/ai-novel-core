@@ -6,6 +6,7 @@ from data_access_logic.character.form import CharacterCreateForm, CharacterUpdat
 from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
+from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode_session.add_turns import AddTurns
 from data_access_logic.episode_session.answer_turn import AnswerTurn
@@ -20,12 +21,27 @@ from db.schema import Visibility
 from tool import episode_session
 
 
-def test_new_history_is_private_and_known_by_owner(shown):
+def test_new_character_is_public_and_its_history_is_private(shown):
     result = shown(CommitCharacter(CharacterCreateForm(
         name="知る人テスト", text="説明", histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
 
+    assert (result["visibility"], result["knower_ids"]) == ("public", [result["id"]])
     assert result["histories"] == [{"start": 1195, "visibility": "private", "description": "市で店を開く",
                                     "knower_ids": [result["id"]]}]
+
+
+def test_knower_must_exist(world):
+    with pytest.raises(ValueError, match="knower_ids"):
+        UpdateCharacter(CharacterUpdateForm(id=world.character_ids[0], knower_ids=[10**9])).run()
+
+
+def test_delete_character_removes_its_knower_rows(shown, world):
+    taro, _ = world.character_ids
+    other = shown(CommitCharacter(CharacterCreateForm(name="消える人", text="説明")))
+    shown(UpdateCharacter(CharacterUpdateForm(id=taro, visibility=Visibility.PRIVATE, knower_ids=[taro, other["id"]])))
+    shown(DeleteCharacter(character_id=other["id"]))
+
+    assert shown(ReadKnowledge(character_id=taro, time="1200/01/01"))["自分"]["人物像"] == "テスト太郎の説明"
 
 
 def test_update_history_knowers(shown, world):
@@ -43,7 +59,7 @@ def test_read_knowledge(shown, world):
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=taro, text="太郎の芯\n\n# plot\n\n先の筋書き\n", histories=[
         CharacterHistoryRow(start=1190, description="太郎の秘密", knower_ids=[taro])])))
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, text="花子の芯\n\n# plot\n\n花子の先", histories=[
         CharacterHistoryRow(start=1190, visibility=Visibility.PUBLIC, description="公の事"),
         CharacterHistoryRow(start=1191, description="花子だけの秘密", knower_ids=[hanako]),
         CharacterHistoryRow(start=1192, description="太郎も知る秘密", knower_ids=[hanako, taro]),
@@ -59,10 +75,37 @@ def test_read_knowledge(shown, world):
     assert me["人物像"] == "太郎の芯"
     assert [history["来歴"] for history in me["来歴(古い順)"]] == ["太郎の秘密"]
     hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
+    assert hanako_known["人物像"] == "花子の芯"
     assert [history["来歴"] for history in hanako_known["来歴(古い順)"]] == ["公の事", "太郎も知る秘密"]
     idea = next(idea for idea in result["知っているアイデア"] if idea["名前"] == "テスト魔導")
     assert (idea["呼び名"], idea["説明"]) == ("テスト術", "テスト用の技術")
     assert [history["来歴"] for history in idea["来歴(古い順)"]] == ["都に広まる", "炉の作り方は秘匿される"]
+
+
+def test_read_knowledge_hides_private_texts(shown, world):
+    taro, hanako = world.character_ids
+    shown(UpdateCharacter(CharacterUpdateForm(id=taro, visibility=Visibility.PRIVATE, knower_ids=[])))
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, visibility=Visibility.PRIVATE)))
+    shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, visibility=Visibility.PRIVATE, knower_ids=[hanako])))
+
+    result = shown(ReadKnowledge(character_id=taro, time="1200/01/01"))
+    hanako_view = shown(ReadKnowledge(character_id=hanako, time="1200/01/01"))
+
+    # 本人も知る人から外せば、自分の本文を知らない。関係のある人物の名前は分かるが、非公開の本文は分からない
+    assert result["自分"]["人物像"] is None
+    assert [(character["名前"], character["人物像"]) for character in result["知っている人物"]] == [("テスト花子", None)]
+    assert "テスト魔導" not in [idea["名前"] for idea in result["知っているアイデア"]]
+    assert hanako_view["自分"]["人物像"] == "テスト花子の説明"
+    assert "テスト魔導" in [idea["名前"] for idea in hanako_view["知っているアイデア"]]
+
+
+def test_read_knowledge_skips_unrelated_cast(shown, world):
+    stranger = shown(CommitCharacter(CharacterCreateForm(name="初対面の人", text="説明")))
+    shown(AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=stranger["id"], request="市に着いた")]))
+
+    result = shown(ReadKnowledge(character_id=world.character_ids[0], time="1200/01/01"))
+
+    assert "初対面の人" not in [character["名前"] for character in result["知っている人物"]]
 
 
 def test_session_turns(shown, world):

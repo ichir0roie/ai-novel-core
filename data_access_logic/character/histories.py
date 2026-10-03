@@ -3,7 +3,7 @@ from typing import Any
 
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.source_text import plot_section
-from db.schema import Character, CharacterHistory, CharacterHistoryCharacter, Visibility
+from db.schema import Character, CharacterHistory, CharacterHistoryKnower, Visibility
 from db.stamp import Stamp
 
 
@@ -27,7 +27,7 @@ def add_history(character: Character, year: int, description: str) -> None:
     if row is None:
         character.histories.append(CharacterHistory(
             start=year, visibility=Visibility.PRIVATE, description=description,
-            knowers=[CharacterHistoryCharacter(character=character)]))
+            knowers=[CharacterHistoryKnower(knower=character)]))
     else:
         row.description = f"{row.description}\n{description}"
 

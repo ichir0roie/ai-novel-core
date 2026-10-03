@@ -1,7 +1,10 @@
+from typing import Annotated
+
 from pydantic import Field
 
 from data_access_logic.idea.record import IdeaHistoryRow, IdeaRecognitionRow
-from data_access_logic.material import Form, Timestamp
+from data_access_logic.material import Form, References, Timestamp
+from db.schema import Visibility
 
 
 class IdeaCreateForm(Form):
@@ -16,6 +19,9 @@ class IdeaCreateForm(Form):
     meme_seeded: bool = False
     recognitions: list[IdeaRecognitionRow] = []
     histories: list[IdeaHistoryRow] = []
+    visibility: Visibility = Visibility.PUBLIC
+    knower_ids: Annotated[list[int] | None, References("character")] = Field(
+        default=None, title="知る人", description="本文が非公開(visibility=private)のとき、本文を知る人物")
 
 
 class IdeaUpdateForm(Form):
@@ -31,3 +37,7 @@ class IdeaUpdateForm(Form):
     # 渡すと配列をまるごと置き換える
     recognitions: list[IdeaRecognitionRow] | None = None
     histories: list[IdeaHistoryRow] | None = None
+    visibility: Visibility | None = None
+    # 渡すとまるごと置き換える
+    knower_ids: Annotated[list[int] | None, References("character")] = Field(
+        default=None, title="知る人", description="本文が非公開(visibility=private)のとき、本文を知る人物")

@@ -70,6 +70,9 @@ class CharacterRecord(CharacterHead):
     text: str | None = None
     # すべての来歴の行。話・出来事に渡すときは、その時刻までに起きた行だけに絞る(`histories_at`)
     histories: list[CharacterHistoryRow]
+    visibility: Visibility
+    # 本文が非公開のとき、本文を知る人物
+    knower_ids: list[int]
 
 
 class CharacterLocationRecord(Material):

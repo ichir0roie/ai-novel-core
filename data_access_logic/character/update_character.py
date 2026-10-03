@@ -7,7 +7,7 @@ from data_access_logic.character.form import CharacterUpdateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
-from db.child_lists import replaced_histories, replaced_rows
+from db.child_lists import replaced_histories, replaced_rows, set_knowers
 from db.schema import Character, CharacterHistory, CharacterParameter, CharacterLocation
 
 
@@ -19,6 +19,7 @@ class UpdateCharacter(CommitEntrypoint):
 
     def execute(self, s: Session) -> CharacterRecord:
         form = self.character
+        self.check_knowers(s, form)
         record = common_query.get_row(s, Character, form.id)
 
         if form.parameters is not None:
@@ -27,6 +28,8 @@ class UpdateCharacter(CommitEntrypoint):
             record.locations = replaced_rows(record.locations, form.locations, CharacterLocation)
         if form.histories is not None:
             record.histories = replaced_histories(record.histories, form.histories, CharacterHistory, owner=record)
+        if form.knower_ids is not None:
+            set_knowers(record, form.knower_ids)
         # 誕生は列を持たず parameters の一番早く始まる行の start で表す(db/schema.py の Character.start)。
         # 空にするときは null を渡すので、値ではなく渡されたかで決める
         if "start" in form.model_fields_set:

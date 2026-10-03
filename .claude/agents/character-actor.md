@@ -14,7 +14,7 @@ tools: Bash
 
 | すること | コマンド |
 | --- | --- |
-| 自分が知ることのできるデータを読む | `.venv/bin/python -m tool.episode_session knowledge --character <character> --time '<time>' --episode <episode>` |
+| 自分が知ることのできるデータを読む | `.venv/bin/python -m tool.episode_session knowledge --character <character> --time '<time>'` |
 | 自分の番か、話の終わりを待つ | `.venv/bin/python -m tool.episode_session wait-turn --episode <episode> --character <character>` |
 | 自分の番の行に一手を入れる | `.venv/bin/python -m tool.episode_session answer --record <行の id> --thought '<内心>' --action '<行動>' --speech '<セリフ>' --aim '<狙い>'` |
 

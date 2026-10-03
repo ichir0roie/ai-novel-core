@@ -102,7 +102,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「その時点の顔ぶれは?」             | `story.read_cast.ReadCast(story_id, time=None)`。`time` を省けば作品の最後の話の時刻 |
 | 「その場所・その時点の様子は?」     | `story.read_brief.ReadBrief(location_id, time)`                                 |
 | 「この人物の周りで何が起きている?」 | `character.read_surroundings.ReadSurroundings(character_id, time)`               |
-| 「この人物がその時に知っていることを読ませて」 | `character.read_knowledge.ReadKnowledge(character_id, time, episode_id=None)`。人物がその時刻に知ることのできるデータ。本人(芯から `# plot` を除いたもの・その時の名字や口調・来歴)、関係のある人物と `episode_id` の話の登場人物の来歴、本人に結んだアイデアと居場所に効くアイデア(居場所に効くものは説明つき)の来歴を返す。来歴は時刻の年までに起きた行のうち、公開の行と、その人物が知る人に入った非公開の行だけ(下の「来歴の公開度と知る人」) |
+| 「この人物がその時に知っていることを読ませて」 | `character.read_knowledge.ReadKnowledge(character_id, time)`。人物がその時刻に知ることのできるデータ。本人と、その時刻に関係のある人物の本文(芯から `# plot` を除いたもの)と来歴、本人の名字・口調などその時の値、本人に結んだアイデアと居場所に効くアイデアの本文と来歴を返す。本文・来歴は公開のものと、その人物が知る人に入ったものだけ。来歴は時刻の年までに起きた行だけ。本文を知らないアイデアは名前ごと出さない(下の「本文・来歴の公開度と知る人」) |
 | 「話のセッションに手番を足して」「人物役の一手を待って」 | スキル `episode` の「語り部と人物役」。表(`episode_character_session`)は `tool.episode_session` のコマンドで扱う。入口は `episode_session.add_turns.AddTurns(episode_id, turns)`(語り部が要求の行を足す)・`answer_turn.AnswerTurn(record_id, answer)`(人物役が番の行に一手を入れる)・`read_turn.ReadTurn(episode_id, character_id)`(人物役の番か: turn / waiting / closed)・`read_session.ReadSession(episode_id)`(すべての行)・`close_session.CloseSession(episode_id)`(出た人物に終了の行)。行動の入っていない一番古い行の人物が、いま動く番 |
 | 「この人物を本文用にそろえて」       | `character.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと生まれたときの値)。変わった時ごとの行は `parameters`。芯は `text`。来歴(`histories`)は `time` の年までに起きた行だけを古い順に出す(`time` を省くと、年の決まっていない行も最後に含めてすべて) |
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
@@ -197,13 +197,15 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - `CommitIdea` / `UpdateIdea` は `histories` を受け取る。`UpdateIdea` に渡すと配列をまるごと置き換える
 - `MergeIdea` は `source_id` の `histories` も `target_id` へ付け替える。`DeleteIdea` では一緒に消える
 
-**来歴の公開度と知る人**: 人物とアイデアの来歴の行は、公開度(`visibility`)を持つ。`public` は誰でも知りうる。
-`private`(既定)は、知る人の表(`character_history_character` / `idea_history_character`)に入った人物だけが知る。
+**本文・来歴の公開度と知る人**: 人物・アイデアの本文(本体の行)と来歴の行は、公開度(`visibility`)を持つ。
+`public` は誰でも知りうる。`private` は、知る人の表(`character_knower` / `idea_knower` / `character_history_knower` /
+`idea_history_knower`)に入った人物だけが知る。本文は既定で公開、来歴は既定で非公開。
 
-- 入口では行の `knower_ids`(知る人物の id の配列)で出し入れする。渡すとまるごと置き換える
-- `knower_ids` を渡さない行は、今ある行なら知る人をそのままにし、新しい行なら人物の来歴は本人だけ、アイデアの来歴は誰も知らない
-  (`db/child_lists.py` の `replaced_histories`)。GUI は `knower_ids` を出さないので、GUI で足した人物の来歴は本人だけが知る
-- 本人も知らない来歴(出生の秘密など)は、`knower_ids` から本人を外す
+- 入口では本体と来歴の行の `knower_ids`(知る人物の id の配列)で出し入れする。渡すとまるごと置き換える
+- 人物は、作るとき本人が自分の本文を知る人に入る(`db/schema.py` の `_knows_oneself`。`CommitCharacter` の `knower_ids` は本人のほかに知る人物)
+- 来歴の行で `knower_ids` を渡さない行は、今ある行なら知る人をそのままにし、新しい行なら人物の来歴は本人だけ、アイデアの来歴は誰も知らない
+  (`db/child_lists.py` の `replaced_histories`)。GUI は来歴の行の `knower_ids` を出さないので、GUI で足した人物の来歴は本人だけが知る
+- 本人も知らない本文・来歴(記憶を失った人物・出生の秘密など)は、`knower_ids` から本人を外す
 - 公開度と知る人で絞るのは、人物が知ることのできるデータ(`ReadKnowledge`。スキル `episode` の人物役が読む)だけ。
   話・出来事・人物の生成と、語り部が読む材料(`ReadEpisodeBrief` など)は作者の目で書くので、公開度に関わらずすべての行を渡す
 - `add_history`(出来事・人物の生成が来歴に書き足す)は、その年の非公開の行に書き足し、無ければ本人だけが知る非公開の行を足す

@@ -40,6 +40,9 @@ class IdeaRecord(Material):
     meme_seeded: bool
     recognitions: list[IdeaRecognitionRow]
     histories: list[IdeaHistoryRow]
+    visibility: Visibility
+    # 本文が非公開のとき、本文を知る人物
+    knower_ids: list[int]
     text: str
 
 

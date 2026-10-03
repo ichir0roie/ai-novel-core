@@ -66,7 +66,6 @@ def main() -> None:
     knowledge = commands.add_parser("knowledge", help="人物がその時刻に知ることのできるデータを読む")
     knowledge.add_argument("--character", type=int, required=True)
     knowledge.add_argument("--time", required=True)
-    knowledge.add_argument("--episode", type=int)
 
     wait = commands.add_parser("wait-turn", help="自分の番(turn)か話の終わり(closed)が来るまで待つ")
     wait.add_argument("--episode", type=int, required=True)
@@ -101,8 +100,7 @@ def main() -> None:
     configure_logging()
     match args.command:
         case "knowledge":
-            result = call("character.read_knowledge.ReadKnowledge",
-                          {"character_id": args.character, "time": args.time, "episode_id": args.episode})
+            result = call("character.read_knowledge.ReadKnowledge", {"character_id": args.character, "time": args.time})
         case "wait-turn":
             result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "answer":
