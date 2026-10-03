@@ -272,6 +272,8 @@ button.ghost { background: transparent; }
 .childlist.flow .flow-index { color: var(--muted); font-size: 0.72rem; font-family: var(--mono); flex-shrink: 0; }
 .childlist.flow .flow-period, .childlist.flow .flow-field { font-size: 0.85rem; }
 .childlist.flow .flow-name { font-weight: 600; }
+.childlist.flow .flow-field:has(.flow-flag) { display: inline-flex; align-items: center; gap: 0.3rem; }
+.childlist.flow .flow-flag { color: var(--accent); font-weight: 600; }
 .childlist.flow .flow-period-edit { display: inline-flex; align-items: center; gap: 0.3rem; }
 .childlist.flow .flow-line input[type="text"], .childlist.flow .flow-line select { width: auto; min-width: 6rem; }
 .childlist.flow .flow-remove { margin-left: auto; }

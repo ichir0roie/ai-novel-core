@@ -205,6 +205,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - `location_id` は効く場所(その場所と配下で効く)、`start` / `end` は効く期間。どちらも空ならどこでも・いつでも効く
 - `name` は必須。その場所・時代でアイデアをこう呼ぶ、という作中の呼び名
 - `detail` は呼び名についての注釈(作中でどう受け止められているか)。無くてもよい
+- `private` を true にした行は非公開。効く場所・期間に住む人物も知らず、知る相手(`knowers`)だけが知る。作中の呼び名(`called`)にも使わない
 - `CommitIdea` / `UpdateIdea` は `histories` を受け取る。`UpdateIdea` に渡すと配列をまるごと置き換える
 - `SearchIdeas` の名前・本文検索、`data_access_logic/idea/search.py`、`data_access_logic/idea/context.py`(中間段)、清書に渡す「関係する設定」
   (`IdeaContextSerialized`)は、いずれもアイデアの `histories` を見て、当てはまる場所・時代の
@@ -221,6 +222,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 知る相手の行は、知る人物(`knower_id`)か知る場所(`location_id`)のどちらか一方と、知った時刻(`start`。空なら初めから)を持つ
 - 場所の行は、その時刻にその場所(配下も含む)に住む人物(`character_location`)が知る。誰もが知ることは世界の場所で表す
 - アイデアの履歴の行は、行の効く場所(`location_id`。空ならどこでも)と期間に住む人物も、知る相手の行が無くても知る。
+  ただし非公開(`private`)の行は、場所・期間に関わらず知る相手だけが知る
   履歴の行の無いアイデアは、人物役のだれも知らない
 - 入口では人物の本体と来歴の行、アイデアの履歴の行の `knowers`(行の配列)で出し入れする。渡すとまるごと置き換える
 - 人物は、作るとき本人が自分の本文を知る相手に入る(`db/schema.py` の `_knows_oneself`。`CommitCharacter` の `knowers` は本人のほかの相手)

@@ -673,6 +673,7 @@ class IdeaHistory(Base):
 
     `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
     当てはまる行が無ければ本質の `name` をそのまま使う(`data_access_logic/idea/alias.py` の `called`)。
+    非公開(`private`)の行は、場所・期間に関わらず知る相手だけが知る秘密で、作中の呼び名には使わない。
     効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/idea_context.py`)。
     """
 
@@ -690,16 +691,19 @@ class IdeaHistory(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, comment="この場所・時代での作中の呼び名", sort_order=140)
     detail: Mapped[str | None] = mapped_column(
         String, comment="作中での受け止め方(作中の人物が、このアイデアについて知っていること)", sort_order=150)
+    private: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false",
+        comment="非公開。効く場所・期間に住む人物も知らず、知る相手だけが知る。作中の呼び名にも使わない", sort_order=160)
 
     idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
-    # 人物役(`data_access_logic/character/knowledge.py`)には、効く場所・期間に住む人物か、知る相手に当たる人物にだけ渡す。
+    # 人物役(`data_access_logic/character/knowledge.py`)には、効く場所・期間に住む人物(非公開の行を除く)か、知る相手に当たる人物にだけ渡す。
     # アイデアの本文は人物役に渡さないので、人物が知ることのできるアイデアはこの行だけ
     knowers: Mapped[list["IdeaHistoryKnower"]] = relationship(
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryKnower.id")
 
 
 class IdeaHistoryKnower(KnowerMixin, Base):
-    """アイデアの履歴(呼び名)の行を知る相手。効く場所・期間に住む人物は、行が無くても知る。"""
+    """アイデアの履歴(呼び名)の行を知る相手。効く場所・期間に住む人物は、非公開の行でなければ、行が無くても知る。"""
 
     __tablename__ = "idea_history_knower"
     __table_args__ = _knower_args("idea_history_knower", "idea_history_id")

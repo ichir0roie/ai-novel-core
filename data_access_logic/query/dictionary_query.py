@@ -36,7 +36,9 @@ def history_in_scope(location_ids: Collection[int] | None = None, time: Stamp | 
 
 def histories_select(essence_ids: Collection[int], location_ids: Collection[int] | None = None,
                         time: Stamp | None = None) -> Select:
-    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time)]
+    # 非公開の行は知る相手だけの秘密で、その場所・時代の呼び名ではない
+    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time),
+                  IdeaHistory.private.is_(False)]
     return (select(IdeaHistory)
             .where(*conditions)
             .order_by(IdeaHistory.start.desc().nulls_last(), IdeaHistory.id))
