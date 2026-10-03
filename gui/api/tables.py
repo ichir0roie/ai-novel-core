@@ -85,7 +85,7 @@ TABLES: tuple[TableSpec, ...] = (
               CharacterUpdateForm, CharacterRecord, ("name", "appearance", "text", "meme", "principle", "plot", "histories.description")),
     TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,
               UpdateCharacterRelation, CharacterRelationCreateForm, CharacterRelationUpdateForm,
-              CharacterRelationRecord, ("relation", "text")),
+              CharacterRelationRecord, ("relation", "text", "histories.description")),
     TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, EventRecord,
               ("name", "text")),
     TableSpec("location", "場所", Location, CommitLocation, UpdateLocation, LocationCreateForm, LocationUpdateForm,

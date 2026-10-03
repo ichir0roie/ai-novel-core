@@ -50,6 +50,12 @@ class CharacterHistoryRow(_ChildRow):
     knowers: list[KnowerRow] | None = None
 
 
+class CharacterRelationHistoryRow(_ChildRow):
+    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・人物役には渡さない)
+    start: int | None = None
+    description: str
+
+
 class CharacterHead(Material):
     id: int
     name: str | None = None
@@ -93,7 +99,10 @@ class CharacterRelationRecord(Material):
     relation: str
     start: Timestamp | None = None
     end: Timestamp | None = None
+    # 関係の芯(時期を限らない)
     text: str
+    # すべての来歴の行。話・人物役に渡すときは、その時刻までに起きた行だけに絞る(`cast.relations_at`)
+    histories: list[CharacterRelationHistoryRow]
 
 
 class GeneratedCharacter(Material):

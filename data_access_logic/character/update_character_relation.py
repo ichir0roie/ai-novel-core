@@ -7,7 +7,8 @@ from data_access_logic.character.form import CharacterRelationUpdateForm
 from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
-from db.schema import Character, CharacterRelation
+from db.child_lists import replaced_rows
+from db.schema import Character, CharacterRelation, CharacterRelationHistory
 
 
 class UpdateCharacterRelation(CommitEntrypoint):
@@ -22,6 +23,8 @@ class UpdateCharacterRelation(CommitEntrypoint):
         self.check_exists(s, Character, self.relation.character_2_id, "character_2_id")
 
         self.relation.write_changes_to(record)
+        if self.relation.histories is not None:
+            record.histories = replaced_rows(record.histories, self.relation.histories, CharacterRelationHistory)
         if record.character_1_id == record.character_2_id:
             raise ValueError("character_1_id と character_2_id は別の人物")
         self.finalize(s, record)
