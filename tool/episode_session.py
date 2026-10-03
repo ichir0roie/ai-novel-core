@@ -55,7 +55,7 @@ def wait_answers(episode_id: int, after: int, interval: float, timeout: float) -
     """手番がすべて埋まったら、`after` より後の行を返す。"""
     def check():
         records = call("episode_session.read_session.ReadSession", {"episode_id": episode_id})
-        if any(record["action"] is None and not record["closing"] for record in records):
+        if any(record["action"] is None and not record["closing"] and not record["is_event"] for record in records):
             return None
         return {"status": "answered", "records": [record for record in records if record["id"] > after]}
     return _waited(check, interval, timeout) or {"status": "timeout"}
@@ -79,6 +79,7 @@ def main() -> None:
     answer.add_argument("--thought")
     answer.add_argument("--speech")
     answer.add_argument("--aim")
+    answer.add_argument("--event", help="行動が環境に起こした変化")
 
     appearance = commands.add_parser("appearance", help="初対面の相手から見て分かること(名前なし)を読む")
     appearance.add_argument("--character", type=int, required=True)
@@ -87,7 +88,8 @@ def main() -> None:
     stage = commands.add_parser("stage", help="語り部が読む材料(プロット・場所・登場人物・関係・設定の表層)を読む")
     stage.add_argument("--episode", type=int, required=True)
 
-    add = commands.add_parser("add", help="手番の要求の行を足す(JSON の配列: character_id・time・request)")
+    add = commands.add_parser(
+        "add", help="手番の要求の行(character_id・time・request)とイベントの行(time・event)を足す(JSON の配列)")
     add.add_argument("--episode", type=int, required=True)
     add.add_argument("--turns", required=True, help="JSON のファイル。- なら標準入力から読む")
     add.add_argument("--wait", action="store_true", help="足したあと、手番がすべて埋まるまで待ち、足した行から後を返す")
@@ -117,7 +119,8 @@ def main() -> None:
         case "wait-turn":
             result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "answer":
-            fields = {"thought": args.thought, "action": args.action, "speech": args.speech, "aim": args.aim}
+            fields = {"thought": args.thought, "action": args.action, "speech": args.speech, "aim": args.aim,
+                      "event": args.event}
             result = call("episode_session.answer_turn.AnswerTurn", {
                 "record_id": args.record, "answer": {name: value for name, value in fields.items() if value is not None}})
         case "appearance":

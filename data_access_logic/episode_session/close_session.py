@@ -21,7 +21,8 @@ class CloseSession(CommitEntrypoint):
     def execute(self, s: Session) -> list[SessionRecord]:
         self.check_exists(s, Episode, self.episode_id, "episode_id")
         character_ids = s.scalars(select(EpisodeCharacterSession.character_id)
-                                  .where(EpisodeCharacterSession.episode_id == self.episode_id)
+                                  .where(EpisodeCharacterSession.episode_id == self.episode_id,
+                                         EpisodeCharacterSession.character_id.is_not(None))
                                   .order_by(EpisodeCharacterSession.id)).all()
         records = []
         for character_id in dict.fromkeys(character_ids):

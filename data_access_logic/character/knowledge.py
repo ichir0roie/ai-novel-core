@@ -174,7 +174,7 @@ class KnowledgeSerialized(Material):
         }
 
 
-def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
+def related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
     relations = s.scalars(select(CharacterRelation).where(
         or_(CharacterRelation.character_1_id == character.id, CharacterRelation.character_2_id == character.id),
         alive_at(CharacterRelation, time)).order_by(CharacterRelation.id)).all()
@@ -205,7 +205,7 @@ def _ideas(s: Session, viewer: Viewer) -> list[KnownIdea]:
 def knowledge_of(s: Session, character_id: int, time: Stamp) -> KnowledgeSerialized:
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
-    others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)]
+    others = [common_query.get_row(s, Character, id_) for id_ in related_ids(s, character, time)]
     knows_oneself = knows(character.knowers, viewer)
     return KnowledgeSerialized(
         time=time,

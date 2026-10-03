@@ -813,17 +813,22 @@ class EpisodeCharacterSession(Base):
 
     語り部が手番の人物に要求の行を足し、人物役がその行に行動を書き込む。手番は話の中で id の順に回り、
     行動の書かれていない一番古い行の人物が、いま動く番(`data_access_logic/episode_session/`)。
+    語り部は、場面の始まりや環境が変わったところで、人物の無いイベントの行(`is_event`)を足して環境を送る。
     """
 
     __tablename__ = "episode_character_session"
 
     episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
-    character_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="この手番で動く人物", sort_order=110)
+    character_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, comment="この手番で動く人物。イベントの行は空", sort_order=110)
     time: Mapped[Stamp | None] = mapped_column(StampType, comment="この手番の作中の時刻", sort_order=120)
-    request: Mapped[str] = mapped_column(
-        String, nullable=False,
-        comment="語り部の要求。前の手番から、その人物に見える・聞こえるようになったこと(状況の差分)と、この手番で求めること",
+    is_event: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="語り部が場面・環境を送るイベントの行。人物は空で、手番に数えない", sort_order=125)
+    request: Mapped[str | None] = mapped_column(
+        String,
+        comment="語り部の要求。前の手番から、その人物に見える・聞こえるようになったこと(状況の差分)と、この手番で求めること。"
+                "イベントの行は空",
         sort_order=130)
     closing: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, comment="話が終わった合図。人物役はこの行を読んだら止まる", sort_order=140)
@@ -832,8 +837,12 @@ class EpisodeCharacterSession(Base):
         String, comment="人物の行動(外から見える動き)。空ならまだ動いていない", sort_order=160)
     speech: Mapped[str | None] = mapped_column(String, comment="人物のセリフ", sort_order=170)
     aim: Mapped[str | None] = mapped_column(String, comment="この手番での人物の狙い", sort_order=180)
+    event: Mapped[str | None] = mapped_column(
+        String,
+        comment="環境への変化。イベントの行は語り部が送る場面・環境、人物の行はその人物の行動が起こした変化",
+        sort_order=190)
 
-    character: Mapped["Character"] = relationship(lazy="noload")
+    character: Mapped["Character | None"] = relationship(lazy="noload")
 
 
 class EpisodeIdea(Base):
