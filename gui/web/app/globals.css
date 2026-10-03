@@ -305,6 +305,8 @@ button.ghost { background: transparent; }
 .related ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
 .related.context-bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
 .related.context-bar .context-title { color: var(--muted); font-size: 0.85rem; margin-right: 0.3rem; }
+/* 話のページの登場人物ごとの関係(EpisodeCharacterRelations)は、ボタンの行の下に一行を取って並べる */
+.related.context-bar > :is(.episode-sheet-characters, .status) { flex-basis: 100%; }
 .episode-characters-field { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .episode-characters-summary { color: var(--muted); font-size: 0.85rem; }
 /* 登場人物の名前。押すと人物のモーダル(CharacterSheetModal)を開く */
@@ -573,19 +575,28 @@ button.ghost { background: transparent; }
 .timeline-item.dragging .timeline-text { overflow: visible; }
 .timeline-target { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
 /* タイムラインから開く編集・追加のモーダル。人物のモーダルと同じく、左右の欄がそれぞれスクロールする */
-.timeline-hint { margin-top: 0.4rem; }
-/* スマホは表を広く見せる。説明は出さず、操作は横へスクロールする一行にまとめ、表は画面の端まで使う */
+/* 表は画面の端まで使う。操作の行だけ余白を取り、左はメニューボタンの分を空ける */
+main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
+.page-fill.timeline-page > .toolbar { margin: 0; padding: 6px 10px 6px 56px; }
+.timeline-page > .status { margin: 0 10px 6px; }
+.timeline-page > .timeline { border-width: 1px 0 0; border-radius: 0; }
+/* スマホは操作を横へスクロールする一行にまとめる */
 @media (max-width: 640px) {
-  main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
-  .timeline-page > .toolbar { flex-wrap: nowrap; overflow-x: auto; margin: 0; padding: 6px 8px; gap: 0.4rem; }
+  .page-fill.timeline-page > .toolbar { flex-wrap: nowrap; overflow-x: auto; padding: 6px 8px; gap: 0.4rem; }
   .timeline-page > .toolbar > * { flex-shrink: 0; }
   .timeline-page > .toolbar h1 { display: none; }
   .timeline-page > .status { margin: 0 8px 6px; }
-  .timeline-hint { display: none; }
-  .timeline { --timeline-label: 96px; border-width: 1px 0 0; border-radius: 0; }
+  .timeline { --timeline-label: 96px; }
 }
-/* タイムラインで押した話を見るモーダル(EpisodeSheetModal)。人物の閲覧モーダルの並び(character-sheet)に、登場人物ごとの歳と関係を足す */
+/* タイムラインで押した話を見るモーダル(EpisodeSheetModal)。人物の閲覧モーダルの並び(character-sheet)に、登場人物ごとの歳と関係を足す。
+   プロットが短い話で余白ばかりにならないよう、人物のモーダルのように高さを決めず中身に合わせる */
+.modal.wide:has(.episode-sheet) { height: auto; }
 .episode-sheet h3 { margin-top: 1rem; }
+/* 本文の冒頭は左の列の下端に寄せる */
+.record-side > .episode-sheet-text { margin-top: auto; padding-top: 1rem; }
+/* 枠の余白に 6 行目が覗かないよう、余白は外の枠に持たせ、内側で行を切る */
+.episode-sheet-box { border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.7rem; }
+.episode-sheet-clamp { white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; line-clamp: 5; line-height: 1.6; }
 .episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
 .episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
 .episode-sheet-relations { display: flex; flex-wrap: wrap; gap: 0.3rem; }

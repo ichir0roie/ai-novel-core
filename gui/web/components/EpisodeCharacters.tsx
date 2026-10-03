@@ -19,14 +19,16 @@ type Props = {
   onChange: (ids: number[]) => void;
   episodeStart: unknown;
   episodeLocationId: unknown;
+  /** ボタンの横に名前を並べるか。話のページでは下に関係ごと並べる(`EpisodeCharacterRelations`)ので出さない */
+  summary?: boolean;
 };
 
 /** 話の登場人物(`episode_character`)。「time & place」の行に並ぶボタンで、押すとモーダルで追加削除する。
  * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。
  * 候補は、検索欄が空ならフォームの場所(`location_id`)に時刻(`start`)にいる人物だけ、検索語を入れたら全人物から探す
  * (選んだ人物はいつも出す)。場所・時刻が空か読めないときは絞らない。
- * 並んだ名前を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
-export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeLocationId }: Props) {
+ * 並んだ名前(`summary`)を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
+export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeLocationId, summary = true }: Props) {
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -46,18 +48,20 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
       <button type="button" onClick={() => setOpen(true)}>
         {T.episodeCharacters.button(characterIds.length)}
       </button>
-      <span className="episode-characters-summary">
-        {selected.length > 0
-          ? selected.map((o, i) => (
-              <span key={o.id}>
-                {i > 0 && " / "}
-                <button type="button" className="character-open" onClick={() => setViewing(o.id)}>
-                  {labelWithAge(o.label, o.born, episodeStart)}
-                </button>
-              </span>
-            ))
-          : T.episodeCharacters.none}
-      </span>
+      {summary && (
+        <span className="episode-characters-summary">
+          {selected.length > 0
+            ? selected.map((o, i) => (
+                <span key={o.id}>
+                  {i > 0 && " / "}
+                  <button type="button" className="character-open" onClick={() => setViewing(o.id)}>
+                    {labelWithAge(o.label, o.born, episodeStart)}
+                  </button>
+                </span>
+              ))
+            : T.episodeCharacters.none}
+        </span>
+      )}
       {viewing !== null && <CharacterSheetModal characterId={viewing} time={episodeStart} onClose={() => setViewing(null)} />}
       {open && (
         <Modal

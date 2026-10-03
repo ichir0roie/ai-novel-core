@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ContextTable from "@/components/ContextTable";
+import EpisodeCharacterRelations from "@/components/EpisodeCharacterRelations";
 import EpisodeCharacters from "@/components/EpisodeCharacters";
 import Modal from "@/components/Modal";
 import type { Labels, Rec } from "@/lib/api";
@@ -22,8 +23,8 @@ type CharactersProps = {
 };
 
 /** 話の時期・場所に重なる出来事・作品(`related.context`、閲覧専用)。種類ごとのボタンを横に並べ、
- * 押すとその一覧をモーダルの表で見る。episode のときだけ、同じ行に編集できる登場人物のボタンも並べる
- * (`characterIds`/`onChangeCharacterIds`/`episodeStart` を渡したときだけ出す)。 */
+ * 押すとその一覧をモーダルの表で見る。episode のときだけ、同じ行に編集できる登場人物のボタンも並べ、
+ * その下に登場人物ごとの歳と関係を出す(`characterIds`/`onChangeCharacterIds`/`episodeStart` を渡したときだけ出す)。 */
 export default function EpisodeContext({
   context, characterIds, onChangeCharacterIds, episodeStart, episodeLocationId,
 }: { context: Context } & Partial<CharactersProps>) {
@@ -51,8 +52,10 @@ export default function EpisodeContext({
           onChange={onChangeCharacterIds!}
           episodeStart={episodeStart}
           episodeLocationId={episodeLocationId}
+          summary={false}
         />
       )}
+      {showCharacters && <EpisodeCharacterRelations characterIds={characterIds!} start={episodeStart} />}
       {open && active && (
         <Modal title={`${labelOfTable(open)} (${active.items.length})`} onClose={() => setOpen(null)} wide>
           <ContextTable table={open} items={active.items} labels={active.labels} />

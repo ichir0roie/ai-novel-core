@@ -726,7 +726,6 @@ export default function TimelinePage() {
           {scale && <div className="timeline-center" style={{ left: box.label + box.viewport / 2 }} />}
         </div>
       )}
-      <div className="hint timeline-hint">{T.timeline.hint}</div>
       {viewing !== null && <EpisodeSheetModal episodeId={viewing} onClose={() => setViewing(null)} />}
       {adding && <NewEpisodeModal initial={adding.initial} storyLabel={adding.storyLabel} onClose={() => setAdding(null)} />}
       <Tooltip tip={tip} />
