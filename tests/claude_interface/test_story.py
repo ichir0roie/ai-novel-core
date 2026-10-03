@@ -12,12 +12,11 @@ from data_access_logic.story.update_story import UpdateStory
 def test_commit_story(shown, world, mock_ai):
     result = shown(CommitStory(StoryCreateForm(
         name="テスト続編", text="続編の構想", world_id=world.planet_id, location_id=world.neighbor_id, narration="一人称",
-        state="構想中", start="1210/01/01", end="1220/01/01", event_seeded=True)))
+        state="構想中", event_seeded=True)))
 
     assert (result["name"], result["text"]) == ("テスト続編", "続編の構想")
     assert (result["world_id"], result["location_id"]) == (world.planet_id, world.neighbor_id)
     assert (result["narration"], result["state"]) == ("一人称", "構想中")
-    assert (result["start"], result["end"]) == ("1210/01/01 00:00:00", "1220/01/01 00:00:00")
     assert result["event_seeded"] is True
 
 
@@ -62,10 +61,9 @@ def test_start_story(shown, world):
 def test_update_story(shown, world):
     result = shown(UpdateStory(StoryUpdateForm(
         id=world.story_id, name="テスト作品改", text="改めた構想", world_id=world.planet_id, location_id=world.neighbor_id,
-        narration="二人称", state="完結", start="1201/01/01", end="1299/01/01", event_seeded=False)))
+        narration="二人称", state="完結", event_seeded=False)))
 
     assert (result["name"], result["text"]) == ("テスト作品改", "改めた構想")
     assert (result["world_id"], result["location_id"]) == (world.planet_id, world.neighbor_id)
     assert (result["narration"], result["state"]) == ("二人称", "完結")
-    assert (result["start"], result["end"]) == ("1201/01/01 00:00:00", "1299/01/01 00:00:00")
     assert result["event_seeded"] is False

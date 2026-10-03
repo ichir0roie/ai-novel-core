@@ -101,7 +101,7 @@ def situation(
 ) -> LocationSituationSerialized:
     """要約は揃えてある前提でそのまま読む。"""
     location = LocationTextMaterial.model_validate(s.get_one(Location, location_id))
-    stories = story_creation_query.load_location_story(s, location_id, time) if use_story else []
+    stories = story_creation_query.load_location_story(s, location_id) if use_story else []
     story_recent_events = []
     if stories:
         # 横(兄弟の場所)の出来事は含めない。作品の配下全体を渡すと、他の国の展開まで持ち込まれて

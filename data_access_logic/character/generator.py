@@ -178,7 +178,7 @@ def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person:
         select(Location).where(Location.id == born_location_id)
         .options(joinedload(Location.parent)).execution_options(populate_existing=True))
         if born_location_id is not None else None)
-    stories = story_creation_query.load_location_story(s, born_location_id, time) if born_location_id is not None else []
+    stories = story_creation_query.load_location_story(s, born_location_id) if born_location_id is not None else []
     later_ideas = (s.scalars(dictionary_query.later_ideas_select(
         common_query.idea_scope_ids(s, born_location_id), time)).all() if born_location_id is not None else [])
     return BirthSources(

@@ -92,7 +92,7 @@ def world() -> Iterator[World]:
         s.add(neighbor)
         s.flush()
         story = Story(name="テスト作品", text="テスト用の作品", world_id=planet.id, location_id=location.id,
-                      narration="三人称", state="執筆中", start="1200/01/01", end="1300/01/01", event_seeded=True)
+                      narration="三人称", state="執筆中", event_seeded=True)
         s.add(story)
         characters = [
             Character(name=name, text=f"{name}の説明", kind="人物",

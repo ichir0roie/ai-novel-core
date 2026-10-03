@@ -195,7 +195,7 @@ def _context_block(s: Session, table: str, rows: Sequence[Base]) -> ContextBlock
 
 
 def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:
-    """話の時期(start〜end)・場所(location_id)に重なる出来事・作品。
+    """話の時期(start〜end)・場所(location_id)に重なる出来事と、場所に重なる作品。
 
     人物・場所はここでは拾わない(話の人物は `episode_character`、場所は `location_id` がそのまま持つ)。
     """
@@ -209,9 +209,7 @@ def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:
     events = s.scalars(loading(select(Event).where(*event_conditions)
                                .order_by(Event.time, Event.id).limit(_CONTEXT_LIMIT), EventRecord)).all()
 
-    story_conditions = [Story.id != episode.story_id,
-                        or_(Story.start.is_(None), Story.start <= until),
-                        or_(Story.end.is_(None), Story.end >= since)]
+    story_conditions = [Story.id != episode.story_id]
     if location_ids:
         story_conditions.append(or_(Story.location_id.in_(location_ids), Story.world_id.in_(location_ids)))
     stories = s.scalars(select(Story).where(*story_conditions)

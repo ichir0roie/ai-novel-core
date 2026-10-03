@@ -38,6 +38,9 @@ const OCCUPY_MARGIN_PX = 24;
 // 帯の直前・帯の左端の目盛りは、文字が帯に掛かるので文字を出さない
 const TICK_LABEL_PX = 48;
 const FULL_STAMP = /^\d+\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/;
+// 絞り込みの URL の引数と、それを覚えておく localStorage のキー
+const FILTER_KEYS = ["span", "story_id", "location_id"] as const;
+const FILTER_STORAGE_KEY = "timeline-filter";
 
 // 軸は日の単位。start・end は日の境目に丸めた通算日で、at は丸める前の時刻(同じ日の中の並び順に使う)
 type Item = { key: string; id: number; label: string; record: Rec; at: number; start: number; end: number | null };
@@ -193,6 +196,18 @@ function itemsOf(data: TimelineResponse): Item[] {
   return items;
 }
 
+/** 覚えておいた絞り込みのうち、値のあるもの。無ければ null */
+function savedFilter(): Record<string, string> | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) ?? "null");
+    const filter: Record<string, string> = {};
+    for (const key of FILTER_KEYS) if (saved?.[key]) filter[key] = String(saved[key]);
+    return Object.keys(filter).length > 0 ? filter : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 日付をずらしたときに直す欄。開始・終了を同じ日数だけ動かす。 */
 function shifted(item: Item, days: number): Rec {
   const changes: Rec = {};
@@ -202,7 +217,8 @@ function shifted(item: Item, days: number): Rec {
 
 /**
  * 作品の木。話の無い作品も段にする(作品で絞ったときは、その作品と子孫の作品)。場所で絞ったときは、その場所の話のある作品だけにする。
- * 段にする作品の祖先の作品も段にする。親が段に無い作品は根に置く。読み直しても段が入れ替わらないよう、兄弟は作品の id 順に並べる
+ * 段にする作品の祖先の作品も段にする。親が段に無い作品は根に置く。兄弟は、その作品と子孫の作品の一番早い話の順に並べ、
+ * 話の無い作品は後ろに回す。読み直しても段が入れ替わらないよう、一番早い話が同じなら作品の id 順にする
  */
 function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, locationId: number | null,
   labels: Labels): Group[] {
@@ -219,8 +235,18 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
   for (const id of byStory.keys()) {
     for (let at: number | null = id; at !== null && !shown.has(at); at = stories.get(at)?.parent ?? null) shown.add(at);
   }
+  const firstAt = new Map<number, number>();
+  for (const item of episodes) {
+    const seen = new Set<number>();
+    for (let at: number | null = item.record.story_id as number; at !== null && !seen.has(at); at = stories.get(at)?.parent ?? null) {
+      seen.add(at);
+      if (item.at < (firstAt.get(at) ?? Infinity)) firstAt.set(at, item.at);
+    }
+  }
+  const firstOf = (id: number) => firstAt.get(id) ?? Infinity;
+  const byFirst = (a: number, b: number) => firstOf(a) - firstOf(b) || a - b;
   const childrenOf = new Map<number | null, number[]>();
-  for (const id of [...shown].sort((a, b) => a - b)) {
+  for (const id of [...shown].sort(byFirst)) {
     const parent = stories.get(id)?.parent ?? null;
     const key = parent !== null && shown.has(parent) ? parent : null;
     childrenOf.set(key, [...(childrenOf.get(key) ?? []), id]);
@@ -238,7 +264,7 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
     (childrenOf.get(id) ?? []).forEach(reach);
   };
   roots.forEach(reach);
-  return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort((a, b) => a - b)].map(node);
+  return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort(byFirst)].map(node);
 }
 
 /** 作品 `id` が `ancestor` か、その子孫か。親を循環してたどる作品でも止まる */
@@ -316,6 +342,27 @@ export default function TimelinePage() {
     [router, search],
   );
 
+  // 絞り込みを付けずに開いたら(ナビのリンクなど)、前に選んだ絞り込みへ移す。移し終わるまで話を引かない(引いた話から中心を決めると、
+  // 移す前の URL に中心を書いて絞り込みを消してしまう)
+  const [restoring, setRestoring] = useState(true);
+  useEffect(() => {
+    if (!restoring) return;
+    const target = FILTER_KEYS.some((key) => search.has(key)) ? null : savedFilter();
+    if (target) navigate(target);
+    else setRestoring(false);
+  }, [restoring, search, navigate]);
+
+  /** 絞り込みを変え、次に絞り込みを付けずに開いたときのために覚えておく */
+  const filter = (changes: Partial<Record<(typeof FILTER_KEYS)[number], string | number | null>>) => {
+    const next = Object.fromEntries(FILTER_KEYS.map((key) => [key, key in changes ? changes[key] : search.get(key)]));
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // 覚えられなくても、この画面の中では絞り込みが効く
+    }
+    navigate(changes);
+  };
+
   useEffect(() => {
     if (!at && data) navigate({ at: defaultCenter(data) });
   }, [at, data, navigate]);
@@ -342,6 +389,7 @@ export default function TimelinePage() {
   }, []);
 
   useEffect(() => {
+    if (restoring) return;
     let alive = true;
     getTimeline({ story_id: storyId, location_id: locationId })
       .then((result) => {
@@ -354,7 +402,7 @@ export default function TimelinePage() {
     return () => {
       alive = false;
     };
-  }, [storyId, locationId, version]);
+  }, [restoring, storyId, locationId, version]);
 
   // スクロールする欄。幅を測り、縦のホイールを横のスクロールに回す(段の名前の上と Shift を押したときは縦のまま)
   const scrollBoxRef = useCallback((element: HTMLDivElement | null) => {
@@ -625,17 +673,17 @@ export default function TimelinePage() {
             title={T.timeline.span}
             choices={SPANS.map((days) => ({ value: days, label: T.timeline.spanOf(days) }))}
             value={span}
-            onChange={(days) => navigate({ span: days })}
+            onChange={(days) => filter({ span: days })}
             placeholder={T.select}
           />
         </div>
         <div className="hint timeline-filter">
           {T.timeline.story}
-          <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => navigate({ story_id: value })} title={T.timeline.story} />
+          <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => filter({ story_id: value })} title={T.timeline.story} />
         </div>
         <div className="hint timeline-filter">
           {T.timeline.location}
-          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => navigate({ location_id: value })} title={T.timeline.location} />
+          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => filter({ location_id: value })} title={T.timeline.location} />
         </div>
       </div>
       {error && <div className="status error">{error}</div>}
@@ -678,7 +726,6 @@ export default function TimelinePage() {
           {scale && <div className="timeline-center" style={{ left: box.label + box.viewport / 2 }} />}
         </div>
       )}
-      <div className="hint timeline-hint">{T.timeline.hint}</div>
       {viewing !== null && <EpisodeSheetModal episodeId={viewing} onClose={() => setViewing(null)} />}
       {adding && <NewEpisodeModal initial={adding.initial} storyLabel={adding.storyLabel} onClose={() => setAdding(null)} />}
       <Tooltip tip={tip} />
