@@ -6,7 +6,7 @@
 
 写し元は SQLite(昔の `novel.db`)でも PostgreSQL でもよい。テストの db に本番を写すのにも使う(`tool.test.copy_production_db`)。
 
-- 写し元と写し先は同じ alembic の版(head)にそろえておく。食い違えば止まる
+- 写し元と写し先は同じ alembic のバージョン(head)にそろえておく。食い違えば止まる
 - 写し先は `init_db` 直後の空の db を前提にする。行があれば止まる(`--truncate` で消してから写す)
 - 写し元の外部キーが指す先の無い行(SQLite は外部キーを確かめない)があれば、写す前に並べて止まる
 - 一つのトランザクションで写すので、途中で落ちれば何も入らない
@@ -117,7 +117,7 @@ def _check_revision(src, dst) -> None:
 
     source_rev, target_rev = revision(src), revision(dst)
     if source_rev != target_rev:
-        sys.exit(f"alembic の版が食い違う(写し元 {source_rev} / 写し先 {target_rev})。"
+        sys.exit(f"alembic のバージョンが食い違う(写し元 {source_rev} / 写し先 {target_rev})。"
                  "両方に upgrade head を当ててから写す")
 
 

@@ -42,7 +42,7 @@
 - 置き場は `db/alembic/`。コマンド例は `db/alembic/README`
 - `schema.py` を変えたら alembic で `revision --autogenerate` → 内容確認 → `upgrade head`(手元の開発用の db に当てる)。AWS の db へ当てる決まりは `.claude/docs/aws.md` の決まり 1
 - 列を消す変更は、マージから API の差し替えまでの 1〜2 分だけ古い API が失敗しうる
-- 新しいマイグレーションの確かめに、空の db から `upgrade head` で一から上げない(古い版に PostgreSQL で通らないものがあり落ちる)。代わりに、変える前のコミットを `git worktree add --detach <スクラッチパッドの dir> <コミット>` で取り出し、その `db.postgres.init_db --url <テスト用のサーバーの別の db> --create-database` で表を作って版を付け、行を足してから、今のブランチで `alembic upgrade head` と `alembic check` を回す
+- 新しいマイグレーションの確かめに、空の db から `upgrade head` で一から上げない(古いバージョンに PostgreSQL で通らないものがあり落ちる)。代わりに、変える前のコミットを `git worktree add --detach <スクラッチパッドの dir> <コミット>` で取り出し、その `db.postgres.init_db --url <テスト用のサーバーの別の db> --create-database` で表を作ってバージョンを付け、行を足してから、今のブランチで `alembic upgrade head` と `alembic check` を回す
 - マイグレーションのテスト(上げ下げの往復)は書かない
 
 ## 世界ごとの好み(AI へ渡す文面)

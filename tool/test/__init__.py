@@ -67,7 +67,7 @@ def ensure_test_db() -> None:
                                "db", "alembic", "alembic.ini")
     head = ScriptDirectory.from_config(Config(alembic_ini)).get_current_head()
     if current != head:
-        logger.warning(f"テスト用の db の版({current})がコードの版({head})と違う。"
+        logger.warning(f"テスト用の db のバージョン({current})がコードのバージョン({head})と違う。"
                        "`.venv/bin/python -m tool.test.recreate_db` で作り直す")
 
 
