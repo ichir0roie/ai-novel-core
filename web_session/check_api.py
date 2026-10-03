@@ -3,8 +3,8 @@
 
     .venv/bin/python -m web_session.check_api
 
-繋ぐ先の API・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・
-`claude` コマンドの有無を JSON で print し、届かないか版が食い違えば終了コード 1 で終わる。
+繋ぐ先の API・db の種類・alembic のバージョン(db の側と、このセッションのコードの head)・PostGIS のバージョン・
+`claude` コマンドの有無を JSON で print し、届かないかバージョンが食い違えば終了コード 1 で終わる。
 web の環境の設定(ネットワーク・環境変数)を変えたら、まずこれを回す(`.docs/web-session.md`)。
 """
 from __future__ import annotations

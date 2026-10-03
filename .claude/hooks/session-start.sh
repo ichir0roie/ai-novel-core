@@ -36,8 +36,8 @@ if [ "$background" = 1 ]; then
   trap '[ -e "$setup_dir/python" ] || touch "$setup_dir/failed"' EXIT
 fi
 
-# python の版は .python-version に書く。版の違う .venv は作り直す。
-# uv が古いと新しい版の python を知らないので、uvx で新しめの uv を使う(python もそれが取ってくる)
+# python のバージョンは .python-version に書く。バージョンの違う .venv は作り直す。
+# uv が古いと新しいバージョンの python を知らないので、uvx で新しめの uv を使う(python もそれが取ってくる)
 python_version=$(tr -d '[:space:]' < .python-version)
 uv=(uvx -q --from 'uv>=0.9' uv)
 py=.venv/bin/python
