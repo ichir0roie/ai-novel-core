@@ -7,7 +7,7 @@ from data_access_logic.character.form import CharacterCreateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import world_creation_query
-from db.child_lists import replaced_rows
+from db.child_lists import replaced_histories, replaced_rows
 from db.schema import Character, CharacterHistory, CharacterParameter, CharacterLocation, Location
 
 
@@ -28,7 +28,7 @@ class CommitCharacter(CommitEntrypoint):
         record = Character()
         form.write_to(record)
         record.parameters = replaced_rows([], form.parameters, CharacterParameter)
-        record.histories = replaced_rows([], form.histories, CharacterHistory)
+        record.histories = replaced_histories([], form.histories, CharacterHistory, owner=record)
         # 誕生は列を持たず parameters の一番早く始まる行の start で表す(db/schema.py の Character.start)。
         if form.start is not None:
             record.start = form.start

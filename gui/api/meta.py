@@ -36,7 +36,7 @@ _LABELS = {
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "character": {"parameters": "periodic", "locations": "periodic", "histories": "flow"},
-    "idea": {"recognitions": "flow"},
+    "idea": {"recognitions": "flow", "histories": "flow"},
 }
 
 

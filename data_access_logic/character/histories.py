@@ -3,7 +3,7 @@ from typing import Any
 
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.source_text import plot_section
-from db.schema import Character, CharacterHistory
+from db.schema import Character, CharacterHistory, CharacterHistoryCharacter, Visibility
 from db.stamp import Stamp
 
 
@@ -21,10 +21,13 @@ def histories_at(character: Character, time: Stamp | None) -> list[CharacterHist
 
 
 def add_history(character: Character, year: int, description: str) -> None:
-    """その年の行があれば、その説明に一文を書き足す(行を増やしすぎない)。無ければ、その年から始まる行を足す。"""
-    row = next((row for row in character.histories if row.start == year), None)
+    """その年の非公開の行があれば、その説明に一文を書き足す(行を増やしすぎない)。無ければ、その年から始まる
+    非公開の行を足し、本人だけを知る人にする(公開の行に書き足すと、本人しか知らないはずのことが広まる)。"""
+    row = next((row for row in character.histories if row.start == year and row.visibility == Visibility.PRIVATE), None)
     if row is None:
-        character.histories.append(CharacterHistory(start=year, description=description))
+        character.histories.append(CharacterHistory(
+            start=year, visibility=Visibility.PRIVATE, description=description,
+            knowers=[CharacterHistoryCharacter(character=character)]))
     else:
         row.description = f"{row.description}\n{description}"
 

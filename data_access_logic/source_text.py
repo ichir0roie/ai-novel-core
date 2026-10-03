@@ -21,6 +21,11 @@ def plot_section(text: str | None) -> str:
     return match.group(1).strip() if match else ""
 
 
+def without_plot_section(text: str | None) -> str:
+    """人物の本文から `# plot` の節(作者が進めたい先の筋書き)を除いた本文。"""
+    return _PLOT_SECTION.sub("", text or "").strip()
+
+
 def strip_fact_check(text: str | None) -> str:
     """本文から検証結果の節を取り除いた、素の本文を返す。"""
     return _FACT_CHECK_SECTION.sub("", text or "").rstrip()

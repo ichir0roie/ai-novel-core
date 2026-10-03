@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
 from data_access_logic.material import Form, Material, Timestamp
-from db.schema import PersonalityLevel
+from db.schema import PersonalityLevel, Visibility
 
 
 class _ChildRow(Form):
@@ -44,7 +44,10 @@ class CharacterLocationRow(_ChildRow):
 class CharacterHistoryRow(_ChildRow):
     # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
     start: int | None = None
+    visibility: Visibility = Visibility.PRIVATE
     description: str
+    # 非公開の行を知る人物。渡さなければ、新しい行は本人だけ、今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
+    knower_ids: list[int] | None = None
 
 
 class CharacterHead(Material):

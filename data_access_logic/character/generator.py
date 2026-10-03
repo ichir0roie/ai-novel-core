@@ -42,7 +42,7 @@ from data_access_logic.meme.extractor import draw_from, meme_pool, position_lege
 from data_access_logic.meme.models import DrawnMeme
 from data_access_logic.query import common_query, dictionary_query, story_creation_query
 from data_access_logic.story.models import StoryPlotMaterial
-from db.child_lists import replaced_rows
+from db.child_lists import replaced_histories
 from db.schema import (
     CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, Location,
 )
@@ -364,8 +364,8 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
         end=creation.end,
         # 生まれた時点で決める値なので、誕生から効く一行だけを持つ
         parameters=[parameter_row(creation.parameters, creation.birth)],
-        histories=replaced_rows([], creation.writing.histories, CharacterHistory),
     )
+    record.histories = replaced_histories([], creation.writing.histories, CharacterHistory, owner=record)
     s.add(record)
     s.flush()
     if creation.born_location_id is not None:

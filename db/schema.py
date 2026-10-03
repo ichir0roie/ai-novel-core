@@ -6,7 +6,7 @@ import hashlib
 import os
 
 from sqlalchemy import (
-    BigInteger, Boolean, Integer, String, DECIMAL, JSON, TypeDecorator,
+    BigInteger, Boolean, Enum, Integer, String, DECIMAL, JSON, TypeDecorator,
     create_engine,
     ForeignKey,
     UniqueConstraint,
@@ -507,6 +507,21 @@ class CharacterRelation(TextBase):
         foreign_keys="CharacterRelation.character_2_id", lazy="noload")
 
 
+class Visibility(enum.StrEnum):
+    """来歴の公開度。"""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+
+def _visibility_column(knowers_table: str, sort_order: int) -> Mapped[Visibility]:
+    return mapped_column(
+        Enum(Visibility, native_enum=False, length=16, values_callable=lambda members: [member.value for member in members]),
+        default=Visibility.PRIVATE, server_default=Visibility.PRIVATE.value, nullable=False,
+        comment=f"公開度。public は誰でも知りうる。private は知る人({knowers_table})に入った人物だけが知る",
+        sort_order=sort_order)
+
+
 class CharacterHistory(Base):
     """人物の来歴を、起きた年ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
@@ -524,12 +539,34 @@ class CharacterHistory(Base):
     start: Mapped[int | None] = mapped_column(
         Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
         sort_order=110)
+    visibility: Mapped[Visibility] = _visibility_column("character_history_character", 120)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
+    knowers: Mapped[list["CharacterHistoryCharacter"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="CharacterHistoryCharacter.id")
 
     def covers(self, time: Stamp) -> bool:
         return self.start is not None and self.start <= time.year
+
+    @property
+    def knower_ids(self) -> list[int]:
+        return [knower.character_id for knower in self.knowers]
+
+
+class CharacterHistoryCharacter(Base):
+    """非公開の人物の来歴を知る人物。"""
+
+    __tablename__ = "character_history_character"
+    __table_args__ = (UniqueConstraint("character_history_id", "character_id"),)
+
+    character_history_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character_history.id"), index=True, nullable=False, sort_order=100)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=110)
+
+    history: Mapped[CharacterHistory] = relationship(back_populates="knowers", lazy="noload")
+    character: Mapped["Character"] = relationship(lazy="noload")
 
 
 class Idea(MemeSeededMixin, TextBase):
@@ -549,12 +586,15 @@ class Idea(MemeSeededMixin, TextBase):
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
-    # 場所・時代ごとの作中での呼び名は IdeaRecognition で積む。GUI では recognitions に並ぶ。
-    CHILD_LISTS = ("recognitions",)
+    # 場所・時代ごとの作中での呼び名は IdeaRecognition で、年ごとの来歴は IdeaHistory で積む。GUI ではそれぞれの配列に並ぶ。
+    CHILD_LISTS = ("recognitions", "histories")
 
     recognitions: Mapped[list["IdeaRecognition"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
         order_by="IdeaRecognition.start.desc().nulls_last()")
+    histories: Mapped[list["IdeaHistory"]] = relationship(
+        back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
+        order_by="IdeaHistory.start.desc().nulls_last()")
 
 
 class IdeaRecognition(Base):
@@ -580,6 +620,48 @@ class IdeaRecognition(Base):
     detail: Mapped[str | None] = mapped_column(String, comment="呼び名についての注釈(作中での受け止め方)", sort_order=150)
 
     idea: Mapped[Idea] = relationship(back_populates="recognitions", lazy="noload")
+
+
+class IdeaHistory(Base):
+    """アイデアの来歴(作られた・広まった・変わった・隠されたこと)を、起きた年ごとの一行で持つ子テーブル。
+    行の持ち方と時刻での絞り方は `CharacterHistory` と同じ。
+    """
+
+    __tablename__ = "idea_history"
+
+    idea_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
+    start: Mapped[int | None] = mapped_column(
+        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
+        sort_order=110)
+    visibility: Mapped[Visibility] = _visibility_column("idea_history_character", 120)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
+
+    idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
+    knowers: Mapped[list["IdeaHistoryCharacter"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryCharacter.id")
+
+    def covers(self, time: Stamp) -> bool:
+        return self.start is not None and self.start <= time.year
+
+    @property
+    def knower_ids(self) -> list[int]:
+        return [knower.character_id for knower in self.knowers]
+
+
+class IdeaHistoryCharacter(Base):
+    """非公開のアイデアの来歴を知る人物。"""
+
+    __tablename__ = "idea_history_character"
+    __table_args__ = (UniqueConstraint("idea_history_id", "character_id"),)
+
+    idea_history_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("idea_history.id"), index=True, nullable=False, sort_order=100)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=110)
+
+    history: Mapped[IdeaHistory] = relationship(back_populates="knowers", lazy="noload")
+    character: Mapped["Character"] = relationship(lazy="noload")
 
 
 class Story(EventSeededMixin, TextBase):
@@ -676,6 +758,34 @@ class EpisodeCharacter(Base):
         sort_order=120)
 
     episode: Mapped["Episode"] = relationship(back_populates="episode_characters", lazy="noload")
+    character: Mapped["Character"] = relationship(lazy="noload")
+
+
+class EpisodeCharacterSession(Base):
+    """話の本文を書く前に、語り部と人物役が場面を手番で進めた記録。語り部と人物役はこの表だけでやり取りする。
+
+    語り部が手番の人物に要求の行を足し、人物役がその行に行動を書き込む。手番は話の中で id の順に回り、
+    行動の書かれていない一番古い行の人物が、いま動く番(`data_access_logic/episode_session/`)。
+    """
+
+    __tablename__ = "episode_character_session"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="この手番で動く人物", sort_order=110)
+    time: Mapped[Stamp | None] = mapped_column(StampType, comment="この手番の作中の時刻", sort_order=120)
+    request: Mapped[str] = mapped_column(
+        String, nullable=False,
+        comment="語り部の要求。前の手番から、その人物に見える・聞こえるようになったこと(状況の差分)と、この手番で求めること",
+        sort_order=130)
+    closing: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, comment="話が終わった合図。人物役はこの行を読んだら止まる", sort_order=140)
+    thought: Mapped[str | None] = mapped_column(String, comment="人物の内心(言葉にしない思い)", sort_order=150)
+    action: Mapped[str | None] = mapped_column(
+        String, comment="人物の行動(外から見える動き)。空ならまだ動いていない", sort_order=160)
+    speech: Mapped[str | None] = mapped_column(String, comment="人物のセリフ", sort_order=170)
+    aim: Mapped[str | None] = mapped_column(String, comment="この手番での人物の狙い", sort_order=180)
+
     character: Mapped["Character"] = relationship(lazy="noload")
 
 

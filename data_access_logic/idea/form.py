@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from data_access_logic.idea.record import IdeaRecognitionRow
+from data_access_logic.idea.record import IdeaHistoryRow, IdeaRecognitionRow
 from data_access_logic.material import Form, Timestamp
 
 
@@ -15,6 +15,7 @@ class IdeaCreateForm(Form):
     parent_idea_id: int | None = None
     meme_seeded: bool = False
     recognitions: list[IdeaRecognitionRow] = []
+    histories: list[IdeaHistoryRow] = []
 
 
 class IdeaUpdateForm(Form):
@@ -29,3 +30,4 @@ class IdeaUpdateForm(Form):
     meme_seeded: bool | None = None
     # 渡すと配列をまるごと置き換える
     recognitions: list[IdeaRecognitionRow] | None = None
+    histories: list[IdeaHistoryRow] | None = None

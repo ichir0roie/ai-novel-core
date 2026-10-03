@@ -41,6 +41,9 @@ class MergeIdea(CommitEntrypoint):
         for recognition in list(source.recognitions):
             source.recognitions.remove(recognition)
             target.recognitions.append(recognition)
+        for history in list(source.histories):
+            source.histories.remove(history)
+            target.histories.append(history)
         merged = MergedIdea(merged=IdeaName.model_validate(source), into=IdeaName.model_validate(target),
                             links_moved=relink(s, source.id, target.id))
         s.delete(source)
