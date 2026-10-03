@@ -367,7 +367,7 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
     # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `notes` と同じく、基本の本文に時代ごとの行を足す形)。
+    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。
     CHILD_LISTS = ("parameters", "locations", "histories")
 
     @property

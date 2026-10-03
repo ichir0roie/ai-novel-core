@@ -61,7 +61,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「人物の一覧」「誰がいる?」         | `character.list_characters.ListCharacters()`                                     |
 | 「人物同士の関係は?」               | `character.list_character_relations.ListCharacterRelations(character_id=None)`   |
 | 「出来事の一覧」                     | `event.list_events.ListEvents()`(全件)。絞るなら `event.read_events.ReadEvents(time=…)` か、`ReadEvents(location_id=…)` / `ReadEvents(character_id=…)` / `ReadEvents(event_id=…)`(どの表の id かを名前で渡す) |
-| 「このアイデアは何?」「アイデアを調べて」 | `idea.search_ideas.SearchIdeas(keywords, location_id=None, limit=None, time=None)`。名前・本文(基本の本文と追記の両方)の部分一致のあいまい検索。`keywords` は `IdeaDraft(keyword=…, variants=[…])`(`variants` は言い換え)のリスト。当たり方の強い順に返す。自動生成の候補も返す。`location_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名。`text` は `time` の時点に効く追記(下の「アイデアの追記」)まで積み重ねた本文 |
+| 「このアイデアは何?」「アイデアを調べて」 | `idea.search_ideas.SearchIdeas(keywords, location_id=None, limit=None, time=None)`。名前・本文(基本の本文と作中の呼び名の両方)の部分一致のあいまい検索。`keywords` は `IdeaDraft(keyword=…, variants=[…])`(`variants` は言い換え)のリスト。当たり方の強い順に返す。自動生成の候補も返す。`location_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名 |
 | 「この下書きに関わる設定は?」(中間段を自分で回す) | `idea.resolve_ideas.ResolveIdeas(ideas, location_id=None, time=None)`。下書きから洗い出した語(`IdeaDraft`。`keyword` / `variants` / `description` / `kind` / `start` / `end`)をアイデアと照らし、当たったものと上位・下位を返す。当たらなかった語は候補として足す(下の「中間段」)。候補の効く期間は語の `start` / `end`。`start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け(言えなければ省いて None)、`end` は分かるときだけ付ける。`time` は出来事の時刻。`time` を渡すと `start` が空(時期が未定)のアイデアは `ideas` に入れない。呼び名に当たったら本質のアイデアにそろえ、作中の呼び名を `called` に付ける |
 | 「この本文が踏まえたアイデアを結んで」 | `idea.link_ideas.LinkIdeas(idea_ids, event_id=None, episode_id=None, character_id=None)`。三つのうち一つだけ渡す |
 | 「この候補をあのアイデアにまとめて」 | `idea.merge_idea.MergeIdea(source_id, target_id)`。結んだ本文と source の履歴(呼び名)を付け替えてから source を消す |
@@ -74,7 +74,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この下書きから出来事を AI に作らせて」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None)`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、名前・場所・当事者から記録の本文だけを書いて埋める(`data_access_logic/event/writer.py`。他の欄は変えない) |
 | 「この人物の出自・居場所を足して」   | `character.commit_character_location.CommitCharacterLocation(location)`              |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`     |
-| 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を `location_id` から自動で探して親にする(無ければ作る)。時代ごとの追記は `notes`(下の「アイデアの追記」)、場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し、足したミームも検める。`{"record": 確定したアイデア, "memes_added": 足したミームの件数}` を返す。`fact_check=False` で検めずに本文からだけ抜き出す |
+| 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea, fact_check=True)`。効く場所は `location_id`(その場所と配下で効く)、効く期間は `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。確定したあと、AI が Dラボのナレッジとネット検索でアイデアの妥当性・補足を検め、`fact_check` 欄(md の `# fact_check` 節)へ書く。続けて本文と検証結果のそれぞれからミームを抜き出し、足したミームも検める。`{"record": 確定したアイデア, "memes_added": 足したミームの件数}` を返す。`fact_check=False` で検めずに本文からだけ抜き出す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「アイデア・oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"idea"` / `"oracle"` / `"meme"`。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、`fact_check` 欄へ入れる。`ids` を省くと `fact_check` が空のものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。アイデア・oracle は検めたあと本文と検証結果からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `location.update_location.UpdateLocation(location)`                                 |
@@ -84,8 +84,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「場所を消して」                     | `location.delete_location.DeleteLocation(location_id)`                              |
 | 「出来事を直して」                   | `event.update_event.UpdateEvent(event)`。`id` 必須、渡した欄だけ直す。`character_ids` を渡すと当事者をまるごと置き換える。直したあと要約(`event_summary`)を作り直す |
 | 「出来事を消して」「出来事を作り直して」 | `event.delete_event.DeleteEvent(event_id)`。子の出来事が残っていれば止まる。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `histories` に積み足した行と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
-| 「アイデアを直して」                 | `idea.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す。`notes` / `histories` を渡すとそれぞれ配列をまるごと置き換える(下の「アイデアの追記」「アイデアの履歴(呼び名)」) |
-| 「アイデアを消して」                 | `idea.delete_idea.DeleteIdea(idea_id)`。下位のアイデアが残っていれば止まる。結んだ本文との中間テーブルの行、履歴(呼び名)・追記の行も消す |
+| 「アイデアを直して」                 | `idea.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す。`histories` を渡すと配列をまるごと置き換える(下の「アイデアの履歴(呼び名)」) |
+| 「アイデアを消して」                 | `idea.delete_idea.DeleteIdea(idea_id)`。下位のアイデアが残っていれば止まる。結んだ本文との中間テーブルの行、履歴(呼び名)の行も消す |
 | 「覚え書きを足して」「oracle に書いて」 | `oracle.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは `CommitIdea` と同じく、検めて(`fact_check`)、本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める |
 | 「覚え書きを直して」                 | `oracle.update_oracle.UpdateOracle(oracle)`。`id` 必須、渡した欄だけ直す |
 | 「ミームを足して」「この考え方をミームに入れて」 | `meme.commit_meme.CommitMeme(meme)`。`text` 必須。`category` は 信条/欲求/境遇/集団/理 のいずれか(空でもよい。次の抽出で AI が振る)。置き場所は分類のディレクトリ |
@@ -157,7 +157,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 芯は時期を限らない説明で、いつの話・出来事にも人物像として渡る。時が進むにつれて起きたこと・変わった立場・境遇などの来歴は、
 `character_history` テーブルに起きた年ごとの行(`start` / `description`)で積む。入口では人物の
 `histories` に配列で並ぶ(id と character_id は出さない。行は配列の並びで決まり、並びを変えなければ id も変わらない)。
-アイデアの基本の本文(`text`)と追記(`notes`)と同じ分け方で、GUI の見た目は「アイデアの履歴(呼び名)」に揃えている。
+アイデアの履歴(`idea_history`)と同じく子の配列 `histories` で持ち、GUI の見た目も揃えている。
 
 ```json
 "text": "村の鍛冶屋。…\n\n# meme\n- 古表: …\n\n# 行動原理\n…",
@@ -179,24 +179,6 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   (`UpdateCharacter` は配列をまるごと置き換えるので、時刻を渡さない `ReadCharacter` で今の行をすべて読み、足した配列を渡す)
 - `CommitCharacter` / `UpdateCharacter` は `text` と `histories` を受け取る。`UpdateCharacter` に `histories` を渡すと配列をまるごと置き換える
 - 出来事の生成(`GenerateEvent` など)で人物について分かったことは、出来事の年の行に足す(`add_history`)
-
-**アイデアの追記**: アイデアの基本の本文(`text`)は書き換えず、時代が進むにつれて分かった・変わった情報は
-`idea_note` テーブルに期間ごとの行(`start` / `end` / `text`)で積む。入口ではアイデアの `notes` に配列で並ぶ
-(id と idea_id は出さない。行は配列の並びで決まり、並びを変えなければ id も変わらない)。
-
-```json
-"notes": [
-  {"start": "11600", "end": null, "text": "この年、量産が始まった"},
-  {"start": "11650", "end": "11700", "text": "一時、材料の枯渇で作れなくなった"}
-]
-```
-
-- `start` / `end` が空なら、その端は限らない。ある時刻の本文は、基本の本文に、その時刻に効く追記
-  (`start` <= 時刻 < `end`)を `start` の古い順に積み重ねて作る。効く追記が無ければ(そもそも一つも
-  無い場合も含め)基本の本文がそのまま全て
-- `CommitIdea` / `UpdateIdea` は `notes` を受け取る。`UpdateIdea` に渡すと配列をまるごと置き換える
-- `SearchIdeas` の名前・本文検索、`data_access_logic/idea/search.py`(あいまい検索の当たり方の判定)、清書に渡す
-  「関係する設定」(`data_access_logic/idea/models.py` の `IdeaContextSerialized`)は、いずれもこの積み重ねた本文を使う
 
 **アイデアの履歴(呼び名)**: アイデアの作中での呼び名(本質の `name` とは別に、この場所・この時代ではこう呼ぶ、
 という言い方)は、`idea_history` テーブルに場所・時代ごとの行(`location_id` / `start` / `end` / `name` / `detail`)
@@ -465,7 +447,7 @@ db だけの関数を `<領域>/steps.py` の段(`@db_step`。`step.py`)とし�
 | `common_query.py`              | 時刻の扱い・断面・顔ぶれ・場所の道筋                         |
 | `period.py`                    | その時刻に期間(`start` 〜 `end`)が掛かる行の条件(`alive_at`) |
 | `character_simulation_query.py` | 人物を軸に周辺を読む(`read_surroundings`)                   |
-| `dictionary_query.py`          | アイデア(辞書)の検索。名前・本文(`idea_note` を左外部結合した追記も含む)の部分一致、場所・時刻の範囲、自動生成の候補 |
+| `dictionary_query.py`          | アイデア(辞書)の検索。名前・本文(`idea_history` を左外部結合した作中の呼び名も含む)の部分一致、場所・時刻の範囲、自動生成の候補 |
 | `story_creation_query.py`      | 場所に掛かる作品(`story`)の読み出し                          |
 | `world_creation_query.py`      | 生きている人物、広さの整合、進行中の判定               |
 | `event_seed_query.py`          | 出来事の種をまだ抜き出していない元(`event_seeded` が false) |

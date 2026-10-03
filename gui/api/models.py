@@ -43,7 +43,7 @@ class ChildListMeta(BaseModel):
     name: str
     label: str
     columns: list[ColumnMeta]
-    # GUI での見せ方。"table"(既定): 素朴な編集可能な表(アイデアの notes など)。
+    # GUI での見せ方。"table"(既定): 素朴な編集可能な表。
     # "periodic": 期間(start・end)ごとの値を、期間を列にした読み取り専用の表 + モーダル編集で出す
     # (人物のパラメータ・居場所)。"flow": 本文の下に続けて、上から下へ流れる読み取り専用の札 + モーダル編集で
     # 出す(アイデアの呼び名。detail の注釈が長くなりがちなので、期間を列にする表よりこちらが読みやすい)
