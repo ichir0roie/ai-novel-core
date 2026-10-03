@@ -158,6 +158,7 @@ db のロール `novel_app`(行の読み書きだけ。IAM データベース認
 | 変数 | 値 |
 | --- | --- |
 | `AMPLIFY_MONOREPO_APP_ROOT` | `gui/web` |
+| `AMPLIFY_DIFF_DEPLOY` | `true`。`gui/web` に差分の無い push(python だけの変更など)ではビルドと deploy を飛ばす。ビルドは分単位で課金されるため |
 | `NOVEL_API_URL` | Lambda の関数 URL(末尾の `/` は無くてよい) |
 | `NOVEL_API_KEY` | Lambda の `NOVEL_API_KEYS` の `gui=` と同じ値 |
 | `NOVEL_WEB_API_KEY` | Lambda の `NOVEL_API_KEYS` の `web=` と同じ値。web のセッションの `/api/*` を、Amplify の段でも確かめるのに使う |
@@ -169,7 +170,9 @@ db のロール `novel_app`(行の読み書きだけ。IAM データベース認
 `AMPLIFY_APP_ORIGIN` は置かない(置くと adapter-nextjs がサーバー側でログインする形に切り替わり、画面の Authenticator が使えなくなる)。
 3. 画面に入る人を Cognito に作る(画面からの登録は閉じてある)。仮のパスワードがメールで届き、最初のログインで替える:
    `aws cognito-idp admin-create-user --user-pool-id <ユーザープールの ID> --username <メールアドレス> --user-attributes Name=email,Value=<メールアドレス> Name=email_verified,Value=true`
-4. 以降は `main` への push で Amplify が建て直す
+4. 以降は `main` への push で Amplify が建て直す。`AMPLIFY_DIFF_DEPLOY` は `gui/web` の中だけの差分を見るので、
+   ルートの `amplify.yml` だけを変えたときや環境変数を替えたときは、`AMPLIFY_DIFF_DEPLOY` を `false` にしてから
+   コンソールで建て直し、終わったら `true` に戻す(同じコミットの建て直しも、差分が無いとして飛ばされうるため)
 
 Next.js は 16 系を使っている。Amplify の SSR が対応するバージョンは Amplify のドキュメントで確かめる(ビルドが通っても、
 実行で落ちるときはバージョンの対応を疑う)。`next build` はこのリポジトリで通ることを確かめてある。
