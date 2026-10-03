@@ -5,12 +5,14 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import os
 from collections.abc import Iterator
 from typing import Any
 
+import httpx
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
@@ -32,13 +34,15 @@ from db.schema import engine, get_env_session
 from db.stamp import Stamp
 from gui.api import interface, meta, records, timeline
 from gui.api.models import (
-    CharacterLocationsResponse, Created, EntranceList, EntranceMeta, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
+    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Created, EntranceList, EntranceMeta, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
     RunRequest, RunResult, TablesResponse, TimelineResponse,
 )
 from gui.api.tables import spec_of
 
 logger = logging.getLogger(__name__)
 configure_logging()
+# `/api/batch` の中の要求は合言葉の確かめのところで一つずつ出すので、httpx の行は重ねない
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 app = FastAPI(title="ai-novel-core GUI API", version="0.1.0")
 
@@ -189,6 +193,26 @@ def run_step(step_id: str, body: Any = Body(None)) -> Any:
     """db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、
     流れと AI を自分で持ったまま db に触る所だけを頼む"""
     return step.run_json(step_id, body)
+
+
+@app.post("/api/batch", response_model=BatchResponse)
+async def batch(body: BatchRequest, request: Request) -> BatchResponse:
+    """同じ時に出た GET をまとめて回す。Lambda は一つの実行環境で一つの要求しか受けないので、画面が並べて呼ぶと
+    その数だけ実行環境が起き、それぞれがコールドスタートを待つ"""
+    for path in body.paths:
+        if not path.startswith("/api/") or path.startswith("/api/batch"):
+            raise ValueError(f"まとめて回せないパス: {path}")
+    # 一つずつの要求も合言葉の確かめとログを通るよう、受けた鍵をそのまま付ける
+    key = request.headers.get(API_KEY_HEADER)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://batch",
+                                 headers={API_KEY_HEADER: key} if key else None) as client:
+        responses = await asyncio.gather(*(client.get(path) for path in body.paths))
+    return BatchResponse(responses=[
+        BatchItem(status=response.status_code,
+                  body=response.json() if response.headers.get("content-type") == "application/json"
+                  else {"detail": response.text})
+        for response in responses])
 
 
 @app.get("/api/maps", response_model=MapsResponse)

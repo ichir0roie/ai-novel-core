@@ -189,3 +189,23 @@ def test_character_locations(client, world):
     assert response.status_code == 200
     locations = response.json()["locations"]
     assert all(locations[str(character_id)] == world.location_id for character_id in world.character_ids)
+
+
+def test_batch(client, world):
+    response = client.post("/api/batch", json={"paths": [
+        f"/api/tables/episode/records/{world.episode_id}",
+        f"/api/tables/idea/options?q=テスト魔導&ids={world.idea_id}",
+        "/api/tables/no_such_table/records"]})
+
+    assert response.status_code == 200
+    record, options, unknown = response.json()["responses"]
+    assert (record["status"], record["body"]["record"]["id"]) == (200, world.episode_id)
+    assert (options["status"], [item["id"] for item in options["body"]["items"]]) == (200, [world.idea_id])
+    assert unknown["status"] == 404 and "detail" in unknown["body"]
+
+
+def test_batch_rejects_other_paths(client):
+    for path in ["/api/batch", "https://example.com/api/tables", "/docs"]:
+        response = client.post("/api/batch", json={"paths": [path]})
+
+        assert response.status_code == 400, path

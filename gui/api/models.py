@@ -166,3 +166,17 @@ class RunResult(BaseModel):
     result: Any = None
 
 
+class BatchRequest(BaseModel):
+    # 問い合わせまで含めたパス(`/api/tables/story/records?limit=500`)。GET でだけ回す
+    paths: list[str] = Field(min_length=1, max_length=20)
+
+
+class BatchItem(BaseModel):
+    status: int
+    body: Any = None
+
+
+class BatchResponse(BaseModel):
+    responses: list[BatchItem]
+
+

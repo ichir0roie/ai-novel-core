@@ -19,9 +19,11 @@ export class ApiError extends Error {
   }
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  // アクセストークン(1 時間)が切れていれば、更新のトークンで取り直してクッキーに置く。route handler はクッキーのトークンを確かめる
-  if (loginRequired) await fetchAuthSession();
+function detailOf(body: { detail?: unknown }): string {
+  return typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -30,14 +32,51 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
     try {
-      const body = await response.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      detail = detailOf(await response.json());
     } catch {
       // 本文が JSON でないときは statusText のまま
     }
     throw new ApiError(response.status, detail);
   }
   return (await response.json()) as T;
+}
+
+// 同じ時に出た GET は `/api/batch` 一回にまとめる。Lambda は一つの実行環境で一つの要求しか受けないので、
+// 並べて送るとその数だけ実行環境が起き、それぞれがコールドスタートを待つ
+const BATCH_LIMIT = 20;
+type Pending = { path: string; resolve: (value: unknown) => void; reject: (reason: unknown) => void };
+let pending: Pending[] = [];
+
+async function flush(): Promise<void> {
+  const queued = pending;
+  pending = [];
+  for (let i = 0; i < queued.length; i += BATCH_LIMIT) {
+    const chunk = queued.slice(i, i + BATCH_LIMIT);
+    if (chunk.length === 1) {
+      request(chunk[0].path).then(chunk[0].resolve, chunk[0].reject);
+      continue;
+    }
+    request<components["schemas"]["BatchResponse"]>("/api/batch", {
+      method: "POST",
+      body: JSON.stringify({ paths: chunk.map((item) => item.path) }),
+    }).then(
+      ({ responses }) =>
+        responses.forEach(({ status, body }, j) =>
+          status < 400 ? chunk[j].resolve(body) : chunk[j].reject(new ApiError(status, detailOf(body ?? {})))),
+      (e) => chunk.forEach((item) => item.reject(e)),
+    );
+  }
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  // アクセストークン(1 時間)が切れていれば、更新のトークンで取り直してクッキーに置く。route handler はクッキーのトークンを確かめる
+  if (loginRequired) await fetchAuthSession();
+  if (init) return request<T>(path, init);
+  return new Promise<T>((resolve, reject) => {
+    pending.push({ path, resolve: resolve as (value: unknown) => void, reject });
+    // 同じ描画で動いた effect の呼び出しが出揃ってから送る
+    if (pending.length === 1) setTimeout(() => void flush(), 0);
+  });
 }
 
 export const getTables = () => api<components["schemas"]["TablesResponse"]>("/api/tables");
