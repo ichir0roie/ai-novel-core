@@ -16,7 +16,7 @@ from data_access_logic.episode.mentions import cast_characters, mentioned_in
 from data_access_logic.episode.summary import past_episode_ids, past_episodes, recent_episodes
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
-from data_access_logic.idea.models import IdeaTerm
+from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Episode, EpisodeCharacter, Event
@@ -79,7 +79,7 @@ def writing_targets(s: Session, episode_id: int) -> WritingTargets:
     )
 
 
-def episode_material(s: Session, episode_id: int, keywords: list[IdeaTerm]) -> EpisodeMaterialSerialized:
+def episode_material(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeMaterialSerialized:
     """要約は揃えてある前提でそのまま読む。`keywords` の語をアイデアと照らし、当たらなかった造語は候補として足す(`resolve_ideas`)。"""
     episode = _episode(s, episode_id)
     main_episode = TargetEpisode.model_validate(episode)

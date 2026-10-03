@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from sqlalchemy import ColumnElement, and_, or_
 
-from db.schema import CharacterLocation, CharacterRelation, Idea, IdeaRecognition, Location
+from db.schema import CharacterLocation, CharacterRelation, Idea, IdeaHistory, Location
 from db.stamp import Stamp
 
-Period = type[CharacterLocation] | type[CharacterRelation] | type[Idea] | type[IdeaRecognition] | type[Location]
+Period = type[CharacterLocation] | type[CharacterRelation] | type[Idea] | type[IdeaHistory] | type[Location]
 
 
 def alive_at(model: Period, time: Stamp) -> ColumnElement[bool]:

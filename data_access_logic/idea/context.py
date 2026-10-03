@@ -13,7 +13,7 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
-from data_access_logic.idea.models import IdeaContextSerialized, IdeaMaterial, IdeaTerm, RelatedIdeaMaterial, unique_terms
+from data_access_logic.idea.models import IdeaContextSerialized, IdeaMaterial, IdeaDraft, RelatedIdeaMaterial, unique_ideas
 from data_access_logic.idea.search import keywords_of, search, spellings
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, Idea, Location
@@ -29,26 +29,26 @@ def _dated(ideas: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
     return [idea for idea in ideas if idea.start is not None]
 
 
-def _candidate(s: Session, term: IdeaTerm, location_id: int | None) -> Idea | None:
+def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None) -> Idea | None:
     # 場所・時刻の外にあって検索に当たらなかった同じ名前のアイデアは、二重に足さずそれを結ぶ
-    existing = s.scalar(select(Idea).where(Idea.name.in_(spellings(term.keyword))).order_by(Idea.id))
+    existing = s.scalar(select(Idea).where(Idea.name.in_(spellings(idea_draft.keyword))).order_by(Idea.id))
     if existing is not None:
         return existing
 
-    if (s.scalar(select(Character.id).where(Character.name == term.keyword).limit(1)) is not None
-            or s.scalar(select(Location.id).where(Location.name == term.keyword).limit(1)) is not None):
+    if (s.scalar(select(Character.id).where(Character.name == idea_draft.keyword).limit(1)) is not None
+            or s.scalar(select(Location.id).where(Location.name == idea_draft.keyword).limit(1)) is not None):
         return None
 
-    classification = find_or_create_classification(s, term.kind, location_id)
+    classification = find_or_create_classification(s, idea_draft.kind, location_id)
     locations = (common_query.location_path(s, location_id)
                  if location_id is not None else [])
     candidate = Idea(
-        name=term.keyword,
-        kind=term.kind,
-        text=term.description,
+        name=idea_draft.keyword,
+        kind=idea_draft.kind,
+        text=idea_draft.description,
         location_id=locations[0].id if locations else None,
-        start=term.start,
-        end=term.end,
+        start=idea_draft.start,
+        end=idea_draft.end,
         parent_idea_id=classification.id if classification is not None else None,
     )
     s.add(candidate)
@@ -79,32 +79,32 @@ def _related(s: Session, hits: list[IdeaMaterial], location_id: int | None, time
 
 
 def resolve_ideas(
-    s: Session, keywords: list[IdeaTerm], location_id: int | None, time: Stamp | None,
+    s: Session, keywords: list[IdeaDraft], location_id: int | None, time: Stamp | None,
 ) -> IdeaContextSerialized:
     """洗い出した語をアイデアと照らし、当たらなかった固有の語を候補として足す。
 
     足す候補の効く期間は語の `start` / `end`(時期のはっきりしない語は None のまま)。
     """
-    terms = unique_terms(keywords)
-    hits = search(s, terms, location_id, time)
+    idea_drafts = unique_ideas(keywords)
+    hits = search(s, idea_drafts, location_id, time)
 
     matched = {keyword for hit in hits for keyword in hit.keywords}
     candidates: dict[int, Idea] = {}
-    for term in terms:
-        if term.keyword in matched or not term.coined:
+    for idea_draft in idea_drafts:
+        if idea_draft.keyword in matched or not idea_draft.coined:
             continue
-        candidate = _candidate(s, term, location_id)
+        candidate = _candidate(s, idea_draft, location_id)
         if candidate is not None:
             candidates.setdefault(candidate.id, candidate)
 
     hit_ideas = [hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]]
     related = _related(s, _dated(hit_ideas, time), location_id, time)
-    recognitions = called(s, [idea.id for idea in related], location_id, time)
+    histories = called(s, [idea.id for idea in related], location_id, time)
 
     return IdeaContextSerialized(
         hits=hit_ideas,
         candidates=list(candidates.values()),
-        related=[RelatedIdeaMaterial(idea=idea, recognition=recognitions.get(idea.id)) for idea in related],
+        related=[RelatedIdeaMaterial(idea=idea, history=histories.get(idea.id)) for idea in related],
     )
 
 

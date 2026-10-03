@@ -367,7 +367,7 @@ class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
     # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `notes` と同じく、基本の本文に時代ごとの行を足す形)。
+    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。
     CHILD_LISTS = ("parameters", "locations", "histories")
 
     @property
@@ -549,23 +549,25 @@ class Idea(MemeSeededMixin, TextBase):
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
-    # 場所・時代ごとの作中での呼び名は IdeaRecognition で積む。GUI では recognitions に並ぶ。
-    CHILD_LISTS = ("recognitions",)
+    # 場所・時代ごとの作中での呼び名は、人物の来歴と同じく履歴(IdeaHistory)として積む。GUI では histories に並ぶ。
+    CHILD_LISTS = ("histories",)
 
-    recognitions: Mapped[list["IdeaRecognition"]] = relationship(
+    histories: Mapped[list["IdeaHistory"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
-        order_by="IdeaRecognition.start.desc().nulls_last()")
+        order_by="IdeaHistory.start.desc().nulls_last()")
 
 
-class IdeaRecognition(Base):
-    """アイデアの作中での呼び名を、場所・時代ごとに一行で持つ。
+class IdeaHistory(Base):
+    """アイデアの履歴。作中での呼び名を、場所・時代ごとに一行で持つ。
+
+    アイデアそのものは話に結べば効く期間を問わず読むが、履歴は話の時刻・場所に効く行だけを使う。
 
     `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
     当てはまる行が無ければ本質の `name` をそのまま使う(`data_access_logic/idea/alias.py` の `called`)。
     効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/idea_context.py`)。
     """
 
-    __tablename__ = "idea_recognition"
+    __tablename__ = "idea_history"
 
     idea_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("idea.id"), index=True, nullable=False, sort_order=100)
@@ -579,7 +581,7 @@ class IdeaRecognition(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, comment="この場所・時代での作中の呼び名", sort_order=140)
     detail: Mapped[str | None] = mapped_column(String, comment="呼び名についての注釈(作中での受け止め方)", sort_order=150)
 
-    idea: Mapped[Idea] = relationship(back_populates="recognitions", lazy="noload")
+    idea: Mapped[Idea] = relationship(back_populates="histories", lazy="noload")
 
 
 class Story(EventSeededMixin, TextBase):

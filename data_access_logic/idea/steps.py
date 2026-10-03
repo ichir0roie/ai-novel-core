@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.context import resolve_ideas as resolve
 from data_access_logic.idea.form import IdeaCreateForm
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaTerm
+from data_access_logic.idea.models import IdeaContextMaterial, IdeaDraft
 from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.step import RowId, db_step
 from db.schema import Idea
@@ -17,7 +17,7 @@ from db.stamp import Stamp
 
 class ResolveForm(BaseModel):
     # AI が挙げた、アイデアと照らす語
-    keywords: list[IdeaTerm]
+    keywords: list[IdeaDraft]
     location_id: int | None
     time: Stamp | None
 
