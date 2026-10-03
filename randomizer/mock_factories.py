@@ -235,8 +235,6 @@ class StoryFactory(_ModelFactory):
     location_id = _pool(Location, "LocationFactory", p_none=0.1)
     narration = factory.Faker("random_element", elements=_NARRATIONS)
     state = factory.Faker("random_element", elements=_STATES)
-    start = _optional_stamp()
-    end = _end_after_start()
 
 
 class EpisodeFactory(_ModelFactory):

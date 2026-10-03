@@ -145,6 +145,19 @@ class RelatedIdeaMaterial(Material):
     recognition: IdeaRecognitionMaterial | None = None
 
 
+def idea_for_prompt(related: RelatedIdeaMaterial) -> dict[str, Any]:
+    idea, recognition = related.idea, related.recognition
+    text = idea.text or ""
+    if len(text) > constants.IDEA_CONTEXT_LETTERS:
+        text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
+    return {
+        "名前": recognition.name if recognition else idea.name,
+        "種類": idea.kind,
+        "作中での受け止め方": recognition.detail if recognition else None,
+        "内容": text,
+    }
+
+
 class IdeaContextMaterial(Material):
     # 下書きの語が当たったアイデア
     hits: list[IdeaMaterial]
@@ -163,19 +176,7 @@ class IdeaContextSerialized(IdeaContextMaterial):
 
     @model_serializer
     def _for_prompt(self) -> list[dict[str, Any]]:
-        rows = []
-        for related in self.related:
-            idea, recognition = related.idea, related.recognition
-            text = idea.text or ""
-            if len(text) > constants.IDEA_CONTEXT_LETTERS:
-                text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
-            rows.append({
-                "名前": recognition.name if recognition else idea.name,
-                "種類": idea.kind,
-                "作中での受け止め方": recognition.detail if recognition else None,
-                "内容": text,
-            })
-        return rows
+        return [idea_for_prompt(related) for related in self.related]
 
 
 class IdeaHit(Material):

@@ -116,13 +116,13 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「世界観へ反映済みにする」           | `episode.set_episode_synced.SetEpisodeSynced(episode_id, synced=True)`   |
 | 「話の要約を作り直して」「要約がおかしい」 | `episode.rewrite_episode_summary.RewriteEpisodeSummary(episode_ids)`。本文が変わっていなくても、話の概要(`episode.summary_text`)を AI に作り直させ、一件ごとに commit する。本文が変わったときの作り直しは `CommitEpisode` などが自動で行うので、これは中身の崩れた要約を直すとき用 |
 | 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | `event.generate_event.GenerateEvent(event=EventForm(location_id=…, time=…, name="〇〇な場面"))`。当事者はその時刻にそこにいて手の空いたサブキャラクターから選ぶ(下の「出来事の生成」)。当事者を決めるなら `character_ids` |
-| 「このプロットで話を書いて」「〇〇と△△が出る話を 11579/03/02 で」「この枠に本文を書いて」 | スキル `episode`。このセッションの Claude が `ReadEpisodeCasting` でプロットから登場人物・場所を推測して `CastEpisode` で結び、そのあと材料を `ReadEpisodeBrief` で読んで自分で本文を書き、`CommitEpisode`(`synced=True`)で確定する(新しい話は先に `CommitEpisode` で枠を足す) |
+| 「このプロットで話を書いて」「〇〇と△△が出る話を 11579/03/02 で」「この枠に本文を書いて」 | スキル `episode`。このセッションの Claude が `ReadEpisodeCasting` でプロットから登場人物・場所を推測して `CastEpisode` で結び、プロットの語を `ResolveTerms` でアイデアと照らして `LinkIdeas` で結び、そのあと材料を `ReadEpisodeBrief` で読んで自分で本文を書き、`CommitEpisode`(`synced=True`)で確定する(新しい話は先に `CommitEpisode` で枠を足す) |
 | 「この話の登場人物・場所を決める材料を読ませて」 | `episode.read_episode_casting.ReadEpisodeCasting(episode_id)`。この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(プロット・本文に名前が出る人物・登場人物と関係のある人物・話の場所にいる人物)・話の場所の中の既知の場所と、登場人物・名前だけ出る人物それぞれがこの話より前に関わったすべての話(作品を問わない。概要つき)を、日本語の見出しと id 付きで返す。関わった話の概要が無いか本文と食い違っていれば、読む前に AI で作り直す(作れなかった話は null)。時刻が空なら止まる |
 | 「人物を消して」 | `character.delete_character.DeleteCharacter(character_id)`。期間ごとの値・説明の変化・出自と居場所・相関・結んだアイデア・話に名前だけ出る行も消す。出来事の当事者か、話の登場人物・視点になっている人物は止まる |
 | 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文・概要を時刻の順に返す |
 | 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
 | 「この話の登場人物・場所を結んで」 | `episode.cast_episode.CastEpisode(episode_id, character_ids, location_id=None, viewpoint_character_id=None)`。登場人物(`episode_character`)をまるごと置き換え、名前だけ出る人物を拾い直す。場所・視点は渡したときだけ書く。同期フラグは変えない |
-| 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の `shared` / `episode` の行)・作品・前の話の概要(この話より前の、同じ作品のすべての話と登場人物が関わったすべての話)・文体の見本(同じ作品の直前の五話の本文。中身は読ませない)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から引くので、先に `CastEpisode` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
+| 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の `shared` / `episode` の行)・作品・前の話の概要(この話より前の、同じ作品のすべての話と登場人物が関わったすべての話)・文体の見本(同じ作品の直前の五話の本文。中身は読ませない)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・関係する設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から、関係する設定は話に結んだアイデア(`episode_idea`)のうち話の時刻に効くもの(人物の関係と同じく `start` <= 時刻 < `end`)から引くので、先に `CastEpisode` / `LinkIdeas` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
 
 **まだ入口が無いもの**(頼まれたら作ってから行う): 人物の削除。
 
@@ -291,6 +291,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 
 claude が対話で書くときは、自分で語と言い換えを挙げて `ResolveTerms` を呼び、返った `ideas` を踏まえて清書し、
 確定したあとに `hits` と `candidates` の id を `LinkIdeas` で結ぶ。
+話の本文(スキル `episode` / `revise-episode`)だけは、プロットの語で `ResolveTerms` を呼んで踏まえるアイデアを書く前に `LinkIdeas` で話に結び、
+`ReadEpisodeBrief` の「関係する設定」(結んだアイデアのうち話の時刻に効くもの)を読んでから本文を書く。
 
 `meme` テーブル自体はアイデア(`idea`)・oracle・人物の筋書き・出来事から抜き出して貯めるだけで、
 人物との FK は持たない(ミームは人物の間を移り変わり・伝染していくため)。
