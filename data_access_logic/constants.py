@@ -76,7 +76,7 @@ MEME_POSITIONS = {
 EPISODE_PLOT_TIMEOUT = 300.0
 # 書き直したプロットから、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
 EPISODE_CASTING_TIMEOUT = 300.0
-# 文体の見本として本文を渡す、同じ作品の直前の話の本数。話の中身は、この話より前のすべての話の概要で渡す。
+# 文体の見本として本文を渡す、同じ作品(章・外伝を含む)の直前の話の本数。話の中身は、この話より前のすべての話の概要で渡す。
 EPISODE_STYLE_SAMPLE_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3

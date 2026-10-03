@@ -206,7 +206,7 @@ class PersonContentDraft(BaseModel):
     text: str = Field(description=(
         "現在の時刻での、具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば地の文として含め、別項目には分けない。"
         "「優しい」「謎めいた」のような、誰にでも当てはまる抽象的な形容だけで済ませず、"
-        "この人物固有の具体的な癖・関わり・生い立ちを最低一つ含める"))
+        "この人物固有の具体的な癖・関わり・生い立ちを最低一つ含める。口調・話し方は tone・dialect に書き、ここには書かない"))
     age: int = Field(ge=_AGE_RANGE[0], le=_AGE_RANGE[1], description=_PERSON_AGE_DESCRIPTION)
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
     sex: str = Field(description="性別。「男」「女」に限らず、この人物に合う性のあり方を自由に決めてよい")
