@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Form, Material, Timestamp
-from db.schema import Visibility
 
 
 class IdeaRecognitionRow(Form):
@@ -23,10 +23,9 @@ class IdeaHistoryRow(Form):
 
     # 起きた年。空なら年が決まっていない
     start: int | None = None
-    visibility: Visibility = Visibility.PRIVATE
     description: str
-    # 非公開の行を知る人物。渡さなければ、新しい行は誰も知らず、今ある行はそのまま
-    knower_ids: list[int] | None = None
+    # 知る相手。渡さなければ、新しい行は誰も知らない、今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
+    knowers: list[KnowerRow] | None = None
 
 
 class IdeaRecord(Material):
@@ -40,9 +39,8 @@ class IdeaRecord(Material):
     meme_seeded: bool
     recognitions: list[IdeaRecognitionRow]
     histories: list[IdeaHistoryRow]
-    visibility: Visibility
-    # 本文が非公開のとき、本文を知る人物
-    knower_ids: list[int]
+    # 本文(`text`)を知る相手
+    knowers: list[KnowerRow]
     text: str
 
 

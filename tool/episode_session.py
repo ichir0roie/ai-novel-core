@@ -5,7 +5,7 @@
 返すものが来るまで表を一定の間隔で見て、来たら結果の JSON を出して終わる(待つあいだ Claude は考えない)。
 
     人物役: knowledge / wait-turn / answer
-    語り部: add / wait-answers / read / close
+    語り部: appearance / add / wait-answers / read / close
 
     .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
 """
@@ -78,6 +78,10 @@ def main() -> None:
     answer.add_argument("--speech")
     answer.add_argument("--aim")
 
+    appearance = commands.add_parser("appearance", help="初対面の相手から見て分かること(名前なし)を読む")
+    appearance.add_argument("--character", type=int, required=True)
+    appearance.add_argument("--time", required=True)
+
     add = commands.add_parser("add", help="手番の要求の行を足す(JSON の配列のファイル: character_id・time・request)")
     add.add_argument("--episode", type=int, required=True)
     add.add_argument("--turns", type=Path, required=True)
@@ -107,6 +111,8 @@ def main() -> None:
             fields = {"thought": args.thought, "action": args.action, "speech": args.speech, "aim": args.aim}
             result = call("episode_session.answer_turn.AnswerTurn", {
                 "record_id": args.record, "answer": {name: value for name, value in fields.items() if value is not None}})
+        case "appearance":
+            result = call("character.read_appearance.ReadAppearance", {"character_id": args.character, "time": args.time})
         case "add":
             turns = json.loads(args.turns.read_text(encoding="utf-8"))
             result = call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, "turns": turns})

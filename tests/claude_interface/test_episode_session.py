@@ -1,12 +1,15 @@
-"""来歴の公開度と知る人、人物が知ることのできるデータ(`character/read_knowledge`)、話のセッション(`episode_session/`)。"""
+"""本文・来歴を知る相手、人物が知ることのできるデータ(`character/read_knowledge`)と見た目(`read_appearance`)、
+話のセッション(`episode_session/`)。"""
 import pytest
+from pydantic import ValidationError
 
 from data_access_logic.character.commit_character import CommitCharacter
+from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.character.form import CharacterCreateForm, CharacterUpdateForm
+from data_access_logic.character.read_appearance import ReadAppearance
 from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
-from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode_session.add_turns import AddTurns
 from data_access_logic.episode_session.answer_turn import AnswerTurn
@@ -14,89 +17,104 @@ from data_access_logic.episode_session.close_session import CloseSession
 from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
 from data_access_logic.episode_session.read_session import ReadSession
 from data_access_logic.episode_session.read_turn import ReadTurn
-from data_access_logic.idea.form import IdeaUpdateForm
+from data_access_logic.idea.commit_idea import CommitIdea
+from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
 from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
-from db.schema import Visibility
+from data_access_logic.knowers import KnowerRow
 from tool import episode_session
 
 
-def test_new_character_is_public_and_its_history_is_private(shown):
+def _histories(person: dict) -> list[str]:
+    return [history["来歴"] for history in person["来歴(古い順)"]]
+
+
+def test_new_character_knows_itself_and_its_history(shown):
     result = shown(CommitCharacter(CharacterCreateForm(
         name="知る人テスト", text="説明", histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
 
-    assert (result["visibility"], result["knower_ids"]) == ("public", [result["id"]])
-    assert result["histories"] == [{"start": 1195, "visibility": "private", "description": "市で店を開く",
-                                    "knower_ids": [result["id"]]}]
+    oneself = [{"knower_id": result["id"], "location_id": None, "start": None}]
+    assert result["knowers"] == oneself
+    assert result["histories"][0]["knowers"] == oneself
 
 
-def test_knower_must_exist(world):
-    with pytest.raises(ValueError, match="knower_ids"):
-        UpdateCharacter(CharacterUpdateForm(id=world.character_ids[0], knower_ids=[10**9])).run()
+def test_knower_is_a_character_or_a_location(world):
+    with pytest.raises(ValidationError, match="どちらか一方"):
+        KnowerRow()
+    with pytest.raises(ValidationError, match="どちらか一方"):
+        KnowerRow(knower_id=world.character_ids[0], location_id=world.location_id)
+    with pytest.raises(ValueError, match="knowers.knower_id"):
+        UpdateCharacter(CharacterUpdateForm(id=world.character_ids[0], knowers=[KnowerRow(knower_id=10**9)])).run()
 
 
 def test_delete_character_removes_its_knower_rows(shown, world):
     taro, _ = world.character_ids
     other = shown(CommitCharacter(CharacterCreateForm(name="消える人", text="説明")))
-    shown(UpdateCharacter(CharacterUpdateForm(id=taro, visibility=Visibility.PRIVATE, knower_ids=[taro, other["id"]])))
+    shown(UpdateCharacter(CharacterUpdateForm(id=taro, knowers=[KnowerRow(knower_id=taro), KnowerRow(knower_id=other["id"])])))
     shown(DeleteCharacter(character_id=other["id"]))
 
     assert shown(ReadKnowledge(character_id=taro, time="1200/01/01"))["自分"]["人物像"] == "テスト太郎の説明"
 
 
-def test_update_history_knowers(shown, world):
-    taro, hanako = world.character_ids
-    replaced = shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
-        CharacterHistoryRow(start=1191, description="秘密", knower_ids=[hanako, taro])])))
-    kept = shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
-        CharacterHistoryRow(start=1191, description="秘密(書き直し)")])))
-
-    assert replaced["histories"][0]["knower_ids"] == [hanako, taro]
-    assert kept["histories"][0]["knower_ids"] == [hanako, taro]
-
-
 def test_read_knowledge(shown, world):
     taro, hanako = world.character_ids
-    shown(UpdateCharacter(CharacterUpdateForm(id=taro, text="太郎の芯\n\n# plot\n\n先の筋書き\n", histories=[
-        CharacterHistoryRow(start=1190, description="太郎の秘密", knower_ids=[taro])])))
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, text="花子の芯\n\n# plot\n\n花子の先", histories=[
-        CharacterHistoryRow(start=1190, visibility=Visibility.PUBLIC, description="公の事"),
-        CharacterHistoryRow(start=1191, description="花子だけの秘密", knower_ids=[hanako]),
-        CharacterHistoryRow(start=1192, description="太郎も知る秘密", knower_ids=[hanako, taro]),
-        CharacterHistoryRow(start=1250, visibility=Visibility.PUBLIC, description="先のこと")])))
+    shown(UpdateCharacter(CharacterUpdateForm(
+        id=taro, appearance="背が高い", text="太郎の芯", meme="- 今表: 太郎のミーム", principle="太郎の行動原理",
+        plot="太郎の先の筋書き",
+        histories=[CharacterHistoryRow(start=1190, description="太郎の秘密", knowers=[KnowerRow(knower_id=taro)])])))
+    shown(UpdateCharacter(CharacterUpdateForm(
+        id=hanako, appearance="髪が赤い", text="花子の芯", meme="- 裏: 花子のミーム", plot="花子の先",
+        knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1195/01/01")],
+        histories=[
+            CharacterHistoryRow(start=1190, description="都の噂", knowers=[KnowerRow(location_id=world.location_id)]),
+            CharacterHistoryRow(start=1191, description="花子だけの秘密", knowers=[KnowerRow(knower_id=hanako)]),
+            CharacterHistoryRow(start=1192, description="太郎も知る秘密",
+                                knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1199/01/01")]),
+            CharacterHistoryRow(start=1193, description="後で知る秘密", knowers=[KnowerRow(knower_id=taro, start="1201/01/01")]),
+            CharacterHistoryRow(start=1250, description="先のこと", knowers=[KnowerRow(location_id=world.location_id)])])))
     shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
-        IdeaHistoryRow(start=1150, visibility=Visibility.PUBLIC, description="都に広まる"),
-        IdeaHistoryRow(start=1160, description="炉の作り方は秘匿される", knower_ids=[taro]),
+        IdeaHistoryRow(start=1150, description="都に広まる", knowers=[KnowerRow(location_id=world.location_id)]),
+        IdeaHistoryRow(start=1160, description="炉の作り方は秘匿される", knowers=[KnowerRow(knower_id=taro)]),
         IdeaHistoryRow(start=1170, description="誰も知らない欠陥")])))
 
     result = shown(ReadKnowledge(character_id=taro, time="1200/01/01"))
 
     me = result["自分"]
-    assert me["人物像"] == "太郎の芯"
-    assert [history["来歴"] for history in me["来歴(古い順)"]] == ["太郎の秘密"]
+    assert (me["外見"], me["人物像"], me["ミーム"], me["行動原理"]) == ("背が高い", "太郎の芯", "- 今表: 太郎のミーム", "太郎の行動原理")
+    assert "筋書き" not in me
+    assert _histories(me) == ["太郎の秘密"]
     hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
-    assert hanako_known["人物像"] == "花子の芯"
-    assert [history["来歴"] for history in hanako_known["来歴(古い順)"]] == ["公の事", "太郎も知る秘密"]
+    assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
+    assert "ミーム" not in hanako_known
+    assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密"]
     idea = next(idea for idea in result["知っているアイデア"] if idea["名前"] == "テスト魔導")
     assert (idea["呼び名"], idea["説明"]) == ("テスト術", "テスト用の技術")
-    assert [history["来歴"] for history in idea["来歴(古い順)"]] == ["都に広まる", "炉の作り方は秘匿される"]
+    assert _histories(idea) == ["都に広まる", "炉の作り方は秘匿される"]
 
 
-def test_read_knowledge_hides_private_texts(shown, world):
+def test_read_knowledge_without_knowing(shown, world, mock_ai):
     taro, hanako = world.character_ids
-    shown(UpdateCharacter(CharacterUpdateForm(id=taro, visibility=Visibility.PRIVATE, knower_ids=[])))
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, visibility=Visibility.PRIVATE)))
-    shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, visibility=Visibility.PRIVATE, knower_ids=[hanako])))
+    shown(UpdateCharacter(CharacterUpdateForm(id=taro, meme="- 今表: 残るミーム", knowers=[])))
+    shown(CommitIdea(IdeaCreateForm(name="村の秘薬", kind="技術", text="村だけの薬", location_id=world.neighbor_id,
+                                    knowers=[KnowerRow(knower_id=taro)]), fact_check=False))
+    shown(CommitIdea(IdeaCreateForm(name="遠い技", kind="技術", text="村だけの技", location_id=world.neighbor_id),
+                     fact_check=False))
 
     result = shown(ReadKnowledge(character_id=taro, time="1200/01/01"))
-    hanako_view = shown(ReadKnowledge(character_id=hanako, time="1200/01/01"))
 
-    # 本人も知る人から外せば、自分の本文を知らない。関係のある人物の名前は分かるが、非公開の本文は分からない
-    assert result["自分"]["人物像"] is None
+    # 本人を知る相手から外すと、自分の芯を知らない(ミーム・行動原理は本人のもの)。関係のある相手の芯は、知る相手に入っていなければ分からない
+    assert (result["自分"]["人物像"], result["自分"]["ミーム"]) == (None, "- 今表: 残るミーム")
     assert [(character["名前"], character["人物像"]) for character in result["知っている人物"]] == [("テスト花子", None)]
-    assert "テスト魔導" not in [idea["名前"] for idea in result["知っているアイデア"]]
-    assert hanako_view["自分"]["人物像"] == "テスト花子の説明"
-    assert "テスト魔導" in [idea["名前"] for idea in hanako_view["知っているアイデア"]]
+    ideas = [idea["名前"] for idea in result["知っているアイデア"]]
+    assert "村の秘薬" in ideas and "遠い技" not in ideas
+
+
+def test_read_appearance(shown, world):
+    shown(UpdateCharacter(CharacterUpdateForm(id=world.character_ids[1], appearance="髪が赤い")))
+
+    result = shown(ReadAppearance(character_id=world.character_ids[1], time="1200/01/01"))
+
+    assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身", "外見": "髪が赤い"}
 
 
 def test_read_knowledge_skips_unrelated_cast(shown, world):

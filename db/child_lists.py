@@ -11,9 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 
-from db.schema import (
-    Character, CharacterHistory, CharacterHistoryKnower, CharacterKnower, Idea, IdeaHistory, IdeaHistoryKnower, IdeaKnower,
-)
+from db.schema import Character, CharacterHistory, CharacterHistoryKnower, IdeaHistory, IdeaHistoryKnower
 
 Child = TypeVar("Child")
 History = TypeVar("History", CharacterHistory, IdeaHistory)
@@ -44,37 +42,21 @@ def replaced_rows(current: Sequence[Child], rows: Sequence[BaseModel], child: ty
 
 def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], child: type[History],
                        owner: Character | None = None) -> list[History]:
-    """来歴の行を `replaced_rows` と同じく置き換え、行の `knower_ids` で知る人を置き換える。
-    `knower_ids` を渡さない行は、今ある行なら知る人をそのままにし、新しい行なら `owner`(人物の来歴の本人)だけを知る人にする。"""
+    """来歴の行を `replaced_rows` と同じく置き換え、行の `knowers`(知る相手の行の配列)で知る相手を置き換える。
+    `knowers` を渡さない行は、今ある行なら知る相手をそのままにし、新しい行なら `owner`(人物の来歴の本人)だけを知る相手にする。"""
     replaced = []
     for index, row in enumerate(rows):
         target = current[index] if index < len(current) else child()
         for name, value in row:
-            if name != "knower_ids":
+            if name != "knowers":
                 setattr(target, name, value)
-        knower_ids = getattr(row, "knower_ids")
-        if knower_ids is not None:
-            set_knowers(target, knower_ids)
-        elif index >= len(current) and owner is not None:
-            set_knowers(target, [owner])
+        knowers = getattr(row, "knowers")
+        if isinstance(target, CharacterHistory):
+            if knowers is not None:
+                target.knowers = replaced_rows(target.knowers, knowers, CharacterHistoryKnower)
+            elif index >= len(current) and owner is not None:
+                target.knowers = [CharacterHistoryKnower(knower=owner)]
+        elif knowers is not None:
+            target.knowers = replaced_rows(target.knowers, knowers, IdeaHistoryKnower)
         replaced.append(target)
     return replaced
-
-
-def set_knowers(row: CharacterHistory | IdeaHistory | Character | Idea, knowers: Sequence[int | Character]) -> None:
-    """知る人をまるごと置き換える。残る人の行は使い回す(消して足し直すと、同じ組の挿入が削除より先に走って一意制約に当たる)。
-    まだ id の無い人物(足している最中の本人)は行そのもので渡す。"""
-    def kept_or_new[Knower: (CharacterHistoryKnower, IdeaHistoryKnower, CharacterKnower, IdeaKnower)](
-            current: Sequence[Knower], model: type[Knower]) -> list[Knower]:
-        by_id = {knower.knower_id: knower for knower in current}
-        return [model(knower=knower) if isinstance(knower, Character) else by_id.get(knower) or model(knower_id=knower)
-                for knower in dict.fromkeys(knowers)]
-    match row:
-        case CharacterHistory():
-            row.knowers = kept_or_new(row.knowers, CharacterHistoryKnower)
-        case IdeaHistory():
-            row.knowers = kept_or_new(row.knowers, IdeaHistoryKnower)
-        case Character():
-            row.knowers = kept_or_new(row.knowers, CharacterKnower)
-        case Idea():
-            row.knowers = kept_or_new(row.knowers, IdeaKnower)

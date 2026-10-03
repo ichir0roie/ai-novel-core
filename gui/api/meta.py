@@ -20,6 +20,7 @@ from gui.api.tables import TABLES, TableSpec
 # コメントより短い、フォームに出す見出し
 _LABELS = {
     "id": "id", "name": "名前", "kind": "種別", "text": "本文", "start": "開始", "end": "終了",
+    "appearance": "外見", "meme": "ミーム", "principle": "行動原理", "plot": "筋書き",
     "title": "題", "plot_text": "プロット", "main_text": "本文", "category": "分類",
     "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
     "character_id": "人物", "character_1_id": "人物 1", "character_2_id": "人物 2", "relation": "関係",
@@ -158,4 +159,5 @@ def all_tables(s: Session) -> list[TableMeta]:
 _LABELS["parameters"] = "期間ごとのパラメータ"
 _LABELS["locations"] = "期間ごとの居場所"
 _LABELS["histories"] = "来歴"
+_LABELS["knowers"] = "知る相手"
 _LABELS["recognitions"] = "場所・時代ごとの呼び名"

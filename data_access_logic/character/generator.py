@@ -262,16 +262,14 @@ def _history(items: Sequence[HistoryItemDraft], born_year: int, age: int) -> lis
 
 
 def _writing(fixed: Reconciled, memes: list[DrawnMeme], time: Stamp, age: int | None, name: str) -> CharacterWriting:
-    """芯(説明・meme・行動原理)は `text` に、来歴の節目は、その年から始まる行に置く。"""
-    text = fixed.text
-    if memes:
-        text += "\n\n# meme\n" + "\n".join(f"- {drawn.position}: {drawn.text}" for drawn in memes)
-        if fixed.principle:
-            text += f"\n\n# 行動原理\n{fixed.principle}"
+    """芯は `text` に、ミームと行動原理はそれぞれの列に、来歴の節目は、その年から始まる行に置く。
+    行動原理はミームどうしの関係なので、ミームが無ければ書かない。"""
+    meme = "\n".join(f"- {drawn.position}: {drawn.text}" for drawn in memes) or None
+    principle = fill_name_placeholder(fixed.principle, name) if memes and fixed.principle else None
     rows = _history(fixed.history, time.year - age, age) if age is not None else []
     for row in rows:
         row.description = fill_name_placeholder(row.description, name)
-    return CharacterWriting(text=fill_name_placeholder(text, name), histories=rows)
+    return CharacterWriting(text=fill_name_placeholder(fixed.text, name), meme=meme, principle=principle, histories=rows)
 
 
 def _starting_parameters(rng: random.Random, person: bool, form: CharacterForm | None) -> CharacterParameterValues:
@@ -360,6 +358,8 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
         name=creation.name,
         kind=creation.kind,
         text=creation.writing.text,
+        meme=creation.writing.meme,
+        principle=creation.writing.principle,
         main_character=creation.main_character,
         end=creation.end,
         # 生まれた時点で決める値なので、誕生から効く一行だけを持つ
@@ -440,9 +440,11 @@ def completed_text(
 
 
 def save_completed_text(s: Session, character_id: int, writing: CharacterWriting, ideas: list[IdeaMaterial]) -> Character:
-    """芯を `text` に書き、来歴の節目は今の行に足す(同じ年の行があればその説明に書き足す)。"""
+    """芯・ミーム・行動原理を書き、来歴の節目は今の行に足す(同じ年の行があればその説明に書き足す)。"""
     record = s.get_one(Character, character_id)
     record.text = writing.text
+    record.meme = writing.meme
+    record.principle = writing.principle
     for row in writing.histories:
         if row.start is not None:
             add_history(record, row.start, row.description)

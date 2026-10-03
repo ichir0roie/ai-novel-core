@@ -7,8 +7,8 @@ from data_access_logic.character.form import CharacterCreateForm
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import world_creation_query
-from db.child_lists import replaced_histories, replaced_rows, set_knowers
-from db.schema import Character, CharacterHistory, CharacterParameter, CharacterLocation, Location
+from db.child_lists import replaced_histories, replaced_rows
+from db.schema import Character, CharacterHistory, CharacterKnower, CharacterParameter, CharacterLocation, Location
 
 
 class CommitCharacter(CommitEntrypoint):
@@ -30,8 +30,8 @@ class CommitCharacter(CommitEntrypoint):
         form.write_to(record)
         record.parameters = replaced_rows([], form.parameters, CharacterParameter)
         record.histories = replaced_histories([], form.histories, CharacterHistory, owner=record)
-        if form.knower_ids is not None:
-            set_knowers(record, [record, *form.knower_ids])
+        # 本人は作るときに知る相手に入っている(`db/schema.py` の `_knows_oneself`)
+        record.knowers = [*record.knowers, *replaced_rows([], form.knowers, CharacterKnower)]
         # 誕生は列を持たず parameters の一番早く始まる行の start で表す(db/schema.py の Character.start)。
         if form.start is not None:
             record.start = form.start

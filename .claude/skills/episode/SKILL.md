@@ -26,7 +26,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 本文の材料を読む(結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
 | 設定を引く | `idea.resolve_terms.ResolveTerms` | `{'terms': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
 | 設定を結ぶ | `idea.link_ideas.LinkIdeas` | `{'idea_ids': […], 'episode_id': …}` |
-| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
+| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'appearance': <見た目>, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
 | 人物を AI に組ませて足す | `character.generate_character.GenerateCharacter` | `{'character': {'name': …, 'text': <人物像と役どころ>, 'location_id': …}, 'time': '<話の時刻>', 'plot_text': <話のプロット>}` |
 | 人物の来歴を読む | `character.read_character.ReadCharacter` | `{'character_id': …}`(時刻を渡さず、すべての行を読む) |
 | 人物の来歴に足す | `character.update_character.UpdateCharacter` | `{'character': {'id': …, 'histories': [<今の行すべて>, …]}}`(配列はまるごと置き換わる) |
@@ -85,13 +85,14 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 ## 語り部と人物役
 
-このセッションの Claude が語り部になり、台詞・行動のある登場人物を一人ずつ人物役(エージェント `character-actor`。opus・effort low・道具は Bash だけ)に演じさせて、場面を手番で進める。語り部と人物役は直接やり取りせず、話のセッションの表(`episode_character_session`)に行を足し・書き込むだけで進める。人物役は、自分が知ることのできるデータ(公開の来歴と、自分が知る人に入った非公開の来歴)を自分で読むので、その人物が知らないことでは動かない。
+このセッションの Claude が語り部になり、台詞・行動のある登場人物を一人ずつ人物役(エージェント `character-actor`。opus・effort low・道具は Bash だけ)に演じさせて、場面を手番で進める。語り部と人物役は直接やり取りせず、話のセッションの表(`episode_character_session`)に行を足し・書き込むだけで進める。人物役は、自分が知ることのできるデータ(知る相手に当たる本文・来歴だけ)を自分で読むので、その人物が知らないことでは動かない。
 
 - 台詞・行動のある登場人物が一人だけの話と、ユーザが一人で書くよう頼んだときは、人物役を起こさずに語り部が書く
 - 端役(屋台の主・通行人など)と群衆は、人物役を起こさずに語り部が演じる
-- 表を扱うコマンドは、手元でも web のセッションでも `.venv/bin/python -m tool.episode_session <コマンド>`(`knowledge` / `wait-turn` / `answer` は人物役、`add` / `wait-answers` / `read` / `close` は語り部)
-- 人物役が読むのは、本人と関係のある人物の本文(芯から `# plot` の節を除いたもの)・来歴と、結んだ・居場所に効くアイデアの本文・来歴のうち、公開のものと本人が知る人に入ったものだけ(`data_access_logic/readme.md` の「本文・来歴の公開度と知る人」)。初対面の相手のことは、状況の差分で伝える
-- 本人も知らない設定(出生の秘密など)が公開の本文に書いてあれば、非公開の来歴(本人を知る人から外す)へ移すようユーザに伝える
+- 表を扱うコマンドは、手元でも web のセッションでも `.venv/bin/python -m tool.episode_session <コマンド>`(`knowledge` / `wait-turn` / `answer` は人物役、`appearance` / `add` / `wait-answers` / `read` / `close` は語り部)
+- 人物役が読むのは、本人の外見・芯・ミーム・行動原理と、関係のある人物の外見・芯、知っているアイデアの本文と、それぞれの来歴のうち、知る相手に当たるものだけ(`data_access_logic/readme.md` の「本文・来歴を知る相手」)。筋書き(`plot`)は渡らない
+- 初対面の相手(関係の無い人物)のことは、状況の差分で伝える。見た目は `appearance --character <相手> --time <時刻>` で読み(名前は返らない)、そこから書く。名前・経歴は、名乗る・噂を聞くなど、その場で分かったときだけ差分に入れる
+- 芯(`text`)に、関係のある人物も知らないはずの秘密(出生の秘密など)が書いてあれば、その人物の来歴(知る相手を絞った行)へ移すようユーザに伝える
 
 1. **場面を組む**: プロットの `## 場面` から、場面ごとに場所・時刻・その場にいる人物・その場面の着地点を決める
 2. **人物役を起こす**: 台詞・行動のある登場人物ごとに `character-actor` を一つ、裏で(`run_in_background`)起こす。最初のメッセージには話の id・人物の id・話の時刻だけを書く(材料は人物役が `knowledge` で自分で読む)
@@ -104,6 +105,15 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 6. **プロットから外れたら**、結果を要求で押しつけず、状況(誰が来る・何が見える・時間が進む)を差分に入れて導く。外れた方が良ければプロットを直してから進める(大筋を変えるならユーザに尋ねる)
 7. **場面を飛ばす**(時間を進める・移動する)ときは、そのあいだに起きたことを語り部が決め、差分と新しい時刻(`time`)にまとめて渡す
 8. **終える**: 話の最後まで進んだら `close --episode <id>` で終了の行を足す。人物役はそれを読んで止まる(止まった知らせが届く)
+
+## 話のあとに、知ったことを足す
+
+本文を確定したあと(手順 8 のあと)、語り部がセッションの行(`read --episode <id>`)を読み、話の中で人物が知ったことを db に残す。足すのは主要人物・サブキャラクターを問わない(手順 10 の来歴の書き足しとは別)。知った時刻(`start`)はその話の時刻にし、それより前の話には効かないようにする。
+
+- 初めて会って名乗り合った・言葉を交わした人物どうしには、関係(`character.commit_character_relation.CommitCharacterRelation`)を足す。`relation` は短い名前(「宿を貸した旅人」など)、`text` は会ったいきさつ、`start` は話の時刻
+- 話の中で明かされた来歴・芯(打ち明けた秘密・名乗った身の上)は、聞いた人物を、その行の知る相手(`knowers` に `{"knower_id": <聞いた人物>, "start": "<話の時刻>"}`)に足す。来歴の行は `UpdateCharacter` の `histories` の配列ごと、芯は `knowers` の配列ごと渡す(まるごと置き換わるので、今の行を時刻を渡さない `ReadCharacter` で読んでから足す)
+- 話の中で初めて知った設定(アイデア)も同じく、`UpdateIdea` の `knowers` に足す
+- 何を足したかを、報告に書く
 
 ## 本文に起こす
 
@@ -134,5 +144,5 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 ## 報告する
 
-- 終わったら書いた話の行(`episode`)を読み、題・時刻・視点・字数(`letters`)・あらすじ・足した人物・場所・結んだ設定・来歴に足した人物と、人物役を起こした人物・手番の数を短く報告する。本文・プロット・材料のような長いものは返答に貼らない
+- 終わったら書いた話の行(`episode`)を読み、題・時刻・視点・字数(`letters`)・あらすじ・足した人物・場所・結んだ設定・来歴に足した人物と、人物役を起こした人物・手番の数、話のあとに足した関係・知る相手を短く報告する。本文・プロット・材料のような長いものは返答に貼らない
 - すでに本文のある話を書き直す・書き足す(推敲する)ときは、スキル `revise-episode` を使う
