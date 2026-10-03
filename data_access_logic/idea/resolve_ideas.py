@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """洗い出した語をアイデアと照らす、claude が呼ぶ入口(中間段を claude が自分で回すとき)。
 
-    ResolveTerms([IdeaTerm(keyword="虫憑き", variants=["寄生", "宿り"], description="…", kind="呼称",
+    ResolveIdeas([IdeaDraft(keyword="虫憑き", variants=["寄生", "宿り"], description="…", kind="呼称",
                            start="1190")],
                  location_id=61, time="1200/04/01").show()
 
 `time` は出来事の時刻。その時刻に効くアイデアだけを引く。
-当たったアイデアとその上位・下位を `ideas` に返す。作中の呼び名(`idea_recognition`)に当たっても本質の
+当たったアイデアとその上位・下位を `ideas` に返す。作中の呼び名(`idea_history`)に当たっても本質の
 アイデアにそろえ、その場所・時刻での呼び名を `called` に付ける。どれにも当たらなかった語は、`kind` の種別で
 新しいアイデアとして足し、`candidates` に返す。足した候補は語の `start` から `end` まで効く。
 `start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け、言えなければ省く(None)。`end` は分かるときだけ付ける。
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.context import resolve_ideas
-from data_access_logic.idea.models import IdeaMaterial, IdeaRecognitionMaterial, IdeaTerm
+from data_access_logic.idea.models import IdeaMaterial, IdeaHistoryMaterial, IdeaDraft
 from db.schema import Idea
 from db.stamp import Stamp
 
@@ -33,28 +33,28 @@ class ResolvedIdea(BaseModel):
     text: str | None = None
 
 
-class ResolvedTerms(BaseModel):
+class ResolvedIdeas(BaseModel):
     ideas: list[ResolvedIdea]
     hits: list[int]
     candidates: list[ResolvedIdea]
 
 
-def _resolved(idea: IdeaMaterial, recognition: IdeaRecognitionMaterial | None = None) -> ResolvedIdea:
+def _resolved(idea: IdeaMaterial, history: IdeaHistoryMaterial | None = None) -> ResolvedIdea:
     return ResolvedIdea(id=idea.id, name=idea.name, kind=idea.kind,
                         parent_idea_id=idea.parent_idea_id,
-                        called=recognition.name if recognition else idea.name, text=idea.text)
+                        called=history.name if history else idea.name, text=idea.text)
 
 
-class ResolveTerms(CommitEntrypoint):
+class ResolveIdeas(CommitEntrypoint):
     model = Idea
 
-    def __init__(self, terms: list[IdeaTerm], location_id: int | None = None, time: Stamp | str | None = None):
-        self.terms = terms
+    def __init__(self, ideas: list[IdeaDraft], location_id: int | None = None, time: Stamp | str | None = None):
+        self.ideas = ideas
         self.location_id = location_id
         self.time = Stamp.parse(time)
 
-    def execute(self, s: Session) -> ResolvedTerms:
-        context = resolve_ideas(s, self.terms, self.location_id, self.time)
-        return ResolvedTerms(ideas=[_resolved(related.idea, related.recognition) for related in context.related],
+    def execute(self, s: Session) -> ResolvedIdeas:
+        context = resolve_ideas(s, self.ideas, self.location_id, self.time)
+        return ResolvedIdeas(ideas=[_resolved(related.idea, related.history) for related in context.related],
                              hits=[idea.id for idea in context.hits],
                              candidates=[_resolved(idea) for idea in context.candidates])

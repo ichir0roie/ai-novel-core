@@ -22,7 +22,6 @@ from data_access_logic.meme.models import (
     DrawnMeme, MemeCategory, MemeDraft, MemesDraft, MemeText, PooledMeme,
 )
 from data_access_logic.query import meme_query
-from data_access_logic.character.histories import plot_of
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
 from db.schema import MEME_CATEGORIES, Character, Event, Idea, Meme, Oracle
 
@@ -75,7 +74,7 @@ def pending_sources(s: Session) -> list[SourceText]:
     for oracle in s.scalars(meme_query.unseeded_select(Oracle)).all():
         sources.append(source_of(oracle, "覚え書き", oracle.text))
     for character in s.scalars(meme_query.unseeded_select(Character)).all():
-        sources.append(source_of(character, "人物の筋書き", plot_of(character)))
+        sources.append(source_of(character, "人物の筋書き", character.plot or ""))
     for event in s.scalars(meme_query.unseeded_select(Event)).all():
         sources.append(source_of(event, "出来事", event.text))
     return [source for source in sources if source.text.strip()]

@@ -7,8 +7,8 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.form import IdeaUpdateForm
 from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.query import common_query
-from db.child_lists import replaced_rows
-from db.schema import Idea, IdeaRecognition, Location
+from db.child_lists import replaced_histories, replaced_rows
+from db.schema import Idea, IdeaHistory, IdeaKnower, Location
 
 
 class UpdateIdea(CommitEntrypoint):
@@ -19,6 +19,7 @@ class UpdateIdea(CommitEntrypoint):
 
     def execute(self, s: Session) -> IdeaRecord:
         form = self.idea
+        self.check_knowers(s, form)
         record = common_query.get_row(s, Idea, form.id)
 
         self.check_exists(s, Location, form.location_id, "location_id")
@@ -28,8 +29,10 @@ class UpdateIdea(CommitEntrypoint):
         if form.parent_idea_id is not None:
             self._check_not_descendant(s, form.id, form.parent_idea_id)
 
-        if form.recognitions is not None:
-            record.recognitions = replaced_rows(record.recognitions, form.recognitions, IdeaRecognition)
+        if form.histories is not None:
+            record.histories = replaced_histories(record.histories, form.histories, IdeaHistory)
+        if form.knowers is not None:
+            record.knowers = replaced_rows(record.knowers, form.knowers, IdeaKnower)
         form.write_changes_to(record)
         self.finalize(s, record)
         return IdeaRecord.model_validate(record)

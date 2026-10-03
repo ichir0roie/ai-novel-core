@@ -1,6 +1,6 @@
 # ruff(python の lint)の設定。`uvx ruff check` で回す。
 
-# python の版は .python-version に合わせる
+# python のバージョンは .python-version に合わせる
 target-version = "py314"
 
 [lint]
@@ -12,5 +12,5 @@ ignore = ["F403", "F405"]
 [lint.per-file-ignores]
 # `import *` で先へ渡すための import なので、使っていないように見えても消さない
 "db/schema.py" = ["F401"]
-# マイグレーションは、その版を作ったときのまま残す
+# マイグレーションは、そのバージョンを作ったときのまま残す
 "db/alembic/**" = ["E", "F"]

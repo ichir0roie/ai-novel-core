@@ -29,7 +29,7 @@ def test_tables(client, world):
     tables = {table["name"]: table for table in body["tables"]}
     assert set(tables) == {"story", "episode", "character", "character_relation", "event", "location", "idea",
                            "meme", "oracle", "style_preference"}
-    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
+    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories", "knowers"}
 
 
 def test_list_records(client, world):

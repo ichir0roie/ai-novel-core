@@ -29,8 +29,12 @@ class CharacterSheet(Material):
 
     character: CharacterHead
     parameters_at: CharacterParameterValues
-    # 人物の芯(説明・meme・行動原理・plot)
+    appearance: str | None = None
+    # 人物の芯(経歴・立場・性格の説明)
     text: str | None = None
+    meme: str | None = None
+    principle: str | None = None
+    plot: str | None = None
     # その時刻までに起きた来歴(時刻を渡さなければ、年の決まっていない行も含めてすべて)
     histories: list[CharacterHistoryRow]
     location: LocationAt | None = None
@@ -66,7 +70,11 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
         character=CharacterHead.model_validate(character),
         # 時刻を渡さないときは、生まれたときの値だけを重ねる
         parameters_at=parameters_at(character, None if until is None else at),
+        appearance=character.appearance if text else None,
         text=character.text if text else None,
+        meme=character.meme if text else None,
+        principle=character.principle if text else None,
+        plot=character.plot if text else None,
         histories=histories_at(character, None if until is None else at) if text else [],
         location=_location_at(s, character_id, at),
         recent_events=events_of(

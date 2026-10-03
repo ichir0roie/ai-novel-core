@@ -10,7 +10,7 @@ from tool.test import ensure_test_db  # schema より先に読む(db をテス�
 from tool.test.mock_ai_client import MockAIClient  # noqa: E402
 from db.schema import (  # noqa: E402
     Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterRelation, Episode,
-    EpisodeCharacter, Event, EventCharacter, EventSeed, Idea, IdeaRecognition, Location, Meme, MemeCategory, Oracle,
+    EpisodeCharacter, Event, EventCharacter, EventSeed, Idea, IdeaHistory, Location, Meme, MemeCategory, Oracle,
     Story, engine, get_env_session,
 )
 from data_access_logic.entrypoint import Entrypoint  # noqa: E402
@@ -127,7 +127,7 @@ def world() -> Iterator[World]:
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
         idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術",
                     location_id=location.id, start="1100/01/01", meme_seeded=True,
-                    recognitions=[IdeaRecognition(location_id=location.id, start="1150/01/01", name="テスト術",
+                    histories=[IdeaHistory(location_id=location.id, start="1150/01/01", name="テスト術",
                                                   detail="都での呼び名")])
         s.add(idea)
         s.flush()

@@ -5,9 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from data_access_logic.idea.models import IdeaMaterial
+from data_access_logic.idea.alias import called
+from data_access_logic.idea.models import IdeaMaterial, RelatedIdeaMaterial
 from data_access_logic.label import label_of
 from db.schema import Base, Character, CharacterIdea, Episode, EpisodeIdea, Event, EventIdea, Idea
+from db.stamp import Stamp
 
 
 class _Link:
@@ -50,6 +52,20 @@ def link(s: Session, record: Event | Episode | Character, ideas: list[Idea] | li
         added += 1
     s.flush()
     return added
+
+
+def linked_ideas_at(s: Session, record: Event | Episode | Character, location_id: int | None,
+                    time: Stamp) -> list[RelatedIdeaMaterial]:
+    """`record` に結んだアイデア。結んだ人物と同じく効く期間(`start` / `end`)では絞らず、履歴(呼び名)だけを
+    その場所・時刻に効くものから選ぶ。"""
+    table = _link_of(record)
+    ideas = s.scalars(
+        select(Idea).join(table.table, table.idea_id == Idea.id)
+        .where(table.owner_id == record.id)
+        .order_by(Idea.id)
+    ).all()
+    histories = called(s, [idea.id for idea in ideas], location_id, time)
+    return [RelatedIdeaMaterial(idea=idea, history=histories.get(idea.id)) for idea in ideas]
 
 
 def linked_records(s: Session, idea_id: int) -> list[Event | Episode | Character]:

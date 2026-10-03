@@ -18,7 +18,7 @@ from sqlalchemy.orm.interfaces import ORMOption
 
 from data_access_logic.logs import configure_logging
 from data_access_logic.material import Material
-from db.schema import Base, get_env_session
+from db.schema import Base, Character, Location, get_env_session
 
 
 class UnknownRecordError(ValueError):
@@ -101,6 +101,14 @@ class CommitEntrypoint(SessionEntrypoint):
         if id_ is not None and s.get(model, id_) is None:
             raise UnknownRecordError(
                 f"{label}={id_} という id の {model.__tablename__} が見つからない")
+
+    @classmethod
+    def check_knowers(cls, s: Session, form: BaseModel) -> None:
+        """本文と来歴の行の `knowers`(知る相手)の人物・場所があるか。"""
+        holders = [form, *(getattr(form, "histories", None) or [])]
+        for knower in (knower for holder in holders for knower in (getattr(holder, "knowers", None) or [])):
+            cls.check_exists(s, Character, knower.knower_id, "knowers.knower_id")
+            cls.check_exists(s, Location, knower.location_id, "knowers.location_id")
 
     @staticmethod
     def finalize(s: Session, record: Base) -> None:

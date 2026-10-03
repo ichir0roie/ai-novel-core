@@ -4,7 +4,7 @@
 API と同じイメージを、コマンドだけ差し替えて動かす(`infra/lib/api-stack.ts`)。Lambda Web Adapter は、HTTP でない呼び出し
 (CI の `aws lambda invoke`)を `POST /events` として流し、その応答をそのまま呼び出しの結果として返す。
 db へは表の持ち主のロール(`novel_migrator`。`infra/sql/novel_migrator.sql`)で、IAM データベース認証で繋ぐ。
-呼び出しの中身は見ず、イメージに入っている版まで `alembic upgrade head` を流すだけにする(任意の SQL は受けない)。
+呼び出しの中身は見ず、イメージに入っているバージョンまで `alembic upgrade head` を流すだけにする(任意の SQL は受けない)。
 """
 from __future__ import annotations
 

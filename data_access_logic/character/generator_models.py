@@ -401,8 +401,11 @@ class CharacterContent(Material):
 class CharacterWriting(Material):
     """生んだ人物・対象の芯と来歴。"""
 
-    # 芯(説明・meme・行動原理)
+    # 芯(説明)
     text: str
+    # `- <古今表裏>: <文面>` の箇条書き
+    meme: str | None = None
+    principle: str | None = None
     # 来歴の節目ごとの行(起きた年から始まる)
     histories: list[CharacterHistoryRow]
 

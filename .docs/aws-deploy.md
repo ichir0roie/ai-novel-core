@@ -171,8 +171,8 @@ db のロール `novel_app`(行の読み書きだけ。IAM データベース認
    `aws cognito-idp admin-create-user --user-pool-id <ユーザープールの ID> --username <メールアドレス> --user-attributes Name=email,Value=<メールアドレス> Name=email_verified,Value=true`
 4. 以降は `main` への push で Amplify が建て直す
 
-Next.js は 16 系を使っている。Amplify の SSR が対応する版は Amplify のドキュメントで確かめる(ビルドが通っても、
-実行で落ちるときは版の対応を疑う)。`next build` はこのリポジトリで通ることを確かめてある。
+Next.js は 16 系を使っている。Amplify の SSR が対応するバージョンは Amplify のドキュメントで確かめる(ビルドが通っても、
+実行で落ちるときはバージョンの対応を疑う)。`next build` はこのリポジトリで通ることを確かめてある。
 
 ## 守り
 

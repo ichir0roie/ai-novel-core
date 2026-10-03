@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """話の本文を、`claude -p` の生成関数に任せず、このセッションの Claude が自分で書く・直すための材料。
 
-本文の材料(登場人物の直近の出来事・関係、場所の出来事)は話に結んだ登場人物・場所から引くので、先に `episode_casting` で
-登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
+本文の材料(登場人物の直近の出来事・関係、場所の出来事、関係する設定)は話に結んだ登場人物・場所・アイデアから引くので、
+先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結び、プロットの語を `ResolveIdeas` で
+アイデアと照らして `LinkIdeas` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
 本文は Claude が `CommitEpisode` で確定する。
 どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える → `episode_casting` / `episode_brief`)に分けてある。
 手元では `read_casting` / `read_brief` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
@@ -27,6 +28,7 @@ from data_access_logic.episode.plot_completer import known_locations
 from data_access_logic.episode.summary import appearances, past_episode_ids, past_episodes, recent_episodes
 from data_access_logic.episode.material import later_events_select, location_events_select
 from data_access_logic.event.summary import events_of
+from data_access_logic.idea.links import linked_ideas_at
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
 from data_access_logic.style_preference.form import StyleTarget
@@ -128,6 +130,7 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
         mentioned=mentioned_of(mentioned_in(episode), time),
         relations=relations_at(s, characters, time),
         appearances=appearances(s, episode, characters),
+        ideas=linked_ideas_at(s, episode, location_id, time),
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],
         later_events=events_of(s, later_events_select(location_id, characters, time)),

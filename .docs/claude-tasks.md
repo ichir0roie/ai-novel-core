@@ -33,7 +33,7 @@ GUI の追加・修正は `execute(s)` で確定だけし、AI の段を回さ�
 
 ## 回す
 
-入口の id と引数で流れを回す(`.claude/docs/web-db.md` の「呼び方」)。API に届くか・版が合うかは、リポジトリのルートで:
+入口の id と引数で流れを回す(`.claude/docs/web-db.md` の「呼び方」)。API に届くか・バージョンが合うかは、リポジトリのルートで:
 
 ```
 .venv/bin/python -m web_session.check_api

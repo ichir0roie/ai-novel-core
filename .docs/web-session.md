@@ -51,16 +51,16 @@ web のセッションでは RDS への転送も `DEM_DATABASE_URL` も、開発
 .venv/bin/python -m web_session.check_api
 ```
 
-API に届いたか・db の種類・alembic の版(db の側と、このセッションのコードの head)・PostGIS の版・
+API に届いたか・db の種類・alembic のバージョン(db の側と、このセッションのコードの head)・PostGIS のバージョン・
 `claude` コマンドの有無を JSON で出す。`connected: true` かつ `alembic_current == alembic_head` なら終了コード 0。
-手元から AWS の db の版を確かめるときは `.venv/bin/python -m alembic -c db/alembic/alembic.ini current`(ふだんの転送越しの接続で読める)。
+手元から AWS の db のバージョンを確かめるときは `.venv/bin/python -m alembic -c db/alembic/alembic.ini current`(ふだんの転送越しの接続で読める)。
 
 | 出たもの | 見るところ |
 | --- | --- |
 | `api_url_set` が false | 環境の `NOVEL_API_URL` |
 | `403` / `host_not_allowed` | 環境の Network access に、画面(Amplify)のホストが入っているか |
 | `401` | 環境の `NOVEL_API_KEY` が、Amplify の `NOVEL_WEB_API_KEY` と Lambda の `NOVEL_API_KEYS` の `web=` の両方と合っているか |
-| `alembic_current` が `alembic_head` と違う | db にマイグレーションを当てる([ci-cd.md](ci-cd.md#マイグレーション))か、`core` を db の版に合わせる |
+| `alembic_current` が `alembic_head` と違う | db にマイグレーションを当てる([ci-cd.md](ci-cd.md#マイグレーション))か、`core` を db のバージョンに合わせる |
 | `claude_command` が null | web のセッションでは claude が入っている前提。フックの途中で落ちていないか |
 
 環境変数を変えたら、次に開くセッションから効く(開いているセッションには効かない)。

@@ -16,7 +16,7 @@ from data_access_logic.episode.models import (
     EpisodeMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
-from data_access_logic.idea.models import IdeaTerm
+from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.step import RowId, db_step
 from data_access_logic.summary_targets import SummaryTargets
@@ -46,7 +46,7 @@ class SummaryForm(BaseModel):
 class MaterialForm(BaseModel):
     episode_id: int
     # 話のプロットから AI が挙げた、アイデアと照らす語
-    keywords: list[IdeaTerm]
+    keywords: list[IdeaDraft]
 
 
 class FrameForm(BaseModel):
