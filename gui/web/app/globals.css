@@ -198,8 +198,9 @@ button.ghost { background: transparent; }
    自動最小サイズが中身の高さではなく 0 相当になって、上の flex: none が無いと JS が付けた高さを無視して縮む */
 /* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使う。
    左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
-   (保存ボタンを見るのに左の欄ごとスクロールしなくてよい)。最低でも見出し+数行は見える高さは残す */
-.record-side .field.section.side { flex: 1 1 28rem; min-height: 8rem; }
+   (保存ボタンを見るのに左の欄ごとスクロールしなくてよい)。登場人物の関係を開いても、プロットを書ける高さは残す
+   (足りなければ左の欄ごとスクロールする) */
+.record-side .field.section.side { flex: 1 1 28rem; min-height: 18rem; }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
   flex: 1; height: auto; min-height: 0; resize: none; overflow: auto;
 }
@@ -600,7 +601,9 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 .episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
 .episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
 .episode-sheet-relations { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.episode-sheet-relation { border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.45rem; font-size: 0.85rem; color: var(--muted); }
-.episode-sheet-relation.here { color: inherit; border-color: var(--accent); }
+.episode-sheet-relation { border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.45rem; font-size: 0.85rem; border-color: var(--accent); }
+.episode-sheet-characters.collapsed { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
+.episode-sheet-characters.collapsed .episode-sheet-character { display: inline; padding-bottom: 0; border-bottom: none; }
+.episode-relations-toggle { font-size: 0.8rem; padding: 0.1rem 0.5rem; }
 .episode-sheet-mentioned { margin-top: 0.6rem; }
 .sheet-plain { white-space: pre-wrap; }

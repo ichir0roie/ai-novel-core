@@ -240,6 +240,7 @@ export const T = {
     characters: (n: number, at: string | null) => `Characters (${n})${at ? ` at ${at}` : ""}`,
     relation: (partner: string, relation: string) => `→ ${partner}: ${relation}`,
     noRelations: "(no relations)",
+    toggleRelations: (open: boolean) => (open ? "Hide relations ▴" : "Show relations ▾"),
     mentioned: (names: string) => `Mentioned only: ${names}`,
   },
 

@@ -17,17 +17,21 @@ type Props = {
   start: unknown;
   /** 人物の選択肢に無い id の名前(`RecordResponse.labels.character_ids`) */
   fallbackLabels?: Record<string | number, string>;
+  /** 初めは名前と歳だけを一行に並べ、ボタンを押すと関係ごとの並びに開く。話のページで下のプロットを押し縮めないため */
+  collapsible?: boolean;
 };
 
-/** 話の登場人物ごとに、話の開始の時点の歳と、その時点の関係を並べる(閲覧専用)。
+/** 話の登場人物ごとに、話の開始の時点の歳と、その時点の登場人物どうしの関係を並べる(閲覧専用)。
  * 名前を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
-export default function EpisodeCharacterRelations({ characterIds, start, fallbackLabels }: Props) {
+export default function EpisodeCharacterRelations({ characterIds, start, fallbackLabels, collapsible = false }: Props) {
   const characters = useOptions("character");
   const [relations, setRelations] = useState<Relation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(!collapsible);
 
   useEffect(() => {
+    if (!expanded || relations) return;
     let active = true;
     getRelations()
       .then((graph) => {
@@ -39,7 +43,7 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
     return () => {
       active = false;
     };
-  }, []);
+  }, [expanded, relations]);
 
   const byId = useMemo(() => new Map(characters.map((o) => [o.id, o])), [characters]);
   const time = typeof start === "string" ? start : null;
@@ -51,17 +55,42 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
   };
 
   if (characterIds.length === 0) return <span className="hint">{T.episodeCharacters.none}</span>;
+
+  const sheet = viewing !== null && <CharacterSheetModal characterId={viewing} time={start} onClose={() => setViewing(null)} />;
+  const toggle = collapsible && (
+    <button type="button" className="episode-relations-toggle" onClick={() => setExpanded(!expanded)}>
+      {T.episodeSheet.toggleRelations(expanded)}
+    </button>
+  );
+
+  if (!expanded) {
+    return (
+      <div className="episode-sheet-characters collapsed">
+        <span className="episode-sheet-character">
+          {characterIds.map((id, i) => (
+            <span key={id}>
+              {i > 0 && " / "}
+              <button type="button" className="character-open" onClick={() => setViewing(id)}>
+                {withAge(id)}
+              </button>
+            </span>
+          ))}
+        </span>
+        {toggle}
+        {sheet}
+      </div>
+    );
+  }
   if (error) return <div className="status error">{error}</div>;
   if (!relations) return <span className="hint">{T.loading}</span>;
 
   return (
     <>
       <div className="episode-sheet-characters">
+        {toggle && <div>{toggle}</div>}
         {characterIds.map((id) => {
-          // その人物から見た関係のうち、話の年に続いているもの。この話に出る相手を先に並べる
-          const own = relations
-            .filter((r) => r.character_1_id === id && inYear(r, year))
-            .sort((a, b) => Number(characterIds.includes(b.character_2_id)) - Number(characterIds.includes(a.character_2_id)));
+          // その人物から見た関係のうち、話の年に続いていて、相手もこの話に出るもの
+          const own = relations.filter((r) => r.character_1_id === id && characterIds.includes(r.character_2_id) && inYear(r, year));
           return (
             <div key={id} className="episode-sheet-character">
               <button type="button" className="character-open" onClick={() => setViewing(id)}>
@@ -72,7 +101,7 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
               ) : (
                 <span className="episode-sheet-relations">
                   {own.map((r) => (
-                    <span key={r.id} className={`episode-sheet-relation ${characterIds.includes(r.character_2_id) ? "here" : ""}`}
+                    <span key={r.id} className="episode-sheet-relation"
                       title={[T.span(r.start, r.end), r.text].filter(Boolean).join("\n")}>
                       {T.episodeSheet.relation(nameOf(r.character_2_id), r.relation ?? "")}
                     </span>
@@ -83,7 +112,7 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
           );
         })}
       </div>
-      {viewing !== null && <CharacterSheetModal characterId={viewing} time={start} onClose={() => setViewing(null)} />}
+      {sheet}
     </>
   );
 }
