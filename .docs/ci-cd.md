@@ -12,7 +12,7 @@
 2. OIDC で AWS のロールを引き受ける(鍵を GitHub に置かない)
 3. `infra/lambda/Dockerfile` を `linux/amd64` で建て、ECR に `<commit の sha>` と `main` の二つの tag で push
    (`--provenance=false`。Lambda は複数アーキの目録を受け付けない)
-4. 変数 `MIGRATION_FUNCTION_NAME` があれば、マイグレーションの関数を同じイメージに差し替えて呼び、db を新しい版にする(下の「マイグレーション」)。
+4. 変数 `MIGRATION_FUNCTION_NAME` があれば、マイグレーションの関数を同じイメージに差し替えて呼び、db を新しいバージョンにする(下の「マイグレーション」)。
    失敗したら API は差し替えない
 5. `aws lambda update-function-code`(`<commit の sha>` の tag)→ 反映を待つ
 6. 秘密の `API_BASE_URL` があれば `/api/ping` を叩いて確かめる
@@ -71,13 +71,13 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
 
 ## マイグレーション
 
-`main` へのマージで API を出すたびに、CI が db を新しい版にしてから API を差し替える(**db を先に、コードを後に**)。
+`main` へのマージで API を出すたびに、CI が db を新しいバージョンにしてから API を差し替える(**db を先に、コードを後に**)。
 列を足す変更は、新しい API がまだ無い列を読まないので安全。列を消す・名前を変える変更は、マイグレーションのあと API を差し替えるまでの
 1〜2 分だけ、古い API が消えた列を読んで失敗しうる(一人で使う道具なので許している)。
 
 | 何が | どう |
 | --- | --- |
-| Lambda `novel-migrate` | API と同じイメージを、コマンドだけ `db/migration_app.py` に差し替えて動かす。Lambda Web Adapter が `aws lambda invoke` を `POST /events` に流し、`alembic upgrade head` を流して `{"before", "after", "head"}` を返す。呼び出しの中身は見ないので、イメージに入っている版まで当てる以外のことはできない。同時に一つしか動かない(予約の同時実行 1)。タイムアウト 15 分 |
+| Lambda `novel-migrate` | API と同じイメージを、コマンドだけ `db/migration_app.py` に差し替えて動かす。Lambda Web Adapter が `aws lambda invoke` を `POST /events` に流し、`alembic upgrade head` を流して `{"before", "after", "head"}` を返す。呼び出しの中身は見ないので、イメージに入っているバージョンまで当てる以外のことはできない。同時に一つしか動かない(予約の同時実行 1)。タイムアウト 15 分 |
 | db のロール `novel_migrator` | 表の持ち主。IAM データベース認証で繋ぐ(パスワードを持たない)。`novel_migrator` が作った表・連番には、既定の権限で `novel_app` の行の読み書きが付く(`infra/sql/novel_migrator.sql`) |
 | CI(`deploy-api.yml` の `migrate db`) | `novel-migrate` を新しいイメージに差し替えて呼び、`after` が `head` と同じでなければ止まる(API は差し替えない)。返事は 16 分まで待つ(TCP の keepalive で無通信の接続が切られないようにしている)。ログは CloudWatch Logs の `novel-migrate` のロググループ |
 
@@ -89,11 +89,11 @@ ECR・OIDC・CI のロールは手で作らず、`infra/` の `NovelCi` スタ�
   マスターがパスワードで入れなくなる。`novel_migrator.sql` は、持ち主を移す間だけマスターを一員にし、同じトランザクションの終わりに外す
 
 ```
-.venv/bin/python -m alembic -c db/alembic/alembic.ini current   # 版を見るだけなら、ふだんの接続でよい
+.venv/bin/python -m alembic -c db/alembic/alembic.ini current   # バージョンを見るだけなら、ふだんの接続でよい
 DEM_DATABASE_URL='postgresql+psycopg://novel_migrator@127.0.0.1:15432/novel?sslmode=require' .venv/bin/python -m alembic -c db/alembic/alembic.ini upgrade head   # 手で当てる
 ```
 
-当て忘れ・失敗は、web のセッションの `web_session.check_api` が版の食い違いとして報告する。
+当て忘れ・失敗は、web のセッションの `web_session.check_api` がバージョンの食い違いとして報告する。
 
 ### 最初の一回
 

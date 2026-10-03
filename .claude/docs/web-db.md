@@ -49,7 +49,7 @@ print(json.dumps(run('<入口の id>', {<引数>}), ensure_ascii=False, indent=2
 - 長い出力は `> <scratchpad>/<名>.json` へ書き出して Read する
 - 本文・プロットのような長い文字列は、スクラッチパッドのファイルに置き、引数の中で `Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')` と読む(`from pathlib import Path` を足す)
 
-API に届かない(`ApiError`)・版が食い違う・段が無いと返るとき:
+API に届かない(`ApiError`)・バージョンが食い違う・段が無いと返るとき:
 
 - `.venv/bin/python -m web_session.check_api` を回し、出力と `.docs/web-session.md` の「確かめる」の表を見る
 - `ProxyError: 403`(プロキシが CONNECT を断った)なら、環境の Network access に API のホストが入っていない。`curl -sS "$HTTPS_PROXY/__agentproxy/status"` の失敗の記録で断られたホストを確かめ、許可先に足すようユーザに頼んで止まる(コードでは直せない)

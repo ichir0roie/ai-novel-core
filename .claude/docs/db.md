@@ -64,12 +64,12 @@ with engine.connect() as c:
 
 ## マイグレーションの確認
 
-- db の版は、コードの版(`alembic heads`)と揃っていなければならない。`core` の変更で列が増えていると、入口が `column ... does not exist` で止まる
+- db のバージョンは、コードのバージョン(`alembic heads`)と揃っていなければならない。`core` の変更で列が増えていると、入口が `column ... does not exist` で止まる
 - まだマージしていないブランチのマイグレーションは RDS に無い(当て方は `.claude/docs/aws.md` の決まり 1)
 - db を触る作業の前に食い違いを見つけたら、ユーザに伝える
 
 ```
-.venv/bin/python -m alembic -c db/alembic/alembic.ini current   # novel_app でも版は読める
+.venv/bin/python -m alembic -c db/alembic/alembic.ini current   # novel_app でもバージョンは読める
 .venv/bin/python -m alembic -c db/alembic/alembic.ini heads
 ```
 

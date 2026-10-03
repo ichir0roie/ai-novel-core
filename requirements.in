@@ -1,4 +1,4 @@
-# 直接使うパッケージ。版を固定した requirements.txt はここから作る(作り方は requirements.txt の頭)。
+# 直接使うパッケージ。バージョンを固定した requirements.txt はここから作る(作り方は requirements.txt の頭)。
 # ここを直したら requirements.txt も作り直す
 #
 # 記録の形は db/schema.py、マイグレーションは db/alembic/

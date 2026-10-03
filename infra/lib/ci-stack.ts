@@ -7,7 +7,7 @@ import { api, type DeployConfig, migration } from "./config.js";
 
 // API のイメージの置き場と、GitHub Actions が引き受けるロール。リポジトリは公開なので、ロールは main の push だけが引き受けられ、
 // できることは novel-api の ECR への push(と、push や関数の差し替えに要るイメージの読み取り)と、novel-api・novel-migrate 関数の
-// コードの差し替え、novel-migrate の呼び出し(イメージに入っている版までマイグレーションを流すだけ)、
+// コードの差し替え、novel-migrate の呼び出し(イメージに入っているバージョンまでマイグレーションを流すだけ)、
 // 差し替えたあとの確かめに関数 URL を呼ぶことだけにする(cdk deploy はさせない。db への道も持たせない)
 interface NovelCiStackProps extends StackProps {
   github: DeployConfig["github"];
