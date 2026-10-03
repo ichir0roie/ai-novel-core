@@ -532,6 +532,45 @@
         }
       }
     },
+    "/api/batch": {
+      "post": {
+        "summary": "Batch",
+        "description": "同じ時に出た GET をまとめて回す。Lambda は一つの実行環境で一つの要求しか受けないので、画面が並べて呼ぶと\nその数だけ実行環境が起き、それぞれがコールドスタートを待つ",
+        "operationId": "batch_api_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/maps": {
       "get": {
         "summary": "Maps",
@@ -789,6 +828,56 @@
   },
   "components": {
     "schemas": {
+      "BatchItem": {
+        "properties": {
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "body": {
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "BatchItem"
+      },
+      "BatchRequest": {
+        "properties": {
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "title": "BatchRequest"
+      },
+      "BatchResponse": {
+        "properties": {
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/BatchItem"
+            },
+            "type": "array",
+            "title": "Responses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "responses"
+        ],
+        "title": "BatchResponse"
+      },
       "CharacterLocationsResponse": {
         "properties": {
           "locations": {

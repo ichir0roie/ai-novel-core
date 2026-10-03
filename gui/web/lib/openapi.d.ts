@@ -166,6 +166,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch
+         * @description 同じ時に出た GET をまとめて回す。Lambda は一つの実行環境で一つの要求しか受けないので、画面が並べて呼ぶと
+         *     その数だけ実行環境が起き、それぞれがコールドスタートを待つ
+         */
+        post: operations["batch_api_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/maps": {
         parameters: {
             query?: never;
@@ -307,6 +328,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** BatchItem */
+        BatchItem: {
+            /** Status */
+            status: number;
+            /** Body */
+            body?: unknown;
+        };
+        /** BatchRequest */
+        BatchRequest: {
+            /** Paths */
+            paths: string[];
+        };
+        /** BatchResponse */
+        BatchResponse: {
+            /** Responses */
+            responses: components["schemas"]["BatchItem"][];
+        };
         /** CharacterLocationsResponse */
         CharacterLocationsResponse: {
             /** Locations */
@@ -1043,6 +1081,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_api_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResponse"];
                 };
             };
             /** @description Validation Error */
