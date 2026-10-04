@@ -1,4 +1,3 @@
-import logging
 
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -11,7 +10,6 @@ from data_access_logic.episode.models import (
 )
 from db.schema import Character, Episode, EpisodeCharacter, Story, summary_source_hash
 
-logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -28,23 +26,20 @@ def summary_draft(ai: AIClient, episode: EpisodeSource) -> EpisodeSummaryDraft |
     return ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
 
 
-def _stale(episode: Episode) -> bool:
-    text = episode.main_text.strip()
-    return bool(text) and (episode.summary_text is None or episode.summary_source_hash != summary_source_hash(text))
-
-
 def summary_sources(s: Session, episode_ids: list[int] | None, stale_only: bool) -> list[EpisodeSummarySource]:
     """本文のある話。`stale_only` なら、概要が無いか本文と食い違っている話だけ。`episode_ids` を省けばすべての話から。"""
-    query = select(Episode).order_by(Episode.id)
+    query = select(Episode).where(Episode.main_text != "").order_by(Episode.id)
     if episode_ids is not None:
         query = query.where(Episode.id.in_(episode_ids))
-    episodes = s.scalars(query).all()
-    return [
-        EpisodeSummarySource(id=episode.id, title=episode.title, main_text=episode.main_text,
-                             source_hash=summary_source_hash(episode.main_text.strip()))
-        for episode in episodes
-        if episode.main_text.strip() and (_stale(episode) or not stale_only)
-    ]
+    sources = []
+    for episode in s.scalars(query).all():
+        text = episode.main_text.strip()
+        digest = summary_source_hash(text)
+        stale = episode.summary_text is None or episode.summary_source_hash != digest
+        if text and (stale or not stale_only):
+            sources.append(EpisodeSummarySource(
+                id=episode.id, title=episode.title, main_text=episode.main_text, source_hash=digest))
+    return sources
 
 
 def write_summary(s: Session, episode_id: int, source_hash: str, summary_text: str) -> Episode:
@@ -52,27 +47,6 @@ def write_summary(s: Session, episode_id: int, source_hash: str, summary_text: s
     episode.summary_source_hash = source_hash
     episode.summary_text = summary_text
     s.flush()
-    return episode
-
-
-def summarize(s: Session, ai: AIClient, episode: Episode) -> Episode | None:
-    if not episode.main_text.strip():
-        return None
-    if not _stale(episode):
-        return episode
-    return rewrite_summary(s, ai, episode)
-
-
-def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> Episode | None:
-    text = episode.main_text.strip()
-    if not text:
-        return None
-    draft = summary_draft(ai, episode)
-    if draft is None:
-        logger.warning(f"話 id={episode.id} の概要を作れなかった(AI が答えなかった)")
-        return None
-    write_summary(s, episode.id, summary_source_hash(text), draft.summary_text)
-    s.commit()
     return episode
 
 

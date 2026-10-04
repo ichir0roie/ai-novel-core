@@ -15,14 +15,21 @@ from data_access_logic.event.writer import write_event_text
 from data_access_logic.event_seed.extractor import draw as draw_seeds
 from data_access_logic.event_seed.extractor import refresh_and_consolidate
 from data_access_logic.query import common_query, world_creation_query
-from db.schema import Character, Event, Location, Session, Stamp, get_env_session
+from db.schema import Character, CharacterLocation, Event, Location, Session, Stamp, get_env_session
 
 logger = logging.getLogger(__name__)
 
 
-def _current_location_id(s: Session, character: Character, time: Stamp) -> int | None:
-    character_location = s.scalars(common_query.character_location_select(character.id, time)).first()
-    return character_location.location_id if character_location else None
+def _current_location_id(character: Character, time: Stamp) -> int | None:
+    """`common_query.character_location_select` と同じ選び方(その時刻に続く行のうち、始まりの新しいもの)を、
+    読み込み済みの `locations` で行う(人物ごとに問い合わせ直さない)。"""
+    current = [row for row in character.locations
+               if (row.start is None or row.start <= time) and (row.end is None or row.end > time)]
+    if not current:
+        return None
+    dated = [row for row in current if row.start is not None]
+    return max(dated, key=lambda row: (row.start, row.id)).location_id if dated else max(
+        current, key=lambda row: row.id).location_id
 
 
 def _present_characters(s: Session, location_id: int, time: Stamp) -> list[Character]:
@@ -31,9 +38,11 @@ def _present_characters(s: Session, location_id: int, time: Stamp) -> list[Chara
     busy_ids = set(s.scalars(world_creation_query.busy_character_ids_select(time)).all())
     characters = s.scalars(
         world_creation_query.alive_characters_select(time)
-        .where(world_creation_query.character_active_condition()).order_by(Character.id)).all()
+        .where(world_creation_query.character_active_condition(),
+               Character.locations.any(CharacterLocation.location_id == location_id))
+        .order_by(Character.id)).all()
     return [character for character in characters
-            if character.id not in busy_ids and _current_location_id(s, character, time) == location_id]
+            if character.id not in busy_ids and _current_location_id(character, time) == location_id]
 
 
 class EventPlan(Material):
@@ -62,7 +71,7 @@ def plan_event(s: Session, form: EventForm) -> EventPlan:
     members = _members(s, form, form.location_id, time)
     location_id = form.location_id
     if location_id is None:
-        location_id = _current_location_id(s, members[0], time)
+        location_id = _current_location_id(members[0], time)
         if location_id is None:
             raise ValueError(f"人物 id={members[0].id} の {time} の居場所が分からないので location_id(場所)を渡す")
     location = common_query.get_row(s, Location, location_id)
@@ -129,7 +138,7 @@ class GenerateEvent(SessionEntrypoint):
         plan = plan_event(s, self.event)
         seeds = draw_seeds(s, rng)
         members = [s.get_one(Character, character_id) for character_id in plan.character_ids]
-        record = progress_location(s, self.ai, rng, plan.location_id, members, plan.time, seeds, scene=self.event.scene)
+        record = progress_location(s, self.ai, rng, plan.location_id, members, plan.time, seeds, self.event.scene)
         if record is None:
             raise ValueError("出来事の候補が得られなかった")
         finish_generated(s, record.id, self.event)

@@ -23,6 +23,14 @@ RESIDENT_LIMITS = {"都市": 40, "町": 30, "国": 30, "村": 20}
 # RESIDENT_LIMITS に無い種別(森・洞窟・湖・大陸など)の上限
 DEFAULT_RESIDENT_LIMIT = 10
 
+# data_access_logic/event/progress・data_access_logic/character/cast
+# 出来事を考えるとき、判断材料として渡す「直近の出来事」の件数(場所ごと・人物ごとの窓に使う)。
+# 増やすほど過去の語彙が持ち越され、自己増殖しやすくなる一方、
+# 少なすぎると同じ展開が場所・人物を変えて繰り返されているのを
+# 見分ける材料が足りなくなる(「同じ出来事を名前だけ変えて繰り返さない」
+# 2026-09 の観測)。どちらのリスクも残ったままの折衷値として置く。
+RECENT_EVENT_LIMIT = 5
+
 # data_access_logic/event/progress
 # 移動先候補(_move_destinations)をどこまで拾うか。read_cast の既定
 # (levels=1、「隣の集落にいる者も枠に入れる」)と同じ考え方をそろえる。

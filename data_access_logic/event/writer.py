@@ -11,7 +11,7 @@ import logging
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION, EVENT_RECORD_INSTRUCTION
+from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION, EVENT_RECORD_INSTRUCTION, EVENT_SITUATION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
@@ -29,8 +29,7 @@ _SYSTEM_PROMPT = f"""\
 あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家です。
 ある出来事の名前・時刻・場所・当事者などを日本語の見出しを付けた JSON で渡すので、この出来事の記録の本文を書いてください。
 出来事の名前は、ジャンルや場面を一言で決めたものです。その中身に沿った出来事にしてください。
-当事者の性格の各軸は 無/低/並/高/必 の五段階です。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
+{EVENT_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
 {EVENT_RECORD_INSTRUCTION}"""
 

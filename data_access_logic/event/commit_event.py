@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""出来事が人物の信念・立場を大きく動かしたときは、その変化は人物の来歴(`histories`)に、
-出来事の年の行として書き足す(`update_character` を使う)。
-"""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session

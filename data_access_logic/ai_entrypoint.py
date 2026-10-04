@@ -11,13 +11,12 @@ from sqlalchemy.orm import Session
 
 from ai.claude_code import ai_client, fact_checker
 from data_access_logic.entrypoint import CommitEntrypoint
-from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.record import EpisodeRecord
-from data_access_logic.event import summary as event_summary
 from data_access_logic.event.record import EventRecord
 from data_access_logic.meme.extractor import refresh
 from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.story.record import StoryRecord
+from data_access_logic.summary_targets import rewrite_episode_summaries, rewrite_event_summaries
 from db.schema import Episode, Event, get_env_session
 
 
@@ -34,11 +33,10 @@ class CommitAndRefresh(CommitEntrypoint):
             committed = self.execute(s)
         with get_env_session() as s:
             refresh(s, ai_client)
-            row = s.get_one(self.model, committed.id)
-            if isinstance(row, Event):
-                event_summary.summarize(s, ai_client, row)
-            elif isinstance(row, Episode):
-                episode_summary.summarize(s, ai_client, row)
+            if self.model is Event:
+                rewrite_event_summaries(s, ai_client, [committed.id])
+            elif self.model is Episode:
+                rewrite_episode_summaries(s, ai_client, [committed.id])
             self.follow_up(s)
         return committed
 

@@ -97,13 +97,12 @@ def plan(s: Session, form: EventForm) -> EventPlan:
 
 @db_step
 def situation_targets(s: Session, form: SituationForm) -> SummaryTargets:
-    return progress.situation_targets(s, form.location_id, _characters(s, form.character_ids), form.time, None)
+    return progress.situation_targets(s, form.location_id, _characters(s, form.character_ids), form.time)
 
 
 @db_step
 def situation(s: Session, form: SituationForm) -> LocationSituationMaterial:
-    return progress.situation(
-        s, form.location_id, _characters(s, form.character_ids), form.time, None, form.scene, False)
+    return progress.situation(s, form.location_id, _characters(s, form.character_ids), form.time, form.scene)
 
 
 @db_step
@@ -115,7 +114,7 @@ def destinations(s: Session, form: DestinationsForm) -> list[LocationMaterial]:
 def save_progress(s: Session, form: ProgressForm) -> EventRecord:
     situation_form = form.situation
     record = progress.save_progress(
-        s, situation_form.location_id, _characters(s, situation_form.character_ids), situation_form.time, None,
+        s, situation_form.location_id, _characters(s, situation_form.character_ids), situation_form.time,
         form.destinations, form.draft)
     return record_of(s, EventRecord, finish_generated(s, record.id, form.event))
 

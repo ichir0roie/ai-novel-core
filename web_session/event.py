@@ -41,7 +41,7 @@ def _progress(ai: AIClient, rng: random.Random, form: EventForm) -> EventRecord:
     if candidate is None:
         raise ValueError("出来事の候補が得られなかった")
     moves = call(event_steps.destinations, event_steps.DestinationsForm(location_id=plan.location_id, time=plan.time))
-    draft = progress.record_draft(ai, current, moves, candidate, False)
+    draft = progress.record_draft(ai, current, moves, candidate)
     if draft is None:
         raise ValueError("出来事の候補が得られなかった")
     return call(event_steps.save_progress, event_steps.ProgressForm(

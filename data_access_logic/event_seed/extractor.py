@@ -41,17 +41,17 @@ _CONSOLIDATE_SYSTEM_PROMPT = """\
 - まとめる組が無ければ merges は空のリストにする。"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は芯(`text`)の `# plot` の節だけを使う。"""
+    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は筋書き(`plot`)だけを使う。"""
     sources: list[SourceText] = []
-    for story in s.scalars(event_seed_query.unseeded_select(Story)).all():
+    for story in s.scalars(event_seed_query.unseeded_select(Story, Story.text)).all():
         sources.append(source_of(story, "作品の筋書き", story.text))
-    for episode in s.scalars(event_seed_query.unseeded_select(Episode)).all():
+    for episode in s.scalars(event_seed_query.unseeded_select(Episode, Episode.plot_text, Episode.main_text)).all():
         sources.append(source_of(episode, "話の骨組み", episode.plot_text.strip() or episode.main_text))
-    for character in s.scalars(event_seed_query.unseeded_select(Character)).all():
+    for character in s.scalars(event_seed_query.unseeded_select(Character, Character.plot)).all():
         sources.append(source_of(character, "人物の筋書き", character.plot or ""))
-    for event in s.scalars(event_seed_query.unseeded_select(Event)).all():
+    for event in s.scalars(event_seed_query.unseeded_select(Event, Event.text)).all():
         sources.append(source_of(event, "出来事", event.text))
-    return [source for source in sources if source.text.strip()]
+    return sources
 
 
 def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None:

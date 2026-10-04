@@ -17,9 +17,10 @@ from db.schema import (
 )
 from db.stamp import Stamp, StampError
 
+# 当事者は名前と id しか使わないので、人物の selectin の子の表(パラメータ・居場所・来歴・知る相手)は読まない
 EVENT_LOAD_OPTIONS = (
     selectinload(Event.location),
-    selectinload(Event.event_characters).selectinload(EventCharacter.character),
+    selectinload(Event.event_characters).selectinload(EventCharacter.character).lazyload("*"),
 )
 
 
@@ -186,19 +187,6 @@ def events_at_select(when: Stamp | str, location_ids: Collection[int] | None = N
     return query
 
 
-def events_in_locations_select(location_ids: Collection[int] | None, until: Stamp | str | None = None,
-                               limit: int | None = None) -> Select:
-    query = select(Event).options(*EVENT_LOAD_OPTIONS)
-    if location_ids:
-        query = query.where(Event.location_id.in_(list(location_ids)))
-    if until is not None:
-        query = query.where(Event.time <= span(until)[1])
-    query = query.order_by(Event.time.desc(), Event.id.desc())
-    if limit:
-        query = query.limit(limit)
-    return query
-
-
 def _events_where(condition: ColumnElement[bool], until: Stamp | str | None, limit: int | None) -> Select:
     query = select(Event).options(*EVENT_LOAD_OPTIONS).where(condition)
     if until is not None:
@@ -259,18 +247,6 @@ def character_location_select(character_id: int, until: Stamp) -> Select:
             .where(CharacterLocation.character_id == character_id, alive_at(CharacterLocation, until))
             .order_by(CharacterLocation.start.desc().nulls_last(), CharacterLocation.id.desc())
             .execution_options(populate_existing=True))
-
-
-def latest_character_event_select(character_id: int, until: Stamp | None = None) -> Select:
-    finished = func.coalesce(Event.end, Event.start, Event.time)
-    query = (select(Event)
-             .options(*EVENT_LOAD_OPTIONS)
-             .where(Event.event_characters.any(EventCharacter.character_id == character_id))
-             .order_by(finished.desc(), Event.id.desc())
-             .limit(1))
-    return query.where(finished <= until) if until is not None else query
-
-
 
 
 def resident_character_ids_select(location_ids: Collection[int], until: Stamp) -> Select:
