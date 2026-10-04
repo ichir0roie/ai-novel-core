@@ -1,22 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import Modal from "@/components/Modal";
 import NewEpisodeModal from "@/components/NewEpisodeModal";
-import { ChoicePicker } from "@/components/Picker";
 import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
-import TreeReferenceSelect from "@/components/TreeReferenceSelect";
-import { getTimeline, labelOf, listAllRecords, updateRecord, type Labels, type Rec, type TimelineResponse } from "@/lib/api";
+import { getTimeline, labelOf, listAllRecords, updateEpisodes, type Labels, type Rec, type TimelineResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
-import { dayNumber, formatStamp, fromDayNumber, parseStamp, shiftDays } from "@/lib/stamp";
+import { dayNumber, formatStamp, fromDayNumber, pad2, parseStamp, shiftDays } from "@/lib/stamp";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
 
-// 画面の幅に見せる期間(日数)。全期間はこの縮尺で横に並べ、スクロールで見て回る
-const SPANS = [3, 7, 31, 92, 365, 3650, 36500];
-const DEFAULT_SPAN = 31;
+// 画面の幅に見せる期間は年の単位。全期間はこの縮尺で横に並べ、スクロールで見て回る
+const DAYS_PER_YEAR = 365.2425;
+// 縮尺(画面の幅の年数)と、話の無い区間を詰めるかを覚えておく localStorage のキー
+const VIEW_STORAGE_KEY = "timeline-view";
 const LANE_HEIGHT = 26;
 // 作品の段の下に空けておく空の段の数。話を足すときにクリックする所を残す
 const STORY_SPARE_LANES = 1;
@@ -36,9 +39,12 @@ const MIN_GAP_PX = 2 * GAP_PX;
 const OCCUPY_MARGIN_PX = 24;
 // 帯の直前・帯の左端の目盛りは、文字が帯に掛かるので文字を出さない
 const TICK_LABEL_PX = 48;
+// 等間隔の軸で、年の目盛りの間・月の目盛りの間に取る最小の幅(px)
+const YEAR_TICK_PX = 60;
+const MONTH_TICK_PX = 48;
 const FULL_STAMP = /^\d+\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/;
 // 絞り込みの URL の引数と、それを覚えておく localStorage のキー
-const FILTER_KEYS = ["span", "story_id", "location_id"] as const;
+const FILTER_KEYS = ["story_id"] as const;
 const FILTER_STORAGE_KEY = "timeline-filter";
 
 // 軸は日の単位。start・end は日の境目に丸めた通算日で、at は丸める前の時刻(同じ日の中の並び順に使う)
@@ -48,7 +54,9 @@ type Placed = Item & { x: number; width: number; barWidth: number; lane: number 
 type Group = { key: string; label: string; storyId: number | null; items: Item[]; children: Group[] };
 // open は段の札(と子の段)を出しているか。閉じた段は子孫の札もまとめて、名前の無い印で一行に置く。foldable が false の段は開閉しない
 type Row = { key: string; label: string; storyId: number | null; items: Placed[]; lanes: number; depth: number; foldable: boolean; open: boolean };
-type StoryInfo = { name: string; parent: number | null };
+type StoryInfo = { name: string; parent: number | null; order: number | null };
+// years は画面の幅に見せる年数。squeeze は話の無い広い区間を帯に詰めるか
+type View = { years: number; squeeze: boolean };
 type Tick = { at: number; label: string; major: boolean };
 type Gap = { from: number; to: number; x: number };
 // since〜until が軸の全体で、width はその横幅(px)
@@ -56,6 +64,8 @@ type Scale = { since: number; until: number; width: number; pxPerDay: number; ga
 
 // from は掴んだ段、over は落とす先の作品(掴んだ段の上・作品の無い段の上では null)
 type Drag = { item: Item; from: string; startX: number; startY: number; dx: number; dy: number; over: number | null };
+// 変更モードで溜めた移し。base は読み込んだときの話で、days はそこから何日ずらすか、story は移す先の作品(移さないなら null)
+type Change = { base: Item; days: number; story: number | null };
 
 function dayOf(value: unknown): number | null {
   const parts = parseStamp(value);
@@ -122,11 +132,12 @@ function emptiesAt(since: number, until: number, pxPerDay: number, items: Item[]
 }
 
 /**
- * 時刻と横の位置の対応。縮尺は `pxPerDay` に決めておき、lo〜hi の中で話の無い広い区間だけを幅 {@link GAP_PX} の帯に詰める。
- * lo〜hi の外(前後の余白)は詰めない。詰めて画面の幅より短くなったら、後ろへ延ばして画面を埋める。
+ * 時刻と横の位置の対応。縮尺は `pxPerDay` に決めておく。`squeeze` なら、lo〜hi の中で話の無い広い区間だけを幅 {@link GAP_PX} の帯に詰める。
+ * lo〜hi の外(前後の余白)は詰めない。画面の幅より短ければ、後ろへ延ばして画面を埋める。
  */
-function compress(since: number, until: number, lo: number, hi: number, pxPerDay: number, viewport: number, items: Item[]): Scale {
-  const empties = emptiesAt(lo, hi, pxPerDay, items).filter((g) => (g.to - g.from) * pxPerDay > MIN_GAP_PX);
+function compress(since: number, until: number, lo: number, hi: number, pxPerDay: number, viewport: number, items: Item[],
+  squeeze: boolean): Scale {
+  const empties = squeeze ? emptiesAt(lo, hi, pxPerDay, items).filter((g) => (g.to - g.from) * pxPerDay > MIN_GAP_PX) : [];
   const gaps: Gap[] = [];
   const knots: [number, number][] = [[since, 0]];
   let x = 0;
@@ -179,10 +190,40 @@ function startTicks(items: Item[]): Tick[] {
     });
 }
 
+/**
+ * 等間隔の軸の、from〜to の日の目盛り。年の境目を、間が {@link YEAR_TICK_PX} より広くなる刻み(1・2・5 の 10 のべき倍の年)で置き、
+ * 1 年が広ければ月の境目も置く
+ */
+function calendarTicks(scale: Scale, from: number, to: number): Tick[] {
+  const pxPerYear = scale.pxPerDay * DAYS_PER_YEAR;
+  let step = 1;
+  for (let k = 1; step * pxPerYear < YEAR_TICK_PX; k++) step = [1, 2, 5][k % 3] * 10 ** Math.floor(k / 3);
+  const months = pxPerYear / 12 >= MONTH_TICK_PX;
+  const [lo, hi] = [Math.max(from, scale.since), Math.min(to, scale.until)];
+  const at = (year: number, month: number) => dayNumber({ year, month, day: 1, hour: 0, minute: 0, second: 0 });
+  const ticks: Tick[] = [];
+  for (let year = Math.ceil(fromDayNumber(lo).year / step) * step; year <= fromDayNumber(hi).year; year += step) {
+    ticks.push({ at: at(year, 1), label: String(year), major: true });
+    if (months) for (let month = 2; month <= 12; month++) ticks.push({ at: at(year, month), label: pad2(month), major: false });
+  }
+  return ticks.filter((tick) => tick.at >= lo && tick.at <= hi);
+}
+
 /** 時刻を日の単位に丸める。期間はその日の始めから、終わりの日の終わりまで */
 function daySpan(start: number, end: number | null): { at: number; start: number; end: number | null } {
   const from = Math.floor(start);
   return { at: start, start: from, end: end === null ? null : Math.max(from + 1, Math.ceil(end)) };
+}
+
+/** 溜めた移しを当てた話。札はこの時刻・作品の所に描く */
+function changedItem({ base, days, story }: Change): Item {
+  const record: Rec = { ...base.record, ...shifted(base, days), ...(story !== null ? { story_id: story } : {}) };
+  return { ...base, record, ...daySpan(dayOf(record.start)!, dayOf(record.end)) };
+}
+
+/** 保存する欄。動かした分だけを渡す */
+function changeForm({ base, days, story }: Change): Rec {
+  return { id: base.id, ...(days !== 0 ? shifted(base, days) : {}), ...(story !== null ? { story_id: story } : {}) };
 }
 
 function itemsOf(data: TimelineResponse): Item[] {
@@ -208,6 +249,17 @@ function savedFilter(): Record<string, string> | null {
   }
 }
 
+/** 覚えておいた縮尺と詰め方。無い・読めない値は既定(1 年、詰めない)にする */
+function savedView(): View {
+  try {
+    const saved = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "null");
+    const years = Number(saved?.years);
+    return { years: Number.isInteger(years) && years >= 1 ? years : 1, squeeze: saved?.squeeze === true };
+  } catch {
+    return { years: 1, squeeze: false };
+  }
+}
+
 /** 日付をずらしたときに直す欄。開始・終了を同じ日数だけ動かす。 */
 function shifted(item: Item, days: number): Rec {
   const changes: Rec = {};
@@ -216,17 +268,15 @@ function shifted(item: Item, days: number): Rec {
 }
 
 /**
- * 作品の木。話の無い作品も段にする(作品で絞ったときは、その作品と子孫の作品)。場所で絞ったときは、その場所の話のある作品だけにする。
- * 段にする作品の祖先の作品も段にする。親が段に無い作品は根に置く。兄弟は、その作品と子孫の作品の一番早い話の順に並べ、
- * 話の無い作品は後ろに回す。読み直しても段が入れ替わらないよう、一番早い話が同じなら作品の id 順にする
+ * 作品の木。話の無い作品も段にする(作品で絞ったときは、その作品と子孫の作品)。
+ * 段にする作品の祖先の作品も段にする。親が段に無い作品は根に置く。兄弟は、作品一覧と同じく `display_order` の順に並べる。
+ * `display_order` の空の作品は後ろに回し、その作品と子孫の作品の一番早い話の順にする(話の無い作品はさらに後ろ)。
+ * 読み直しても段が入れ替わらないよう、一番早い話が同じなら作品の id 順にする
  */
-function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, locationId: number | null,
-  labels: Labels): Group[] {
+function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId: number | null, labels: Labels): Group[] {
   const byStory = new Map<number, Item[]>();
   if (storyId !== null) byStory.set(storyId, []);
-  if (locationId === null) {
-    for (const id of stories.keys()) if (storyId === null || descendsFrom(id, storyId, stories)) byStory.set(id, []);
-  }
+  for (const id of stories.keys()) if (storyId === null || descendsFrom(id, storyId, stories)) byStory.set(id, []);
   for (const item of episodes) {
     const story = item.record.story_id as number;
     byStory.set(story, [...(byStory.get(story) ?? []), item]);
@@ -244,9 +294,10 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
     }
   }
   const firstOf = (id: number) => firstAt.get(id) ?? Infinity;
-  const byFirst = (a: number, b: number) => firstOf(a) - firstOf(b) || a - b;
+  const orderOf = (id: number) => stories.get(id)?.order ?? Infinity;
+  const byOrder = (a: number, b: number) => orderOf(a) - orderOf(b) || firstOf(a) - firstOf(b) || a - b;
   const childrenOf = new Map<number | null, number[]>();
-  for (const id of [...shown].sort(byFirst)) {
+  for (const id of [...shown].sort(byOrder)) {
     const parent = stories.get(id)?.parent ?? null;
     const key = parent !== null && shown.has(parent) ? parent : null;
     childrenOf.set(key, [...(childrenOf.get(key) ?? []), id]);
@@ -264,7 +315,7 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
     (childrenOf.get(id) ?? []).forEach(reach);
   };
   roots.forEach(reach);
-  return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort(byFirst)].map(node);
+  return [...roots, ...[...shown].filter((id) => !reached.has(id)).sort(byOrder)].map(node);
 }
 
 /** 作品 `id` が `ancestor` か、その子孫か。親を循環してたどる作品でも止まる */
@@ -299,10 +350,7 @@ export default function TimelinePage() {
   const router = useRouter();
   const search = useSearchParams();
   const at = search.get("at");
-  const spanParam = Number(search.get("span"));
-  const span = SPANS.includes(spanParam) ? spanParam : DEFAULT_SPAN;
   const storyId = Number(search.get("story_id")) || null;
-  const locationId = Number(search.get("location_id")) || null;
   const centerParts = parseStamp(at);
   const center = centerParts ? dayNumber(centerParts) : null;
 
@@ -312,15 +360,20 @@ export default function TimelinePage() {
   const [stories, setStories] = useState<Map<number, StoryInfo> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
   // スクロールする欄のうち、段の名前を除いた見える幅(viewport)と、段の名前の幅(label)
   const [box, setBox] = useState({ viewport: 0, label: 0 });
   // 期間に必ず含める時刻。入力欄・URL で中心を飛ばした先で、スクロールでは変えない(変えると軸が組み直されて位置が飛ぶ)
   const [anchor, setAnchor] = useState<number | null>(null);
+  // 今見ている所が、軸を画面の幅で区切った何番目か。等間隔の軸の目盛りは、全期間に置くと数が増えすぎるので、この前後の区切りにだけ置く
+  const [screen, setScreen] = useState(0);
   const [drag, setDrag] = useState<Drag | null>(null);
-  // 保存を待つあいだ、落とした所に置いておく
-  const [pending, setPending] = useState<{ key: string; days: number } | null>(null);
+  // 変更モード。札を動かしても保存せず、話の id ごとに移しを溜めて、適用でまとめて保存する
+  const [editing, setEditing] = useState(false);
+  const [changes, setChanges] = useState<Map<number, Change>>(new Map());
+  const [applying, setApplying] = useState(false);
   // 空いた所を押して足す話の初期値・作品の名前
+  // 押した話。吹き出しと同じく読み込んだ話から出し、開くたびに引かない
+  const [viewing, setViewing] = useState<Item | null>(null);
   const [adding, setAdding] = useState<{ initial: Rec; storyLabel: string | null } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -328,6 +381,20 @@ export default function TimelinePage() {
   const aligned = useRef<{ at: string | null; scale: Scale | null }>({ at: null, scale: null });
   const { isOpen, setOpen } = useTreeOpen("timeline");
   const { tip, show, hide } = useTooltip();
+  // 縮尺と詰め方は URL に載せず、このブラウザに覚えておく。サーバで描いた初めの画面と合わせるため、読むのは描いたあと
+  const [view, setView] = useState<View>({ years: 1, squeeze: false });
+  useEffect(() => setView(savedView()), []);
+  const span = view.years * DAYS_PER_YEAR;
+
+  const changeView = (changes: Partial<View>) => {
+    const next = { ...view, ...changes };
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // 覚えられなくても、この画面の中では縮尺が効く
+    }
+  };
 
   const navigate = useCallback(
     (changes: Record<string, string | number | null>) => {
@@ -373,35 +440,56 @@ export default function TimelinePage() {
     setDraft(at);
   }
 
+  // 別のタブで話・作品を足して戻ってきたら読み直す。保存・ドラッグの途中は、読み直した話で札が動かないよう待つ
+  const [reloads, setReloads] = useState(0);
+  const busy = useRef(false);
+  useLayoutEffect(() => {
+    busy.current = applying || drag !== null;
+  });
+  useEffect(() => {
+    const reload = () => {
+      if (!busy.current) setReloads((n) => n + 1);
+    };
+    window.addEventListener("focus", reload);
+    return () => window.removeEventListener("focus", reload);
+  }, []);
+
   useEffect(() => {
     let alive = true;
     listAllRecords("story")
       .then((records) => {
         if (!alive) return;
         setStories(new Map(records.map((r) => [Number(r.id), {
-          name: String(r.name ?? r.label ?? ""), parent: typeof r.parent_story_id === "number" ? r.parent_story_id : null }])));
+          name: String(r.name ?? r.label ?? ""), parent: typeof r.parent_story_id === "number" ? r.parent_story_id : null,
+          order: typeof r.display_order === "number" ? r.display_order : null }])));
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [reloads]);
 
   useEffect(() => {
     if (restoring) return;
     let alive = true;
-    getTimeline({ story_id: storyId, location_id: locationId })
+    getTimeline({ story_id: storyId })
       .then((result) => {
         if (!alive) return;
         setData(result);
         setError(null);
-        setPending(null);
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       alive = false;
     };
-  }, [restoring, storyId, locationId, version]);
+  }, [restoring, storyId, reloads]);
+
+  useEffect(() => {
+    if (changes.size === 0) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [changes.size]);
 
   // スクロールする欄。幅を測り、縦のホイールを横のスクロールに回す(段の名前の上と Shift を押したときは縦のまま)
   const scrollBoxRef = useCallback((element: HTMLDivElement | null) => {
@@ -438,7 +526,11 @@ export default function TimelinePage() {
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
   }, []);
 
-  const items = useMemo(() => (data ? itemsOf(data) : []), [data]);
+  const loaded = useMemo(() => (data ? itemsOf(data) : []), [data]);
+  const items = useMemo(() => loaded.map((item) => {
+    const change = changes.get(item.id);
+    return change ? changedItem(change) : item;
+  }), [loaded, changes]);
 
   // 軸は全部の札(と飛ばした先の中心)を含め、前後に画面の半分ずつ余白を取る。端の札も画面の中ほどまで持ってこられる
   const scale = useMemo(() => {
@@ -449,8 +541,8 @@ export default function TimelinePage() {
       hi = Math.max(hi, item.end ?? item.start + 1);
     }
     if (box.viewport === 0 || lo > hi) return null;
-    return compress(Math.floor(lo - span / 2), Math.ceil(hi + span / 2), lo, hi, box.viewport / span, box.viewport, items);
-  }, [anchor, items, span, box.viewport]);
+    return compress(Math.floor(lo - span / 2), Math.ceil(hi + span / 2), lo, hi, box.viewport / span, box.viewport, items, view.squeeze);
+  }, [anchor, items, span, view.squeeze, box.viewport]);
   const pxPerDay = scale?.pxPerDay ?? 0;
   const toX = useCallback((day: number) => scale?.toX(day) ?? 0, [scale]);
   const fromX = useCallback((x: number) => scale?.fromX(x) ?? 0, [scale]);
@@ -479,6 +571,7 @@ export default function TimelinePage() {
   });
 
   const onScroll = () => {
+    if (scrollRef.current && box.viewport > 0) setScreen(Math.floor(scrollRef.current.scrollLeft / box.viewport));
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(() => {
       const element = scrollRef.current;
@@ -498,53 +591,73 @@ export default function TimelinePage() {
 
   const rows = useMemo(() => {
     if (!stories || !scale) return [];
-    const rows = flatten(storyGroups(items, stories, storyId, locationId, labels), 0, isOpen, toX);
+    const rows = flatten(storyGroups(items, stories, storyId, labels), 0, isOpen, toX);
     if (rows.length === 0) rows.push({ key: "story-none", label: "", storyId: null, items: [], lanes: 1, depth: 0, foldable: false, open: true });
     return rows;
-  }, [stories, scale, items, storyId, locationId, labels, isOpen, toX]);
+  }, [stories, scale, items, storyId, labels, isOpen, toX]);
 
   const axisTicks = useMemo(() => {
     if (!scale) return [];
-    // 年の文字は、その年でまだ出していなければ出す。前の文字・詰めた帯に掛かるときは、同じ年の次の目盛りに回す
+    // 詰めた軸は、話の開始日に目盛りを置く(暦の境目は帯に飲まれる)。等間隔の軸は、暦の境目に置く。
+    // 詰めた軸の年の文字は、その年でまだ出していなければ出す。前の文字・詰めた帯に掛かるときは、同じ年の次の目盛りに回す
     let labelEnd = -Infinity;
     let shownYear: string | null = null;
-    return startTicks(items).map((tick) => {
+    const ticks = view.squeeze ? startTicks(items) : calendarTicks(scale, scale.fromX((screen - 1) * box.viewport), scale.fromX((screen + 2) * box.viewport));
+    return ticks.map((tick) => {
       const x = scale.toX(tick.at);
-      if (tick.label === shownYear || x < labelEnd || scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX)) return { ...tick, label: "" };
+      if ((view.squeeze && tick.label === shownYear) || x < labelEnd || scale.gaps.some((g) => x > g.x - TICK_LABEL_PX && x < g.x + GAP_PX)) {
+        return { ...tick, label: "" };
+      }
       shownYear = tick.label;
       labelEnd = x + tickLabelWidth(tick.label);
       return tick;
     });
-  }, [scale, items]);
+  }, [scale, items, view.squeeze, screen, box.viewport]);
 
   /** 横に dx px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
   const daysAt = (item: Item, dx: number) => (pxPerDay > 0 ? Math.round(fromX(toX(item.start) + dx) - item.start) : 0);
 
-  const dragDays = (item: Item) => {
-    if (drag?.item.key === item.key) return Math.abs(drag.dx) > DRAG_THRESHOLD ? daysAt(item, drag.dx) : 0;
-    if (pending?.key === item.key) return pending.days;
-    return 0;
-  };
+  const dragDays = (item: Item) => (drag?.item.key === item.key && Math.abs(drag.dx) > DRAG_THRESHOLD ? daysAt(item, drag.dx) : 0);
 
   const storyLabel = (id: number) => T.nameId(stories?.get(id)?.name ?? labels.story_id?.[id], id);
 
-  const move = async (item: Item, days: number, story: number | null) => {
-    const changes = shifted(item, days);
-    if (story !== null) changes.story_id = story;
-    setPending({ key: item.key, days });
+  /** 移しを溜める。同じ話を何度動かしても、読み込んだときの話からの移しにまとめる。元に戻ったら溜めた分から外す */
+  const move = (item: Item, days: number, story: number | null) => {
+    const next = new Map(changes);
+    const previous = changes.get(item.id);
+    const base = previous?.base ?? item;
+    const target = story ?? previous?.story ?? null;
+    const change = { base, days: (previous?.days ?? 0) + days, story: target === base.record.story_id ? null : target };
+    if (change.days === 0 && change.story === null) next.delete(item.id);
+    else next.set(item.id, change);
+    setChanges(next);
+  };
+
+  const leaveEditing = () => {
+    setChanges(new Map());
+    setEditing(false);
+  };
+
+  const apply = async () => {
+    setApplying(true);
+    setError(null);
     setMessage(null);
     try {
-      await updateRecord("episode", item.id, changes);
-      setMessage([days !== 0 && T.timeline.moved(item.label, String(changes.start)),
-        story !== null && T.timeline.movedToStory(item.label, storyLabel(story))].filter(Boolean).join(" / "));
+      await updateEpisodes([...changes.values()].map(changeForm));
+      // 読み直した話と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
+      const result = await getTimeline({ story_id: storyId });
+      setData(result);
+      setMessage(T.timeline.applied(changes.size));
+      leaveEditing();
     } catch (e) {
-      setError(T.timeline.moveFailed(e instanceof Error ? e.message : String(e)));
+      setError(T.timeline.applyFailed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setApplying(false);
     }
-    setVersion((v) => v + 1);
   };
 
   const onItemDown = (e: PointerEvent<HTMLDivElement>, item: Item, row: Row) => {
-    if (e.button !== 0 || pending) return;
+    if (e.button !== 0 || applying) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     hide();
@@ -560,7 +673,7 @@ export default function TimelinePage() {
   };
 
   const onItemMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (drag) setDrag({ ...drag, dx: e.clientX - drag.startX, dy: e.clientY - drag.startY,
+    if (drag && editing) setDrag({ ...drag, dx: e.clientX - drag.startX, dy: e.clientY - drag.startY,
       over: storyUnder(e.clientX, e.clientY, drag.from, drag.item) });
   };
 
@@ -571,30 +684,35 @@ export default function TimelinePage() {
     const dy = e.clientY - drag.startY;
     setDrag(null);
     if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) {
-      window.open(`/tables/episode/${item.id}`, "_blank", "noopener,noreferrer");
+      setViewing(item);
       return;
     }
+    // 変更モードの外では札を動かさない
+    if (!editing) return;
     // 段を移すときの手ぶれで時刻が動かないよう、横にしきい値を超えて動かしたときだけ時刻を送る
     const days = Math.abs(dx) > DRAG_THRESHOLD ? daysAt(item, dx) : 0;
-    if (days !== 0 || over !== null) void move(item, days, over);
+    if (days !== 0 || over !== null) move(item, days, over);
   };
 
-  /** 空いた所を押したら、その日・その段の作品で話を足す(時刻を直して、追加ページを別タブに開く) */
+  /** 空いた所を押したら、その日・その段の作品で話を足す(時刻とプロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (pxPerDay === 0) return;
     const snapped = Math.floor(fromX(e.clientX - e.currentTarget.getBoundingClientRect().left));
     const initial: Rec = { start: formatStamp(fromDayNumber(snapped)) };
     const story = row.storyId ?? storyId;
     if (story !== null) initial.story_id = story;
-    if (locationId !== null) initial.location_id = locationId;
     setAdding({ initial, storyLabel: story === null ? null : storyLabel(story) });
   };
 
-  const tooltipLines = (item: Item) => {
+  /** 吹き出しと押したときのモーダルに出す、時刻・作品・場所の行 */
+  const detailLines = (item: Item) => {
     const r = item.record;
-    return [item.label, T.span(r.start, r.end) || String(r.start), labelOf(labels, "story_id", r.story_id),
-      r.location_id != null && labelOf(labels, "location_id", r.location_id), String(r.preview ?? "")];
+    const base = changes.get(item.id)?.base.record;
+    return [T.span(r.start, r.end) || String(r.start), labelOf(labels, "story_id", r.story_id),
+      base && T.timeline.was(T.span(base.start, base.end) || String(base.start), storyLabel(base.story_id as number)),
+      r.location_id != null && labelOf(labels, "location_id", r.location_id)];
   };
+  const tooltipLines = (item: Item) => [item.label, ...detailLines(item), String(item.record.preview ?? "")];
 
   const gapLines = (g: Gap) => [T.timeline.gap, `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`];
 
@@ -609,7 +727,13 @@ export default function TimelinePage() {
         ) : (
           <span className="timeline-toggle" />
         )}
-        {row.label}
+        {row.storyId !== null ? (
+          <Link href={`/tables/story/${row.storyId}`} target="_blank" rel="noopener noreferrer">
+            {row.label}
+          </Link>
+        ) : (
+          row.label
+        )}
       </div>
       <div className="timeline-track"
         style={{ width: scale?.width, height: (row.lanes + (row.storyId !== null && row.open ? STORY_SPARE_LANES : 0)) * LANE_HEIGHT + 6 }}
@@ -622,7 +746,8 @@ export default function TimelinePage() {
             item.end === null ? "point" : "",
             row.open ? "" : "folded",
             dragging ? "dragging" : "",
-            pending?.key === item.key ? "saving" : "",
+            changes.has(item.id) ? "changed" : "",
+            applying && changes.has(item.id) ? "saving" : "",
           ].join(" ");
           const target = days !== 0 && shifted(item, days);
           const offset = days ? toX(item.start + days) - item.x : 0;
@@ -684,30 +809,47 @@ export default function TimelinePage() {
         </form>
         <button type="button" onClick={() => shift(1)} disabled={center === null}>{T.timeline.later}</button>
         <div className="hint timeline-filter">
-          {T.timeline.span}
-          <ChoicePicker
-            title={T.timeline.span}
-            choices={SPANS.map((days) => ({ value: days, label: T.timeline.spanOf(days) }))}
-            value={span}
-            onChange={(days) => filter({ span: days })}
-            placeholder={T.select}
-          />
+          {T.timeline.scale}
+          <button type="button" onClick={() => changeView({ years: view.years - 1 })} disabled={view.years <= 1} title={T.timeline.fewerYears}>◀</button>
+          <span className="timeline-years">{T.timeline.years(view.years)}</span>
+          <button type="button" onClick={() => changeView({ years: view.years + 1 })} title={T.timeline.moreYears}>▶</button>
         </div>
+        <label className="hint timeline-filter">
+          <input type="checkbox" checked={view.squeeze} onChange={(e) => changeView({ squeeze: e.target.checked })} />
+          {T.timeline.squeeze}
+        </label>
         <div className="hint timeline-filter">
           {T.timeline.story}
           <ReferenceSelect table="story" value={storyId} nullable onChange={(value) => filter({ story_id: value })} title={T.timeline.story} />
         </div>
-        <div className="hint timeline-filter">
-          {T.timeline.location}
-          <TreeReferenceSelect table="location" value={locationId} nullable onChange={(value) => filter({ location_id: value })} title={T.timeline.location} />
-        </div>
+        {editing ? (
+          <>
+            <button type="button" className="primary" disabled={changes.size === 0 || applying} onClick={() => void apply()}>
+              {T.timeline.apply(changes.size)}
+            </button>
+            <button
+              type="button"
+              disabled={applying}
+              onClick={() => {
+                if (changes.size === 0 || window.confirm(T.timeline.confirmDiscard(changes.size))) leaveEditing();
+              }}
+            >
+              {T.timeline.discard}
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => setEditing(true)}>
+            {T.timeline.edit}
+          </button>
+        )}
       </div>
+      {editing && <div className="status info">{T.timeline.editHint}</div>}
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}
       {!data || !stories ? (
         !error && <div className="status info">{T.loading}</div>
       ) : (
-        <div className="timeline" aria-busy={pending !== null}>
+        <div className={`timeline ${editing ? "editing" : ""}`} aria-busy={applying}>
           <div className="timeline-scroll" ref={scrollBoxRef} onScroll={onScroll}>
             <div className="timeline-row timeline-axis">
               <div className="timeline-label" />
@@ -742,7 +884,42 @@ export default function TimelinePage() {
           {scale && <div className="timeline-center" style={{ left: box.label + box.viewport / 2 }} />}
         </div>
       )}
-      {adding && <NewEpisodeModal initial={adding.initial} storyLabel={adding.storyLabel} onClose={() => setAdding(null)} />}
+      {viewing && (
+        <Modal
+          title={viewing.label}
+          onClose={() => setViewing(null)}
+          actions={
+            <>
+              <span className="spacer" />
+              <button type="button" onClick={() => setViewing(null)}>{T.close}</button>
+              <button type="button" className="primary"
+                onClick={() => window.open(`/tables/episode/${viewing.id}`, "_blank", "noopener,noreferrer")}>
+                {T.timeline.openInNewTab}
+              </button>
+            </>
+          }
+        >
+          <div className="timeline-sheet">{detailLines(viewing).filter(Boolean).join("\n")}</div>
+          <div className="field section auto">
+            <label>plot_text</label>
+            <div className="section markdown-preview auto">
+              {viewing.record.plot_text ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{String(viewing.record.plot_text)}</ReactMarkdown>
+              ) : (
+                <span className="hint">{T.characterSheet.noText}</span>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+      {adding && (
+        <NewEpisodeModal
+          initial={adding.initial}
+          storyLabel={adding.storyLabel}
+          onClose={() => setAdding(null)}
+          onAdded={() => setReloads((n) => n + 1)}
+        />
+      )}
       <Tooltip tip={tip} />
     </div>
   );

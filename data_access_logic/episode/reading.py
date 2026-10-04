@@ -63,9 +63,10 @@ def episodes(s: Session, story_id: int, count: int = 10, before: Stamp | str | N
     return [(EpisodeRow if text else EpisodeHead).model_validate(episode) for episode in reversed(rows)]
 
 
-def last_episode(s: Session, story_id: int) -> EpisodeRecord | None:
-    """作品の中の並び(`common_query.episode_order`)で一番後ろの話。新しい話の場所・視点・登場人物の初期値にする。"""
-    row = s.scalars(common_query.episodes_select(story_id, count=1)).first()
+def previous_episode(s: Session, story_id: int, before: Stamp | str | None = None) -> EpisodeRecord | None:
+    """作品の中で start が `before` より前の、一番後ろの話。`before` が無ければ作品の並び(`common_query.episode_order`)で
+    一番後ろの話。新しい話の場所・視点・登場人物の初期値にする。"""
+    row = s.scalars(common_query.episodes_select(story_id, count=1, before=before)).first()
     return None if row is None else record_of(s, EpisodeRecord, row)
 
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
-import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
+import { listAllRecords, updateStories, type Rec } from "@/lib/api";
 import NameId from "./NameId";
 import { buildStoryTree, collapsibleIds, descendantIds, findNode, type StoryNode } from "@/lib/storyTree";
 import { useOpenPage } from "@/lib/nav";
@@ -16,16 +16,16 @@ type MoveTarget = number | typeof ROOT;
 
 type ContextMenuState = { node: StoryNode; x: number; y: number };
 
-// Move ボタンの移動モードの状態。blocked は動かす作品自身の子孫(親にすると循環になる)
+// 編集モードの状態。movingId は親を付け替えている作品、blocked はその子孫(親にすると循環になる)
 type MoveState = {
+  editing: boolean;
   movingId: number | null;
   blocked: Set<number>;
   onStartMove: (id: number) => void;
   onCancelMove: () => void;
   onMoveHere: (target: MoveTarget) => void;
   onContextMenu: (menu: ContextMenuState) => void;
-  // 兄弟の中で一つ上(-1)・下(+1)へ並べ替える。保存の間は押せない
-  reordering: boolean;
+  // 兄弟の中で一つ上(-1)・下(+1)へ並べ替える
   onShift: (siblings: StoryNode[], index: number, delta: -1 | 1) => void;
 };
 
@@ -39,7 +39,7 @@ function StoryRow({ node, siblings, index, move }: RowProps) {
       type="button"
       className="tree-move-btn"
       title={delta < 0 ? T.storyTree.moveUp : T.storyTree.moveDown}
-      disabled={inMoveMode || move.reordering || !siblings[index + delta]}
+      disabled={inMoveMode || !siblings[index + delta]}
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -51,28 +51,40 @@ function StoryRow({ node, siblings, index, move }: RowProps) {
   );
   return (
     <>
-      <Link href={`/tables/story/${node.id}`} className="tree-name" onClick={(e) => e.stopPropagation()}>
+      <Link
+        href={`/tables/story/${node.id}`}
+        className="tree-name"
+        onClick={(e) => {
+          e.stopPropagation();
+          // 編集モードで画面を移ると溜めた変更が消えるので、開かない
+          if (move.editing) e.preventDefault();
+        }}
+      >
         <NameId name={node.name} id={node.id} />
       </Link>
       <span className="tree-meta">
         <span>{T.storyTree.episodes(node.episodes)}</span>
         {node.children.length > 0 && <span>{T.storyTree.stories(node.children.length)}</span>}
       </span>
-      <button
-        type="button"
-        className="tree-move-btn"
-        disabled={inMoveMode && !isSelf}
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (isSelf) move.onCancelMove();
-          else if (!inMoveMode) move.onStartMove(node.id);
-        }}
-      >
-        {isSelf ? T.storyTree.cancelMove : T.storyTree.move}
-      </button>
-      {shiftButton(-1)}
-      {shiftButton(1)}
+      {move.editing && (
+        <>
+          <button
+            type="button"
+            className="tree-move-btn"
+            disabled={inMoveMode && !isSelf}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (isSelf) move.onCancelMove();
+              else if (!inMoveMode) move.onStartMove(node.id);
+            }}
+          >
+            {isSelf ? T.storyTree.cancelMove : T.storyTree.changeParent}
+          </button>
+          {shiftButton(-1)}
+          {shiftButton(1)}
+        </>
+      )}
     </>
   );
 }
@@ -127,10 +139,22 @@ function StoryNodeView({ node, siblings, index, openState, move }: RowProps & { 
 }
 
 type Source = { stories: Rec[]; episodes: Rec[] };
+// 編集モードで溜めている作品ごとの変更。適用するまで db に書かない
+type Patch = { parent_story_id?: number | null; display_order?: number };
+type Draft = Map<number, Patch>;
+
+// 兄弟の並びどおりに display_order を上から 1, 2, … に振り直す
+const renumber = (draft: Draft, ids: number[]): Draft => {
+  const next = new Map(draft);
+  ids.forEach((id, i) => next.set(id, { ...next.get(id), display_order: i + 1 }));
+  return next;
+};
 
 /** 作品・話の一覧をそのまま引いて、作品の親子(`parent_story_id`)の木をブラウザで組む。タブに戻ったときに引き直す。
- *  親の付け替えは、Move ボタンで移動モードに入って別の作品をクリックする(一番上の欄なら親なし)。
+ *  上の Move ボタンで編集モードに入ると、行に Change parent と ▲▼ が出る。
+ *  親の付け替えは、Change parent を押して別の作品をクリックする(一番上の欄なら親なし)。新しい親の子の一番下に付く。
  *  兄弟の中の並びは ▲▼ で入れ替え、兄弟みんなの `display_order` を上から 1, 2, … に振り直す。
+ *  変更はブラウザに溜め、Apply で `story.update_stories.UpdateStories` にまとめて渡す。
  *  ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない。行の右クリックで、子の作品・話を足すメニューを出す。 */
 export default function StoryTree() {
   const openPage = useOpenPage();
@@ -139,7 +163,9 @@ export default function StoryTree() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<number | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
-  const [reordering, setReordering] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Draft>(new Map());
+  const [saving, setSaving] = useState(false);
   const openState = useTreeOpen("story");
 
   useEffect(() => {
@@ -172,59 +198,85 @@ export default function StoryTree() {
     return () => window.removeEventListener("focus", load);
   }, [load]);
 
-  const nodes = useMemo(() => (source ? buildStoryTree(source.stories, source.episodes) : null), [source]);
+  const stories = useMemo(
+    () => source?.stories.map((story) => ({ ...story, ...draft.get(Number(story.id)) })) ?? null,
+    [source, draft],
+  );
+  // 溜めた変更のうち、db の値と違うもの。▲▼ を押して戻したものは出さない
+  const changes = useMemo(
+    () =>
+      (source?.stories ?? []).flatMap((story) => {
+        const patch = draft.get(Number(story.id)) ?? {};
+        const changed = Object.entries(patch).filter(([key, value]) => (story[key] ?? null) !== value);
+        return changed.length > 0 ? [{ id: Number(story.id), ...Object.fromEntries(changed) }] : [];
+      }),
+    [source, draft],
+  );
+  const nodes = useMemo(
+    () => (source && stories ? buildStoryTree(stories, source.episodes) : null),
+    [source, stories],
+  );
   const blocked = useMemo(
     () => (nodes === null || movingId === null ? new Set<number>() : descendantIds(nodes, movingId)),
     [nodes, movingId],
   );
   const movingNode = useMemo(() => (nodes === null || movingId === null ? null : findNode(nodes, movingId)), [nodes, movingId]);
 
-  const moveTo = useCallback(
-    async (id: number, parentId: number | null) => {
-      setSaveError(null);
-      try {
-        await updateRecord("story", id, { parent_story_id: parentId });
-        await load();
-        setMovingId(null);
-      } catch (e) {
-        setSaveError(T.storyTree.moveFailed(e instanceof Error ? e.message : String(e)));
-      }
-    },
-    [load],
-  );
+  useEffect(() => {
+    if (changes.length === 0) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [changes.length]);
 
-  const shift = useCallback(
-    async (siblings: StoryNode[], index: number, delta: -1 | 1) => {
-      const next = [...siblings];
-      [next[index], next[index + delta]] = [next[index + delta], next[index]];
-      setSaveError(null);
-      setReordering(true);
-      try {
-        await Promise.all(
-          next.flatMap((n, i) => (n.displayOrder === i + 1 ? [] : [updateRecord("story", n.id, { display_order: i + 1 })])),
-        );
-      } catch (e) {
-        setSaveError(T.storyTree.reorderFailed(e instanceof Error ? e.message : String(e)));
-      } finally {
-        await load();
-        setReordering(false);
-      }
-    },
-    [load],
-  );
+  const moveTo = (id: number, parentId: number | null) => {
+    setMovingId(null);
+    if (nodes === null) return;
+    const siblings = parentId === null ? nodes : (findNode(nodes, parentId)?.children ?? []);
+    if (siblings.some((n) => n.id === id)) return;
+    const next = renumber(draft, [...siblings.map((n) => n.id), id]);
+    next.set(id, { ...next.get(id), parent_story_id: parentId });
+    setDraft(next);
+  };
+
+  const shift = (siblings: StoryNode[], index: number, delta: -1 | 1) => {
+    const ids = siblings.map((n) => n.id);
+    [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
+    setDraft(renumber(draft, ids));
+  };
+
+  const leaveEditing = () => {
+    setDraft(new Map());
+    setMovingId(null);
+    setEditing(false);
+  };
+
+  const apply = async () => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      await updateStories(changes);
+      await load();
+      leaveEditing();
+    } catch (e) {
+      setSaveError(T.storyTree.applyFailed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const move: MoveState = {
+    editing,
     movingId,
     blocked,
     onStartMove: setMovingId,
     onCancelMove: () => setMovingId(null),
     onMoveHere: (target) => {
       if (movingId === null || movingId === target) return;
-      void moveTo(movingId, target === ROOT ? null : target);
+      moveTo(movingId, target === ROOT ? null : target);
     },
     onContextMenu: setMenu,
-    reordering,
-    onShift: (siblings, index, delta) => void shift(siblings, index, delta),
+    onShift: shift,
   };
 
   if (error) return <div className="status error">{error}</div>;
@@ -233,6 +285,29 @@ export default function StoryTree() {
 
   return (
     <div className="panel">
+      <div className="toolbar">
+        {editing ? (
+          <>
+            <button type="button" className="primary" disabled={changes.length === 0 || saving} onClick={() => void apply()}>
+              {T.storyTree.apply(changes.length)}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                if (changes.length === 0 || window.confirm(T.storyTree.confirmDiscard(changes.length))) leaveEditing();
+              }}
+            >
+              {T.storyTree.discard}
+            </button>
+            <span className="tree-move-hint">{T.storyTree.editHint}</span>
+          </>
+        ) : (
+          <button type="button" onClick={() => setEditing(true)}>
+            {T.storyTree.move}
+          </button>
+        )}
+      </div>
       {saveError && <div className="status error">{saveError}</div>}
       {movingId !== null && (
         <div className="tree-move-hint">{T.storyTree.moveModeHint(T.nameId(movingNode?.name, movingId))}</div>

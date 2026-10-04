@@ -194,8 +194,8 @@ def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
         record.synced = False
     if form.main_text is not None:
         record.main_text = layout_novel_text(form.main_text)
-        # 本文が変わったら、次の抽出でミームを抜き出し直す
-        if record.main_text != written_text:
+        # 本文が変わったら、次の抽出でミームを抜き出し直す(GUI で抜き出し済みフラグを渡されたらそれに従う)
+        if form.meme_seeded is None and record.main_text != written_text:
             record.meme_seeded = False
     CommitEntrypoint.finalize(s, record)
     # 渡されなければ既存の登場人物はそのまま

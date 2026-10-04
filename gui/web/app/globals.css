@@ -357,6 +357,7 @@ a.button-link:hover { border-color: var(--accent); }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }
 .jump-title { font-size: 1.6rem; font-weight: 700; }
 .jump-sub { font-size: 0.9rem; opacity: 0.85; }
+.jump + .jump { margin-top: 0.6rem; }
 .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem; }
 .kbd { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--line); border-radius: 4px; padding: 0 0.3rem; color: var(--muted); }
 
@@ -383,6 +384,7 @@ a.button-link:hover { border-color: var(--accent); }
 .viz-side td.num { text-align: right; white-space: nowrap; }
 .viz-side tr.row { cursor: pointer; }
 .viz-side tr.row:hover td { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.viz-side tr.row.on td { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
 .viz-side .text { white-space: pre-wrap; margin: 4px 0 8px; }
 .tip { position: fixed; pointer-events: none; background: #222; color: #fff; padding: 6px 8px; font-size: 12px; border-radius: 3px; white-space: pre; max-width: 360px; z-index: 20; }
 @media (max-width: 800px) {
@@ -542,6 +544,7 @@ a.button-link:hover { border-color: var(--accent); }
 .timeline-center-input { display: inline-flex; align-items: center; gap: 0.4rem; }
 .timeline-center-input input[type="text"] { width: 12.5rem; }
 .timeline-filter { display: inline-flex; align-items: center; gap: 0.4rem; }
+.timeline-years { min-width: 4.5rem; text-align: center; color: var(--ink); }
 .timeline { --timeline-label: 220px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .timeline-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-x: contain; }
 .timeline-body { position: relative; width: max-content; }
@@ -582,6 +585,10 @@ a.button-link:hover { border-color: var(--accent); }
 .timeline-item.folded.dragging .timeline-text { padding: 0 6px; }
 .timeline-item.dragging { cursor: grabbing; z-index: 3; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); }
 .timeline-item.saving { opacity: 0.6; }
+/* 変更モードでなければ札は動かず、押すと話を開く */
+.timeline:not(.editing) .timeline-item { cursor: pointer; }
+/* 変更モードで動かして、まだ保存していない札 */
+.timeline-item.changed { border-style: dashed; border-color: var(--danger); }
 .timeline-item:hover { z-index: 2; }
 .timeline-bar {
   position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; pointer-events: none;
@@ -614,3 +621,5 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 .episode-sheet-characters.collapsed { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
 .episode-sheet-characters.collapsed .episode-sheet-character { display: inline; padding-bottom: 0; border-bottom: none; }
 .episode-relations-toggle { font-size: 0.8rem; padding: 0.1rem 0.5rem; }
+/* タイムラインで押した話のモーダル。吹き出しと同じ行を並べる */
+.timeline-sheet { white-space: pre-wrap; line-height: 1.7; margin-bottom: 0.8rem; }

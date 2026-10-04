@@ -224,6 +224,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/story_route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Story Route
+         * @description 作品の話を順に並べ、それぞれを地図に置く位置。地図(`/maps?story=`)が場所の移り変わりを描く
+         */
+        get: operations["get_story_route_api_story_route_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/relations": {
         parameters: {
             query?: never;
@@ -304,7 +324,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/last_episode": {
+    "/api/previous_episode": {
         parameters: {
             query?: never;
             header?: never;
@@ -312,10 +332,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Last Episode
-         * @description 作品の最後の話。話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う
+         * Previous Episode
+         * @description 作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。
+         *     話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う
          */
-        get: operations["last_episode_api_last_episode_get"];
+        get: operations["previous_episode_api_previous_episode_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -716,6 +737,31 @@ export interface components {
             /** Colors */
             colors: string[];
         };
+        /** RouteStop */
+        RouteStop: {
+            /** Episode Id */
+            episode_id: number;
+            /** Title */
+            title: string;
+            /** Start */
+            start: string | null;
+            /** Story Id */
+            story_id: number;
+            /** Location Id */
+            location_id: number | null;
+            /** Location Name */
+            location_name: string | null;
+            /** Placed Id */
+            placed_id: number | null;
+            /** Placed Name */
+            placed_name: string | null;
+            /** Planet Id */
+            planet_id: number | null;
+            /** Lon */
+            lon: number | null;
+            /** Lat */
+            lat: number | null;
+        };
         /** RunRequest */
         RunRequest: {
             /** Args */
@@ -729,6 +775,15 @@ export interface components {
             entrance: string;
             /** Result */
             result?: unknown;
+        };
+        /** StoryRoute */
+        StoryRoute: {
+            /** Story Id */
+            story_id: number;
+            /** Story Name */
+            story_name: string;
+            /** Stops */
+            stops: components["schemas"]["RouteStop"][];
         };
         /** TableMeta */
         TableMeta: {
@@ -1209,6 +1264,37 @@ export interface operations {
             };
         };
     };
+    get_story_route_api_story_route_get: {
+        parameters: {
+            query: {
+                story_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryRoute"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     relations_api_relations_get: {
         parameters: {
             query?: never;
@@ -1285,7 +1371,6 @@ export interface operations {
         parameters: {
             query?: {
                 story_id?: number | null;
-                location_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -1313,10 +1398,11 @@ export interface operations {
             };
         };
     };
-    last_episode_api_last_episode_get: {
+    previous_episode_api_previous_episode_get: {
         parameters: {
             query: {
                 story_id: number;
+                before?: string | null;
             };
             header?: never;
             path?: never;

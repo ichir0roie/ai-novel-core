@@ -30,6 +30,7 @@ from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OP
 from data_access_logic.map.collect import planet_maps
 from data_access_logic.map.geometry import BEARINGS
 from data_access_logic.map.render_svg import COLORS, render_svg
+from data_access_logic.map.story_route import StoryRoute, story_route
 from db.schema import engine, get_env_session
 from db.stamp import Stamp
 from gui.api import interface, meta, records, timeline
@@ -231,6 +232,12 @@ def map_svg(planet_id: int, s: Session = Depends(session_dep)) -> Response:
     raise UnknownRecordError(f"id={planet_id} の星に地図が無い(座標を持つ場所が無いか、星でない)")
 
 
+@app.get("/api/story_route", response_model=StoryRoute)
+def get_story_route(story_id: int, s: Session = Depends(session_dep)) -> StoryRoute:
+    """作品の話を順に並べ、それぞれを地図に置く位置。地図(`/maps?story=`)が場所の移り変わりを描く"""
+    return story_route(s, story_id)
+
+
 @app.get("/api/relations", response_model=RelationsResponse)
 def relations(s: Session = Depends(session_dep)) -> RelationsResponse:
     """人物相関図の元データ。画面(`/relations`)が描く"""
@@ -254,16 +261,17 @@ def location_characters(location_id: int, time: str, s: Session = Depends(sessio
 
 
 @app.get("/api/timeline", response_model=TimelineResponse)
-def get_timeline(story_id: int | None = None, location_id: int | None = None,
-                 s: Session = Depends(session_dep)) -> TimelineResponse:
+def get_timeline(story_id: int | None = None, s: Session = Depends(session_dep)) -> TimelineResponse:
     """全期間の話。画面(`/timeline`)が時刻の軸に並べる"""
-    return timeline.timeline(s, story_id=story_id, location_id=location_id)
+    return timeline.timeline(s, story_id=story_id)
 
 
-@app.get("/api/last_episode", response_model=EpisodeRecord | None)
-def last_episode(story_id: int, s: Session = Depends(session_dep)) -> EpisodeRecord | None:
-    """作品の最後の話。話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う"""
-    return episode_reading.last_episode(s, story_id)
+@app.get("/api/previous_episode", response_model=EpisodeRecord | None)
+def previous_episode(story_id: int, before: str | None = None,
+                     s: Session = Depends(session_dep)) -> EpisodeRecord | None:
+    """作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。
+    話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う"""
+    return episode_reading.previous_episode(s, story_id, before)
 
 
 @app.get("/api/episode_neighbors", response_model=episode_reading.EpisodeNeighbors)

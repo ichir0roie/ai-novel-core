@@ -79,12 +79,12 @@ const CANDIDATES: [Anchor, number, number][] = [
   ["start", 8, 4], ["end", -8, 4], ["middle", 0, -9], ["middle", 0, 15],
   ["start", 8, -8], ["start", 8, 16], ["end", -8, -8], ["end", -8, 16],
 ];
-type Box = [number, number, number, number];
+export type Box = [number, number, number, number];
 const overlaps = (a: Box, b: Box) => !(a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]);
 
-/** 印のそばで他のラベルと重ならない位置を選ぶ。同じ点に重なる印は呼ぶ側で y をずらして渡す。 */
-export function locationLabels(items: [number, number, string][], px = 11): [number, number, Anchor][] {
-  const placed: Box[] = [];
+/** 印のそばで他のラベルと重ならない位置を選ぶ。同じ点に重なる印は呼ぶ側で y をずらして渡す。`obstacles` はラベルを避けさせる箱。 */
+export function locationLabels(items: [number, number, string][], px = 11, obstacles: Box[] = []): [number, number, Anchor][] {
+  const placed: Box[] = [...obstacles];
   return items.map(([x, y, text]) => {
     const w = textWidth(text, px);
     const h = px + 2;

@@ -209,15 +209,26 @@ export default function RecordPage() {
                     <a
                       className="button-link"
                       href={claudeSessionUrl(
-                        (String(loaded.record.main_text ?? "").trim() ? T.record.claudePromptRevise : T.record.claudePromptWrite)(
-                          T.nameId(loaded.label, id),
-                        ),
+                        String(loaded.record.main_text ?? "").trim()
+                          ? T.record.claudePromptRevise(T.nameId(loaded.label, id))
+                          : T.record.claudePromptWrite(id),
                       )}
                       target="_blank"
                       rel="noopener noreferrer"
                       title={T.record.openClaudeHint}
                     >
                       {T.record.openClaude}
+                    </a>
+                  )}
+                  {table === "episode" && (
+                    <a
+                      className="button-link"
+                      href={claudeSessionUrl(T.record.claudePromptInteractive(id))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={T.record.openClaudeInteractiveHint}
+                    >
+                      {T.record.openClaudeInteractive}
                     </a>
                   )}
                   <span className="spacer" />

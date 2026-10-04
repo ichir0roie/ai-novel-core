@@ -128,6 +128,12 @@ export const runEntrance = (id: string, args: Rec) =>
 /** アイデアを消す(下位のアイデアが残っていると失敗する)。`idea.delete_idea.DeleteIdea` を呼ぶ。 */
 export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.DeleteIdea", { idea_id: ideaId });
 
+/** 作品の並び・親をまとめて直す(一つでも通らなければ何も直さない)。`story.update_stories.UpdateStories` を呼ぶ。 */
+export const updateStories = (stories: Rec[]) => runEntrance("story.update_stories.UpdateStories", { stories });
+
+/** 話の時刻・作品をまとめて直す(一つでも通らなければ何も直さない)。`episode.update_episodes.UpdateEpisodes` を呼ぶ。 */
+export const updateEpisodes = (episodes: Rec[]) => runEntrance("episode.update_episodes.UpdateEpisodes", { episodes });
+
 /** ミームをまとめて消す(一つでも無ければ何も消さない)。`meme.delete_meme.DeleteMeme` を呼ぶ。 */
 export const deleteMemes = (memeIds: number[]) => runEntrance("meme.delete_meme.DeleteMeme", { meme_ids: memeIds });
 
@@ -138,11 +144,14 @@ export const deleteEpisode = (episodeId: number) =>
 export type MapsResponse = components["schemas"]["MapsResponse"];
 export type PlanetMap = components["schemas"]["PlanetMap"];
 export type MapLocation = components["schemas"]["MapLocation"];
+export type StoryRoute = components["schemas"]["StoryRoute"];
+export type RouteStop = components["schemas"]["RouteStop"];
 export type RelationsResponse = components["schemas"]["RelationsResponse"];
 export type RelationCharacter = components["schemas"]["RelationCharacter"];
 export type Relation = components["schemas"]["Relation"];
 
 export const getMaps = () => api<MapsResponse>("/api/maps");
+export const getStoryRoute = (storyId: number) => api<StoryRoute>(`/api/story_route?story_id=${storyId}`);
 export const getRelations = () => api<RelationsResponse>("/api/relations");
 
 export type CharacterLocationsResponse = components["schemas"]["CharacterLocationsResponse"];
@@ -156,8 +165,11 @@ export const getLocationCharacters = (locationId: number, time: string) =>
 
 export type EpisodeRecord = components["schemas"]["EpisodeRecord"];
 
-export const getLastEpisode = (storyId: number) =>
-  api<EpisodeRecord | null>(`/api/last_episode?${new URLSearchParams({ story_id: String(storyId) })}`);
+export const getPreviousEpisode = (storyId: number, before: string | null) => {
+  const query = new URLSearchParams({ story_id: String(storyId) });
+  if (before !== null) query.set("before", before);
+  return api<EpisodeRecord | null>(`/api/previous_episode?${query}`);
+};
 
 export type EpisodeNeighbors = components["schemas"]["EpisodeNeighbors"];
 
@@ -166,10 +178,9 @@ export const getEpisodeNeighbors = (episodeId: number | string) =>
 
 export type TimelineResponse = components["schemas"]["TimelineResponse"];
 
-export const getTimeline = (params: { story_id?: number | null; location_id?: number | null }) => {
+export const getTimeline = (params: { story_id?: number | null }) => {
   const query = new URLSearchParams();
   if (params.story_id != null) query.set("story_id", String(params.story_id));
-  if (params.location_id != null) query.set("location_id", String(params.location_id));
   return api<TimelineResponse>(`/api/timeline?${query}`);
 };
 

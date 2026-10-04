@@ -22,6 +22,7 @@ export default function Related({
   const context = related.context as Parameters<typeof EpisodeContext>[0]["context"] | undefined;
   const graph = owner?.table === "character" ? { href: `/relations?character=${owner.id}`, ...T.related.relationGraph }
     : owner?.table === "location" ? { href: `/maps?location=${owner.id}`, ...T.related.mapCentered }
+    : owner?.table === "story" ? { href: `/maps?story=${owner.id}`, ...T.related.storyRoute }
     : null;
   const hasContext = context && Object.values(context).some((block) => block.items.length > 0);
   const showCharacters = characterIds !== undefined && onChangeCharacterIds !== undefined;

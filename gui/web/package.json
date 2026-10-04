@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "types": "openapi-typescript ../api/openapi.json -o lib/openapi.d.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "icons": "node scripts/icons.mjs"
   },
   "dependencies": {

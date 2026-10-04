@@ -39,6 +39,8 @@ class EpisodeCommitForm(Form):
     viewpoint_character_id: int | None = None
     location_id: int | None = None
     event_seeded: bool | None = None
+    # 渡さなければ、本文が変わったときに抜き出し直す扱いにする
+    meme_seeded: bool | None = None
     # 渡さなければ、手で直した話として同期していない扱いにする
     synced: bool | None = None
     # 渡すと登場人物(`episode_character`)をまるごと置き換える
@@ -57,6 +59,12 @@ class EpisodeCreateForm(EpisodeCommitForm):
 
     id: None = None
     story_id: int = Field(...)
+
+
+class EpisodeUpdateForm(EpisodeCommitForm):
+    """既にある話を直すときの `EpisodeCommitForm`(まとめて直す入口が、新しい話を足さないよう `id` を必須にする)。"""
+
+    id: int = Field(...)
 
 
 def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> None:

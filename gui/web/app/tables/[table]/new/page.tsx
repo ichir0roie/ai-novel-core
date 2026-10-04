@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec } from "@/lib/api";
-import { useCopyFromLastEpisode } from "@/lib/lastEpisode";
+import { useCopyFromPreviousEpisode } from "@/lib/previousEpisode";
 import { PageTitle, useMeta, useTable } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
@@ -42,7 +42,7 @@ export default function NewRecordPage() {
     if (meta && value === null) setValue(initialValue(meta, searchParams));
   }, [meta, value, searchParams]);
 
-  useCopyFromLastEpisode(value?.story_id, setValue, table === "episode");
+  useCopyFromPreviousEpisode(value?.story_id, value?.start, setValue, table === "episode");
 
   if (!meta || value === null) return <div className="status info">{T.loading}</div>;
 

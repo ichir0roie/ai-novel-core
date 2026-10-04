@@ -7,7 +7,6 @@ import { parseStamp, stampOrder } from "./stamp";
 export type StoryNode = {
   id: number;
   name: string;
-  displayOrder: number | null;
   // 話(episode)の数
   episodes: number;
   children: StoryNode[];
@@ -53,7 +52,7 @@ export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
   const node = (story: Rec): StoryNode => {
     const id = Number(story.id);
     return {
-      id, name: String(story.name ?? story.label ?? ""), displayOrder: num(story.display_order), episodes: episodeCount.get(id) ?? 0,
+      id, name: String(story.name ?? story.label ?? ""), episodes: episodeCount.get(id) ?? 0,
       children: (childrenOf.get(id) ?? []).map(node),
     };
   };

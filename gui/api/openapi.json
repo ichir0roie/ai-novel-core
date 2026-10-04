@@ -627,6 +627,46 @@
         }
       }
     },
+    "/api/story_route": {
+      "get": {
+        "summary": "Get Story Route",
+        "description": "作品の話を順に並べ、それぞれを地図に置く位置。地図(`/maps?story=`)が場所の移り変わりを描く",
+        "operationId": "get_story_route_api_story_route_get",
+        "parameters": [
+          {
+            "name": "story_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Story Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryRoute"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/relations": {
       "get": {
         "summary": "Relations",
@@ -735,22 +775,6 @@
               ],
               "title": "Story Id"
             }
-          },
-          {
-            "name": "location_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Location Id"
-            }
           }
         ],
         "responses": {
@@ -777,11 +801,11 @@
         }
       }
     },
-    "/api/last_episode": {
+    "/api/previous_episode": {
       "get": {
-        "summary": "Last Episode",
-        "description": "作品の最後の話。話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う",
-        "operationId": "last_episode_api_last_episode_get",
+        "summary": "Previous Episode",
+        "description": "作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。\n話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う",
+        "operationId": "previous_episode_api_previous_episode_get",
         "parameters": [
           {
             "name": "story_id",
@@ -790,6 +814,22 @@
             "schema": {
               "type": "integer",
               "title": "Story Id"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
             }
           }
         ],
@@ -807,7 +847,7 @@
                       "type": "null"
                     }
                   ],
-                  "title": "Response Last Episode Api Last Episode Get"
+                  "title": "Response Previous Episode Api Previous Episode Get"
                 }
               }
             }
@@ -2019,6 +2059,125 @@
         ],
         "title": "RelationsResponse"
       },
+      "RouteStop": {
+        "properties": {
+          "episode_id": {
+            "type": "integer",
+            "title": "Episode Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "placed_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placed Id"
+          },
+          "placed_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placed Name"
+          },
+          "planet_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planet Id"
+          },
+          "lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lon"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "episode_id",
+          "title",
+          "start",
+          "story_id",
+          "location_id",
+          "location_name",
+          "placed_id",
+          "placed_name",
+          "planet_id",
+          "lon",
+          "lat"
+        ],
+        "title": "RouteStop"
+      },
       "RunRequest": {
         "properties": {
           "args": {
@@ -2045,6 +2204,32 @@
           "entrance"
         ],
         "title": "RunResult"
+      },
+      "StoryRoute": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "story_name": {
+            "type": "string",
+            "title": "Story Name"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStop"
+            },
+            "type": "array",
+            "title": "Stops"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id",
+          "story_name",
+          "stops"
+        ],
+        "title": "StoryRoute"
       },
       "TableMeta": {
         "properties": {
