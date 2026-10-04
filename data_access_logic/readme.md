@@ -225,6 +225,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - アイデアの履歴の行は、行の効く場所(`location_id`)・期間に住む人物も、知る相手に入っていなければ知らない。
   その場所の住人に知らせるなら、その場所を知る相手にする。履歴の行の無いアイデアは、人物役のだれも知らない
 - 入口では人物の本体と来歴の行、アイデアの履歴の行の `knowers`(行の配列)で出し入れする。渡すとまるごと置き換える
+- 人物を、ほかの人物の来歴・アイデアの履歴の行の知る相手にまとめて足すのは `character.add_history_knowers.AddHistoryKnowers(knower_id, character_history_ids, idea_history_ids, start=None)`(GUI の人物の画面の「Organize knowledge」)。
+  行の id は `character.read_knowable_histories.ReadKnowableHistories(character_id=…)` / `(idea_id=…)` で読む。すでに知る相手に入っている行には足さない
 - 人物は、作るとき本人が自分の本文を知る相手に入る(`db/schema.py` の `_knows_oneself`。`CommitCharacter` の `knowers` は本人のほかの相手)
 - 来歴・履歴の行で `knowers` を渡さない行は、今ある行なら知る相手をそのままにし、新しい行なら人物の来歴は本人だけ、アイデアの履歴は行の無いまま
   (`db/child_lists.py` の `replaced_histories`)

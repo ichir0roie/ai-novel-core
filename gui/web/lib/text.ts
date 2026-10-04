@@ -229,6 +229,27 @@ export const T = {
     since: (start: string) => `(from ${start})`,
   },
 
+  knowledge: {
+    open: "Organize knowledge",
+    title: (name: string) => `Organize knowledge — ${name}`,
+    filter: "Filter characters and ideas by name or id",
+    characters: "Characters",
+    ideas: "Ideas",
+    noMatch: "No match",
+    pickSource: "Pick a character or an idea on the left to see its rows",
+    noHistories: "No rows",
+    undated: "undated",
+    year: (year: number) => `${year}`,
+    anywhere: "anywhere",
+    known: "known",
+    picked: (n: number) => `${n} row${n === 1 ? "" : "s"} picked`,
+    unpick: "Remove from the picked rows",
+    since: "Known since (empty: from the beginning)",
+    register: "Register",
+    registered: (n: number) => `Registered ${n} row${n === 1 ? "" : "s"}`,
+    failed: (error: string) => `Could not register: ${error}`,
+  },
+
   maps: {
     title: "Location map",
     centeredOn: (name: string) => `Map centered on ${name}`,

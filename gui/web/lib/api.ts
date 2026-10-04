@@ -149,6 +149,26 @@ export const deleteMemes = (memeIds: number[]) => runEntrance("meme.delete_meme.
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
 
+/** 人物の来歴・アイデアの履歴の行を、id と知る相手つきで読む(`character.read_knowable_histories.ReadKnowableHistories`)。 */
+export type KnowableHistories = {
+  character_histories: { id: number; character_id: number; start: number | null; description: string; knowers: Rec[] }[];
+  idea_histories: {
+    id: number; idea_id: number; location_id: number | null; start: string | null; end: string | null;
+    name: string; detail: string | null; knowers: Rec[];
+  }[];
+};
+
+export const readKnowableHistories = async (source: { character_id: number } | { idea_id: number }) =>
+  (await runEntrance("character.read_knowable_histories.ReadKnowableHistories", source)).result as KnowableHistories;
+
+/** 人物を、選んだ来歴・履歴の行の知る相手に足す(`character.add_history_knowers.AddHistoryKnowers`)。 */
+export const addHistoryKnowers = async (args: {
+  knower_id: number; character_history_ids: number[]; idea_history_ids: number[]; start: string | null;
+}) =>
+  (await runEntrance("character.add_history_knowers.AddHistoryKnowers", args)).result as {
+    character_history_ids: number[]; idea_history_ids: number[];
+  };
+
 export type MapsResponse = components["schemas"]["MapsResponse"];
 export type PlanetMap = components["schemas"]["PlanetMap"];
 export type MapLocation = components["schemas"]["MapLocation"];

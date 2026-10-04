@@ -118,3 +118,38 @@ class CharacterMove(BaseModel):
 
     character_id: int = Field(description="住まい・拠点が変わった人物の人物id")
     location_id: int = Field(description="移動先の場所id")
+
+
+class CharacterHistoryEntry(Material):
+    """知る相手を足すために、行を id で指せる人物の来歴の行(`ReadKnowableHistories`)。"""
+
+    id: int
+    character_id: int
+    start: int | None = None
+    description: str
+    knowers: list[KnowerRow]
+
+
+class IdeaHistoryEntry(Material):
+    """知る相手を足すために、行を id で指せるアイデアの履歴の行(`ReadKnowableHistories`)。"""
+
+    id: int
+    idea_id: int
+    location_id: int | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    name: str
+    detail: str | None = None
+    knowers: list[KnowerRow]
+
+
+class KnowableHistories(Material):
+    # 人物を渡したときはその来歴、アイデアを渡したときはその履歴だけが入る
+    character_histories: list[CharacterHistoryEntry]
+    idea_histories: list[IdeaHistoryEntry]
+
+
+class AddedHistoryKnowers(Material):
+    # 知る相手に足した行の id(すでに知る相手に入っていた行は入らない)
+    character_history_ids: list[int]
+    idea_history_ids: list[int]
