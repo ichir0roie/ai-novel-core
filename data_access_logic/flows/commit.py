@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
+from data_access_logic.episode import moves as episode_moves
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeCommitForm
 from data_access_logic.episode.record import EpisodeRecord
@@ -27,9 +28,16 @@ from data_access_logic.flows.summary import rewrite_episode_summaries, rewrite_e
 
 
 def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> EpisodeRecord:
+    """本文を渡したときは、本文の中で住まい・拠点が変わった登場人物の居場所も移す(移動先が空なら何もしない)。"""
     record = call(episode_steps.commit_episode, episode)
     meme.refresh(ai)
     rewrite_episode_summaries(ai, [record.id])
+    if episode.main_text is not None:
+        material = call(episode_steps.moves_material, RowId(id=record.id))
+        if material is not None:
+            character_moves = episode_moves.moves_draft(ai, material)
+            if character_moves:
+                call(episode_steps.save_moves, episode_steps.MovesForm(episode_id=record.id, moves=character_moves))
     return record
 
 

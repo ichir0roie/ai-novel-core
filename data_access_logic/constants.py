@@ -32,7 +32,7 @@ DEFAULT_RESIDENT_LIMIT = 10
 RECENT_EVENT_LIMIT = 5
 
 # data_access_logic/event/progress
-# 移動先候補(_move_destinations)をどこまで拾うか。read_cast の既定
+# 移動先の候補(`character/moves.py` の `move_destinations`)をどこまで拾うか。read_cast の既定
 # (levels=1、「隣の集落にいる者も枠に入れる」)と同じ考え方をそろえる。
 REACH_LEVELS = 1
 MOVE_DESTINATION_LIMIT = 20

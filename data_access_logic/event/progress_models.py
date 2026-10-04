@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 from ai.instructions.event_writing import EVENT_DURATION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.character.models import ParticipantMaterial, ParticipantSerialized
+from data_access_logic.character.moves import CharacterMove
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
@@ -106,13 +107,6 @@ class RecordRequestSerialized(RecordRequest):
         }
 
 
-class CharacterMoveDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    character_id: int = Field(description="居場所が変わった人物の人物id")
-    location_id: int = Field(description="移動先の候補の場所id")
-
-
 class CharacterUpdateDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -141,7 +135,7 @@ class EventRecordDraft(BaseModel):
     event_name: str = Field(description="出来事の名前")
     event_text: str = Field(description="出来事の内容")
     character_ids: list[int] = Field(description="関わった人物・対象の人物id")
-    character_moves: list[CharacterMoveDraft] = Field(description="居場所が変わった人物")
+    character_moves: list[CharacterMove] = Field(description="住まい・拠点が変わった人物ごとの移動先。誰も変わっていなければ空")
     character_updates: list[CharacterUpdateDraft] = Field(description="この出来事を通して人となりについて新しく分かった人物・対象")
     location_abolished: bool = Field(description="この出来事でこの場所自体が消滅・放棄されたか")
     location_founded: FoundedLocationDraft | None = Field(description="この出来事でこの場所の配下に生まれた新しい場所")

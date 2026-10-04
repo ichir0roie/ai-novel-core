@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
+from data_access_logic.character.moves import move_destinations
 from data_access_logic.entrypoint import CommitEntrypoint, record_of, reloaded
 from data_access_logic.event import progress, writer
 from data_access_logic.event import summary as event_summary
@@ -106,7 +107,7 @@ def situation(s: Session, form: SituationForm) -> LocationSituationMaterial:
 
 @db_step
 def destinations(s: Session, form: DestinationsForm) -> list[LocationMaterial]:
-    return progress.destinations(s, form.location_id, form.time)
+    return move_destinations(s, form.location_id, form.time)
 
 
 @db_step

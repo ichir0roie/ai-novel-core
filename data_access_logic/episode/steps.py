@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
-from data_access_logic.episode import brief, framer, material, plot_completer
+from data_access_logic.character.moves import CharacterMove
+from data_access_logic.episode import brief, framer, material, moves, plot_completer
+from data_access_logic.episode.moves import EpisodeMovesMaterial
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, has_cast, save_frame, set_characters
@@ -207,3 +209,18 @@ def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
 @db_step
 def episode_record(s: Session, form: RowId) -> EpisodeRecord:
     return record_of(s, EpisodeRecord, s.get_one(Episode, form.id))
+
+
+class MovesForm(BaseModel):
+    episode_id: int
+    moves: list[CharacterMove]
+
+
+@db_step
+def moves_material(s: Session, form: RowId) -> EpisodeMovesMaterial | None:
+    return moves.moves_material(s, form.id)
+
+
+@db_step
+def save_moves(s: Session, form: MovesForm) -> list[CharacterMove]:
+    return moves.save_moves(s, form.episode_id, form.moves)

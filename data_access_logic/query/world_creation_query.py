@@ -28,11 +28,10 @@ def busy_character_ids_select(time: Stamp) -> Select:
     )
 
 
-def active_locations_select(time: Stamp, location_ids: Collection[int], limit: int) -> Select:
-    """`location_ids` のうち、その時刻にあって、ランダム生成の対象(`active_random_generation`)の場所を id の順に。"""
+def alive_locations_select(time: Stamp, location_ids: Collection[int], limit: int) -> Select:
+    """`location_ids` のうち、その時刻にある場所を id の順に。"""
     return (select(Location)
-            .where(Location.id.in_(list(location_ids)), alive_at(Location, time),
-                   Location.active_random_generation.is_(True))
+            .where(Location.id.in_(list(location_ids)), alive_at(Location, time))
             .order_by(Location.id)
             .limit(limit))
 

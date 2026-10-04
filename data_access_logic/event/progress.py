@@ -20,6 +20,7 @@ from ai.instructions.naming import PLACE_NAMING_INSTRUCTION, fill_name_placehold
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
+from data_access_logic.character.moves import apply_moves
 from data_access_logic.character.histories import add_history
 from data_access_logic.event.progress_models import (
     CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, LocationSituationMaterial,
@@ -27,9 +28,9 @@ from data_access_logic.event.progress_models import (
 )
 from data_access_logic.event.summary import events_of
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
-from data_access_logic.query import common_query, world_creation_query
+from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
-from db.schema import Character, CharacterLocation, Event, EventCharacter, Location
+from db.schema import Character, Event, EventCharacter, Location
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ _RECORD_SYSTEM_PROMPT = f"""\
 {_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
 character_ids には、関わった人物・対象の人物idを、居合わせる人物・対象の中からだけ選んで入れる(複数可)。
-character_moves は、この出来事で居場所が変わった人物だけ(旅立ち・移住・避難・帰還など)。場所idは移動先の候補からだけ選ぶ。誰も動いていなければ空にする。
+character_moves は、この出来事で住まい・拠点が変わった人物ごとの移動先(旅立ち・移住・避難・帰還など)。場所idは移動先の候補からだけ選ぶ。一時の外出は入れない。誰も変わっていなければ空にする。
 この出来事が場所自身の改廃(消滅・新設)に及ぶときだけ、location_abolished / location_founded を埋める。
 何も変わっていなければ location_abolished は false、location_founded は null のままにする。
 location_founded の固有名詞は次の基準で名づける。
@@ -119,14 +120,6 @@ def rolled_candidate(
     return chosen
 
 
-def destinations(s: Session, location_id: int, time: Stamp) -> list[LocationMaterial]:
-    root_id = common_query.location_up(s, location_id, constants.REACH_LEVELS)
-    nearby_ids = set(common_query.descendant_location_ids(s, root_id)) - {location_id, root_id}
-    locations = s.scalars(
-        world_creation_query.active_locations_select(time, nearby_ids, constants.MOVE_DESTINATION_LIMIT)).all()
-    return [LocationMaterial.model_validate(location) for location in locations]
-
-
 def record_draft(
     ai: AIClient, situation: LocationSituationMaterial, destinations: list[LocationMaterial], candidate: CandidateDraft,
 ) -> EventRecordDraft | None:
@@ -151,20 +144,9 @@ def save_progress(
 ) -> Event:
     by_id = {character.id: character for character in characters}
     involved_ids = list(dict.fromkeys(character_id for character_id in draft.character_ids if character_id in by_id))
-
-    destination_by_id = {destination.id: destination for destination in destinations}
-    move_notes = []
-    for move in draft.character_moves:
-        character = by_id.get(move.character_id)
-        destination = destination_by_id.get(move.location_id)
-        if character is None or destination is None:
-            continue
-        for current in s.scalars(common_query.character_location_select(character.id, time)).all():
-            current.end = time
-        s.add(CharacterLocation(character_id=character.id, location_id=destination.id, start=time, end=character.end))
-        if character.id not in involved_ids:
-            involved_ids.append(character.id)
-        move_notes.append(f"{character.name} → {destination.name}")
+    # 移した人物も当事者に入れる
+    moved = apply_moves(s, draft.character_moves, characters, destinations, time)
+    involved_ids.extend(move.character_id for move in moved if move.character_id not in involved_ids)
 
     end = time.plus_days(draft.event_duration_days)
     record = Event(
@@ -213,7 +195,6 @@ def save_progress(
     logger.info(f"{time} 場所id={location_id}: {record.name}"
           f" / 継続: {draft.event_duration_days}日({time}〜{end})"
           + (f" / 関わった: {', '.join(involved_names)}" if involved_names else "")
-          + (f" / 移動: {'; '.join(move_notes)}" if move_notes else "")
           + (f" / 人物・対象更新: {'; '.join(update_notes)}" if update_notes else "")
           + (f" / 場所: {'; '.join(location_notes)}" if location_notes else ""))
     return record
