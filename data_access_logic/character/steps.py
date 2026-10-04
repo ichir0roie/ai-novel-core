@@ -11,7 +11,7 @@ from data_access_logic.character import generator
 from data_access_logic.character.generator_models import BirthSources, CharacterCreation, CharacterWriting, CompletionTarget
 from data_access_logic.character.moves import update_locations
 from data_access_logic.character.record import CharacterMove, CharacterRecord
-from data_access_logic.query import common_query, world_creation_query
+from data_access_logic.query import common_query
 from data_access_logic.step import RowId, RowIds, db_step
 from db.schema import Location
 from db.stamp import Stamp
@@ -60,7 +60,6 @@ def generation_time(s: Session, form: GenerationTimeForm) -> Stamp:
 def check_generation_locations(s: Session, form: RowIds) -> None:
     for location_id in form.ids:
         common_query.get_row(s, Location, location_id)
-        world_creation_query.check_has_story(s, location_id, "character")
 
 
 @db_step

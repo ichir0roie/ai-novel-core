@@ -5,10 +5,9 @@ from collections.abc import Collection
 
 from sqlalchemy import ColumnElement, Select, func, or_, select
 
-from data_access_logic.query import common_query
 from data_access_logic.query.period import alive_at
 from db.schema import (
-    Character, CharacterParameter, Event, EventCharacter, Location, Session, Stamp, Story,
+    Character, CharacterParameter, Event, EventCharacter, Location, Stamp,
 )
 
 
@@ -66,19 +65,3 @@ def check_within_parent_span(parent: Location, child_start: Stamp | None, child_
             raise ValueError(
                 f"{label}: end={child_end} が親(id={parent.id})の "
                 f"end={parent.end} を超える")
-
-
-def location_has_story(s: Session, location_id: int) -> bool:
-    ancestor_ids = [step.id for step in common_query.location_path(s, location_id)]
-    return s.scalar(
-        select(Story.id)
-        .where(Story.location_id.in_(ancestor_ids))
-        .limit(1)
-    ) is not None
-
-
-def check_has_story(s: Session, location_id: int, label: str) -> None:
-    if not location_has_story(s, location_id):
-        raise ValueError(
-            f"{label}: location_id={location_id} には作品が無い。"
-            "先に CommitStory でその場所(か祖先)へ作品を置いてから確定する")

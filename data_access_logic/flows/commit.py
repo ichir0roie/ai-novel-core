@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `CommitStory` / `CommitOracle` の `run()`)。
+"""行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `CommitOracle` の `run()`)。
 
 確定は db の段一つで済ませる(GUI の API が呼ぶ `execute(s)` と同じ)。そのあとの AI の段(ミームの抜き出し・要約・種・事実確認)は、
 AI が答えなくても確定は残る。
@@ -22,9 +22,6 @@ from data_access_logic.oracle import steps as oracle_steps
 from data_access_logic.oracle.form import OracleCreateForm
 from data_access_logic.oracle.record import MemeSourceCommitted
 from data_access_logic.step import RowId
-from data_access_logic.story import steps as story_steps
-from data_access_logic.story.form import StoryCreateForm
-from data_access_logic.story.record import StoryRecord
 from data_access_logic.flows import event_seed, fact_check, meme
 from data_access_logic.caller import call
 from data_access_logic.flows.summary import rewrite_episode_summaries, rewrite_event_summaries
@@ -65,13 +62,6 @@ def update_event(event: EventUpdateForm, ai: AIClient = ai_client) -> EventRecor
     record = call(event_steps.update_event, event)
     meme.refresh(ai)
     rewrite_event_summaries(ai, [record.id])
-    return record
-
-
-def commit_story(story: StoryCreateForm, ai: AIClient = ai_client) -> StoryRecord:
-    """作品はミームの元ではなく、出来事の種の元なので、種を抜き出す。"""
-    record = call(story_steps.commit_story, story)
-    event_seed.refresh_and_consolidate(ai)
     return record
 
 

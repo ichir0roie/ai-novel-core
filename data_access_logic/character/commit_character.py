@@ -23,7 +23,6 @@ class CommitCharacter(CommitEntrypoint):
         if form.location_id is not None:
             location = s.get_one(Location, form.location_id)
             world_creation_query.check_within_parent_span(location, form.start, form.end, "character")
-            world_creation_query.check_has_story(s, form.location_id, "character")
 
         record = Character()
         form.write_to(record)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field, computed_field, model_serializer
+from pydantic import model_serializer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,25 +20,10 @@ from db.schema import Character, Event, Idea, IdeaHistory, Location, Story
 from db.stamp import Stamp
 
 
-class _StoryWithLocations(StoryRecord):
-    world: Named | None = Field(default=None, exclude=True)
-    location: Named | None = Field(default=None, exclude=True)
-
-    @computed_field
-    @property
-    def world_name(self) -> str | None:
-        return None if self.world is None else self.world.name
-
-    @computed_field
-    @property
-    def location_name(self) -> str | None:
-        return None if self.location is None else self.location.name
-
-
 class StoryDigest(Material):
     """作品の列に、話の数・最後の話・未同期の話を同じ段に並べて出す。"""
 
-    story: _StoryWithLocations
+    story: StoryRecord
     episode_count: int
     last_episode: EpisodeTitle | None = None
     unsynced: list[EpisodeTitle]
@@ -81,7 +66,7 @@ class Cast(Material):
 def story_digest(s: Session, story: Story) -> StoryDigest:
     episodes = s.scalars(common_query.story_episodes_select(story.id)).all()
     return StoryDigest(
-        story=_StoryWithLocations.model_validate(story),
+        story=StoryRecord.model_validate(story),
         episode_count=len(episodes),
         last_episode=EpisodeTitle.model_validate(episodes[-1]) if episodes else None,
         unsynced=[EpisodeTitle.model_validate(episode) for episode in episodes if not episode.synced],
@@ -141,10 +126,11 @@ def _brief_idea(idea: Idea, history: IdeaHistory | None) -> BriefIdea:
 
 def cast(s: Session, story_id: int, when: Stamp | str | None = None, count: int = 5, levels: int = 1) -> Cast:
     story = common_query.get_row(s, Story, story_id)
-    if story.location_id is None:
-        raise ValueError(f"作品 {story.name} に立つ場所(location_id)が無い")
     _, until = common_query.resolve_time(s, when, story)
-    root_id = common_query.location_up(s, story.location_id, levels)
+    location_id = common_query.story_location_id(s, story.id, until)
+    if location_id is None:
+        raise ValueError(f"作品 {story.name} に、{until} までに場所の決まった話が無い")
+    root_id = common_query.location_up(s, location_id, levels)
     root = s.get_one(Location, root_id)
     location_ids = common_query.descendant_location_ids(s, root_id)
     character_ids = residents(s, location_ids, until)

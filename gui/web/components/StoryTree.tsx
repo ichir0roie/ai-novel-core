@@ -35,7 +35,6 @@ function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
         <NameId name={node.name} id={node.id} />
       </Link>
       <span className="tree-meta">
-        {node.state && <span className="chip">{node.state}</span>}
         <span>{T.storyTree.episodes(node.episodes)}</span>
         {node.children.length > 0 && <span>{T.storyTree.stories(node.children.length)}</span>}
       </span>

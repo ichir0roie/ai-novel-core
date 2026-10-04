@@ -46,6 +46,8 @@ type Props = {
   side?: ReactNode;
   /** 左の欄の一番下に置く保存系のボタン列 */
   actions?: ReactNode;
+  /** 渡すと右半分にこれを置き、本文(section の列)は左の欄の下に回す(作品の話の一覧など) */
+  aside?: ReactNode;
 };
 
 /** 見出しとして出す名前の欄。クリックすると入力欄になり、Enter・Esc・フォーカスが外れると見出しに戻る。 */
@@ -76,7 +78,7 @@ function EditableTitle({ value, placeholder, onChange }: { value: string; placeh
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
  * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions }: Props) {
+export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, aside }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
   // 名前の欄は見出しで直し、id は見出しの横に出すので、フォームには並べない
@@ -85,16 +87,35 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
   // (EpisodeCharacters。side の Related 経由)で編集するので、編集画面では二重に出さない
   const plain = columns.filter((c) => !c.section && c !== titleColumn && c.key !== "id"
     && !(mode === "edit" && meta.name === "episode" && c.key === "character_ids"));
-  const sections = columns.filter((c) => c.section && !c.side);
-  const sideSections = columns.filter((c) => c.section && c.side);
+  const textLeft = aside !== undefined;
+  const sections = columns.filter((c) => c.section && !c.side && !textLeft);
+  const sideSections = columns.filter((c) => c.section && (c.side || textLeft));
   // display が "flow" の子リスト(アイデアの呼び名など)は本文(section)の下に続けて出す。それ以外は左の欄に並べる
   const sideChildLists = meta.child_lists.filter((c) => c.display !== "flow");
   const flowChildLists = meta.child_lists.filter((c) => c.display === "flow");
   // episode の視点の人物は、絞り込み欄が空ならフォームの場所・時刻にいる人物だけを候補に出す
   const locationCharacterIds = useLocationCharacterIds(value.location_id, value.start, meta.name === "episode");
 
+  const flowLists = (
+    <>
+      {flowChildLists.map((child) => (
+        <div key={child.name} className="field wide">
+          <label>
+            {child.name}
+          </label>
+          <ChildListEditor
+            meta={child}
+            rows={(value[child.name] as Rec[] | undefined) ?? []}
+            onChange={(rows) => set(child.name, rows)}
+            extraColumns={meta.name === "character" && child.name === "histories" ? historyAgeColumns(value.start) : undefined}
+          />
+        </div>
+      ))}
+    </>
+  );
+
   return (
-    <div className={`record ${sections.length ? "split" : ""}`}>
+    <div className={`record ${sections.length || textLeft ? "split" : ""}`}>
       <div className="record-side">
         <div className="record-header">
           <div className="title-line">
@@ -155,8 +176,10 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
             <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
           </div>
         ))}
+        {textLeft && flowLists}
         {actions && <div className="record-actions">{actions}</div>}
       </div>
+      {textLeft && <div className="record-aside">{aside}</div>}
       {sections.length > 0 && (
         <div className="record-text">
           {sections.map((column) => (
@@ -168,19 +191,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 autoHeight={flowChildLists.length > 0} />
             </div>
           ))}
-          {flowChildLists.map((child) => (
-            <div key={child.name} className="field wide">
-              <label>
-                {child.name}
-              </label>
-              <ChildListEditor
-                meta={child}
-                rows={(value[child.name] as Rec[] | undefined) ?? []}
-                onChange={(rows) => set(child.name, rows)}
-                extraColumns={meta.name === "character" && child.name === "histories" ? historyAgeColumns(value.start) : undefined}
-              />
-            </div>
-          ))}
+          {!textLeft && flowLists}
         </div>
       )}
     </div>

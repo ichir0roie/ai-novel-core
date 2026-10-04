@@ -18,8 +18,6 @@ from db.stamp import Stamp
 class StoryMaterial(Material):
     name: str
     text: str
-    narration: str
-    state: str
     parent_story: "StoryMaterial | None" = None
 
 
@@ -122,7 +120,7 @@ def _location(locations: list[LocationMaterial]) -> str | None:
 
 
 def _story(story: StoryMaterial) -> dict[str, Any]:
-    return {"作品名": story.name, "筋書き": story.text, "語り": story.narration, "状態": story.state,
+    return {"作品名": story.name, "筋書き": story.text,
             "親の作品": None if story.parent_story is None else _story(story.parent_story)}
 
 
@@ -131,7 +129,7 @@ class EpisodeMaterial(Material):
     main_episode: TargetEpisode
     # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 話の場所(無ければ作品の立つ場所)とその親。広い順
+    # 話の場所とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
@@ -238,7 +236,7 @@ class EpisodeBrief(Material):
     past_episodes: list[PastEpisode]
     # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]
-    # 話の場所(無ければ作品の立つ場所)とその親。広い順
+    # 話の場所とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
@@ -316,7 +314,7 @@ class EpisodeCasting(Material):
     """本文の材料を読む前に、登場人物・場所を決める材料。"""
 
     main_episode: CastingEpisode
-    # 話の場所(無ければ作品の立つ場所)とその親。広い順
+    # 話の場所とその親。広い順
     locations: list[LocationMaterial]
     # 話の場所の直下にある場所
     child_locations: list[LocationMaterial]
@@ -366,7 +364,7 @@ class EpisodeFrameMaterial(Material):
     main_episode: FrameEpisode
     # 古い順
     past_episodes: list[PastEpisode]
-    # 作品の立つ場所とその親。広い順
+    # 話の場所とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
@@ -387,10 +385,8 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
     def _for_prompt(self) -> dict[str, Any]:
         episode = self.main_episode
         return {
-            "作品": {
-                **_story(self.story),
-                "立つ場所": _location(self.locations),
-            },
+            "作品": _story(self.story),
+            "場所": _location(self.locations),
             "前の話の概要(古い順)": _past_episodes(self.past_episodes),
             "登場人物": [member.model_dump() for member in self.cast],
             "名前だけ出る人物": [member.model_dump() for member in self.mentioned],

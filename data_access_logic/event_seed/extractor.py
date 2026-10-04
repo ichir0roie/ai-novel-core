@@ -19,13 +19,13 @@ from data_access_logic.event_seed.models import (
 )
 from data_access_logic.query import event_seed_query
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, row_of, source_of
-from db.schema import Character, Episode, Event, EventSeed, Story
+from db.schema import Character, Episode, Event, EventSeed
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは物語の編集者です。
-作品の筋書き・話の骨組み・人物の筋書き・起きた出来事を番号つきの JSON で渡すので、それぞれから、ほかの時代・ほかの場所・ほかの人物にも起こせる「出来事の種」を抜き出してください。
+話の骨組み・人物の筋書き・起きた出来事を番号つきの JSON で渡すので、それぞれから、ほかの時代・ほかの場所・ほかの人物にも起こせる「出来事の種」を抜き出してください。
 - 人名・地名・組織名・その作品だけの用語と、年代を抜く。人物は「古参の番兵」「商家の娘」のような立場で書く。
 - 一つの種は一〜二文。誰が、何をきっかけに、何をして、どんな揺れや変化が起きるかを書く。
 - 作者の前書き・使用環境・書き方の約束・構成表など、出来事にならない文からは抜き出さない。
@@ -42,8 +42,6 @@ _CONSOLIDATE_SYSTEM_PROMPT = """\
 def pending_sources(s: Session) -> list[SourceText]:
     """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は筋書き(`plot`)だけを使う。"""
     sources: list[SourceText] = []
-    for story in s.scalars(event_seed_query.unseeded_select(Story, Story.text)).all():
-        sources.append(source_of(story, "作品の筋書き", story.text))
     for episode in s.scalars(event_seed_query.unseeded_select(Episode, Episode.plot_text, Episode.main_text)).all():
         sources.append(source_of(episode, "話の骨組み", episode.plot_text.strip() or episode.main_text))
     for character in s.scalars(event_seed_query.unseeded_select(Character, Character.plot)).all():

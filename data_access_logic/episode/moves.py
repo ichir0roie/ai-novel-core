@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.moves import move_destinations
 from data_access_logic.character.record import CharacterMove
-from data_access_logic.episode.material import episode_location_id, load_episode
+from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material
@@ -72,7 +72,7 @@ class EpisodeMovesDraft(BaseModel):
 def moves_material(s: Session, episode_id: int) -> EpisodeMovesMaterial | None:
     """本文・時刻・登場人物・話の場所のどれかが無ければ None(移す相手も先も決まらない)。"""
     episode = load_episode(s, episode_id)
-    location_id = episode_location_id(episode)
+    location_id = episode.location_id
     characters = cast_characters(episode)
     if episode.start is None or not episode.main_text.strip() or not characters or location_id is None:
         return None

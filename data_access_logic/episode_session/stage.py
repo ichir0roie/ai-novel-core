@@ -43,7 +43,7 @@ class StageMember(Material):
 
 class Stage(Material):
     main_episode: StageEpisode
-    # 話の場所(無ければ作品の立つ場所)とその親。広い順
+    # 話の場所とその親。広い順
     locations: list[LocationMaterial]
     location: LocationTextMaterial | None = None
     cast: list[StageMember]
@@ -86,7 +86,7 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
     time = episode.start
     if time is None:
         raise ValueError(f"話 id={episode_id} の時刻(start)が空")
-    location_id = episode.location_id or episode.story.location_id
+    location_id = episode.location_id
     characters = cast_characters(episode)
     cast_ids = {character.id for character in characters}
     relations = [line for line in relations_at(s, characters, time)

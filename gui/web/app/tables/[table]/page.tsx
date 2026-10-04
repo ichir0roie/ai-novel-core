@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { deleteMemes, getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
-import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
 import CharacterTree from "@/components/CharacterTree";
+import ListTable, { nextSort, Pager } from "@/components/ListTable";
 import NameId from "@/components/NameId";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
@@ -78,7 +78,6 @@ export default function TablePage() {
   const setParam = (key: string, value: string | null) => setParams({ [key]: value });
 
   if (!meta || !params) return <div className="status info">{T.loading}</div>;
-  const columns = listColumns(meta);
   const offset = Number(params.get("offset") ?? 0);
   const total = data?.total ?? 0;
   const sort = params.get("sort") ?? meta.sort;
@@ -116,24 +115,12 @@ export default function TablePage() {
     );
   }
 
-  // 見出しをクリックした列で並べる。同じ列なら向きを返し、別の列なら昇順から
-  const sortBy = (key: string) => {
-    if (key === sort) setParams({ sort: key, order: order === "asc" ? "desc" : "asc" });
-    else setParams({ sort: key, order: key === meta.sort ? meta.order : "asc" });
-  };
-  const sortHeader = (key: string, label: string) => (
-    <th key={key} title={key} className={`sortable ${key === sort ? "sorted" : ""}`} onClick={() => sortBy(key)}>
-      {label}
-      {key === sort ? (order === "asc" ? " ↑" : " ↓") : ""}
-    </th>
-  );
+  const sortBy = (key: string) => setParams(nextSort(meta, sort, order, key));
 
   // 列名の query で絞り込んでいるもの(参照列のセルをクリックすると増える)。見出しに出す作品は除く
   const filters = [...search.entries()].filter(
     ([key]) => !RESERVED.has(key) && !(storyId && key === "story_id") && meta.columns.some((c) => c.key === key),
   );
-  const pageIds = (data?.items ?? []).map((item) => Number(item.id));
-  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
   const toggle = (id: number) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -205,102 +192,24 @@ export default function TablePage() {
         )}
       </div>
       {error && <div className="status error">{error}</div>}
-      <div className="scroll-x">
-        <table className="list">
-          <thead>
-            <tr>
-              {sortHeader("id", "id")}
-              {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
-              {columns.map((c) => sortHeader(c.key, c.key))}
-              {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
-              {bulkDelete && (
-                <th className="check">
-                  <input
-                    type="checkbox"
-                    title={T.list.selectAll}
-                    checked={allSelected}
-                    onChange={() => setSelected(allSelected ? new Set() : new Set(pageIds))}
-                  />
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {data?.items.map((item) => (
-              <tr
-                key={String(item.id)}
-                className={selected.has(Number(item.id)) ? "row selected" : "row"}
-                tabIndex={0}
-                // まとめて消せる一覧では、行のクリックは選ぶだけにして、詳細へは名前の文字から飛ぶ
-                onClick={(e) => (bulkDelete ? toggle(Number(item.id)) : openPage(`/tables/${table}/${item.id}`, e))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") openPage(`/tables/${table}/${item.id}`);
-                }}
-              >
-                <td>{String(item.id)}</td>
-                <td className="name">
-                  {bulkDelete ? (
-                    <span
-                      className="open"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openPage(`/tables/${table}/${item.id}`, e);
-                      }}
-                    >
-                      {String(item.label ?? "")}
-                    </span>
-                  ) : (
-                    String(item.label ?? "")
-                  )}
-                </td>
-                {columns.map((c) => (
-                  <td key={c.key}>
-                    {c.references && item[c.key] != null ? (
-                      // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
-                      <span
-                        className="ref"
-                        title={T.list.filterBy(c.key)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setParam(c.key, String(item[c.key]));
-                        }}
-                      >
-                        {cellText(c, item, data.labels)}
-                      </span>
-                    ) : (
-                      cellText(c, item, data.labels)
-                    )}
-                  </td>
-                ))}
-                {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
-                {bulkDelete && (
-                  <td className="check">
-                    <input
-                      type="checkbox"
-                      title={T.list.select}
-                      checked={selected.has(Number(item.id))}
-                      // 行のクリックでも切り替わるので、二度切り替わらないよう止める
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => toggle(Number(item.id))}
-                    />
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="pager">
-        <button disabled={offset <= 0} onClick={() => setParam("offset", String(Math.max(0, offset - PAGE)))}>
-          {T.list.prev}
-        </button>
-        <span>
-          {T.list.range(total === 0 ? 0 : offset + 1, Math.min(offset + PAGE, total), total)}
-        </span>
-        <button disabled={offset + PAGE >= total} onClick={() => setParam("offset", String(offset + PAGE))}>
-          {T.list.next}
-        </button>
-      </div>
+      <ListTable
+        meta={meta}
+        data={data}
+        sort={sort}
+        order={order}
+        onSort={sortBy}
+        onOpen={(id, e) => openPage(`/tables/${table}/${id}`, e)}
+        onFilter={(key, value) => setParam(key, value)}
+        selection={bulkDelete ? {
+          selected,
+          onToggle: toggle,
+          onToggleAll: () => {
+            const pageIds = (data?.items ?? []).map((item) => Number(item.id));
+            setSelected(pageIds.every((id) => selected.has(id)) ? new Set() : new Set(pageIds));
+          },
+        } : undefined}
+      />
+      <Pager offset={offset} size={PAGE} total={total} onOffset={(next) => setParam("offset", String(next))} />
     </>
   );
 }

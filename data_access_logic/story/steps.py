@@ -8,13 +8,11 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.step import db_step
 from data_access_logic.story.form import StoryCreateForm
 from data_access_logic.story.record import StoryRecord
-from db.schema import Location, Story
+from db.schema import Story
 
 
 @db_step
 def commit_story(s: Session, form: StoryCreateForm) -> StoryRecord:
-    CommitEntrypoint.check_exists(s, Location, form.world_id, "world_id")
-    CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
     CommitEntrypoint.check_exists(s, Story, form.parent_story_id, "parent_story_id")
     record = Story()
     form.write_to(record)

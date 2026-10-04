@@ -35,8 +35,6 @@ _SAMPLE_CULTURES = ("遊牧", "稲作", "狩猟採集", "交易", "漁労", "牧
 _SAMPLE_ERAS = ("古代", "中世", "近世", "産業革命期", "近代", "現代", "近未来")
 _CHARACTER_KINDS = (CHARACTER_KIND_PERSON,) * 7 + ("国", "組織", "商会", "氏族", "集団", "物")
 _IDEA_KINDS = ("地名", "人名", "組織", "技術", "魔法", "制度", "道具", "生物", "慣習")
-_NARRATIONS = ("一人称", "三人称", "神視点")
-_STATES = ("構想中", "執筆中", "完結", "中断")
 
 
 def bind(engine) -> None:
@@ -230,10 +228,6 @@ class StoryFactory(_ModelFactory):
 
     name = factory.Sequence(lambda n: f"作品{n}")
     text = _text()
-    world_id = _pool(Location, "LocationFactory", p_none=0.1)
-    location_id = _pool(Location, "LocationFactory", p_none=0.1)
-    narration = factory.Faker("random_element", elements=_NARRATIONS)
-    state = factory.Faker("random_element", elements=_STATES)
 
 
 class EpisodeFactory(_ModelFactory):

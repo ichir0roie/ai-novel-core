@@ -16,7 +16,7 @@ from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION
 from ai.instructions.plot import PLOT_FORMAT_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_of, mentioned_of, relations_at
-from data_access_logic.episode.material import episode_location_id, later_events_select, load_episode, summary_targets_of
+from data_access_logic.episode.material import later_events_select, load_episode, summary_targets_of
 from data_access_logic.episode.models import (
     EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeFrameMaterialSerialized, FrameEpisode, StoryMaterial,
 )
@@ -66,18 +66,17 @@ def framing_targets(s: Session, episode_id: int) -> SummaryTargets:
 def frame_material(s: Session, episode_id: int) -> EpisodeFrameMaterialSerialized:
     """要約は揃えてある前提でそのまま読む。"""
     episode = _unwritten(s, episode_id)
-    story_location_id = episode.story.location_id
     characters = cast_characters(episode)
     time = _time(s, episode)
     return EpisodeFrameMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=FrameEpisode.model_validate(episode),
         past_episodes=past_episodes(s, episode, characters),
-        locations=common_query.location_path(s, story_location_id) if story_location_id is not None else [],
+        locations=common_query.location_path(s, episode.location_id) if episode.location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned_in(episode), time),
         relations=relations_at(s, characters, time),
-        later_events=events_of(s, later_events_select(episode_location_id(episode), characters, time)),
+        later_events=events_of(s, later_events_select(episode.location_id, characters, time)),
     )
 
 

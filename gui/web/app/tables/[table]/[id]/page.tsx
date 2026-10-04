@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import RecordForm from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
+import StoryEpisodes from "@/components/StoryEpisodes";
 import {
   deleteEpisode,
   diff,
@@ -190,6 +191,7 @@ export default function RecordPage() {
                   : {})}
               />
             }
+            aside={table === "story" ? <StoryEpisodes storyId={id} /> : undefined}
             actions={
               <div className="actionbar">
                 <div className="inner">

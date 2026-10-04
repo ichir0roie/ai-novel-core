@@ -26,7 +26,7 @@ class StoryStart(BaseModel):
     message: str | None = None
     time: Timestamp | None = None
     episodes: list[SerializeAsAny[EpisodeHead]] = []
-    # 作品に立つ場所が無ければ読まない
+    # 作品に場所の決まった話が無ければ読まない
     cast: story_reading.Cast | None = None
     brief: story_reading.Brief | None = None
 
@@ -52,7 +52,8 @@ class StartStory(SessionEntrypoint):
         _, until = common_query.resolve_time(s, self.time, story)
         start = StoryStart(story=story_reading.story_digest(s, story), unsynced=unsynced, stopped=False, time=until,
                            episodes=episode_reading.episodes(s, self.story_id, count=self.episodes))
-        if story.location_id is not None:
+        location_id = common_query.story_location_id(s, story.id, until)
+        if location_id is not None:
             start.cast = story_reading.cast(s, self.story_id, until, count=self.count, levels=self.levels)
-            start.brief = story_reading.brief(s, story.location_id, until, reach=self.reach)
+            start.brief = story_reading.brief(s, location_id, until, reach=self.reach)
         return start

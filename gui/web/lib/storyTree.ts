@@ -6,14 +6,12 @@ import { parseStamp, stampOrder } from "./stamp";
 export type StoryNode = {
   id: number;
   name: string;
-  state: string | null;
   // 話(episode)の数
   episodes: number;
   children: StoryNode[];
 };
 
 const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
-const str = (v: unknown): string | null => (v == null ? null : String(v));
 
 export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
   const known = new Set(stories.map((s) => Number(s.id)));
@@ -52,7 +50,7 @@ export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
   const node = (story: Rec): StoryNode => {
     const id = Number(story.id);
     return {
-      id, name: String(story.name ?? story.label ?? ""), state: str(story.state), episodes: episodeCount.get(id) ?? 0,
+      id, name: String(story.name ?? story.label ?? ""), episodes: episodeCount.get(id) ?? 0,
       children: (childrenOf.get(id) ?? []).map(node),
     };
   };

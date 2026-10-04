@@ -716,22 +716,11 @@ class IdeaHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
-class Story(EventSeededMixin, TextBase):
+class Story(TextBase):
 
     __tablename__ = "story"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
-
-    world_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("location.id"), comment="使用する世界線", sort_order=210)
-    world: Mapped[Location | None] = relationship(
-        foreign_keys="Story.world_id", lazy="noload")
-    location_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("location.id"), comment="立つ場所。断面を取るのに使う", sort_order=220)
-    location: Mapped[Location | None] = relationship(
-        foreign_keys="Story.location_id", lazy="noload")
-    narration: Mapped[str] = mapped_column(String,  comment="語り", sort_order=230)
-    state: Mapped[str] = mapped_column(String,  comment="状態", sort_order=240)
 
     parent_story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)

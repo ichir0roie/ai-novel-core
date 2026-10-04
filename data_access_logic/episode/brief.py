@@ -23,7 +23,7 @@ from data_access_logic.episode.models import (
     BriefEpisode, CastingEpisode, EpisodeBriefSerialized, EpisodeCastingSerialized, StoryMaterial,
 )
 from data_access_logic.episode.material import (
-    episode_location_id, known_locations, later_events_select, load_episode, location_events_select, summary_targets_of,
+    known_locations, later_events_select, load_episode, location_events_select, summary_targets_of,
 )
 from data_access_logic.episode.summary import appearances, past_episodes, recent_episodes
 from data_access_logic.event.summary import events_of
@@ -64,7 +64,7 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
     episode = _episode(s, episode_id)
     main_episode = CastingEpisode.model_validate(episode)
     time = main_episode.start
-    location_id = episode_location_id(episode)
+    location_id = episode.location_id
     characters = cast_characters(episode)
     mentioned = mentioned_in(episode)
     candidates = candidate_characters(
@@ -90,7 +90,7 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)
     time = main_episode.start
-    location_id = episode_location_id(episode)
+    location_id = episode.location_id
     characters = cast_characters(episode)
     mentioned = mentioned_in(episode)
     return EpisodeBriefSerialized(

@@ -9,24 +9,19 @@ from data_access_logic.story.start_story import StartStory
 from data_access_logic.story.update_story import UpdateStory
 
 
-def test_commit_story(shown, world, mock_ai):
-    result = shown(CommitStory(StoryCreateForm(
-        name="テスト続編", text="続編の構想", world_id=world.planet_id, location_id=world.neighbor_id, narration="一人称",
-        state="構想中", event_seeded=True)))
+def test_commit_story(shown, world):
+    result = shown(CommitStory(StoryCreateForm(name="テスト続編", text="続編の構想", parent_story_id=world.story_id)))
 
-    assert (result["name"], result["text"]) == ("テスト続編", "続編の構想")
-    assert (result["world_id"], result["location_id"]) == (world.planet_id, world.neighbor_id)
-    assert (result["narration"], result["state"]) == ("一人称", "構想中")
-    assert result["event_seeded"] is True
+    assert (result["name"], result["text"], result["parent_story_id"]) == ("テスト続編", "続編の構想", world.story_id)
 
 
 def test_delete_story(shown, world):
     # 話を持つ作品は消せないので、話の無い作品を足してから消す
-    story_id = CommitStory(StoryCreateForm(name="消す作品", text="消す", location_id=world.location_id)).result().id
+    story_id = shown(CommitStory(StoryCreateForm(name="消す作品", text="消す")))["id"]
 
     result = shown(DeleteStory(story_id=story_id))
 
-    assert result == {"id": story_id, "name": "消す作品", "location_id": world.location_id, "text": "消す"}
+    assert result == {"id": story_id, "name": "消す作品", "text": "消す"}
 
 
 def test_list_stories(shown, world):
@@ -59,11 +54,6 @@ def test_start_story(shown, world):
 
 
 def test_update_story(shown, world):
-    result = shown(UpdateStory(StoryUpdateForm(
-        id=world.story_id, name="テスト作品改", text="改めた構想", world_id=world.planet_id, location_id=world.neighbor_id,
-        narration="二人称", state="完結", event_seeded=False)))
+    result = shown(UpdateStory(StoryUpdateForm(id=world.story_id, name="テスト作品改", text="改めた構想")))
 
     assert (result["name"], result["text"]) == ("テスト作品改", "改めた構想")
-    assert (result["world_id"], result["location_id"]) == (world.planet_id, world.neighbor_id)
-    assert (result["narration"], result["state"]) == ("二人称", "完結")
-    assert result["event_seeded"] is False

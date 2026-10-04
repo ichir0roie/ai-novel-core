@@ -274,9 +274,14 @@ def characters_select() -> Select:
 # ---------------------------------------------------------------- 作品
 
 def stories_select() -> Select:
-    return (select(Story)
-            .options(selectinload(Story.world), selectinload(Story.location))
-            .order_by(Story.id))
+    return select(Story).order_by(Story.id)
+
+
+def story_location_id(s: Session, story_id: int, until: Stamp) -> int | None:
+    """作品の立つ場所。時刻 `until` までで、場所の決まった一番後の話の場所(無ければ None)。"""
+    return s.scalar(select(Episode.location_id)
+                    .where(Episode.story_id == story_id, Episode.location_id.is_not(None), Episode.start <= until)
+                    .order_by(Episode.start.desc(), Episode.id.desc()).limit(1))
 
 
 def episode_order() -> tuple:

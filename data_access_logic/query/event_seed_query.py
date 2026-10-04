@@ -4,10 +4,10 @@ from __future__ import annotations
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import InstrumentedAttribute, lazyload
 
-from db.schema import Character, Episode, Event, Story
+from db.schema import Character, Episode, Event
 
 
-def unseeded_select(model: type[Story] | type[Episode] | type[Character] | type[Event],
+def unseeded_select(model: type[Episode] | type[Character] | type[Event],
                     *texts: InstrumentedAttribute[str] | InstrumentedAttribute[str | None]) -> Select:
     """まだ種を抜き出していない行のうち、元にする列(`texts`)のどれかが空でないもの。
     元の列が空の行は印を付けずに残るので、SQL の側で外さないと抜き出しのたびに読み直す。

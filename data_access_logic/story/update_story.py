@@ -7,7 +7,7 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
 from data_access_logic.story.form import StoryUpdateForm
 from data_access_logic.story.record import StoryRecord
-from db.schema import Location, Story
+from db.schema import Story
 
 
 class UpdateStory(CommitEntrypoint):
@@ -17,8 +17,6 @@ class UpdateStory(CommitEntrypoint):
 
     def execute(self, s: Session) -> StoryRecord:
         record = common_query.get_row(s, Story, self.story.id)
-        self.check_exists(s, Location, self.story.world_id, "world_id")
-        self.check_exists(s, Location, self.story.location_id, "location_id")
         if self.story.parent_story_id is not None:
             self.check_exists(s, Story, self.story.parent_story_id, "parent_story_id")
             if record.id in common_query.story_path_ids(s, self.story.parent_story_id):

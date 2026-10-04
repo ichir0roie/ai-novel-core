@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """話の材料を組む共通の読み込みと、プロットを書き直す材料(`writing_targets` → 要約を揃える → `episode_material`)。
 
-話の行の読み込み(`load_episode`)・話の場所(`episode_location_id`)・要約を揃える対象(`summary_targets_of`)は、
+話の行の読み込み(`load_episode`)・要約を揃える対象(`summary_targets_of`)は、
 枠(`framer`)・プロット補完(`plot_completer`)・本文の材料(`brief`)が共に使う。
 """
 from __future__ import annotations
@@ -59,11 +59,6 @@ def check_cast(episode: Episode) -> None:
         raise ValueError(f"話 id={episode.id} の登場人物(episode_character)が空。登場人物を指定してから書く")
 
 
-def episode_location_id(episode: Episode) -> int | None:
-    """話の場所、無ければ作品の立つ場所。"""
-    return episode.location_id or episode.story.location_id
-
-
 def known_locations(s: Session, location_id: int | None) -> list[LocationMaterial]:
     """話の場所の直下にある場所。"""
     if location_id is None:
@@ -83,7 +78,7 @@ def later_events_select(location_id: int | None, characters: list[Character], st
 
 def summary_targets_of(s: Session, episode: Episode, start: Stamp, with_location_events: bool = True) -> SummaryTargets:
     """材料が要約で渡す話・出来事(前の話・登場人物の直近の出来事・場所の直近の出来事・後に決まっている出来事)。"""
-    location_id = episode_location_id(episode)
+    location_id = episode.location_id
     characters = cast_characters(episode)
     location_events = (s.scalars(location_events_select(location_id, start)).all()
                        if with_location_events and location_id is not None else [])
@@ -108,7 +103,7 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> 
     episode = load_episode(s, episode_id)
     check_cast(episode)
     main_episode = TargetEpisode.model_validate(episode)
-    location_id = episode_location_id(episode)
+    location_id = episode.location_id
     characters = cast_characters(episode)
     return EpisodeMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
