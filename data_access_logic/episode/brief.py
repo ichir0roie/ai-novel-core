@@ -30,7 +30,6 @@ from data_access_logic.event.summary import events_of
 from data_access_logic.idea.links import linked_ideas_at
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
-from data_access_logic.style_preference.form import StyleTarget
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Episode
 
@@ -44,13 +43,12 @@ def _episode(s: Session, episode_id: int) -> Episode:
 
 
 def _guide(s: Session) -> str:
-    extras = read_style_extras(s, StyleTarget.EPISODE)
     return "\n".join([
         EVENT_AGE_INSTRUCTION,
         MENTIONED_INSTRUCTION,
         PAST_EPISODES_INSTRUCTION,
         STYLE_SAMPLE_INSTRUCTION,
-        style.style_instruction("episode", shared_extra=extras.shared, extra=extras.own),
+        style.style_instruction(read_style_extras(s)),
     ])
 
 

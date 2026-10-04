@@ -126,7 +126,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文・概要を時刻の順に返す |
 | 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
 | 「この話の登場人物・場所を結んで」 | `episode.cast_episode.CastEpisode(episode_id, character_ids, location_id=None, viewpoint_character_id=None)`。登場人物(`episode_character`)をまるごと置き換え、名前だけ出る人物を拾い直す。場所・視点は渡したときだけ書く。同期フラグは変えない |
-| 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の `shared` / `episode` の行)・作品・前の話の概要(この話より前の、同じ作品のすべての話と登場人物が関わったすべての話)・文体の見本(同じ作品・章・外伝の直前の五話の本文。中身は読ませない)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・関係する設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から、関係する設定は話に結んだアイデア(`episode_idea`)から引く(結んだ人物と同じく効く期間では絞らず、呼び名はアイデアの履歴 `idea_history` のうち話の時刻・場所に効くもの)ので、先に `CastEpisode` / `LinkIdeas` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
+| 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の行)・作品・前の話の概要(この話より前の、同じ作品のすべての話と登場人物が関わったすべての話)・文体の見本(同じ作品・章・外伝の直前の五話の本文。中身は読ませない)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・関係する設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から、関係する設定は話に結んだアイデア(`episode_idea`)から引く(結んだ人物と同じく効く期間では絞らず、呼び名はアイデアの履歴 `idea_history` のうち話の時刻・場所に効くもの)ので、先に `CastEpisode` / `LinkIdeas` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
 
 筋書きのテーブルは無い。場所に掛かる筋書きは作品(`story`)の
 `text` に、人物に掛かる筋書きはその人物の `plot` に書く。
@@ -361,8 +361,8 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 ## 出来事の生成・話の材料
 
 世界の舞台設定や、既存の話から抽出した文体の癖のような「ユーザーの好み」は `core` には定数で持たず
-(`ai/instructions/style.py` の `style_instruction()` を見る)、db の `style_preference` 表に対象(`target`)ごとに持つ。
-話の本文の材料(`ReadEpisodeBrief` の「書き方」)には、`shared`(どの対象にも効く)と `episode` の行を足す(`style_preference/extras.py`)。
+(`ai/instructions/style.py` の `style_instruction()` を見る)、db の `style_preference` 表に持つ。効くのは話の本文だけで、
+材料(`ReadEpisodeBrief` の「書き方」)に、すべての行を id の順に足す(`style_preference/extras.py`)。
 行が無ければ空で、`core` だけの汎用の文体になる。
 
 出来事の生成(`GenerateEvent`)は、下書きの名前・記録を場面の指定(「市場の喧嘩」「怪談」など)に、時刻・場所・当事者を決まった値として、

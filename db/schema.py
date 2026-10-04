@@ -262,14 +262,10 @@ class Oracle(MemeSeededMixin, TextBase):
 
 
 class StylePreference(TextBase):
-    """世界ごとの文体の好み(舞台設定・既存の話から抽出した文体の癖)。`ai/instructions/style.py` の固定の文面に足して AI に渡す。"""
+    """世界ごとの、話の本文の文体の好み(舞台設定・既存の話から抽出した文体の癖)。
+    `ai/instructions/style.py` の固定の文面に、すべての行を id の順に足して、本文を書く材料の「書き方」に入れる。"""
 
     __tablename__ = "style_preference"
-
-    target: Mapped[str] = mapped_column(
-        String, nullable=False, unique=True,
-        comment="効く対象。shared はどの対象にも効き、episode などはその対象(`ai/instructions/style.py` の STYLE_BASES)だけに効く",
-        sort_order=200)
 
 
 CHARACTER_KIND_PERSON = "人物"

@@ -97,8 +97,8 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, OracleCreateForm, OracleUpdateForm,
               OracleRecord, ("title", "text")),
     TableSpec("style_preference", "文体の好み", StylePreference, CommitStylePreference, UpdateStylePreference,
-              StylePreferenceCreateForm, StylePreferenceUpdateForm, StylePreferenceRecord, ("target", "text"),
-              sort="target", order="asc"),
+              StylePreferenceCreateForm, StylePreferenceUpdateForm, StylePreferenceRecord, ("text",),
+              order="asc"),
 )
 
 TABLE_BY_NAME: dict[str, TableSpec] = {spec.name: spec for spec in TABLES}

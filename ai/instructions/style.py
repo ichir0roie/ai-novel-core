@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""土台(`*_BASE`)はここに定数で置く、共通・対象ごとの固定の文体指示。
+"""話の本文の、固定の文体指示(`*_BASE`)と、本文の改行を整える `layout_novel_text`。
 
-世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、世界ごとに違う
-「好み」は、ここには定数で持たない。`style_instruction()` の `shared_extra`(共通に効く)・
-`extra`(その対象だけに効く)として、呼び出し側から渡す(入口は db の `style_preference` から読む)。
-
-対象ごとの土台は共通とは別に持っているので、あとから対象ごとに別の文面を用意できる。
+世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、世界ごとに違う「好み」は、ここには定数で持たない。
+`style_instruction()` の `extra` として呼び出し側から渡す(入口は db の `style_preference` から読む)。
 """
 from __future__ import annotations
 
@@ -108,10 +105,6 @@ def layout_novel_text(text: str) -> str:
     return "\n\n\n".join(scenes)
 
 
-# --- 共通(どの文にも効く文体) ---------------------------------------------
-# 世界の舞台設定や、既存の話から抽出した文体の癖は、世界ごとに違う「ユーザーの好み」なので
-# ここには置かない。呼び出し側が style_instruction() の shared_extra / extra で渡す(db の style_preference)。
-
 SHARED_STYLE_BASE = """\
 語の選び方・文の運び方は、この世界の文章すべてで揃える。
 修飾を重ねない。抽象名詞で言い換えず、物と動作の名前で書く。
@@ -119,8 +112,6 @@ SHARED_STYLE_BASE = """\
 
 基本的な文体はライトノベルを参考にする。"""
 
-
-# --- 対象ごと --------------------------------------------------------------
 
 EPISODE_STYLE_BASE = f"""\
 本文は地の文と会話文を交ぜ、地の文に寄せすぎない。
@@ -141,34 +132,7 @@ EPISODE_STYLE_BASE = f"""\
 書く筋(プロット。場面を手番で演じたなら、その手番の行)に場面が足りないときは、足りないぶんを場面として立ててから書く。
 筋にある出来事は、渡された作品・登場人物・場所・前の話の概要・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。"""
 
-STORY_STYLE_BASE = """\
-作品の筋書きは読ませる文ではなく、後から段階を測るための文として書く。
-段階ごとに一〜二文で、誰と何を巡ってか分かる言い方にする。"""
-
-EVENT_STYLE_BASE = """\
-出来事の記録は情景も語り口も持たせず、事実と関係だけで書く。
-一文に一件だけ入れ、起きた順に並べる。"""
-
-IDEA_STYLE_BASE = """\
-アイデアの説明は、それを知らない読み手が一読で掴める短さにする。
-物・制度・技のどれなのかを先に置き、来歴はその後に一文で足す。"""
-
-STYLE_BASES: dict[str, str] = {
-    "episode": EPISODE_STYLE_BASE,
-    "story": STORY_STYLE_BASE,
-    "event": EVENT_STYLE_BASE,
-    "idea": IDEA_STYLE_BASE,
-}
-
-
-def style_instruction(target: str, shared_extra: str = "", extra: str = "") -> str:
-    """文体の指示を組み立てる。
-
-    ここに定数で置くのは、共通(SHARED_STYLE_BASE)と対象ごと(STYLE_BASES)の固定の文面だけ。
-    世界の舞台設定や、既存の話から抽出した文体の癖のような、世界ごとに違う「好み」は定数に持たず、
-    呼び出し側が `shared_extra`(共通に効く)・`extra`(この対象だけに効く)として渡す(db の `style_preference`)。
-    """
-    if target not in STYLE_BASES:
-        raise ValueError(f"文体の指示が無い対象: {target}")
-    parts = (SHARED_STYLE_BASE, shared_extra, STYLE_BASES[target], extra)
+def style_instruction(extra: str = "") -> str:
+    """話の本文の文体の指示。ここに定数で置くのは固定の文面だけで、世界ごとの好みは `extra`(db の `style_preference`)で渡す。"""
+    parts = (SHARED_STYLE_BASE, EPISODE_STYLE_BASE, extra)
     return "\n".join(part.strip() for part in parts if part.strip())
