@@ -4,6 +4,7 @@ import { Fragment, useRef, useState, type ReactNode } from "react";
 import type { ChildListMeta, ColumnMeta, Rec } from "@/lib/api";
 import FieldInput, { AutoGrowTextarea, CHILD_FREEFORM_TEXT_KEYS } from "./FieldInput";
 import Modal from "./Modal";
+import NameId from "./NameId";
 import { useOptions } from "./ReferenceSelect";
 import StampInput from "./StampInput";
 import { T } from "@/lib/text";
@@ -24,7 +25,7 @@ function ReadValue({ column, value }: { column: ColumnMeta; value: unknown }) {
   if (value == null || value === "") return <>—</>;
   if (column.references) {
     const option = options.find((o) => o.id === value);
-    return <>{option ? option.label : String(value)}</>;
+    return <NameId name={option?.label} id={value} />;
   }
   if (column.type === "boolean") return <>{value ? T.yes : T.no}</>;
   if (Array.isArray(value) || typeof value === "object") return <>{JSON.stringify(value)}</>;

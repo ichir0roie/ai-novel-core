@@ -4,6 +4,9 @@
 const join = (keys: string[]) => keys.join(", ");
 const dash = (v: unknown) => (v == null ? "-" : String(v));
 const span = (start: unknown, end: unknown) => (start == null && end == null ? "" : `${start ?? ""} – ${end ?? ""}`);
+const idMark = (id: unknown) => `#${id}`;
+// 行の名前は、どの画面でも id と組にして出す(名前が無ければ id だけ)。JSX では components/NameId が同じ並びで出す
+const nameId = (name: unknown, id: unknown) => (name == null || name === "" ? idMark(id) : `${name} ${idMark(id)}`);
 
 export const T = {
   appName: "novel db",
@@ -25,6 +28,8 @@ export const T = {
   cannotReachApi: (error: string) => `Cannot reach API: ${error} (check that uvicorn is running)`,
   signInRequired: "Sign in required.",
   span,
+  idMark,
+  nameId,
 
   nav: {
     menu: "Menu",
@@ -41,7 +46,6 @@ export const T = {
 
   list: {
     episodesOf: (story: string) => `Episodes of ${story}`,
-    story: (id: string) => `story ${id}`,
     stories: "Stories",
     tree: "Tree",
     list: "List",
@@ -282,6 +286,5 @@ export const T = {
     sexOf: (sex: string) => `sex: ${sex}`,
     periodOf: (span: string) => `period: ${span}`,
     arrow: (from: string, to: string, relation: string | null) => `${from} → ${to}: ${relation ?? ""}`,
-    unknownId: (id: number) => `id=${id}`,
   },
 } as const;

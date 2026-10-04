@@ -1,5 +1,6 @@
 import Link from "next/link";
 import EpisodeContext from "@/components/EpisodeContext";
+import NameId from "@/components/NameId";
 import { T } from "@/lib/text";
 
 type Appearance = { table: string; id: number; label: string; synced?: boolean; letters?: number };
@@ -45,7 +46,7 @@ export default function Related({
                   {appearances.map((a) => (
                     <li key={`${a.table}:${a.id}`}>
                       <Link href={`/tables/${a.table}/${a.id}`}>
-                        {a.table}「{a.label}」(id={a.id})
+                        {a.table} <NameId name={a.label} id={a.id} />
                       </Link>
                     </li>
                   ))}

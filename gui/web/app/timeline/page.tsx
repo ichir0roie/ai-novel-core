@@ -190,7 +190,7 @@ function itemsOf(data: TimelineResponse): Item[] {
   for (const record of data.items) {
     const start = dayOf(record.start);
     if (start === null) continue;
-    items.push({ key: `episode-${record.id}`, id: record.id as number, label: String(record.label || `id=${record.id}`),
+    items.push({ key: `episode-${record.id}`, id: record.id as number, label: T.nameId(record.label, record.id),
       record, ...daySpan(start, dayOf(record.end)) });
   }
   return items;
@@ -253,7 +253,7 @@ function storyGroups(episodes: Item[], stories: Map<number, StoryInfo>, storyId:
   }
   const node = (id: number): Group => {
     const name = stories.get(id)?.name ?? labels.story_id?.[id];
-    return { key: `story-${id}`, label: name ? `${name} (${id})` : String(id), storyId: id,
+    return { key: `story-${id}`, label: T.nameId(name, id), storyId: id,
       items: byStory.get(id) ?? [], children: (childrenOf.get(id) ?? []).map(node) };
   };
   // 親を循環してたどる作品は根から届かないので、届かなかった分を根に足す
@@ -573,12 +573,12 @@ export default function TimelinePage() {
     const story = row.storyId ?? storyId;
     if (story !== null) initial.story_id = story;
     if (locationId !== null) initial.location_id = locationId;
-    setAdding({ initial, storyLabel: story === null ? null : stories?.get(story)?.name ?? labels.story_id?.[story] ?? null });
+    setAdding({ initial, storyLabel: story === null ? null : T.nameId(stories?.get(story)?.name ?? labels.story_id?.[story], story) });
   };
 
   const tooltipLines = (item: Item) => {
     const r = item.record;
-    return [`${item.label} (id=${item.id})`, T.span(r.start, r.end) || String(r.start), labelOf(labels, "story_id", r.story_id),
+    return [item.label, T.span(r.start, r.end) || String(r.start), labelOf(labels, "story_id", r.story_id),
       r.location_id != null && labelOf(labels, "location_id", r.location_id), String(r.preview ?? "")];
   };
 

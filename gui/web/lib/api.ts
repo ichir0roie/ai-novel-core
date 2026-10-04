@@ -1,5 +1,6 @@
 import { fetchAuthSession } from "aws-amplify/auth";
 import { loginRequired } from "./auth";
+import { T } from "./text";
 import type { components } from "./openapi";
 
 export type TableMeta = components["schemas"]["TableMeta"];
@@ -112,8 +113,7 @@ export function diff(initial: Rec, current: Rec): Rec {
 
 export function labelOf(labels: Labels | undefined, column: string, id: unknown): string {
   if (id === null || id === undefined) return "";
-  const name = labels?.[column]?.[String(id)];
-  return name ? `${name} (${id})` : String(id);
+  return T.nameId(labels?.[column]?.[String(id)], id);
 }
 
 export type EntranceMeta = components["schemas"]["EntranceMeta"];

@@ -89,7 +89,7 @@ export default function RecordPage() {
   };
 
   const remove = async () => {
-    if (!loaded || !window.confirm(T.record.confirmDeleteEpisode(loaded.label || `id=${id}`))) return;
+    if (!loaded || !window.confirm(T.record.confirmDeleteEpisode(T.nameId(loaded.label, id)))) return;
     setBusy(true);
     setError(null);
     setSaved(null);
@@ -107,7 +107,7 @@ export default function RecordPage() {
 
   return (
     <div className="page-fill">
-      <PageTitle kind={meta.label} record={loaded?.label} />
+      <PageTitle kind={meta.label} record={loaded && T.nameId(loaded.label, id)} />
       {!loaded && error && <div className="status error">{error}</div>}
       {loaded && (
         <div className="panel fill">
@@ -118,7 +118,7 @@ export default function RecordPage() {
             mode="edit"
             titleNote={
               <>
-                <Link href={`/tables/${table}`}>{meta.label}</Link> / id={id}
+                <Link href={`/tables/${table}`}>{meta.label}</Link> / {T.idMark(id)}
               </>
             }
             header={

@@ -387,6 +387,7 @@ button.ghost { background: transparent; }
 :is(.tree-location, .tree-parent) > details > summary { cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; padding: 0.25rem 0; }
 :is(.tree-location, .tree-parent) > details > summary::marker { color: var(--muted); }
 .tree-name { font-weight: 600; }
+.name-id { color: var(--muted); font-weight: normal; font-size: 0.85em; font-variant-numeric: tabular-nums; }
 .tree-kind, .tree-count, .tree-meta { color: var(--muted); font-size: 0.85rem; }
 .tree-link { font-size: 0.8rem; margin-left: auto; }
 .tree-story { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.2rem 0; }

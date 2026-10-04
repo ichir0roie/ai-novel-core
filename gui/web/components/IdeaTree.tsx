@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { deleteIdea, listAllRecords, updateRecord, type Rec } from "@/lib/api";
+import NameId from "./NameId";
 import { buildIdeaTree, collapsibleIds, descendantIds, findNode, type IdeaNode } from "@/lib/ideaTree";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
@@ -65,7 +66,9 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
               {openState.isOpen(key) ? "▼" : "▶"}
             </button>
           )}
-          <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
+          <span className="tree-name">
+            <NameId name={node.name} id={node.id} />
+          </span>
           <button
             type="button"
             className="tree-move-btn"
@@ -165,8 +168,7 @@ export default function IdeaTree() {
     async (node: IdeaNode) => {
       const hasChildren = node.children.length > 0;
       if (hasChildren) {
-        const name = node.name ?? `(id ${node.id})`;
-        if (!window.confirm(T.ideaTree.confirmDeleteWithChildren(name, node.children.length))) return;
+        if (!window.confirm(T.ideaTree.confirmDeleteWithChildren(T.nameId(node.name, node.id), node.children.length))) return;
       }
       setSaveError(null);
       try {
@@ -190,7 +192,7 @@ export default function IdeaTree() {
     <div className="panel">
       {saveError && <div className="status error">{saveError}</div>}
       {movingId !== null && (
-        <div className="tree-move-hint">{T.ideaTree.moveModeHint(movingNode?.name ?? `(id ${movingId})`)}</div>
+        <div className="tree-move-hint">{T.ideaTree.moveModeHint(T.nameId(movingNode?.name, movingId))}</div>
       )}
       {movingId !== null && (
         <button type="button" className="tree-root-drop" onClick={() => onMoveHere(null)}>

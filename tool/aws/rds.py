@@ -35,6 +35,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import IO
 
 from pydantic import BaseModel
 
@@ -44,6 +45,9 @@ PARAMETER_PREFIX = "/novel/"
 BASTION_OS_USER = "ec2-user"
 # --serve が聞くポート。SessionStart フックと .vscode が渡す DEM_DATABASE_URL もここを指す
 SERVE_PORT = 15432
+
+# lock_port が取ったロックのファイル。閉じるとロックが外れるので、プロセスが終わるまで持つ
+_held_locks: list[IO[str]] = []
 
 
 class RdsTarget(BaseModel):
@@ -106,7 +110,39 @@ def read_master_secret(secret_arn: str) -> MasterSecret:
         _aws("secretsmanager", "get-secret-value", "--secret-id", secret_arn, "--query", "SecretString"))
 
 
+def _port_in_use(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        return True
+    except OSError:
+        return False
+
+
+def lock_port(port: int) -> bool:
+    """同じポートの転送を張る tool.aws.rds を一つに限る。取れたロックは、プロセスが終わるまで握る。
+
+    重なると、後の ssh は bind に失敗してすぐ終わるのに、ポートには先の転送が繋がるので張れたと見誤り、
+    張り直しを空回りさせて踏み台の CPU を食い続ける。SessionStart フックと VS Code のタスクが同時に起こすと重なる。
+    """
+    f = open(Path(tempfile.gettempdir()) / f"novel-rds-{port}.lock", "a+")
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return False
+    _held_locks.append(f)
+    return True
+
+
 def open_tunnel(target: RdsTarget, port: int, key_dir: Path) -> subprocess.Popen[bytes]:
+    # ポートを他のもの(ロックを握らずに残った ssh など)が持っていると、繋がるだけで張れたと見誤る
+    if _port_in_use(port):
+        sys.exit(f"127.0.0.1:{port} を他のプロセスが使っている")
     key = key_dir / "key"
     subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
     ssh = ["ssh", "-N", "-i", str(key),
@@ -175,6 +211,11 @@ def main(argv: list[str] | None = None) -> None:
 
     configure_logging()
     args = _parse_args(argv)
+    if not lock_port(args.port):
+        if args.serve:
+            logger.info(f"127.0.0.1:{args.port} の転送は別の --serve が張っている")
+            return
+        sys.exit(f"127.0.0.1:{args.port} の転送は別の tool.aws.rds が張っている。--port で別のポートを使う")
     command = args.command or [os.environ.get("SHELL", "bash")]
     target = load_target()
     started = ensure_bastion_running(target.bastion_instance_id)

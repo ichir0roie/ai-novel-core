@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import CharacterSheetModal from "@/components/CharacterSheetModal";
+import NameId from "@/components/NameId";
 import { useOptions } from "@/components/ReferenceSelect";
 import { getRelations, type Relation } from "@/lib/api";
 import { ageAt, parseStamp } from "@/lib/stamp";
@@ -48,10 +49,11 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
   const byId = useMemo(() => new Map(characters.map((o) => [o.id, o])), [characters]);
   const time = typeof start === "string" ? start : null;
   const year = parseStamp(time)?.year ?? null;
-  const nameOf = (id: number) => byId.get(id)?.label ?? fallbackLabels?.[id] ?? `id=${id}`;
+  const nameOf = (id: number) => byId.get(id)?.label ?? fallbackLabels?.[id];
   const withAge = (id: number) => {
+    const name = nameOf(id);
     const age = ageAt(byId.get(id)?.born ?? null, time);
-    return age === null ? nameOf(id) : `${nameOf(id)}(${age})`;
+    return <NameId name={name && age !== null ? `${name}(${age})` : name} id={id} />;
   };
 
   if (characterIds.length === 0) return <span className="hint">{T.episodeCharacters.none}</span>;
@@ -103,7 +105,7 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
                   {own.map((r) => (
                     <span key={r.id} className="episode-sheet-relation"
                       title={[T.span(r.start, r.end), r.text].filter(Boolean).join("\n")}>
-                      {T.episodeSheet.relation(nameOf(r.character_2_id), r.relation ?? "")}
+                      {T.episodeSheet.relation(T.nameId(nameOf(r.character_2_id), r.character_2_id), r.relation ?? "")}
                     </span>
                   ))}
                 </span>

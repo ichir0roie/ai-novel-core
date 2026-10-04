@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import NameId from "@/components/NameId";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getMaps, type MapLocation, type MapsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
@@ -102,7 +103,7 @@ export default function MapsPage() {
   }
   const drawn: [Point, number, number, number][] = [];
   for (const members of groups.values()) members.forEach((p, i) => drawn.push([p, X(p.lon), Y(p.lat), i]));
-  const labels = locationLabels(drawn.map(([p, x, y, i]) => [x, y + 12 * i, (p.name ?? "") + altText(p.alt)]));
+  const labels = locationLabels(drawn.map(([p, x, y, i]) => [x, y + 12 * i, T.nameId(p.name, p.id) + altText(p.alt)]));
   const radius = entry?.planet.radius_km ?? null;
 
   const rows = originPoint
@@ -117,9 +118,9 @@ export default function MapsPage() {
 
   return (
     <div className="page-fill viz">
-      <PageTitle kind={T.maps.title} record={focusLocation?.name} />
+      <PageTitle kind={T.maps.title} record={focusLocation && T.nameId(focusLocation.name, focusLocation.id)} />
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>{focusLocation ? T.maps.centeredOn(focusLocation.name ?? "") : T.maps.title}</h1>
+        <h1 style={{ margin: 0 }}>{focusLocation ? T.maps.centeredOn(T.nameId(focusLocation.name, focusLocation.id)) : T.maps.title}</h1>
         {focus != null && (
           <>
             {focusLocation && (
@@ -136,7 +137,7 @@ export default function MapsPage() {
           <span className="segment">
             {data.planets.map((pl, i) => (
               <button key={pl.planet.id} type="button" className={i === planetIndex ? "on" : ""} onClick={() => selectPlanet(i)}>
-                {pl.planet.name}
+                <NameId name={pl.planet.name} id={pl.planet.id} />
               </button>
             ))}
           </span>
@@ -181,8 +182,8 @@ export default function MapsPage() {
                   <text x={X(frame.lonMin) - 6} y={Y(lat) + 4} textAnchor="end" fill="#555">{lat}°</text>
                 </g>
               ))}
-              <text x={MARGIN.left} y={24} fontSize={18} fontWeight="bold">{entry.planet.name}</text>
-              <text x={MARGIN.left + 40 + (entry.planet.name?.length ?? 0) * 18} y={24} fill="#555">
+              <text x={MARGIN.left} y={24} fontSize={18} fontWeight="bold">{T.nameId(entry.planet.name, entry.planet.id)}</text>
+              <text x={MARGIN.left + 40 + T.nameId(entry.planet.name, entry.planet.id).length * 18} y={24} fill="#555">
                 {radius ? T.maps.radius(radius) : T.maps.radiusUnknown}
               </text>
               {shapes
@@ -195,13 +196,13 @@ export default function MapsPage() {
                   return (
                     <g
                       key={`shape${p.id}`}
-                      onMouseMove={(e) => show(e, [T.maps.nameKind(p.name, p.kind), T.maps.parent(p.parent_name), T.maps.polygonVertices(outerRing(p.polygon).length), p.environment && T.maps.environment(p.environment)])}
+                      onMouseMove={(e) => show(e, [T.maps.nameKind(T.nameId(p.name, p.id), p.kind), T.maps.parent(p.parent_id == null ? null : T.nameId(p.parent_name, p.parent_id)), T.maps.polygonVertices(outerRing(p.polygon).length), p.environment && T.maps.environment(p.environment)])}
                       onMouseLeave={hide}
                     >
                       <path d={d} fill={color} fillOpacity={opacity[p.category]} fillRule="evenodd" stroke={color} strokeWidth={1.2} strokeLinejoin="round" />
                       {!pointIds.has(p.id) && (
                         <text x={X(cx)} y={Y(cy)} textAnchor="middle" fontSize={13} fontWeight="bold" fill={color} fillOpacity={0.7} pointerEvents="none">
-                          {p.name}
+                          {T.nameId(p.name, p.id)}
                         </text>
                       )}
                     </g>
@@ -223,8 +224,8 @@ export default function MapsPage() {
                     onDoubleClick={() => openPage(p.link)}
                     onMouseMove={(e) =>
                       show(e, [
-                        T.maps.nameKind(p.name, p.kind),
-                        T.maps.parent(p.parent_name),
+                        T.maps.nameKind(T.nameId(p.name, p.id), p.kind),
+                        T.maps.parent(p.parent_id == null ? null : T.nameId(p.parent_name, p.parent_id)),
                         T.maps.lonLatAlt(p.lon, p.lat, p.alt),
                         p.environment && T.maps.environment(p.environment),
                         [p.sample_region, p.sample_culture, p.sample_era].filter(Boolean).join(" / "),
@@ -235,7 +236,7 @@ export default function MapsPage() {
                   >
                     <Marker category={p.category} x={x} y={y} r={(sel ? 7 : 4) + 2 * i} color={color} strokeWidth={sel ? 2.5 : 1} />
                     <text x={lx} y={ly} textAnchor={anchor} fill={color} stroke="#fdfcf8" strokeWidth={3} paintOrder="stroke" fontWeight={sel ? "bold" : "normal"}>
-                      {p.name}
+                      {T.nameId(p.name, p.id)}
                       {altText(p.alt)}
                     </text>
                   </g>
@@ -254,7 +255,10 @@ export default function MapsPage() {
               <>
                 <div className="viz-head">
                   <h2>
-                    {originPoint.name} <span className="hint">({originPoint.kind} / {originPoint.parent_name ?? "-"})</span>
+                    <NameId name={originPoint.name} id={originPoint.id} />{" "}
+                    <span className="hint">
+                      ({originPoint.kind} / {originPoint.parent_id == null ? "-" : T.nameId(originPoint.parent_name, originPoint.parent_id)})
+                    </span>
                   </h2>
                   <button type="button" className="primary" onClick={() => openPage(originPoint.link)}>
                     {T.openRecord}
@@ -283,9 +287,9 @@ export default function MapsPage() {
                     {rows.map((r) => (
                       <tr key={r.p.id} className="row" onClick={() => setOrigin(r.p.id)}>
                         <td>
-                          {r.p.name}
+                          <NameId name={r.p.name} id={r.p.id} />
                           <br />
-                          <span className="hint">{r.p.parent_name ?? ""}</span>
+                          <span className="hint">{r.p.parent_id == null ? "" : T.nameId(r.p.parent_name, r.p.parent_id)}</span>
                         </td>
                         {r.deg < 0.01 ? (
                           <td colSpan={2}>{T.maps.sameCoordinates}</td>

@@ -62,11 +62,11 @@ export default function EpisodeSheetModal({ episodeId, onClose }: Props) {
   const start = record?.start ?? null;
   const characterIds = (record?.character_ids as number[] | undefined) ?? [];
   const mentionedIds = (record?.mentioned_character_ids as number[] | undefined) ?? [];
-  const nameOf = (id: number) => byId.get(id)?.label ?? loaded?.labels?.character_ids?.[id] ?? `id=${id}`;
+  const nameOf = (id: number) => T.nameId(byId.get(id)?.label ?? loaded?.labels?.character_ids?.[id], id);
 
   const shown = (column: ColumnMeta, value: unknown): string => {
     if (value === null || value === undefined || value === "") return "—";
-    if (column.references) return labelOf(loaded?.labels, column.key, value) || `id=${value}`;
+    if (column.references) return labelOf(loaded?.labels, column.key, value);
     if (typeof value === "boolean") return value ? T.yes : T.no;
     return String(value);
   };
@@ -92,7 +92,7 @@ export default function EpisodeSheetModal({ episodeId, onClose }: Props) {
 
   return (
     <Modal
-      title={record && meta ? `${meta.label}: ${(title && (record[title.key] as string | null)) || loaded.label || `id=${episodeId}`}` : T.loading}
+      title={record && meta ? `${meta.label}: ${T.nameId((title && (record[title.key] as string | null)) || loaded.label, episodeId)}` : T.loading}
       onClose={onClose}
       actions={actions}
       wide

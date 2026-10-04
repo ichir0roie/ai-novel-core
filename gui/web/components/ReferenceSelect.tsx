@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
+import NameId from "./NameId";
 import { PickerModal, PickerToggle } from "./Picker";
 import { getOptions, type Option } from "@/lib/api";
 import { T } from "@/lib/text";
@@ -63,13 +64,13 @@ type Props = {
 export default function ReferenceSelect({ table, value, nullable, onChange, disabled, defaultIds, title }: Props) {
   const options = useOptions(table);
   const [open, setOpen] = useState(false);
-  const choices = useMemo(() => options.map((o) => ({ value: o.id, label: `${o.id}: ${o.label}` })), [options]);
+  const choices = useMemo(() => options.map((o) => ({ value: o.id, label: T.nameId(o.label, o.id) })), [options]);
   const current = choices.find((c) => c.value === value);
 
   return (
     <div className="picker">
       <PickerToggle
-        label={current?.label ?? (value !== null ? `id ${value}` : nullable ? T.none : T.select)}
+        label={current?.label ?? (value !== null ? T.idMark(value) : nullable ? T.none : T.select)}
         empty={value === null}
         onClick={() => setOpen(true)}
         disabled={disabled}
@@ -118,7 +119,7 @@ export function ReferenceMultiSelect({ table, value, onChange, title }: MultiPro
   return (
     <div className="picker">
       <PickerToggle label={T.picker.count(value.length)} empty={value.length === 0} onClick={() => setOpen(true)} />
-      <span className="picker-summary">{selected.map((o) => o.label).join(" / ")}</span>
+      <span className="picker-summary">{selected.map((o) => T.nameId(o.label, o.id)).join(" / ")}</span>
       {open && (
         <Modal
           title={title ?? T.select}
@@ -138,7 +139,7 @@ export function ReferenceMultiSelect({ table, value, onChange, title }: MultiPro
             {shown.map((o) => (
               <label key={o.id} className={`picker-option ${value.includes(o.id) ? "selected" : ""}`}>
                 <input type="checkbox" checked={value.includes(o.id)} onChange={() => toggle(o.id)} />
-                {o.id}: {o.label}
+                <NameId name={o.label} id={o.id} />
               </label>
             ))}
           </div>

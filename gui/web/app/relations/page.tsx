@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import NameId from "@/components/NameId";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getRelations, type Relation, type RelationCharacter, type RelationsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
@@ -129,13 +130,13 @@ export default function RelationsPage() {
     };
   }, [onMouseMove, onMouseUp]);
 
-  const focusName = focus == null ? null : data?.characters.find((c) => c.id === focus)?.name ?? T.relations.unknownId(focus);
+  const focusName = focus == null ? null : T.nameId(data?.characters.find((c) => c.id === focus)?.name, focus);
 
   if (error) return <div className="status error">{error}</div>;
   if (!data) return <div className="status info">{T.loading}</div>;
 
   const byId = new Map(data.characters.map((c) => [c.id, c]));
-  const nameOf = (id: number) => byId.get(id)?.name ?? `id=${id}`;
+  const nameOf = (id: number) => T.nameId(byId.get(id)?.name, id);
   const kinds = [...new Set(data.characters.map((c) => c.kind ?? ""))];
   const colorOf = Object.fromEntries(kinds.map((k, i) => [k, data.colors[i % data.colors.length]]));
   const chars = data.characters.filter((c) => !hidden.has(c.kind ?? "") && inYear(c, year));
@@ -216,7 +217,7 @@ export default function RelationsPage() {
         <>
           <div className="viz-head">
             <h2>
-              {c.name} <span className="hint">({c.kind ?? ""})</span>
+              <NameId name={c.name} id={c.id} /> <span className="hint">({c.kind ?? ""})</span>
             </h2>
             <button type="button" className="primary" onClick={() => openPage(c.link)}>
               {T.openRecord}
@@ -288,7 +289,7 @@ export default function RelationsPage() {
     <div className="page-fill viz">
       <PageTitle kind={T.relations.title} record={focusName} />
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>{focus == null ? T.relations.title : T.relations.of(byId.get(focus)?.name ?? T.relations.unknownId(focus))}</h1>
+        <h1 style={{ margin: 0 }}>{focus == null ? T.relations.title : T.relations.of(focusName ?? "")}</h1>
         {focus != null && (
           <Link href="/relations" className="hint">
             {T.relations.fullGraph}
@@ -388,12 +389,12 @@ export default function RelationsPage() {
                       ev.preventDefault();
                     }}
                     onDoubleClick={() => openPage(c.link)}
-                    onMouseMove={(ev) => show(ev, [T.relations.nameKind(c.name, c.kind), c.sex && T.relations.sexOf(c.sex), spanText(c) && T.relations.periodOf(spanText(c))])}
+                    onMouseMove={(ev) => show(ev, [T.relations.nameKind(nameOf(c.id), c.kind), c.sex && T.relations.sexOf(c.sex), spanText(c) && T.relations.periodOf(spanText(c))])}
                     onMouseLeave={hide}
                   >
                     <circle cx={p.x * z} cy={p.y * z} r={R_NODE * z} fill={colorOf[c.kind ?? ""]} stroke={on || touched ? "#222" : "#fff"} strokeWidth={on || touched ? 3 : 1.5} />
                     <text x={p.x * z} y={(p.y + R_NODE + 14) * z} textAnchor="middle" fill="#222" stroke="#fdfcf8" strokeWidth={3} paintOrder="stroke" fontSize={12 * z} fontWeight={on ? "bold" : "normal"}>
-                      {c.name}
+                      {nameOf(c.id)}
                     </text>
                   </g>
                 );

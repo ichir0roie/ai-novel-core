@@ -42,7 +42,7 @@ export function buildCharacterTree(
   for (const character of [...characters].sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), "ja"))) {
     const id = Number(character.id);
     const entry: TreeCharacter = {
-      id, name: String(character.name ?? character.label ?? `id ${id}`),
+      id, name: String(character.name ?? character.label ?? ""),
       kind: str(character.kind),
     };
     const at = characterLocations[String(id)];

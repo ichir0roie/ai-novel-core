@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import CharacterSheetModal from "@/components/CharacterSheetModal";
 import Modal from "@/components/Modal";
+import NameId from "@/components/NameId";
 import { useOptions } from "@/components/ReferenceSelect";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
 import { ageAt } from "@/lib/stamp";
@@ -40,7 +41,7 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
 
   const q = filter.trim();
   const shown = options.filter((o) =>
-    characterIds.includes(o.id) || (q ? o.label.includes(q) : locationCharacterIds === null || locationCharacterIds.includes(o.id)));
+    characterIds.includes(o.id) || (q ? o.label.includes(q) || String(o.id) === q : locationCharacterIds === null || locationCharacterIds.includes(o.id)));
   const toggle = (id: number) => onChange(characterIds.includes(id) ? characterIds.filter((v) => v !== id) : [...characterIds, id]);
 
   return (
@@ -55,7 +56,7 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
                 <span key={o.id}>
                   {i > 0 && " / "}
                   <button type="button" className="character-open" onClick={() => setViewing(o.id)}>
-                    {labelWithAge(o.label, o.born, episodeStart)}
+                    <NameId name={labelWithAge(o.label, o.born, episodeStart)} id={o.id} />
                   </button>
                 </span>
               ))
@@ -82,7 +83,7 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
             {shown.map((o) => (
               <label key={o.id} className={`picker-option ${characterIds.includes(o.id) ? "selected" : ""}`}>
                 <input type="checkbox" checked={characterIds.includes(o.id)} onChange={() => toggle(o.id)} />
-                {labelWithAge(`${o.id}: ${o.label}`, o.born, episodeStart)}
+                <NameId name={labelWithAge(o.label, o.born, episodeStart)} id={o.id} />
               </label>
             ))}
           </div>

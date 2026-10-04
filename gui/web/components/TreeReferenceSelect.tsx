@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Modal from "./Modal";
+import NameId from "./NameId";
 import { PickerToggle } from "./Picker";
 import { RecordLink, useOptions } from "./ReferenceSelect";
 import { buildOptionTree, type OptionNode } from "@/lib/optionTree";
@@ -56,7 +57,7 @@ function NodeRow({
           className={`tree-select-label ${node.id === selectedId ? "selected" : ""}`}
           onClick={() => onPick(node.id)}
         >
-          {node.id}: {node.label}
+          <NameId name={node.label} id={node.id} />
         </button>
       </div>
       {hasChildren && open && (
@@ -103,7 +104,7 @@ export default function TreeReferenceSelect({ table, value, nullable, onChange, 
   return (
     <div className="picker">
       <PickerToggle
-        label={current ? `${current.id}: ${current.label}` : value !== null ? `id ${value}` : nullable ? T.none : T.select}
+        label={value !== null ? T.nameId(current?.label, value) : nullable ? T.none : T.select}
         empty={value === null}
         onClick={() => setOpen(true)}
         disabled={disabled}

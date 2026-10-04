@@ -158,11 +158,13 @@ def locations_on_planet_select(planet_id: int) -> Select:
     )
 
 
-def shapes_on_planet_select(planet_id: int) -> Select:
+def mapped_locations_select() -> Select:
+    """星の上にあって、経緯度か輪郭(polygon)を持つ場所。全部の星の分を一度に引く"""
     return (
         select(Location)
-        .where(Location.location_planet == planet_id)
-        .where(Location.polygon.is_not(None))
+        .where(Location.location_planet.is_not(None))
+        .where(or_(Location.location_longitude.is_not(None) & Location.location_latitude.is_not(None),
+                   Location.polygon.is_not(None)))
         .order_by(Location.id.asc())
     )
 

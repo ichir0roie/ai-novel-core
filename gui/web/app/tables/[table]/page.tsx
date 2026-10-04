@@ -9,6 +9,7 @@ import { PageTitle, useTable } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
 import CharacterTree from "@/components/CharacterTree";
+import NameId from "@/components/NameId";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
@@ -62,8 +63,8 @@ export default function TablePage() {
     };
   }, [storyId]);
 
-  const title = storyId ? T.list.episodesOf(storyLabel ?? T.list.story(storyId)) : meta?.label;
-  const recordName = storyId ? (storyLabel ?? T.list.story(storyId)) : null;
+  const recordName = storyId ? T.nameId(storyLabel, storyId) : null;
+  const title = recordName ? T.list.episodesOf(recordName) : meta?.label;
 
   const setParams = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams(search.toString());
@@ -167,7 +168,9 @@ export default function TablePage() {
       {storyId && (
         <div className="hint">
           <Link href="/tables/story">{T.list.stories}</Link> /{" "}
-          <Link href={`/tables/story/${storyId}`}>{storyLabel ?? `id=${storyId}`}</Link>
+          <Link href={`/tables/story/${storyId}`}>
+            <NameId name={storyLabel} id={storyId} />
+          </Link>
         </div>
       )}
       <h1>

@@ -7,7 +7,7 @@ from pydantic import BaseModel, model_serializer
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.map.collect import MapLocation, Planet, map_location_of, planet_of
+from data_access_logic.map.collect import MapLocation, Planet, map_location_of, parents_of, planet_of
 from data_access_logic.map.geometry import (
     altitude_diff_text, angular_distance_deg, bearing_deg, bearing_name, distance_km, distance_text,
 )
@@ -53,16 +53,18 @@ class ListNeighbors(SessionEntrypoint):
             raise ValueError(f"{origin.name}(id={origin.id})は星(location_planet)が決まっていない")
 
         planet = planet_of(planet_row)
-        neighbors = [self._neighbor(s, origin, location, planet.radius_km)
-                     for location in s.scalars(common_query.locations_on_planet_select(planet.id)).all()
+        locations = [location for location in s.scalars(common_query.locations_on_planet_select(planet.id)).all()
                      if location.id != origin.id and (self.kind is None or location.kind == self.kind)]
+        parents = parents_of(s, [origin, *locations])
+        neighbors = [self._neighbor(origin, location, planet.radius_km, parents) for location in locations]
         neighbors.sort(key=lambda neighbor: (neighbor.distance_deg, neighbor.point.id))
         if self.limit is not None:
             neighbors = neighbors[: self.limit]
-        return Neighbors(location=map_location_of(s, origin), planet=planet, neighbors=neighbors)
+        return Neighbors(location=map_location_of(origin, parents), planet=planet, neighbors=neighbors)
 
     @staticmethod
-    def _neighbor(s: Session, origin: Location, location: Location, radius: float | None) -> Neighbor:
+    def _neighbor(origin: Location, location: Location, radius: float | None,
+                  parents: dict[int, Location]) -> Neighbor:
         lon1, lat1 = origin.location_longitude, origin.location_latitude
         lon2, lat2 = location.location_longitude, location.location_latitude
         deg = angular_distance_deg(lon1, lat1, lon2, lat2)
@@ -70,7 +72,7 @@ class ListNeighbors(SessionEntrypoint):
         bearing = bearing_deg(lon1, lat1, lon2, lat2)
         diff = (float(location.location_altitude) - float(origin.location_altitude)
                 if location.location_altitude is not None and origin.location_altitude is not None else None)
-        point = map_location_of(s, location)
+        point = map_location_of(location, parents)
         direction = "同じ経緯度" if deg < 0.01 else bearing_name(bearing)
         parent = f"・{point.parent_name}" if point.parent_name else ""
         where = "同じ経緯度" if deg < 0.01 else f"{direction} {distance_text(km, deg)}"

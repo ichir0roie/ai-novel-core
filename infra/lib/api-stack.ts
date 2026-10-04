@@ -63,7 +63,7 @@ export class NovelApiStack extends Stack {
       memorySize: 1024,
       timeout: Duration.seconds(30),
       // 署名を持つ呼ぶ側が暴れても、費用と db の接続数がこれ以上に膨らまないようにする
-      reservedConcurrentExecutions: 5,
+      reservedConcurrentExecutions: 30,
       role: functionRole,
       logGroup,
       vpc,

@@ -22,7 +22,7 @@ type CharacterSheet = Record<string, unknown> & {
   text: string | null;
   // `time` の時点までに起きた行だけ(時点が無ければ、年の決まっていない行も含めてすべて)
   histories: History[];
-  location: { location_name: string | null } | null;
+  location: { location_id: number; location_name: string | null } | null;
 };
 
 function shown(value: unknown): string {
@@ -93,7 +93,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
   );
 
   return (
-    <Modal title={sheet ? `${sheet.name ?? characterId}${age === null ? "" : `(${age})`}` : T.loading} onClose={onClose} actions={actions} wide>
+    <Modal title={sheet ? T.nameId(sheet.name && age !== null ? `${sheet.name}(${age})` : sheet.name, characterId) : T.loading} onClose={onClose} actions={actions} wide>
       {error && <div className="status error">{error}</div>}
       {!sheet || !meta ? (
         !error && <div className="status info">{T.loading}</div>
@@ -126,7 +126,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
               </div>
               <div>
                 <dt>{T.characterSheet.location}</dt>
-                <dd>{shown(sheet.location?.location_name)}</dd>
+                <dd>{sheet.location ? T.nameId(sheet.location.location_name, sheet.location.location_id) : shown(null)}</dd>
               </div>
               {parameterColumns.filter((c) => !c.choices).map((c) => (
                 <div key={c.key}>

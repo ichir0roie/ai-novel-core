@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getCharacterLocations, listAllRecords, type Rec } from "@/lib/api";
+import NameId from "./NameId";
 import { buildCharacterTree, collapsibleIds, type TreeCharacter, type TreeNode } from "@/lib/characterTree";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
@@ -12,7 +13,9 @@ type OpenState = ReturnType<typeof useTreeOpen>;
 function CharacterRow({ character }: { character: TreeCharacter }) {
   return (
     <li className="tree-story">
-      <Link href={`/tables/character/${character.id}`}>{character.name}</Link>
+      <Link href={`/tables/character/${character.id}`}>
+        <NameId name={character.name} id={character.id} />
+      </Link>
       <span className="tree-meta">
         {character.kind && character.kind !== "人物" && <span className="chip">{character.kind}</span>}
       </span>
@@ -26,7 +29,9 @@ function LocationNode({ node, openState }: { node: TreeNode; openState: OpenStat
     <li className="tree-location">
       <details open={openState.isOpen(key)} onToggle={(e) => openState.setOpen(key, e.currentTarget.open)}>
         <summary>
-          <span className="tree-name">{node.name ?? `(id ${node.id})`}</span>
+          <span className="tree-name">
+            <NameId name={node.name} id={node.id} />
+          </span>
           {node.kind && <span className="tree-kind">{node.kind}</span>}
           <span className="tree-count">{T.characterTree.characters(node.total)}</span>
           <Link href={`/tables/location/${node.id}`} className="tree-link" onClick={(e) => e.stopPropagation()}>

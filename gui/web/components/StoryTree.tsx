@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { listAllRecords, updateRecord, type Rec } from "@/lib/api";
+import NameId from "./NameId";
 import { buildStoryTree, collapsibleIds, descendantIds, findNode, type StoryNode } from "@/lib/storyTree";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
@@ -31,7 +32,7 @@ function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
   return (
     <>
       <Link href={`/tables/story/${node.id}`} className="tree-name" onClick={(e) => e.stopPropagation()}>
-        {node.name}
+        <NameId name={node.name} id={node.id} />
       </Link>
       <span className="tree-meta">
         {node.state && <span className="chip">{node.state}</span>}
@@ -189,7 +190,7 @@ export default function StoryTree() {
     <div className="panel">
       {saveError && <div className="status error">{saveError}</div>}
       {movingId !== null && (
-        <div className="tree-move-hint">{T.storyTree.moveModeHint(movingNode?.name ?? `(id ${movingId})`)}</div>
+        <div className="tree-move-hint">{T.storyTree.moveModeHint(T.nameId(movingNode?.name, movingId))}</div>
       )}
       {movingId !== null && (
         <button type="button" className="tree-root-drop" onClick={() => move.onMoveHere(ROOT)}>
