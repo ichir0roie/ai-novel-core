@@ -47,7 +47,7 @@ def _parameter_row(start: str) -> CharacterParameterRow:
 def test_commit_character(shown, world):
     result = shown(CommitCharacter(CharacterCreateForm(
         name="北原ミツ", text="市の香辛料売り", kind="人物", main_character=True,
-        event_seeded=True, meme_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
+        event_seeded=True, location_id=world.location_id, start="1180/05/06", end="1250/01/01",
         parameters=[_parameter_row("1180/05/06")],
         histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
 
@@ -201,7 +201,7 @@ def test_read_surroundings(shown, world):
 def test_update_character(shown, world):
     result = shown(UpdateCharacter(CharacterUpdateForm(
         id=world.character_ids[1], name="テスト花代", text="改名した", kind="人物",
-        main_character=True, event_seeded=False, meme_seeded=False, start="1171/02/03", end="1261/04/05",
+        main_character=True, event_seeded=False, start="1171/02/03", end="1261/04/05",
         parameters=[_parameter_row("1171/02/03")],
         locations=[CharacterLocationRow(location_id=world.neighbor_id, start="1171/02/03", end="1261/04/05")],
         histories=[CharacterHistoryRow(start=1200, description="改名して村へ移った")])))
@@ -209,7 +209,7 @@ def test_update_character(shown, world):
     assert result["name"] == "テスト花代"
     assert result["text"] == "改名した"
     assert result["main_character"] is True
-    assert (result["event_seeded"], result["meme_seeded"]) == (False, False)
+    assert result["event_seeded"] is False
     assert (result["start"], result["end"]) == ("1171/02/03 00:00:00", "1261/04/05 00:00:00")
     assert result["parameters"][0]["dialect"] == "西の訛り"
     assert [location["location_id"] for location in result["locations"]] == [world.neighbor_id]

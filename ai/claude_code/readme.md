@@ -8,7 +8,7 @@ AI を `ai` 引数(`data_access_logic/ai_client.py` の `AIClient`)で受け取�
 ai/claude_code/
   ai_client.py            `generate(prompt, 出力のモデル, ...)`。出力のモデルの json schema を渡して
                           `claude -p --output-format json --json-schema …` を subprocess で呼び、そのモデルで返す(得られなければ None)
-  fact_checker.py         アイデア・oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く
+  fact_checker.py         oracle・ミームを Dラボのナレッジとネット検索で検め、妥当性と補足を `fact_check` 欄へ書く
 ```
 
 ## 仕組み

@@ -15,7 +15,6 @@ from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event import summary as event_summary
 from data_access_logic.event.record import EventRecord
-from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.meme.extractor import refresh
 from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.story.record import StoryRecord
@@ -50,12 +49,12 @@ class CommitAndRefresh(CommitEntrypoint):
 class MemeSourceCommitted(BaseModel):
     """確定した行と、そのあと足したミームの件数。"""
 
-    record: IdeaRecord | OracleRecord
+    record: OracleRecord
     memes_added: int
 
 
 class CommitMemeSource(CommitEntrypoint):
-    """ミームの元(アイデア・oracle)を確定したあと、その場でミームを抜き出す基底。
+    """ミームの元(oracle)を確定したあと、その場でミームを抜き出す基底。
 
     抜き出しは確定のトランザクションを閉じてから行う(AI が答えなくても確定は残し、
     `meme_seeded` が false のまま次の抽出に回す)。
@@ -65,7 +64,7 @@ class CommitMemeSource(CommitEntrypoint):
 
     fact_check = True
 
-    def execute(self, s: Session) -> IdeaRecord | OracleRecord:
+    def execute(self, s: Session) -> OracleRecord:
         raise NotImplementedError
 
     def result(self) -> MemeSourceCommitted:

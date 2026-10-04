@@ -357,7 +357,7 @@ def _knower_args(table: str, subject: str) -> tuple:
             CheckConstraint("(knower_id IS NULL) <> (location_id IS NULL)", name=f"ck_{table}_one_knower"))
 
 
-class Character(EventSeededMixin, MemeSeededMixin, ContentBase):
+class Character(EventSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
@@ -640,15 +640,13 @@ class CharacterHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
-class Idea(MemeSeededMixin, TextBase):
+class Idea(TextBase):
     __tablename__ = "idea"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
 
-    location_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("location.id"), index=True,
-        comment="効く場所。この場所とその配下で効く。空ならどこにも効かない", sort_order=220)
+    # 効く場所は本体に持たず、履歴の行(非公開の行も含む)の場所で持つ(`dictionary_query.idea_in_scope`)
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="効き始める時刻。出来事の時刻と比べる。空なら始まりを限らない", sort_order=230)
     end: Mapped[Stamp | None] = mapped_column(
@@ -657,7 +655,7 @@ class Idea(MemeSeededMixin, TextBase):
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
-    # 本文(`text`)は本質で、作者(語り部・生成)だけが読む。作中の人物が知ることは、場所・時代ごとの作中での呼び名と
+    # 本文(`text`)は本質で、作者(語り部と、話を書くセッションの Claude)だけが読み、AI の生成には渡さない。作中の人物が知ることは、場所・時代ごとの作中での呼び名と
     # 受け止め方として、人物の来歴と同じく履歴(IdeaHistory)に積む。GUI では histories に並ぶ。
     CHILD_LISTS = ("histories",)
 
@@ -742,7 +740,7 @@ class Story(EventSeededMixin, TextBase):
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
 
-class Episode(EventSeededMixin, ContentBase):
+class Episode(EventSeededMixin, MemeSeededMixin, ContentBase):
     """話。プロット・時刻・視点・場所と本文、本文の概要までを一行に持つ。"""
 
     __tablename__ = "episode"

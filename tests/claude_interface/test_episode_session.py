@@ -149,12 +149,10 @@ def test_read_knowledge_without_knowing(shown, world, mock_ai):
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=taro, meme="- 今表: 残るミーム", knowers=[])))
     shown(CommitIdea(IdeaCreateForm(name="村の秘薬", kind="技術", text="村だけの薬", histories=[
-        IdeaHistoryRow(location_id=world.neighbor_id, name="秘薬", knowers=[KnowerRow(knower_id=taro)])]),
-        fact_check=False))
+        IdeaHistoryRow(location_id=world.neighbor_id, name="秘薬", knowers=[KnowerRow(knower_id=taro)])])))
     shown(CommitIdea(IdeaCreateForm(name="遠い技", kind="技術", text="村だけの技", histories=[
-        IdeaHistoryRow(location_id=world.neighbor_id, name="遠い技")]), fact_check=False))
-    shown(CommitIdea(IdeaCreateForm(name="履歴の無い技", kind="技術", text="都の技", location_id=world.location_id),
-                     fact_check=False))
+        IdeaHistoryRow(location_id=world.neighbor_id, name="遠い技")])))
+    shown(CommitIdea(IdeaCreateForm(name="履歴の無い技", kind="技術", text="都の技")))
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
@@ -169,8 +167,7 @@ def test_read_knowledge_without_knowing(shown, world, mock_ai):
 def test_read_knowledge_private_idea_history(shown, world, mock_ai):
     taro, hanako = world.character_ids
     idea = shown(CommitIdea(IdeaCreateForm(name="里の暦", kind="概念", text="里だけの数え方", histories=[
-        IdeaHistoryRow(name="古い数え方", detail="里では六千年台と記す", private=True, knowers=[KnowerRow(knower_id=taro)])]),
-        fact_check=False))["record"]
+        IdeaHistoryRow(name="古い数え方", detail="里では六千年台と記す", private=True, knowers=[KnowerRow(knower_id=taro)])])))
 
     # 場所も期間も空の行でも、非公開なら住む人物は知らず、知る相手だけが知る
     def names(character_id: int) -> list[str]:

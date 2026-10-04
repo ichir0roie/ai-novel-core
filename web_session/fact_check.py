@@ -47,7 +47,7 @@ def extract_memes(ai: AIClient, fact_check: bool) -> int:
 
 
 def check_and_extract(ai: AIClient, table: str, ids: list[int] | None, limit: int | None) -> fact_checker.FactChecked:
-    """検めたあと、ミームの元(アイデア・oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
+    """検めたあと、ミームの元(oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
     checked = check(table, ids, limit)
     if table == "meme":
         return fact_checker.FactChecked(checked=checked, memes_added=0)

@@ -32,7 +32,6 @@ FLOWS: dict[str, Callable[..., Any]] = {
     "event.generate_event.GenerateEvent": event.generate_event,
     "event.update_event.UpdateEvent": commit.update_event,
     "fact_check.check_facts.CheckFacts": refresh.check_facts,
-    "idea.commit_idea.CommitIdea": commit.commit_idea,
     "meme.extract_memes.ExtractMemes": refresh.extract_memes,
     REFRESH: refresh.refresh_generated_content,
     "oracle.commit_oracle.CommitOracle": commit.commit_oracle,

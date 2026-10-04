@@ -292,7 +292,7 @@ class EpisodeBriefSerialized(EpisodeBrief):
                          for member in self.cast],
                 "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
-                "関係する設定": [{"アイデアid": related.idea.id, **idea_for_prompt(related)} for related in self.ideas],
+                "関係する設定": [{"アイデアid": related.idea.id, **idea_for_prompt(related, with_text=True)} for related in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
             },

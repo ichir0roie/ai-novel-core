@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-    CheckFacts("idea").show()              まだ検めていないアイデアをすべて検める
     CheckFacts("oracle").show()            まだ検めていない oracle をすべて検める
     CheckFacts("meme", limit=10).show()    まだ検めていないミームを 10 件だけ検める
-    CheckFacts("idea", ids=[30]).show()    名指ししたものを検め直す
+    CheckFacts("oracle", ids=[30]).show()  名指ししたものを検め直す
 
-アイデア・oracle は、検めたあと本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。
+アイデアの本文は作者だけが読むので検めない。oracle は、検めたあと本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。
 `{"checked": 検めた件数, "memes_added": 足したミームの件数}` を返す。
 """
 from __future__ import annotations

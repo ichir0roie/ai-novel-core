@@ -23,7 +23,7 @@ from data_access_logic.meme.models import (
 )
 from data_access_logic.query import meme_query
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
-from db.schema import MEME_CATEGORIES, Character, Event, Idea, Meme, Oracle
+from db.schema import MEME_CATEGORIES, Episode, Event, Meme, Oracle
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +39,14 @@ _CATEGORY_GUIDE = "\n".join(f"  - {name}: {CATEGORY_DESCRIPTIONS[name]}" for nam
 
 _SYSTEM_PROMPT = f"""\
 あなたは物語の編集者です。
-用語の説明(アイデア)・著者の創作についての覚え書き・それらの検証結果・人物の筋書き・起きた出来事を、番号つきの JSON で渡すので、それぞれから、\
+著者の創作についての覚え書き・その検証結果・起きた出来事・話の本文を、番号つきの JSON で渡すので、それぞれから、\
 人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出してください。
 - 人名・地名・組織名・その作品だけの固有名詞を抜き、他の人物にも乗り移りうる普遍的な考え方として書く。
 - 一つのミームは一文。何を大事にし、何を避け、何をきっかけに動くかが分かるように書く。
 - 固有名詞を抜いても特定の人物の役どころ・筋書き上の境遇をなぞるだけのもの(その人物にしか当てはまらない立場や状況)は抜き出さない。引いた人物がその人物の写しになるため。
 - 作者の前書き・使用環境・書き方の約束など、考え方にならない文からは抜き出さない。
-- 出来事からは、当事者がその出来事を経て選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの記録からは抜き出さない。
-- 本文中の「検証結果」の節は、用語の説明や覚え書きを現実の科学・歴史・思想・心理学に照らした調べ書き。\
+- 出来事と話の本文からは、当事者がその出来事を経て選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの記録からは抜き出さない。
+- 本文中の「検証結果」の節は、覚え書きを現実の科学・歴史・思想・心理学に照らした調べ書き。\
 そこに出てくる現実の人・集団の考え方や、研究で裏付けられた行動の傾向を、人物の行動原理になりうる考え方として抜き出す。\
 出典の一覧や、妥当性の判定そのものからは抜き出さない。
 - 一つの元から 0〜3 件。同じ元の中で似たミームは一つにまとめる。
@@ -67,16 +67,15 @@ _CLASSIFY_SYSTEM_PROMPT = f"""\
 {_CATEGORY_GUIDE}"""
 
 def pending_sources(s: Session) -> list[SourceText]:
-    """まだミームを抜き出していない元。アイデア・oracle の本文には検証結果(`# 検証結果` の節)も含む。人物は芯(`text`)の `# plot` の節だけを使う。"""
+    """まだミームを抜き出していない元。oracle の本文には検証結果(`# 検証結果` の節)も含む。
+    アイデアの本文と人物の筋書きからは抜き出さず、話の本文から抜き出す。"""
     sources: list[SourceText] = []
-    for idea in s.scalars(meme_query.unseeded_select(Idea)).all():
-        sources.append(source_of(idea, "アイデア", idea.text))
     for oracle in s.scalars(meme_query.unseeded_select(Oracle)).all():
         sources.append(source_of(oracle, "覚え書き", oracle.text))
-    for character in s.scalars(meme_query.unseeded_select(Character)).all():
-        sources.append(source_of(character, "人物の筋書き", character.plot or ""))
     for event in s.scalars(meme_query.unseeded_select(Event)).all():
         sources.append(source_of(event, "出来事", event.text))
+    for episode in s.scalars(meme_query.unseeded_select(Episode)).all():
+        sources.append(source_of(episode, "話の本文", episode.main_text))
     return [source for source in sources if source.text.strip()]
 
 

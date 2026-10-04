@@ -88,11 +88,6 @@ def _personality(parameters: CharacterParameterValues) -> dict[str, str]:
     }
 
 
-def _truncated(text: str | None) -> str:
-    text = (text or "").strip()
-    return text[:constants.IDEA_CONTEXT_LETTERS] + "…" if len(text) > constants.IDEA_CONTEXT_LETTERS else text
-
-
 class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
@@ -104,8 +99,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
             "出身": _born_location(self.born_location),
             "この場所・時刻に関連する筋書き": "\n\n".join(story.text for story in self.stories if story.text) or None,
             "この時刻より後に始まる設定(まだ無い)": [
-                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.start.year if idea.start else None,
-                 "内容": _truncated(idea.text)}
+                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.start.year if idea.start else None}
                 for idea in self.later_ideas],
             "体現する要素": self.element,
             "行動原理(ミーム)": [{"古今表裏": meme.position, "内容": meme.text} for meme in self.memes],
@@ -351,8 +345,7 @@ class StoryElementsRequestSerialized(StoryElementsRequest):
         return {
             "現在の時刻": str(self.time),
             "この時刻より後に始まる設定(まだ無い)": [
-                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.start.year if idea.start else None,
-                 "内容": _truncated(idea.text)}
+                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.start.year if idea.start else None}
                 for idea in self.later_ideas],
             "筋書き": "\n\n".join(story.text for story in self.stories if story.text),
         }

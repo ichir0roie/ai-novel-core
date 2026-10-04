@@ -62,7 +62,7 @@ def test_list_options(client, world):
 def test_create_record(client, world):
     response = client.post("/api/tables/character/records", json={
         "name": "API の人", "text": "API から足した人物", "kind": "人物", "main_character": True,
-        "event_seeded": True, "meme_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
+        "event_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
         "end": "1255/06/07",
         "parameters": [{"start": "1181/02/03", "family_name": "東雲", "sex": "女", "height": 162.5,
                         "build": "中背", "first_person": "わたくし", "second_person": "貴方", "third_person": "彼の方",

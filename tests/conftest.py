@@ -96,7 +96,7 @@ def world() -> Iterator[World]:
         s.add(story)
         characters = [
             Character(name=name, text=f"{name}の説明", kind="人物",
-                      main_character=main, event_seeded=True, meme_seeded=True,
+                      main_character=main, event_seeded=True,
                       end="1260/01/01", parameters=[_parameter("1170/01/01", sex)],
                       histories=[CharacterHistory(start=1190, description=f"{name}の来歴"),
                                  CharacterHistory(description=f"{name}の年未定の構想")])
@@ -125,14 +125,13 @@ def world() -> Iterator[World]:
         s.add(episode)
         s.flush()
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
-        idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術",
-                    location_id=location.id, start="1100/01/01", meme_seeded=True,
+        idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術", start="1100/01/01",
                     histories=[IdeaHistory(location_id=location.id, start="1150/01/01", name="テスト術",
                                                   detail="都での呼び名")])
         s.add(idea)
         s.flush()
-        child_idea = Idea(name="テスト魔導炉", kind="技術", text="テスト魔導の炉",
-                          location_id=location.id, parent_idea_id=idea.id, meme_seeded=True)
+        child_idea = Idea(name="テスト魔導炉", kind="技術", text="テスト魔導の炉", parent_idea_id=idea.id,
+                          histories=[IdeaHistory(location_id=location.id, name="テスト魔導炉", private=True)])
         meme = Meme(text="テストの信条", category=MemeCategory.BELIEF)
         oracle = Oracle(title="テストの覚え書き", text="テスト用の覚え書き", meme_seeded=True)
         event_seed = EventSeed(text="テストの種", consolidated=False)

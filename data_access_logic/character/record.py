@@ -62,7 +62,6 @@ class CharacterHead(Material):
     kind: str
     main_character: bool
     event_seeded: bool
-    meme_seeded: bool
     # 誕生は列を持たず、parameters の一番早く始まる行の start(`Character.start`)
     start: Timestamp | None = None
     # 没年

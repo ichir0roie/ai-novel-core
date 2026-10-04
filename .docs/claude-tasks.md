@@ -11,7 +11,7 @@ Lambda には claude が無く、あっても数分〜十数分の生成は Lamb
 
 GUI の追加・修正は `execute(s)` で確定だけし、AI の段を回さない。その印として次が残る。
 
-- `meme_seeded=false`(ミームを抜き出していない)
+- `meme_seeded=false`(ミームを抜き出していない。oracle・出来事・話)
 - 本文と食い違った `summary_source_hash` / `event_summary.source_hash`(要約が古い)
 
 これは `RefreshGeneratedContent` がまとめて拾う。頼まれたら Claude のセッションが回す(スキル `run-ai-tasks`)。

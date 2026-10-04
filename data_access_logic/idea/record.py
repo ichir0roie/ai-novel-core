@@ -25,11 +25,9 @@ class IdeaRecord(Material):
     id: int
     name: str
     kind: str
-    location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     parent_idea_id: int | None = None
-    meme_seeded: bool
     histories: list[IdeaHistoryRow]
     text: str
 
