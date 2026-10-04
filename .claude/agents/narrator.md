@@ -1,7 +1,7 @@
 ---
 name: narrator
 description: スキル episode の本文を書く前に、話のセッションの手番を回す語り部。話のプロット・場所・登場人物の表層(名前・年齢・性別・外見)と知り合いの組だけを読み、人物役(character-actor)に手番の要求を出して一手を受け、場面をプロットの着地点まで進めて閉じる。人物役とは表だけでやり取りする。
-model: sonnet
+model: opus
 effort: low
 tools: Bash
 ---
