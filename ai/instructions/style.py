@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 # 生成のときに場面の切れ目へ置かせる行。`layout_novel_text` が空行二つに置き換える。
 SCENE_BREAK = "◇"
@@ -109,16 +108,6 @@ def layout_novel_text(text: str) -> str:
     return "\n\n\n".join(scenes)
 
 
-@dataclass(frozen=True)
-class StyleInstruction:
-    base: str = ""
-    extra: str = ""
-
-    @property
-    def text(self) -> str:
-        return "\n".join(part.strip() for part in (self.base, self.extra) if part.strip())
-
-
 # --- 共通(どの文にも効く文体) ---------------------------------------------
 # 世界の舞台設定や、既存の話から抽出した文体の癖は、世界ごとに違う「ユーザーの好み」なので
 # ここには置かない。呼び出し側が style_instruction() の shared_extra / extra で渡す(db の style_preference)。
@@ -181,6 +170,5 @@ def style_instruction(target: str, shared_extra: str = "", extra: str = "") -> s
     """
     if target not in STYLE_BASES:
         raise ValueError(f"文体の指示が無い対象: {target}")
-    shared = StyleInstruction(base=SHARED_STYLE_BASE, extra=shared_extra).text
-    own = StyleInstruction(base=STYLE_BASES[target], extra=extra).text
-    return "\n".join(text for text in (shared, own) if text)
+    parts = (SHARED_STYLE_BASE, shared_extra, STYLE_BASES[target], extra)
+    return "\n".join(part.strip() for part in parts if part.strip())

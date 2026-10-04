@@ -19,7 +19,6 @@ from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION
 from ai.instructions.plot import PLOT_FORMAT_INSTRUCTION
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION
-from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import mentioned_of
 from data_access_logic.character.form import CharacterForm
@@ -69,7 +68,7 @@ def plot_draft(ai: AIClient, material: EpisodeMaterial, order: str | None, model
     request = EpisodePlotRequestSerialized(material=material, order=order)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "この話のプロットを書き直してください。"]),
-        EpisodePlotDraft, system=_PLOT_SYSTEM_PROMPT, timeout=constants.EPISODE_PLOT_TIMEOUT,
+        EpisodePlotDraft, system=_PLOT_SYSTEM_PROMPT,
         model=model, effort=effort)
     if draft is None:
         raise ValueError("書き直したプロットが得られなかった")
@@ -97,7 +96,7 @@ def casting_draft(
         material=material, plot_text=plot_text, known_locations=known, known_characters=known_people)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げてください。"]),
-        EpisodeCastingDraft, system=_CASTING_SYSTEM_PROMPT, timeout=constants.EPISODE_CASTING_TIMEOUT,
+        EpisodeCastingDraft, system=_CASTING_SYSTEM_PROMPT,
         model=model, effort=effort)
     if draft is None:
         logger.warning("人物・舞台の候補が得られなかったので、プロットの書き直しだけにする")

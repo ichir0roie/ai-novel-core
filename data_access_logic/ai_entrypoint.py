@@ -70,11 +70,8 @@ class CommitMemeSource(CommitEntrypoint):
             committed = self.execute(s)
         with get_env_session() as s:
             if self.fact_check and committed.text.strip():
-                fact_checker.check(s, self.model.__tablename__, ids=[committed.id])
-            last_id = fact_checker.last_meme_id(s)
-            memes_added = refresh(s, ai_client)
-            if self.fact_check:
-                fact_checker.check_new_memes(s, last_id)
+                fact_checker.check(s, ai_client, self.model.__tablename__, ids=[committed.id])
+            memes_added = fact_checker.extract_memes(s, ai_client, self.fact_check)
             # 検めた結果は本文の末尾に足されるので、読み直して返す
             record = type(committed).model_validate(s.get_one(self.model, committed.id))
         return MemeSourceCommitted(record=record, memes_added=memes_added)

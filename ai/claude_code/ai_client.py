@@ -64,9 +64,10 @@ def _build_args(system: str | None, schema: dict, tools: tuple[str, ...] = (),
     return args
 
 
-def _reply(prompt: str, args: list[str], timeout: float) -> _Reply:
-    # CLI の起動と思考のぶん、呼び出し側の timeout では足りないことがある。
-    timeout = max(timeout, float(os.environ.get("DEM_CLAUDE_AI_TIMEOUT", 600)))
+def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
+    # CLI の起動と思考のぶん、短い待ち時間では足りない。既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、
+    # 道具で調べさせる呼び出しなど、それより長く待つものだけが `timeout` を渡す。
+    timeout = max(timeout or 0.0, float(os.environ.get("DEM_CLAUDE_AI_TIMEOUT", 600)))
     # プロジェクトの CLAUDE.md・設定を拾わせない(生成の指示は system だけにする)。
     cwd = tempfile.gettempdir()
     try:
@@ -94,7 +95,7 @@ def generate[Output: BaseModel](
     prompt: str,
     output: type[Output],
     system: str | None = None,
-    timeout: float = 120.0,
+    timeout: float | None = None,
     tools: tuple[str, ...] = (),
     model: str = MODEL,
     effort: str = EFFORT,

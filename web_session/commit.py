@@ -15,7 +15,6 @@ from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event import steps as event_steps
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
 from data_access_logic.event.record import EventRecord
-from data_access_logic.fact_check import steps as fact_steps
 from data_access_logic.oracle import steps as oracle_steps
 from data_access_logic.oracle.form import OracleCreateForm
 from data_access_logic.step import RowId
@@ -59,12 +58,8 @@ def commit_story(story: StoryCreateForm, ai: AIClient = ai_client) -> StoryRecor
 def _meme_source_follow_up(ai: AIClient, table: str, record_id: int, text: str, fact_check_enabled: bool) -> int:
     """確定したもの自身を検め、検証結果を足した本文からミームを抜き出し、足したミームも検める。足したミームの件数を返す。"""
     if fact_check_enabled and text.strip():
-        fact_check.check(table, ids=[record_id])
-    last_id = call(fact_steps.last_meme_id)
-    added = meme.refresh(ai)
-    if fact_check_enabled:
-        fact_check.check_new_memes(last_id)
-    return added
+        fact_check.check(ai, table, ids=[record_id])
+    return fact_check.extract_memes(ai, fact_check_enabled)
 
 
 def commit_oracle(oracle: OracleCreateForm, fact_check: bool = True, ai: AIClient = ai_client) -> MemeSourceCommitted:

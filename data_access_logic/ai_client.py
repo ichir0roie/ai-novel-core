@@ -12,7 +12,8 @@ class AIClient(Protocol):
         prompt: str,
         output: type[Output],
         system: str | None = None,
-        timeout: float = 120.0,
+        timeout: float | None = None,
+        tools: tuple[str, ...] = (),
         model: str = ...,
         effort: str = ...,
     ) -> Output | None: ...

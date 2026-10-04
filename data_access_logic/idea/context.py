@@ -75,7 +75,7 @@ def _related(s: Session, hits: list[IdeaMaterial], location_id: int | None, time
         ).all()
         for child in children:
             related.setdefault(child.id, IdeaMaterial.model_validate(child))
-    return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]
+    return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]  # 足した上位・下位にも掛ける
 
 
 def resolve_ideas(
@@ -102,7 +102,7 @@ def resolve_ideas(
     histories = called(s, [idea.id for idea in related], location_id, time)
 
     return IdeaContextSerialized(
-        hits=hit_ideas,
+        hits=_dated(hit_ideas, time),
         candidates=list(candidates.values()),
         related=[RelatedIdeaMaterial(idea=idea, history=histories.get(idea.id)) for idea in related],
     )

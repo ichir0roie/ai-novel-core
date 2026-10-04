@@ -9,7 +9,7 @@
 """
 from __future__ import annotations
 
-from ai.claude_code import fact_checker
+from ai.claude_code import ai_client, fact_checker
 from data_access_logic.entrypoint import Entrypoint
 from db.schema import get_env_session
 
@@ -26,4 +26,4 @@ class CheckFacts(Entrypoint):
 
     def result(self) -> fact_checker.FactChecked:
         with get_env_session() as s:
-            return fact_checker.check_and_extract(s, self.table, self.ids, self.limit)
+            return fact_checker.check_and_extract(s, ai_client, self.table, self.ids, self.limit)

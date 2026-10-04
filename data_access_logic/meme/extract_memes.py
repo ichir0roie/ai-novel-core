@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from ai.claude_code import ai_client, fact_checker
 from data_access_logic.entrypoint import Entrypoint
-from data_access_logic.meme.extractor import refresh
 from db.schema import get_env_session
 
 __all__ = ["ExtractMemes"]
@@ -21,8 +20,4 @@ class ExtractMemes(Entrypoint):
 
     def result(self) -> ExtractedMemes:
         with get_env_session() as s:
-            last_id = fact_checker.last_meme_id(s)
-            added = refresh(s, ai_client)
-            if self.fact_check:
-                fact_checker.check_new_memes(s, last_id)
-            return ExtractedMemes(memes_added=added)
+            return ExtractedMemes(memes_added=fact_checker.extract_memes(s, ai_client, self.fact_check))

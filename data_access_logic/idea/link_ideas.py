@@ -30,5 +30,6 @@ class LinkIdeas(CommitEntrypoint):
         self.check_exists(s, Episode, self.episode_id, "episode_id")
         for idea_id in self.idea_ids:
             self.check_exists(s, Idea, idea_id, "idea_ids")
+        # check_exists で読んだ行は同じセッションに残っているので、get_one は問い合わせ直さない
         added = link(s, s.get_one(Episode, self.episode_id), [s.get_one(Idea, id_) for id_ in self.idea_ids])
         return LinkedIdeas(episode_id=self.episode_id, linked=added)

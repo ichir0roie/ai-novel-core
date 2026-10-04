@@ -45,14 +45,9 @@ DEFAULT_EVENT_DURATION_DAYS = 1
 # 多いと本文を書く段で候補の要約が薄くなる。
 CANDIDATE_COUNT = 6
 
-# data_access_logic/event/summary
-# 直前の出来事の本文を要約させるのを待つ秒数。
-EVENT_SUMMARY_TIMEOUT = 120.0
-
 # data_access_logic/event_seed
 # 出来事の種を抜き出すとき、一度の呼び出しで渡す元の本文の字数の上限。
 EVENT_SEED_BATCH_LETTERS = 6000
-EVENT_SEED_TIMEOUT = 300.0
 # 出来事の生成(`GenerateEvent`)で、一件の出来事に引く種の件数。候補はこの種か、直前の出来事からの連想で立てる。
 EVENT_SEED_DRAW_COUNT = 3
 # 棚卸し前の種がこの件数たまったら、似た種をまとめる。
@@ -63,7 +58,6 @@ EVENT_SEED_CONSOLIDATE_LETTERS = 15000
 # data_access_logic/meme
 # ミームを抜き出すとき、一度の呼び出しで渡す元の本文の字数の上限。
 MEME_BATCH_LETTERS = 6000
-MEME_TIMEOUT = 300.0
 # 抜き出したミームの重複を見るとき、一度に見比べる既存のミームの字数の上限(新しいミームは毎回すべて添える)。
 MEME_DEDUPE_LETTERS = 15000
 # 人物・対象を生むときに、分類ごとに引くミームの件数の幅。
@@ -80,10 +74,6 @@ MEME_POSITIONS = {
 }
 
 # data_access_logic/episode
-# プロット補完で、プロットを書き直させるのを待つ秒数。
-EPISODE_PLOT_TIMEOUT = 300.0
-# 書き直したプロットから、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
-EPISODE_CASTING_TIMEOUT = 300.0
 # 文体の見本として本文を渡す、同じ作品(章・外伝を含む)の直前の話の本数。話の中身は、この話より前のすべての話の概要で渡す。
 EPISODE_STYLE_SAMPLE_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
@@ -91,12 +81,7 @@ EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。
 EPISODE_PLACE_EVENT_LIMIT = 3
 
-# data_access_logic/episode/summary
-# 話一話ぶんの概要を作らせるのを待つ秒数。
-RECAP_TIMEOUT = 300.0
-
 # data_access_logic/idea
-IDEA_DRAFTS_TIMEOUT = 300.0
 # 清書に渡すアイデアの上限(直接当たったものと、その上位・下位を合わせて)。
 IDEA_CONTEXT_LIMIT = 100
 # 清書に渡すアイデア一件の本文の字数の上限。

@@ -1,7 +1,6 @@
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
-from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.event.models import (
     EventSerialized, EventSource, EventSourceSerialized, EventSummaryDraft, EventSummarySource,
@@ -21,7 +20,7 @@ def summary_draft(ai: AIClient, event: EventSource) -> EventSummaryDraft | None:
         EventSourceSerialized.model_validate(event).model_dump_json(indent=2),
         "この出来事を要約してください。",
     ])
-    return ai.generate(prompt, EventSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.EVENT_SUMMARY_TIMEOUT)
+    return ai.generate(prompt, EventSummaryDraft, system=_SYSTEM_PROMPT)
 
 
 def stale_sources(s: Session, event_ids: list[int] | None) -> list[EventSummarySource]:

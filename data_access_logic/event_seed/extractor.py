@@ -58,7 +58,7 @@ def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれの元から出来事の種を抜き出してください。"]),
-        SeedsDraft, system=_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
+        SeedsDraft, system=_SYSTEM_PROMPT)
 
 
 def save_seeds(s: Session, seeds: list[str], sources: list[SourceText]) -> int:
@@ -103,7 +103,7 @@ def merges_draft(ai: AIClient, fresh: list[StoredSeed], settled: list[StoredSeed
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "同じ出来事を言い換えただけの種の組をまとめてください。"]),
-        ConsolidateDraft, system=_CONSOLIDATE_SYSTEM_PROMPT, timeout=constants.EVENT_SEED_TIMEOUT)
+        ConsolidateDraft, system=_CONSOLIDATE_SYSTEM_PROMPT)
     if decided is None:
         return None
     merges = []

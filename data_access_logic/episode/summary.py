@@ -23,7 +23,7 @@ def summary_draft(ai: AIClient, episode: EpisodeSource) -> EpisodeSummaryDraft |
         EpisodeSourceSerialized.model_validate(episode).model_dump_json(indent=2),
         "この話の概要を作ってください。",
     ])
-    return ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
+    return ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT)
 
 
 def summary_sources(s: Session, episode_ids: list[int] | None, stale_only: bool) -> list[EpisodeSummarySource]:
