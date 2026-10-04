@@ -118,7 +118,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 `args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに一度だけ読み込んでから渡す(`interface.prepare`。読み込めなければ 400)。
 どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `result()` を上書きしている入口、
 AI を引数に取る入口)。それらは API の一覧に出さず、呼んでも 403 にする。
-Claude のセッションが、手元は `show()`(`.claude/docs/db.md`)、web は `web_session/flows.py`(`.claude/docs/web-db.md`)で呼ぶ。
+Claude のセッションが、手元は `show()`(`.claude/docs/db.md`)、web は `web_session/flows.py` の `run`(`.claude/docs/web-db.md`)で呼ぶ。
 
 ## 型と lint
 

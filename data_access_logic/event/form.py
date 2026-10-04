@@ -1,6 +1,6 @@
-from typing import Annotated, Any
+from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from data_access_logic.material import Draft, Form, References, Timestamp
 
@@ -19,11 +19,6 @@ class EventForm(Draft):
     character_ids: list[int] | None = None
     hidden: bool = False
     parent_event_id: int | None = None
-
-    @field_validator("hidden", mode="before")
-    @classmethod
-    def _unset_is_false(cls, value: Any) -> Any:
-        return False if value is None else value
 
     @property
     def scene(self) -> str | None:

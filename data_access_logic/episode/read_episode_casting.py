@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
-
 from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
-from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.episode import brief
+from data_access_logic.entrypoint import Entrypoint
 from data_access_logic.episode.models import EpisodeCastingSerialized
+from data_access_logic.flows import episode
 
 
-class ReadEpisodeCasting(SessionEntrypoint):
+class ReadEpisodeCasting(Entrypoint):
     """話(`episode_id`)の本文の材料を読む前に、このセッションの Claude がプロットから登場人物・場所を決めるための材料を読む。
 
     この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(プロット・本文に名前が出る人物・
@@ -24,5 +22,5 @@ class ReadEpisodeCasting(SessionEntrypoint):
         self.episode_id = episode_id
         self.ai = ai
 
-    def execute(self, s: Session) -> EpisodeCastingSerialized:
-        return brief.read_casting(s, self.ai, self.episode_id)
+    def result(self) -> EpisodeCastingSerialized:
+        return episode.read_episode_casting(self.episode_id, self.ai)

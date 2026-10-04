@@ -43,7 +43,7 @@ gui/                データ編集 GUI。api/(FastAPI)と web/(Next.js)
 tool/               危険操作(danger/)、テスト用の道具(test/。必ず手元の PostGIS のテスト用の db を使う。
                     mock_ai_client で AI 無しに生成を回す、seed_mock_db で全テーブルにモックデータを流し込む。テスト用の db は copy_production_db で本番を写して作る)、
                     AWS の RDS へ踏み台越しに繋ぐ aws/rds(--serve でふだんの転送、-- <コマンド> でマスターで流す)
-web_session/        Claude Code on the web のセッションが呼ぶ流れ。claude -p を回し、db には API の段越しにだけ触る
+web_session/        Claude Code on the web のセッションが入口を呼ぶ口。手元と同じ流れ(data_access_logic/flows/)を、db の段だけ API 越しにして回す
                     (API に届くかを見る check_api)
 infra/              AWS のリソース(CDK、TypeScript。npx cdk deploy)。既存の db・踏み台は作り直さず参照する
   lambda/           API を Lambda(Lambda Web Adapter)で動かすコンテナ。amplify.yml(ルート)は画面を Amplify で建てる設定

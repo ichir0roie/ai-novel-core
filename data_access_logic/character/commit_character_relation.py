@@ -11,7 +11,6 @@ from db.schema import Character, CharacterRelation, CharacterRelationHistory
 
 
 class CommitCharacterRelation(CommitEntrypoint):
-    model = CharacterRelation
 
     def __init__(self, relation: CharacterRelationCreateForm):
         self.relation = relation

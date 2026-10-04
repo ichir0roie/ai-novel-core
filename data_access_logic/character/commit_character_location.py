@@ -12,7 +12,6 @@ from db.schema import Character, CharacterLocation, Location
 
 
 class CommitCharacterLocation(CommitEntrypoint):
-    model = CharacterLocation
 
     def __init__(self, character_location: CharacterLocationCreateForm):
         self.character_location = character_location

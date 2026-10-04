@@ -11,7 +11,6 @@ from db.schema import CharacterHistoryKnower, CharacterKnower, IdeaHistoryKnower
 
 
 class DeleteLocation(CommitEntrypoint):
-    model = Location
 
     def __init__(self, location_id: int):
         self.location_id = location_id

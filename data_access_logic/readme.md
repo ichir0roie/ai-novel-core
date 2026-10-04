@@ -62,22 +62,23 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「人物の一覧」「誰がいる?」         | `character.list_characters.ListCharacters()`                                     |
 | 「人物同士の関係は?」               | `character.list_character_relations.ListCharacterRelations(character_id=None)`   |
 | 「出来事の一覧」                     | `event.list_events.ListEvents()`(全件)。絞るなら `event.read_events.ReadEvents(time=…)` か、`ReadEvents(location_id=…)` / `ReadEvents(character_id=…)` / `ReadEvents(event_id=…)`(どの表の id かを名前で渡す) |
-| 「このアイデアは何?」「アイデアを調べて」 | `idea.search_ideas.SearchIdeas(keywords, location_id=None, limit=None, time=None)`。名前・本文(基本の本文と作中の呼び名の両方)の部分一致のあいまい検索。`keywords` は `IdeaDraft(keyword=…, variants=[…])`(`variants` は言い換え)のリスト。当たり方の強い順に返す。自動生成の候補も返す。`location_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名 |
+| 「このアイデアは何?」「アイデアを調べて」 | `idea.search_ideas.SearchIdeas(keywords, location_id=None, limit=None, time=None)`。名前・本文(基本の本文と作中の呼び名の両方)の部分一致のあいまい検索。`keywords` は `IdeaDraft(keyword=…, variants=[…])`(`variants` は言い換え)のリスト。当たり方の強い順に返す。中間段が足した候補のアイデアも返す。`location_id` は現在地から最上位までの場所に、`time` はその時刻に効く(`start` <= time < `end`)アイデアに絞る。`called` はその場所・時刻での作中の呼び名 |
 | 「この下書きに関わる設定は?」(中間段を自分で回す) | `idea.resolve_ideas.ResolveIdeas(ideas, location_id=None, time=None)`。下書きから洗い出した語(`IdeaDraft`。`keyword` / `variants` / `description` / `kind` / `start` / `end`)をアイデアと照らし、当たったものと上位・下位を返す。当たらなかった語は候補として足す(下の「中間段」)。候補の効く期間は語の `start` / `end`。`start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け(言えなければ省いて None)、`end` は分かるときだけ付ける。`time` は出来事の時刻。`time` を渡すと `start` が空(時期が未定)のアイデアは `ideas` に入れない。呼び名に当たったら本質のアイデアにそろえ、作中の呼び名を `called` に付ける |
 | 「この本文が踏まえたアイデアを結んで」 | `idea.link_ideas.LinkIdeas(idea_ids, episode_id)`。話にだけ結ぶ(結んだアイデアが材料の「関係する設定」に出る) |
 | 「この候補をあのアイデアにまとめて」 | `idea.merge_idea.MergeIdea(source_id, target_id)`。結んだ本文と source の履歴(呼び名)を付け替えてから source を消す |
-| 「判断待ちの一覧」                   | `review.list_pending_reviews.ListPendingReviews()`。候補のアイデア・候補のミーム・未同期の話・本文に残った TODO |
+| 「判断待ちの一覧」                   | `review.list_pending_reviews.ListPendingReviews()`。未同期の話・本文に残った TODO |
 | 「場所を足して」                     | `location.create_random_location.CreateRandomLocation()` で下書き → 内容を決めて `location.commit_location.CommitLocation(location)` |
 | 「人物を足して」                     | `character.create_random_character.CreateRandomCharacter()` → `character.commit_character.CommitCharacter(character)`。外見は `appearance`、説明(人物の芯)は `text` に書く。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`meme` と `principle`(行動原理)の列に書く(下の「人物が持つミーム」)。来歴の節目は、その年から始まる `histories` の行に一件ずつ書く(下の「人物の来歴」。サブキャラクターは世界の書き進めた所より後を書かない) |
-| 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/character/generator.py` の `generate_character`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。場所の種別ごとの人数の上限(下の「世界の広がりと制約」)に達した場所には、上限までしか足さない。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
+| 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/flows/character.py`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。場所の種別ごとの人数の上限(下の「世界の広がりと制約」)に達した場所には、上限までしか足さない。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
 | 「出来事を足して」                   | `event.create_random_event.CreateRandomEvent()` → `event.commit_event.CommitEvent(event)` |
 | 「この下書きから人物を AI に作らせて」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None, plot_text=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢(0〜90歳。渡さなければ 0〜40歳)にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、没年は `main_character` を立てて渡したときだけ持たせる。`character` の `text` と `histories` の各行の説明は、人物像・役どころの下書きとして核にする。`character` に `id` を渡せば(GUI の詳細画面)、その人物の芯(`text`)が空のときに限り、決まっている名前・属性・出自を核に芯と来歴だけを書いて埋める(来歴の節目は今の行に足す。他の欄は変えない) |
 | 「この下書きから出来事を AI に作らせて」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None)`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、名前・場所・当事者から記録の本文だけを書いて埋める(`data_access_logic/event/writer.py`。他の欄は変えない) |
 | 「この人物の出自・居場所を足して」   | `character.commit_character_location.CommitCharacterLocation(location)`              |
+| 「この人物たちを〇〇へ移して」「話のあとで居場所を変えて」 | `character.move_characters.MoveCharacters(moves=[CharacterMove(character_id=…, location_id=…)], time=…)`(`CharacterMove` は `character.record`)。人物ごとに、`time` に続いている居場所の行を `time` で閉じ、移動先の行を `time` から足す(没年があればそこまで)。人物・場所が無ければ止める。出来事の生成・話の確定のあとの移動も、この書き換え(`character/moves.py` の `update_locations`)を使う |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`。`text` は時期を限らない関係の芯、関係の中で起きたことは起きた年ごとの `histories` の行に書く(下の「関係の芯と来歴」)。来歴を書き足すときは `UpdateCharacterRelation` に今の行ごと渡す(配列はまるごと置き換わる) |
 | 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea)`。本体は場所を持たず、効く場所は `histories` の行(非公開の行も含む)の `location_id` で持つ(行の無いアイデアはどこでも効く)。効く期間は本体の `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を、場所のある最初の行の `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。本文は作者だけが読むので、確定のあとに AI(事実確認・ミームの抜き出し)を回さない。確定したアイデアを返す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
-| 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、`fact_check` 欄へ入れる。`ids` を省くと `fact_check` が空のものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。oracle は検めたあと本文と検証結果からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
+| 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、本文の末尾の `# 検証結果` の節に入れる(前の節は置き換える)。`ids` を省くとまだその節の無いものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。oracle は検めたあと、その節を含む本文からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `location.update_location.UpdateLocation(location)`                                 |
 | 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, parameters=[...]))`。変わった時ごとの行の配列をまるごと渡す(下の「変わった時ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
 | 「この人物の来歴を足して」「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」「年の決まっていない構想を足して」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, histories=[...]))`。起きた年ごとの行の配列をまるごと渡す(今の配列は `ReadCharacter` の `histories` で読む。時刻を渡すとその時刻までの行だけになるので、書き足すときは時刻を渡さずに読む)。年の決まっていない構想は `start` を空にした行に書く。下の「人物の芯と来歴」 |
@@ -87,15 +88,15 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「出来事を消して」「出来事を作り直して」 | `event.delete_event.DeleteEvent(event_id)`。子の出来事が残っていれば止まる。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `histories` に積み足した行と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
 | 「アイデアを直して」                 | `idea.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す。`histories` を渡すと配列をまるごと置き換える(下の「アイデアの履歴(呼び名)」) |
 | 「アイデアを消して」                 | `idea.delete_idea.DeleteIdea(idea_id)`。下位のアイデアが残っていれば止まる。結んだ本文との中間テーブルの行、履歴(呼び名)の行も消す |
-| 「覚え書きを足して」「oracle に書いて」 | `oracle.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは `CommitIdea` と同じく、検めて(`fact_check`)、本文と検証結果のそれぞれからミームを抜き出し(`memes_added`)、足したミームも検める |
+| 「覚え書きを足して」「oracle に書いて」 | `oracle.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは、検めて(`fact_check`。本文の末尾に `# 検証結果` の節を足す)、その節を含む本文からミームを抜き出し(`memes_added`)、足したミームも検める |
 | 「覚え書きを直して」                 | `oracle.update_oracle.UpdateOracle(oracle)`。`id` 必須、渡した欄だけ直す |
 | 「ミームを足して」「この考え方をミームに入れて」 | `meme.commit_meme.CommitMeme(meme)`。`text` 必須。`category` は 信条/欲求/境遇/集団/理 のいずれか(空でもよい。次の抽出で AI が振る)。置き場所は分類のディレクトリ |
 | 「ミームを直して」「ミームの分類を直して」 | `meme.update_meme.UpdateMeme(meme)`。`id` 必須、渡した欄だけ直す。`category` は 信条/欲求/境遇/集団/理 のいずれか |
 | 「ミームを消して」                   | `meme.delete_meme.DeleteMeme(meme_ids)`。id の配列をまとめて一つのトランザクションで消す(一つでも無ければ何も消さない)。GUI のミームの一覧で選んで消すのもこれ |
 | 「出来事の種を直して」               | `event_seed.update_event_seed.UpdateEventSeed(seed)`。`id` 必須、渡した欄だけ直す。語の置き換えなどは db を読んで id を拾ってから呼ぶ |
-| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。oracle(著者の覚え書き)の本文と検証結果(`fact_check`。別々の元として渡す)・出来事の本文・話の本文(`main_text`)から抜き出し(アイデアの本文と人物の筋書きからは抜き出さない)、分類を振って `meme` テーブルへ足す。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振る。足したミームは AI が Dラボのナレッジとネット検索で検め、`fact_check` 欄へ書く(`ExtractMemes(fact_check=False)` で飛ばす)。足した件数を `{"memes_added"}` で返す。承認の段は無く、分類の付いたミームは足したその時から `DrawMemes` で人物へ引かれる |
+| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。oracle(著者の覚え書き)の本文(`# 検証結果` の節を含む)・出来事の本文・話の本文(`main_text`)から抜き出し(アイデアの本文と人物の筋書きからは抜き出さない)、分類を振って `meme` テーブルへ足す。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振る。足したミームは AI が Dラボのナレッジとネット検索で検め、本文の末尾の `# 検証結果` の節に書く(`ExtractMemes(fact_check=False)` で飛ばす。重複の確かめ・分類・人物へ引くときは、この節を除いた文面を使う)。足した件数を `{"memes_added"}` で返す。承認の段は無く、分類の付いたミームは足したその時から `DrawMemes` で人物へ引かれる |
 | 「ミームを引いて」                   | `meme.draw_memes.DrawMemes(person=True, seed=None)`。ミームから、分類ごとに 0〜2 件引き、それぞれに古今表裏を割り振って返す。db には書かない |
-| 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、まだ要約の無い出来事・話もすべて見て `event_summary` と話の `summary_text` を作る。`CommitEvent` / `CommitStory` / `CommitEpisode` は確定した一件だけを見るので、GUI から直した分などの取りこぼしを拾うのはこちら |
+| 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、要約が無いか本文と食い違っている出来事・話をすべて拾って `event_summary` と話の `summary_text` を作り直す(数は作り直した件数)。`CommitEvent` / `CommitStory` / `CommitEpisode` は確定した一件だけを見るので、GUI から直した分などの取りこぼしを拾うのはこちら |
 | 「作品の一覧」                       | `story.list_stories.ListStories()`                                           |
 | 「話を書き始める」「次の話を書く」   | `story.start_story.StartStory(story_id, time=None)`。同期確認・見出し・直前の話・断面・顔ぶれを一度に出す。`time` を省けば作品の最後の話の時刻 |
 | 「前の話を読ませて」                 | `episode.read_episodes.ReadEpisodes(story_id, count=10, before=None, text=True)`。`before` は時刻で、start がそれより前の話に絞る |
@@ -107,11 +108,11 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「話のセッションに手番を足して」「人物役の一手を待って」 | スキル `episode` の「語り部と人物役」。表(`episode_character_session`)は `tool.episode_session` のコマンドで扱う。入口は `episode_session.add_turns.AddTurns(episode_id, turns)`(語り部が要求の行を足す)・`answer_turn.AnswerTurn(record_id, answer)`(人物役が番の行に一手を入れる)・`read_turn.ReadTurn(episode_id, character_id)`(人物役の番か: turn / waiting / closed。番の行は要求と終了の印だけで、時刻は返さない)・`read_session.ReadSession(episode_id)`(すべての行)・`read_stage.ReadStage(episode_id)`(語り部が読む材料。プロット・時刻・場所・登場人物の外見と芯と来歴・登場人物どうしの関係とその来歴・話に結んだ設定の本文と履歴。芯・来歴・履歴は知る相手に関わらずすべて渡し、非公開かどうかと知る相手を添える。前の話・本文は入らない)・`close_session.CloseSession(episode_id)`(出た人物に終了の行)・`clear_session.ClearSession(episode_id)`(その話の行をすべて消す。演じ直す前に)。行動の入っていない一番古い行の人物が、いま動く番 |
 | 「この人物を本文用にそろえて」       | `character.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと生まれたときの値)。変わった時ごとの行は `parameters`。芯は `text`。来歴(`histories`)は `time` の年までに起きた行だけを古い順に出す(`time` を省くと、年の決まっていない行も最後に含めてすべて) |
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
-| 「この作品の子に章・外伝を作って」   | `story.commit_story.CommitStory(StoryCreateForm(name=…, parent_story_id=<親の作品id>, …))`。付け替えは `UpdateStory(StoryUpdateForm(id=…, parent_story_id=…))`(自分か子孫の子にはできない。`None` を渡せば親から外す)。子の作品の話を書くときは、親をたどった作品の筋書き(`親の作品`)と、一番上の作品とその子孫の話を前の話として渡す(下の「話の生成」) |
+| 「この作品の子に章・外伝を作って」   | `story.commit_story.CommitStory(StoryCreateForm(name=…, parent_story_id=<親の作品id>, …))`。付け替えは `UpdateStory(StoryUpdateForm(id=…, parent_story_id=…))`(自分か子孫の子にはできない。`None` を渡せば親から外す)。子の作品の話を書くときは、親をたどった作品の筋書き(`親の作品`)を渡す。前の話・文体の見本の範囲は下の「出来事の生成・話の材料」の「前の話は」の段落 |
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話か子の作品が残っていれば止まる |
-| 「この下書きから話の枠を AI に決めさせて」 | `episode.generate_frame.GenerateFrame(frame=EpisodeForm(story_id=…, viewpoint_character_id=…, location_id=…, character_ids=[…], …), character_ids=None)`。下書きを枠として保存してから、題・プロット(`## 場面` / `## 狙い` の形)・時刻を下書きを核に AI が決める(`id` を渡せばその本文の無い枠を決め直す)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ。視点(`viewpoint_character_id`。Character への FK)・場所(`location_id`。Location への FK)は AI には決めさせず、下書きにあればその id をそのまま使う(無ければ NULL のまま)。登場人物は `character_ids`(省けば下書きの `character_ids`、それも無ければ枠の `episode_character`)で、足した枠の `episode_character` にも残す。書き直したプロットに名前が出る既存の人物は `mentioned` の行として登録し(下の「名前だけ出る人物」)、その設定を AI に渡す |
-| 「プロットを補完して」「プロットを場面まで書き直して」「足りない人物・舞台を作って」 | `episode.complete_plot.CompletePlot(episode=EpisodeForm(story_id=…, character_ids=[…], …), order=None, model=None, effort=None)`。プロット補完。今のプロット(`plot_text`)を核に、`order`(作者の注文。展開・焦点・雰囲気など)も取り入れて、本文全体を場面に割ったプロット(下の「補足」の `## 場面` / `## 狙い` の形)を AI に書き直させ、それでプロットをそっくり置き換える(今のプロットの中身は書き直したプロットに含めさせる。本文は書かない)。書き直したプロットに出るのに登場人物にいない人物は `generate_character` で作り、話の `episode_character` に足す。書き直したプロットの主な舞台が話の場所(無ければ作品の立つ場所)より細かく、その直下の既知の場所にも無ければ、その場所の下に作って話の `location_id` にする。プロットか時刻が空なら先に `GenerateFrame` と同じ生成で枠を決める。登場人物は下書きの `character_ids`(話の `episode_character` と同じ欄)、省けば枠の `episode_character` で、空なら止まる。`model` / `effort` はプロットの書き直しと候補の呼び出しにだけ効く(省けば opus 5.5 の low)。書き直したプロットに名前が出る既存の人物は `mentioned` の行として登録し(下の「名前だけ出る人物」)、その設定を AI に渡す |
+| 「この下書きから話の枠を AI に決めさせて」 | `episode.generate_frame.GenerateFrame(frame=EpisodeForm(story_id=…, viewpoint_character_id=…, location_id=…, character_ids=[…], …))`。下書きを枠として保存してから、題・プロット(`ai/instructions/plot.py` の形)・時刻を下書きを核に AI が決める(`id` を渡せばその本文の無い枠を決め直す。本文のある話は保存の前に止まる)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ。視点(`viewpoint_character_id`。Character への FK)・場所(`location_id`。Location への FK)は AI には決めさせず、下書きにあればその id をそのまま使う(無ければ NULL のまま)。登場人物は下書きの `character_ids`(省けば枠の `episode_character`)で、足した枠の `episode_character` にも残す。書き直したプロットに名前が出る既存の人物は `mentioned` の行として登録し(下の「名前だけ出る人物」)、その設定を AI に渡す |
+| 「プロットを補完して」「プロットを場面まで書き直して」「足りない人物・舞台を作って」 | `episode.complete_plot.CompletePlot(episode=EpisodeForm(story_id=…, character_ids=[…], …), order=None, model=None, effort=None)`。プロット補完。今のプロット(`plot_text`)を核に、`order`(作者の注文。展開・焦点・雰囲気など)も取り入れて、本文全体を場面に割ったプロット(`ai/instructions/plot.py` の形)を AI に書き直させ、それでプロットをそっくり置き換える(今のプロットの中身は書き直したプロットに含めさせる。本文は書かない)。書き直したプロットに出るのに登場人物にいない人物は `generate_character` で作り(プロットが固有の名で呼ぶときだけその名を核にし、役職・あだ名は説明に添える)、話の `episode_character` に足す。書き直したプロットの主な舞台が話の場所(無ければ作品の立つ場所)より細かく、その直下の既知の場所にも無ければ、その場所の下に作って話の `location_id` にする。プロットか時刻が空なら先に `GenerateFrame` と同じ生成で枠を決める。登場人物は下書きの `character_ids`(話の `episode_character` と同じ欄)、省けば枠の `episode_character` で、空なら枠を決める前に止まる。`model` / `effort` はプロットの書き直しと候補の呼び出しにだけ効く(省けば AI の client の既定)。書き直したプロットに名前が出る既存の人物は `mentioned` の行として登録し(下の「名前だけ出る人物」)、その設定を AI に渡す |
 | 「この話を推敲して」「初登場キャラの描写を厚くして」 | スキル `revise-episode`。このセッションの Claude が `ReadEpisodeBrief` で材料を読んで自分で書き直し、`CommitEpisode` で確定する(`synced` はそのまま渡し、指示はプロットの「## 推敲」の節に積む。登場人物・場所が変わるなら、書く前に `CastEpisode` で結び直して材料を読み直す) |
 | 「本文を確定する」「話のプロットを入れる」 | `episode.commit_episode.CommitEpisode(episode)`。`id` を渡せばその話を直し(渡した欄だけ)、省けば `story_id` の作品に新しい話を足す。`synced` を渡さなければ同期していない扱い(false)にする。`plot_text`(プロット)か `main_text`(本文)のどちらかがあればよい。`main_text` は `ai/instructions/style.py` の `layout_novel_text` で改行を整えてから入れる(地の文は一文一行、「◇」の行は空行二つ)。話に番号は無く、作品の中では `start` の順に並ぶ(`start` の無い話は後ろに id 順)。あいだに話を足すときは、前後の話のあいだの `start` を付ける |
 | 「未同期の話は残ってる?」           | `episode.list_unsynced_episodes.ListUnsyncedEpisodes(story_id=None)`           |
@@ -121,14 +122,12 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「話の要約を作り直して」「要約がおかしい」 | `episode.rewrite_episode_summary.RewriteEpisodeSummary(episode_ids)`。本文が変わっていなくても、話の概要(`episode.summary_text`)を AI に作り直させ、一件ごとに commit する。本文が変わったときの作り直しは `CommitEpisode` などが自動で行うので、これは中身の崩れた要約を直すとき用 |
 | 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | `event.generate_event.GenerateEvent(event=EventForm(location_id=…, time=…, name="〇〇な場面"))`。当事者はその時刻にそこにいて手の空いたサブキャラクターから選ぶ(下の「出来事の生成」)。当事者を決めるなら `character_ids` |
 | 「このプロットで話を書いて」「〇〇と△△が出る話を 11579/03/02 で」「この枠に本文を書いて」 | スキル `episode`。このセッションの Claude が `ReadEpisodeCasting` でプロットから登場人物・場所を推測して `CastEpisode` で結び、プロットの語を `ResolveIdeas` でアイデアと照らして `LinkIdeas` で結び、そのあと材料を `ReadEpisodeBrief` で読んで自分で本文を書き、`CommitEpisode`(`synced=True`)で確定する(新しい話は先に `CommitEpisode` で枠を足す) |
-| 「この話の登場人物・場所を決める材料を読ませて」 | `episode.read_episode_casting.ReadEpisodeCasting(episode_id)`。この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(プロット・本文に名前が出る人物・登場人物と関係のある人物・話の場所にいる人物)・話の場所の中の既知の場所と、登場人物・名前だけ出る人物それぞれがこの話より前に関わったすべての話(作品を問わない。概要つき)を、日本語の見出しと id 付きで返す。関わった話の概要が無いか本文と食い違っていれば、読む前に AI で作り直す(作れなかった話は null)。時刻が空なら止まる |
+| 「この話の登場人物・場所を決める材料を読ませて」 | `episode.read_episode_casting.ReadEpisodeCasting(episode_id)`。この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(登場人物と関係のある人物・話の場所にいる人物。プロット・本文に名前が出る人物は「名前だけ出る人物」に出る)・話の場所の中の既知の場所と、登場人物・名前だけ出る人物それぞれがこの話より前に関わったすべての話(作品を問わない。概要つき)を、日本語の見出しと id 付きで返す。関わった話の概要が無いか本文と食い違っていれば、読む前に AI で作り直す(作れなかった話は null)。時刻が空なら止まる |
 | 「人物を消して」 | `character.delete_character.DeleteCharacter(character_id)`。期間ごとの値・説明の変化・出自と居場所・相関・話に名前だけ出る行も消す。出来事の当事者か、話の登場人物・視点になっている人物は止まる |
 | 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文・概要を時刻の順に返す |
 | 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
 | 「この話の登場人物・場所を結んで」 | `episode.cast_episode.CastEpisode(episode_id, character_ids, location_id=None, viewpoint_character_id=None)`。登場人物(`episode_character`)をまるごと置き換え、名前だけ出る人物を拾い直す。場所・視点は渡したときだけ書く。同期フラグは変えない |
-| 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の `shared` / `episode` の行)・作品・前の話の概要(この話より前の、同じ作品のすべての話と登場人物が関わったすべての話)・文体の見本(同じ作品・章・外伝の直前の五話の本文。中身は読ませない)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・関係する設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から、関係する設定は話に結んだアイデア(`episode_idea`)から引く(結んだ人物と同じく効く期間では絞らず、呼び名はアイデアの履歴 `idea_history` のうち話の時刻・場所に効くもの)ので、先に `CastEpisode` / `LinkIdeas` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
-
-**まだ入口が無いもの**(頼まれたら作ってから行う): 人物の削除。
+| 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の行)・作品・前の話の概要(この話より前の、同じ作品(親・兄弟の章・外伝を含む)のすべての話と登場人物が関わったすべての話)・文体の見本(同じ作品・章・外伝の直前の五話の本文。中身は読ませない)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係・関係する設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から、関係する設定は話に結んだアイデア(`episode_idea`)から引く(結んだ人物と同じく効く期間では絞らず、呼び名はアイデアの履歴 `idea_history` のうち話の時刻・場所に効くもの)ので、先に `CastEpisode` / `LinkIdeas` で結んでから読む。時刻が空なら止まる。前の話・出来事の要約が本文と食い違っていれば、読む前に AI で作り直す(本文は書かない) |
 
 筋書きのテーブルは無い。場所に掛かる筋書きは作品(`story`)の
 `text` に、人物に掛かる筋書きはその人物の `plot` に書く。
@@ -269,12 +268,12 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 
 人物が持つミーム(行動原理の芯。`meme` テーブル)は、その人物の `meme` 列に、持つミームの文面を
 `- <古今表裏>: <文面>` の箇条書きでそのまま書く。人物は複数のミームを持ってよい。ミームどうしの関係の整理は、
-`meme` ではなく `principle`(行動原理)に書く(`plot` に書くと、そこからミームがまた抜き出される)。
+`meme` ではなく `principle`(行動原理)に書く。
 
 - 古今表裏: 古=かつて持っていたが今は手放した / 今=いま持っている / 表=人前で掲げている / 裏=内に秘めている
 - 引き方: 分類ごとに 0〜2 件。人物は 信条・欲求・境遇、人物以外の対象は 信条・欲求・集団 から引く。
   理(世界の法則)は引かない(`data_access_logic/constants.py` の `MEME_*`)
-- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う
+- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う。引いたミームを先に渡し、年齢・性格(12 軸)・背丈・体格を、そのミームの古今表裏と出自・生い立ち・人物像から AI が総合的に決める(サイコロでは決めない。作者が下書きで決めた値はそのまま使う)。人物以外の対象の性格は、どの軸も「並」
 
 ## 世界の広がりと制約
 
@@ -283,8 +282,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 
 - 居場所: 生成した場所を、その一件の居場所(`character_location`)として生まれた時から今まで続く行で足す。中身を決める AI には、
   今の住まい・仕事場もその場所(かその中)に置かせる(筋書きが別の場所の役どころを示していても、その場所で担う形に移させる)
-- 世界との検め(`consistency.py`): 清書した説明・行動原理・来歴を、居場所・現在の時刻・まだ無い設定・既にいる人物や対象と照らして
-  AI に検めさせ、食い違いがあればそこだけ直させる(直した食い違いはログに出す)
+- 世界との検め(`consistency.py`): 中身の説明・行動原理・来歴を、居場所・現在の時刻・まだ無い設定・説明の語に当たった設定(中間段)・既にいる人物や対象と照らして
+  一回の AI 呼び出しで検めさせ、食い違いがあればそこだけ直させる(直した食い違いはログに出す)
 - 名付け(`naming.py`): 居場所と中身から名前の候補を `NAME_CANDIDATE_COUNT`(10)個 AI に出させ、同じ場所(居場所とその上位・配下)に
   いる人物・対象と同じ名を除いて、サイコロで一つ選ぶ。作者が名を指定したときは、その名(か近い響き)をそのまま使う
 - 人数の上限: ランダムに人物を足す `GenerateCharacters` は、場所にじかにいる人物・対象を種別ごとの上限
@@ -310,11 +309,10 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 
 | 生成 | 下書き | 清書 |
 | ---- | ------ | ---- |
-| 人物の自動生成 | 中身を決めた説明 | 関係する設定があれば説明を清書 |
+| 人物の自動生成 | 中身を決めた説明 | 世界との検め(`consistency.py`)で、関係する設定と合わせて直す |
 | プロット補完(`data_access_logic/episode/plot_completer.py`) | 今のプロット(`plot_text`) | 書き直したプロット |
 
-claude が対話で書くときは、自分で語と言い換えを挙げて `ResolveIdeas` を呼び、返った `ideas` を踏まえて清書し、
-話の本文に使ったときは、確定したあとに `hits` と `candidates` の id を `LinkIdeas` で話に結ぶ。
+claude が対話で書くときは、自分で語と言い換えを挙げて `ResolveIdeas` を呼び、返った `ideas` を踏まえて書く。
 話の本文(スキル `episode` / `revise-episode`)だけは、プロットの語で `ResolveIdeas` を呼んで踏まえるアイデアを書く前に `LinkIdeas` で話に結び、
 `ReadEpisodeBrief` の「関係する設定」(結んだアイデア)を読んでから本文を書く。
 
@@ -323,13 +321,13 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 補足:
 
-- `CommitEvent` / `UpdateEvent` / `CommitStory` / `CommitEpisode` は、確定したあとに毎回(`ai_entrypoint.py` の `CommitAndRefresh`)
+- `CommitEvent` / `UpdateEvent` / `CommitEpisode` は、確定したあとに毎回(`run()`。流れは `flows/commit.py`)
   ミームの棚卸し
   (`data_access_logic/meme/extractor.py` の `refresh`)と、出来事・話ならその場での要約(`event_summary` / 話の `summary_text`。
   本文が変わっていれば作り直す)をまとめて行うので、`ExtractMemes` を別に呼ぶ必要は無い。`CommitEvent` はさらに出来事の種を抜き出す
   (下の「出来事の生成・話の材料」)。確定の入口を通らなかった分の
   取りこぼしをまとめて拾いたいときは `RefreshGeneratedContent` を呼ぶ。これらの経路で足したミームは
-  検めない(`fact_check` が空のまま)ので、`CheckFacts("meme")` で後から埋める
+  検めない(`# 検証結果` の節が無いまま)ので、`CheckFacts("meme")` で後から埋める
 - 話は `episode` テーブルに一話一行で持つ。枠(`plot_text`。作者が入れるプロット、AI 生成前)と
   本文(AI か作者が書く、投稿する本文。`main_text`)を同じ行に持ち、時期・場所・視点は
   `start` / `end` / `location_id`(Location への FK)/ `viewpoint_character_id`(Character への FK)に入る。
@@ -337,10 +335,10 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
   `episode_character` の `mentioned` が true の行は、登場せずプロット・本文に名前が出るだけの人物(下の「名前だけ出る人物」)。
   本文の概要(`summary_text`)と、概要を作った本文の sha256(`summary_source_hash`)も同じ行に持つ。
   書いたモデル・effort は db に残さない(選択肢はその場の Claude 呼び出しにだけ効く)
-- 本文に字数の指定は無い(`ai/instructions/style.py` の `EPISODE_STYLE_BASE`)。プロット(`plot_text`)と、渡された作品・登場人物・場所・
+- 本文に字数の指定は無い(`ai/instructions/style.py` の `EPISODE_STYLE_BASE`)。筋(プロット、場面を手番で演じたならその行)と、渡された作品・登場人物・場所・
   直前の話・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。
-  場面の数と一場面の長さは決めず、中身に合わせる。**書く直前にプロットを場面まで割ってから本文に入る**。プロットはその話ぶんで 300〜500 字を目安に、
-  `## 場面` の箇条書き(`場所 / 出る人 / そこで変わること`)と `## 狙い` で書く:
+  場面の数と一場面の長さは決めず、中身に合わせる。プロットの形は `ai/instructions/plot.py` の `PLOT_FORMAT_INSTRUCTION`
+  (枠の生成・プロット補完・スキル `episode` が共に使う。300〜500 字を目安に `## 場面` の箇条書き(`場所 / 出る人 / そこで変わること`)と `## 狙い`):
 
 ```
 # plot_text
@@ -364,8 +362,8 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 ## 出来事の生成・話の材料
 
 世界の舞台設定や、既存の話から抽出した文体の癖のような「ユーザーの好み」は `core` には定数で持たず
-(`ai/instructions/style.py` の `style_instruction()` を見る)、db の `style_preference` 表に対象(`target`)ごとに持つ。
-話の本文の材料(`ReadEpisodeBrief` の「書き方」)には、`shared`(どの対象にも効く)と `episode` の行を足す(`style_preference/extras.py`)。
+(`ai/instructions/style.py` の `style_instruction()` を見る)、db の `style_preference` 表に持つ。効くのは話の本文だけで、
+材料(`ReadEpisodeBrief` の「書き方」)に、すべての行を id の順に足す(`style_preference/extras.py`)。
 行が無ければ空で、`core` だけの汎用の文体になる。
 
 出来事の生成(`GenerateEvent`)は、下書きの名前・記録を場面の指定(「市場の喧嘩」「怪談」など)に、時刻・場所・当事者を決まった値として、
@@ -374,6 +372,8 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 世界ごとの文体の好み(`style_preference`)は使わない。
 当事者を省けば、その時刻にその場所にいて(`character_location`)、別の出来事の最中でない、生きているサブキャラクターから選ぶ。
 場所を名指しするので、場所の `active_random_generation` は見ない。作品の本文(筋書き)は渡さない。
+記録の段は、住まい・拠点が変わった人物ごとの移動先(`character_moves`。人物 id と場所 id の組 `CharacterMove` のリスト)も返す。空なら居場所は変えず、あれば居合わせた人物と移動先の候補に当たる組だけで、今の居場所の行を出来事の時刻で閉じ、移動先の行をその時刻から足す(`character/moves.py` の `update_locations`)。移した組は `GenerateEvent` のレスポンスの `moves` に返る。移動先の候補は、出来事の場所から `constants.REACH_LEVELS` 段上までの配下で、その時刻にある場所。
+話も同じく、`CommitEpisode` で本文を確定したあとの段(`episode/moves.py`)が、本文の中で住まい・拠点が変わった登場人物ごとの移動先を AI に返させ、空でなければ話の時刻で居場所を移す(移動先の候補は話の場所から同じように引く)。移した組は `CommitEpisode` のレスポンスの `moves` に返る。
 出来事の候補は、出来事の種(`event_seed` テーブル)からランダムに引いた種か、直前の出来事からの連想で立てる。
 種は作品の本文・話のプロット(`plot_text`、無ければ本文)・人物の `plot`・出来事の本文から、時代・場所・固有名詞を抜いて抜き出したもの
 (`data_access_logic/event_seed/extractor.py` の `refresh`。`event_seeded` が false の元だけから抜き出して true にする。
@@ -398,17 +398,17 @@ AI の結果を書き戻したとき、`CommitEpisode` / `CastEpisode` で確定
 本文・プロット・枠を書く材料には「名前だけ出る人物」として、その時点の歳・種別・口調・人物像を渡す(直近の出来事・相関は渡さない)。
 話のレコードでは `mentioned_character_ids` に並ぶ。
 前の話は、この話の時刻より前の、本文のある話から選ぶ(`data_access_logic/episode/summary.py`)。
+ここでの同じ作品は、話の作品と、その親の作品・親を同じくする作品(章・外伝)を合わせたもの(親の無い作品は同じ作品だけ)。
 話の中身は概要だけで渡す。同じ作品のすべての話と、登場人物が関わった(`episode_character` に登場か名前だけの行がある)すべての話を、
-作品を問わず重ならないように合わせて渡す(直前の話も含む)。
-同じ作品の直前の五話(`constants.EPISODE_STYLE_SAMPLE_COUNT`)は校正済みとみなし、「文体の見本」として本文だけを渡す。
-ここでの同じ作品は、話の作品と、その親の作品・親を同じくする作品(章・外伝)を合わせたもの。章の頭の話にも前の章の話が見本として渡る(親の無い作品は同じ作品だけ)。
+作品を問わず重ならないように合わせて渡す(直前の話も含む。章の頭の話にも前の章の話が渡る)。
+同じ作品の直前の五話(`constants.EPISODE_STYLE_SAMPLE_COUNT`)は校正済みとみなし、「文体の見本」として本文だけを渡す(その中身も前の話の概要に入っている)。
 見本からは文体だけを汲ませ、中身は読み取らせない(`ai/instructions/past_episodes.py`)。章・外伝をまたぐ話には作品名を添える。作品の筋書きは、親の作品を「親の作品」としてたどって渡す。
 枠を作るとき(`framer`)は本文を渡さず、前の話をすべて概要で渡す。
 概要の無い話は書く前に作る(本文が変わっていなければ作り直さない)。
 登場人物ごとに、その時点の歳・人となり・口調・相関・直近の出来事(要約)を渡す。話の場所(無ければ作品の立つ場所)の
 直近の出来事と、その場所か登場人物に掛かる「この時点より後に既に決まっている出来事」も渡し、矛盾させない。
 プロット補完では、プロットから中間段でアイデアを引いて「関係する設定」として渡す。
-Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_client.py` の `_MODEL` / `_EFFORT`)。
+Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_client.py` の `MODEL` / `EFFORT`)。待ち時間の既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、それより長く待つ呼び出し(事実確認)だけが `timeout` を渡す。
 
 上の表の「作る」「確定する」入口を使えば、Claude も対話の中で人物・場所・出来事の
 内容を決めて確定してよい。
@@ -450,7 +450,7 @@ GUI の API(`gui/api/interface.py`)は、領域のディレクトリ直下のフ
 - AI を呼んで得た結果は、得たその場で commit する(長い AI 呼び出しの前も、それまでの保存分を commit する)。
   db だけを触る「確定する」入口は、`execute` の中で commit しない(`.claude/docs/data-access.md`)
 
-入口の基底は `entrypoint.py`(db だけを触る)と `ai_entrypoint.py`(確定のあとに AI を回す)に置く。
+入口の基底は `entrypoint.py` に置く。AI を回す入口の `result()` は、流れ(`flows/`)を呼ぶだけにする(下の「AI を呼ぶ処理と、流れ・段」)。
 読む入口が返す行の組み立ては、各領域の `reading.py` に置く(`event/reading.py` の `EventRow`、`character/reading.py` の `CharacterSheet` など)。
 
 ```
@@ -459,27 +459,26 @@ Entrypoint(entrypoint.py)
 │   ├─ CommitEntrypoint         「確定する」系。execute(s) を s.begin() に包む。GUI の API も execute(s) を呼ぶ
 │   │   ├─ commit_*.py / update_*.py / delete_*.py / merge_idea.py / set_episode_synced.py
 │   │   ├─ idea.resolve_ideas.ResolveIdeas / idea.link_ideas.LinkIdeas(候補を足す・結ぶので確定側)
-│   │   ├─ CommitAndRefresh(ai_entrypoint.py)  確定のあと要約・ミームを作る → CommitEvent / UpdateEvent / CommitStory / CommitEpisode
-│   │   └─ CommitMemeSource(ai_entrypoint.py)  確定のあと検めてミームを抜き出す → CommitOracle
+│   │   └─ CommitEvent / UpdateEvent / CommitEpisode / CommitStory / CommitOracle  execute(s) は段を呼んで確定だけ、
+│   │                           result() は確定のあとの AI(ミーム・要約・種・事実確認)まで流れ(flows/commit.py)で回す
 │   ├─ ListEntrypoint           select() の行を row() でモデルにして並べる → list_locations / list_characters / list_character_relations / list_events
-│   └─ read_*.py / list_*.py / start_story.py / search_ideas.py / list_pending_reviews.py / draw_memes.py / generate_*.py
+│   └─ read_*.py / list_*.py / start_story.py / search_ideas.py / list_pending_reviews.py / draw_memes.py
+├─ AI を回す入口(generate_*.py / complete_plot.py / read_episode_brief.py / read_episode_casting.py / rewrite_episode_summary.py /
+│   extract_memes.py / refresh_generated_content.py / check_facts.py)  result() で流れ(flows/)を呼ぶだけ
 └─ RandomDraft                  db に触れない下書き作成 → create_random_*.py
 ```
 
-(`meme.extract_memes.ExtractMemes`・`meme.refresh_generated_content.RefreshGeneratedContent`・`fact_check.check_facts.CheckFacts` は、
-`execute(s)` の外で db セッションを開き直したいので `Entrypoint` を直接継ぎ、`result()` を書く)
+### AI を呼ぶ処理と、流れ・段
 
-### AI を呼ぶ処理と、web のセッションの段
+AI を呼ぶ処理は、db だけの関数(対象を引く `*_targets`、材料を組む `*_material`、書き戻す `save_*`)を `<領域>/steps.py` の段
+(`@db_step`。`step.py`)にし、AI だけの関数(`*_draft`。材料のモデルを受けて AI の出力のモデルを返し、db に触らない)と分けて置く。
+二つをつなぐ流れは `flows/` に一つだけ持ち、段は `caller.call` で呼ぶ。手元では段を自分のセッションで回し、
+db に繋がない Claude Code on the web のセッションでは、`web_session/flows.run` が口を API(`POST /api/steps/<領域>.steps.<関数名>`)に
+差し替えて同じ入口を回す(`.docs/claude-tasks.md`)。
 
-AI を呼ぶ処理は、db だけの関数(対象を引く `*_targets`、材料を組む `*_material`、書き戻す `save_*`)と、
-AI だけの関数(`*_draft`。材料のモデルを受けて AI の出力のモデルを返し、db に触らない)に分けて置く。
-手元の入口はそれを自分のセッションでつなぐ。Claude Code on the web のセッションは db に繋がないので、
-db だけの関数を `<領域>/steps.py` の段(`@db_step`。`step.py`)として API(`POST /api/steps/<領域>.steps.<関数名>`)越しに呼び、
-流れは `web_session/` に持つ(`.docs/claude-tasks.md` の「web のセッションで回す」)。
-
-- 段は API の一つのトランザクションで回るので、中で commit しない
-- 段の入力・出力は pydantic のモデル。出力は `*Serialized` でない土台のマテリアルで宣言する(列のまま JSON で運ぶ)
-- claude を叩く入口を足したら、段と `web_session/` の流れ(`web_session/flows.py` の対応表)も足す
+- 段は一つのトランザクションで回り、終わりに commit する(AI の結果を書き戻す段を一回呼ぶのが一つの commit)。段の中で commit しない
+- 段の入力・出力は pydantic のモデル。出力は `*Serialized` でない土台のマテリアルで宣言する(web では列のまま JSON で運ぶ)
+- claude を叩く入口を足したら、段と `flows/` の流れも足す
 
 ## 引き方は query 側にある
 
@@ -490,7 +489,7 @@ db だけの関数を `<領域>/steps.py` の段(`@db_step`。`step.py`)とし�
 | `common_query.py`              | 時刻の扱い・断面・顔ぶれ・場所の道筋                         |
 | `period.py`                    | その時刻に期間(`start` 〜 `end`)が掛かる行の条件(`alive_at`) |
 | `character_simulation_query.py` | 人物を軸に周辺を読む(`read_surroundings`)                   |
-| `dictionary_query.py`          | アイデア(辞書)の検索。名前・本文(`idea_history` を左外部結合した作中の呼び名も含む)の部分一致、場所・時刻の範囲、自動生成の候補 |
+| `dictionary_query.py`          | アイデア(辞書)の検索。名前・本文(`idea_history` を左外部結合した作中の呼び名も含む)の部分一致、場所・時刻の範囲 |
 | `story_creation_query.py`      | 場所に掛かる作品(`story`)の読み出し                          |
 | `world_creation_query.py`      | 生きている人物、広さの整合、進行中の判定               |
 | `event_seed_query.py`          | 出来事の種をまだ抜き出していない元(`event_seeded` が false) |

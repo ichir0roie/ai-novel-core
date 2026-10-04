@@ -20,8 +20,6 @@ class StoryMaterial(Material):
     text: str
     narration: str
     state: str
-    start: Stamp | None = None
-    end: Stamp | None = None
     parent_story: "StoryMaterial | None" = None
 
 
@@ -131,10 +129,8 @@ def _story(story: StoryMaterial) -> dict[str, Any]:
 class EpisodeMaterial(Material):
     story: StoryMaterial
     main_episode: TargetEpisode
-    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
+    # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 文体の見本にする、同じ作品の直前の話。古い順
-    recent_episodes: list[RecentEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
@@ -163,7 +159,6 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
         return {
             "作品": _story(self.story),
             "前の話の概要(古い順)": _past_episodes(self.past_episodes),
-            "文体の見本(古い順)": _style_samples(self.recent_episodes),
             "書く話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
@@ -199,7 +194,7 @@ class EpisodePlotRequestSerialized(EpisodePlotRequest):
 
 class EpisodeCastingRequest(Material):
     material: EpisodeMaterial
-    # 書き直したプロット。材料の「書く話」のプロット(書き直す前のプロット)と置き換わる
+    # 書き直したプロット。材料の「書く話」のプロット(書き直す前のプロット)と置き換える
     plot_text: str
     # 話の場所の直下にある場所
     known_locations: list[LocationMaterial]
@@ -215,9 +210,12 @@ class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
+        material = self.material.model_dump()
+        # 書き直す前のプロットと、それに名前の出る人物は渡さない(新しいプロットとその既知の人物に置き換える)
+        episode = {key: value for key, value in material["書く話"].items() if key != "名前だけ出る人物"}
         return {
-            **self.material.model_dump(),
-            "新しいプロット": self.plot_text,
+            **material,
+            "書く話": {**episode, "プロット": self.plot_text},
             "この場所の中の既知の場所": [_location([location]) for location in self.known_locations],
             "新しいプロットに名前の出る既知の人物": [member.model_dump() for member in self.known_characters],
         }
@@ -236,7 +234,7 @@ class BriefEpisode(EpisodeBase):
 class EpisodeBrief(Material):
     story: StoryMaterial
     main_episode: BriefEpisode
-    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
+    # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
     # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]
@@ -453,9 +451,10 @@ class EpisodeCharacterCandidateDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     called: str = Field(description="新しいプロットでの呼び名")
+    name: str = Field(description="新しいプロットで固有の名で呼ばれていればその名(名字を含めない)。役職・続柄・あだ名だけなら空文字")
     text: str = Field(description="人物像と、この話での役どころ")
 
-    @field_validator("called", "text")
+    @field_validator("called", "name", "text")
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()
@@ -492,9 +491,9 @@ class EpisodeFrameDraft(BaseModel):
 
     title: str = Field(description="サブタイトル。短く")
     plot_text: str = Field(description="プロット")
-    start: str = Field(description="時刻。「年/月/日」の形")
+    start: str | None = Field(description="時刻。「年/月/日」の形。作者の指定の時刻が決まっていれば null")
 
-    @field_validator("title", "start")
+    @field_validator("title")
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()

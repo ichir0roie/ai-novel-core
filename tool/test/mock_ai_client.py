@@ -9,8 +9,8 @@ import re
 
 from pydantic import BaseModel, ValidationError
 
-# 材料は日本語の見出しの JSON(`"人物id": 1`)で渡る。dict の repr(`'character_id': 1`)で渡す生成器も残っている
-_CHARACTER_ID_IN_PROMPT = re.compile(r"(?:'character_id'|\"人物id\"): (\d+)")
+# 材料は日本語の見出しの JSON(`"人物id": 1`)で渡る
+_CHARACTER_ID_IN_PROMPT = re.compile(r"\"人物id\": (\d+)")
 
 # 空だと後段が何もしない配列だけ、件数を持たせる。それ以外の配列は空で返す。
 _ARRAY_SIZES = {"candidates": 3, "seeds": 2}
@@ -22,7 +22,7 @@ class MockAIClient:
         self.calls: list[dict] = []
 
     def generate[Output: BaseModel](
-        self, prompt: str, output: type[Output], system: str | None = None, timeout: float = 120.0,
+        self, prompt: str, output: type[Output], system: str | None = None, timeout: float | None = None,
         tools: tuple[str, ...] = (), model: str = "", effort: str = "",
     ) -> Output | None:
         schema = output.model_json_schema()
@@ -62,6 +62,8 @@ class MockAIClient:
             high = schema.get("maximum", max(low, 1))
             return self.rng.randint(low, high)
         if types == "number":
+            if "exclusiveMinimum" in schema:
+                return float(schema["exclusiveMinimum"]) + 1
             return float(schema.get("minimum", 0))
         if types == "boolean":
             return False

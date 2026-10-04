@@ -11,7 +11,6 @@ from db.schema import Episode, EpisodeCharacter, EpisodeCharacterSession, Episod
 
 
 class DeleteEpisode(CommitEntrypoint):
-    model = Episode
 
     def __init__(self, episode_id: int):
         self.episode_id = episode_id

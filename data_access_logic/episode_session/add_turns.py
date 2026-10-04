@@ -12,7 +12,6 @@ from db.schema import Character, Episode, EpisodeCharacterSession
 class AddTurns(CommitEntrypoint):
     """語り部が、話のセッションに手番の要求の行を並べた順に足す。人物役は自分の行が来たら行動を入れる。"""
 
-    model = EpisodeCharacterSession
 
     def __init__(self, episode_id: int, turns: list[TurnRequest]):
         self.episode_id = episode_id

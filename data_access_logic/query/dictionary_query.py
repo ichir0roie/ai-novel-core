@@ -69,10 +69,12 @@ def ideas_by_keywords_select(keywords: Collection[str], location_ids: Collection
         or_(*(Idea.name.contains(keyword, autoescape=True) for keyword in keywords),
            *(Idea.text.contains(keyword, autoescape=True) for keyword in keywords)),
         idea_in_scope(location_ids, time))
+    # 呼び名の行が場所・時代に当たっても、本体の効く期間(`start` / `end`)の外のアイデアは返さない
     history_hit = and_(
         or_(*(IdeaHistory.name.contains(keyword, autoescape=True) for keyword in keywords),
            *(IdeaHistory.detail.contains(keyword, autoescape=True) for keyword in keywords)),
-        history_in_scope(location_ids, time))
+        history_in_scope(location_ids, time),
+        alive_at(Idea, time) if time is not None else true())
     return (select(Idea)
             .outerjoin(IdeaHistory, IdeaHistory.idea_id == Idea.id)
             .where(or_(essence_hit, history_hit))

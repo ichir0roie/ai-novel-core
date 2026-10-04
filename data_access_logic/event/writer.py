@@ -2,7 +2,7 @@
 """本文(`text`)の空いた出来事に、名前・場所・当事者から記録の本文だけを書く。書けなければ空のまま残す。
 
 db だけの段(`text_targets` → 要約を揃える → `text_material` → `save_event_text`)と、AI だけの段(`text_draft`)に分けてある。
-手元では `write_event_text` がつなぎ、web のセッションでは `web_session/event.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/event.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import logging
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION, EVENT_RECORD_INSTRUCTION
+from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION, EVENT_RECORD_INSTRUCTION, EVENT_SITUATION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
@@ -20,7 +20,7 @@ from data_access_logic.event.writer_models import (
     EventTextDraft, EventTextMaterial, EventTextMaterialSerialized, TextlessEvent,
 )
 from data_access_logic.query import common_query
-from data_access_logic.summary_targets import SummaryTargets, refresh
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Event, EventCharacter
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,7 @@ _SYSTEM_PROMPT = f"""\
 あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家です。
 ある出来事の名前・時刻・場所・当事者などを日本語の見出しを付けた JSON で渡すので、この出来事の記録の本文を書いてください。
 出来事の名前は、ジャンルや場面を一言で決めたものです。その中身に沿った出来事にしてください。
-当事者の性格の各軸は 無/低/並/高/必 の五段階です。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
+{EVENT_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
 {EVENT_RECORD_INSTRUCTION}"""
 
@@ -91,11 +90,4 @@ def save_event_text(s: Session, event_id: int, draft: EventTextDraft | None) -> 
         record.text = draft.text
         s.flush()
         logger.info(f"{record.name}(id={record.id}): 本文を書いた({len(record.text)}字)")
-    return record
-
-
-def write_event_text(s: Session, ai: AIClient, event_id: int) -> Event:
-    refresh(s, ai, text_targets(s, event_id))
-    record = save_event_text(s, event_id, text_draft(ai, text_material(s, event_id)))
-    s.commit()
     return record

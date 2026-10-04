@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ユーザの判断が要るものを一覧にする、claude が呼ぶ入口(週次ルーチン)。db には書かない。
+"""ユーザの判断が要るものを一覧にする、claude が呼ぶ入口。db には書かない。
 
     ListPendingReviews().show()
 

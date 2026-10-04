@@ -12,7 +12,6 @@ from db.schema import Character, CharacterHistory, CharacterKnower, CharacterPar
 
 
 class UpdateCharacter(CommitEntrypoint):
-    model = Character
 
     def __init__(self, character: CharacterUpdateForm):
         self.character = character

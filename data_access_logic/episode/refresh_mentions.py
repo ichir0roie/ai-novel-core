@@ -6,8 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
-from data_access_logic.episode.mentions import save_mentions
-from db.schema import Episode, EpisodeCharacter
+from data_access_logic.episode.mentions import named_characters, save_mentions
+from db.schema import Episode
 
 
 class EpisodeMentions(BaseModel):
@@ -23,7 +23,6 @@ class RefreshMentions(CommitEntrypoint):
     `episode_ids` を省けばすべての話。登場人物(`mentioned` でない行)は変えない。
     """
 
-    model = Episode
 
     def __init__(self, episode_ids: list[int] | None = None):
         self.episode_ids = episode_ids
@@ -32,12 +31,10 @@ class RefreshMentions(CommitEntrypoint):
         query = select(Episode.id).order_by(Episode.id)
         if self.episode_ids is not None:
             query = query.where(Episode.id.in_(self.episode_ids))
+        characters = named_characters(s)
         refreshed = []
         for episode_id in s.scalars(query).all():
-            save_mentions(s, episode_id)
-            episode = s.get_one(Episode, episode_id)
+            mentioned_ids = save_mentions(s, episode_id, characters)
             refreshed.append(EpisodeMentions(
-                id=episode_id, title=episode.title,
-                mentioned_character_ids=list(s.scalars(select(EpisodeCharacter.character_id).where(
-                    EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.mentioned)).all())))
+                id=episode_id, title=s.get_one(Episode, episode_id).title, mentioned_character_ids=mentioned_ids))
         return refreshed

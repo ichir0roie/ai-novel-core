@@ -11,7 +11,6 @@ from db.schema import Location, Story
 
 
 class UpdateStory(CommitEntrypoint):
-    model = Story
 
     def __init__(self, story: StoryUpdateForm):
         self.story = story

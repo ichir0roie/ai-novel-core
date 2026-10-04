@@ -11,7 +11,6 @@ from db.schema import Oracle
 
 
 class UpdateOracle(CommitEntrypoint):
-    model = Oracle
 
     def __init__(self, oracle: OracleUpdateForm):
         self.oracle = oracle

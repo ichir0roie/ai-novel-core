@@ -1,28 +1,19 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from ai.claude_code import ai_client, fact_checker
+from ai.claude_code import ai_client
+from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import Entrypoint
-from data_access_logic.meme.extractor import refresh
-from db.schema import get_env_session
+from data_access_logic.flows import refresh
+from data_access_logic.flows.refresh import ExtractedMemes
 
 __all__ = ["ExtractMemes"]
 
 
-class ExtractedMemes(BaseModel):
-    memes_added: int
-
-
 class ExtractMemes(Entrypoint):
-    def __init__(self, fact_check: bool = True):
+    def __init__(self, fact_check: bool = True, ai: AIClient = ai_client):
         self.fact_check = fact_check
+        self.ai = ai
 
     def result(self) -> ExtractedMemes:
-        with get_env_session() as s:
-            last_id = fact_checker.last_meme_id(s)
-            added = refresh(s, ai_client)
-            if self.fact_check:
-                fact_checker.check_new_memes(s, last_id)
-            return ExtractedMemes(memes_added=added)
+        return refresh.extract_memes(self.fact_check, self.ai)

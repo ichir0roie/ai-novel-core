@@ -31,7 +31,8 @@ class EventTextMaterialSerialized(EventTextMaterial):
             "出来事の名前": event.name,
             "時刻": str(event.start or event.time),
             "終わり": str(event.end) if event.end else None,
-            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text} if location else None,
+            "場所": ({"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment}
+                     if location else None),
             "当事者": [participant.model_dump() for participant in self.participants],
             "この時点より後に既に決まっている出来事": [later.model_dump() for later in self.later_events],
         }
