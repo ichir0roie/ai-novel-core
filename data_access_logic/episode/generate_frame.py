@@ -16,21 +16,17 @@ class GenerateFrame(SessionEntrypoint):
     AI に決めさせて足す。`id` を渡せばその枠(本文の無い話)を決め直す。本文はスキル `episode` で Claude が書く。
 
     下書きは AI 呼び出しの前に枠として一度保存する。視点・場所は AI に決めさせず、下書きの値のまま残す。
-    登場人物は `character_ids`(GUI の生成パネルで選んだ人物)、省けば下書きの `character_ids` で、枠の
-    `episode_character` として残す。どちらも無ければ枠の `episode_character`(空なら作品と直前の話だけを材料にする)。
+    登場人物は下書きの `character_ids` で、枠の `episode_character` として残す。省けば枠の `episode_character`
+    (空なら作品と直前の話だけを材料にする)。
     下書き・決めたプロットに名前が出るだけの人物は `episode_character` の `mentioned` の行にし、その設定を AI に渡す。
     """
 
-    def __init__(self, frame: EpisodeForm, character_ids: list[int] | None = None, ai: AIClient = ai_client):
+    def __init__(self, frame: EpisodeForm, ai: AIClient = ai_client):
         self.frame = frame
-        self.character_ids = character_ids
         self.ai = ai
 
     def execute(self, s: Session) -> EpisodeRecord:
-        form = self.frame.model_copy()
-        if self.character_ids is not None:
-            form.character_ids = self.character_ids
-        record = save_frame(s, form)
+        record = save_frame(s, self.frame)
         s.commit()
         framed = framer.frame_episode(s, self.ai, record.id)
         return record_of(s, EpisodeRecord, framed)

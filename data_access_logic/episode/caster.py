@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from data_access_logic.episode.mentions import cast_characters, mentioned_characters
+from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.query import common_query
 from data_access_logic.query.period import alive_at
 from db.schema import Character, CharacterRelation, Episode
@@ -33,12 +33,12 @@ def _resident_ids(s: Session, location_id: int | None, time: Stamp) -> list[int]
 def candidate_characters(
     s: Session, episode: Episode, excluded_ids: set[int], location_id: int | None, time: Stamp,
 ) -> list[Character]:
-    """プロット・本文に名前が出る人物・登場人物と関係のある人物・話の場所(とその中)にいる人物。
+    """登場人物と関係のある人物・話の場所(とその中)にいる人物。プロット・本文に名前が出る人物は、保存のたびに
+    名前だけ出る人物(`mentioned` の行)として拾い直してあり、候補とは別に出す。
 
     `episode` は `episode_characters` と `EpisodeCharacter.character` を読んだもの。"""
     cast_ids = {character.id for character in cast_characters(episode)}
     candidate_ids = [
-        *(character.id for character in mentioned_characters(s, episode, cast_ids)),
         *_related_ids(s, cast_ids, time),
         *_resident_ids(s, location_id, time),
     ]

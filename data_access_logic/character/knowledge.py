@@ -38,7 +38,6 @@ class Viewer:
 
     character_id: int
     time: Stamp
-    home_id: int | None
     location_ids: frozenset[int]
 
 
@@ -46,7 +45,7 @@ def viewer_of(s: Session, character: Character, time: Stamp) -> Viewer:
     here = s.scalars(common_query.character_location_select(character.id, time)).first()
     home_id = here.location_id if here is not None else None
     location_ids = common_query.idea_scope_ids(s, home_id) if home_id is not None else []
-    return Viewer(character_id=character.id, time=time, home_id=home_id, location_ids=frozenset(location_ids))
+    return Viewer(character_id=character.id, time=time, location_ids=frozenset(location_ids))
 
 
 def knows(knowers: Sequence[KnowerMixin], viewer: Viewer) -> bool:

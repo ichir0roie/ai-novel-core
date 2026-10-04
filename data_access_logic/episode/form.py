@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from pydantic import Field, model_validator
-from sqlalchemy import delete, or_
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from data_access_logic.episode.mentions import save_mentions
@@ -69,11 +69,20 @@ def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> Non
     s.flush()
 
 
+def has_cast(s: Session, episode_id: int) -> bool:
+    """登場人物(名前だけ出る人物でない行)がいるか。"""
+    return s.scalar(select(EpisodeCharacter.character_id).where(
+        EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.mentioned.is_(False)).limit(1)) is not None
+
+
 def save_frame(s: Session, form: EpisodeForm) -> Episode:
     """AI 呼び出し(数分〜十数分かかることがある)の前に下書きを保存しておき、途中で失敗しても編集を失わないようにする
     (呼ぶ側がこの後すぐ commit する)。名前だけ出る人物も、保存したプロット・本文から拾い直して、AI に渡す材料に入れる。"""
     if form.id is not None:
         record = s.get_one(Episode, form.id)
+        # 枠を決める・プロットを補完するのは本文の無い話だけ。AI を回して下書きを書き戻す前に止める
+        if record.main_text.strip():
+            raise ValueError(f"話 id={form.id} には本文が入っているので、枠・プロットを AI に決めさせない")
     elif form.story_id is not None:
         record = Episode(story_id=form.story_id, title="", plot_text="")
         s.add(record)

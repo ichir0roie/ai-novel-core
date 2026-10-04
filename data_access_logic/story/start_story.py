@@ -13,8 +13,8 @@ from data_access_logic.story import reading as story_reading
 from db.schema import Story
 from db.stamp import Stamp
 
-_STOPPED_MESSAGE = ("未同期の話が残っている。モード 3(世界観更新)を先に通して、"
-                    "SetEpisodeSynced で同期フラグを立ててから書き始める")
+_STOPPED_MESSAGE = ("未同期の話が残っている。その話の中身を世界(人物の来歴・関係など)へ反映してから、"
+                    "SetEpisodeSynced で同期フラグを立てて書き始める")
 
 
 class StoryStart(BaseModel):

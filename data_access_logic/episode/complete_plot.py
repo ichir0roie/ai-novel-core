@@ -4,11 +4,11 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ai.claude_code import ai_client
-from ai.claude_code.ai_client import PLOT_EFFORT, PLOT_MODEL
+from ai.claude_code.ai_client import EFFORT, MODEL
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import SessionEntrypoint, record_of
 from data_access_logic.episode import framer, plot_completer
-from data_access_logic.episode.form import EpisodeForm, save_frame
+from data_access_logic.episode.form import EpisodeForm, has_cast, save_frame
 from data_access_logic.episode.record import EpisodeRecord
 
 
@@ -23,7 +23,7 @@ class CompletePlot(SessionEntrypoint):
     下書きは AI 呼び出しの前に枠として一度保存する。プロットか時刻(`start`)が枠に無ければ、先に `GenerateFrame` と同じ生成で枠を決める。
     登場人物は下書きの `character_ids`、省けば枠の `episode_character`。空なら止まる。
     `order` は作者の注文(展開・焦点・雰囲気など、今のプロットに加えて新しいプロットに望むこと)。今のプロットと合わせて取り入れる。
-    `model` / `effort` はプロットの書き直しと候補の呼び出しにだけ効く(省けば `PLOT_MODEL` / `PLOT_EFFORT`)。
+    `model` / `effort` はプロットの書き直しと候補の呼び出しにだけ効く(省けば AI の client の既定の `MODEL` / `EFFORT`)。
     """
 
     def __init__(
@@ -39,8 +39,11 @@ class CompletePlot(SessionEntrypoint):
     def execute(self, s: Session) -> EpisodeRecord:
         record = save_frame(s, self.episode)
         s.commit()
+        # 登場人物が空だとプロットを書き直す材料を組めないので、枠を AI に決めさせる前に止める
+        if not has_cast(s, record.id):
+            raise ValueError(f"話 id={record.id} の登場人物(episode_character)が空。登場人物を指定してから補完する")
         if not record.plot_text.strip() or record.start is None:
             framer.frame_episode(s, self.ai, record.id)
         completed = plot_completer.complete_plot(
-            s, self.ai, record.id, self.order or None, model=self.model or PLOT_MODEL, effort=self.effort or PLOT_EFFORT)
+            s, self.ai, record.id, self.order or None, model=self.model or MODEL, effort=self.effort or EFFORT)
         return record_of(s, EpisodeRecord, completed)

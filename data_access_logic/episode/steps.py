@@ -10,7 +10,7 @@ from data_access_logic.episode import brief, framer, material, plot_completer
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.commit_episode import CommitEpisode
-from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, save_frame
+from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, has_cast, save_frame
 from data_access_logic.episode.models import (
     EpisodeBrief, EpisodeCasting, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodeSummarySource,
@@ -28,6 +28,8 @@ class SavedFrame(BaseModel):
     id: int
     # プロットか時刻が空なので、本文を書く前に枠を決める
     needs_frame: bool
+    # 登場人物(名前だけ出る人物でない行)がいるか
+    has_cast: bool
 
 
 class SummarySourcesForm(BaseModel):
@@ -84,7 +86,8 @@ class NewLocationForm(BaseModel):
 @db_step
 def save_episode_frame(s: Session, form: EpisodeForm) -> SavedFrame:
     record = save_frame(s, form)
-    return SavedFrame(id=record.id, needs_frame=not record.plot_text.strip() or record.start is None)
+    return SavedFrame(id=record.id, needs_frame=not record.plot_text.strip() or record.start is None,
+                      has_cast=has_cast(s, record.id))
 
 
 @db_step
@@ -150,7 +153,7 @@ def save_plot(s: Session, form: PlotForm) -> None:
 
 @db_step
 def known_locations(s: Session, form: LocationScope) -> list[LocationMaterial]:
-    return plot_completer.known_locations(s, form.location_id)
+    return material.known_locations(s, form.location_id)
 
 
 @db_step
