@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ai.claude_code import ai_client
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.generator import generate_character
+from data_access_logic.character.generator import birth_sources, generate_character, story_elements
 from data_access_logic.character.record import GeneratedCharacter
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.query import common_query, world_creation_query
@@ -62,8 +62,13 @@ class GenerateCharacters(SessionEntrypoint):
         created = []
         # generate_character は一人ごとに commit するので、途中で止まっても作った人物は残る
         for location_id in self.location_ids:
-            for _ in range(capped_count(rng, self.count, location_id, rooms[location_id])):
-                record = generate_character(s, self.ai, rng, location_id, self.time, self.person)
+            count = capped_count(rng, self.count, location_id, rooms[location_id])
+            if not count:
+                continue
+            # 筋書きの立場は同じ場所・時刻なら変わらないので、場所ごとに一度だけ抜き出して一人ずつサイコロで選ぶ
+            elements = story_elements(self.ai, birth_sources(s, location_id, self.time, self.person), self.time)
+            for _ in range(count):
+                record = generate_character(s, self.ai, rng, location_id, self.time, self.person, elements=elements)
                 if record is not None:
                     created.append(GeneratedCharacter(id=record.id, name=record.name, location_id=location_id))
         return created

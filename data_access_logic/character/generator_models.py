@@ -6,7 +6,7 @@ from data_access_logic import constants
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.models import CharacterBase, CharacterParameterValues
 from data_access_logic.character.record import CharacterHistoryRow
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
+from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
 from data_access_logic.meme.models import DrawnMeme, PooledMeme
@@ -118,6 +118,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
                 "二人称": parameters.second_person if parameters else None,
                 "三人称": parameters.third_person if parameters else None,
                 "口調": parameters.tone if parameters else None,
+                "方言": parameters.dialect if parameters else None,
             },
             "作者の指定": {"名前": self.hint_name, "説明": self.hint_text},
             "登場する話のプロット": self.plot_text,
@@ -153,15 +154,18 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
             "三人称": parameters.third_person if parameters else None,
             "口調": parameters.tone if parameters else None,
             "方言": parameters.dialect if parameters else None,
+            "決まっている名字": parameters.family_name if parameters else None,
             "居場所": _born_location(self.born_location),
             "同じ場所にいる人物・対象の名": self.avoided_names,
             "作者が付けたい名": self.hint_name,
         }
 
 
-def _clamped_age(value: Any, bounds: tuple[int, int] = _AGE_RANGE) -> Any:
+# 年齢の幅(人物の生成とプロットの役どころで違う)は、決まった年齢がある場合もあるので schema では限らず、
+# 呼ぶ側で丸める(`generator._person_age`)。負の値だけはここで 0 にする
+def _not_negative(value: Any) -> Any:
     try:
-        return min(max(int(value), bounds[0]), bounds[1])
+        return max(int(value), 0)
     except (TypeError, ValueError):
         return value
 
@@ -181,16 +185,22 @@ class StoryElementsDraft(BaseModel):
 class HistoryItemDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    age: int = Field(ge=0, le=_AGE_RANGE[1], description="その時の歳")
+    age: int = Field(ge=0, description="その時の歳")
     text: str = Field(description="その歳に何があり、立場・仕事・住まい・人間関係がどう変わったかの1文")
+
+    @field_validator("age", mode="before")
+    @classmethod
+    def _age(cls, value: Any) -> Any:
+        return _not_negative(value)
 
 
 _PERSON_AGE_DESCRIPTION = (
-    "現在の時刻での年齢。「登場する話のプロット」があれば、この時刻・この場所でその話の役どころ(作者の指定)を果たせる歳にする。"
-    "無ければ人物説明と矛盾しない値をあなた自身で決める。例えば老成した説明なら年長めに、幼さの残る説明なら年少めに")
+    "現在の時刻での年齢。「決まっている」の年齢が null でなければその値。"
+    f"「登場する話のプロット」があれば、この時刻・この場所でその話の役どころ(作者の指定)を果たせる歳({_SCENE_AGE_RANGE[0]}〜{_SCENE_AGE_RANGE[1]})にする。"
+    f"無ければ人物説明と矛盾しない値({_AGE_RANGE[0]}〜{_AGE_RANGE[1]})をあなた自身で決める。例えば老成した説明なら年長めに、幼さの残る説明なら年少めに")
 _HISTORY_DESCRIPTION = (
-    "来歴。生まれてから年齢の歳(現在の時刻)までの節目を、歳の順に3〜5件。人物説明の立場・仕事・住まいには、いつそうなったかの節目を必ず含める。"
-    "現在より後の節目・死は含めない")
+    "来歴。生まれてから年齢の歳(現在の時刻)までの節目を歳の順に、幼ければ0〜2件、大人なら3〜5件。"
+    "人物説明の立場・仕事・住まいには、いつそうなったかの節目を必ず含める。現在より後の節目・死は含めない")
 
 
 class PersonContentDraft(BaseModel):
@@ -198,10 +208,10 @@ class PersonContentDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(description=(
-        "現在の時刻での、具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば地の文として含め、別項目には分けない。"
+        "現在の時刻での、具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば含める。"
         "「優しい」「謎めいた」のような、誰にでも当てはまる抽象的な形容だけで済ませず、"
         "この人物固有の具体的な癖・関わり・生い立ちを最低一つ含める。口調・話し方は tone・dialect に書き、ここには書かない"))
-    age: int = Field(ge=_AGE_RANGE[0], le=_AGE_RANGE[1], description=_PERSON_AGE_DESCRIPTION)
+    age: int = Field(ge=0, description=_PERSON_AGE_DESCRIPTION)
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
     sex: str = Field(description="性別。「男」「女」に限らず、この人物に合う性のあり方を自由に決めてよい")
     build: str = Field(description="体格。背丈・肉付き・立ち姿など、生活・仕事に合う体つきを1文で")
@@ -219,7 +229,7 @@ class PersonContentDraft(BaseModel):
     @field_validator("age", mode="before")
     @classmethod
     def _age(cls, value: Any) -> Any:
-        return _clamped_age(value)
+        return _not_negative(value)
 
     @field_validator("text", "principle", "sex", "build", "first_person", "second_person", "third_person",
                      "tone", "dialect")
@@ -235,21 +245,6 @@ class PersonContentDraft(BaseModel):
         return value
 
 
-class SceneHistoryItemDraft(HistoryItemDraft):
-    age: int = Field(ge=0, le=_SCENE_AGE_RANGE[1], description="その時の歳")
-
-
-# 話のプロットの役どころから生む人物。年かさの役(上役・老人)も作れるよう、年齢の幅を広げる
-class ScenePersonContentDraft(PersonContentDraft):
-    age: int = Field(ge=_SCENE_AGE_RANGE[0], le=_SCENE_AGE_RANGE[1], description=_PERSON_AGE_DESCRIPTION)
-    history: list[SceneHistoryItemDraft] = Field(description=_HISTORY_DESCRIPTION)
-
-    @field_validator("age", mode="before")
-    @classmethod
-    def _age(cls, value: Any) -> Any:
-        return _clamped_age(value, _SCENE_AGE_RANGE)
-
-
 class NonPersonContentDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
@@ -259,13 +254,13 @@ class NonPersonContentDraft(BaseModel):
     text: str = Field(description=(
         "現在の時刻での、この対象が何であって、何を決められて、誰に対して力を持つのかが伝わる2〜3文の説明。"
         "「由緒ある」「謎めいた」のような、どの対象にも当てはまる形容だけで済ませない"))
-    age: int = Field(ge=_AGE_RANGE[0], le=_AGE_RANGE[1], description="成り立ってからの年数")
+    age: int = Field(ge=0, description="成り立ってからの年数。「決まっている」の年齢が null でなければその値")
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
 
     @field_validator("age", mode="before")
     @classmethod
     def _age(cls, value: Any) -> Any:
-        return _clamped_age(value)
+        return _not_negative(value)
 
     @field_validator("text", "principle")
     @classmethod
@@ -315,22 +310,6 @@ class NameDraft(BaseModel):
         return value
 
 
-class PolishDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    text: str = Field(description="清書した説明")
-
-    @field_validator("text")
-    @classmethod
-    def _described(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("説明が空")
-        return value
-
-
-
 class StoryElementsRequest(Material):
     time: Stamp
     stories: list[StoryPlotMaterial]
@@ -349,21 +328,6 @@ class StoryElementsRequestSerialized(StoryElementsRequest):
                 for idea in self.later_ideas],
             "筋書き": "\n\n".join(story.text for story in self.stories if story.text),
         }
-
-
-class PolishRequest(Material):
-    draft: str
-    ideas: IdeaContextMaterial
-
-
-class PolishRequestSerialized(PolishRequest):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    ideas: IdeaContextSerialized
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        return {"下書き": self.draft, "関係する設定": self.ideas.model_dump()}
 
 
 class BirthSources(Material):
@@ -420,7 +384,6 @@ class CharacterCreation(Material):
 class CompletionTarget(Material):
     """芯(text)を埋める人物・対象の、決まっている値。"""
 
-    id: int
     name: str | None = None
     kind: str
     time: Stamp
@@ -428,3 +391,5 @@ class CompletionTarget(Material):
     born_location_id: int | None = None
     age: int | None = None
     parameters: CharacterParameterValues | None = None
+    # 芯のほかに作者が書いた列(外見・ミーム・行動原理・筋書き)。核として渡す
+    hint_text: str | None = None
