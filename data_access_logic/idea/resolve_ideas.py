@@ -11,7 +11,7 @@
 新しいアイデアとして足し、`candidates` に返す。足した候補は語の `start` から `end` まで効く。
 `start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け、言えなければ省く(None)。`end` は分かるときだけ付ける。
 `hits` は語が直接当たったアイデア(`ideas` と同じく、`time` を渡せば時期の未定のものは除く)。
-話の本文なら、書く前に `ideas` から踏まえるものを選び、`candidates` と合わせて `idea.link_ideas.LinkIdeas` で話に結ぶ(スキル `episode`)。
+話の本文なら、プロットの語で呼んで造語を候補として足しておくと、本文の材料の設定に載る(スキル `episode`)。
 """
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { deleteIdea, listAllRecords, updateRecord, type Rec } from "@/lib/api";
+import { deleteIdeaDetachingChildren, listAllRecords, updateRecord, type Rec } from "@/lib/api";
 import NameId from "./NameId";
 import { buildIdeaTree, collapsibleIds, descendantIds, findNode, type IdeaNode } from "@/lib/ideaTree";
 import { useOpenPage } from "@/lib/nav";
@@ -172,10 +172,7 @@ export default function IdeaTree() {
       }
       setSaveError(null);
       try {
-        for (const child of node.children) {
-          await updateRecord("idea", child.id, { parent_idea_id: null });
-        }
-        await deleteIdea(node.id);
+        await deleteIdeaDetachingChildren(node.id, node.children.map((child) => child.id));
         await load();
       } catch (e) {
         setSaveError(T.ideaTree.deleteFailed(e instanceof Error ? e.message : String(e)));

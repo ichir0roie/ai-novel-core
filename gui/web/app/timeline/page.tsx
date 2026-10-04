@@ -694,7 +694,7 @@ export default function TimelinePage() {
     if (days !== 0 || over !== null) move(item, days, over);
   };
 
-  /** 空いた所を押したら、その日・その段の作品で話を足す(時刻とプロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
+  /** 空いた所を押したら、その日・その段の作品で話を足す(時刻・タイトル・プロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (pxPerDay === 0) return;
     const snapped = Math.floor(fromX(e.clientX - e.currentTarget.getBoundingClientRect().left));

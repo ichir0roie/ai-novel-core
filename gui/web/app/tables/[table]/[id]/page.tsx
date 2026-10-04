@@ -9,9 +9,11 @@ import Related from "@/components/Related";
 import StoryEpisodes from "@/components/StoryEpisodes";
 import {
   deleteEpisode,
+  deleteIdeaDetachingChildren,
   diff,
   getEpisodeNeighbors,
   getRecord,
+  listAllRecords,
   updateRecord,
   type EpisodeNeighbors,
   type Rec,
@@ -120,12 +122,30 @@ export default function RecordPage() {
   };
 
   const remove = async () => {
-    if (!loaded || !window.confirm(T.record.confirmDeleteEpisode(T.nameId(loaded.label, id)))) return;
-    setBusy(true);
+    if (!loaded) return;
+    const label = T.nameId(loaded.label, id);
     setError(null);
     setSaved(null);
+    let childIds: number[] = [];
+    if (table === "idea") {
+      try {
+        childIds = (await listAllRecords("idea", { parent_idea_id: id })).map((child) => Number(child.id));
+      } catch (e) {
+        setError(T.record.deleteFailed(e instanceof Error ? e.message : String(e)));
+        return;
+      }
+    }
+    const message =
+      table === "episode"
+        ? T.record.confirmDeleteEpisode(label)
+        : childIds.length > 0
+          ? T.ideaTree.confirmDeleteWithChildren(label, childIds.length)
+          : T.record.confirmDeleteIdea(label);
+    if (!window.confirm(message)) return;
+    setBusy(true);
     try {
-      await deleteEpisode(Number(id));
+      if (table === "episode") await deleteEpisode(Number(id));
+      else await deleteIdeaDetachingChildren(Number(id), childIds);
       invalidateOptions(table);
       openPage(listHref(table, loaded.record));
     } catch (e) {
@@ -188,6 +208,8 @@ export default function RecordPage() {
                       onChangeCharacterIds: (ids: number[]) => setValue({ ...value, character_ids: ids }),
                       episodeStart: value.start,
                       episodeLocationId: value.location_id,
+                      // 地図は保存した行から引くので、作品も保存した値で渡す
+                      episodeStoryId: loaded.record.story_id,
                     }
                   : {})}
               />
@@ -233,7 +255,7 @@ export default function RecordPage() {
                   )}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
-                  {table === "episode" && (
+                  {(table === "episode" || table === "idea") && (
                     <button className="danger" onClick={() => void remove()} disabled={busy}>
                       {T.record.delete}
                     </button>

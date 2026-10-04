@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Spec } from "@/components/Hint";
 import Modal from "@/components/Modal";
 import { runEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
+import { columnHint } from "@/lib/hint";
 import { useTable } from "@/lib/meta";
 import { ageAt, ageInYear } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -25,6 +27,9 @@ type CharacterSheet = Record<string, unknown> & {
   location: { location_id: number; location_name: string | null } | null;
 };
 
+// 人物の列のうち、シートの頭に出すもの
+const SHEET_KEYS = ["id", "name", "kind", "main_character"];
+
 function shown(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? T.yes : T.no;
@@ -37,7 +42,7 @@ function LevelMeter({ column, value }: { column: ColumnMeta; value: unknown }) {
   const level = choices.indexOf(String(value));
   return (
     <div className="sheet-level">
-      <span className="sheet-level-label">{column.key}</span>
+      <span className="sheet-level-label"><Spec hint={columnHint(column)}>{column.key}</Spec></span>
       <span className="sheet-level-cells">
         {choices.map((choice, i) => (
           <span key={choice} className={`sheet-level-cell ${i <= level ? "on" : ""}`} />
@@ -100,10 +105,10 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
           <div className="record-side">
             <h3>{T.characterSheet.record}</h3>
             <dl className="sheet-fields">
-              {["id", "name", "kind", "main_character"].map((key) => (
-                <div key={key}>
-                  <dt>{key}</dt>
-                  <dd>{shown(sheet[key])}</dd>
+              {meta.columns.filter((c) => SHEET_KEYS.includes(c.key)).map((c) => (
+                <div key={c.key}>
+                  <dt><Spec hint={columnHint(c)}>{c.key}</Spec></dt>
+                  <dd>{shown(sheet[c.key])}</dd>
                 </div>
               ))}
               <div>
@@ -128,7 +133,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
               </div>
               {parameterColumns.filter((c) => !c.choices).map((c) => (
                 <div key={c.key}>
-                  <dt>{c.key}</dt>
+                  <dt><Spec hint={columnHint(c)}>{c.key}</Spec></dt>
                   <dd>{shown(sheet[c.key])}</dd>
                 </div>
               ))}

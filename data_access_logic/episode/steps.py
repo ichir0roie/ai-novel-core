@@ -54,6 +54,12 @@ class MaterialForm(BaseModel):
     keywords: list[IdeaDraft]
 
 
+class BriefForm(BaseModel):
+    episode_id: int
+    # プロット・話のセッションの行・今の本文から AI が挙げた、アイデアと照らす語
+    keywords: list[IdeaDraft]
+
+
 class FrameForm(BaseModel):
     episode_id: int
     draft: EpisodeFrameDraft
@@ -140,13 +146,13 @@ def episode_casting(s: Session, form: RowId) -> EpisodeCasting:
 
 
 @db_step
-def brief_targets(s: Session, form: RowId) -> SummaryTargets:
+def brief_targets(s: Session, form: RowId) -> brief.BriefTargets:
     return brief.brief_targets(s, form.id)
 
 
 @db_step
-def episode_brief(s: Session, form: RowId) -> EpisodeBrief:
-    return brief.episode_brief(s, form.id)
+def episode_brief(s: Session, form: BriefForm) -> EpisodeBrief:
+    return brief.episode_brief(s, form.episode_id, form.keywords)
 
 
 @db_step

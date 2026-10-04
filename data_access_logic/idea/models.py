@@ -161,8 +161,8 @@ class IdeaHistoryWholeMaterial(Material):
     knowers: list[KnowerMaterial]
 
 
-class LinkedIdeaMaterial(RelatedIdeaMaterial):
-    """話に結んだアイデア。語り部と本文を書く Claude の材料(`links.linked_ideas_at`)。"""
+class WholeIdeaMaterial(RelatedIdeaMaterial):
+    """作者の目で読むアイデア。語り部と本文を書く Claude の材料(`whole.whole_ideas_at`)。"""
 
     # その時刻までに始まった履歴の行。場所・終わりを問わず、非公開の行も含む
     histories: list[IdeaHistoryWholeMaterial]
@@ -184,16 +184,16 @@ def idea_for_prompt(related: RelatedIdeaMaterial, with_text: bool) -> dict[str, 
     return shown
 
 
-def linked_idea_for_prompt(linked: LinkedIdeaMaterial) -> dict[str, Any]:
+def whole_idea_for_prompt(whole: WholeIdeaMaterial) -> dict[str, Any]:
     return {
-        **idea_for_prompt(linked, with_text=True),
+        **idea_for_prompt(whole, with_text=True),
         "履歴(古い順)": [
             {"呼び名": history.name, "受け止め方": history.detail,
              "効く場所": None if history.location is None else history.location.name,
              "始まり": None if history.start is None else str(history.start),
              "終わり": None if history.end is None else str(history.end),
              "非公開": history.private, "知る相手": knowers_for_prompt(history.knowers)}
-            for history in linked.histories],
+            for history in whole.histories],
     }
 
 

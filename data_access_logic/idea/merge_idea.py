@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """アイデア `source_id`(主に候補)を `target_id` へまとめる、claude が呼ぶ入口。
 
-`source_id` に結んであった話と、`source_id` の履歴(`idea_history`。作中での呼び名)は
-`target_id` へ付け替え、`source_id` は消す。
+`source_id` の履歴(`idea_history`。作中での呼び名)は `target_id` へ付け替え、`source_id` は消す。
 """
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
-from data_access_logic.idea.links import relink
 from data_access_logic.idea.record import IdeaName
 from data_access_logic.query import common_query
 from db.schema import Idea
@@ -20,7 +18,6 @@ from db.schema import Idea
 class MergedIdea(BaseModel):
     merged: IdeaName
     into: IdeaName
-    links_moved: int
 
 
 class MergeIdea(CommitEntrypoint):
@@ -40,7 +37,6 @@ class MergeIdea(CommitEntrypoint):
         for history in list(source.histories):
             source.histories.remove(history)
             target.histories.append(history)
-        merged = MergedIdea(merged=IdeaName.model_validate(source), into=IdeaName.model_validate(target),
-                            links_moved=relink(s, source.id, target.id))
+        merged = MergedIdea(merged=IdeaName.model_validate(source), into=IdeaName.model_validate(target))
         s.delete(source)
         return merged

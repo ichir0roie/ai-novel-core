@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
-from data_access_logic.idea.links import relink
 from data_access_logic.idea.record import IdeaName
 from data_access_logic.query import common_query
 from db.schema import Idea
@@ -24,6 +23,5 @@ class DeleteIdea(CommitEntrypoint):
             raise ValueError(f"idea_id={self.idea_id} には下位のアイデアが残っている。先にそちらを消すか繋ぎ直す")
 
         deleted = IdeaName.model_validate(record)
-        relink(s, record.id, None)
         s.delete(record)
         return deleted

@@ -8,6 +8,7 @@ import typing
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy import Boolean, Column, Integer, JSON, Numeric, func, select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from data_access_logic.label import LABEL_COLUMNS
@@ -24,6 +25,9 @@ _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "idea": {"histories": "flow"},
     "character_relation": {"histories": "flow"},
 }
+# 行の知る相手を GUI で選べる子リスト。人物の来歴は、GUI が knowers を渡すと新しい行の知る相手を本人にする既定
+# (`db/child_lists.py` の `replaced_histories`)が効かなくなるので出さない
+_CHILD_LIST_KNOWERS: dict[str, set[str]] = {"idea": {"histories"}}
 
 
 def _column_type(column: Column) -> str:
@@ -117,8 +121,10 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
         child = child_model(spec.model, name)
         row_fields = _row_model(spec, name).model_fields
         columns = [column_meta(child.__table__.columns[key], row_fields.get(key)) for key in child_columns(spec.model, name)]
-        result.append(ChildListMeta(name=name, columns=columns,
-                                    display=display_by_name.get(name, "table")))
+        result.append(ChildListMeta(name=name, table=child.__table__.name, columns=columns,
+                                    comment=sa_inspect(spec.model).relationships[name].doc,
+                                    display=display_by_name.get(name, "table"),
+                                    knowers=name in _CHILD_LIST_KNOWERS.get(spec.name, set())))
     return result
 
 

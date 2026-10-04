@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from ai.claude_code import ai_client
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.character.form import CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm
@@ -24,7 +25,7 @@ from data_access_logic.episode_session.read_turn import ReadTurn
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
-from data_access_logic.idea.link_ideas import LinkIdeas
+from data_access_logic.idea.models import IdeaDraftByAI, IdeaDraftsByAI
 from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
@@ -203,7 +204,7 @@ def test_read_knowledge_skips_unrelated_cast(shown, world):
 
 
 def _secrets(shown, world) -> None:
-    """花子に公開・非公開の来歴を、関係に来歴を、話に結んだアイデアに公開・非公開の履歴を足す(話の時刻は 1200 年)。"""
+    """花子に公開・非公開の来歴を、関係に来歴を、アイデアに公開・非公開の履歴を足す(話の時刻は 1200 年)。"""
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(
         id=hanako, appearance="髪が赤い",
@@ -219,7 +220,6 @@ def _secrets(shown, world) -> None:
         IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
         IdeaHistoryRow(name="術の真名", private=True, knowers=[KnowerRow(knower_id=taro)]),
         IdeaHistoryRow(start="1300/01/01", name="先の呼び名")])))
-    shown(LinkIdeas(idea_ids=[world.idea_id], episode_id=world.episode_id))
 
 
 # 作者の目で読む材料には、芯・来歴・履歴を知る相手に関わらずすべて渡し、非公開かどうかと、話の時刻までに知った相手を添える。
@@ -249,20 +249,29 @@ def test_read_stage(shown, world):
     assert result["この話"]["プロット"] == "市で出会う"
     assert result["場所(広い順)"] == ["テスト星", "テスト都"]
     assert result["場所の説明"] == "テスト用の都"
+    # 語り部には人物の表層と知り合いの組だけを渡し、芯・来歴・関係の説明・設定は渡さない
     hanako_row = next(member for member in result["登場人物"] if member["人物id"] == hanako)
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
-                          "外見": "髪が赤い", "人物像": "テスト花子の説明", "人物像を知る相手": HANAKO_KNOWERS,
-                          "来歴(古い順)": HANAKO_HISTORIES}
-    assert result["登場人物どうしの関係"] == RELATIONS
-    [idea] = result["関係する設定"]
-    # 名前は話の場所・時刻に効く公開の履歴から
-    assert (idea["名前"], idea["作中での受け止め方"]) == ("テスト術", "都での呼び名")
-    assert idea["履歴(古い順)"] == IDEA_HISTORIES
+                          "外見": "髪が赤い"}
+    assert result["知り合い"] == [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
+    assert set(result) == {"この話", "場所(広い順)", "場所の説明", "登場人物", "知り合い"}
 
 
-def test_read_episode_brief(shown, world, mock_ai):
-    _, hanako = world.character_ids
+def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
+    taro, hanako = world.character_ids
     _secrets(shown, world)
+    [turn] = shown(AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=taro, request="日が暮れた")]))
+    shown(AnswerTurn(record_id=turn["id"], answer=TurnAnswer(action="テスト術で灯をともす")))
+    sources = []
+
+    def generate(prompt, output, *args, **kwargs):
+        # 設定の語は、話のセッションの行に出た語だけを挙げたことにする
+        if output is IdeaDraftsByAI:
+            sources.append(prompt)
+            return output(ideas=[IdeaDraftByAI(keyword="テスト術", variants=[], description="灯をともす術", coined=True,
+                                               kind="技術", start=None, end=None)] if "テスト術" in prompt else [])
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
 
     result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
@@ -270,8 +279,12 @@ def test_read_episode_brief(shown, world, mock_ai):
     hanako_row = next(member for member in episode["登場人物"] if member["人物id"] == hanako)
     assert (hanako_row["人物像を知る相手"], hanako_row["来歴(古い順)"]) == (HANAKO_KNOWERS, HANAKO_HISTORIES)
     assert episode["登場人物の関係"] == RELATIONS
-    [idea] = episode["関係する設定"]
-    assert (idea["アイデアid"], idea["名前"]) == (world.idea_id, "テスト術")
+    # 語はプロットと話のセッションの行から、元ごとに挙げる
+    assert any("市で出会う" in prompt for prompt in sources)
+    assert any("テスト術で灯をともす" in prompt for prompt in sources)
+    ideas = {idea["アイデアid"]: idea for idea in episode["設定"]}
+    idea = ideas[world.idea_id]
+    assert idea["名前"] == "テスト術"
     assert idea["履歴(古い順)"] == IDEA_HISTORIES
 
 

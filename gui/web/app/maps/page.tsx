@@ -34,6 +34,8 @@ export default function MapsPage() {
   const focus = Number(search.get("location")) || null;
   // 作品から飛んできたとき。話の場所を作品の中の順に結んで描く
   const storyId = Number(search.get("story")) || null;
+  // 話から飛んできたとき。作品の道筋の中でその話の立ち寄りを選んでおく
+  const episodeId = Number(search.get("episode")) || null;
   const [data, setData] = useState<MapsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [planetIndex, setPlanetIndex] = useState(0);
@@ -50,10 +52,12 @@ export default function MapsPage() {
         setData(result);
         setRoute(story);
         if (story) {
-          // 話の場所が一番多く立つ星から見せる
+          const visit = episodeId == null ? undefined : routeVisits(story.stops).find((v) => v.stops.some((stop) => stop.episode_id === episodeId));
+          if (visit) setSelected(visit.n);
+          // 選んだ話の星、無ければ話の場所が一番多く立つ星から見せる
           const counts = new Map<number, number>();
           for (const stop of story.stops) if (stop.planet_id != null) counts.set(stop.planet_id, (counts.get(stop.planet_id) ?? 0) + 1);
-          const best = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+          const best = visit?.planetId ?? [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
           const index = result.planets.findIndex((pl) => pl.planet.id === best);
           if (index >= 0) setPlanetIndex(index);
           return;
@@ -65,7 +69,7 @@ export default function MapsPage() {
         if (result.planets[index].points.some((p) => p.id === focus)) setOrigin(focus);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [focus, storyId]);
+  }, [focus, storyId, episodeId]);
 
   const entry = data?.planets[planetIndex] ?? null;
   const points = useMemo(() => (entry?.points ?? []).filter((p): p is Point => p.lon != null && p.lat != null), [entry]);
@@ -100,6 +104,11 @@ export default function MapsPage() {
     if (!el || !v) return;
     el.scrollTo({ left: frame.x(v.lon) - el.clientWidth / 2, top: frame.y(v.lat) - el.clientHeight / 2, behavior: "smooth" });
   }, [here, selected, frame]);
+  // 選んだ立ち寄りの行が見えるよう、横の一覧もスクロールする
+  const sideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    sideRef.current?.querySelector("tr.on")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selected, route]);
 
   if (error) return <div className="status error">{error}</div>;
   if (!data) return <div className="status info">{T.loading}</div>;
@@ -382,7 +391,7 @@ export default function MapsPage() {
               </g>
             </svg>
           </div>
-          <aside className="viz-side">
+          <aside className="viz-side" ref={sideRef}>
             {route ? (
               <>
                 <div className="viz-head">

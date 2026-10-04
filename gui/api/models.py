@@ -40,12 +40,18 @@ ChildListDisplay = Literal["table", "periodic", "flow"]
 
 class ChildListMeta(BaseModel):
     name: str
+    # 子の行を持つテーブル
+    table: str
     columns: list[ColumnMeta]
+    # 子の一覧の仕様(`db/schema.py` の relationship の doc)
+    comment: str | None = None
     # GUI での見せ方。"table"(既定): 素朴な編集可能な表。
     # "periodic": 期間(start・end)ごとの値を、期間を列にした読み取り専用の表 + モーダル編集で出す
     # (人物のパラメータ・居場所)。"flow": 本文の下に続けて、上から下へ流れる読み取り専用の札 + モーダル編集で
     # 出す(アイデアの呼び名。detail の注釈が長くなりがちなので、期間を列にする表よりこちらが読みやすい)
     display: ChildListDisplay = "table"
+    # 行ごとに知る相手(`knowers`。`data_access_logic/knowers.py` の `KnowerRow` の配列)を、人物を選んで足す欄を出すか
+    knowers: bool = False
 
 
 class TableMeta(BaseModel):

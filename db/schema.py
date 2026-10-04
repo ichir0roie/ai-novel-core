@@ -108,7 +108,9 @@ class Location(TextBase):
 
     name: Mapped[str | None] = mapped_column(String, sort_order=200)
     kind: Mapped[str | None] = mapped_column(String, sort_order=210)
-    parent_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("location.id"), sort_order=220)
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("location.id"),
+        comment="一つ上の場所。断面・知る相手・アイデアの効く場所は、この木をたどって配下の場所まで含む", sort_order=220)
 
     # 位置は**一つの座標系だけ**で持つ。経度・緯度・高度で持ち、
     # **どこを原点とするかは星ごとに決めて、その星の text に書く**。
@@ -139,7 +141,10 @@ class Location(TextBase):
     start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=310)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=320)
 
-    active_random_generation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    active_random_generation: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="ランダム生成の対象にするか。出来事の生成で新設された子の場所は親の値を継ぐ。"
+        "場所を名指しする出来事の生成(GenerateEvent)はこの値を見ない")
 
     # 自分の親(一つ上の場所)。木をのぼって道筋(location_path)を組むのに使う。
     # 書き込みは常に parent_id を直に触るので、どちらも読み取り専用にしておく
@@ -168,14 +173,18 @@ class Event(EventSeededMixin, MemeSeededMixin, TextBase):
     __tablename__ = "event"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
-    # 断面(ReadBrief)に出すかどうかだけを持つ。分類は name/text の書き方で表す。
-    hidden: Mapped[bool] = mapped_column(Boolean, default=False, sort_order=210)
+    hidden: Mapped[bool] = mapped_column(
+        Boolean, default=False,
+        comment="場所の断面(ReadBrief)に出さないか。true なら full で読むときだけ出す。分類は持たず、name・text の書き方で表す",
+        sort_order=210)
     time: Mapped[Stamp] = mapped_column(StampType, index=True, sort_order=220)
 
-    parent_event_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("event.id"), sort_order=230)
+    parent_event_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("event.id"), comment="上位の出来事(この出来事を含む大きな出来事)", sort_order=230)
 
     location_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("location.id"), index=True, sort_order=240)
+        Integer, ForeignKey("location.id"), index=True,
+        comment="起きた場所。場所の断面(ReadBrief)は、その場所と配下で起きた出来事を読む", sort_order=240)
     location: Mapped[Location | None] = relationship(lazy="noload")
 
     # 行動もここに入る(人物の行動に別表は無い)。誰の行動かは
@@ -416,14 +425,20 @@ class Character(EventSeededMixin, ContentBase):
 
     parameters: Mapped[list[CharacterParameter]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterParameter.id")
+        order_by="CharacterParameter.id",
+        doc="名字・体格・口調・性格を、変わった時ごとに一行で持つ。行は start から先ずっと効き、後に始まる行が上書きする。"
+        "一番早く始まる行の start が誕生")
     locations: Mapped[list[CharacterLocation]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterLocation.start.desc().nulls_last()"
+        order_by="CharacterLocation.start.desc().nulls_last()",
+        doc="住まい・拠点を期間ごとに一行で持つ。一番古い行が出自。出来事の当事者はこの居場所から選び、"
+        "場所を知る相手にした本文・来歴は、その時刻にそこ(配下も含む)に住む人物が知る"
     )
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterHistory.start.desc().nulls_last()"
+        order_by="CharacterHistory.start.desc().nulls_last()",
+        doc="来歴を、起きた年ごとに一行で持つ。話・出来事には、その時刻の年までに始まった行だけを渡す。"
+        "年が空の行は構想で、作者だけが読む。非公開の行は知る相手だけが知る"
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",
@@ -431,7 +446,9 @@ class Character(EventSeededMixin, ContentBase):
     )
     knowers: Mapped[list["CharacterKnower"]] = relationship(
         foreign_keys="CharacterKnower.character_id", back_populates="character", lazy="selectin",
-        cascade="all, delete-orphan", order_by="CharacterKnower.id")
+        cascade="all, delete-orphan", order_by="CharacterKnower.id",
+        doc="人物の芯(text)を知る相手(人物か場所のどちらか)と、知った時刻。"
+        "足すとき本人が入る。本人も知らない芯(記憶を失った人物など)なら本人を外す")
 
 
 
@@ -527,10 +544,13 @@ class CharacterLocation(Base):
     __tablename__ = "character_location"
 
     character_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("character.id"), sort_order=100)
-    location_id: Mapped[int] = mapped_column(Integer, ForeignKey("location.id"), sort_order=110)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("location.id"), comment="住まい・拠点にする場所", sort_order=110)
 
-    start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=120)
-    end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=130)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="住み始めた時刻。空なら初めから", sort_order=120)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="離れた時刻(この時刻からはいない)。空ならまだいる", sort_order=130)
 
     character: Mapped[Character | None] = relationship(back_populates="locations", lazy="noload")
     location: Mapped[Location] = relationship(lazy="noload")
@@ -568,7 +588,9 @@ class CharacterRelation(TextBase):
 
     histories: Mapped[list["CharacterRelationHistory"]] = relationship(
         back_populates="relation_row", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterRelationHistory.start.desc().nulls_last()")
+        order_by="CharacterRelationHistory.start.desc().nulls_last()",
+        doc="関係の中で起きたこと・変わったことを、起きた年ごとに一行で持つ。話・人物役には、その時刻の年までに始まった行だけを渡す。"
+        "年が空の行は構想で、作者だけが読む")
 
 
 class CharacterRelationHistory(Base):
@@ -664,13 +686,15 @@ class Idea(TextBase):
 
     histories: Mapped[list["IdeaHistory"]] = relationship(
         back_populates="idea", lazy="selectin", cascade="all, delete-orphan",
-        order_by="IdeaHistory.start.desc().nulls_last()")
+        order_by="IdeaHistory.start.desc().nulls_last()",
+        doc="作中での呼び名と受け止め方を、場所・時代ごとに一行で持つ。作中の人物が知ることのできるのはこの行だけ(本文は作者だけが読む)。"
+        "非公開の行は知る相手だけが知り、作中の呼び名にも使わない")
 
 
 class IdeaHistory(Base):
     """アイデアの履歴。作中での呼び名と受け止め方(作中の人物が知っていること)を、場所・時代ごとに一行で持つ。
 
-    アイデアそのものは話に結べば効く期間を問わず読むが、履歴は話の時刻・場所に効く行だけを使う。
+    語り部と話を書くセッションの Claude には、話の時刻までに始まったアイデアをすべて渡し、作中の呼び名は話の時刻・場所に効く行から選ぶ。
 
     `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
     当てはまる行が無ければ本質の `name` をそのまま使う(`data_access_logic/idea/alias.py` の `called`)。
@@ -746,7 +770,9 @@ class Episode(EventSeededMixin, MemeSeededMixin, ContentBase):
         String, nullable=False, default="", server_default="",
         comment="本文。まだ書いていない話(枠だけ)は空文字", sort_order=10000)
 
-    story_id: Mapped[int] = mapped_column(Integer, ForeignKey("story.id"), sort_order=200)
+    story_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("story.id"), comment="属する作品。章の話は章の作品に付け、書くときは親の作品の筋書きまでたどる",
+        sort_order=200)
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
@@ -831,16 +857,6 @@ class EpisodeCharacterSession(Base):
     aim: Mapped[str | None] = mapped_column(String, comment="この手番での人物の狙い", sort_order=180)
 
     character: Mapped["Character"] = relationship(lazy="noload")
-
-
-class EpisodeIdea(Base):
-    """話のプロットから引いて本文が踏まえたアイデア。"""
-
-    __tablename__ = "episode_idea"
-    __table_args__ = (UniqueConstraint("episode_id", "idea_id"),)
-
-    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
-    idea_id: Mapped[int] = mapped_column(Integer, ForeignKey("idea.id"), index=True, sort_order=110)
 
 
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、

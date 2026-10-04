@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """話の本文を、`claude -p` の生成関数に任せず、このセッションの Claude が自分で書く・直すための材料。
 
-本文の材料(登場人物の直近の出来事・関係、場所の出来事、関係する設定)は話に結んだ登場人物・場所・アイデアから引くので、
-先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結び、プロットの語を `ResolveIdeas` で
-アイデアと照らして `LinkIdeas` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
+本文の材料(登場人物の直近の出来事・関係、場所の出来事)は話に結んだ登場人物・場所から引くので、
+先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む
+(スキル `episode` / `revise-episode`)。設定は話に結ばず、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。
 本文は Claude が `CommitEpisode` で確定する。
-どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える → `episode_casting` / `episode_brief`)に分けてある。
+どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える(本文の材料は、語も挙げる) →
+`episode_casting` / `episode_brief`)に分けてある。
 流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
@@ -27,11 +28,15 @@ from data_access_logic.episode.material import (
 )
 from data_access_logic.episode.summary import appearances, past_episodes, recent_episodes
 from data_access_logic.event.summary import events_of
-from data_access_logic.idea.links import linked_ideas_at
+from data_access_logic.episode_session.turns import session_select
+from data_access_logic.idea.context import resolve_ideas
+from data_access_logic.idea.models import IdeaDraft
+from data_access_logic.idea.whole import whole_ideas
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Episode
+from db.stamp import Stamp
 
 
 def _episode(s: Session, episode_id: int) -> Episode:
@@ -80,19 +85,36 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
     )
 
 
-def brief_targets(s: Session, episode_id: int) -> SummaryTargets:
+class BriefTargets(SummaryTargets):
+    # 設定と照らす語を AI に挙げさせる元(`keywords_of`)。プロット・話のセッションの行・今の本文の、空でないもの
+    word_sources: list[str]
+    start: Stamp
+
+
+def _word_sources(s: Session, episode: Episode) -> list[str]:
+    rows = s.scalars(session_select(episode.id)).all()
+    session = "\n".join(text for row in rows
+                        for text in (row.request, row.thought, row.action, row.speech, row.aim) if text)
+    return [text for text in (episode.plot_text, session, episode.main_text) if text.strip()]
+
+
+def brief_targets(s: Session, episode_id: int) -> BriefTargets:
     episode = _episode(s, episode_id)
-    return summary_targets_of(s, episode, episode.start)
+    targets = summary_targets_of(s, episode, episode.start)
+    return BriefTargets(**targets.model_dump(), word_sources=_word_sources(s, episode), start=episode.start)
 
 
-def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
-    """要約は揃えてある前提でそのまま読む。"""
+def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeBriefSerialized:
+    """要約は揃えてある前提でそのまま読む。`keywords` の語をアイデアと照らし、当たったものとその上位・下位を設定に渡す。
+    当たらなかった造語は候補として足し、設定に入れる(`resolve_ideas`)。"""
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)
     time = main_episode.start
     location_id = episode.location_id
     characters = cast_characters(episode)
     mentioned = mentioned_in(episode)
+    context = resolve_ideas(s, keywords, location_id, time)
+    idea_ids = [*(related.idea.id for related in context.related), *(candidate.id for candidate in context.candidates)]
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
@@ -104,7 +126,7 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
         secrets={character.id: secrets_at(s, character, time) for character in [*characters, *mentioned]},
         relations=relations_at(s, characters, time),
         appearances=appearances(s, episode, characters),
-        ideas=linked_ideas_at(s, episode, location_id, time),
+        ideas=whole_ideas(s, idea_ids, location_id, time),
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],
         later_events=events_of(s, later_events_select(location_id, characters, time)),

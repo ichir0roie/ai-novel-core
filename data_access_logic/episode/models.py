@@ -8,7 +8,7 @@ from data_access_logic.character.models import (
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.idea.models import (
-    IdeaContextMaterial, IdeaContextSerialized, LinkedIdeaMaterial, linked_idea_for_prompt,
+    IdeaContextMaterial, IdeaContextSerialized, WholeIdeaMaterial, whole_idea_for_prompt,
 )
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material, Named
@@ -247,8 +247,9 @@ class EpisodeBrief(Material):
     relations: list[CharacterRelationLine]
     # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
     appearances: list[CharacterEpisode]
-    # 話に結んだアイデア(`episode_idea`)。効く期間では絞らず、呼び名は話の時刻・場所に効く履歴から。履歴の行はすべて添える
-    ideas: list[LinkedIdeaMaterial]
+    # プロット・話のセッションの行・今の本文から挙げた語に当たったアイデアとその上位・下位、足した候補。
+    # 呼び名は話の時刻・場所に効く履歴から。履歴の行は話の時刻までに始まったものをすべて添える
+    ideas: list[WholeIdeaMaterial]
     # 古い順
     location_events: list[EventMaterial]
     later_events: list[EventMaterial]
@@ -294,7 +295,7 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump(),
                               **secrets_for_prompt(self.secrets[member.character.id])} for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
-                "関係する設定": [{"アイデアid": linked.idea.id, **linked_idea_for_prompt(linked)} for linked in self.ideas],
+                "設定": [{"アイデアid": whole.idea.id, **whole_idea_for_prompt(whole)} for whole in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
             },

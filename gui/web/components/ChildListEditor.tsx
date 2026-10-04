@@ -1,12 +1,15 @@
 "use client";
 
-import { Fragment, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type FocusEvent, type ReactNode } from "react";
 import type { ChildListMeta, ColumnMeta, Rec } from "@/lib/api";
 import FieldInput, { AutoGrowTextarea, CHILD_FREEFORM_TEXT_KEYS } from "./FieldInput";
+import { Spec } from "./Hint";
+import KnowerList from "./KnowerList";
 import Modal from "./Modal";
 import NameId from "./NameId";
 import { useOptions } from "./ReferenceSelect";
 import StampInput from "./StampInput";
+import { columnHint, columnsHint } from "@/lib/hint";
 import { T } from "@/lib/text";
 
 /** スキーマに無い、行から計算するだけの読み取り専用の列(居場所の期間から出す年齢など)。指定した列の右に挿む。 */
@@ -42,13 +45,18 @@ function formatDateOnly(value: unknown): string {
 
 /** 札 1 枚ぶん(項目名+値)。実在の列(誠実性など)だけでなく、期間・年齢のように
  * 複数の列から合成する項目もこの形にそろえて、同じ ChipGrid で並べられるようにする。 */
-type Chip = { key: string; label: ReactNode; title?: string; render: (row: Rec) => ReactNode };
+type Chip = { key: string; label: ReactNode; hint?: string; render: (row: Rec) => ReactNode };
+
+/** 札・1 行の項目の名前。仕様があればかざすと出す。 */
+function ChipLabel({ chip }: { chip: Chip }) {
+  return chip.hint ? <Spec hint={chip.hint}>{chip.label}</Spec> : <>{chip.label}</>;
+}
 
 function chipOf(column: ColumnMeta): Chip {
   return {
     key: column.key,
     label: column.key,
-    title: column.comment ?? column.key,
+    hint: columnHint(column),
     render: (row) => <ReadValue column={column} value={row[column.key]} />,
   };
 }
@@ -61,8 +69,8 @@ function ChipGrid({ chips, row }: { chips: Chip[]; row: Rec }) {
   return (
     <div className="chipgrid">
       {chips.map((c) => (
-        <div key={c.key} className="chip" title={c.title}>
-          <div className="chip-label">{c.label}</div>
+        <div key={c.key} className="chip">
+          <div className="chip-label"><ChipLabel chip={c} /></div>
           <div className="chip-value">{c.render(row)}</div>
         </div>
       ))}
@@ -73,8 +81,8 @@ function ChipGrid({ chips, row }: { chips: Chip[]; row: Rec }) {
 /** 1 行を丸ごと使う項目(期間・体格など)。項目名と値を「キー | 値」で横に並べ、左詰めにする。 */
 function SoloField({ chip, row }: { chip: Chip; row: Rec }) {
   return (
-    <div className="solo-field" title={chip.title}>
-      <span className="solo-key">{chip.label}</span>
+    <div className="solo-field">
+      <span className="solo-key"><ChipLabel chip={chip} /></span>
       <span className="solo-sep">|</span>
       <span className="solo-value">{chip.render(row)}</span>
     </div>
@@ -97,7 +105,7 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
     consumed.add("end");
     const startAge = extraColumns.find((e) => e.after === "start");
     const endAge = extraColumns.find((e) => e.after === "end");
-    const period: Chip = { key: "__period", label: "start ~ end", render: (row) => `${formatDateOnly(row.start)} ~ ${formatDateOnly(row.end)}` };
+    const period: Chip = { key: "__period", label: "start ~ end", hint: columnsHint([byKey.get("start"), byKey.get("end")]), render: (row) => `${formatDateOnly(row.start)} ~ ${formatDateOnly(row.end)}` };
     soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={period} row={row} /> });
     if (startAge && endAge) {
       const age: Chip = { key: "__age", label: T.record.ageAt, render: (row) => `${startAge.render(row)} ~ ${endAge.render(row)}` };
@@ -107,7 +115,7 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
     // 終わりを持たない行(人物のパラメータ・来歴)は、始まりから先ずっと効く
     consumed.add("start");
     const startAge = extraColumns.find((e) => e.after === "start");
-    const since: Chip = { key: "__period", label: "start ~ end", render: (row) => `${formatDateOnly(row.start)} ~` };
+    const since: Chip = { key: "__period", label: "start ~ end", hint: columnsHint([byKey.get("start")]), render: (row) => `${formatDateOnly(row.start)} ~` };
     soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={since} row={row} /> });
     if (startAge) {
       const age: Chip = { key: "__age", label: T.record.ageAt, render: (row) => `${startAge.render(row)} ~` };
@@ -210,20 +218,29 @@ function FlowCard({
   const otherLineColumns = meta.columns.filter(
     (c) => !CHILD_FREEFORM_TEXT_KEYS.has(c.key) && c.key !== "start" && c.key !== "end" && c.key !== "name");
 
-  // クリック・タブでカードの外へ焦点が移ったら編集を終える。マウスのクリックでは relatedTarget が
-  // 当てにならないブラウザがあるので、一拍置いて document.activeElement がカードの中かどうかで見る。
-  const stopIfFocusLeft = () => {
-    window.setTimeout(() => {
-      if (!ref.current?.contains(document.activeElement)) onStopEdit();
-    }, 0);
+  // カードの外をクリックするか、Tab でカードの外へ焦点が移ったら編集を終える。カードの欄から開いた選択のモーダル
+  // (場所の木など)は body の直下に描かれるので、モーダルの中もカードの中とみなす。焦点の行き先(activeElement)では
+  // 見ない: モーダルを開くと焦点がその入力欄へ、閉じると body へ落ち、どちらも「外へ出た」と取り違えてモーダルごと消える
+  const outside = (target: EventTarget | null) =>
+    target instanceof Element && !ref.current?.contains(target) && !target.closest(".modal-backdrop");
+  useEffect(() => {
+    if (!editing) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (outside(e.target)) onStopEdit();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  });
+  const stopIfTabbedOut = (e: FocusEvent) => {
+    if (outside(e.relatedTarget)) onStopEdit();
   };
 
   return (
-    <div ref={ref} className={`flow-card ${editing ? "editing" : ""}`} onClick={editing ? undefined : onEdit} onBlur={editing ? stopIfFocusLeft : undefined}>
+    <div ref={ref} className={`flow-card ${editing ? "editing" : ""}`} onClick={editing ? undefined : onEdit} onBlur={editing ? stopIfTabbedOut : undefined}>
       <div className="flow-line">
         <span className="flow-index">#{index + 1}</span>
         {nameColumn && (
-          <div className="flow-field flow-name" title={nameColumn.comment ?? nameColumn.key}>
+          <div className="flow-field flow-name" data-hint={columnHint(nameColumn)}>
             {editing ? (
               <FieldInput column={nameColumn} value={row[nameColumn.key]} onChange={(v) => onChange(nameColumn.key, v)} compact />
             ) : (
@@ -243,7 +260,9 @@ function FlowCard({
               {hasEnd && <StampInput value={(row.end as string | null) ?? null} onChange={(v) => onChange("end", v)} />}
             </span>
           ) : (
-            <span className="flow-period">{formatDateOnly(row.start)} ~ {hasEnd ? formatDateOnly(row.end) : ""}</span>
+            <span className="flow-period" data-hint={columnsHint(meta.columns.filter((c) => c.key === "start" || c.key === "end"))}>
+              {formatDateOnly(row.start)} ~ {hasEnd ? formatDateOnly(row.end) : ""}
+            </span>
           )
         )}
         {extraColumns.filter((extra) => extra.after === "start").map((extra) => (
@@ -254,8 +273,8 @@ function FlowCard({
           const flag = column.type === "boolean";
           if (flag && !editing && !row[column.key]) return null;
           return (
-            <div key={column.key} className="flow-field" title={column.comment ?? column.key}>
-              {flag && <span className="flow-flag">{column.key}</span>}
+            <div key={column.key} className="flow-field" data-hint={flag ? undefined : columnHint(column)}>
+              {flag && <span className="flow-flag"><Spec hint={columnHint(column)}>{column.key}</Spec></span>}
               {editing ? (
                 <FieldInput column={column} value={row[column.key]} onChange={(v) => onChange(column.key, v)} compact />
               ) : (
@@ -279,6 +298,7 @@ function FlowCard({
           )}
         </div>
       ))}
+      {meta.knowers && <KnowerList knowers={(row.knowers as Rec[] | null) ?? []} onChange={(knowers) => onChange("knowers", knowers)} />}
     </div>
   );
 }
@@ -351,7 +371,7 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
                 <th />
                 {meta.columns.map((column) => (
                   <Fragment key={column.key}>
-                    <th title={column.comment ?? column.key}>{column.key}</th>
+                    <th><Spec hint={columnHint(column)}>{column.key}</Spec></th>
                     {extrasAfter(column.key).map((extra) => (
                       <th key={extra.key} className="hint">
                         {extra.label}
@@ -411,8 +431,8 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
           <div className="form">
             {meta.columns.map((column) => (
               <div key={column.key} className="field">
-                <label title={column.comment ?? ""}>
-                  {column.key}
+                <label>
+                  <Spec hint={columnHint(column)}>{column.key}</Spec>
                 </label>
                 <FieldInput column={column} value={rows[editing][column.key]} onChange={(v) => update(editing, column.key, v)} />
               </div>

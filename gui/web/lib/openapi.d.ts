@@ -397,14 +397,23 @@ export interface components {
         ChildListMeta: {
             /** Name */
             name: string;
+            /** Table */
+            table: string;
             /** Columns */
             columns: components["schemas"]["ColumnMeta"][];
+            /** Comment */
+            comment?: string | null;
             /**
              * Display
              * @default table
              * @enum {string}
              */
             display: "table" | "periodic" | "flow";
+            /**
+             * Knowers
+             * @default false
+             */
+            knowers: boolean;
         };
         /** ColumnMeta */
         ColumnMeta: {

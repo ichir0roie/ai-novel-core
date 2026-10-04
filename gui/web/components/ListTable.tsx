@@ -1,6 +1,8 @@
 "use client";
 
 import type { RecordList, TableMeta } from "@/lib/api";
+import { Spec } from "./Hint";
+import { columnHint } from "@/lib/hint";
 import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { T } from "@/lib/text";
 
@@ -41,12 +43,15 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
   const pageIds = (data?.items ?? []).map((item) => Number(item.id));
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selection?.selected.has(id));
 
-  const sortHeader = (key: string, label: string) => (
-    <th key={key} title={key} className={`sortable ${key === sort ? "sorted" : ""}`} onClick={() => onSort(key)}>
-      {label}
+  const sortHeader = (key: string, label: string) => {
+    const column = meta.columns.find((c) => c.key === key);
+    return (
+    <th key={key} className={`sortable ${key === sort ? "sorted" : ""}`} onClick={() => onSort(key)}>
+      {column ? <Spec hint={columnHint(column)}>{label}</Spec> : label}
       {key === sort ? (order === "asc" ? " ↑" : " ↓") : ""}
     </th>
-  );
+    );
+  };
 
   return (
     <div className="scroll-x">

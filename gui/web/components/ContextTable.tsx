@@ -1,4 +1,6 @@
 import type { Labels, Rec } from "@/lib/api";
+import { Spec } from "./Hint";
+import { columnHint } from "@/lib/hint";
 import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
 import { useTable } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
@@ -18,7 +20,7 @@ export default function ContextTable({ table, items, labels }: { table: string; 
             <th>id</th>
             <th>{T.list.name}</th>
             {columns.map((c) => (
-              <th key={c.key}>{c.key}</th>
+              <th key={c.key}><Spec hint={columnHint(c)}>{c.key}</Spec></th>
             ))}
             {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
           </tr>

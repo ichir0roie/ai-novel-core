@@ -286,6 +286,9 @@ a.button-link:hover { border-color: var(--accent); }
 .childlist.flow .flow-line input[type="text"], .childlist.flow .flow-line select { width: auto; min-width: 6rem; }
 .childlist.flow .flow-remove { margin-left: auto; }
 .childlist.flow .flow-detail-text { font-size: 0.85rem; color: var(--ink); white-space: pre-wrap; }
+.childlist.flow .flow-knowers { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: default; }
+.childlist.flow .knower-chip { display: inline-flex; align-items: center; gap: 0.2rem; border: 1px solid var(--line); border-radius: 999px; padding: 0 0.2rem 0 0.6rem; }
+.childlist.flow .knower-chip button { border: none; background: none; padding: 0.1rem 0.4rem; }
 
 /* モーダル(子の行の編集など) */
 .modal-backdrop {
@@ -386,7 +389,8 @@ a.button-link:hover { border-color: var(--accent); }
 .viz-side tr.row:hover td { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
 .viz-side tr.row.on td { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
 .viz-side .text { white-space: pre-wrap; margin: 4px 0 8px; }
-.tip { position: fixed; pointer-events: none; background: #222; color: #fff; padding: 6px 8px; font-size: 12px; border-radius: 3px; white-space: pre; max-width: 360px; z-index: 20; }
+.tip { position: fixed; pointer-events: none; background: #222; color: #fff; padding: 6px 8px; font-size: 12px; border-radius: 3px; white-space: pre-wrap; max-width: 360px; z-index: 50; }
+.spec { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
 @media (max-width: 800px) {
   .viz-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40%; }
 }

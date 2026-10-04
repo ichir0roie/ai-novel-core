@@ -79,7 +79,9 @@ export const T = {
     ageInYear: (age: number) => `(age ${age})`,
     delete: "Delete",
     confirmDeleteEpisode: (label: string) =>
-      `Delete episode "${label}"? Its cast and idea links are removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,
+      `Delete episode "${label}"? Its cast is removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,
+    confirmDeleteIdea: (label: string) =>
+      `Delete idea "${label}"? Its histories are removed too. This cannot be undone.`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
     previousEpisode: "◀ Prev",
     nextEpisode: "Next ▶",
@@ -90,8 +92,8 @@ export const T = {
     openClaudeInteractive: "Interactive ↗",
     openClaudeInteractiveHint: "Open a new Claude Code session in a new tab where you narrate this episode and the characters respond",
     // 初めのメッセージは Claude とスキルに向けるので日本語で書く
-    claudePromptWrite: (id: string) => `ストーリーセッション ${id}`,
-    claudePromptInteractive: (id: string) => `ストーリーインタラクティブ ${id}`,
+    claudePromptWrite: (id: string) => `ep${id}`,
+    claudePromptInteractive: (id: string) => `ep${id} in`,
     claudePromptRevise: (label: string) => `スキル revise-episode で、エピソード ${label} を書き直して。直したいところ: `,
   },
 
@@ -124,8 +126,7 @@ export const T = {
     relationGraph: { title: "Relation graph", sub: "Only relations involving this character" },
     mapCentered: { title: "Map centered here", sub: "Map centered on this location" },
     storyRoute: { title: "Route map", sub: "Locations of the episodes, in story order" },
-    appearsIn: "Appears in",
-    noLinkedText: "(no linked text)",
+    episodeRoute: { title: "Route map", sub: "Locations of this story's episodes, with this one selected" },
     episodeList: "Episode list",
     episodeSummary: (episodes: number, letters: number) => `${episodes} episodes / ${letters.toLocaleString()} chars`,
     unsynced: (n: number) => ` / ${n} unsynced`,
@@ -219,6 +220,15 @@ export const T = {
     close: "Close",
   },
 
+  knowers: {
+    label: "knowers",
+    add: "+ Add character",
+    pickTitle: "Add a character who knows this row",
+    remove: "Remove this knower",
+    location: "location: ",
+    since: (start: string) => `(from ${start})`,
+  },
+
   maps: {
     title: "Location map",
     centeredOn: (name: string) => `Map centered on ${name}`,
@@ -280,6 +290,7 @@ export const T = {
     newEpisode: "New episode",
     newEpisodeIn: (story: string) => `Story: ${story}`,
     newEpisodeStart: "Start",
+    newEpisodeTitle: "title",
     newEpisodePlot: "plot_text",
     newEpisodeNoStory: "Pick a story row to add here, or open the full form",
     addEpisode: "Add",

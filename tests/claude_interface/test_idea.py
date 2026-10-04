@@ -6,7 +6,6 @@ from data_access_logic.fact_check.check_facts import CheckFacts
 from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.delete_idea import DeleteIdea
 from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
-from data_access_logic.idea.link_ideas import LinkIdeas
 from data_access_logic.idea.merge_idea import MergeIdea
 from data_access_logic.idea.models import (
     IdeaContextSerialized, IdeaDraft, IdeaMaterial, RelatedIdeaMaterial, idea_for_prompt,
@@ -63,18 +62,11 @@ def test_delete_idea(shown, world):
     assert result == {"id": world.child_idea_id, "name": "テスト魔導炉", "kind": "技術"}
 
 
-def test_link_ideas(shown, world):
-    result = shown(LinkIdeas(idea_ids=[world.idea_id, world.child_idea_id], episode_id=world.episode_id))
-
-    assert result == {"episode_id": world.episode_id, "linked": 2}
-
-
 def test_merge_idea(shown, world):
     result = shown(MergeIdea(source_id=world.child_idea_id, target_id=world.idea_id))
 
     assert result["merged"]["id"] == world.child_idea_id
     assert result["into"]["id"] == world.idea_id
-    assert isinstance(result["links_moved"], int)
 
 
 def test_resolve_ideas(shown, world):

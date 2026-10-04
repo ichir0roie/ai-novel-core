@@ -128,6 +128,14 @@ export const runEntrance = (id: string, args: Rec) =>
 /** アイデアを消す(下位のアイデアが残っていると失敗する)。`idea.delete_idea.DeleteIdea` を呼ぶ。 */
 export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.DeleteIdea", { idea_id: ideaId });
 
+/** 下位のアイデアを根へ外してから、アイデアを消す。 */
+export async function deleteIdeaDetachingChildren(ideaId: number, childIds: number[]) {
+  for (const childId of childIds) {
+    await updateRecord("idea", childId, { parent_idea_id: null });
+  }
+  await deleteIdea(ideaId);
+}
+
 /** 作品の並び・親をまとめて直す(一つでも通らなければ何も直さない)。`story.update_stories.UpdateStories` を呼ぶ。 */
 export const updateStories = (stories: Rec[]) => runEntrance("story.update_stories.UpdateStories", { stories });
 

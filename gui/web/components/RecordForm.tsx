@@ -5,6 +5,8 @@ import type { Rec, TableMeta } from "@/lib/api";
 import ChildListEditor, { type ExtraColumn } from "./ChildListEditor";
 import EpisodeCharacters from "./EpisodeCharacters";
 import FieldInput from "./FieldInput";
+import { Spec } from "./Hint";
+import { childListHint, columnHint } from "@/lib/hint";
 import { useLocationCharacterIds } from "@/lib/locationCharacters";
 import { ageAt, ageInYear } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -101,7 +103,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
       {flowChildLists.map((child) => (
         <div key={child.name} className="field wide">
           <label>
-            {child.name}
+            <Spec hint={childListHint(child)}>{child.name}</Spec>
           </label>
           <ChildListEditor
             meta={child}
@@ -133,8 +135,8 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
         <div className="form">
           {plain.map((column) => (
             <div key={column.key} className={`field ${column.type === "id_list" || column.type === "json" ? "wide" : ""}`}>
-              <label title={column.comment ?? ""}>
-                {column.key}
+              <label>
+                <Spec hint={columnHint(column)}>{column.key}</Spec>
                 {column.required && <span className="hint">{T.required}</span>}
               </label>
               {meta.name === "episode" && column.key === "character_ids" ? (
@@ -157,7 +159,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
         {sideChildLists.map((child) => (
           <div key={child.name} className="field wide" style={{ marginTop: "1rem" }}>
             <label>
-              {child.name}
+              <Spec hint={childListHint(child)}>{child.name}</Spec>
             </label>
             <ChildListEditor
               meta={child}
@@ -170,8 +172,8 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
         {side}
         {sideSections.map((column) => (
           <div key={column.key} className="field section side" style={{ marginTop: "1rem" }}>
-            <label title={column.comment ?? ""}>
-              {column.key}
+            <label>
+              <Spec hint={columnHint(column)}>{column.key}</Spec>
             </label>
             <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
           </div>
@@ -184,8 +186,8 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
         <div className="record-text">
           {sections.map((column) => (
             <div key={column.key} className={`field section ${flowChildLists.length > 0 ? "auto" : ""}`}>
-              <label title={column.comment ?? ""}>
-                {column.key}
+              <label>
+                <Spec hint={columnHint(column)}>{column.key}</Spec>
               </label>
               <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
                 autoHeight={flowChildLists.length > 0} />

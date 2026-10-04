@@ -20,10 +20,11 @@ type Props = {
   onAdded: () => void;
 };
 
-/** タイムラインの空いた所を押したときの小さなモーダル。時刻とプロットだけでその場で話を足すか、
+/** タイムラインの空いた所を押したときの小さなモーダル。時刻・タイトル・プロットだけでその場で話を足すか、
  * ほかの欄も書くなら追加ページを別タブに開く。 */
 export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded }: Props) {
   const [start, setStart] = useState<string | null>((initial.start as string | null) ?? null);
+  const [title, setTitle] = useState("");
   const [plot, setPlot] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
 
   const open = () => {
     const params = new URLSearchParams(
-      Object.entries({ ...initial, start, plot_text: plot || null }).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
+      Object.entries({ ...initial, start, title: title || null, plot_text: plot || null }).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
     );
     window.open(`/tables/episode/new?${params}`, "_blank", "noopener,noreferrer");
     onClose();
@@ -42,7 +43,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
     setBusy(true);
     setError(null);
     try {
-      const data: Rec = { ...initial, start, plot_text: plot };
+      const data: Rec = { ...initial, start, title, plot_text: plot };
       const previous = await getPreviousEpisode(storyId, start);
       for (const key of COPIED_KEYS) {
         const v = previous?.[key];
@@ -82,6 +83,10 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
       <div className="field">
         <label>{T.timeline.newEpisodeStart}</label>
         <StampInput value={start} onChange={setStart} />
+      </div>
+      <div className="field">
+        <label>{T.timeline.newEpisodeTitle}</label>
+        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
       <div className="field">
         <label>{T.timeline.newEpisodePlot}</label>

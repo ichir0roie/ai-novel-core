@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 import "./globals.css";
 import AuthGate from "@/components/AuthGate";
+import HintLayer from "@/components/Hint";
 import Nav from "@/components/Nav";
 import ResumeLastPage from "@/components/ResumeLastPage";
 import { MetaProvider } from "@/lib/meta";
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <main>
               <Suspense>{children}</Suspense>
             </main>
+            <HintLayer />
           </MetaProvider>
         </AuthGate>
       </body>

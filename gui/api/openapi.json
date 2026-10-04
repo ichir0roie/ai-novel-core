@@ -980,12 +980,27 @@
             "type": "string",
             "title": "Name"
           },
+          "table": {
+            "type": "string",
+            "title": "Table"
+          },
           "columns": {
             "items": {
               "$ref": "#/components/schemas/ColumnMeta"
             },
             "type": "array",
             "title": "Columns"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
           },
           "display": {
             "type": "string",
@@ -996,11 +1011,17 @@
             ],
             "title": "Display",
             "default": "table"
+          },
+          "knowers": {
+            "type": "boolean",
+            "title": "Knowers",
+            "default": false
           }
         },
         "type": "object",
         "required": [
           "name",
+          "table",
           "columns"
         ],
         "title": "ChildListMeta"

@@ -15,8 +15,6 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 from data_access_logic.entrypoint import UnknownFieldError, loading, record_of
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.record import EventRecord
-from data_access_logic.idea.links import Appearance, appearances
-from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.label import clipped, label_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
@@ -48,7 +46,10 @@ class RecordSummary(BaseModel):
         return {**{key: value for key, value in columns.items() if key not in self.text_columns}, **data}
 
 
-class EpisodeLink(Appearance):
+class EpisodeLink(BaseModel):
+    table: str
+    id: int
+    label: str
     synced: bool
     letters: int
 
@@ -65,10 +66,6 @@ class EpisodeContext(BaseModel):
 
 class Related(BaseModel):
     """フォームに載せない、表示だけの関連情報。表ごとに持つ欄が違い、無い欄は画面に出さない。"""
-
-
-class IdeaRelated(Related):
-    appearances: list[Appearance]
 
 
 class StoryRelated(Related):
@@ -220,8 +217,6 @@ def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:
 
 
 def related_of(s: Session, record: Material) -> Related:
-    if isinstance(record, IdeaRecord):
-        return IdeaRelated(appearances=appearances(s, record.id))
     if isinstance(record, StoryRecord):
         episodes = s.scalars(common_query.story_episodes_select(record.id)).all()
         return StoryRelated(episodes=[

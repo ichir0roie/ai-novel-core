@@ -108,9 +108,13 @@ def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCa
 
 
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
-    """`ReadEpisodeBrief` に当たる。"""
-    refresh(ai, call(episode_steps.brief_targets, RowId(id=episode_id)))
-    return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, RowId(id=episode_id)))
+    """`ReadEpisodeBrief` に当たる。設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。
+    語の数を AI が絞るので、元ごとに挙げさせる。"""
+    targets = call(episode_steps.brief_targets, RowId(id=episode_id))
+    refresh(ai, targets)
+    keywords = [keyword for text in targets.word_sources for keyword in keywords_of(text, ai, targets.start)]
+    return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, episode_steps.BriefForm(
+        episode_id=episode_id, keywords=keywords)))
 
 
 def rewrite_episode_summary(episode_ids: list[int], ai: AIClient = ai_client) -> list[EpisodeSummaryRecord]:
