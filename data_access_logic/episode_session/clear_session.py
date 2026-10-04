@@ -12,7 +12,6 @@ from db.schema import Episode, EpisodeCharacterSession
 class ClearSession(CommitEntrypoint):
     """話のセッションの行を、その話のぶんすべて消す。終了の行が残ると人物役がすぐ止まるので、手番を演じ直す前に消す。"""
 
-    model = EpisodeCharacterSession
 
     def __init__(self, episode_id: int):
         self.episode_id = episode_id

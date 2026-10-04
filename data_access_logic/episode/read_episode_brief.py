@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
-
 from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
-from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.episode import brief
+from data_access_logic.entrypoint import Entrypoint
 from data_access_logic.episode.models import EpisodeBriefSerialized
+from data_access_logic.flows import episode
 
 
-class ReadEpisodeBrief(SessionEntrypoint):
+class ReadEpisodeBrief(Entrypoint):
     """話(`episode_id`)の本文を、このセッションの Claude が自分で書く・直すための材料を読む。
 
     書き方(文体の決まりと `style_preference`)・作品・前の話・この話(プロット・今の本文)・登場人物・名前だけ出る人物・
@@ -23,5 +21,5 @@ class ReadEpisodeBrief(SessionEntrypoint):
         self.episode_id = episode_id
         self.ai = ai
 
-    def execute(self, s: Session) -> EpisodeBriefSerialized:
-        return brief.read_brief(s, self.ai, self.episode_id)
+    def result(self) -> EpisodeBriefSerialized:
+        return episode.read_episode_brief(self.episode_id, self.ai)

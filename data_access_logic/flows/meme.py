@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ミームの抜き出しと分類を、API 越しに回す(手元の `data_access_logic/meme/extractor.refresh` に当たる)。
+"""ミームの抜き出しと分類の流れ。
 
 AI の結果は束ごとに、得たその場で書き戻す。抜き出せなかった元は印を付けずに残し、次の回に抜き出し直す。
 """
@@ -12,7 +12,7 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.meme import extractor
 from data_access_logic.meme import steps as meme_steps
 from data_access_logic.source_text import batches
-from web_session.api import call
+from data_access_logic.caller import call
 
 logger = logging.getLogger(__name__)
 

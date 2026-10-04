@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """db だけを読み書きする一段。API(`POST /api/steps/{id}`)が一つのトランザクションで回す。
 
-web のセッション(`web_session/`)は db に繋がないので、流れと AI(`claude -p`)を自分で持ち、db に触る所だけをこの段で API に頼む。
+流れ(`data_access_logic/flows/`)は db に触る所だけをこの段で呼ぶ(`data_access_logic/caller.py`)。手元では自分のセッションで回し、
+db に繋がない web のセッションでは API に頼む。
 段は `(s: Session, 入力のモデル) -> 出力` か `(s: Session) -> 出力` の関数に `@db_step` を付けて、
 `data_access_logic/<領域>/steps.py` に置く。id は `<領域>.steps.<関数名>`。
 入力も出力も pydantic のモデル(出力は一覧・数・None でもよい)にし、型注釈から JSON を読み書きする。
@@ -64,7 +65,8 @@ def output_type(step: Callable[..., Any]) -> Any:
     return typing.get_type_hints(step)["return"]
 
 
-def run(step: Callable[..., Any], form: Any) -> Any:
+def run[Out](step: Callable[..., Out], form: Any = None) -> Out:
+    """段を一つのトランザクションで回す(API と、手元の流れの `caller.call`)。"""
     with get_env_session() as s, s.begin():
         return step(s) if form_type(step) is None else step(s, form)
 

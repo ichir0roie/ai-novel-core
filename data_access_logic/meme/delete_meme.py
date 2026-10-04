@@ -12,7 +12,6 @@ from db.schema import Meme
 class DeleteMeme(CommitEntrypoint):
     """ミームを消す。GUI の一覧で選んだものをまとめて消すので、id の配列で受ける。"""
 
-    model = Meme
 
     def __init__(self, meme_ids: list[int]):
         self.meme_ids = meme_ids

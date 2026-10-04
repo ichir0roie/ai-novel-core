@@ -11,6 +11,7 @@ import logging
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from data_access_logic.material import Named
 from db.schema import Character, Episode, EpisodeCharacter
 
 logger = logging.getLogger(__name__)
@@ -64,28 +65,24 @@ def mentioned_in(episode: Episode) -> list[Character]:
     return [link.character for link in episode.episode_characters if link.mentioned]
 
 
-def mentioned_characters(s: Session, episode: Episode, cast_ids: set[int]) -> list[Character]:
-    text = "\n".join([episode.plot_text, episode.main_text])
-    candidates = s.scalars(
-        select(Character)
-        .where(Character.name.is_not(None))
-        .order_by(Character.id)
-    ).all()
-    return [
-        character for character in candidates
-        if character.id not in cast_ids and character.name
-        and len(character.name) >= _MIN_NAME_LENGTH and named_in(text, character.name)
-    ]
+def named_characters(s: Session) -> list[Named]:
+    """名前で拾える人物・対象。名前しか使わないので、人物の selectin の子の表は読まない。"""
+    rows = s.execute(select(Character.id, Character.name).where(Character.name.is_not(None)).order_by(Character.id)).all()
+    return [Named(id=row.id, name=row.name) for row in rows if len(row.name) >= _MIN_NAME_LENGTH]
 
 
-def save_mentions(s: Session, episode_id: int) -> None:
-    """名前だけ出る人物の行を、今のプロット・本文から拾った人物で置き換える。"""
+def save_mentions(s: Session, episode_id: int, characters: list[Named] | None = None) -> list[int]:
+    """名前だけ出る人物の行を、今のプロット・本文から拾った人物で置き換え、その人物の id を返す。
+    何話も続けて拾い直すときは、`named_characters` を一度だけ読んで渡す。"""
     episode = s.get_one(Episode, episode_id)
     cast_ids = set(s.scalars(select(EpisodeCharacter.character_id).where(
         EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.mentioned.is_(False))).all())
-    characters = mentioned_characters(s, episode, cast_ids)
+    text = "\n".join([episode.plot_text, episode.main_text])
+    found = [character for character in (named_characters(s) if characters is None else characters)
+             if character.id not in cast_ids and character.name and named_in(text, character.name)]
     s.execute(delete(EpisodeCharacter).where(EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.mentioned))
     s.add_all([EpisodeCharacter(episode_id=episode_id, character_id=character.id, mentioned=True)
-               for character in characters])
+               for character in found])
     s.flush()
-    logger.info(f"話 id={episode_id} に名前だけ出る人物: {', '.join(str(character.name) for character in characters) or 'なし'}")
+    logger.info(f"話 id={episode_id} に名前だけ出る人物: {', '.join(str(character.name) for character in found) or 'なし'}")
+    return [character.id for character in found]

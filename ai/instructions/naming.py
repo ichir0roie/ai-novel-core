@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""乱数で言語を一つ引いてから固有名詞を組み立てる、といった対話越しの手順は
-JSON 生成 1 回で名づけを終える場面(`data_access_logic/character/generator.py` の人物の自動生成)には
-埋め込めないので、要旨だけを定数として持ち、プロンプト経由で一括で守らせる。
-"""
+"""名づけの基準(人物は `data_access_logic/character/naming.py`、場所は出来事の生成の新設の場所)と、名前の仮置き。"""
 from __future__ import annotations
 
 import re
@@ -13,7 +10,7 @@ import re
 # name の記録とずれるのを避けるため)。
 NAME_PLACEHOLDER = "【名前】"
 
-# ローカルAIは括弧の種類・内側の空白まで指示通りに再現するとは限らないため、
+# AI は括弧の種類・内側の空白まで指示通りに再現するとは限らないため、
 # 「名前」を囲む括弧の表記ゆれ(全角/半角、前後の空白)は許容して拾う。
 # 括弧の無い裸の「名前」は普通の日本語としても出現しうるので対象にしない。
 _NAME_PLACEHOLDER_PATTERN = re.compile(r"[【\[(]\s*名前\s*[】\])]")

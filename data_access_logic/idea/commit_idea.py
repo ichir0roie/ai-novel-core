@@ -14,7 +14,6 @@ from db.schema import Idea, IdeaHistory
 class CommitIdea(CommitEntrypoint):
     """アイデアを足す。本文は作者だけが読むので、確定のあとに AI(事実確認・ミームの抜き出し)を回さない。"""
 
-    model = Idea
 
     def __init__(self, idea: IdeaCreateForm):
         self.idea = idea

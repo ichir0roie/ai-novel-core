@@ -3,7 +3,7 @@
 
 db だけの段(`pending_sources` / `meme_texts` / `save_memes` / `unclassified_sources` / `save_categories` / `meme_pool`)と、
 AI だけの段(`extraction_draft` → `without_duplicates`、`classify_draft`)に分けてある。
-手元では `refresh` がつなぎ、web のセッションでは `web_session/meme.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/meme.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -70,25 +70,25 @@ def pending_sources(s: Session) -> list[SourceText]:
     """まだミームを抜き出していない元。oracle の本文には検証結果(`# 検証結果` の節)も含む。
     アイデアの本文と人物の筋書きからは抜き出さず、話の本文から抜き出す。"""
     sources: list[SourceText] = []
-    for oracle in s.scalars(meme_query.unseeded_select(Oracle)).all():
+    for oracle in s.scalars(meme_query.unseeded_select(Oracle, Oracle.text)).all():
         sources.append(source_of(oracle, "覚え書き", oracle.text))
-    for event in s.scalars(meme_query.unseeded_select(Event)).all():
+    for event in s.scalars(meme_query.unseeded_select(Event, Event.text)).all():
         sources.append(source_of(event, "出来事", event.text))
-    for episode in s.scalars(meme_query.unseeded_select(Episode)).all():
+    for episode in s.scalars(meme_query.unseeded_select(Episode, Episode.main_text)).all():
         sources.append(source_of(episode, "話の本文", episode.main_text))
-    return [source for source in sources if source.text.strip()]
+    return sources
 
 
 def meme_texts(s: Session) -> list[str]:
-    """既にあるミーム。id の順。"""
-    return list(s.scalars(select(Meme.text).order_by(Meme.id)).all())
+    """既にあるミームの文面(検証結果の節は除く。重複を見るのに要らず、AI に渡す字数を膨らませる)。id の順。"""
+    return [strip_fact_check(text) for text in s.scalars(select(Meme.text).order_by(Meme.id)).all()]
 
 
 def extraction_draft(ai: AIClient, batch: list[SourceText]) -> MemesDraft | None:
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれの元からミームを抜き出してください。"]),
-        MemesDraft, system=_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+        MemesDraft, system=_SYSTEM_PROMPT)
 
 
 def _normalized(text: str) -> str:
@@ -111,7 +111,7 @@ def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list
         decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
                        "新しいミームのうち、重複しているものの番号を挙げてください。"]),
-            DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+            DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT)
         if decided is None:
             return None
         duplicates = set(decided.duplicates)
@@ -134,7 +134,7 @@ def save_memes(s: Session, memes: list[MemeDraft], sources: list[SourceText]) ->
 
 def unclassified_sources(s: Session) -> list[SourceText]:
     memes = s.scalars(select(Meme).where(Meme.category.is_(None)).order_by(Meme.id)).all()
-    return [source_of(meme, "ミーム", meme.text) for meme in memes]
+    return [source_of(meme, "ミーム", strip_fact_check(meme.text)) for meme in memes]
 
 
 def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] | None:
@@ -142,7 +142,7 @@ def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] 
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "それぞれのミームに分類を振ってください。"]),
-        ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT, timeout=constants.MEME_TIMEOUT)
+        ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT)
     if decided is None:
         return None
     return [MemeCategory(id=batch[item.number - 1].id, category=item.category)
@@ -156,50 +156,10 @@ def save_categories(s: Session, categories: list[MemeCategory]) -> int:
     return len(categories)
 
 
-def _classify(s: Session, ai: AIClient) -> int:
-    unclassified = unclassified_sources(s)
-    classified = 0
-    for batch in batches(unclassified, constants.MEME_BATCH_LETTERS):
-        categories = classify_draft(ai, batch)
-        if categories is None:
-            continue
-        classified += save_categories(s, categories)
-        s.commit()
-    if unclassified:
-        logger.info(f"分類の空いたミーム{len(unclassified)}件のうち、{classified}件に分類を振った")
-    return classified
-
-
-def refresh(s: Session, ai: AIClient) -> int:
-    """抜き出せなかった元は `meme_seeded` を false のまま残し、次の回に抜き出し直す。足したミームの件数を返す。"""
-    pending = pending_sources(s)
-    added = 0
-    for batch in batches(pending, constants.MEME_BATCH_LETTERS):
-        decided = extraction_draft(ai, batch)
-        if decided is None:
-            logger.warning(f"元{len(batch)}件からミームを抜き出せなかった。次の回に抜き出し直す")
-            continue
-        fresh = without_duplicates(ai, decided.memes, meme_texts(s))
-        if fresh is None:
-            logger.warning(f"元{len(batch)}件から抜き出したミームの重複を確かめられなかった。次の回に抜き出し直す")
-            continue
-        added += save_memes(s, fresh, batch)
-        s.commit()
-    if pending:
-        logger.info(f"元{len(pending)}件から抜き出し、ミームを{added}件足した")
-    _classify(s, ai)
-    return added
-
-
 def meme_pool(s: Session, categories: tuple[str, ...]) -> list[PooledMeme]:
-    """`draw_from` が引く元。分類ごとに id の順。"""
-    return [
-        PooledMeme.model_validate(meme)
-        for category in categories
-        for meme in s.scalars(
-            select(Meme).where(Meme.category == category).order_by(Meme.id)
-        ).all()
-    ]
+    """`draw_from` が引く元。id の順。検証結果の節は引いた人物に要らないので落としておく(web では API で運ぶ)。"""
+    memes = s.scalars(select(Meme).where(Meme.category.in_(categories)).order_by(Meme.id)).all()
+    return [PooledMeme(id=meme.id, category=meme.category, text=strip_fact_check(meme.text)) for meme in memes]
 
 
 def draw_from(rng: random.Random, pool: list[PooledMeme], categories: tuple[str, ...]) -> list[DrawnMeme]:
@@ -210,7 +170,7 @@ def draw_from(rng: random.Random, pool: list[PooledMeme], categories: tuple[str,
         count = min(rng.randint(*constants.MEME_DRAW_RANGE), len(memes))
         for meme in rng.sample(memes, count):
             drawn.append(DrawnMeme(id=meme.id, position=rng.choice(list(constants.MEME_POSITIONS)),
-                                   category=meme.category, text=strip_fact_check(meme.text)))
+                                   category=meme.category, text=meme.text))
     return drawn
 
 

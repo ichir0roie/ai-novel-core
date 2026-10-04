@@ -1,16 +1,14 @@
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
-from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from data_access_logic import constants
-from data_access_logic.ai_client import AIClient
 from data_access_logic.character.models import (
     CastCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine, CharacterSecrets,
     MentionedSerialized, ParticipantSerialized,
 )
 from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.parameters import parameters_at
-from data_access_logic.event.summary import events_of, summarized_events
+from data_access_logic.event.summary import events_of
 from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
 from db.schema import Character, Event
@@ -84,12 +82,6 @@ def candidate_at(character: Character, time: Stamp) -> CastCandidateSerialized:
                                    histories=histories_at(character, time))
 
 
-def cast_at(s: Session, ai: AIClient, characters: list[Character], time: Stamp) -> list[CastSerialized]:
-    for character in characters:
-        summarized_events(s, ai, _recent_events_select(character, time))
-    return cast_of(s, characters, time)
-
-
 def participants_at(s: Session, characters: list[Character], time: Stamp) -> list[ParticipantSerialized]:
     return [
         ParticipantSerialized(
@@ -99,7 +91,7 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
             histories=histories_at(character, time),
             relations=relations_at(s, [character], time),
             recent_events=s.scalars(
-                common_query.events_of_character_select(character.id, until=time, limit=RECENT_EVENT_LIMIT)
+                common_query.events_of_character_select(character.id, until=time, limit=constants.RECENT_EVENT_LIMIT)
             ).all(),
         )
         for character in characters

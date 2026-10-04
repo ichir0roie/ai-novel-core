@@ -4,11 +4,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from ai.instructions.event_writing import EVENT_DURATION_INSTRUCTION
 from data_access_logic import constants
-from data_access_logic.character.models import ParticipantCharacter, ParticipantMaterial, ParticipantSerialized
+from data_access_logic.character.models import ParticipantMaterial, ParticipantSerialized
+from data_access_logic.character.record import CharacterMove
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
-from data_access_logic.story.models import StoryPlotMaterial
 from db.stamp import Stamp
 
 
@@ -19,12 +19,6 @@ class LocationSituationMaterial(Material):
     # 新しい順
     recent_events: list[EventBase]
     later_events: list[EventMaterial]
-    # 進めたい筋書き。上位の場所のものから順
-    stories: list[StoryPlotMaterial]
-    # この場所とその上位の場所(作品の立つ場所まで)で直近使われた出来事。新しい順
-    story_recent_events: list[EventBase]
-    focus_character: ParticipantCharacter | None = None
-    focus_previous_event: EventMaterial | None = None
     # ジャンルや場面を一言で決めたもの
     scene: str | None = None
 
@@ -34,21 +28,16 @@ class LocationSituationSerialized(LocationSituationMaterial):
 
     participants: list[ParticipantSerialized]
     later_events: list[EventSerialized]
-    focus_previous_event: EventSerialized | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        location, focus = self.location, self.focus_character
+        location = self.location
         return {
             "現在の時刻": str(self.time),
-            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text},
+            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment},
             "居合わせる人物・対象": [participant.model_dump() for participant in self.participants],
             "この場所の直近の出来事(新しい順)": [event.name for event in self.recent_events],
             "この時点より後に既に決まっている出来事": [event.model_dump() for event in self.later_events],
-            "進めたい筋書き": "\n\n".join(story.text for story in self.stories if story.text) or None,
-            "筋書きに関わる直近の出来事(新しい順)": [event.name for event in self.story_recent_events],
-            "主役": {"人物id": focus.id, "名前": focus.name} if focus else None,
-            "主役の直前の出来事": self.focus_previous_event.model_dump() if self.focus_previous_event else None,
             "場面の指定": self.scene,
         }
 
@@ -79,7 +68,7 @@ class CandidatesDraft(BaseModel):
 
 class CandidateRequest(Material):
     situation: LocationSituationMaterial
-    # 時代・場所を抜いた、別の物語から取ったアイデア
+    # この世界のほかの場面の筋から、時代・場所・固有名詞を抜いたもの
     seeds: list[str]
 
 
@@ -118,17 +107,10 @@ class RecordRequestSerialized(RecordRequest):
         }
 
 
-class CharacterMoveDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    character_id: int = Field(description="居場所が変わった人物の人物id")
-    location_id: int = Field(description="移動先の候補の場所id")
-
-
 class CharacterUpdateDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    character_id: int = Field(description="レコード自体が変わった人物・対象の人物id")
+    character_id: int = Field(description="この出来事を通して人となりについて新しく分かった人物・対象の人物id")
     text: str = Field(default="", description="この出来事を通して見えた、その人物の人となり")
 
     @field_validator("text")
@@ -153,8 +135,8 @@ class EventRecordDraft(BaseModel):
     event_name: str = Field(description="出来事の名前")
     event_text: str = Field(description="出来事の内容")
     character_ids: list[int] = Field(description="関わった人物・対象の人物id")
-    character_moves: list[CharacterMoveDraft] = Field(description="居場所が変わった人物")
-    character_updates: list[CharacterUpdateDraft] = Field(description="この出来事でレコード自体が変わった人物・対象")
+    character_moves: list[CharacterMove] = Field(description="住まい・拠点が変わった人物ごとの移動先。誰も変わっていなければ空")
+    character_updates: list[CharacterUpdateDraft] = Field(description="この出来事を通して人となりについて新しく分かった人物・対象")
     location_abolished: bool = Field(description="この出来事でこの場所自体が消滅・放棄されたか")
     location_founded: FoundedLocationDraft | None = Field(description="この出来事でこの場所の配下に生まれた新しい場所")
     event_duration_days: int = Field(

@@ -12,7 +12,6 @@ from db.schema import Episode, EpisodeCharacterSession
 class CloseSession(CommitEntrypoint):
     """話が終わったとき、セッションに出たすべての人物に終了の行を足す。人物役はそれを読んで止まる。"""
 
-    model = EpisodeCharacterSession
 
     def __init__(self, episode_id: int, request: str = "話はここで終わり。止まってよい。"):
         self.episode_id = episode_id

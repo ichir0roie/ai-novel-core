@@ -23,8 +23,16 @@ RESIDENT_LIMITS = {"都市": 40, "町": 30, "国": 30, "村": 20}
 # RESIDENT_LIMITS に無い種別(森・洞窟・湖・大陸など)の上限
 DEFAULT_RESIDENT_LIMIT = 10
 
+# data_access_logic/event/progress・data_access_logic/character/cast
+# 出来事を考えるとき、判断材料として渡す「直近の出来事」の件数(場所ごと・人物ごとの窓に使う)。
+# 増やすほど過去の語彙が持ち越され、自己増殖しやすくなる一方、
+# 少なすぎると同じ展開が場所・人物を変えて繰り返されているのを
+# 見分ける材料が足りなくなる(「同じ出来事を名前だけ変えて繰り返さない」
+# 2026-09 の観測)。どちらのリスクも残ったままの折衷値として置く。
+RECENT_EVENT_LIMIT = 5
+
 # data_access_logic/event/progress
-# 移動先候補(_move_destinations)をどこまで拾うか。read_cast の既定
+# 移動先の候補(`character/moves.py` の `move_destinations`)をどこまで拾うか。read_cast の既定
 # (levels=1、「隣の集落にいる者も枠に入れる」)と同じ考え方をそろえる。
 REACH_LEVELS = 1
 MOVE_DESTINATION_LIMIT = 20
@@ -37,14 +45,9 @@ DEFAULT_EVENT_DURATION_DAYS = 1
 # 多いと本文を書く段で候補の要約が薄くなる。
 CANDIDATE_COUNT = 6
 
-# data_access_logic/event/summary
-# 直前の出来事の本文を要約させるのを待つ秒数。
-EVENT_SUMMARY_TIMEOUT = 120.0
-
 # data_access_logic/event_seed
 # 出来事の種を抜き出すとき、一度の呼び出しで渡す元の本文の字数の上限。
 EVENT_SEED_BATCH_LETTERS = 6000
-EVENT_SEED_TIMEOUT = 300.0
 # 出来事の生成(`GenerateEvent`)で、一件の出来事に引く種の件数。候補はこの種か、直前の出来事からの連想で立てる。
 EVENT_SEED_DRAW_COUNT = 3
 # 棚卸し前の種がこの件数たまったら、似た種をまとめる。
@@ -55,7 +58,6 @@ EVENT_SEED_CONSOLIDATE_LETTERS = 15000
 # data_access_logic/meme
 # ミームを抜き出すとき、一度の呼び出しで渡す元の本文の字数の上限。
 MEME_BATCH_LETTERS = 6000
-MEME_TIMEOUT = 300.0
 # 抜き出したミームの重複を見るとき、一度に見比べる既存のミームの字数の上限(新しいミームは毎回すべて添える)。
 MEME_DEDUPE_LETTERS = 15000
 # 人物・対象を生むときに、分類ごとに引くミームの件数の幅。
@@ -72,10 +74,6 @@ MEME_POSITIONS = {
 }
 
 # data_access_logic/episode
-# プロット補完で、プロットを書き直させるのを待つ秒数。
-EPISODE_PLOT_TIMEOUT = 300.0
-# 書き直したプロットから、材料に無い人物・舞台の候補を抜き出させるのを待つ秒数。
-EPISODE_CASTING_TIMEOUT = 300.0
 # 文体の見本として本文を渡す、同じ作品(章・外伝を含む)の直前の話の本数。話の中身は、この話より前のすべての話の概要で渡す。
 EPISODE_STYLE_SAMPLE_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
@@ -83,14 +81,8 @@ EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。
 EPISODE_PLACE_EVENT_LIMIT = 3
 
-# data_access_logic/episode/summary
-# 話一話ぶんの概要を作らせるのを待つ秒数。
-RECAP_TIMEOUT = 300.0
-
 # data_access_logic/idea
-IDEA_DRAFTS_TIMEOUT = 300.0
 # 清書に渡すアイデアの上限(直接当たったものと、その上位・下位を合わせて)。
 IDEA_CONTEXT_LIMIT = 100
 # 清書に渡すアイデア一件の本文の字数の上限。
 IDEA_CONTEXT_LETTERS = 400
-IDEA_POLISH_TIMEOUT = 300.0

@@ -9,3 +9,4 @@ class LocationMaterial(Material):
 
 class LocationTextMaterial(LocationMaterial):
     text: str
+    environment: str | None = None

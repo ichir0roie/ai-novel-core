@@ -13,7 +13,8 @@ from data_access_logic.character.form import (
     CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
 )
 from data_access_logic.character.generate_character import GenerateCharacter
-from data_access_logic.character.generate_characters import GenerateCharacters, resident_rooms
+from data_access_logic.character import steps as character_steps
+from data_access_logic.character.generate_characters import GenerateCharacters
 from data_access_logic.character.generator_models import CharacterNameMaterialSerialized, PersonNameDraft
 from data_access_logic.character.naming import PersonNameCandidates, named
 from data_access_logic.character.list_character_relations import ListCharacterRelations
@@ -125,7 +126,9 @@ def test_generate_characters(shown, world, mock_ai):
 def test_generate_characters_stops_at_resident_limit(shown, world, mock_ai, monkeypatch: pytest.MonkeyPatch):
     with get_env_session() as s:
         monkeypatch.setattr(constants, "RESIDENT_LIMITS", {"都市": 1000})
-        residents = 1000 - resident_rooms(s, [world.location_id], Stamp.parse("1200/04/01"))[world.location_id]
+        rooms = character_steps.generation_rooms(s, character_steps.ResidentRoomsForm(
+            location_ids=[world.location_id], time=Stamp.parse("1200/04/01")))
+        residents = 1000 - rooms[world.location_id]
     monkeypatch.setattr(constants, "RESIDENT_LIMITS", {"都市": residents + 1})
 
     result = shown(GenerateCharacters(

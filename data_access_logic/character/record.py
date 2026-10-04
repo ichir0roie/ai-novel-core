@@ -1,4 +1,4 @@
-from pydantic import ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Form, Material, Timestamp
@@ -111,3 +111,12 @@ class GeneratedCharacter(Material):
     id: int
     name: str | None = None
     location_id: int
+
+
+# 人物の居場所の移動。出来事・話の AI の応答と、居場所を書き換える入口(`MoveCharacters`)・レスポンスで使う
+# (json schema として AI に渡すので、docstring を書くと description として AI に渡る)
+class CharacterMove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character_id: int = Field(description="住まい・拠点が変わった人物の人物id")
+    location_id: int = Field(description="移動先の場所id")

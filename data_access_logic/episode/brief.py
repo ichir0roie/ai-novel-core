@@ -6,67 +6,49 @@
 アイデアと照らして `LinkIdeas` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
 本文は Claude が `CommitEpisode` で確定する。
 どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える → `episode_casting` / `episode_brief`)に分けてある。
-手元では `read_casting` / `read_brief` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session
 
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
-from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import candidate_at, cast_event_ids, cast_of, mentioned_of, relations_at, secrets_at
+from data_access_logic.character.cast import candidate_at, cast_of, mentioned_of, relations_at, secrets_at
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
 from data_access_logic.episode.models import (
     BriefEpisode, CastingEpisode, EpisodeBriefSerialized, EpisodeCastingSerialized, StoryMaterial,
 )
-from data_access_logic.episode.plot_completer import known_locations
-from data_access_logic.episode.summary import appearances, past_episode_ids, past_episodes, recent_episodes
-from data_access_logic.episode.material import later_events_select, location_events_select
+from data_access_logic.episode.material import (
+    episode_location_id, known_locations, later_events_select, load_episode, location_events_select, summary_targets_of,
+)
+from data_access_logic.episode.summary import appearances, past_episodes, recent_episodes
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.links import linked_ideas_at
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
-from data_access_logic.style_preference.form import StyleTarget
-from data_access_logic.summary_targets import SummaryTargets, refresh
-from db.schema import Episode, EpisodeCharacter
+from data_access_logic.summary_targets import SummaryTargets
+from db.schema import Episode
 
 
 def _episode(s: Session, episode_id: int) -> Episode:
     """登場人物が空でも読む(誰を出すかは、材料を読んだ Claude が決める)。"""
-    episode = s.scalar(
-        select(Episode)
-        .where(Episode.id == episode_id)
-        .options(
-            joinedload(Episode.story),
-            joinedload(Episode.viewpoint_character),
-            selectinload(Episode.episode_characters).joinedload(EpisodeCharacter.character),
-        )
-        .execution_options(populate_existing=True)
-    )
-    if episode is None:
-        raise ValueError(f"話 id={episode_id} が見つからない")
+    episode = load_episode(s, episode_id)
     if episode.start is None:
         raise ValueError(f"話 id={episode_id} の時刻(start)が空。歳・直近の出来事を決められないので、先に時刻を入れる")
     return episode
 
 
-def _location_id(episode: Episode) -> int | None:
-    return episode.location_id or episode.story.location_id
-
-
 def _guide(s: Session) -> str:
-    extras = read_style_extras(s, StyleTarget.EPISODE)
     return "\n".join([
         EVENT_AGE_INSTRUCTION,
         MENTIONED_INSTRUCTION,
         PAST_EPISODES_INSTRUCTION,
         STYLE_SAMPLE_INSTRUCTION,
-        style.style_instruction("episode", shared_extra=extras.shared, extra=extras.own),
+        style.style_instruction(read_style_extras(s)),
     ])
 
 
@@ -82,7 +64,7 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
     episode = _episode(s, episode_id)
     main_episode = CastingEpisode.model_validate(episode)
     time = main_episode.start
-    location_id = _location_id(episode)
+    location_id = episode_location_id(episode)
     characters = cast_characters(episode)
     mentioned = mentioned_in(episode)
     candidates = candidate_characters(
@@ -100,17 +82,7 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
 
 def brief_targets(s: Session, episode_id: int) -> SummaryTargets:
     episode = _episode(s, episode_id)
-    main_episode = BriefEpisode.model_validate(episode)
-    location_id = _location_id(episode)
-    characters = cast_characters(episode)
-    location_events = (s.scalars(location_events_select(location_id, main_episode.start)).all()
-                       if location_id is not None else [])
-    later_events = s.scalars(later_events_select(location_id, characters, main_episode.start)).all()
-    return SummaryTargets(
-        episode_ids=past_episode_ids(s, episode, characters),
-        event_ids=[*cast_event_ids(s, characters, main_episode.start),
-                   *(event.id for event in location_events), *(event.id for event in later_events)],
-    )
+    return summary_targets_of(s, episode, episode.start)
 
 
 def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
@@ -118,7 +90,7 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)
     time = main_episode.start
-    location_id = _location_id(episode)
+    location_id = episode_location_id(episode)
     characters = cast_characters(episode)
     mentioned = mentioned_in(episode)
     return EpisodeBriefSerialized(
@@ -138,13 +110,3 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
         later_events=events_of(s, later_events_select(location_id, characters, time)),
         guide=_guide(s),
     )
-
-
-def read_casting(s: Session, ai: AIClient, episode_id: int) -> EpisodeCastingSerialized:
-    refresh(s, ai, casting_targets(s, episode_id))
-    return episode_casting(s, episode_id)
-
-
-def read_brief(s: Session, ai: AIClient, episode_id: int) -> EpisodeBriefSerialized:
-    refresh(s, ai, brief_targets(s, episode_id))
-    return episode_brief(s, episode_id)

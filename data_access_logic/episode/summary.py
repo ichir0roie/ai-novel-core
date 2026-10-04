@@ -1,4 +1,3 @@
-import logging
 
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -11,7 +10,6 @@ from data_access_logic.episode.models import (
 )
 from db.schema import Character, Episode, EpisodeCharacter, Story, summary_source_hash
 
-logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 あなたは日本語のライトノベルの担当編集者です。
@@ -25,26 +23,23 @@ def summary_draft(ai: AIClient, episode: EpisodeSource) -> EpisodeSummaryDraft |
         EpisodeSourceSerialized.model_validate(episode).model_dump_json(indent=2),
         "この話の概要を作ってください。",
     ])
-    return ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT, timeout=constants.RECAP_TIMEOUT)
-
-
-def _stale(episode: Episode) -> bool:
-    text = episode.main_text.strip()
-    return bool(text) and (episode.summary_text is None or episode.summary_source_hash != summary_source_hash(text))
+    return ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT)
 
 
 def summary_sources(s: Session, episode_ids: list[int] | None, stale_only: bool) -> list[EpisodeSummarySource]:
     """本文のある話。`stale_only` なら、概要が無いか本文と食い違っている話だけ。`episode_ids` を省けばすべての話から。"""
-    query = select(Episode).order_by(Episode.id)
+    query = select(Episode).where(Episode.main_text != "").order_by(Episode.id)
     if episode_ids is not None:
         query = query.where(Episode.id.in_(episode_ids))
-    episodes = s.scalars(query).all()
-    return [
-        EpisodeSummarySource(id=episode.id, title=episode.title, main_text=episode.main_text,
-                             source_hash=summary_source_hash(episode.main_text.strip()))
-        for episode in episodes
-        if episode.main_text.strip() and (_stale(episode) or not stale_only)
-    ]
+    sources = []
+    for episode in s.scalars(query).all():
+        text = episode.main_text.strip()
+        digest = summary_source_hash(text)
+        stale = episode.summary_text is None or episode.summary_source_hash != digest
+        if text and (stale or not stale_only):
+            sources.append(EpisodeSummarySource(
+                id=episode.id, title=episode.title, main_text=episode.main_text, source_hash=digest))
+    return sources
 
 
 def write_summary(s: Session, episode_id: int, source_hash: str, summary_text: str) -> Episode:
@@ -52,27 +47,6 @@ def write_summary(s: Session, episode_id: int, source_hash: str, summary_text: s
     episode.summary_source_hash = source_hash
     episode.summary_text = summary_text
     s.flush()
-    return episode
-
-
-def summarize(s: Session, ai: AIClient, episode: Episode) -> Episode | None:
-    if not episode.main_text.strip():
-        return None
-    if not _stale(episode):
-        return episode
-    return rewrite_summary(s, ai, episode)
-
-
-def rewrite_summary(s: Session, ai: AIClient, episode: Episode) -> Episode | None:
-    text = episode.main_text.strip()
-    if not text:
-        return None
-    draft = summary_draft(ai, episode)
-    if draft is None:
-        logger.warning(f"話 id={episode.id} の概要を作れなかった(AI が答えなかった)")
-        return None
-    write_summary(s, episode.id, summary_source_hash(text), draft.summary_text)
-    s.commit()
     return episode
 
 
@@ -99,13 +73,12 @@ def _related_ids_select(characters: list[Character]) -> Select[int]:
         EpisodeCharacter.character_id.in_([character.id for character in characters]))
 
 
-def _story_family_past_select(episode: Episode) -> Select[Episode]:
-    """同じ作品と、親の作品・親を同じくする作品(章・外伝)の話。章ごとに作品が分かれていても、
-    章の頭の話に前の章の話を見本として渡すため。親の無い作品は同じ作品だけ。"""
+def _family_ids_select(episode: Episode) -> Select[int]:
+    """同じ作品と、親の作品・親を同じくする作品(章・外伝)。章ごとに作品が分かれていても、
+    章の頭の話に前の章の話を渡すため。親の無い作品は同じ作品だけ。"""
     parent_id = select(Story.parent_story_id).where(Story.id == episode.story_id).scalar_subquery()
-    family_ids = select(Story.id).where(
+    return select(Story.id).where(
         or_(Story.id == episode.story_id, Story.id == parent_id, Story.parent_story_id == parent_id))
-    return _past(select(Episode).where(Episode.story_id.in_(family_ids)), episode)
 
 
 def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
@@ -114,16 +87,17 @@ def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
 
 # 同じ作品(章・外伝を含む)の直前の話(新しい順に `constants.EPISODE_STYLE_SAMPLE_COUNT` 話)は、文体の見本としてだけ本文を渡す。古い順
 def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
-    rows = s.scalars(_story_family_past_select(episode).limit(constants.EPISODE_STYLE_SAMPLE_COUNT)).all()
+    rows = s.scalars(_past(select(Episode).where(Episode.story_id.in_(_family_ids_select(episode))), episode)
+                     .limit(constants.EPISODE_STYLE_SAMPLE_COUNT)).all()
     return [RecentEpisode.model_validate(row) for row in reversed(rows)]
 
 
 def _summarized_select(episode: Episode, characters: list[Character]) -> Select[Episode]:
-    """同じ作品のすべての話と、登場人物が関わるすべての話(重ならない)。
-    直前の話の本文は文体の見本にしか使わせないので、その中身もここの概要で渡す。"""
+    """同じ作品と、親・兄弟の作品(章・外伝)のすべての話と、登場人物が関わるすべての話(重ならない)。
+    文体の見本(`recent_episodes`)と同じ作品の範囲にして、見本の話の中身をここの概要で渡す。"""
     return _past(
         select(Episode).where(
-            or_(Episode.story_id == episode.story_id, Episode.id.in_(_related_ids_select(characters)))),
+            or_(Episode.story_id.in_(_family_ids_select(episode)), Episode.id.in_(_related_ids_select(characters)))),
         episode)
 
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""人物・対象の生成を、API 越しに回す。
+"""人物・対象の生成の流れ(`GenerateCharacter` / `GenerateCharacters`)。
 
-引数は `data_access_logic/character/` の入口(`GenerateCharacter` / `GenerateCharacters`)と同じ。db の段は
-`data_access_logic/character/steps.py`、AI・乱数の段は `data_access_logic/character/generator.py` の `character_content` など。
+db の段は `data_access_logic/character/steps.py`、AI・乱数の段は `data_access_logic/character/generator.py` の `character_content` など。
 """
 from __future__ import annotations
 
+import logging
 import random
 
 from ai.claude_code import ai_client
@@ -13,25 +13,39 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.character import generator
 from data_access_logic.character import steps as character_steps
 from data_access_logic.character.form import CharacterForm
-from data_access_logic.character.generate_characters import capped_count
+from data_access_logic.character.generator_models import BirthSources
 from data_access_logic.character.record import CharacterRecord, GeneratedCharacter
 from data_access_logic.idea import steps as idea_steps
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId, RowIds
 from db.schema import CHARACTER_KIND_PERSON
 from db.stamp import Stamp
-from web_session.api import call
+from data_access_logic.caller import call
+
+
+logger = logging.getLogger(__name__)
+
+
+def _capped_count(rng: random.Random, count: tuple[int, int], location_id: int, room: int) -> int:
+    wanted = rng.randint(*count)
+    if wanted > room:
+        logger.warning(f"location_id={location_id} は人数の上限まであと {room} 人なので、{wanted} 人でなく {room} 人だけ足す")
+    return min(wanted, room)
+
+
+def _sources(born_location_id: int | None, time: Stamp, person: bool) -> BirthSources:
+    return call(character_steps.birth_sources,
+                character_steps.BirthSourcesForm(born_location_id=born_location_id, time=time, person=person))
 
 
 def generate(
     ai: AIClient, rng: random.Random, born_location_id: int | None, time: Stamp, person: bool,
-    form: CharacterForm | None = None, plot_text: str | None = None,
+    form: CharacterForm | None = None, plot_text: str | None = None, elements: list[str] | None = None,
 ) -> CharacterRecord | None:
     """一件生んで足す。中身が得られなければ足さずに None。AI が洗い出した語から足した候補のアイデアは、照らす段で確定する。
-    `plot_text` は登場させる話のプロット(`generator.character_content`)。"""
-    sources = call(character_steps.birth_sources,
-                   character_steps.BirthSourcesForm(born_location_id=born_location_id, time=time, person=person))
-    decided = generator.character_content(ai, rng, sources, time, person, form, plot_text)
+    `plot_text` / `elements` は `generator.character_content` に渡す。"""
+    decided = generator.character_content(
+        ai, rng, _sources(born_location_id, time, person), time, person, form, plot_text, elements)
     if decided is None:
         return None
     ideas = call(idea_steps.resolve_ideas, idea_steps.ResolveForm(
@@ -41,9 +55,8 @@ def generate(
 
 def _complete_text(ai: AIClient, rng: random.Random, character_id: int) -> CharacterRecord:
     target = call(character_steps.completion_target, RowId(id=character_id))
-    sources = call(character_steps.birth_sources, character_steps.BirthSourcesForm(
-        born_location_id=target.born_location_id, time=target.time, person=target.person))
-    material, content = generator.completion_content(ai, rng, target, sources)
+    material, content = generator.completion_content(
+        ai, rng, target, _sources(target.born_location_id, target.time, target.person))
     ideas = call(idea_steps.resolve_ideas, idea_steps.ResolveForm(
         keywords=keywords_of(content.text, ai, target.time), location_id=target.born_location_id, time=target.time))
     return call(character_steps.save_completed_text, character_steps.CompletedTextForm(
@@ -82,8 +95,13 @@ def generate_characters(
     rng = random.Random(seed)
     created = []
     for location_id in location_ids:
-        for _ in range(capped_count(rng, count, location_id, rooms[location_id])):
-            record = generate(ai, rng, location_id, at, person)
+        wanted = _capped_count(rng, count, location_id, rooms[location_id])
+        if not wanted:
+            continue
+        # 筋書きの立場は同じ場所・時刻なら変わらないので、場所ごとに一度だけ抜き出して一人ずつサイコロで選ぶ
+        elements = generator.story_elements(ai, _sources(location_id, at, person), at)
+        for _ in range(wanted):
+            record = generate(ai, rng, location_id, at, person, elements=elements)
             if record is not None:
                 created.append(GeneratedCharacter(id=record.id, name=record.name, location_id=location_id))
     return created

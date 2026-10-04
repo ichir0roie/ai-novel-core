@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""話の枠の生成・プロット補完・概要の作り直しと、Claude が自分で書くための材料の読み出しを、API 越しに回す。
+"""話の枠の生成・プロット補完・概要の作り直しと、Claude が自分で書くための材料の読み出しの流れ。
 
-引数は `data_access_logic/episode/` の入口(`GenerateFrame` など)と同じ。db の段は `data_access_logic/episode/steps.py`、
+db の段は `data_access_logic/episode/steps.py`、
 AI の段は `framer` / `plot_completer` の `*_draft`。
 AI の呼び出しの前に下書きを枠として保存し、AI の結果は得たその場で書き戻す(途中で落ちても、それまでの分は残す)。
 """
@@ -11,7 +11,7 @@ import logging
 import random
 
 from ai.claude_code import ai_client
-from ai.claude_code.ai_client import PLOT_EFFORT, PLOT_MODEL
+from ai.claude_code.ai_client import EFFORT, MODEL
 from data_access_logic.ai_client import AIClient
 from data_access_logic.episode import framer, plot_completer
 from data_access_logic.episode import steps as episode_steps
@@ -23,9 +23,9 @@ from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.stamp import Stamp
-from web_session import character
-from web_session.api import call
-from web_session.summary import refresh, rewrite_episode_summaries
+from data_access_logic.flows import character
+from data_access_logic.caller import call
+from data_access_logic.flows.summary import refresh, rewrite_episode_summaries
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def _frame(ai: AIClient, episode_id: int) -> None:
 
 
 def _material(ai: AIClient, episode_id: int) -> EpisodeMaterial:
-    """本文・プロットを書く材料。AI が洗い出した語から足した候補のアイデアは、材料を読む段で確定する。"""
+    """プロットを書き直す材料。AI が洗い出した語から足した候補のアイデアは、材料を読む段で確定する。"""
     targets = call(episode_steps.writing_targets, RowId(id=episode_id))
     refresh(ai, targets)
     return call(episode_steps.episode_material, episode_steps.MaterialForm(
@@ -65,12 +65,9 @@ def _record(episode_id: int) -> EpisodeRecord:
     return call(episode_steps.episode_record, RowId(id=episode_id))
 
 
-def generate_frame(frame: EpisodeForm, character_ids: list[int] | None = None, ai: AIClient = ai_client) -> EpisodeRecord:
+def generate_frame(frame: EpisodeForm, ai: AIClient = ai_client) -> EpisodeRecord:
     """`GenerateFrame` に当たる。"""
-    form = frame.model_copy()
-    if character_ids is not None:
-        form.character_ids = character_ids
-    saved = call(episode_steps.save_episode_frame, form)
+    saved = call(episode_steps.save_episode_frame, frame)
     _frame(ai, saved.id)
     return _record(saved.id)
 
@@ -80,8 +77,10 @@ def complete_plot(
     ai: AIClient = ai_client,
 ) -> EpisodeRecord:
     """`CompletePlot` に当たる。プロットを書き直し、プロットに出るのに材料に無い人物・舞台を足す。"""
-    model, effort = model or PLOT_MODEL, effort or PLOT_EFFORT
+    model, effort = model or MODEL, effort or EFFORT
     saved = call(episode_steps.save_episode_frame, episode)
+    if not saved.has_cast:
+        raise ValueError(f"話 id={saved.id} の登場人物(episode_character)が空。登場人物を指定してから補完する")
     if saved.needs_frame:
         _frame(ai, saved.id)
     material = _material(ai, saved.id)

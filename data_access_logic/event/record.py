@@ -3,6 +3,7 @@ from typing import Any, ClassVar
 from pydantic import Field, computed_field, model_validator
 from sqlalchemy.orm import selectinload
 
+from data_access_logic.character.record import CharacterMove
 from data_access_logic.material import Material, Timestamp
 from db.schema import Event
 
@@ -42,6 +43,11 @@ class EventRecord(EventColumns):
     @property
     def character_ids(self) -> list[int]:
         return [link.character_id for link in self.event_characters]
+
+
+class GeneratedEvent(EventRecord):
+    # この出来事で居場所を移した人物の移動先。移していなければ空
+    moves: list[CharacterMove] = []
 
 
 class DeletedEvent(Material):

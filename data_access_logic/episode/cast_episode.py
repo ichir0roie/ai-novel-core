@@ -18,7 +18,6 @@ class CastEpisode(CommitEntrypoint):
     `location_id` / `viewpoint_character_id` は渡したときだけ書く。同期フラグ(`synced`)は変えない。
     """
 
-    model = Episode
 
     def __init__(self, episode_id: int, character_ids: list[int], location_id: int | None = None,
                  viewpoint_character_id: int | None = None):

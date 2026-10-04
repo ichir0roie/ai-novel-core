@@ -3,7 +3,7 @@
 `DEM_CLAUDE_AI_DLAB_TOOLS` で差し替えられるようにしている。繋がっていなければ AI はネット検索だけで検める。
 
 db だけの段(`check_sources` / `save_fact_checks` / `last_meme_id` / `new_meme_ids`)と、AI だけの段(`check_draft`)に分けてある。
-手元では `check` などがつなぎ、web のセッションでは `web_session/fact_check.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/fact_check.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -13,12 +13,11 @@ import os
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 
-from ai.claude_code import ai_client
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
-from data_access_logic.meme.extractor import refresh as refresh_memes
+from data_access_logic.ai_client import AIClient
 from data_access_logic.material import Material
 from data_access_logic.source_text import (
-    FACT_CHECK_HEADING, SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check,
+    FACT_CHECK_HEADING, SourceBatchSerialized, SourceText, row_of, source_of, strip_fact_check,
 )
 from db.schema import Meme, Oracle, Session
 
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 WEB_TOOLS = ("WebSearch", "WebFetch", "ToolSearch")
 DEFAULT_DLAB_TOOLS = "mcp__d-lab"
-# 検索を何度も挟むので、道具なしの呼び出しより長く待つ。
+# 検索を何度も挟むので、道具なしの呼び出し(既定 600 秒)より長く待つ。
 TIMEOUT = 900.0
 # 一度の呼び出しで検めさせる本文の字数の上限。一件でこれを超えるものは一件だけで渡す。
 BATCH_LETTERS = 3000
@@ -124,8 +123,8 @@ def check_sources(s: Session, table: str, ids: list[int] | None = None, limit: i
     return [_source(record) for record in s.scalars(query).all()]
 
 
-def check_draft(batch: list[SourceText]) -> list[FactCheckNote] | None:
-    decided = ai_client.generate(
+def check_draft(ai: AIClient, batch: list[SourceText]) -> list[FactCheckNote] | None:
+    decided = ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。"]),
         FactChecksDraft, system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
@@ -147,40 +146,9 @@ def save_fact_checks(s: Session, notes: list[FactCheckNote]) -> int:
     return len(notes)
 
 
-def check(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> int:
-    sources = check_sources(s, table, ids, limit)
-    written = 0
-    for batch in batches(sources, BATCH_LETTERS):
-        notes = check_draft(batch)
-        if notes is None:
-            continue
-        written += save_fact_checks(s, notes)
-        s.commit()
-    if sources:
-        logger.info(f"{table} {len(sources)}件のうち、{written}件を検めた")
-    return written
-
-
 def last_meme_id(s: Session) -> int:
     return s.scalar(select(func.max(Meme.id))) or 0
 
 
 def new_meme_ids(s: Session, last_id: int) -> list[int]:
     return list(s.scalars(select(Meme.id).where(Meme.id > last_id)).all())
-
-
-def check_new_memes(s: Session, last_id: int) -> int:
-    """`last_id` より後に足したミームだけを検める(既にあるミームの後埋めは `check` を名指しなしで呼ぶ)。"""
-    ids = new_meme_ids(s, last_id)
-    return check(s, "meme", ids=ids) if ids else 0
-
-
-def check_and_extract(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> FactChecked:
-    """検めたあと、ミームの元(oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
-    checked = check(s, table, ids, limit)
-    if table == "meme":
-        return FactChecked(checked=checked, memes_added=0)
-    last_id = last_meme_id(s)
-    added = refresh_memes(s, ai_client)
-    check_new_memes(s, last_id)
-    return FactChecked(checked=checked, memes_added=added)

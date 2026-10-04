@@ -10,7 +10,8 @@
 アイデアにそろえ、その場所・時刻での呼び名を `called` に付ける。どれにも当たらなかった語は、`kind` の種別で
 新しいアイデアとして足し、`candidates` に返す。足した候補は語の `start` から `end` まで効く。
 `start` は `time` と下書きの中身からある程度はっきり言えるときだけ付け、言えなければ省く(None)。`end` は分かるときだけ付ける。
-話の本文なら、清書したら `idea.link_ideas.LinkIdeas` で、`hits` と `candidates` の id を話に結ぶ。
+`hits` は語が直接当たったアイデア(`ideas` と同じく、`time` を渡せば時期の未定のものは除く)。
+話の本文なら、書く前に `ideas` から踏まえるものを選び、`candidates` と合わせて `idea.link_ideas.LinkIdeas` で話に結ぶ(スキル `episode`)。
 """
 from __future__ import annotations
 
@@ -20,7 +21,6 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaMaterial, IdeaHistoryMaterial, IdeaDraft
-from db.schema import Idea
 from db.stamp import Stamp
 
 
@@ -46,7 +46,6 @@ def _resolved(idea: IdeaMaterial, history: IdeaHistoryMaterial | None = None) ->
 
 
 class ResolveIdeas(CommitEntrypoint):
-    model = Idea
 
     def __init__(self, ideas: list[IdeaDraft], location_id: int | None = None, time: Stamp | str | None = None):
         self.ideas = ideas

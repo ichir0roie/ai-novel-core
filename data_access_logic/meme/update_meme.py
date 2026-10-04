@@ -11,7 +11,6 @@ from db.schema import Meme
 
 
 class UpdateMeme(CommitEntrypoint):
-    model = Meme
 
     def __init__(self, meme: MemeUpdateForm):
         self.meme = meme

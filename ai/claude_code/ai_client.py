@@ -21,12 +21,8 @@ class ClaudeAIError(RuntimeError):
     pass
 
 
-_MODEL = "claude-opus-5-5"
-_EFFORT = "low"
-
-# プロット補完(プロットの書き直しと、足りない人物・舞台の候補)は既定のまま。
-PLOT_MODEL = _MODEL
-PLOT_EFFORT = _EFFORT
+MODEL = "claude-opus-5-5"
+EFFORT = "low"
 
 
 class _Reply(BaseModel):
@@ -46,7 +42,7 @@ def _command() -> str:
 
 
 def _build_args(system: str | None, schema: dict, tools: tuple[str, ...] = (),
-                model: str = _MODEL, effort: str = _EFFORT) -> list[str]:
+                model: str = MODEL, effort: str = EFFORT) -> list[str]:
     # `--tools` は組み込みの道具だけを絞る。MCP の道具(`mcp__…`)は MCP サーバーから来るので、許可だけ渡す。
     builtin = [tool for tool in tools if not tool.startswith("mcp__")]
     args = [
@@ -68,9 +64,10 @@ def _build_args(system: str | None, schema: dict, tools: tuple[str, ...] = (),
     return args
 
 
-def _reply(prompt: str, args: list[str], timeout: float) -> _Reply:
-    # CLI の起動と思考のぶん、呼び出し側の timeout では足りないことがある。
-    timeout = max(timeout, float(os.environ.get("DEM_CLAUDE_AI_TIMEOUT", 600)))
+def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
+    # CLI の起動と思考のぶん、短い待ち時間では足りない。既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、
+    # 道具で調べさせる呼び出しなど、それより長く待つものだけが `timeout` を渡す。
+    timeout = max(timeout or 0.0, float(os.environ.get("DEM_CLAUDE_AI_TIMEOUT", 600)))
     # プロジェクトの CLAUDE.md・設定を拾わせない(生成の指示は system だけにする)。
     cwd = tempfile.gettempdir()
     try:
@@ -98,10 +95,10 @@ def generate[Output: BaseModel](
     prompt: str,
     output: type[Output],
     system: str | None = None,
-    timeout: float = 120.0,
+    timeout: float | None = None,
     tools: tuple[str, ...] = (),
-    model: str = _MODEL,
-    effort: str = _EFFORT,
+    model: str = MODEL,
+    effort: str = EFFORT,
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。"""
     args = _build_args(system, output.model_json_schema(), tools, model, effort)

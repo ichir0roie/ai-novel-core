@@ -9,7 +9,7 @@ PREVIEW_LENGTH = 80
 # 行を呼ぶ名前にする列。無い表(ミームなど)は本文の頭で呼ぶ
 LABEL_COLUMNS: dict[type, str | None] = {
     Story: "name", Episode: "title", Character: "name", CharacterRelation: "relation", Event: "name",
-    Location: "name", Idea: "name", Meme: None, Oracle: "title", StylePreference: "target",
+    Location: "name", Idea: "name", Meme: None, Oracle: "title", StylePreference: None,
 }
 
 
