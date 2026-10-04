@@ -18,7 +18,7 @@ from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import candidate_at, cast_event_ids, cast_of, mentioned_of, relations_at
+from data_access_logic.character.cast import candidate_at, cast_event_ids, cast_of, mentioned_of, relations_at, secrets_at
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
 from data_access_logic.episode.models import (
@@ -120,6 +120,7 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
     time = main_episode.start
     location_id = _location_id(episode)
     characters = cast_characters(episode)
+    mentioned = mentioned_in(episode)
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
@@ -127,7 +128,8 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
         recent_episodes=recent_episodes(s, episode),
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         cast=cast_of(s, characters, time),
-        mentioned=mentioned_of(mentioned_in(episode), time),
+        mentioned=mentioned_of(mentioned, time),
+        secrets={character.id: secrets_at(s, character, time) for character in [*characters, *mentioned]},
         relations=relations_at(s, characters, time),
         appearances=appearances(s, episode, characters),
         ideas=linked_ideas_at(s, episode, location_id, time),

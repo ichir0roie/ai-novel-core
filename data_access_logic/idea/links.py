@@ -4,9 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.idea.alias import called
-from data_access_logic.idea.models import IdeaMaterial, RelatedIdeaMaterial
+from data_access_logic.idea.models import IdeaHistoryWholeMaterial, IdeaMaterial, LinkedIdeaMaterial
+from data_access_logic.knowers import knowers_at
 from data_access_logic.label import label_of
-from db.schema import Episode, EpisodeIdea, Idea
+from db.schema import Episode, EpisodeIdea, Idea, IdeaHistory, Location
 from db.stamp import Stamp
 
 
@@ -24,16 +25,29 @@ def link(s: Session, episode: Episode, ideas: list[Idea] | list[IdeaMaterial]) -
     return added
 
 
-def linked_ideas_at(s: Session, episode: Episode, location_id: int | None, time: Stamp) -> list[RelatedIdeaMaterial]:
-    """話に結んだアイデア。結んだ人物と同じく効く期間(`start` / `end`)では絞らず、履歴(呼び名)だけを
-    その場所・時刻に効くものから選ぶ。"""
+def _history_at(s: Session, row: IdeaHistory, time: Stamp) -> IdeaHistoryWholeMaterial:
+    return IdeaHistoryWholeMaterial(
+        location=None if row.location_id is None else s.get_one(Location, row.location_id), start=row.start, end=row.end,
+        name=row.name, detail=row.detail, private=row.private, knowers=knowers_at(s, row.knowers, time))
+
+
+def linked_ideas_at(s: Session, episode: Episode, location_id: int | None, time: Stamp) -> list[LinkedIdeaMaterial]:
+    """話に結んだアイデア。結んだ人物と同じく効く期間(`start` / `end`)では絞らず、呼び名をその場所・時刻に効く履歴から選び、
+    その時刻までに始まった履歴の行をすべて添える(人物の来歴と同じく、先の行は出さない)。"""
     ideas = s.scalars(
         select(Idea).join(EpisodeIdea, EpisodeIdea.idea_id == Idea.id)
         .where(EpisodeIdea.episode_id == episode.id)
         .order_by(Idea.id)
     ).all()
     histories = called(s, [idea.id for idea in ideas], location_id, time)
-    return [RelatedIdeaMaterial(idea=idea, history=histories.get(idea.id)) for idea in ideas]
+    return [
+        LinkedIdeaMaterial(
+            idea=idea, history=histories.get(idea.id),
+            histories=[_history_at(s, row, time)
+                       for row in sorted(idea.histories, key=lambda row: (row.start is not None, row.start or 0))
+                       if row.start is None or row.start <= time])
+        for idea in ideas
+    ]
 
 
 class Appearance(BaseModel):

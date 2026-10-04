@@ -607,6 +607,8 @@ class CharacterHistory(Base):
     ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
     `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出し、話・出来事には渡さない。
+    非公開(`private`)の行は、知る相手だけが知る秘密。公開の行は、本人とその時刻に関係のある人物も知る
+    (アイデアの履歴の公開・非公開と同じ形)。
     """
 
     __tablename__ = "character_history"
@@ -617,8 +619,13 @@ class CharacterHistory(Base):
         Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
         sort_order=110)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
+    private: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false",
+        comment="非公開。本人・関係のある人物も知らず、知る相手だけが知る", sort_order=140)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
+    # 人物役(`data_access_logic/character/knowledge.py`)には、公開の行なら本人と関係のある人物に、非公開の行なら知る相手に
+    # 当たる人物にだけ渡す
     knowers: Mapped[list["CharacterHistoryKnower"]] = relationship(
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="CharacterHistoryKnower.id")
 
@@ -628,7 +635,7 @@ class CharacterHistory(Base):
 
 
 class CharacterHistoryKnower(KnowerMixin, Base):
-    """人物の来歴の行を知る相手。"""
+    """人物の来歴の行を知る相手。本人と関係のある人物は、非公開の行でなければ、行が無くても知る。"""
 
     __tablename__ = "character_history_knower"
     __table_args__ = _knower_args("character_history_knower", "character_history_id")

@@ -12,6 +12,7 @@ from data_access_logic.character.record import CharacterHistoryRow, CharacterRel
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.episode.delete_episode import DeleteEpisode
+from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode_session.add_turns import AddTurns
 from data_access_logic.episode_session.answer_turn import AnswerTurn
 from data_access_logic.episode_session.clear_session import ClearSession
@@ -67,16 +68,21 @@ def test_read_knowledge(shown, world):
     shown(UpdateCharacter(CharacterUpdateForm(
         id=taro, appearance="背が高い", text="太郎の芯", meme="- 今表: 太郎のミーム", principle="太郎の行動原理",
         plot="太郎の先の筋書き",
-        histories=[CharacterHistoryRow(start=1190, description="太郎の秘密", knowers=[KnowerRow(knower_id=taro)])])))
+        histories=[CharacterHistoryRow(start=1190, description="太郎の秘密", private=True,
+                                       knowers=[KnowerRow(knower_id=taro)])])))
     shown(UpdateCharacter(CharacterUpdateForm(
         id=hanako, appearance="髪が赤い", text="花子の芯", meme="- 裏: 花子のミーム", plot="花子の先",
         knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1195/01/01")],
         histories=[
-            CharacterHistoryRow(start=1190, description="都の噂", knowers=[KnowerRow(location_id=world.location_id)]),
-            CharacterHistoryRow(start=1191, description="花子だけの秘密", knowers=[KnowerRow(knower_id=hanako)]),
-            CharacterHistoryRow(start=1192, description="太郎も知る秘密",
+            CharacterHistoryRow(start=1190, description="都の噂", private=True,
+                                knowers=[KnowerRow(location_id=world.location_id)]),
+            CharacterHistoryRow(start=1191, description="花子だけの秘密", private=True, knowers=[KnowerRow(knower_id=hanako)]),
+            CharacterHistoryRow(start=1192, description="太郎も知る秘密", private=True,
                                 knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1199/01/01")]),
-            CharacterHistoryRow(start=1193, description="後で知る秘密", knowers=[KnowerRow(knower_id=taro, start="1201/01/01")]),
+            CharacterHistoryRow(start=1193, description="後で知る秘密", private=True,
+                                knowers=[KnowerRow(knower_id=taro, start="1201/01/01")]),
+            # 公開の行は、知る相手に入っていなくても関係のある人物が知る
+            CharacterHistoryRow(start=1194, description="花子が店を開く", knowers=[KnowerRow(knower_id=hanako)]),
             CharacterHistoryRow(start=1250, description="先のこと", knowers=[KnowerRow(location_id=world.location_id)])])))
     shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
         IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
@@ -92,7 +98,7 @@ def test_read_knowledge(shown, world):
     hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
     assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
     assert "ミーム" not in hanako_known
-    assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密"]
+    assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密", "花子が店を開く"]
     # アイデアの本文と本質の名前は渡さず、知っている履歴の行(呼び名と受け止め方)だけを渡す
     idea = next(idea for idea in result["知っているアイデア"]
                 if "テスト術" in [name["呼び名"] for name in idea["知っている呼び名"]])
@@ -196,10 +202,47 @@ def test_read_knowledge_skips_unrelated_cast(shown, world):
     assert "初対面の人" not in [character["名前"] for character in result["知っている人物"]]
 
 
-def test_read_stage(shown, world):
+def _secrets(shown, world) -> None:
+    """花子に公開・非公開の来歴を、関係に来歴を、話に結んだアイデアに公開・非公開の履歴を足す(話の時刻は 1200 年)。"""
     taro, hanako = world.character_ids
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, appearance="髪が赤い")))
+    shown(UpdateCharacter(CharacterUpdateForm(
+        id=hanako, appearance="髪が赤い",
+        knowers=[KnowerRow(knower_id=hanako), KnowerRow(location_id=world.location_id, start="1195/01/01")],
+        histories=[
+            CharacterHistoryRow(start=1190, description="花子が店を開く"),
+            CharacterHistoryRow(start=1195, description="花子の秘密", private=True,
+                                knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1201/01/01")]),
+            CharacterHistoryRow(start=1250, description="先のこと")])))
+    shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, histories=[
+        CharacterRelationHistoryRow(start=1195, description="市で再会する")])))
+    shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
+        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
+        IdeaHistoryRow(name="術の真名", private=True, knowers=[KnowerRow(knower_id=taro)]),
+        IdeaHistoryRow(start="1300/01/01", name="先の呼び名")])))
     shown(LinkIdeas(idea_ids=[world.idea_id], episode_id=world.episode_id))
+
+
+# 作者の目で読む材料には、芯・来歴・履歴を知る相手に関わらずすべて渡し、非公開かどうかと、話の時刻までに知った相手を添える。
+# 話の時刻より後に始まる来歴・履歴と、後で知る相手は出さない
+HANAKO_KNOWERS = [{"人物": "テスト花子", "場所": None, "知った時刻": None},
+                  {"人物": None, "場所": "テスト都", "知った時刻": "1195/01/01 00:00:00"}]
+HANAKO_HISTORIES = [
+    # 今ある行を書き換えた行なので、知る相手は今のまま(無い)
+    {"年": 1190, "来歴": "花子が店を開く", "非公開": False, "知る相手": []},
+    {"年": 1195, "来歴": "花子の秘密", "非公開": True,
+     "知る相手": [{"人物": "テスト花子", "場所": None, "知った時刻": None}]}]
+IDEA_HISTORIES = [
+    {"呼び名": "術の真名", "受け止め方": None, "効く場所": None, "始まり": None, "終わり": None, "非公開": True,
+     "知る相手": [{"人物": "テスト太郎", "場所": None, "知った時刻": None}]},
+    {"呼び名": "テスト術", "受け止め方": "都での呼び名", "効く場所": "テスト都", "始まり": "1150/01/01 00:00:00", "終わり": None,
+     "非公開": False, "知る相手": []}]
+RELATIONS = [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ", "説明": "同じ通りで育った",
+              "来歴(古い順)": [{"年": 1195, "来歴": "市で再会する"}]}]
+
+
+def test_read_stage(shown, world):
+    _, hanako = world.character_ids
+    _secrets(shown, world)
 
     result = shown(ReadStage(episode_id=world.episode_id))
 
@@ -207,12 +250,29 @@ def test_read_stage(shown, world):
     assert result["場所(広い順)"] == ["テスト星", "テスト都"]
     assert result["場所の説明"] == "テスト用の都"
     hanako_row = next(member for member in result["登場人物"] if member["人物id"] == hanako)
-    # 来歴は渡さない(人物がこれまでに何をしたかは人物役が持つ)
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
-                          "外見": "髪が赤い", "人物像": "テスト花子の説明"}
-    assert result["登場人物どうしの関係"] == [
-        {"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ", "説明": "同じ通りで育った"}]
-    assert [idea["名前"] for idea in result["関係する設定"]] == ["テスト術"]
+                          "外見": "髪が赤い", "人物像": "テスト花子の説明", "人物像を知る相手": HANAKO_KNOWERS,
+                          "来歴(古い順)": HANAKO_HISTORIES}
+    assert result["登場人物どうしの関係"] == RELATIONS
+    [idea] = result["関係する設定"]
+    # 名前は話の場所・時刻に効く公開の履歴から
+    assert (idea["名前"], idea["作中での受け止め方"]) == ("テスト術", "都での呼び名")
+    assert idea["履歴(古い順)"] == IDEA_HISTORIES
+
+
+def test_read_episode_brief(shown, world, mock_ai):
+    _, hanako = world.character_ids
+    _secrets(shown, world)
+
+    result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
+
+    episode = result["この話"]
+    hanako_row = next(member for member in episode["登場人物"] if member["人物id"] == hanako)
+    assert (hanako_row["人物像を知る相手"], hanako_row["来歴(古い順)"]) == (HANAKO_KNOWERS, HANAKO_HISTORIES)
+    assert episode["登場人物の関係"] == RELATIONS
+    [idea] = episode["関係する設定"]
+    assert (idea["アイデアid"], idea["名前"]) == (world.idea_id, "テスト術")
+    assert idea["履歴(古い順)"] == IDEA_HISTORIES
 
 
 def test_session_turns(shown, world):

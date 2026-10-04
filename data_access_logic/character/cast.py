@@ -5,11 +5,13 @@ from ai.instructions.event_writing import RECENT_EVENT_LIMIT
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.models import (
-    CastCandidateSerialized, CastSerialized, CharacterRelationLine, MentionedSerialized, ParticipantSerialized,
+    CastCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine, CharacterSecrets,
+    MentionedSerialized, ParticipantSerialized,
 )
-from data_access_logic.character.histories import histories_at
+from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import events_of, summarized_events
+from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
 from db.schema import Character, Event
 from db.stamp import Stamp
@@ -58,6 +60,15 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
         )
         for character in characters
     ]
+
+
+def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecrets:
+    return CharacterSecrets(
+        knowers=knowers_at(s, character.knowers, time),
+        histories=[CharacterHistoryMaterial(start=row.start, description=row.description, private=row.private,
+                                            knowers=knowers_at(s, row.knowers, time))
+                   for row in rows_at(character, time)],
+    )
 
 
 def mentioned_of(characters: list[Character], time: Stamp) -> list[MentionedSerialized]:
