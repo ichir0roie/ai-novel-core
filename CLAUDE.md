@@ -3,6 +3,7 @@
 - Claude はユーザへの返答を常に日本語で書く。
 - 作品の中身(話・人物・設定)は db(AWS の RDS)にだけ置く。リポジトリには入れない
 - 話(`episode`)を書くのはスキル `episode`、書き直すのはスキル `revise-episode`
+- 語り部をユーザがチャットで務めて話の手番を回すのはスキル `interactive-episode`
 
 # 作業する場所
 
