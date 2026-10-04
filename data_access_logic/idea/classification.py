@@ -23,6 +23,16 @@ def _anchor(s: Session, location_id: int | None) -> tuple[Idea, int] | None:
     return None
 
 
+def classification_kinds(s: Session, location_id: int | None) -> list[str] | None:
+    """`location_id` の属する世界・星を表すアイデアの下にある分類の種別。場所を表すアイデアが見つからなければ None。"""
+    found = _anchor(s, location_id)
+    if found is None:
+        return None
+    anchor, _ = found
+    return list(s.scalars(select(Idea.name).where(Idea.parent_idea_id == anchor.id, Idea.kind == Idea.name)
+                          .order_by(Idea.id)).all())
+
+
 def find_or_create_classification(s: Session, kind: str, location_id: int | None) -> Idea | None:
     """`kind` をまとめる分類のアイデア(`name == kind` の行)を、`location_id` の属する世界・星を表すアイデアの下から探し、無ければその下に作る。
     場所を表すアイデアが見つからなければ、親を決めようがないので None(呼び出し側は `parent_idea_id` を付けない)。"""

@@ -25,6 +25,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
 | 本文の材料を読む(登場人物・場所を結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
+| 話に出た新しい語を足す | `episode_session.add_ideas.AddIdeas` | `{'episode_id': …, 'ideas': [{'keyword': …, 'description': …, 'kind': …}]}`(場所・時刻は話から取る。種別は分類のあるものから選ぶ。返るのは足した語 `added` と足さなかった語 `kept` の名前だけ) |
 | 設定を引く | `idea.resolve_ideas.ResolveIdeas` | `{'ideas': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
 | 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'appearance': <見た目>, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
 | 人物を AI に組ませて足す | `character.generate_character.GenerateCharacter` | `{'character': {'name': …, 'text': <人物像と役どころ>, 'location_id': …}, 'time': '<話の時刻>', 'plot_text': <話のプロット>}` |
@@ -82,6 +83,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 8. **本文を書く**(下の「書くとき」に沿う。手順 6 で手番を回したときは「本文に起こす」にも沿って、セッションの行を地の文にする)
    - 書いた本文はスクラッチパッドのファイルに置く
    - 書くうちに登場人物・場所を変えたくなったら、4 の `CastEpisode` で結び直し、7 を読み直してから書き続ける。書くうちに新しい固有の語を使うなら、`ResolveIdeas` で照らして返った `ideas` を踏まえる(当たらない語は候補として足される)
+   - 書き終えたら、確定の前に、本文・プロット・セッションの行に出た固有の語(獣・魔物、道具、料理、店や商会、制度・決まり、作中の呼び名、仕事の名前など)のうち、材料の「設定」に無いものをすべて挙げ、`AddIdeas` でまとめて足す。迷ったら足す。人名と場所の名前は足さない。種別は既にある分類から選ぶ(無い種別は、選べる種別の一覧を添えて断られる)
 9. **確定する**: `CommitEpisode` に `id`・`title`・`main_text`(ファイルの中身)・`synced=True` を渡す
    - `synced=True` は自動で書いた話の扱い(渡さないと手で直した話として false になる)
    - 題は、作者が決めた題があればそのまま、空なら付ける
@@ -101,8 +103,9 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 手順 6 では、語り部(エージェント `narrator`)と、台詞・行動のある登場人物一人ずつの人物役(エージェント `character-actor`)に場面を手番で演じさせる。語り部も人物役も opus・effort low(手番の返りを速くするため effort を下げる)。どちらも道具は Bash だけ。語り部と人物役は直接やり取りせず、話のセッションの表(`episode_character_session`)に行を足し・書き込むだけで進める。このセッションの Claude は二つを起こして、語り部が終わるのを待つだけにする(手番の段で、材料・前の話を抱えた大きな文脈を手番ごとに読み直さないため)。
 
-- 語り部が読むのは、プロット・時刻・場所・登場人物の表層(名前・年齢・性別・外見)・登場人物のだれとだれが知り合いか(関係の名前だけ)だけ(`tool.episode_session stage`。入口は `episode_session.read_stage.ReadStage`)。人物の芯・来歴、関係の説明・来歴、設定、前の話・本文は読まない。語り部はプロットと場所・時刻と人物の表層を機械的に回し、人物の内側は人物役が出す。手番の進め方はエージェントの定義(`.claude/agents/narrator.md`)に書いてある
+- 語り部が読むのは、プロット・時刻・場所・登場人物の表層(名前・年齢・性別・外見)・登場人物のだれとだれが知り合いか(関係の名前だけ)だけ(`tool.episode_session stage`。入口は `episode_session.read_stage.ReadStage`)。人物の芯・来歴、関係の説明・来歴、設定、前の話・本文は読まない。語り部はプロットと場所・時刻と人物の表層を機械的に回し、人物の内側は人物役が出す。場面に新しい固有の語を出したら、語り部がそのつど `add-ideas`(入口は `AddIdeas`)で足す。手番の進め方はエージェントの定義(`.claude/agents/narrator.md`)に書いてある
 - 人物役が読むのは、本人の外見・芯・ミーム・行動原理と、関係のある人物の外見・芯、知っているアイデアの呼び名と受け止め方と、それぞれの来歴のうち、知っているものだけ(公開の来歴と、非公開で知る相手に当たるもの。`data_access_logic/readme.md` の「本文・来歴を知る相手」)。筋書き(`plot`)は渡らない
+  - アイデアは、はじめに読む材料(`knowledge`)にはプロットに名前の出るものだけが入る。手番の要求に出た語は、人物役がそのつど `ideas`(入口は `character.read_known_ideas.ReadKnownIdeas`)で引き、知っているものだけを読む
 - 台詞・行動のある登場人物が一人だけの話と、ユーザが一人で書くよう頼んだときは、語り部も人物役も起こさない。手順 6 を飛ばし、このセッションの Claude がプロットから書く
 - 端役(屋台の主・通行人など)と群衆は、人物役を起こさずに語り部が演じる
 - 芯(`text`)に、関係のある人物も知らないはずの秘密(出生の秘密など)が書いてあれば、その人物の来歴(知る相手を絞った行)へ移すようユーザに伝える
