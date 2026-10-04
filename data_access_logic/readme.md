@@ -320,7 +320,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 補足:
 
-- `CommitEvent` / `UpdateEvent` / `CommitStory` / `CommitEpisode` は、確定したあとに毎回(`ai_entrypoint.py` の `CommitAndRefresh`)
+- `CommitEvent` / `UpdateEvent` / `CommitEpisode` は、確定したあとに毎回(`run()`。流れは `flows/commit.py`)
   ミームの棚卸し
   (`data_access_logic/meme/extractor.py` の `refresh`)と、出来事・話ならその場での要約(`event_summary` / 話の `summary_text`。
   本文が変わっていれば作り直す)をまとめて行うので、`ExtractMemes` を別に呼ぶ必要は無い。`CommitEvent` はさらに出来事の種を抜き出す
@@ -447,7 +447,7 @@ GUI の API(`gui/api/interface.py`)は、領域のディレクトリ直下のフ
 - AI を呼んで得た結果は、得たその場で commit する(長い AI 呼び出しの前も、それまでの保存分を commit する)。
   db だけを触る「確定する」入口は、`execute` の中で commit しない(`.claude/docs/data-access.md`)
 
-入口の基底は `entrypoint.py`(db だけを触る)と `ai_entrypoint.py`(確定のあとに AI を回す)に置く。
+入口の基底は `entrypoint.py` に置く。AI を回す入口の `result()` は、流れ(`flows/`)を呼ぶだけにする(下の「AI を呼ぶ処理と、流れ・段」)。
 読む入口が返す行の組み立ては、各領域の `reading.py` に置く(`event/reading.py` の `EventRow`、`character/reading.py` の `CharacterSheet` など)。
 
 ```
@@ -456,27 +456,26 @@ Entrypoint(entrypoint.py)
 │   ├─ CommitEntrypoint         「確定する」系。execute(s) を s.begin() に包む。GUI の API も execute(s) を呼ぶ
 │   │   ├─ commit_*.py / update_*.py / delete_*.py / merge_idea.py / set_episode_synced.py
 │   │   ├─ idea.resolve_ideas.ResolveIdeas / idea.link_ideas.LinkIdeas(候補を足す・結ぶので確定側)
-│   │   ├─ CommitAndRefresh(ai_entrypoint.py)  確定のあと要約・ミームを作る → CommitEvent / UpdateEvent / CommitStory / CommitEpisode
-│   │   └─ CommitMemeSource(ai_entrypoint.py)  確定のあと検めてミームを抜き出す → CommitOracle
+│   │   └─ CommitEvent / UpdateEvent / CommitEpisode / CommitStory / CommitOracle  execute(s) は段を呼んで確定だけ、
+│   │                           result() は確定のあとの AI(ミーム・要約・種・事実確認)まで流れ(flows/commit.py)で回す
 │   ├─ ListEntrypoint           select() の行を row() でモデルにして並べる → list_locations / list_characters / list_character_relations / list_events
-│   └─ read_*.py / list_*.py / start_story.py / search_ideas.py / list_pending_reviews.py / draw_memes.py / generate_*.py
+│   └─ read_*.py / list_*.py / start_story.py / search_ideas.py / list_pending_reviews.py / draw_memes.py
+├─ AI を回す入口(generate_*.py / complete_plot.py / read_episode_brief.py / read_episode_casting.py / rewrite_episode_summary.py /
+│   extract_memes.py / refresh_generated_content.py / check_facts.py)  result() で流れ(flows/)を呼ぶだけ
 └─ RandomDraft                  db に触れない下書き作成 → create_random_*.py
 ```
 
-(`meme.extract_memes.ExtractMemes`・`meme.refresh_generated_content.RefreshGeneratedContent`・`fact_check.check_facts.CheckFacts` は、
-AI の結果を得るたびに commit しながら一つのセッションで回し、`execute(s)` を持たないので `Entrypoint` を直接継ぎ、`result()` を書く)
+### AI を呼ぶ処理と、流れ・段
 
-### AI を呼ぶ処理と、web のセッションの段
+AI を呼ぶ処理は、db だけの関数(対象を引く `*_targets`、材料を組む `*_material`、書き戻す `save_*`)を `<領域>/steps.py` の段
+(`@db_step`。`step.py`)にし、AI だけの関数(`*_draft`。材料のモデルを受けて AI の出力のモデルを返し、db に触らない)と分けて置く。
+二つをつなぐ流れは `flows/` に一つだけ持ち、段は `caller.call` で呼ぶ。手元では段を自分のセッションで回し、
+db に繋がない Claude Code on the web のセッションでは、`web_session/flows.run` が口を API(`POST /api/steps/<領域>.steps.<関数名>`)に
+差し替えて同じ入口を回す(`.docs/claude-tasks.md`)。
 
-AI を呼ぶ処理は、db だけの関数(対象を引く `*_targets`、材料を組む `*_material`、書き戻す `save_*`)と、
-AI だけの関数(`*_draft`。材料のモデルを受けて AI の出力のモデルを返し、db に触らない)に分けて置く。
-手元の入口はそれを自分のセッションでつなぐ。Claude Code on the web のセッションは db に繋がないので、
-db だけの関数を `<領域>/steps.py` の段(`@db_step`。`step.py`)として API(`POST /api/steps/<領域>.steps.<関数名>`)越しに呼び、
-流れは `web_session/` に持つ(`.docs/claude-tasks.md` の「web のセッションで回す」)。
-
-- 段は API の一つのトランザクションで回るので、中で commit しない
-- 段の入力・出力は pydantic のモデル。出力は `*Serialized` でない土台のマテリアルで宣言する(列のまま JSON で運ぶ)
-- claude を叩く入口を足したら、段と `web_session/` の流れ(`web_session/flows.py` の対応表)も足す
+- 段は一つのトランザクションで回り、終わりに commit する(AI の結果を書き戻す段を一回呼ぶのが一つの commit)。段の中で commit しない
+- 段の入力・出力は pydantic のモデル。出力は `*Serialized` でない土台のマテリアルで宣言する(web では列のまま JSON で運ぶ)
+- claude を叩く入口を足したら、段と `flows/` の流れも足す
 
 ## 引き方は query 側にある
 

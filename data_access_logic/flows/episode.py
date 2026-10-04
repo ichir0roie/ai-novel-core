@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""話の枠の生成・プロット補完・概要の作り直しと、Claude が自分で書くための材料の読み出しを、API 越しに回す。
+"""話の枠の生成・プロット補完・概要の作り直しと、Claude が自分で書くための材料の読み出しの流れ。
 
-引数は `data_access_logic/episode/` の入口(`GenerateFrame` など)と同じ。db の段は `data_access_logic/episode/steps.py`、
+db の段は `data_access_logic/episode/steps.py`、
 AI の段は `framer` / `plot_completer` の `*_draft`。
 AI の呼び出しの前に下書きを枠として保存し、AI の結果は得たその場で書き戻す(途中で落ちても、それまでの分は残す)。
 """
@@ -23,9 +23,9 @@ from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.stamp import Stamp
-from web_session import character
-from web_session.api import call
-from web_session.summary import refresh, rewrite_episode_summaries
+from data_access_logic.flows import character
+from data_access_logic.caller import call
+from data_access_logic.flows.summary import refresh, rewrite_episode_summaries
 
 logger = logging.getLogger(__name__)
 

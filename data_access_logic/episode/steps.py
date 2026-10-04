@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""話の db の段(`data_access_logic/step.py`)。web のセッション(`web_session/episode.py`)が API 越しに呼ぶ。"""
+"""話の db の段(`data_access_logic/step.py`)。流れ(`data_access_logic/flows/`)が、手元では自分のセッションで、web のセッションでは API 越しに呼ぶ。"""
 from __future__ import annotations
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from data_access_logic.entrypoint import record_of
+from ai.instructions.style import layout_novel_text
+from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode import brief, framer, material, plot_completer
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
-from data_access_logic.episode.commit_episode import CommitEpisode
-from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, has_cast, save_frame
+from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, has_cast, save_frame, set_characters
+from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.models import (
     EpisodeBrief, EpisodeCasting, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodeSummarySource,
@@ -20,7 +21,8 @@ from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.step import RowId, db_step
 from data_access_logic.summary_targets import SummaryTargets
-from db.schema import Episode
+from data_access_logic.query import common_query
+from db.schema import Character, Episode, Location, Story
 from db.stamp import Stamp
 
 
@@ -173,7 +175,33 @@ def add_location(s: Session, form: NewLocationForm) -> None:
 
 @db_step
 def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
-    return CommitEpisode(form).execute(s)
+    CommitEntrypoint.check_exists(s, Story, form.story_id, "story_id")
+    CommitEntrypoint.check_exists(s, Character, form.viewpoint_character_id, "viewpoint_character_id")
+    CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
+    for character_id in form.character_ids or []:
+        CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")
+
+    if form.id is None:
+        record = Episode(plot_text="", title="")
+        s.add(record)
+    else:
+        record = common_query.get_row(s, Episode, form.id)
+    written_text = record.main_text
+    form.write_changes_to(record)
+    # 手で直した話は、世界観へ戻し直すまで同期していない扱いにする(GUI で同期フラグを渡されたらそれに従う)
+    if form.synced is None:
+        record.synced = False
+    if form.main_text is not None:
+        record.main_text = layout_novel_text(form.main_text)
+        # 本文が変わったら、次の抽出でミームを抜き出し直す
+        if record.main_text != written_text:
+            record.meme_seeded = False
+    CommitEntrypoint.finalize(s, record)
+    # 渡されなければ既存の登場人物はそのまま
+    if form.character_ids is not None:
+        set_characters(s, record.id, form.character_ids)
+    save_mentions(s, record.id)
+    return record_of(s, EpisodeRecord, record)
 
 
 @db_step

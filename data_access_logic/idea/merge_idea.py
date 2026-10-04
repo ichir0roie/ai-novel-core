@@ -24,7 +24,6 @@ class MergedIdea(BaseModel):
 
 
 class MergeIdea(CommitEntrypoint):
-    model = Idea
 
     def __init__(self, source_id: int, target_id: int):
         self.source_id = source_id

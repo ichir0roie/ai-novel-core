@@ -3,7 +3,7 @@
 
 db だけの段(`pending_sources` / `meme_texts` / `save_memes` / `unclassified_sources` / `save_categories` / `meme_pool`)と、
 AI だけの段(`extraction_draft` → `without_duplicates`、`classify_draft`)に分けてある。
-手元では `refresh` がつなぎ、web のセッションでは `web_session/meme.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/meme.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -154,41 +154,6 @@ def save_categories(s: Session, categories: list[MemeCategory]) -> int:
         s.get_one(Meme, item.id).category = item.category
     s.flush()
     return len(categories)
-
-
-def _classify(s: Session, ai: AIClient) -> int:
-    unclassified = unclassified_sources(s)
-    classified = 0
-    for batch in batches(unclassified, constants.MEME_BATCH_LETTERS):
-        categories = classify_draft(ai, batch)
-        if categories is None:
-            continue
-        classified += save_categories(s, categories)
-        s.commit()
-    if unclassified:
-        logger.info(f"分類の空いたミーム{len(unclassified)}件のうち、{classified}件に分類を振った")
-    return classified
-
-
-def refresh(s: Session, ai: AIClient) -> int:
-    """抜き出せなかった元は `meme_seeded` を false のまま残し、次の回に抜き出し直す。足したミームの件数を返す。"""
-    pending = pending_sources(s)
-    added = 0
-    for batch in batches(pending, constants.MEME_BATCH_LETTERS):
-        decided = extraction_draft(ai, batch)
-        if decided is None:
-            logger.warning(f"元{len(batch)}件からミームを抜き出せなかった。次の回に抜き出し直す")
-            continue
-        fresh = without_duplicates(ai, decided.memes, meme_texts(s))
-        if fresh is None:
-            logger.warning(f"元{len(batch)}件から抜き出したミームの重複を確かめられなかった。次の回に抜き出し直す")
-            continue
-        added += save_memes(s, fresh, batch)
-        s.commit()
-    if pending:
-        logger.info(f"元{len(pending)}件から抜き出し、ミームを{added}件足した")
-    _classify(s, ai)
-    return added
 
 
 def meme_pool(s: Session, categories: tuple[str, ...]) -> list[PooledMeme]:

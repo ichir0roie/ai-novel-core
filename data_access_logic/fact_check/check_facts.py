@@ -10,20 +10,21 @@
 from __future__ import annotations
 
 from ai.claude_code import ai_client, fact_checker
+from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import Entrypoint
-from db.schema import get_env_session
+from data_access_logic.flows import refresh
 
 __all__ = ["CheckFacts"]
 
 
 class CheckFacts(Entrypoint):
-    def __init__(self, table: str, ids: list[int] | None = None, limit: int | None = None):
+    def __init__(self, table: str, ids: list[int] | None = None, limit: int | None = None, ai: AIClient = ai_client):
         if table not in fact_checker.MODELS:
             raise ValueError(f"table は {'/'.join(fact_checker.MODELS)} のいずれか: {table!r}")
         self.table = table
         self.ids = ids
         self.limit = limit
+        self.ai = ai
 
     def result(self) -> fact_checker.FactChecked:
-        with get_env_session() as s:
-            return fact_checker.check_and_extract(s, ai_client, self.table, self.ids, self.limit)
+        return refresh.check_facts(self.table, self.ids, self.limit, self.ai)

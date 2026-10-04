@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""材料に要約で渡す話・出来事の要約を、API 越しに本文へ揃える(手元の `data_access_logic/summary_targets.refresh` に当たる)。
+"""材料に要約で渡す話・出来事の要約を、本文へ揃える流れ。
 
 AI の結果は得たその場で一件ずつ書き戻す(後の要約で AI が落ちても、それまでの要約は残す)。
 """
@@ -14,7 +14,7 @@ from data_access_logic.episode.summary import summary_draft as episode_summary_d
 from data_access_logic.event import steps as event_steps
 from data_access_logic.event.summary import summary_draft as event_summary_draft
 from data_access_logic.summary_targets import SummaryTargets
-from web_session.api import call
+from data_access_logic.caller import call
 
 logger = logging.getLogger(__name__)
 

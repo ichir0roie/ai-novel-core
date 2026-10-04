@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
-"""出来事の db の段(`data_access_logic/step.py`)。web のセッション(`web_session/event.py`)が API 越しに呼ぶ。"""
+"""出来事の db の段(`data_access_logic/step.py`)。流れ(`data_access_logic/flows/`)が、手元では自分のセッションで、web のセッションでは API 越しに呼ぶ。"""
 from __future__ import annotations
 
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from data_access_logic.entrypoint import record_of
+from data_access_logic.entrypoint import CommitEntrypoint, record_of, reloaded
 from data_access_logic.event import progress, writer
 from data_access_logic.event import summary as event_summary
-from data_access_logic.event.commit_event import CommitEvent
 from data_access_logic.event.form import EventCreateForm, EventForm, EventUpdateForm
-from data_access_logic.event.generate_event import EventPlan, finish_generated, plan_event, textless_event
+from data_access_logic.event.plan import EventPlan, finish_generated, plan_event, textless_event
 from data_access_logic.event.models import EventSummarySource
 from data_access_logic.event.progress_models import EventRecordDraft, LocationSituationMaterial
 from data_access_logic.event.record import EventRecord
-from data_access_logic.event.update_event import UpdateEvent
 from data_access_logic.event.writer_models import EventTextDraft, EventTextMaterial
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.step import RowId, db_step
 from data_access_logic.summary_targets import SummaryTargets
-from db.schema import Character, Event
+from data_access_logic.query import common_query
+from db.schema import Character, Event, EventCharacter, Location
 from db.stamp import Stamp
 
 
@@ -121,12 +120,32 @@ def save_progress(s: Session, form: ProgressForm) -> EventRecord:
 
 @db_step
 def commit_event(s: Session, form: EventCreateForm) -> EventRecord:
-    return CommitEvent(form).execute(s)
+    CommitEntrypoint.check_exists(s, Event, form.parent_event_id, "parent_event_id")
+    CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
+    for character_id in form.character_ids:
+        CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")
+    record = Event()
+    form.write_to(record)
+    record.event_characters = [EventCharacter(character_id=character_id) for character_id in form.character_ids]
+    s.add(record)
+    s.flush()
+    return record_of(s, EventRecord, record)
 
 
 @db_step
 def update_event(s: Session, form: EventUpdateForm) -> EventRecord:
-    return UpdateEvent(form).execute(s)
+    record = reloaded(s, common_query.get_row(s, Event, form.id), selectinload(Event.event_characters))
+    if form.parent_event_id == form.id:
+        raise ValueError(f"parent_event_id={form.id} が自分自身を指している")
+    CommitEntrypoint.check_exists(s, Event, form.parent_event_id, "parent_event_id")
+    CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
+    for character_id in form.character_ids or []:
+        CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")
+    form.write_changes_to(record)
+    if form.character_ids is not None:
+        record.event_characters = [EventCharacter(character_id=character_id) for character_id in form.character_ids]
+    CommitEntrypoint.finalize(s, record)
+    return record_of(s, EventRecord, record)
 
 
 @db_step

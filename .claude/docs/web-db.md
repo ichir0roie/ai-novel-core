@@ -31,9 +31,9 @@
 | 行を並べる・絞る | `curl -sS -H "$h" "$api/api/tables/<表>/records?<列>=<値>&sort=<列>&order=asc&limit=500"` |
 | 行を一つ読む | `curl -sS -H "$h" "$api/api/tables/<表>/records/<id>"`(`.record` に列が入る) |
 | db だけの入口(claude を叩かない) | `curl -sS -H "$h" -H 'content-type: application/json' -d '{"args":{...}}' "$api/api/interface/<入口の id>"` |
-| claude を叩く入口 | web の流れを python で回す(`web_session/flows.py` の対応表。入口と同じ引数)。下の例 |
+| claude を叩く入口 | `web_session/flows.py` の `run` で、入口の id と引数(手元と同じ)を渡して python で回す。下の例 |
 
-claude を叩く入口の web の流れは、AI(`claude -p`)をこのセッションで回し、db の段だけを API で呼ぶ。数分〜十数分かかるので `run_in_background` で回す。入口の id と引数(JSON の形)で回す例:
+claude を叩く入口は、手元と同じ流れ(`data_access_logic/flows/`)で AI(`claude -p`)をこのセッションで回し、db の段だけを API で呼ぶ。数分〜十数分かかるので `run_in_background` で回す。入口の id と引数(JSON の形)で回す例:
 
 ```
 .venv/bin/python -c "

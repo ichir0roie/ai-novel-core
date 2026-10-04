@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""アイデアの db の段(`data_access_logic/step.py`)。web のセッション(`web_session/`)が API 越しに呼ぶ。"""
+"""アイデアの db の段(`data_access_logic/step.py`)。流れ(`data_access_logic/flows/`)が、手元では自分のセッションで、web のセッションでは API 越しに呼ぶ。"""
 from __future__ import annotations
 
 from pydantic import BaseModel

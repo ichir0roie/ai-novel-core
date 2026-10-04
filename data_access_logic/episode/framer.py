@@ -2,7 +2,7 @@
 """本文は書かない(本文はスキル `episode` でこのセッションの Claude が書く)。
 
 db だけの段(`framing_targets` → 要約を揃える → `frame_material` → `save_frame_draft`)と、AI だけの段(`frame_draft`)に分けてある。
-手元では `frame_episode` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from data_access_logic.episode.mentions import cast_characters, mentioned_in, sa
 from data_access_logic.episode.summary import latest_past_episode, past_episodes
 from data_access_logic.event.summary import events_of
 from data_access_logic.query import common_query
-from data_access_logic.summary_targets import SummaryTargets, refresh
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Episode
 from db.stamp import Stamp, StampError
 
@@ -114,14 +114,4 @@ def save_frame_draft(s: Session, episode_id: int, draft: EpisodeFrameDraft, star
     s.flush()
     save_mentions(s, episode_id)
     logger.info(f"{start}「{record.title}」 id={record.id} の枠を決めた")
-    return record
-
-
-def frame_episode(s: Session, ai: AIClient, episode_id: int) -> Episode:
-    """題・プロットは作者の指定を核に AI が組み立て直し、時刻は決まっていればそれ、無ければ AI が直前の話の後から選ぶ。"""
-    refresh(s, ai, framing_targets(s, episode_id))
-    material = frame_material(s, episode_id)
-    draft = frame_draft(ai, material)
-    record = save_frame_draft(s, episode_id, draft, frame_start(material, draft))
-    s.commit()
     return record

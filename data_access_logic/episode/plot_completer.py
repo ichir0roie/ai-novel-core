@@ -3,12 +3,11 @@
 
 材料は `material.writing_targets` → 要約を揃える → `material.episode_material`。
 AI だけの段(`plot_draft`・`casting_draft`)と db だけの段(`save_plot`・`material.known_locations`・`add_cast_member`・`add_location`)に分けてあり、
-手元では `complete_plot` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
 
 import logging
-import random
 
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -22,17 +21,14 @@ from ai.instructions.naming import PLACE_NAMING_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import mentioned_of
 from data_access_logic.character.form import CharacterForm
-from data_access_logic.character.generator import generate_character
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.models import (
     EpisodeCastingDraft, EpisodeCastingRequestSerialized, EpisodeCharacterCandidateDraft, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodePlotDraft, EpisodePlotRequestSerialized,
 )
 from data_access_logic.episode.mentions import mentioned_in, save_mentions
-from data_access_logic.episode.material import episode_material, known_locations, load_episode, writing_targets
-from data_access_logic.idea.search import keywords_of
+from data_access_logic.episode.material import load_episode
 from data_access_logic.location.models import LocationMaterial
-from data_access_logic.summary_targets import refresh
 from db.schema import Character, Episode, EpisodeCharacter, Location
 from db.stamp import Stamp
 
@@ -133,49 +129,3 @@ def character_draft(candidate: EpisodeCharacterCandidateDraft) -> CharacterForm:
     """候補の人物像と役どころを、作る人物の説明の下書きにする。プロットが固有の名で呼ぶときだけ、その名を作者の名にする
     (役職・あだ名を名にすると、名付けの重なりよけも飛んでしまう)。"""
     return CharacterForm(name=candidate.name or None, text=f"{candidate.text}\n(プロットでの呼び名: {candidate.called})")
-
-
-def add_characters(
-    s: Session, ai: AIClient, episode_id: int, candidates: list[EpisodeCharacterCandidateDraft],
-    location_id: int | None, time: Stamp, plot_text: str,
-) -> None:
-    rng = random.Random()
-    for candidate in candidates:
-        # generate_character は一人ごとに commit するので、途中で止まっても作った人物は残る
-        record = generate_character(
-            s, ai, rng, location_id, time, True, character_draft(candidate), plot_text)
-        if record is None:
-            logger.warning(f"「{candidate.called}」の人物が得られなかったので足さない")
-            continue
-        add_cast_member(s, episode_id, record.id)
-        s.commit()
-
-
-def complete_plot(
-    s: Session, ai: AIClient, episode_id: int, order: str | None, model: str, effort: str,
-) -> Episode:
-    """今のプロットを核に、`order`(作者の注文。無ければ None)も取り入れて、本文全体を場面に割ったプロットを書き直させ、
-    それでプロットをそっくり置き換える(今のプロットの中身は書き直したプロットに含めさせる)。
-    書き直したプロットに出るのに材料に無い人物は作って登場人物に足し、話の場所より細かい舞台はその場所の下に作って話の場所にする。
-    `model` / `effort` はプロットの書き直しと候補の呼び出しに渡す(人物を作る呼び出しは人物の生成の既定のまま)。"""
-    targets = writing_targets(s, episode_id)
-    refresh(s, ai, targets)
-    material = episode_material(s, episode_id, keywords_of(targets.plot_text, ai, targets.start))
-    s.commit()
-    plot_text = plot_draft(ai, material, order, model, effort)
-    save_plot(s, episode_id, plot_text)
-    s.commit()
-
-    location_id = material.locations[-1].id if material.locations else None
-    casting = casting_draft(
-        ai, material, plot_text, known_locations(s, location_id),
-        known_characters(s, episode_id, material.main_episode.start), model, effort)
-    if casting is not None and casting.characters:
-        add_characters(s, ai, episode_id, casting.characters, location_id, material.main_episode.start, plot_text)
-    if casting is not None and casting.location is not None:
-        add_location(s, episode_id, casting.location, location_id)
-        s.commit()
-
-    record = s.get_one(Episode, episode_id)
-    logger.info(f"{material.story.name}「{record.title}」 id={record.id} のプロットを補完した")
-    return record

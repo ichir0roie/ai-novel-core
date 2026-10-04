@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""事実確認を、API 越しに回す(手元の `ai/claude_code/fact_checker` の `check` などに当たる)。
+"""事実確認の流れ。
 
 AI の結果は束ごとに、得たその場で書き戻す。
 """
@@ -11,8 +11,8 @@ from ai.claude_code import fact_checker
 from data_access_logic.ai_client import AIClient
 from data_access_logic.fact_check import steps as fact_steps
 from data_access_logic.source_text import batches
-from web_session import meme
-from web_session.api import call
+from data_access_logic.flows import meme
+from data_access_logic.caller import call
 
 logger = logging.getLogger(__name__)
 

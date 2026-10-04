@@ -23,7 +23,6 @@ class RefreshMentions(CommitEntrypoint):
     `episode_ids` を省けばすべての話。登場人物(`mentioned` でない行)は変えない。
     """
 
-    model = Episode
 
     def __init__(self, episode_ids: list[int] | None = None):
         self.episode_ids = episode_ids

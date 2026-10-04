@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""出来事の種の抜き出しと棚卸しを、API 越しに回す(手元の `data_access_logic/event_seed/extractor.refresh_and_consolidate` に当たる)。
+"""出来事の種の抜き出しと棚卸しの流れ。
 
 AI の結果は束ごとに、得たその場で書き戻す。
 """
@@ -13,7 +13,7 @@ from data_access_logic.event_seed import extractor
 from data_access_logic.event_seed import steps as seed_steps
 from data_access_logic.source_text import batches
 from data_access_logic.step import RowIds
-from web_session.api import call
+from data_access_logic.caller import call
 
 logger = logging.getLogger(__name__)
 

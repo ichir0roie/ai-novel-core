@@ -12,7 +12,6 @@ from db.schema import Location
 
 
 class UpdateLocation(CommitEntrypoint):
-    model = Location
 
     def __init__(self, location: LocationUpdateForm):
         self.location = location

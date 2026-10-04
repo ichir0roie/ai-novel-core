@@ -5,8 +5,7 @@
 名前は中身が決まったあとに、その内容と居場所から候補を出させ、同じ場所にいる人物・対象の名を避けてサイコロで選ぶ。
 
 db だけの段(`birth_sources` → 語をアイデアと照らす `resolve_ideas` → `save_character`)と、AI・乱数だけの段
-(`character_content` → `character_creation`)に分けてある。手元では `generate_character` がつなぎ、
-web のセッションでは `web_session/character.py` が API 越しにつなぐ。
+(`character_content` → `character_creation`)に分けてある。流れ(`data_access_logic/flows/character.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -32,7 +31,6 @@ from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.naming import named
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
 from data_access_logic.character.record import CharacterHistoryRow
-from data_access_logic.idea.context import gather_ideas
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial
 from data_access_logic.meme.extractor import draw_from, meme_pool, position_legend
 from data_access_logic.meme.models import DrawnMeme
@@ -367,28 +365,6 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
     return record
 
 
-def generate_character(
-    s: Session,
-    ai: AIClient,
-    rng: random.Random,
-    born_location_id: int | None,
-    time: Stamp,
-    person: bool,
-    form: CharacterForm | None = None,
-    plot_text: str | None = None,
-    elements: list[str] | None = None,
-) -> Character | None:
-    """中身が得られなければ足さずに None を返す。`plot_text` / `elements` は `character_content` に渡す。"""
-    decided = character_content(
-        ai, rng, birth_sources(s, born_location_id, time, person), time, person, form, plot_text, elements)
-    if decided is None:
-        return None
-    ideas = gather_ideas(s, decided.content.text, ai, born_location_id, time)
-    record = save_character(s, character_creation(ai, rng, decided, ideas, born_location_id, form))
-    s.commit()
-    return record
-
-
 def completion_target(s: Session, character_id: int) -> CompletionTarget:
     record = s.get_one(Character, character_id)
     if (record.text or "").strip():
@@ -443,16 +419,4 @@ def save_completed_text(s: Session, character_id: int, writing: CharacterWriting
         if row.start is not None:
             add_history(record, row.start, row.description)
     s.flush()
-    return record
-
-
-def complete_text(s: Session, ai: AIClient, rng: random.Random, character_id: int) -> Character:
-    """人物・対象の芯(text)が空のとき、決まっている名前・属性・出自を核に AI に説明と来歴だけを書かせて埋める。
-    性別・体格・口調・性格・種別・生年・没年・名前は変えない。"""
-    target = completion_target(s, character_id)
-    material, content = completion_content(
-        ai, rng, target, birth_sources(s, target.born_location_id, target.time, target.person))
-    ideas = gather_ideas(s, content.text, ai, target.born_location_id, target.time)
-    record = save_completed_text(s, character_id, completed_text(ai, target, material, content, ideas))
-    s.commit()
     return record

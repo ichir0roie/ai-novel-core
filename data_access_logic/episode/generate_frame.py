@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
-
 from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
-from data_access_logic.entrypoint import SessionEntrypoint, record_of
-from data_access_logic.episode import framer
-from data_access_logic.episode.form import EpisodeForm, save_frame
+from data_access_logic.entrypoint import Entrypoint
+from data_access_logic.episode.form import EpisodeForm
 from data_access_logic.episode.record import EpisodeRecord
+from data_access_logic.flows import episode
 
 
-class GenerateFrame(SessionEntrypoint):
+class GenerateFrame(Entrypoint):
     """作者の下書き(GUI の欄の値。`story_id` 以外は空でもよい)を核に、本文の無い話の枠(題・プロット・時刻)を
     AI に決めさせて足す。`id` を渡せばその枠(本文の無い話)を決め直す。本文はスキル `episode` で Claude が書く。
 
@@ -25,8 +23,5 @@ class GenerateFrame(SessionEntrypoint):
         self.frame = frame
         self.ai = ai
 
-    def execute(self, s: Session) -> EpisodeRecord:
-        record = save_frame(s, self.frame)
-        s.commit()
-        framed = framer.frame_episode(s, self.ai, record.id)
-        return record_of(s, EpisodeRecord, framed)
+    def result(self) -> EpisodeRecord:
+        return episode.generate_frame(self.frame, self.ai)

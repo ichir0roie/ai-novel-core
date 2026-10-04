@@ -10,7 +10,6 @@ from db.schema import Episode
 
 
 class SetEpisodeSynced(CommitEntrypoint):
-    model = Episode
 
     def __init__(self, episode_id: int, synced: bool = True):
         self.episode_id = episode_id

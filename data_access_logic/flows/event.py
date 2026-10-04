@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""出来事の生成を、API 越しに回す。
+"""出来事の生成の流れ(`GenerateEvent`)。
 
-引数は `data_access_logic/event/generate_event.py` の入口(`GenerateEvent`)と同じ。db の段は `data_access_logic/event/steps.py`、
+db の段は `data_access_logic/event/steps.py`、
 AI・乱数の段は `data_access_logic/event/progress.py` の `rolled_candidate` / `record_draft` と `writer.text_draft`。
 """
 from __future__ import annotations
@@ -17,9 +17,9 @@ from data_access_logic.event.record import EventRecord
 from data_access_logic.event_seed import steps as seed_steps
 from data_access_logic.event_seed.extractor import draw_from
 from data_access_logic.step import RowId
-from web_session import event_seed
-from web_session.api import call
-from web_session.summary import refresh
+from data_access_logic.flows import event_seed
+from data_access_logic.caller import call
+from data_access_logic.flows.summary import refresh
 
 
 def _write_text(ai: AIClient, event_id: int) -> EventRecord:

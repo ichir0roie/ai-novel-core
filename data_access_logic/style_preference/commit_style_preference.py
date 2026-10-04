@@ -11,7 +11,6 @@ from db.schema import StylePreference
 
 
 class CommitStylePreference(CommitEntrypoint):
-    model = StylePreference
 
     def __init__(self, style_preference: StylePreferenceCreateForm):
         self.style_preference = style_preference

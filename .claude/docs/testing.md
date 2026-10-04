@@ -38,7 +38,10 @@
 - セッションの途中で PostGIS が止まることがある(`connection refused`、API の 500)。`infra_local/postgis.sh` を回し直せば立ち上がり、db の中身は残る
 - AI を呼ぶ処理では本物の claude を呼ばない。`tool.test.mock_ai_client.MockAIClient` を `ai` に渡すか、`ai.claude_code.ai_client.generate` を差し替える
 
-## web の流れ(`web_session/`)を確かめる
+## web の口(`web_session/`)を確かめる
+
+流れは手元の入口と同じ(`data_access_logic/flows/`)なので、ふだんは pytest で足りる。API 越しの口まで確かめるときだけ、次のようにする。
+
 
 - 新しい段・入口を確かめるのに、マージやデプロイをして本番の API で試さない(手元に起こした API に今のコードの段がある)
 - テスト用の db に向けた API を手元に起こす(下の「GUI を起こす」)。`NOVEL_API_KEYS` を渡さなければ合言葉を確かめない

@@ -90,8 +90,6 @@ class ListEntrypoint(SessionEntrypoint):
 # `execute()` は `s.begin()` に包むので、その中で `s.commit()` は呼ばない
 # (成功時は抜けるときにまとめて commit、例外時は rollback される。docstring にすると、継いだ入口の説明として GUI に出てしまう)
 class CommitEntrypoint(SessionEntrypoint):
-    model: type
-
     def result(self) -> BaseModel | Sequence[BaseModel]:
         with get_env_session() as s, s.begin():
             return self.execute(s)

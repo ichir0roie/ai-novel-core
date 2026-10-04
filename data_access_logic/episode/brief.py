@@ -6,7 +6,7 @@
 アイデアと照らして `LinkIdeas` で結んでから `episode_brief` を読む(スキル `episode` / `revise-episode`)。
 本文は Claude が `CommitEpisode` で確定する。
 どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える → `episode_casting` / `episode_brief`)に分けてある。
-手元では `read_casting` / `read_brief` がつなぎ、web のセッションでは `web_session/episode.py` が API 越しにつなぐ。
+流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
-from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import candidate_at, cast_of, mentioned_of, relations_at, secrets_at
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
@@ -32,7 +31,7 @@ from data_access_logic.idea.links import linked_ideas_at
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
 from data_access_logic.style_preference.form import StyleTarget
-from data_access_logic.summary_targets import SummaryTargets, refresh
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Episode
 
 
@@ -113,13 +112,3 @@ def episode_brief(s: Session, episode_id: int) -> EpisodeBriefSerialized:
         later_events=events_of(s, later_events_select(location_id, characters, time)),
         guide=_guide(s),
     )
-
-
-def read_casting(s: Session, ai: AIClient, episode_id: int) -> EpisodeCastingSerialized:
-    refresh(s, ai, casting_targets(s, episode_id))
-    return episode_casting(s, episode_id)
-
-
-def read_brief(s: Session, ai: AIClient, episode_id: int) -> EpisodeBriefSerialized:
-    refresh(s, ai, brief_targets(s, episode_id))
-    return episode_brief(s, episode_id)

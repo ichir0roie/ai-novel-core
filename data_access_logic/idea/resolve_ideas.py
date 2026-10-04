@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaMaterial, IdeaHistoryMaterial, IdeaDraft
-from db.schema import Idea
 from db.stamp import Stamp
 
 
@@ -47,7 +46,6 @@ def _resolved(idea: IdeaMaterial, history: IdeaHistoryMaterial | None = None) ->
 
 
 class ResolveIdeas(CommitEntrypoint):
-    model = Idea
 
     def __init__(self, ideas: list[IdeaDraft], location_id: int | None = None, time: Stamp | str | None = None):
         self.ideas = ideas

@@ -10,11 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
-from data_access_logic.ai_client import AIClient
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.models import IdeaContextSerialized, IdeaMaterial, IdeaDraft, RelatedIdeaMaterial, unique_ideas
-from data_access_logic.idea.search import keywords_of, search, spellings
+from data_access_logic.idea.search import search, spellings
 from data_access_logic.query import common_query, dictionary_query
 from db.schema import Character, Idea, IdeaHistory, Location
 from db.stamp import Stamp
@@ -106,10 +105,3 @@ def resolve_ideas(
         candidates=list(candidates.values()),
         related=[RelatedIdeaMaterial(idea=idea, history=histories.get(idea.id)) for idea in related],
     )
-
-
-def gather_ideas(s: Session, draft: str, ai: AIClient, location_id: int | None, time: Stamp | None) -> IdeaContextSerialized:
-    """AI が洗い出した語から足した候補は、この後の生成が失敗しても残すよう、その場で確定する。"""
-    context = resolve_ideas(s, keywords_of(draft, ai, time), location_id, time)
-    s.commit()
-    return context

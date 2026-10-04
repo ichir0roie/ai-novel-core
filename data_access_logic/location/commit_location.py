@@ -11,7 +11,6 @@ from db.schema import Location
 
 
 class CommitLocation(CommitEntrypoint):
-    model = Location
 
     def __init__(self, location: LocationCreateForm):
         self.location = location

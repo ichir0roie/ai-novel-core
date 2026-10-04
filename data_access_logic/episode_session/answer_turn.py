@@ -14,7 +14,6 @@ from db.schema import EpisodeCharacterSession
 class AnswerTurn(CommitEntrypoint):
     """人物役が、自分の番の要求の行に一手(内心・行動・セリフ・狙い)を入れる。"""
 
-    model = EpisodeCharacterSession
 
     def __init__(self, record_id: int, answer: TurnAnswer):
         self.record_id = record_id

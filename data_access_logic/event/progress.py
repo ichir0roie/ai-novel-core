@@ -2,8 +2,7 @@
 """場所に居合わせる人物・対象から、候補をサイコロ → 記録、の順で出来事を一件起こす。
 
 db だけの段(`situation_targets` → 要約を揃える → `situation` / `destinations` → `save_progress`)と、
-AI・乱数だけの段(`rolled_candidate` → `record_draft`)に分けてある。手元では `progress_location` がつなぎ、
-web のセッションでは `web_session/event.py` が API 越しにつなぐ。
+AI・乱数だけの段(`rolled_candidate` → `record_draft`)に分けてある。流れ(`data_access_logic/flows/event.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -29,7 +28,7 @@ from data_access_logic.event.progress_models import (
 from data_access_logic.event.summary import events_of
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.query import common_query, world_creation_query
-from data_access_logic.summary_targets import SummaryTargets, refresh
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, CharacterLocation, Event, EventCharacter, Location
 from db.stamp import Stamp
 
@@ -217,28 +216,4 @@ def save_progress(
           + (f" / 移動: {'; '.join(move_notes)}" if move_notes else "")
           + (f" / 人物・対象更新: {'; '.join(update_notes)}" if update_notes else "")
           + (f" / 場所: {'; '.join(location_notes)}" if location_notes else ""))
-    return record
-
-
-def progress_location(
-    s: Session,
-    ai: AIClient,
-    rng: random.Random,
-    location_id: int,
-    characters: list[Character],
-    time: Stamp,
-    seeds: list[str],
-    scene: str | None,
-) -> Event | None:
-    refresh(s, ai, situation_targets(s, location_id, characters, time))
-    current = situation(s, location_id, characters, time, scene)
-    candidate = rolled_candidate(ai, rng, current, seeds)
-    if candidate is None:
-        return None
-    moves = destinations(s, location_id, time)
-    draft = record_draft(ai, current, moves, candidate)
-    if draft is None:
-        return None
-    record = save_progress(s, location_id, characters, time, moves, draft)
-    s.commit()
     return record

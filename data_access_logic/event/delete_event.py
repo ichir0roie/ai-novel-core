@@ -11,7 +11,6 @@ from db.schema import Event, EventCharacter, EventSummary
 
 
 class DeleteEvent(CommitEntrypoint):
-    model = Event
 
     def __init__(self, event_id: int):
         self.event_id = event_id

@@ -20,7 +20,6 @@ class LinkedIdeas(BaseModel):
 
 
 class LinkIdeas(CommitEntrypoint):
-    model = Idea
 
     def __init__(self, idea_ids: list[int], episode_id: int):
         self.idea_ids = idea_ids
