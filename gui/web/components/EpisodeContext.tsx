@@ -6,7 +6,6 @@ import EpisodeCharacterRelations from "@/components/EpisodeCharacterRelations";
 import EpisodeCharacters from "@/components/EpisodeCharacters";
 import Modal from "@/components/Modal";
 import type { Labels, Rec } from "@/lib/api";
-import { useMeta } from "@/lib/meta";
 import { T } from "@/lib/text";
 
 type ContextTableKey = "event" | "story";
@@ -28,14 +27,12 @@ type CharactersProps = {
 export default function EpisodeContext({
   context, characterIds, onChangeCharacterIds, episodeStart, episodeLocationId,
 }: { context: Context } & Partial<CharactersProps>) {
-  const { tables } = useMeta();
   const [open, setOpen] = useState<ContextTableKey | null>(null);
 
   const entries = CATEGORY_KEYS.filter((key) => (context[key]?.items.length ?? 0) > 0);
   const showCharacters = characterIds !== undefined && onChangeCharacterIds !== undefined;
   if (entries.length === 0 && !showCharacters) return null;
 
-  const labelOfTable = (key: string) => tables.find((table) => table.name === key)?.label ?? key;
   const active = open ? context[open] : null;
 
   return (
@@ -43,7 +40,7 @@ export default function EpisodeContext({
       <span className="context-title">{T.episodeContext.title}</span>
       {entries.map((key) => (
         <button key={key} type="button" onClick={() => setOpen(key)}>
-          {labelOfTable(key)} ({context[key]!.items.length})
+          {key} ({context[key]!.items.length})
         </button>
       ))}
       {showCharacters && (
@@ -57,7 +54,7 @@ export default function EpisodeContext({
       )}
       {showCharacters && <EpisodeCharacterRelations characterIds={characterIds!} start={episodeStart} collapsible />}
       {open && active && (
-        <Modal title={`${labelOfTable(open)} (${active.items.length})`} onClose={() => setOpen(null)} wide>
+        <Modal title={`${open} (${active.items.length})`} onClose={() => setOpen(null)} wide>
           <ContextTable table={open} items={active.items} labels={active.labels} />
         </Modal>
       )}

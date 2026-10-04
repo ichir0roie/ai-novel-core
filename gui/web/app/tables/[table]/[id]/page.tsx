@@ -6,7 +6,16 @@ import { useCallback, useEffect, useState } from "react";
 import RecordForm from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
-import { deleteEpisode, diff, getRecord, updateRecord, type Rec, type RecordResponse } from "@/lib/api";
+import {
+  deleteEpisode,
+  diff,
+  getEpisodeNeighbors,
+  getRecord,
+  updateRecord,
+  type EpisodeNeighbors,
+  type Rec,
+  type RecordResponse,
+} from "@/lib/api";
 import { PageTitle, useTable } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
@@ -36,6 +45,11 @@ function sortChildListsByStart(table: string, record: Rec): Rec {
   return sorted;
 }
 
+/** 記録のページから戻る一覧。話は同じ作品で絞った一覧に戻す。 */
+function listHref(table: string, record: Rec): string {
+  return table === "episode" && record.story_id != null ? `/tables/${table}?story_id=${record.story_id}` : `/tables/${table}`;
+}
+
 export default function RecordPage() {
   const openPage = useOpenPage();
   const { table, id } = useParams<{ table: string; id: string }>();
@@ -45,6 +59,7 @@ export default function RecordPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [neighbors, setNeighbors] = useState<EpisodeNeighbors | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -62,6 +77,20 @@ export default function RecordPage() {
     void load();
   }, [load]);
 
+  // 時刻・作品を直して保存したら並びが変わるので、保存した値(loaded)ごとに引き直す
+  const savedStart = loaded?.record.start;
+  const savedStoryId = loaded?.record.story_id;
+  useEffect(() => {
+    if (table !== "episode" || savedStoryId === undefined) return;
+    let cancelled = false;
+    getEpisodeNeighbors(id)
+      .then((result) => !cancelled && setNeighbors(result))
+      .catch(() => !cancelled && setNeighbors(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [table, id, savedStart, savedStoryId]);
+
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
 
@@ -78,7 +107,7 @@ export default function RecordPage() {
       setValue(record);
       invalidateOptions(table);
       setSaved(T.record.saved(Object.keys(changes)));
-      if (thenBack) openPage(`/tables/${table}`);
+      if (thenBack) openPage(listHref(table, record));
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -96,7 +125,7 @@ export default function RecordPage() {
     try {
       await deleteEpisode(Number(id));
       invalidateOptions(table);
-      openPage(`/tables/${table}?story_id=${loaded.record.story_id}`);
+      openPage(listHref(table, loaded.record));
     } catch (e) {
       setError(T.record.deleteFailed(e instanceof Error ? e.message : String(e)));
       setBusy(false);
@@ -107,7 +136,7 @@ export default function RecordPage() {
 
   return (
     <div className="page-fill">
-      <PageTitle kind={meta.label} record={loaded && T.nameId(loaded.label, id)} />
+      <PageTitle kind={meta.name} record={loaded && T.nameId(loaded.label, id)} />
       {!loaded && error && <div className="status error">{error}</div>}
       {loaded && (
         <div className="panel fill">
@@ -118,7 +147,27 @@ export default function RecordPage() {
             mode="edit"
             titleNote={
               <>
-                <Link href={`/tables/${table}`}>{meta.label}</Link> / {T.idMark(id)}
+                <Link href={listHref(table, loaded.record)}>{meta.name}</Link> / {T.idMark(id)}
+                {table === "episode" && neighbors && (
+                  <span className="episode-step">
+                    {(
+                      [
+                        [neighbors.previous, T.record.previousEpisode, T.record.noPreviousEpisode],
+                        [neighbors.next, T.record.nextEpisode, T.record.noNextEpisode],
+                      ] as const
+                    ).map(([episode, label, none]) => (
+                      <button
+                        key={label}
+                        className="ghost"
+                        disabled={!episode}
+                        title={episode ? `${T.nameId(episode.title, episode.id)}${episode.start ? ` — ${episode.start}` : ""}` : none}
+                        onClick={(e) => episode && openPage(`/tables/episode/${episode.id}`, e)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </span>
+                )}
               </>
             }
             header={

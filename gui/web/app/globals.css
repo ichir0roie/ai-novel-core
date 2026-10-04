@@ -186,6 +186,8 @@ button.ghost { background: transparent; }
 .record-header h1 { margin: 0; font-size: 1.25rem; line-height: 1.3; }
 .record-header .title-line { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
 .record-header .title-line:empty { display: none; }
+.record-header .episode-step { display: inline-flex; gap: 0.35rem; margin-left: 0.6rem; }
+.record-header .episode-step button { padding: 0.15rem 0.55rem; font-size: 0.8rem; }
 .record-header .title-editable { cursor: text; border-bottom: 1px dashed transparent; }
 .record-header .title-editable:hover { border-bottom-color: var(--muted); }
 .record-header .title-editable.empty { color: var(--muted); font-weight: 400; }

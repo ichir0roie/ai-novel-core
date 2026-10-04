@@ -324,6 +324,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/episode_neighbors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Episode Neighbors
+         * @description 同じ作品の時刻の順で前後の話。話の画面のタイトルの横の移動ボタンが使う
+         */
+        get: operations["episode_neighbors_api_episode_neighbors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -356,8 +376,6 @@ export interface components {
         ChildListMeta: {
             /** Name */
             name: string;
-            /** Label */
-            label: string;
             /** Columns */
             columns: components["schemas"]["ColumnMeta"][];
             /**
@@ -371,8 +389,6 @@ export interface components {
         ColumnMeta: {
             /** Key */
             key: string;
-            /** Label */
-            label: string;
             /**
              * Type
              * @enum {string}
@@ -460,6 +476,14 @@ export interface components {
              */
             mentioned: boolean;
         };
+        /**
+         * EpisodeNeighbors
+         * @description 作品の中の並び(`common_query.episode_order`)で、その話のすぐ前とすぐ後の話。
+         */
+        EpisodeNeighbors: {
+            previous?: components["schemas"]["EpisodeTitle"] | null;
+            next?: components["schemas"]["EpisodeTitle"] | null;
+        };
         /** EpisodeRecord */
         EpisodeRecord: {
             /** Id */
@@ -493,6 +517,15 @@ export interface components {
              * @description この話に登場せず、プロット・本文に名前が出るだけの人物
              */
             readonly mentioned_character_ids: number[];
+        };
+        /** EpisodeTitle */
+        EpisodeTitle: {
+            /** Id */
+            id: number;
+            /** Start */
+            start?: string | null;
+            /** Title */
+            title: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -701,8 +734,6 @@ export interface components {
         TableMeta: {
             /** Name */
             name: string;
-            /** Label */
-            label: string;
             /** Label Column */
             label_column: string | null;
             /** Columns */
@@ -1300,6 +1331,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EpisodeRecord"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    episode_neighbors_api_episode_neighbors_get: {
+        parameters: {
+            query: {
+                episode_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeNeighbors"];
                 };
             };
             /** @description Validation Error */

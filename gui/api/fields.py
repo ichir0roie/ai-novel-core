@@ -32,9 +32,9 @@ def references_of(field: FieldInfo) -> str | None:
 
 
 def field_meta(key: str, field: FieldInfo, create_only: bool = False) -> ColumnMeta:
-    """表の列でない欄(出来事の当事者など)。見出し・説明・指す先は欄の `title` / `description` / `References` に書く。"""
+    """表の列でない欄(出来事の当事者など)。説明・指す先は欄の `description` / `References` に書く。"""
     is_list = any(typing.get_origin(member) is list for member in _members(field.annotation))
     return ColumnMeta(
-        key=key, label=field.title or key, type="id_list" if is_list else "integer",
+        key=key, type="id_list" if is_list else "integer",
         nullable=not field.is_required(), required=field.is_required(), references=references_of(field),
         create_only=create_only, comment=field.description)

@@ -99,13 +99,13 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
   }
 
   if (column.type === "id_list" && column.references) {
-    return <ReferenceMultiSelect table={column.references} value={(value as number[] | null) ?? []} onChange={onChange} title={column.label} />;
+    return <ReferenceMultiSelect table={column.references} value={(value as number[] | null) ?? []} onChange={onChange} title={column.key} />;
   }
   if (column.references && TREE_REFERENCE_TABLES.has(column.references)) {
-    return <TreeReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} title={column.label} />;
+    return <TreeReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} title={column.key} />;
   }
   if (column.references) {
-    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} title={column.label} />;
+    return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} title={column.key} />;
   }
   if (column.choices) {
     // 値がまだ無ければ、選択肢の既定値(column.default)を選んだものとして出す(何も選ばず実行すれば、
@@ -113,7 +113,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
     const shown = (value as string | null) ?? column.default ?? null;
     return (
       <ChoicePicker
-        title={column.label}
+        title={column.key}
         choices={column.choices.map((choice) => ({ value: choice, label: choice === column.default ? `${choice} (default)` : choice }))}
         value={shown}
         onChange={onChange}

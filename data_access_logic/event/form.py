@@ -38,7 +38,7 @@ class EventCreateForm(Form):
     event_seeded: bool = False
     meme_seeded: bool = False
     character_ids: Annotated[list[int], References("character")] = Field(
-        default=[], title="当事者", description="居合わせた人物の id")
+        default=[], description="居合わせた人物の id")
 
 
 class EventUpdateForm(Form):

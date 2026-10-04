@@ -18,7 +18,7 @@ export default function ContextTable({ table, items, labels }: { table: string; 
             <th>id</th>
             <th>{T.list.name}</th>
             {columns.map((c) => (
-              <th key={c.key}>{c.label}</th>
+              <th key={c.key}>{c.key}</th>
             ))}
             {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
           </tr>

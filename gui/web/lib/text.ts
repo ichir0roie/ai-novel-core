@@ -81,6 +81,10 @@ export const T = {
     confirmDeleteEpisode: (label: string) =>
       `Delete episode "${label}"? Its cast and idea links are removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
+    previousEpisode: "◀ Prev",
+    nextEpisode: "Next ▶",
+    noPreviousEpisode: "No earlier episode in this story",
+    noNextEpisode: "No later episode in this story",
   },
 
   create: {
@@ -177,6 +181,10 @@ export const T = {
     confirmDeleteWithChildren: (name: string, count: number) =>
       `"${name}" has ${count} child idea${count === 1 ? "" : "s"}. They will be detached (moved to root) and then "${name}" will be deleted. Continue?`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
+    previousEpisode: "◀ Prev",
+    nextEpisode: "Next ▶",
+    noPreviousEpisode: "No earlier episode in this story",
+    noNextEpisode: "No later episode in this story",
   },
 
   picker: {

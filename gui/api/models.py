@@ -14,7 +14,6 @@ ColumnType = Literal["integer", "number", "boolean", "string", "stamp", "json", 
 
 class ColumnMeta(BaseModel):
     key: str
-    label: str
     type: ColumnType
     nullable: bool
     required: bool
@@ -41,7 +40,6 @@ ChildListDisplay = Literal["table", "periodic", "flow"]
 
 class ChildListMeta(BaseModel):
     name: str
-    label: str
     columns: list[ColumnMeta]
     # GUI での見せ方。"table"(既定): 素朴な編集可能な表。
     # "periodic": 期間(start・end)ごとの値を、期間を列にした読み取り専用の表 + モーダル編集で出す
@@ -52,7 +50,6 @@ class ChildListMeta(BaseModel):
 
 class TableMeta(BaseModel):
     name: str
-    label: str
     label_column: str | None
     columns: list[ColumnMeta]
     child_lists: list[ChildListMeta]

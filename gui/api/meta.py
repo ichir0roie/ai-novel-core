@@ -17,22 +17,6 @@ from gui.api.fields import choices_of, field_meta
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
 
-# コメントより短い、フォームに出す見出し
-_LABELS = {
-    "id": "id", "name": "名前", "kind": "種別", "text": "本文", "start": "開始", "end": "終了",
-    "appearance": "外見", "meme": "ミーム", "principle": "行動原理", "plot": "筋書き",
-    "title": "題", "plot_text": "プロット", "main_text": "本文", "category": "分類",
-    "location_id": "場所", "parent_id": "親の場所", "story_id": "作品", "episode_id": "話",
-    "character_id": "人物", "character_1_id": "人物 1", "character_2_id": "人物 2", "relation": "関係",
-    "time": "時刻", "hidden": "隠す", "narration": "語り", "state": "状態", "world_id": "世界線",
-    "viewpoint_character_id": "視点", "synced": "同期済み",
-    "meme_seeded": "ミーム抽出済み", "event_seeded": "出来事抽出済み", "main_character": "メインキャラクター",
-    "parent_idea_id": "上位のアイデア", "parent_event_id": "親の出来事", "parent_story_id": "親の作品",
-    "letters": "字数", "polygon": "領域(polygon)", "area": "広さ",
-    "environment": "環境", "active_random_generation": "自動生成の対象", "description": "説明",
-}
-
-
 # CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
@@ -40,14 +24,6 @@ _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "idea": {"histories": "flow"},
     "character_relation": {"histories": "flow"},
 }
-
-
-def _label(key: str, comment: str | None) -> str:
-    if key in _LABELS:
-        return _LABELS[key]
-    if comment:
-        return comment.split("。")[0]
-    return key
 
 
 def _column_type(column: Column) -> str:
@@ -80,7 +56,7 @@ def column_meta(column: Column, field: FieldInfo | None, section: bool = False, 
         required = (not column.nullable and not column.primary_key and column.default is None
                     and column.server_default is None and not section)
     return ColumnMeta(
-        key=column.key, label=_label(column.key, column.comment), type=_column_type(column), nullable=column.nullable,
+        key=column.key, type=_column_type(column), nullable=column.nullable,
         required=required, section=section, markdown=markdown, side=side, choices=choices, references=references,
         readonly=readonly or column.primary_key, comment=column.comment)
 
@@ -141,14 +117,14 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
         child = child_model(spec.model, name)
         row_fields = _row_model(spec, name).model_fields
         columns = [column_meta(child.__table__.columns[key], row_fields.get(key)) for key in child_columns(spec.model, name)]
-        result.append(ChildListMeta(name=name, label=_label(name, None), columns=columns,
+        result.append(ChildListMeta(name=name, columns=columns,
                                     display=display_by_name.get(name, "table")))
     return result
 
 
 def table_meta(s: Session, spec: TableSpec) -> TableMeta:
     count = s.scalar(select(func.count()).select_from(spec.model)) or 0
-    return TableMeta(name=spec.name, label=spec.label, label_column=LABEL_COLUMNS[spec.model],
+    return TableMeta(name=spec.name, label_column=LABEL_COLUMNS[spec.model],
                      columns=table_columns(spec), child_lists=child_lists(spec),
                      count=count, sort=spec.sort, order=spec.order)
 
@@ -156,8 +132,3 @@ def table_meta(s: Session, spec: TableSpec) -> TableMeta:
 def all_tables(s: Session) -> list[TableMeta]:
     return [table_meta(s, spec) for spec in TABLES]
 
-
-_LABELS["parameters"] = "期間ごとのパラメータ"
-_LABELS["locations"] = "期間ごとの居場所"
-_LABELS["histories"] = "来歴"
-_LABELS["knowers"] = "知る相手"

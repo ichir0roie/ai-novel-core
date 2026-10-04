@@ -266,4 +266,10 @@ def last_episode(story_id: int, s: Session = Depends(session_dep)) -> EpisodeRec
     return episode_reading.last_episode(s, story_id)
 
 
+@app.get("/api/episode_neighbors", response_model=episode_reading.EpisodeNeighbors)
+def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> episode_reading.EpisodeNeighbors:
+    """同じ作品の時刻の順で前後の話。話の画面のタイトルの横の移動ボタンが使う"""
+    return episode_reading.neighbor_episodes(s, episode_id)
+
+
 _ = Created  # OpenAPI に出す型として残す

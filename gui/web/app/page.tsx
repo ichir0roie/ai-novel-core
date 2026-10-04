@@ -17,7 +17,7 @@ export default function Home() {
         {tables.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (
           <Link key={table.name} href={`/tables/${table.name}`} className="card">
             <div className="sub">
-              {table.label} <code>{table.name}</code>
+              <code>{table.name}</code>
             </div>
             <div className="count">{table.count}</div>
           </Link>

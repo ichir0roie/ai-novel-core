@@ -47,7 +47,7 @@ type Chip = { key: string; label: ReactNode; title?: string; render: (row: Rec) 
 function chipOf(column: ColumnMeta): Chip {
   return {
     key: column.key,
-    label: column.label,
+    label: column.key,
     title: column.comment ?? column.key,
     render: (row) => <ReadValue column={column} value={row[column.key]} />,
   };
@@ -97,20 +97,20 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
     consumed.add("end");
     const startAge = extraColumns.find((e) => e.after === "start");
     const endAge = extraColumns.find((e) => e.after === "end");
-    const period: Chip = { key: "__period", label: "期間", render: (row) => `${formatDateOnly(row.start)} ~ ${formatDateOnly(row.end)}` };
+    const period: Chip = { key: "__period", label: "start ~ end", render: (row) => `${formatDateOnly(row.start)} ~ ${formatDateOnly(row.end)}` };
     soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={period} row={row} /> });
     if (startAge && endAge) {
-      const age: Chip = { key: "__age", label: "年齢", render: (row) => `${startAge.render(row)} ~ ${endAge.render(row)}` };
+      const age: Chip = { key: "__age", label: T.record.ageAt, render: (row) => `${startAge.render(row)} ~ ${endAge.render(row)}` };
       soloSpecs.push({ key: "__age", label: "", render: (row) => <SoloField chip={age} row={row} /> });
     }
   } else if (byKey.has("start")) {
     // 終わりを持たない行(人物のパラメータ・来歴)は、始まりから先ずっと効く
     consumed.add("start");
     const startAge = extraColumns.find((e) => e.after === "start");
-    const since: Chip = { key: "__period", label: "期間", render: (row) => `${formatDateOnly(row.start)} ~` };
+    const since: Chip = { key: "__period", label: "start ~ end", render: (row) => `${formatDateOnly(row.start)} ~` };
     soloSpecs.push({ key: "__period", label: "", render: (row) => <SoloField chip={since} row={row} /> });
     if (startAge) {
-      const age: Chip = { key: "__age", label: "年齢", render: (row) => `${startAge.render(row)} ~` };
+      const age: Chip = { key: "__age", label: T.record.ageAt, render: (row) => `${startAge.render(row)} ~` };
       soloSpecs.push({ key: "__age", label: "", render: (row) => <SoloField chip={age} row={row} /> });
     }
   }
@@ -255,7 +255,7 @@ function FlowCard({
           if (flag && !editing && !row[column.key]) return null;
           return (
             <div key={column.key} className="flow-field" title={column.comment ?? column.key}>
-              {flag && <span className="flow-flag">{column.label}</span>}
+              {flag && <span className="flow-flag">{column.key}</span>}
               {editing ? (
                 <FieldInput column={column} value={row[column.key]} onChange={(v) => onChange(column.key, v)} compact />
               ) : (
@@ -351,7 +351,7 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
                 <th />
                 {meta.columns.map((column) => (
                   <Fragment key={column.key}>
-                    <th title={column.comment ?? column.key}>{column.label}</th>
+                    <th title={column.comment ?? column.key}>{column.key}</th>
                     {extrasAfter(column.key).map((extra) => (
                       <th key={extra.key} className="hint">
                         {extra.label}
@@ -394,7 +394,7 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
       </button>
       {meta.display === "periodic" && editing !== null && rows[editing] && (
         <Modal
-          title={`${meta.label} #${editing + 1}`}
+          title={`${meta.name} #${editing + 1}`}
           onClose={() => setEditing(null)}
           actions={
             <>
@@ -412,8 +412,7 @@ export default function ChildListEditor({ meta, rows, onChange, extraColumns = [
             {meta.columns.map((column) => (
               <div key={column.key} className="field">
                 <label title={column.comment ?? ""}>
-                  {column.label}
-                  <span className="key">{column.key}</span>
+                  {column.key}
                 </label>
                 <FieldInput column={column} value={rows[editing][column.key]} onChange={(v) => update(editing, column.key, v)} />
               </div>

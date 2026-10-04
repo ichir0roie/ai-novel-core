@@ -21,7 +21,7 @@ class EpisodeForm(Draft):
     viewpoint_character_id: int | None = None
     location_id: int | None = None
     character_ids: Annotated[list[int] | None, References("character")] = Field(
-        default=None, title="登場人物",
+        default=None,
         description="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
 
 
@@ -43,7 +43,7 @@ class EpisodeCommitForm(Form):
     synced: bool | None = None
     # 渡すと登場人物(`episode_character`)をまるごと置き換える
     character_ids: Annotated[list[int] | None, References("character")] = Field(
-        default=None, title="登場人物", description="登場人物の id")
+        default=None, description="登場人物の id")
 
     @model_validator(mode="after")
     def _story_of_new_episode(self) -> "EpisodeCommitForm":

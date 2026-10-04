@@ -55,7 +55,7 @@ export default function Nav() {
   const visibleTables = tables.filter((table) => !HIDDEN_TABLES.has(table.name));
   const destinations: Destination[] = [
     { href: "/", label: T.appName },
-    ...visibleTables.map((table) => ({ href: `/tables/${table.name}`, label: table.label })),
+    ...visibleTables.map((table) => ({ href: `/tables/${table.name}`, label: table.name })),
     { href: "/timeline", label: T.nav.timeline },
     { href: "/interface", label: T.nav.endpoints },
   ];
@@ -85,7 +85,7 @@ export default function Nav() {
           <span className="group">
             {visibleTables.map((table) => (
               <Link key={table.name} href={`/tables/${table.name}`} className={isActive(`/tables/${table.name}`) ? "active" : ""}>
-                {table.label}
+                {table.name}
               </Link>
             ))}
           </span>

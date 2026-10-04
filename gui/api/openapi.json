@@ -824,6 +824,46 @@
           }
         }
       }
+    },
+    "/api/episode_neighbors": {
+      "get": {
+        "summary": "Episode Neighbors",
+        "description": "同じ作品の時刻の順で前後の話。話の画面のタイトルの横の移動ボタンが使う",
+        "operationId": "episode_neighbors_api_episode_neighbors_get",
+        "parameters": [
+          {
+            "name": "episode_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Episode Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EpisodeNeighbors"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -900,10 +940,6 @@
             "type": "string",
             "title": "Name"
           },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
           "columns": {
             "items": {
               "$ref": "#/components/schemas/ColumnMeta"
@@ -925,7 +961,6 @@
         "type": "object",
         "required": [
           "name",
-          "label",
           "columns"
         ],
         "title": "ChildListMeta"
@@ -935,10 +970,6 @@
           "key": {
             "type": "string",
             "title": "Key"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
           },
           "type": {
             "type": "string",
@@ -1037,7 +1068,6 @@
         "type": "object",
         "required": [
           "key",
-          "label",
           "type",
           "nullable",
           "required"
@@ -1144,6 +1174,33 @@
           "character_id"
         ],
         "title": "EpisodeCharacterLink"
+      },
+      "EpisodeNeighbors": {
+        "properties": {
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodeTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodeTitle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "EpisodeNeighbors",
+        "description": "作品の中の並び(`common_query.episode_order`)で、その話のすぐ前とすぐ後の話。"
       },
       "EpisodeRecord": {
         "properties": {
@@ -1255,6 +1312,35 @@
           "mentioned_character_ids"
         ],
         "title": "EpisodeRecord"
+      },
+      "EpisodeTitle": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "EpisodeTitle"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1966,10 +2052,6 @@
             "type": "string",
             "title": "Name"
           },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
           "label_column": {
             "anyOf": [
               {
@@ -2017,7 +2099,6 @@
         "type": "object",
         "required": [
           "name",
-          "label",
           "label_column",
           "columns",
           "child_lists",

@@ -64,7 +64,7 @@ export default function TablePage() {
   }, [storyId]);
 
   const recordName = storyId ? T.nameId(storyLabel, storyId) : null;
-  const title = recordName ? T.list.episodesOf(recordName) : meta?.label;
+  const title = recordName ? T.list.episodesOf(recordName) : table;
 
   const setParams = (changes: Record<string, string | null>) => {
     const p = new URLSearchParams(search.toString());
@@ -101,10 +101,8 @@ export default function TablePage() {
   if (tree) {
     return (
       <>
-        <PageTitle kind={meta.label} record={recordName} />
-        <h1>
-          {meta.label} <code>{table}</code>
-        </h1>
+        <PageTitle kind={table} record={recordName} />
+        <h1>{table}</h1>
         <div className="toolbar">
           {viewSwitch}
           <Link href={`/tables/${table}/new`}>
@@ -159,12 +157,12 @@ export default function TablePage() {
   const filterLabel = (key: string, value: string) => {
     const column = meta.columns.find((c) => c.key === key)!;
     const shown = value === "null" ? T.list.empty : column.references ? labelOf(data?.labels, key, value) : value;
-    return `${column.label}: ${shown}`;
+    return `${column.key}: ${shown}`;
   };
 
   return (
     <>
-      <PageTitle kind={meta.label} record={recordName} />
+      <PageTitle kind={table} record={recordName} />
       {storyId && (
         <div className="hint">
           <Link href="/tables/story">{T.list.stories}</Link> /{" "}
@@ -173,9 +171,7 @@ export default function TablePage() {
           </Link>
         </div>
       )}
-      <h1>
-        {title} <code>{table}</code>
-      </h1>
+      <h1>{title}</h1>
       <div className="toolbar">
         {viewSwitch}
         <form
@@ -215,7 +211,7 @@ export default function TablePage() {
             <tr>
               {sortHeader("id", "id")}
               {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
-              {columns.map((c) => sortHeader(c.key, c.label))}
+              {columns.map((c) => sortHeader(c.key, c.key))}
               {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
               {bulkDelete && (
                 <th className="check">
@@ -263,7 +259,7 @@ export default function TablePage() {
                       // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
                       <span
                         className="ref"
-                        title={T.list.filterBy(c.label)}
+                        title={T.list.filterBy(c.key)}
                         onClick={(e) => {
                           e.stopPropagation();
                           setParam(c.key, String(item[c.key]));

@@ -29,6 +29,13 @@ class UnsyncedEpisode(EpisodeTitle):
         return None if self.story is None else self.story.name
 
 
+class EpisodeNeighbors(Material):
+    """作品の中の並び(`common_query.episode_order`)で、その話のすぐ前とすぐ後の話。"""
+
+    previous: EpisodeTitle | None = None
+    next: EpisodeTitle | None = None
+
+
 class EpisodeText(Material):
     id: int
     story: Named
@@ -60,6 +67,14 @@ def last_episode(s: Session, story_id: int) -> EpisodeRecord | None:
     """作品の中の並び(`common_query.episode_order`)で一番後ろの話。新しい話の場所・視点・登場人物の初期値にする。"""
     row = s.scalars(common_query.episodes_select(story_id, count=1)).first()
     return None if row is None else record_of(s, EpisodeRecord, row)
+
+
+def neighbor_episodes(s: Session, episode_id: int) -> EpisodeNeighbors:
+    episode = common_query.get_row(s, Episode, episode_id)
+    rows = s.scalars(common_query.story_episodes_select(episode.story_id)).all()
+    index = rows.index(episode)
+    return EpisodeNeighbors(previous=rows[index - 1] if index > 0 else None,
+                            next=rows[index + 1] if index + 1 < len(rows) else None)
 
 
 def unsynced_episodes(s: Session, story_id: int | None = None) -> list[UnsyncedEpisode]:

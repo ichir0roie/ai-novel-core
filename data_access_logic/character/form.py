@@ -71,7 +71,7 @@ class CharacterCreateForm(Form):
     event_seeded: bool = False
     # `character_location` の行として、誕生から死亡までの期間で足す
     location_id: Annotated[int | None, References("location")] = Field(
-        default=None, title="出自(場所)", description="足すときの出自。CharacterLocation の一番古い行になる")
+        default=None, description="足すときの出自。CharacterLocation の一番古い行になる")
     start: Timestamp | None = None
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow] = []

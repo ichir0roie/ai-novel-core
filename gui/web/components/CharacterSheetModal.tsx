@@ -37,7 +37,7 @@ function LevelMeter({ column, value }: { column: ColumnMeta; value: unknown }) {
   const level = choices.indexOf(String(value));
   return (
     <div className="sheet-level">
-      <span className="sheet-level-label">{column.label}</span>
+      <span className="sheet-level-label">{column.key}</span>
       <span className="sheet-level-cells">
         {choices.map((choice, i) => (
           <span key={choice} className={`sheet-level-cell ${i <= level ? "on" : ""}`} />
@@ -77,10 +77,8 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
     };
   }, [characterId, at]);
 
-  const column = (key: string) => meta?.columns.find((c) => c.key === key);
   const parameterColumns = (meta?.child_lists.find((c) => c.name === "parameters")?.columns ?? [])
     .filter((c) => c.key !== "start" && c.key !== "end");
-  const historyLabel = meta?.child_lists.find((c) => c.name === "histories")?.label ?? "histories";
   const age = sheet ? ageAt(sheet.start, at) : null;
   // 時点で絞り、早い順に並べるのは core(`histories_at`)
   const histories = sheet?.histories ?? [];
@@ -104,7 +102,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
             <dl className="sheet-fields">
               {["id", "name", "kind", "main_character"].map((key) => (
                 <div key={key}>
-                  <dt>{column(key)?.label ?? key}</dt>
+                  <dt>{key}</dt>
                   <dd>{shown(sheet[key])}</dd>
                 </div>
               ))}
@@ -130,7 +128,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
               </div>
               {parameterColumns.filter((c) => !c.choices).map((c) => (
                 <div key={c.key}>
-                  <dt>{c.label}</dt>
+                  <dt>{c.key}</dt>
                   <dd>{shown(sheet[c.key])}</dd>
                 </div>
               ))}
@@ -144,13 +142,13 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
 
           <div className="record-text">
             <div className="field section auto">
-              <label>{column("text")?.label ?? "text"}</label>
+              <label>text</label>
               <div className="section markdown-preview auto sheet-text">
                 {sheet.text ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{sheet.text}</ReactMarkdown> : <span className="hint">{T.characterSheet.noText}</span>}
               </div>
             </div>
             <div className="field wide">
-              <label>{historyLabel}</label>
+              <label>histories</label>
               {histories.length === 0 ? (
                 <span className="hint">{T.characterSheet.noHistory}</span>
               ) : (

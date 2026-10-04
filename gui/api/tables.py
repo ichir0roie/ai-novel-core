@@ -57,7 +57,6 @@ from db.schema import Character, CharacterRelation, Episode, Event, Idea, Locati
 @dataclass(frozen=True)
 class TableSpec:
     name: str
-    label: str
     model: type
     creator: type
     updater: type
@@ -77,26 +76,26 @@ class TableSpec:
 
 
 TABLES: tuple[TableSpec, ...] = (
-    TableSpec("story", "作品", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, StoryRecord,
+    TableSpec("story", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, StoryRecord,
               ("name", "text")),
-    TableSpec("episode", "話", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
+    TableSpec("episode", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
               EpisodeRecord, ("title", "plot_text"), sort="start", order="desc"),
-    TableSpec("character", "人物", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
+    TableSpec("character", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,
               CharacterUpdateForm, CharacterRecord, ("name", "appearance", "text", "meme", "principle", "plot", "histories.description")),
-    TableSpec("character_relation", "人物相関", CharacterRelation, CommitCharacterRelation,
+    TableSpec("character_relation", CharacterRelation, CommitCharacterRelation,
               UpdateCharacterRelation, CharacterRelationCreateForm, CharacterRelationUpdateForm,
               CharacterRelationRecord, ("relation", "text", "histories.description")),
-    TableSpec("event", "出来事", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, EventRecord,
+    TableSpec("event", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, EventRecord,
               ("name", "text")),
-    TableSpec("location", "場所", Location, CommitLocation, UpdateLocation, LocationCreateForm, LocationUpdateForm,
+    TableSpec("location", Location, CommitLocation, UpdateLocation, LocationCreateForm, LocationUpdateForm,
               LocationRecord, ("name", "text"), tree_parent_column="parent_id"),
-    TableSpec("idea", "アイデア", Idea, CommitIdea, UpdateIdea, IdeaCreateForm, IdeaUpdateForm, IdeaRecord,
+    TableSpec("idea", Idea, CommitIdea, UpdateIdea, IdeaCreateForm, IdeaUpdateForm, IdeaRecord,
               ("name", "text"), tree_parent_column="parent_idea_id"),
-    TableSpec("meme", "ミーム", Meme, CommitMeme, UpdateMeme, MemeCreateForm, MemeUpdateForm, MemeRecord,
+    TableSpec("meme", Meme, CommitMeme, UpdateMeme, MemeCreateForm, MemeUpdateForm, MemeRecord,
               ("text",)),
-    TableSpec("oracle", "覚え書き", Oracle, CommitOracle, UpdateOracle, OracleCreateForm, OracleUpdateForm,
+    TableSpec("oracle", Oracle, CommitOracle, UpdateOracle, OracleCreateForm, OracleUpdateForm,
               OracleRecord, ("title", "text")),
-    TableSpec("style_preference", "文体の好み", StylePreference, CommitStylePreference, UpdateStylePreference,
+    TableSpec("style_preference", StylePreference, CommitStylePreference, UpdateStylePreference,
               StylePreferenceCreateForm, StylePreferenceUpdateForm, StylePreferenceRecord, ("text",),
               order="asc"),
 )

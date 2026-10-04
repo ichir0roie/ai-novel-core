@@ -159,6 +159,11 @@ export type EpisodeRecord = components["schemas"]["EpisodeRecord"];
 export const getLastEpisode = (storyId: number) =>
   api<EpisodeRecord | null>(`/api/last_episode?${new URLSearchParams({ story_id: String(storyId) })}`);
 
+export type EpisodeNeighbors = components["schemas"]["EpisodeNeighbors"];
+
+export const getEpisodeNeighbors = (episodeId: number | string) =>
+  api<EpisodeNeighbors>(`/api/episode_neighbors?${new URLSearchParams({ episode_id: String(episodeId) })}`);
+
 export type TimelineResponse = components["schemas"]["TimelineResponse"];
 
 export const getTimeline = (params: { story_id?: number | null; location_id?: number | null }) => {

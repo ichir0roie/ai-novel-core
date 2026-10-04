@@ -23,7 +23,7 @@ function ClampedText({ column, value }: { column: ColumnMeta; value: string | nu
   const text = value?.replace(/\n\s*\n+/g, "\n").trim();
   return (
     <div className="field episode-sheet-text">
-      <label>{column.label}</label>
+      <label>{column.key}</label>
       {text ? (
         <div className="episode-sheet-box">
           <div className="episode-sheet-clamp">{text}</div>
@@ -92,7 +92,7 @@ export default function EpisodeSheetModal({ episodeId, onClose }: Props) {
 
   return (
     <Modal
-      title={record && meta ? `${meta.label}: ${T.nameId((title && (record[title.key] as string | null)) || loaded.label, episodeId)}` : T.loading}
+      title={record && meta ? `${meta.name}: ${T.nameId((title && (record[title.key] as string | null)) || loaded.label, episodeId)}` : T.loading}
       onClose={onClose}
       actions={actions}
       wide
@@ -107,7 +107,7 @@ export default function EpisodeSheetModal({ episodeId, onClose }: Props) {
             <dl className="sheet-fields">
               {plain.map((column) => (
                 <div key={column.key}>
-                  <dt>{column.label}</dt>
+                  <dt>{column.key}</dt>
                   <dd>{shown(column, record[column.key])}</dd>
                 </div>
               ))}
@@ -126,7 +126,7 @@ export default function EpisodeSheetModal({ episodeId, onClose }: Props) {
               const value = record[column.key] as string | null;
               return (
                 <div key={column.key} className="field section auto">
-                  <label>{column.label}</label>
+                  <label>{column.key}</label>
                   <div className="section markdown-preview auto sheet-text">
                     {!value ? (
                       <span className="hint">{T.characterSheet.noText}</span>
