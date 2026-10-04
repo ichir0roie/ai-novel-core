@@ -34,10 +34,10 @@ def upgrade() -> None:
     op.drop_index(op.f('ix_idea_location_id'), table_name='idea')
     op.drop_constraint(op.f('idea_location_id_fkey'), 'idea', type_='foreignkey')
     op.drop_column('idea', 'location_id')
-    # ミームはアイデア・人物から抜き出さず、話の本文から抜き出す。いまある話は次の抽出で抜き出す
+    # ミームはアイデア・人物から抜き出さず、話の本文から抜き出す。いまある話は抜き出し済みとして扱う
     op.drop_column('idea', 'meme_seeded')
     op.drop_column('character', 'meme_seeded')
-    op.add_column('episode', sa.Column('meme_seeded', sa.Boolean(), server_default=sa.false(), nullable=False, comment='ミームを抜き出し済みか。false に戻すと、次の抽出で抜き出し直す'))
+    op.add_column('episode', sa.Column('meme_seeded', sa.Boolean(), server_default=sa.true(), nullable=False, comment='ミームを抜き出し済みか。false に戻すと、次の抽出で抜き出し直す'))
     op.alter_column('episode', 'meme_seeded', server_default=None)
 
 
