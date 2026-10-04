@@ -6,13 +6,15 @@
 本文・人物の来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
 場所ならその時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
+知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
+出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
 人物の来歴はその時刻までに起きた行だけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と、知っていれば芯を渡す。plot はだれにも渡さない。
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +25,7 @@ from sqlalchemy.orm import Session, joinedload
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.idea.models import normalized
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.query.period import alive_at
@@ -159,11 +162,29 @@ class KnowledgeSerialized(Material):
                 {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
                  "来歴(古い順)": _histories_for_prompt(character.histories, year)}
                 for character in self.characters],
-            "知っているアイデア": [
-                {"種別": idea.kind,
-                 "知っている呼び名": [{"呼び名": name.name, "受け止め方": name.detail} for name in idea.names]}
-                for idea in self.ideas],
+            "知っているアイデア": [_idea_for_prompt(idea) for idea in self.ideas],
         }
+
+
+def _idea_for_prompt(idea: KnownIdea) -> dict[str, Any]:
+    return {"種別": idea.kind,
+            "知っている呼び名": [{"呼び名": name.name, "受け止め方": name.detail} for name in idea.names]}
+
+
+class KnownIdeasOfWord(Material):
+    word: str
+    ideas: list[KnownIdea]
+
+
+class KnownIdeasSerialized(Material):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    words: list[KnownIdeasOfWord]
+
+    @model_serializer
+    def _for_prompt(self) -> list[dict[str, Any]]:
+        return [{"語": word.word, "知っているアイデア": [_idea_for_prompt(idea) for idea in word.ideas]}
+                for word in self.words]
 
 
 def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
@@ -175,7 +196,8 @@ def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
     return [id_ for id_ in dict.fromkeys(ids) if id_ != character.id]
 
 
-def _ideas(s: Session, viewer: Viewer) -> list[KnownIdea]:
+def _ideas(s: Session, viewer: Viewer, mentioned: Callable[[list[str]], bool]) -> list[KnownIdea]:
+    """知っているアイデアのうち、本質の名前か知っている呼び名で `mentioned` に当たるもの。"""
     told = select(IdeaHistoryKnower.idea_history_id).where(or_(
         IdeaHistoryKnower.knower_id == viewer.character_id, IdeaHistoryKnower.location_id.in_(list(viewer.location_ids))))
     rows = s.scalars(
@@ -185,15 +207,41 @@ def _ideas(s: Session, viewer: Viewer) -> list[KnownIdea]:
         .order_by(IdeaHistory.idea_id, IdeaHistory.id)
         .execution_options(populate_existing=True)).all()
     known: dict[int, KnownIdea] = {}
+    names: dict[int, list[str]] = {}
     for row in rows:
         if not knows(row.knowers, viewer):
             continue
         idea = known.setdefault(row.idea_id, KnownIdea(kind=row.idea.kind, names=[]))
         idea.names.append(KnownName.model_validate(row))
-    return list(known.values())
+        names.setdefault(row.idea_id, [row.idea.name]).append(row.name)
+    return [idea for idea_id, idea in known.items() if mentioned(names[idea_id])]
 
 
-def knowledge_of(s: Session, character_id: int, time: Stamp) -> KnowledgeSerialized:
+def _in_text(text: str) -> Callable[[list[str]], bool]:
+    text = normalized(text)
+
+    def mentioned(name: str) -> bool:
+        name = normalized(name)
+        return bool(name) and name in text
+    return lambda names: any(mentioned(name) for name in names)
+
+
+# 一字の名前は、ほかの語の一部に当たりすぎる
+_MIN_NAME_LETTERS = 2
+
+
+def _of_word(word: str) -> Callable[[list[str]], bool]:
+    """語が名前の一部か、名前が語の一部なら当たる(「泥鰻の巣」で「泥鰻」、「鰻」で「泥鰻」)。"""
+    word = normalized(word)
+
+    def overlaps(name: str) -> bool:
+        name = normalized(name)
+        return bool(word and name) and (word in name or (len(name) >= _MIN_NAME_LETTERS and name in word))
+    return lambda names: any(overlaps(name) for name in names)
+
+
+def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> KnowledgeSerialized:
+    """アイデアは、`plot_text` に名前の出るものだけを入れる。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)]
@@ -209,5 +257,12 @@ def knowledge_of(s: Session, character_id: int, time: Stamp) -> KnowledgeSeriali
                                    text=other.text if knows(other.knowers, viewer) else None,
                                    histories=known_histories(other.histories, viewer))
                     for other in others],
-        ideas=_ideas(s, viewer),
+        ideas=_ideas(s, viewer, _in_text(plot_text)),
     )
+
+
+def known_ideas_by_words(s: Session, character_id: int, time: Stamp, words: list[str]) -> KnownIdeasSerialized:
+    """語ごとに、人物が知っているアイデアのうち名前の当たるもの。知らなければ空。"""
+    viewer = viewer_of(s, common_query.get_row(s, Character, character_id), time)
+    return KnownIdeasSerialized(words=[KnownIdeasOfWord(word=word, ideas=_ideas(s, viewer, _of_word(word)))
+                                       for word in dict.fromkeys(words)])

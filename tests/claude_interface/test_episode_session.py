@@ -2,6 +2,7 @@
 話のセッション(`episode_session/`)。"""
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from ai.claude_code import ai_client
 from data_access_logic.character.commit_character import CommitCharacter
@@ -13,12 +14,14 @@ from data_access_logic.character.read_appearance import ReadAppearance
 from data_access_logic.character.read_knowable_rows import ReadKnowableRows
 from data_access_logic.character.read_known_rows import ReadKnownRows
 from data_access_logic.character.read_knowledge import ReadKnowledge
+from data_access_logic.character.read_known_ideas import ReadKnownIdeas
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
+from data_access_logic.episode_session.add_ideas import AddIdeas
 from data_access_logic.episode_session.add_turns import AddTurns
 from data_access_logic.episode_session.answer_turn import AnswerTurn
 from data_access_logic.episode_session.clear_session import ClearSession
@@ -30,16 +33,26 @@ from data_access_logic.episode_session.read_turn import ReadTurn
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
-from data_access_logic.idea.models import IdeaDraftByAI, IdeaDraftsByAI
+from data_access_logic.idea.models import IdeaDraft, IdeaDraftByAI, IdeaDraftsByAI
 from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
-from db.schema import Stamp, get_env_session
+from db.schema import Episode, Idea, IdeaHistory, Stamp, get_env_session
 from tool import episode_session
 
 
 def _histories(person: dict) -> list[str]:
     return [history["来歴"] for history in person["来歴(古い順)"]]
+
+
+def _set_plot(world, plot_text: str) -> None:
+    with get_env_session() as s:
+        s.get_one(Episode, world.episode_id).plot_text = plot_text
+        s.commit()
+
+
+def _known_names(ideas: list[dict]) -> list[str]:
+    return [name["呼び名"] for idea in ideas for name in idea["知っている呼び名"]]
 
 
 def test_new_character_knows_itself_and_its_history(shown):
@@ -97,6 +110,7 @@ def test_read_knowledge(shown, world):
         # 効く場所に住んでいても、知る相手に入っていなければ知らない
         IdeaHistoryRow(location_id=world.location_id, name="都の知られない名"),
         IdeaHistoryRow(location_id=world.neighbor_id, name="誰も知らない名")])))
+    _set_plot(world, "市でテスト術を見せる")
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
@@ -169,13 +183,15 @@ def test_read_knowledge_without_knowing(shown, world, mock_ai):
         IdeaHistoryRow(location_id=world.neighbor_id, name="遠い技")])))
     shown(CommitIdea(IdeaCreateForm(name="履歴の無い技", kind="技術", text="都の技")))
 
+    _set_plot(world, "秘薬と遠い技と履歴の無い技")
+
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
     # 本人を知る相手から外すと、自分の芯を知らない(ミーム・行動原理は本人のもの)。関係のある相手の芯は、知る相手に入っていなければ分からない
     assert (result["自分"]["人物像"], result["自分"]["ミーム"]) == (None, "- 今表: 残るミーム")
     assert [(character["名前"], character["人物像"]) for character in result["知っている人物"]] == [("テスト花子", None)]
     # 履歴の行の知る相手に入っていれば知り、入っていなければ知らない。履歴の無いアイデアは住む場所に効いても知らない
-    names = [name["呼び名"] for idea in result["知っているアイデア"] for name in idea["知っている呼び名"]]
+    names = _known_names(result["知っているアイデア"])
     assert "秘薬" in names and "遠い技" not in names and "履歴の無い技" not in names
 
 
@@ -186,8 +202,8 @@ def test_read_knowledge_idea_history_only_by_knowers(shown, world, mock_ai):
 
     # 場所も期間も空の(どこでも効く)行でも、知る相手だけが知る
     def names(character_id: int) -> list[str]:
-        result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=character_id))
-        return [name["呼び名"] for known in result["知っているアイデア"] for name in known["知っている呼び名"]]
+        [word] = shown(ReadKnownIdeas(episode_id=world.episode_id, character_id=character_id, words=["里の暦"]))
+        return _known_names(word["知っているアイデア"])
     assert "古い数え方" in names(taro)
     assert "古い数え方" not in names(hanako)
     # 作中の呼び名は、知る相手に関わらず、場所・時代に効く行から選ぶ
@@ -229,6 +245,71 @@ def test_update_knowledge(shown, world, mock_ai):
 def test_read_knowable_rows_needs_one_source():
     with pytest.raises(ValueError):
         ReadKnowableRows()
+
+
+def test_read_knowledge_only_ideas_in_the_plot(shown, world, mock_ai):
+    taro, _ = world.character_ids
+    shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
+        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名",
+                       knowers=[KnowerRow(location_id=world.location_id)])])))
+    shown(CommitIdea(IdeaCreateForm(name="テスト塩田", kind="施設", text="塩を作る浜", histories=[
+        IdeaHistoryRow(location_id=world.location_id, name="塩の浜", detail="都の南の浜",
+                       knowers=[KnowerRow(location_id=world.location_id)])])))
+    _set_plot(world, "市でテスト術を見せる")
+
+    result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
+
+    # 知っていても、プロットに名前の出ないアイデアは、はじめに読むデータに入れない(手番の要求に出たら語で引く)
+    names = _known_names(result["知っているアイデア"])
+    assert "テスト術" in names and "塩の浜" not in names
+
+
+def test_read_known_ideas(shown, world, mock_ai):
+    taro, _ = world.character_ids
+    shown(CommitIdea(IdeaCreateForm(name="テスト塩田", kind="施設", text="塩を作る浜", histories=[
+        IdeaHistoryRow(location_id=world.location_id, name="塩の浜", detail="都の南の浜",
+                       knowers=[KnowerRow(location_id=world.location_id)])])))
+    shown(CommitIdea(IdeaCreateForm(name="テスト泥鰻", kind="モンスター", text="水路の獣", histories=[
+        IdeaHistoryRow(location_id=world.neighbor_id, name="テスト泥鰻", knowers=[KnowerRow(location_id=world.neighbor_id)])])))
+
+    result = shown(ReadKnownIdeas(episode_id=world.episode_id, character_id=taro,
+                                  words=["塩の浜の小屋", "テスト塩", "テスト泥鰻", "塩の浜の小屋"]))
+
+    # 語が名前の一部か、名前が語の一部なら当たる。知らない語(知る相手の場所に住んでいない)は空。同じ語は一度だけ
+    assert [word["語"] for word in result] == ["塩の浜の小屋", "テスト塩", "テスト泥鰻"]
+    assert result[0]["知っているアイデア"] == [
+        {"種別": "施設", "知っている呼び名": [{"呼び名": "塩の浜", "受け止め方": "都の南の浜"}]}]
+    assert "塩の浜" in _known_names(result[1]["知っているアイデア"])
+    assert result[2]["知っているアイデア"] == []
+    assert "塩を作る浜" not in str(result)
+
+
+def test_add_ideas(shown, world):
+    result = shown(AddIdeas(episode_id=world.episode_id, ideas=[
+        IdeaDraft(keyword="テスト追加語", description="市で売る干し菓子", kind="物品"),
+        IdeaDraft(keyword="テスト魔導", description="都の技術", kind="技術"),
+        IdeaDraft(keyword="テスト花子", description="人の名前", kind="呼称")]))
+
+    # 当たらなかった語だけを候補として足し、既にある語と人名は足さない。アイデアの本文は返さない
+    assert result == {"added": ["テスト追加語"], "kept": ["テスト魔導", "テスト花子"]}
+    with get_env_session() as s:
+        idea = s.scalars(select(Idea).where(Idea.name == "テスト追加語").order_by(Idea.id.desc())).first()
+        assert idea is not None and (idea.kind, idea.text) == ("物品", "市で売る干し菓子")
+
+
+def test_add_ideas_picks_a_kind_of_the_world(shown, world):
+    # 星を表すアイデアがあれば、その下の分類の種別しか受けない(別の分類が増えないように)
+    with get_env_session() as s:
+        planet = Idea(name="テスト星の設定", kind="星", text="テスト用の星", histories=[IdeaHistory(location_id=world.planet_id, name="テスト星")])
+        s.add(planet)
+        s.flush()
+        s.add(Idea(name="モンスター", kind="モンスター", text="分類", parent_idea_id=planet.id))
+        s.commit()
+
+    with pytest.raises(ValueError, match="種別は次から選ぶ: モンスター"):
+        AddIdeas(episode_id=world.episode_id, ideas=[IdeaDraft(keyword="テスト泥鰻", kind="獣")]).run()
+    assert shown(AddIdeas(episode_id=world.episode_id, ideas=[
+        IdeaDraft(keyword="テスト泥鰻", description="水路の獣", kind="モンスター")]))["added"] == ["テスト泥鰻"]
 
 
 def test_read_appearance(shown, world):
