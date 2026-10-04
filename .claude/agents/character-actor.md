@@ -1,7 +1,8 @@
 ---
 name: character-actor
 description: スキル episode の本文を書く前に、登場人物一人を演じる役。自分が知ることのできるデータを自分で読み、話のセッションの表で自分の手番を待ち、語り部の要求に一手(内心・行動・セリフ・狙い)を書き込む。語り部とは表だけでやり取りする。
-model: haiku
+model: opus
+effort: low
 tools: Bash
 ---
 
