@@ -20,6 +20,8 @@ type Props = {
   rows: Rec[];
   onChange: (rows: Rec[]) => void;
   extraColumns?: ExtraColumn[];
+  /** 足した行の知る相手(`meta.knowers` のとき)。省くと knowers を持たない行を足し、API の既定に任せる */
+  newRowKnowers?: Rec[];
 };
 
 /** リードオンリーの表の一マス。参照列(場所など)は id ではなく名前で出す。 */
@@ -336,14 +338,16 @@ function FlowList({
 }
 
 /** 子の行(期間ごとのパラメータなど)。並びで行が決まるので、行の入れ替えはしない。 */
-export default function ChildListEditor({ meta, rows, onChange, extraColumns = [] }: Props) {
+export default function ChildListEditor({ meta, rows, onChange, extraColumns = [], newRowKnowers }: Props) {
   const [editing, setEditing] = useState<number | null>(null);
   const readOnly = meta.display !== "table";
   const update = (index: number, key: string, value: unknown) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
   const add = () => {
-    onChange([...rows, Object.fromEntries(meta.columns.map((c) => [c.key, c.type === "boolean" ? false : null]))]);
+    const row: Rec = Object.fromEntries(meta.columns.map((c) => [c.key, c.type === "boolean" ? false : null]));
+    if (meta.knowers && newRowKnowers) row.knowers = newRowKnowers;
+    onChange([...rows, row]);
     if (readOnly) setEditing(rows.length);
   };
   const extrasAfter = (key: string) => extraColumns.filter((extra) => extra.after === key);

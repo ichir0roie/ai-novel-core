@@ -46,9 +46,7 @@ class CharacterHistoryRow(_ChildRow):
     # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
     start: int | None = None
     description: str
-    # 非公開の行は、本人・関係のある人物も知らず、知る相手だけが知る
-    private: bool = False
-    # 知る相手(非公開でなければ、本人と関係のある人物は、行が無くても知る)。渡さなければ、新しい行は本人だけ、
+    # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行は本人だけ、
     # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
     knowers: list[KnowerRow] | None = None
 

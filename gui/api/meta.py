@@ -25,9 +25,8 @@ _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "idea": {"histories": "flow"},
     "character_relation": {"histories": "flow"},
 }
-# 行の知る相手を GUI で選べる子リスト。人物の来歴は、GUI が knowers を渡すと新しい行の知る相手を本人にする既定
-# (`db/child_lists.py` の `replaced_histories`)が効かなくなるので出さない
-_CHILD_LIST_KNOWERS: dict[str, set[str]] = {"idea": {"histories"}}
+# 行の知る相手を GUI で選べる子リスト
+_CHILD_LIST_KNOWERS: dict[str, set[str]] = {"character": {"histories"}, "idea": {"histories"}}
 
 
 def _column_type(column: Column) -> str:

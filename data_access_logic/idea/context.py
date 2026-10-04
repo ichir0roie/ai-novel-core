@@ -39,7 +39,7 @@ def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None) -> Id
         return None
 
     classification = find_or_create_classification(s, idea_draft.kind, location_id)
-    # 候補は、話の場所の属する世界線で効く。作中の人物が知るものかは分からないので、場所だけを非公開の行で持つ
+    # 候補は、話の場所の属する世界線で効く。作中の人物が知るものかは分からないので、知る相手の無い行で場所だけを持つ
     world = common_query.location_path(s, location_id)[0] if location_id is not None else None
     candidate = Idea(
         name=idea_draft.keyword,
@@ -48,7 +48,7 @@ def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None) -> Id
         start=idea_draft.start,
         end=idea_draft.end,
         parent_idea_id=classification.id if classification is not None else None,
-        histories=[IdeaHistory(location_id=world.id, name=idea_draft.keyword, private=True)] if world is not None else [],
+        histories=[IdeaHistory(location_id=world.id, name=idea_draft.keyword)] if world is not None else [],
     )
     s.add(candidate)
     s.flush()

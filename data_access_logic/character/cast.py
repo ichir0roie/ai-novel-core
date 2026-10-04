@@ -63,7 +63,7 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
 def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecrets:
     return CharacterSecrets(
         knowers=knowers_at(s, character.knowers, time),
-        histories=[CharacterHistoryMaterial(start=row.start, description=row.description, private=row.private,
+        histories=[CharacterHistoryMaterial(start=row.start, description=row.description,
                                             knowers=knowers_at(s, row.knowers, time))
                    for row in rows_at(character, time)],
     )

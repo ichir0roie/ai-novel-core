@@ -51,7 +51,7 @@ def test_commit_idea(shown, world, mock_ai):
     assert (result["start"], result["end"]) == ("1190/01/01 00:00:00", "1290/01/01 00:00:00")
     assert result["histories"] == [{"location_id": world.location_id, "start": "1195/01/01 00:00:00",
                                        "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称",
-                                       "private": False, "knowers": []}]
+                                       "knowers": []}]
     # 本文は作者だけが読むので、確定のあとに AI を回さない
     assert not mock_ai.calls
 
@@ -84,7 +84,7 @@ def test_resolve_ideas(shown, world):
 def test_search_ideas(shown, world):
     result = shown(SearchIdeas(
         keywords=[IdeaDraft(keyword="テスト魔導", variants=["テスト術", "魔導炉"], description="都の技術", kind="技術")],
-        # 前の回の world のアイデア(同じ名前で、どこでも効く非公開の行を持つことがある)も当たるので、件数を絞らない
+        # 前の回の world のアイデア(同じ名前で、どこでも効く行を持つことがある)も当たるので、件数を絞らない
         location_id=world.location_id, time="1200/04/01"))
 
     found = {idea["id"]: idea for idea in result}
@@ -106,9 +106,9 @@ def test_update_idea(shown, world):
 
 
 def test_idea_scope_follows_history_rows(shown, world):
-    # 本体は場所を持たず、履歴の行(非公開も含む)の場所で絞る。履歴の行の無いアイデアはどこでも当たる
+    # 本体は場所を持たず、履歴の行の場所で絞る。履歴の行の無いアイデアはどこでも当たる
     far = shown(CommitIdea(IdeaCreateForm(name="テスト村の技", kind="技術", text="村だけの技", start="1100/01/01", histories=[
-        IdeaHistoryRow(location_id=world.neighbor_id, name="テスト村の技", private=True)])))
+        IdeaHistoryRow(location_id=world.neighbor_id, name="テスト村の技")])))
     anywhere = shown(CommitIdea(IdeaCreateForm(name="テストどこでも技", kind="技術", text="どこでもの技", start="1100/01/01")))
 
     result = shown(SearchIdeas(

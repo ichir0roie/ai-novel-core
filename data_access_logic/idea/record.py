@@ -14,9 +14,7 @@ class IdeaHistoryRow(Form):
     end: Timestamp | None = None
     name: str
     detail: str | None = None
-    # 非公開の行は、効く場所・期間に住む人物も知らず、知る相手だけが知る
-    private: bool = False
-    # 知る相手(非公開でなければ、効く場所・期間に住む人物は、行が無くても知る)。渡さなければ、新しい行は行の無いまま、今ある行はそのまま
+    # 知る相手。この相手だけが履歴を知る(効く場所・期間に住んでいても、入れなければ知らない)。渡さなければ、新しい行は行の無いまま、今ある行はそのまま
     # (`db/child_lists.py` の `replaced_histories`)
     knowers: list[KnowerRow] | None = None
 
