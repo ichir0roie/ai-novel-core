@@ -5,8 +5,8 @@ import type { ColumnMeta, Labels, Rec, TableMeta } from "./api";
 const HIDDEN = new Set(["id", "meme_seeded", "event_seeded", "polygon"]);
 // 話の一覧は作品の詳細から開く前提なので、作品の列は出さない。ミームは本文だけを見て選んで消すので、分類も出さない
 const HIDDEN_BY_TABLE: Record<string, string[]> = { episode: ["story_id"], meme: ["category"] };
-// 本文のプレビュー列を出さないテーブル(ミームは名前の列が本文そのもの)
-export const NO_PREVIEW = new Set(["episode", "meme"]);
+// 本文のプレビュー列を出さないテーブル(ミーム・文体の好みは名前の列が本文そのもの)
+export const NO_PREVIEW = new Set(["episode", "meme", "style_preference"]);
 
 export function listColumns(meta: TableMeta): ColumnMeta[] {
   const hidden = new Set([...HIDDEN, ...(HIDDEN_BY_TABLE[meta.name] ?? [])]);
