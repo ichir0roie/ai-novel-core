@@ -129,7 +129,7 @@ def _story(story: StoryMaterial) -> dict[str, Any]:
 class EpisodeMaterial(Material):
     story: StoryMaterial
     main_episode: TargetEpisode
-    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
+    # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
     # 話の場所(無ければ作品の立つ場所)とその親。広い順
     locations: list[LocationMaterial]
@@ -234,7 +234,7 @@ class BriefEpisode(EpisodeBase):
 class EpisodeBrief(Material):
     story: StoryMaterial
     main_episode: BriefEpisode
-    # この話より前の、同じ作品の話と登場人物が関わった話(直前の話も含む)。古い順
+    # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
     # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]

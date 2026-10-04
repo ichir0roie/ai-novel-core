@@ -73,13 +73,12 @@ def _related_ids_select(characters: list[Character]) -> Select[int]:
         EpisodeCharacter.character_id.in_([character.id for character in characters]))
 
 
-def _story_family_past_select(episode: Episode) -> Select[Episode]:
-    """同じ作品と、親の作品・親を同じくする作品(章・外伝)の話。章ごとに作品が分かれていても、
-    章の頭の話に前の章の話を見本として渡すため。親の無い作品は同じ作品だけ。"""
+def _family_ids_select(episode: Episode) -> Select[int]:
+    """同じ作品と、親の作品・親を同じくする作品(章・外伝)。章ごとに作品が分かれていても、
+    章の頭の話に前の章の話を渡すため。親の無い作品は同じ作品だけ。"""
     parent_id = select(Story.parent_story_id).where(Story.id == episode.story_id).scalar_subquery()
-    family_ids = select(Story.id).where(
+    return select(Story.id).where(
         or_(Story.id == episode.story_id, Story.id == parent_id, Story.parent_story_id == parent_id))
-    return _past(select(Episode).where(Episode.story_id.in_(family_ids)), episode)
 
 
 def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
@@ -88,16 +87,17 @@ def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
 
 # 同じ作品(章・外伝を含む)の直前の話(新しい順に `constants.EPISODE_STYLE_SAMPLE_COUNT` 話)は、文体の見本としてだけ本文を渡す。古い順
 def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
-    rows = s.scalars(_story_family_past_select(episode).limit(constants.EPISODE_STYLE_SAMPLE_COUNT)).all()
+    rows = s.scalars(_past(select(Episode).where(Episode.story_id.in_(_family_ids_select(episode))), episode)
+                     .limit(constants.EPISODE_STYLE_SAMPLE_COUNT)).all()
     return [RecentEpisode.model_validate(row) for row in reversed(rows)]
 
 
 def _summarized_select(episode: Episode, characters: list[Character]) -> Select[Episode]:
-    """同じ作品のすべての話と、登場人物が関わるすべての話(重ならない)。
-    直前の話の本文は文体の見本にしか使わせないので、その中身もここの概要で渡す。"""
+    """同じ作品と、親・兄弟の作品(章・外伝)のすべての話と、登場人物が関わるすべての話(重ならない)。
+    文体の見本(`recent_episodes`)と同じ作品の範囲にして、見本の話の中身をここの概要で渡す。"""
     return _past(
         select(Episode).where(
-            or_(Episode.story_id == episode.story_id, Episode.id.in_(_related_ids_select(characters)))),
+            or_(Episode.story_id.in_(_family_ids_select(episode)), Episode.id.in_(_related_ids_select(characters)))),
         episode)
 
 
