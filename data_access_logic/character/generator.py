@@ -29,7 +29,8 @@ from data_access_logic.character.histories import add_history, histories_at
 from data_access_logic.character.consistency import Reconciled, reconciled
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.naming import named
-from data_access_logic.character.parameters import overlay, parameter_row, parameters_at, rolled, without_person_values
+from data_access_logic.character.form import CharacterParameterForm
+from data_access_logic.character.parameters import overlay, parameter_row, parameters_at
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial
 from data_access_logic.meme.extractor import draw_from, meme_pool, position_legend
@@ -100,10 +101,10 @@ _PERSON_CONTENT_SYSTEM_PROMPT = f"""\
 {_PRESENT_INSTRUCTION}
 {_PLACE_INSTRUCTION}
 {_SCENE_INSTRUCTION}
-「性格」は各軸を {'/'.join(PERSONALITY_LEVELS)} の五段階で渡す(サイコロか作者の指定で決まっていて変えられない)。人物説明はこの段階と矛盾しないようにし、「無」「必」の軸はその極端さが生活・仕事・人との関わり方に具体的な癖として表れるように書く。段階の語をそのまま書き写さない。
+年齢・性格(各軸 {'/'.join(PERSONALITY_LEVELS)} の五段階)・背丈・体格は、渡した「行動原理(ミーム)」の古今表裏と、出自・生い立ち・人物像から総合的に決める。ミームを持つ人物として筋の通る段階・体つきにし、「無」「必」の軸はその極端さが生活・仕事・人との関わり方に具体的な癖として人物説明に表れるように書く。段階の語をそのまま書き写さない。「決まっている」の年齢・性格の軸・背丈・体格は変えない。
 {_meme_instruction("人物")}
 {_PLACEHOLDER_INSTRUCTION}
-性別・体格・一人称・二人称・三人称・口調・方言が「決まっている」で null なら、人物像・年齢・出自・生い立ちに合わせてあなた自身で考えて決める(null でなければ、その値をそのまま返す)。
+性別・一人称・二人称・三人称・口調・方言が「決まっている」で null なら、人物像・年齢・出自・生い立ちに合わせてあなた自身で考えて決める(null でなければ、その値をそのまま返す)。
 誰にでも当てはまる無難なものに寄せず、この人物固有の言葉づかいにする。"""
 
 _NON_PERSON_CONTENT_SYSTEM_PROMPT = f"""\
@@ -189,7 +190,7 @@ def _hint_text(form: CharacterForm | None) -> str | None:
 
 def _birth_material(
     ai: AIClient, rng: random.Random, sources: BirthSources, time: Stamp, person: bool,
-    parameters: CharacterParameterValues | None, name: str | None, kind: str | None, age: int | None,
+    parameters: CharacterParameterForm | None, name: str | None, kind: str | None, age: int | None,
     hint_name: str | None, hint_text: str | None, plot_text: str | None, elements: list[str] | None, draw_memes: bool,
 ) -> CharacterBirthMaterialSerialized:
     """`elements` を省けば、要るときにその場で筋書きから抜き出す。作者の指定かプロットがあれば、要素は使わない。"""
@@ -256,12 +257,15 @@ def _writing(fixed: Reconciled, memes: list[DrawnMeme], time: Stamp, age: int, n
     return CharacterWriting(text=filled(fixed.text), meme=meme, principle=principle, histories=rows)
 
 
-def _starting_parameters(rng: random.Random, person: bool, form: CharacterForm | None) -> CharacterParameterValues:
-    """性格はサイコロで決め、作者が決めた値はサイコロや AI の決定より優先する。人物以外は名字・体格・口調を持たない。"""
-    parameters = rolled(rng)
-    if form is not None and form.parameters:
-        overlay(parameters, form.parameters[0])
-    return parameters if person else without_person_values(parameters)
+def _decided_parameters(content: PersonContentDraft, fixed: CharacterParameterForm) -> CharacterParameterValues:
+    """AI が決めた年齢以外の値に、作者が決めた値を重ねる(作者の値が勝つ)。"""
+    parameters = CharacterParameterValues(
+        sex=content.sex or None, height=round(content.height, 1), build=content.build or None,
+        first_person=content.first_person or None, second_person=content.second_person or None,
+        third_person=content.third_person or None, tone=content.tone or None, dialect=content.dialect or None,
+        **content.personality.model_dump())
+    overlay(parameters, fixed)
+    return parameters
 
 
 def _person_age(content: PersonContentDraft, plot_text: str | None) -> int:
@@ -276,11 +280,11 @@ def character_content(
     """`form` は作者の下書き(GUI の欄の値)。名前・説明は核として AI に渡し、性格・口調・種別・生年は決まった値として使う。
     `plot_text` はこの人物を登場させる話のプロット。生年が決まっていなければ、その役どころに合う年齢を AI に決めさせる。
     `elements` は筋書きから抜き出した立場(`story_elements`。省けば要るときに抜き出す)。中身が得られなければ None。"""
-    parameters = _starting_parameters(rng, person, form)
+    fixed = form.parameters[0] if form and form.parameters else CharacterParameterForm()
     fixed_kind = form.kind if form and form.kind and form.kind != CHARACTER_KIND_PERSON else None
     fixed_age = max(0, time.year - form.start.year) if form and form.start is not None else None
     material = _birth_material(
-        ai, rng, sources, time, person, parameters if person else None,
+        ai, rng, sources, time, person, fixed if person else None,
         None, None if person else fixed_kind, fixed_age, form.name if form else None, _hint_text(form), plot_text,
         elements, draw_memes=True)
     subject = "人物" if person else "対象"
@@ -291,15 +295,11 @@ def character_content(
     if isinstance(content, PersonContentDraft):
         kind = CHARACTER_KIND_PERSON
         age = _person_age(content, plot_text)
-        parameters.dialect = parameters.dialect or content.dialect or None
-        parameters.sex = parameters.sex or content.sex or None
-        parameters.build = parameters.build or content.build or None
-        parameters.first_person = parameters.first_person or content.first_person or None
-        parameters.second_person = parameters.second_person or content.second_person or None
-        parameters.third_person = parameters.third_person or content.third_person or None
-        parameters.tone = parameters.tone or content.tone or None
+        parameters = _decided_parameters(content, fixed)
     else:
         age = content.age
+        # 人物以外の対象は名字・体格・口調を持たず、性格はどの軸も「並」
+        parameters = CharacterParameterValues()
         kind = fixed_kind or (content.kind if content.kind in constants.NON_PERSON_KINDS
                               else rng.choice(constants.NON_PERSON_KINDS))
     return CharacterContent(
@@ -392,7 +392,8 @@ def completion_content(
 ) -> tuple[CharacterBirthMaterialSerialized, PersonContentDraft | NonPersonContentDraft]:
     """決まっている名前・属性・出自と、作者が書いた外見・ミーム・行動原理・筋書きを核に、説明と来歴だけを AI に書かせる。"""
     material = _birth_material(
-        ai, rng, sources, target.time, target.person, target.parameters, target.name,
+        ai, rng, sources, target.time, target.person,
+        None if target.parameters is None else CharacterParameterForm.model_validate(target.parameters.model_dump()), target.name,
         None if target.person else target.kind, target.age, None, target.hint_text, None, None, draw_memes=False)
     subject = "人物" if target.person else "対象"
     content = _content(ai, material, f"この{subject}の説明を決めてください。")

@@ -1,14 +1,11 @@
 """人物の名字・体格・口調・性格は、変わった時ごとの行(`character_parameter`)を重ねて決める。"""
-import random
 
 from pydantic import BaseModel
 
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.record import CharacterParameterRow
-from db.schema import PERSON_PARAMETER_COLUMNS, PERSONALITY_COLUMNS, Character, CharacterParameter, PersonalityLevel
+from db.schema import Character, CharacterParameter
 from db.stamp import Stamp
-
-_HEIGHT_RANGE_CM = (140.0, 195.0)
 
 
 def _order(row: CharacterParameter) -> tuple:
@@ -35,21 +32,6 @@ def parameters_at(character: Character, time: Stamp | None) -> CharacterParamete
     values = CharacterParameterValues()
     for row in sorted(selected, key=_order):
         overlay(values, CharacterParameterRow.model_validate(row))
-    return values
-
-
-def rolled(rng: random.Random) -> CharacterParameterValues:
-    """名字・性別・体格・口調は少ない候補から引くと偏るので、ここでは決めずに AI に人物説明と合わせて決めさせる。"""
-    values = CharacterParameterValues(height=round(rng.uniform(*_HEIGHT_RANGE_CM), 1))
-    for name in PERSONALITY_COLUMNS:
-        setattr(values, name, rng.choice(list(PersonalityLevel)))
-    return values
-
-
-def without_person_values(values: CharacterParameterValues) -> CharacterParameterValues:
-    """人物以外の対象は、名字・体格・口調を持たない。"""
-    for name in PERSON_PARAMETER_COLUMNS:
-        setattr(values, name, None)
     return values
 
 

@@ -62,6 +62,8 @@ class MockAIClient:
             high = schema.get("maximum", max(low, 1))
             return self.rng.randint(low, high)
         if types == "number":
+            if "exclusiveMinimum" in schema:
+                return float(schema["exclusiveMinimum"]) + 1
             return float(schema.get("minimum", 0))
         if types == "boolean":
             return False
