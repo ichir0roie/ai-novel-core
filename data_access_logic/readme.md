@@ -104,7 +104,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この人物の周りで何が起きている?」 | `character.read_surroundings.ReadSurroundings(character_id, time)`               |
 | 「この人物がその時に知っていることを読ませて」 | `character.read_knowledge.ReadKnowledge(episode_id, character_id)`。人物役が、話のセッションでいる時刻(その人物の一番新しい手番の行の `time`、無ければ話の時刻)に知ることのできるデータ。時刻・年は渡さず、来歴の年はその時刻から何年前か(「今年」「13年前」)で出す。本人の外見・芯・ミーム・行動原理・その時の名字や口調、その時刻に関係のある人物の外見と芯、本人と関係のある人物の来歴、その時刻に続いている関係(芯と、時刻の年までに起きた来歴)、知っているアイデア(住む場所に効くものと、知る相手に入ったもの)の本文と来歴を返す。芯・来歴は知る相手に当たるものだけ。来歴は時刻の年までに起きた行だけ。筋書き(`plot`)は出さない(下の「本文・来歴を知る相手」) |
 | 「初対面の相手の見た目を読ませて」 | `character.read_appearance.ReadAppearance(character_id, time)`。会った相手から見て分かること(種別・歳・性別・背丈・体格・外見)。名前は出さない。語り部が初対面の人物の状況の差分を書くときに使う |
-| 「話のセッションに手番を足して」「人物役の一手を待って」 | スキル `episode` の「語り部と人物役」。表(`episode_character_session`)は `tool.episode_session` のコマンドで扱う。入口は `episode_session.add_turns.AddTurns(episode_id, turns)`(語り部が要求の行を足す)・`answer_turn.AnswerTurn(record_id, answer)`(人物役が番の行に一手を入れる)・`read_turn.ReadTurn(episode_id, character_id)`(人物役の番か: turn / waiting / closed。番の行は要求と終了の印だけで、時刻は返さない)・`read_session.ReadSession(episode_id)`(すべての行)・`read_stage.ReadStage(episode_id)`(語り部が読む材料。プロット・時刻・場所・登場人物の外見と芯・登場人物どうしの関係・話に結んだ設定の表層だけで、来歴・前の話・本文は入らない)・`close_session.CloseSession(episode_id)`(出た人物に終了の行)・`clear_session.ClearSession(episode_id)`(その話の行をすべて消す。演じ直す前に)。行動の入っていない一番古い行の人物が、いま動く番 |
+| 「話のセッションに手番を足して」「人物役の一手を待って」 | スキル `episode` の「語り部と人物役」。表(`episode_character_session`)は `tool.episode_session` のコマンドで扱う。入口は `episode_session.add_turns.AddTurns(episode_id, turns)`(語り部が要求の行を足す)・`answer_turn.AnswerTurn(record_id, answer)`(人物役が番の行に一手を入れる)・`read_turn.ReadTurn(episode_id, character_id)`(人物役の番か: turn / waiting / closed。番の行は要求と終了の印だけで、時刻は返さない)・`read_session.ReadSession(episode_id)`(すべての行)・`read_stage.ReadStage(episode_id)`(語り部が読む材料。プロット・時刻・場所・登場人物の外見と芯と来歴・登場人物どうしの関係とその来歴・話に結んだ設定の本文と履歴。芯・来歴・履歴は知る相手に関わらずすべて渡し、非公開かどうかと知る相手を添える。前の話・本文は入らない)・`close_session.CloseSession(episode_id)`(出た人物に終了の行)・`clear_session.ClearSession(episode_id)`(その話の行をすべて消す。演じ直す前に)。行動の入っていない一番古い行の人物が、いま動く番 |
 | 「この人物を本文用にそろえて」       | `character.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと生まれたときの値)。変わった時ごとの行は `parameters`。芯は `text`。来歴(`histories`)は `time` の年までに起きた行だけを古い順に出す(`time` を省くと、年の決まっていない行も最後に含めてすべて) |
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
 | 「この作品の子に章・外伝を作って」   | `story.commit_story.CommitStory(StoryCreateForm(name=…, parent_story_id=<親の作品id>, …))`。付け替えは `UpdateStory(StoryUpdateForm(id=…, parent_story_id=…))`(自分か子孫の子にはできない。`None` を渡せば親から外す)。子の作品の話を書くときは、親をたどった作品の筋書き(`親の作品`)と、一番上の作品とその子孫の話を前の話として渡す(下の「話の生成」) |
@@ -217,23 +217,30 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   `DeleteIdea` は下位のアイデアが残っていなければそのまま消し、`histories` も一緒に消える
 
 **本文・来歴を知る相手**: 人物の本文と来歴の行、アイデアの履歴の行は、知る相手の表(`character_knower` /
-`character_history_knower` / `idea_history_knower`)の行に当たる人物だけが知る(公開・非公開の区別は持たない)。
+`character_history_knower` / `idea_history_knower`)の行に当たる人物が知る。人物の来歴とアイデアの履歴の行は同じ形で、
+公開の行は知る相手のほかにも知る人物がおり、非公開(`private`)の行は知る相手だけが知る。
 アイデアの本文は誰も知らない(作者だけが読む)。
 
 - 知る相手の行は、知る人物(`knower_id`)か知る場所(`location_id`)のどちらか一方と、知った時刻(`start`。空なら初めから)を持つ
 - 場所の行は、その時刻にその場所(配下も含む)に住む人物(`character_location`)が知る。誰もが知ることは世界の場所で表す
-- アイデアの履歴の行は、行の効く場所(`location_id`。空ならどこでも)と期間に住む人物も、知る相手の行が無くても知る。
-  ただし非公開(`private`)の行は、場所・期間に関わらず知る相手だけが知る
+- 人物の来歴の公開の行は、本人とその時刻に関係(`character_relation`)のある人物も、知る相手の行が無くても知る。
+  非公開(`private`)の行は知る相手だけが知る
+- アイデアの履歴の公開の行は、行の効く場所(`location_id`。空ならどこでも)と期間に住む人物も、知る相手の行が無くても知る。
+  非公開(`private`)の行は、場所・期間に関わらず知る相手だけが知る
   履歴の行の無いアイデアは、人物役のだれも知らない
 - 入口では人物の本体と来歴の行、アイデアの履歴の行の `knowers`(行の配列)で出し入れする。渡すとまるごと置き換える
 - 人物は、作るとき本人が自分の本文を知る相手に入る(`db/schema.py` の `_knows_oneself`。`CommitCharacter` の `knowers` は本人のほかの相手)
 - 来歴・履歴の行で `knowers` を渡さない行は、今ある行なら知る相手をそのままにし、新しい行なら人物の来歴は本人だけ、アイデアの履歴は行の無いまま
-  (`db/child_lists.py` の `replaced_histories`)。GUI は来歴の行の `knowers` を出さないので、GUI で足した人物の来歴は本人だけが知る
-- 本人も知らない本文・来歴(記憶を失った人物・出生の秘密など)は、知る相手から本人を外す
+  (`db/child_lists.py` の `replaced_histories`)。`private` を渡さない行は公開になる(今ある行を渡し直すときも、読んだ `private` を渡す)
+- 本人も知らない来歴(記憶を失った人物・出生の秘密など)は、非公開にして知る相手から本人を外す。本人も知らない本文は、知る相手から本人を外す
 - 知る相手で絞るのは、人物が知ることのできるデータ(`ReadKnowledge`。スキル `episode` の人物役が読む)だけ。
   人物役には、本人の外見・芯・ミーム・行動原理と、関係のある人物の外見と芯(知っていれば)を渡し、筋書き(`plot`)はだれにも渡さない。
   話・出来事・人物の生成と、本文を書く Claude・語り部が読む材料(`ReadEpisodeBrief`・`ReadStage` など)は作者の目で書くので、知る相手に関わらずすべてを渡す
-- `add_history`(出来事・人物の生成が来歴に書き足す)は、その年の本人だけが知る行に書き足し、無ければ本人だけが知る行を足す
+- 本文を書く Claude・語り部が読む材料(`ReadEpisodeBrief`・`ReadStage`)は、人物の芯に知る相手を、人物の来歴とアイデアの履歴の行に
+  非公開かどうかと知る相手を添える(`character.cast.secrets_at`・`idea.links.linked_ideas_at`)。知る相手は話の時刻までに知った相手だけ、
+  来歴・履歴は話の時刻までに始まった行だけ(アイデアの履歴は効く場所・終わりを問わない)
+- `add_history`(出来事・人物の生成が来歴に書き足す)と、人物の生成が書く来歴の節目は、AI の書いたことに秘密が混じりうるので、
+  本人だけが知る非公開の行にする(その年の本人だけが知る非公開の行があれば、そこに書き足す)
 
 **アイデアの分類(親の自動探索)**: `parent_idea_id`(上位のアイデア)は、`kind` ごとに一つ、その kind を
 まとめる「分類」のアイデア(`name` が `kind` と同じ。例: `name="組織" kind="組織"`)を親にしてぶら下げる。

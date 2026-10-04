@@ -4,7 +4,8 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validator, model_serializer, model_validator
 
 from data_access_logic import constants
-from data_access_logic.material import Material
+from data_access_logic.knowers import KnowerMaterial, knowers_for_prompt
+from data_access_logic.material import Material, Named
 from db.stamp import Stamp, StampError
 
 
@@ -146,6 +147,27 @@ class RelatedIdeaMaterial(Material):
     history: IdeaHistoryMaterial | None = None
 
 
+class IdeaHistoryWholeMaterial(Material):
+    """作者の目で読む履歴の行。"""
+
+    # 効く場所。空ならどこでも
+    location: Named | None = None
+    start: Stamp | None = None
+    end: Stamp | None = None
+    name: str
+    detail: str | None = None
+    private: bool
+    # その時刻までに知った相手(`knowers.knowers_at`)
+    knowers: list[KnowerMaterial]
+
+
+class LinkedIdeaMaterial(RelatedIdeaMaterial):
+    """話に結んだアイデア。語り部と本文を書く Claude の材料(`links.linked_ideas_at`)。"""
+
+    # その時刻までに始まった履歴の行。場所・終わりを問わず、非公開の行も含む
+    histories: list[IdeaHistoryWholeMaterial]
+
+
 def idea_for_prompt(related: RelatedIdeaMaterial, with_text: bool) -> dict[str, Any]:
     """本文(本質)は、語り部と、話を書くセッションの Claude の材料にだけ載せ(`with_text`)、AI の生成には渡さない。"""
     idea, history = related.idea, related.history
@@ -160,6 +182,19 @@ def idea_for_prompt(related: RelatedIdeaMaterial, with_text: bool) -> dict[str, 
             text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
         shown["内容"] = text
     return shown
+
+
+def linked_idea_for_prompt(linked: LinkedIdeaMaterial) -> dict[str, Any]:
+    return {
+        **idea_for_prompt(linked, with_text=True),
+        "履歴(古い順)": [
+            {"呼び名": history.name, "受け止め方": history.detail,
+             "効く場所": None if history.location is None else history.location.name,
+             "始まり": None if history.start is None else str(history.start),
+             "終わり": None if history.end is None else str(history.end),
+             "非公開": history.private, "知る相手": knowers_for_prompt(history.knowers)}
+            for history in linked.histories],
+    }
 
 
 class IdeaContextMaterial(Material):

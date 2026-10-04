@@ -4,10 +4,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from data_access_logic.character.models import (
     CastCandidate, CastCandidateSerialized, CastMaterial, CastSerialized, CharacterMaterial, CharacterRelationLine,
-    MentionedMaterial, MentionedSerialized, relations_for_prompt,
+    CharacterSecrets, MentionedMaterial, MentionedSerialized, relations_for_prompt, secrets_for_prompt,
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
-from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, RelatedIdeaMaterial, idea_for_prompt
+from data_access_logic.idea.models import (
+    IdeaContextMaterial, IdeaContextSerialized, LinkedIdeaMaterial, linked_idea_for_prompt,
+)
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material, Named
 from db.stamp import Stamp
@@ -243,12 +245,14 @@ class EpisodeBrief(Material):
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
     mentioned: list[MentionedMaterial]
+    # 登場人物・名前だけ出る人物の芯・来歴を誰が知っているか。人物 id ごと
+    secrets: dict[int, CharacterSecrets]
     # 登場人物のどれかが片側にいる関係
     relations: list[CharacterRelationLine]
     # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
     appearances: list[CharacterEpisode]
-    # 話に結んだアイデア(`episode_idea`)。効く期間では絞らず、履歴(呼び名)は話の時刻・場所に効くもの
-    ideas: list[RelatedIdeaMaterial]
+    # 話に結んだアイデア(`episode_idea`)。効く期間では絞らず、呼び名は話の時刻・場所に効く履歴から。履歴の行はすべて添える
+    ideas: list[LinkedIdeaMaterial]
     # 古い順
     location_events: list[EventMaterial]
     later_events: list[EventMaterial]
@@ -288,11 +292,13 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "場所(広い順)": [_place(location) for location in self.locations],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
                 "登場人物": [{"人物id": member.character.id, **member.model_dump(),
+                          **secrets_for_prompt(self.secrets[member.character.id]),
                           "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
                          for member in self.cast],
-                "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump()} for member in self.mentioned],
+                "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump(),
+                              **secrets_for_prompt(self.secrets[member.character.id])} for member in self.mentioned],
                 "登場人物の関係": relations_for_prompt(self.relations),
-                "関係する設定": [{"アイデアid": related.idea.id, **idea_for_prompt(related, with_text=True)} for related in self.ideas],
+                "関係する設定": [{"アイデアid": linked.idea.id, **linked_idea_for_prompt(linked)} for linked in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
             },

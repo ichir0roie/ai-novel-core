@@ -3,8 +3,9 @@
 人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
 来歴の起きた年は、その時刻から何年前かで渡す。
 
-本文・来歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、場所ならその時刻に
+本文は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、場所ならその時刻に
 その場所(配下も含む)に住む人物が、知った時刻から知る。
+来歴は、公開の行なら本人と関係のある人物(ここで来歴を渡す範囲)が知り、非公開(`private`)の行なら知る相手に当たるものだけを渡す。
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけで、
 行の効く場所(空ならどこでも)と期間に住む人物と、行の知る相手に当たる人物が知る。
 人物の来歴はその時刻までに起きた行だけ。
@@ -73,8 +74,8 @@ class KnownHistory(Material):
 
 
 def known_histories(rows: Sequence[CharacterHistory], viewer: Viewer) -> list[KnownHistory]:
-    """古い順。"""
-    known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
+    """本人か関係のある人物の来歴を渡す。古い順。"""
+    known = [row for row in rows if row.covers(viewer.time) and (not row.private or knows(row.knowers, viewer))]
     return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
 
 

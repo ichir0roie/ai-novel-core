@@ -257,7 +257,8 @@ def _history(items: Sequence[HistoryItemDraft], born_year: int, age: int) -> lis
     for item in sorted(items, key=lambda item: item.age):
         if item.text.strip() and item.age <= age:
             by_year.setdefault(born_year + item.age, []).append(item.text.strip())
-    return [CharacterHistoryRow(start=year, description="\n".join(texts)) for year, texts in by_year.items()]
+    # AI の書いた節目には秘密が混じりうるので、関係のある人物に広めず本人だけが知る行にする(作者が公開に直す)
+    return [CharacterHistoryRow(start=year, description="\n".join(texts), private=True) for year, texts in by_year.items()]
 
 
 def _writing(fixed: Reconciled, memes: list[DrawnMeme], time: Stamp, age: int | None, name: str) -> CharacterWriting:

@@ -84,7 +84,7 @@ def main() -> None:
     appearance.add_argument("--character", type=int, required=True)
     appearance.add_argument("--time", required=True)
 
-    stage = commands.add_parser("stage", help="語り部が読む材料(プロット・場所・登場人物・関係・設定の表層)を読む")
+    stage = commands.add_parser("stage", help="語り部が読む材料(プロット・場所・登場人物・関係・設定と、その来歴・履歴を知る相手)を読む")
     stage.add_argument("--episode", type=int, required=True)
 
     add = commands.add_parser("add", help="手番の要求の行を足す(JSON の配列: character_id・time・request)")
