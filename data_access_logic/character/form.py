@@ -143,3 +143,21 @@ class CharacterRelationUpdateForm(Form):
     end: Timestamp | None = None
     # 渡せば来歴の行をまるごと置き換える
     histories: list[CharacterRelationHistoryRow] | None = None
+
+
+class KnowledgeChange(Form):
+    # 知られる行の id(人物の芯なら人物の id、来歴・履歴ならその行の id)
+    id: int
+    # true なら知る相手に入れ(入っていれば知った時刻を直す)、false なら外す
+    known: bool
+    # 知った時刻。空なら初めから知っている。known が false なら使わない
+    start: Timestamp | None = None
+
+
+class KnowledgeForm(Form):
+    """人物が知るもの(ほかの人物の芯・人物の来歴・アイデアの履歴)の知る相手の付け外しを、まとめて渡す(GUI の知識整理)。"""
+
+    knower_id: Annotated[int, References("character")]
+    characters: list[KnowledgeChange] = []
+    character_histories: list[KnowledgeChange] = []
+    idea_histories: list[KnowledgeChange] = []

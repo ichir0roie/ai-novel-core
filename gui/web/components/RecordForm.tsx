@@ -35,6 +35,12 @@ export function historyAgeColumns(birth: unknown): ExtraColumn[] {
   }];
 }
 
+/** 人物の来歴に足す行の知る相手。API が knowers の無い新しい行を本人だけが知る行にするのと揃え、画面でも本人を出しておく
+ * (本人を出さずに知る相手を足すと、本人の知らない行になる)。まだ id の無い人物は API の既定に任せる。 */
+function selfKnowers(id: unknown): Rec[] | undefined {
+  return typeof id === "number" ? [{ knower_id: id, location_id: null, start: null }] : undefined;
+}
+
 type Props = {
   meta: TableMeta;
   value: Rec;
@@ -110,6 +116,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
             rows={(value[child.name] as Rec[] | undefined) ?? []}
             onChange={(rows) => set(child.name, rows)}
             extraColumns={meta.name === "character" && child.name === "histories" ? historyAgeColumns(value.start) : undefined}
+            newRowKnowers={meta.name === "character" && child.name === "histories" ? selfKnowers(value.id) : undefined}
           />
         </div>
       ))}

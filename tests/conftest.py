@@ -130,7 +130,7 @@ def world() -> Iterator[World]:
         s.add(idea)
         s.flush()
         child_idea = Idea(name="テスト魔導炉", kind="技術", text="テスト魔導の炉", parent_idea_id=idea.id,
-                          histories=[IdeaHistory(location_id=location.id, name="テスト魔導炉", private=True)])
+                          histories=[IdeaHistory(location_id=location.id, name="テスト魔導炉")])
         meme = Meme(text="テストの信条", category=MemeCategory.BELIEF)
         oracle = Oracle(title="テストの覚え書き", text="テスト用の覚え書き", meme_seeded=True)
         event_seed = EventSeed(text="テストの種", consolidated=False)

@@ -15,7 +15,7 @@ from db.stamp import Stamp
 def _history_at(s: Session, row: IdeaHistory, time: Stamp) -> IdeaHistoryWholeMaterial:
     return IdeaHistoryWholeMaterial(
         location=None if row.location_id is None else s.get_one(Location, row.location_id), start=row.start, end=row.end,
-        name=row.name, detail=row.detail, private=row.private, knowers=knowers_at(s, row.knowers, time))
+        name=row.name, detail=row.detail, knowers=knowers_at(s, row.knowers, time))
 
 
 def whole_ideas(s: Session, idea_ids: list[int], location_id: int | None, time: Stamp) -> list[WholeIdeaMaterial]:

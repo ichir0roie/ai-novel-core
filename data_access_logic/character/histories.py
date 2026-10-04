@@ -24,17 +24,17 @@ def histories_at(character: Character, time: Stamp | None) -> list[CharacterHist
 
 
 def _known_only_by(row: CharacterHistory, character: Character) -> bool:
-    return row.private and len(row.knowers) == 1 and row.knowers[0].start is None and (
+    return len(row.knowers) == 1 and row.knowers[0].start is None and (
         row.knowers[0].knower is character or (character.id is not None and row.knowers[0].knower_id == character.id))
 
 
 def add_history(character: Character, year: int, description: str) -> None:
-    """その年の、本人だけが知る非公開の行があれば、その説明に一文を書き足す(行を増やしすぎない)。無ければ、その年から始まり
-    本人だけが知る非公開の行を足す(ほかの人も知る行に書き足すと、本人しか知らないはずのことが広まる)。"""
+    """その年の、本人だけが知る行があれば、その説明に一文を書き足す(行を増やしすぎない)。無ければ、その年から始まり
+    本人だけが知る行を足す(ほかの人も知る行に書き足すと、本人しか知らないはずのことが広まる)。"""
     row = next((row for row in character.histories if row.start == year and _known_only_by(row, character)), None)
     if row is None:
         character.histories.append(CharacterHistory(
-            start=year, description=description, private=True, knowers=[CharacterHistoryKnower(knower=character)]))
+            start=year, description=description, knowers=[CharacterHistoryKnower(knower=character)]))
     else:
         row.description = f"{row.description}\n{description}"
 

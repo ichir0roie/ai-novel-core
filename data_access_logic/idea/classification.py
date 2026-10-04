@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def _anchor(s: Session, location_id: int | None) -> tuple[Idea, int] | None:
     """場所の道筋を末端から遡り、その場所自身を表すアイデア(通常は「星」)が見つかった一番深いものと、その場所の id。
-    アイデアの場所は履歴の行(非公開も含む)で持つ。"""
+    アイデアの場所は履歴の行で持つ。"""
     if location_id is None:
         return None
     for step in reversed(common_query.location_path(s, location_id)):
@@ -44,10 +44,10 @@ def find_or_create_classification(s: Session, kind: str, location_id: int | None
         select(Idea).where(Idea.kind == kind, Idea.name == kind, Idea.parent_idea_id == anchor.id).order_by(Idea.id))
     if existing is not None:
         return existing
-    # 分類は作中の人物が知るものではないので、効く場所だけを非公開の行で持つ
+    # 分類は作中の人物が知るものではないので、知る相手の無い行で効く場所だけを持つ
     classification = Idea(
         name=kind, kind=kind, parent_idea_id=anchor.id, text=f'{anchor.name}における「{kind}」のアイデアをまとめる分類。',
-        histories=[IdeaHistory(location_id=anchor_location_id, name=kind, private=True)])
+        histories=[IdeaHistory(location_id=anchor_location_id, name=kind)])
     s.add(classification)
     s.flush()
     logger.info(f"分類を足した: {classification.name}(id={classification.id})")

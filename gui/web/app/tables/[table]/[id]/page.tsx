@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import KnowledgeModal from "@/components/KnowledgeModal";
 import RecordForm from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
@@ -64,6 +65,7 @@ export default function RecordPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [neighbors, setNeighbors] = useState<EpisodeNeighbors | null>(null);
+  const [organizing, setOrganizing] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -253,6 +255,12 @@ export default function RecordPage() {
                       {T.record.openClaudeInteractive}
                     </a>
                   )}
+                  {table === "character" && (
+                    // 自分の芯・来歴の知る相手も直すので、画面の編集中の値と食い違わないよう保存してから開く
+                    <button onClick={() => setOrganizing(true)} disabled={busy || dirty} title={dirty ? T.knowledge.openDisabled : undefined}>
+                      {T.knowledge.open}
+                    </button>
+                  )}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
                   {(table === "episode" || table === "idea") && (
@@ -264,6 +272,14 @@ export default function RecordPage() {
               </div>
             }
           />
+          {organizing && (
+            <KnowledgeModal
+              characterId={Number(id)}
+              characterName={T.nameId(loaded.label, id)}
+              onClose={() => setOrganizing(false)}
+              onSaved={() => void load()}
+            />
+          )}
         </div>
       )}
     </div>

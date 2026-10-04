@@ -92,7 +92,6 @@ class CharacterHistoryMaterial(Material):
 
     start: int | None = None
     description: str
-    private: bool
     # その時刻までに知った相手(`knowers.knowers_at`)
     knowers: list[KnowerMaterial]
 
@@ -102,15 +101,15 @@ class CharacterSecrets(Material):
 
     # 芯(`text`)を知る相手
     knowers: list[KnowerMaterial]
-    # その時刻までに起きた来歴(`histories.rows_at`)。非公開の行も含む
+    # その時刻までに起きた来歴(`histories.rows_at`)。知る相手に関わらずすべて
     histories: list[CharacterHistoryMaterial]
 
 
 def secrets_for_prompt(secrets: CharacterSecrets) -> dict[str, Any]:
-    """`_sheet` の来歴を、非公開かどうかと知る相手つきの行に置き換える。"""
+    """`_sheet` の来歴を、知る相手つきの行に置き換える。"""
     return {
         "人物像を知る相手": knowers_for_prompt(secrets.knowers),
-        "来歴(古い順)": [{"年": history.start, "来歴": history.description, "非公開": history.private,
+        "来歴(古い順)": [{"年": history.start, "来歴": history.description,
                        "知る相手": knowers_for_prompt(history.knowers)} for history in secrets.histories],
     }
 

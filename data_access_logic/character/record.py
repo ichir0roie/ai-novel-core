@@ -46,9 +46,7 @@ class CharacterHistoryRow(_ChildRow):
     # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
     start: int | None = None
     description: str
-    # 非公開の行は、本人・関係のある人物も知らず、知る相手だけが知る
-    private: bool = False
-    # 知る相手(非公開でなければ、本人と関係のある人物は、行が無くても知る)。渡さなければ、新しい行は本人だけ、
+    # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行は本人だけ、
     # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
     knowers: list[KnowerRow] | None = None
 
@@ -120,3 +118,62 @@ class CharacterMove(BaseModel):
 
     character_id: int = Field(description="住まい・拠点が変わった人物の人物id")
     location_id: int = Field(description="移動先の場所id")
+
+
+
+class CharacterTextEntry(Material):
+    """知る相手を直すために読む、人物の芯(`text`)とその知る相手(`ReadKnowableRows`)。"""
+
+    id: int
+    name: str | None = None
+    text: str | None = None
+    knowers: list[KnowerRow]
+
+
+class CharacterHistoryEntry(Material):
+    """知る相手を直すために、行を id で指せる人物の来歴の行(`ReadKnowableRows`)。"""
+
+    id: int
+    character_id: int
+    start: int | None = None
+    description: str
+    knowers: list[KnowerRow]
+
+
+class IdeaHistoryEntry(Material):
+    """知る相手を直すために、行を id で指せるアイデアの履歴の行(`ReadKnowableRows`)。"""
+
+    id: int
+    idea_id: int
+    location_id: int | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    name: str
+    detail: str | None = None
+    knowers: list[KnowerRow]
+
+
+class KnowableRows(Material):
+    # 人物を渡したときはその芯と来歴、アイデアを渡したときはその履歴だけが入る
+    character: CharacterTextEntry | None = None
+    character_histories: list[CharacterHistoryEntry]
+    idea_histories: list[IdeaHistoryEntry]
+
+
+class KnownCharacterHistory(Material):
+    id: int
+    character_id: int
+
+
+class KnownIdeaHistory(Material):
+    id: int
+    idea_id: int
+
+
+class KnownRows(Material):
+    """人物が知る相手の行(人物として直に入った行)を持つもの。場所として入った行は含まない(`ReadKnownRows`)。"""
+
+    # 芯を知る人物の id
+    character_ids: list[int]
+    character_histories: list[KnownCharacterHistory]
+    idea_histories: list[KnownIdeaHistory]

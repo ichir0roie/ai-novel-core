@@ -75,7 +75,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この人物の出自・居場所を足して」   | `character.commit_character_location.CommitCharacterLocation(location)`              |
 | 「この人物たちを〇〇へ移して」「話のあとで居場所を変えて」 | `character.move_characters.MoveCharacters(moves=[CharacterMove(character_id=…, location_id=…)], time=…)`(`CharacterMove` は `character.record`)。人物ごとに、`time` に続いている居場所の行を `time` で閉じ、移動先の行を `time` から足す(没年があればそこまで)。人物・場所が無ければ止める。出来事の生成・話の確定のあとの移動も、この書き換え(`character/moves.py` の `update_locations`)を使う |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`。`text` は時期を限らない関係の芯、関係の中で起きたことは起きた年ごとの `histories` の行に書く(下の「関係の芯と来歴」)。来歴を書き足すときは `UpdateCharacterRelation` に今の行ごと渡す(配列はまるごと置き換わる) |
-| 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea)`。本体は場所を持たず、効く場所は `histories` の行(非公開の行も含む)の `location_id` で持つ(行の無いアイデアはどこでも効く)。効く期間は本体の `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を、場所のある最初の行の `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。本文は作者だけが読むので、確定のあとに AI(事実確認・ミームの抜き出し)を回さない。確定したアイデアを返す |
+| 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea)`。本体は場所を持たず、効く場所は `histories` の行の `location_id` で持つ(行の無いアイデアはどこでも効く)。効く期間は本体の `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を、場所のある最初の行の `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。本文は作者だけが読むので、確定のあとに AI(事実確認・ミームの抜き出し)を回さない。確定したアイデアを返す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、本文の末尾の `# 検証結果` の節に入れる(前の節は置き換える)。`ids` を省くとまだその節の無いものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。oracle は検めたあと、その節を含む本文からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `location.update_location.UpdateLocation(location)`                                 |
@@ -203,10 +203,10 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 ```
 
 - `location_id` は効く場所(その場所と配下で効く)、`start` / `end` は効く期間。どちらも空ならどこでも・いつでも効く
-- アイデアの本体は場所を持たない。アイデアが効く場所は、この行(非公開の行も含む)の場所・期間で決まる(`dictionary_query.idea_in_scope`)。行の無いアイデアはどこでも効き、行があれば、場所・期間の当たる行が一つでもあれば効く
+- アイデアの本体は場所を持たない。アイデアが効く場所は、この行の場所・期間で決まる(`dictionary_query.idea_in_scope`)。行の無いアイデアはどこでも効き、行があれば、場所・期間の当たる行が一つでもあれば効く
 - `name` は必須。その場所・時代でアイデアをこう呼ぶ、という作中の呼び名
 - `detail` は呼び名についての注釈(作中でどう受け止められているか)。無くてもよい
-- `private` を true にした行は非公開。効く場所・期間に住む人物も知らず、知る相手(`knowers`)だけが知る。作中の呼び名(`called`)にも使わない
+- 行を知るのは知る相手(`knowers`)だけ。効く場所・期間は、アイデアの効く範囲と作中の呼び名(`called`)を決めるのにだけ使い、そこに住む人物が知るかどうかには関わらない
 - `CommitIdea` / `UpdateIdea` は `histories` を受け取る。`UpdateIdea` に渡すと配列をまるごと置き換える
 - `SearchIdeas` の名前・本文検索、`data_access_logic/idea/search.py`、`data_access_logic/idea/context.py`(中間段)、清書に渡す「関係する設定」
   (`IdeaContextSerialized`)は、いずれもアイデアの `histories` を見て、当てはまる場所・時代の
@@ -217,38 +217,41 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   `DeleteIdea` は下位のアイデアが残っていなければそのまま消し、`histories` も一緒に消える
 
 **本文・来歴を知る相手**: 人物の本文と来歴の行、アイデアの履歴の行は、知る相手の表(`character_knower` /
-`character_history_knower` / `idea_history_knower`)の行に当たる人物が知る。人物の来歴とアイデアの履歴の行は同じ形で、
-公開の行は知る相手のほかにも知る人物がおり、非公開(`private`)の行は知る相手だけが知る。
+`character_history_knower` / `idea_history_knower`)の行に当たる人物だけが知る。知る相手の行のほかに、知る人物を決めるものは無い。
 アイデアの本文は誰も知らない(作者だけが読む)。
 
 - 知る相手の行は、知る人物(`knower_id`)か知る場所(`location_id`)のどちらか一方と、知った時刻(`start`。空なら初めから)を持つ
 - 場所の行は、その時刻にその場所(配下も含む)に住む人物(`character_location`)が知る。誰もが知ることは世界の場所で表す
-- 人物の来歴の公開の行は、本人とその時刻に関係(`character_relation`)のある人物も、知る相手の行が無くても知る。
-  非公開(`private`)の行は知る相手だけが知る
-- アイデアの履歴の公開の行は、行の効く場所(`location_id`。空ならどこでも)と期間に住む人物も、知る相手の行が無くても知る。
-  非公開(`private`)の行は、場所・期間に関わらず知る相手だけが知る
-  履歴の行の無いアイデアは、人物役のだれも知らない
+- 人物の来歴の行は、本人も関係(`character_relation`)のある人物も、知る相手に入っていなければ知らない
+- アイデアの履歴の行は、行の効く場所(`location_id`)・期間に住む人物も、知る相手に入っていなければ知らない。
+  その場所の住人に知らせるなら、その場所を知る相手にする。履歴の行の無いアイデアは、人物役のだれも知らない
 - 入口では人物の本体と来歴の行、アイデアの履歴の行の `knowers`(行の配列)で出し入れする。渡すとまるごと置き換える
+- ある人物が知るもの(人物の芯・人物の来歴・アイデアの履歴の行)を、まとめて付け外しするのは
+  `character.update_knowledge.UpdateKnowledge(KnowledgeForm(knower_id, characters, character_histories, idea_histories))`
+  (GUI の人物の画面の「Organize knowledge」)。各行は `KnowledgeChange(id, known, start)` で、`known` が true なら知る相手に入れ
+  (入っていれば知った時刻を直す)、false なら外す。場所として入っている知る相手の行には触らない。
+  行の id は `character.read_knowable_rows.ReadKnowableRows(character_id=…)` / `(idea_id=…)`、
+  その人物が知る行は `character.read_known_rows.ReadKnownRows(knower_id)` で読む
 - 人物は、作るとき本人が自分の本文を知る相手に入る(`db/schema.py` の `_knows_oneself`。`CommitCharacter` の `knowers` は本人のほかの相手)
 - 来歴・履歴の行で `knowers` を渡さない行は、今ある行なら知る相手をそのままにし、新しい行なら人物の来歴は本人だけ、アイデアの履歴は行の無いまま
-  (`db/child_lists.py` の `replaced_histories`)。`private` を渡さない行は公開になる(今ある行を渡し直すときも、読んだ `private` を渡す)
-- 本人も知らない来歴(記憶を失った人物・出生の秘密など)は、非公開にして知る相手から本人を外す。本人も知らない本文は、知る相手から本人を外す
+  (`db/child_lists.py` の `replaced_histories`)
+- 本人も知らない来歴・本文(記憶を失った人物・出生の秘密など)は、知る相手から本人を外す
 - 知る相手で絞るのは、人物が知ることのできるデータ(`ReadKnowledge`・`ReadKnownIdeas`。スキル `episode` の人物役が読む)だけ。
   人物役には、本人の外見・芯・ミーム・行動原理と、関係のある人物の外見と芯(知っていれば)を渡し、筋書き(`plot`)はだれにも渡さない。
   話・出来事・人物の生成と、本文を書く Claude が読む材料(`ReadEpisodeBrief` など)は作者の目で書くので、知る相手に関わらずすべてを渡す。
   語り部の材料(`ReadStage`)は人物の表層と知り合いの組だけで、芯・来歴・設定を渡さない
 - 本文を書く Claude が読む材料(`ReadEpisodeBrief`)は、人物の芯に知る相手を、人物の来歴とアイデアの履歴の行に
-  非公開かどうかと知る相手を添える(`character.cast.secrets_at`・`idea.whole.whole_ideas`)。知る相手は話の時刻までに知った相手だけ、
+  知る相手を添える(`character.cast.secrets_at`・`idea.whole.whole_ideas`)。知る相手は話の時刻までに知った相手だけ、
   来歴・履歴は話の時刻までに始まった行だけ(アイデアの履歴は効く場所・終わりを問わない)
 - `add_history`(出来事・人物の生成が来歴に書き足す)と、人物の生成が書く来歴の節目は、AI の書いたことに秘密が混じりうるので、
-  本人だけが知る非公開の行にする(その年の本人だけが知る非公開の行があれば、そこに書き足す)
+  本人だけが知る行にする(その年の本人だけが知る行があれば、そこに書き足す)
 
 **アイデアの分類(親の自動探索)**: `parent_idea_id`(上位のアイデア)は、`kind` ごとに一つ、その kind を
 まとめる「分類」のアイデア(`name` が `kind` と同じ。例: `name="組織" kind="組織"`)を親にしてぶら下げる。
 `CommitIdea` に `parent_idea_id` を渡さなければ(中間段(下の「中間段」)が候補を足すときも同様)、
 `data_access_logic/idea/classification.py` の `find_or_create_classification` が、場所のある最初の履歴の行の `location_id` の場所チェーンを
 根まで遡り、その場所に履歴の行を持つ、同じ種別のアイデア(たいていは「星」のアイデア)が見つかった一番深いところを探して、その子から
-`kind` の分類を探す。あれば再利用し、無ければ `name=kind` の分類を、その場所の非公開の行を付けて新しく作って親にする。
+`kind` の分類を探す。あれば再利用し、無ければ `name=kind` の分類を、その場所の(知る相手の無い)行を付けて新しく作って親にする。
 場所チェーンのどこにも対応するアイデアが無ければ親を決めようがないので、`parent_idea_id` は空のまま
 (明示的に渡した `parent_idea_id` はそのまま尊重し、自動探索はしない。分類自体を足すとき(`name == kind`)も、
 自分自身の親を探しに行かない)。
@@ -300,12 +303,12 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
    出来事の時刻と下書きの中身から、語ごとの `start` / `end` も決めさせる。ある程度はっきりした `start` が言えない語は null、`end` は分かる語だけ
 2. 語と言い換えで、アイデアの名前・本文(場所・時代ごとの作中の呼び名 `idea_history` の `name` / `detail` も含む)を
    部分一致で引く(`data_access_logic/idea/search.py` の `search`)。その場所・時刻で効くアイデアだけ。
-   場所は、アイデアの履歴の行(非公開も含む)の `location_id` が現在地から最上位までの場所のどれかに当たるもの(行の無いアイデアはどこでも)。
+   場所は、アイデアの履歴の行の `location_id` が現在地から最上位までの場所のどれかに当たるもの(行の無いアイデアはどこでも)。
    時刻は、出来事の時刻が `start` 以上 `end` 未満のもの(`end` が空なら限らない)。
    `start` が空のアイデアは時期が未定で、その時刻にもうあるかが分からないので、語が当たっても清書に渡さない(候補も足さない)。
    当たったアイデアに上位・下位のアイデアを足して、清書に「関係する設定」として渡す
 3. どのアイデアにも当たらなかった語は、AI が決めた種別(`kind`)で足す(同じ名前のアイデアが場所・時刻の外にあれば、足さずにそれを結ぶ)。
-   場所は世界線(非公開の履歴の行で持つ)、`start` / `end` は 1. で決めたもの(null ならそのまま空。時期が未定の候補になる)。親(`parent_idea_id`)は
+   場所は世界線(知る相手の無い履歴の行で持つ)、`start` / `end` は 1. で決めたもの(null ならそのまま空。時期が未定の候補になる)。親(`parent_idea_id`)は
    上の「アイデアの分類(親の自動探索)」の通り自動で決める。足した候補は、次からの検索・断面・清書に他のアイデアと同じく出る
 
 | 生成 | 下書き | 清書 |

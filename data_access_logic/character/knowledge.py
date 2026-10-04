@@ -3,11 +3,9 @@
 人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
 来歴の起きた年は、その時刻から何年前かで渡す。
 
-本文は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、場所ならその時刻に
-その場所(配下も含む)に住む人物が、知った時刻から知る。
-来歴は、公開の行なら本人と関係のある人物(ここで来歴を渡す範囲)が知り、非公開(`private`)の行なら知る相手に当たるものだけを渡す。
-アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけで、
-行の効く場所(空ならどこでも)と期間に住む人物と、行の知る相手に当たる人物が知る。
+本文・人物の来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
+場所ならその時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
+アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
 人物の来歴はその時刻までに起きた行だけ。
@@ -57,14 +55,6 @@ def knows(knowers: Sequence[KnowerMixin], viewer: Viewer) -> bool:
                for knower in knowers)
 
 
-def _lives_in_effect(row: IdeaHistory, viewer: Viewer) -> bool:
-    """効く場所が空の行はどこにも効く。非公開の行は、住む人物には効かない。"""
-    if row.private:
-        return False
-    place = row.location_id is None or row.location_id in viewer.location_ids
-    return place and (row.start is None or row.start <= viewer.time) and (row.end is None or row.end > viewer.time)
-
-
 class KnownName(Material):
     name: str
     detail: str | None = None
@@ -77,7 +67,7 @@ class KnownHistory(Material):
 
 def known_histories(rows: Sequence[CharacterHistory], viewer: Viewer) -> list[KnownHistory]:
     """本人か関係のある人物の来歴を渡す。古い順。"""
-    known = [row for row in rows if row.covers(viewer.time) and (not row.private or knows(row.knowers, viewer))]
+    known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
     return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
 
 
@@ -212,15 +202,14 @@ def _ideas(s: Session, viewer: Viewer, mentioned: Callable[[list[str]], bool]) -
         IdeaHistoryKnower.knower_id == viewer.character_id, IdeaHistoryKnower.location_id.in_(list(viewer.location_ids))))
     rows = s.scalars(
         select(IdeaHistory)
-        .where(or_(IdeaHistory.location_id.is_(None), IdeaHistory.location_id.in_(list(viewer.location_ids)),
-                   IdeaHistory.id.in_(told)))
+        .where(IdeaHistory.id.in_(told))
         .options(joinedload(IdeaHistory.idea))
         .order_by(IdeaHistory.idea_id, IdeaHistory.id)
         .execution_options(populate_existing=True)).all()
     known: dict[int, KnownIdea] = {}
     names: dict[int, list[str]] = {}
     for row in rows:
-        if not (_lives_in_effect(row, viewer) or knows(row.knowers, viewer)):
+        if not knows(row.knowers, viewer):
             continue
         idea = known.setdefault(row.idea_id, KnownIdea(kind=row.idea.kind, names=[]))
         idea.names.append(KnownName.model_validate(row))

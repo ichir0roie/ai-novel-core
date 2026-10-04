@@ -7,13 +7,18 @@ from sqlalchemy import select
 from ai.claude_code import ai_client
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.delete_character import DeleteCharacter
-from data_access_logic.character.form import CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm
+from data_access_logic.character.form import (
+    CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm, KnowledgeChange, KnowledgeForm,
+)
 from data_access_logic.character.read_appearance import ReadAppearance
+from data_access_logic.character.read_knowable_rows import ReadKnowableRows
+from data_access_logic.character.read_known_rows import ReadKnownRows
 from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.character.read_known_ideas import ReadKnownIdeas
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
+from data_access_logic.character.update_knowledge import UpdateKnowledge
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode_session.add_ideas import AddIdeas
@@ -82,25 +87,28 @@ def test_read_knowledge(shown, world):
     shown(UpdateCharacter(CharacterUpdateForm(
         id=taro, appearance="背が高い", text="太郎の芯", meme="- 今表: 太郎のミーム", principle="太郎の行動原理",
         plot="太郎の先の筋書き",
-        histories=[CharacterHistoryRow(start=1190, description="太郎の秘密", private=True,
+        histories=[CharacterHistoryRow(start=1190, description="太郎の秘密",
                                        knowers=[KnowerRow(knower_id=taro)])])))
     shown(UpdateCharacter(CharacterUpdateForm(
         id=hanako, appearance="髪が赤い", text="花子の芯", meme="- 裏: 花子のミーム", plot="花子の先",
         knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1195/01/01")],
         histories=[
-            CharacterHistoryRow(start=1190, description="都の噂", private=True,
+            CharacterHistoryRow(start=1190, description="都の噂",
                                 knowers=[KnowerRow(location_id=world.location_id)]),
-            CharacterHistoryRow(start=1191, description="花子だけの秘密", private=True, knowers=[KnowerRow(knower_id=hanako)]),
-            CharacterHistoryRow(start=1192, description="太郎も知る秘密", private=True,
+            CharacterHistoryRow(start=1191, description="花子だけの秘密", knowers=[KnowerRow(knower_id=hanako)]),
+            CharacterHistoryRow(start=1192, description="太郎も知る秘密",
                                 knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1199/01/01")]),
-            CharacterHistoryRow(start=1193, description="後で知る秘密", private=True,
+            CharacterHistoryRow(start=1193, description="後で知る秘密",
                                 knowers=[KnowerRow(knower_id=taro, start="1201/01/01")]),
-            # 公開の行は、知る相手に入っていなくても関係のある人物が知る
+            # 関係のある人物でも、知る相手に入っていなければ知らない
             CharacterHistoryRow(start=1194, description="花子が店を開く", knowers=[KnowerRow(knower_id=hanako)]),
             CharacterHistoryRow(start=1250, description="先のこと", knowers=[KnowerRow(location_id=world.location_id)])])))
     shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
-        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
+        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名",
+                       knowers=[KnowerRow(location_id=world.location_id, start="1150/01/01")]),
         IdeaHistoryRow(location_id=world.neighbor_id, name="村の隠し名", knowers=[KnowerRow(knower_id=taro)]),
+        # 効く場所に住んでいても、知る相手に入っていなければ知らない
+        IdeaHistoryRow(location_id=world.location_id, name="都の知られない名"),
         IdeaHistoryRow(location_id=world.neighbor_id, name="誰も知らない名")])))
     _set_plot(world, "市でテスト術を見せる")
 
@@ -113,7 +121,7 @@ def test_read_knowledge(shown, world):
     hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
     assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
     assert "ミーム" not in hanako_known
-    assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密", "花子が店を開く"]
+    assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密"]
     # アイデアの本文と本質の名前は渡さず、知っている履歴の行(呼び名と受け止め方)だけを渡す
     idea = next(idea for idea in result["知っているアイデア"]
                 if "テスト術" in [name["呼び名"] for name in idea["知っている呼び名"]])
@@ -182,30 +190,71 @@ def test_read_knowledge_without_knowing(shown, world, mock_ai):
     # 本人を知る相手から外すと、自分の芯を知らない(ミーム・行動原理は本人のもの)。関係のある相手の芯は、知る相手に入っていなければ分からない
     assert (result["自分"]["人物像"], result["自分"]["ミーム"]) == (None, "- 今表: 残るミーム")
     assert [(character["名前"], character["人物像"]) for character in result["知っている人物"]] == [("テスト花子", None)]
-    # 履歴の行の知る相手に入っていれば知り、効く場所に住んでいなければ知らない。履歴の無いアイデアは住む場所に効いても知らない
+    # 履歴の行の知る相手に入っていれば知り、入っていなければ知らない。履歴の無いアイデアは住む場所に効いても知らない
     names = _known_names(result["知っているアイデア"])
     assert "秘薬" in names and "遠い技" not in names and "履歴の無い技" not in names
 
 
-def test_read_knowledge_private_idea_history(shown, world, mock_ai):
+def test_read_knowledge_idea_history_only_by_knowers(shown, world, mock_ai):
     taro, hanako = world.character_ids
     idea = shown(CommitIdea(IdeaCreateForm(name="里の暦", kind="概念", text="里だけの数え方", histories=[
-        IdeaHistoryRow(name="古い数え方", detail="里では六千年台と記す", private=True, knowers=[KnowerRow(knower_id=taro)])])))
+        IdeaHistoryRow(name="古い数え方", detail="里では六千年台と記す", knowers=[KnowerRow(knower_id=taro)])])))
 
-    # 場所も期間も空の行でも、非公開なら住む人物は知らず、知る相手だけが知る
+    # 場所も期間も空の(どこでも効く)行でも、知る相手だけが知る
     def names(character_id: int) -> list[str]:
         [word] = shown(ReadKnownIdeas(episode_id=world.episode_id, character_id=character_id, words=["里の暦"]))
         return _known_names(word["知っているアイデア"])
     assert "古い数え方" in names(taro)
     assert "古い数え方" not in names(hanako)
-    # 非公開の行は作中の呼び名に使わない
+    # 作中の呼び名は、知る相手に関わらず、場所・時代に効く行から選ぶ
     with get_env_session() as s:
-        assert idea["id"] not in called(s, [idea["id"]], world.location_id, Stamp.parse("1200/01/01"))
+        assert called(s, [idea["id"]], world.location_id, Stamp.parse("1200/01/01"))[idea["id"]].name == "古い数え方"
+
+def test_update_knowledge(shown, world, mock_ai):
+    taro, hanako = world.character_ids
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, knowers=[KnowerRow(knower_id=hanako)], histories=[
+        CharacterHistoryRow(start=1191, description="花子の打ち明け話", knowers=[KnowerRow(knower_id=hanako)]),
+        CharacterHistoryRow(start=1192, description="太郎が忘れる話", knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro)])])))
+    idea = shown(CommitIdea(IdeaCreateForm(name="里の暗号", kind="概念", text="里だけの暗号", histories=[
+        IdeaHistoryRow(name="符丁", detail="里の者だけが使う", knowers=[KnowerRow(knower_id=taro, start="1150/01/01")])])))
+    rows = shown(ReadKnowableRows(character_id=hanako))
+    told, forgotten = (row["id"] for row in rows["character_histories"])
+    assert (rows["character"]["id"], rows["character"]["text"]) == (hanako, "テスト花子の説明")
+    idea_row = shown(ReadKnowableRows(idea_id=idea["id"]))["idea_histories"][0]
+    assert idea_row["name"] == "符丁"
+
+    result = shown(UpdateKnowledge(KnowledgeForm(
+        knower_id=taro,
+        characters=[KnowledgeChange(id=hanako, known=True, start="1195/01/01")],
+        character_histories=[KnowledgeChange(id=told, known=True), KnowledgeChange(id=forgotten, known=False)],
+        # 知る相手に入っている行は、知った時刻だけを直す
+        idea_histories=[KnowledgeChange(id=idea_row["id"], known=True, start="1190/01/01")])))
+
+    assert hanako in result["character_ids"]
+    histories = [row["id"] for row in result["character_histories"]]
+    assert told in histories and forgotten not in histories
+    assert result == shown(ReadKnownRows(knower_id=taro))
+    assert shown(ReadKnowableRows(idea_id=idea["id"]))["idea_histories"][0]["knowers"] == [
+        {"knower_id": taro, "location_id": None, "start": "1190/01/01 00:00:00"}]
+    knowledge = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
+    hanako_known = next(character for character in knowledge["知っている人物"] if character["名前"] == "テスト花子")
+    assert hanako_known["人物像"] == "テスト花子の説明"
+    assert _histories(hanako_known) == ["花子の打ち明け話"]
+
+
+def test_read_knowable_rows_needs_one_source():
+    with pytest.raises(ValueError):
+        ReadKnowableRows()
+
 
 def test_read_knowledge_only_ideas_in_the_plot(shown, world, mock_ai):
     taro, _ = world.character_ids
+    shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
+        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名",
+                       knowers=[KnowerRow(location_id=world.location_id)])])))
     shown(CommitIdea(IdeaCreateForm(name="テスト塩田", kind="施設", text="塩を作る浜", histories=[
-        IdeaHistoryRow(location_id=world.location_id, name="塩の浜", detail="都の南の浜")])))
+        IdeaHistoryRow(location_id=world.location_id, name="塩の浜", detail="都の南の浜",
+                       knowers=[KnowerRow(location_id=world.location_id)])])))
     _set_plot(world, "市でテスト術を見せる")
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
@@ -218,14 +267,15 @@ def test_read_knowledge_only_ideas_in_the_plot(shown, world, mock_ai):
 def test_read_known_ideas(shown, world, mock_ai):
     taro, _ = world.character_ids
     shown(CommitIdea(IdeaCreateForm(name="テスト塩田", kind="施設", text="塩を作る浜", histories=[
-        IdeaHistoryRow(location_id=world.location_id, name="塩の浜", detail="都の南の浜")])))
+        IdeaHistoryRow(location_id=world.location_id, name="塩の浜", detail="都の南の浜",
+                       knowers=[KnowerRow(location_id=world.location_id)])])))
     shown(CommitIdea(IdeaCreateForm(name="テスト泥鰻", kind="モンスター", text="水路の獣", histories=[
-        IdeaHistoryRow(location_id=world.neighbor_id, name="テスト泥鰻")])))
+        IdeaHistoryRow(location_id=world.neighbor_id, name="テスト泥鰻", knowers=[KnowerRow(location_id=world.neighbor_id)])])))
 
     result = shown(ReadKnownIdeas(episode_id=world.episode_id, character_id=taro,
                                   words=["塩の浜の小屋", "テスト塩", "テスト泥鰻", "塩の浜の小屋"]))
 
-    # 語が名前の一部か、名前が語の一部なら当たる。知らない語(効く場所に住んでいない)は空。同じ語は一度だけ
+    # 語が名前の一部か、名前が語の一部なら当たる。知らない語(知る相手の場所に住んでいない)は空。同じ語は一度だけ
     assert [word["語"] for word in result] == ["塩の浜の小屋", "テスト塩", "テスト泥鰻"]
     assert result[0]["知っているアイデア"] == [
         {"種別": "施設", "知っている呼び名": [{"呼び名": "塩の浜", "受け止め方": "都の南の浜"}]}]
@@ -250,7 +300,7 @@ def test_add_ideas(shown, world):
 def test_add_ideas_picks_a_kind_of_the_world(shown, world):
     # 星を表すアイデアがあれば、その下の分類の種別しか受けない(別の分類が増えないように)
     with get_env_session() as s:
-        planet = Idea(name="テスト星の設定", kind="星", text="テスト用の星", histories=[IdeaHistory(location_id=world.planet_id, name="テスト星", private=True)])
+        planet = Idea(name="テスト星の設定", kind="星", text="テスト用の星", histories=[IdeaHistory(location_id=world.planet_id, name="テスト星")])
         s.add(planet)
         s.flush()
         s.add(Idea(name="モンスター", kind="モンスター", text="分類", parent_idea_id=planet.id))
@@ -280,38 +330,38 @@ def test_read_knowledge_skips_unrelated_cast(shown, world):
 
 
 def _secrets(shown, world) -> None:
-    """花子に公開・非公開の来歴を、関係に来歴を、アイデアに公開・非公開の履歴を足す(話の時刻は 1200 年)。"""
+    """花子に知る相手の違う来歴を、関係に来歴を、アイデアに知る相手の違う履歴を足す(話の時刻は 1200 年)。"""
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(
         id=hanako, appearance="髪が赤い",
         knowers=[KnowerRow(knower_id=hanako), KnowerRow(location_id=world.location_id, start="1195/01/01")],
         histories=[
             CharacterHistoryRow(start=1190, description="花子が店を開く"),
-            CharacterHistoryRow(start=1195, description="花子の秘密", private=True,
+            CharacterHistoryRow(start=1195, description="花子の秘密",
                                 knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1201/01/01")]),
             CharacterHistoryRow(start=1250, description="先のこと")])))
     shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, histories=[
         CharacterRelationHistoryRow(start=1195, description="市で再会する")])))
     shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
         IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
-        IdeaHistoryRow(name="術の真名", private=True, knowers=[KnowerRow(knower_id=taro)]),
+        IdeaHistoryRow(name="術の真名", knowers=[KnowerRow(knower_id=taro)]),
         IdeaHistoryRow(start="1300/01/01", name="先の呼び名")])))
 
 
-# 作者の目で読む材料には、芯・来歴・履歴を知る相手に関わらずすべて渡し、非公開かどうかと、話の時刻までに知った相手を添える。
+# 作者の目で読む材料には、芯・来歴・履歴を知る相手に関わらずすべて渡し、話の時刻までに知った相手を添える。
 # 話の時刻より後に始まる来歴・履歴と、後で知る相手は出さない
 HANAKO_KNOWERS = [{"人物": "テスト花子", "場所": None, "知った時刻": None},
                   {"人物": None, "場所": "テスト都", "知った時刻": "1195/01/01 00:00:00"}]
 HANAKO_HISTORIES = [
     # 今ある行を書き換えた行なので、知る相手は今のまま(無い)
-    {"年": 1190, "来歴": "花子が店を開く", "非公開": False, "知る相手": []},
-    {"年": 1195, "来歴": "花子の秘密", "非公開": True,
+    {"年": 1190, "来歴": "花子が店を開く", "知る相手": []},
+    {"年": 1195, "来歴": "花子の秘密",
      "知る相手": [{"人物": "テスト花子", "場所": None, "知った時刻": None}]}]
 IDEA_HISTORIES = [
-    {"呼び名": "術の真名", "受け止め方": None, "効く場所": None, "始まり": None, "終わり": None, "非公開": True,
+    {"呼び名": "術の真名", "受け止め方": None, "効く場所": None, "始まり": None, "終わり": None,
      "知る相手": [{"人物": "テスト太郎", "場所": None, "知った時刻": None}]},
     {"呼び名": "テスト術", "受け止め方": "都での呼び名", "効く場所": "テスト都", "始まり": "1150/01/01 00:00:00", "終わり": None,
-     "非公開": False, "知る相手": []}]
+     "知る相手": []}]
 RELATIONS = [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ", "説明": "同じ通りで育った",
               "来歴(古い順)": [{"年": 1195, "来歴": "市で再会する"}]}]
 

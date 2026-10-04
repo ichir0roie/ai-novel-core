@@ -14,7 +14,7 @@ from db.stamp import Stamp
 def idea_in_scope(location_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
     """`location_ids` は現在地から最上位までの場所(`common_query.idea_scope_ids`)。
 
-    アイデアの効く場所は本体に持たず、履歴の行(非公開の行も含む)で持つ。履歴の行の無いアイデアはどこでも効き、
+    アイデアの効く場所は本体に持たず、履歴の行で持つ。履歴の行の無いアイデアはどこでも効き、
     あれば、場所・期間の当たる行が一つでもあれば効く。期間は本体の `start` / `end` でも絞る。
     """
     conditions = []
@@ -49,9 +49,7 @@ def history_in_scope(location_ids: Collection[int] | None = None, time: Stamp | 
 
 def histories_select(essence_ids: Collection[int], location_ids: Collection[int] | None = None,
                         time: Stamp | None = None) -> Select:
-    # 非公開の行は知る相手だけの秘密で、その場所・時代の呼び名ではない
-    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time),
-                  IdeaHistory.private.is_(False)]
+    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time)]
     return (select(IdeaHistory)
             .where(*conditions)
             .order_by(IdeaHistory.start.desc().nulls_last(), IdeaHistory.id))

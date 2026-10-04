@@ -156,7 +156,6 @@ class IdeaHistoryWholeMaterial(Material):
     end: Stamp | None = None
     name: str
     detail: str | None = None
-    private: bool
     # その時刻までに知った相手(`knowers.knowers_at`)
     knowers: list[KnowerMaterial]
 
@@ -164,7 +163,7 @@ class IdeaHistoryWholeMaterial(Material):
 class WholeIdeaMaterial(RelatedIdeaMaterial):
     """作者の目で読むアイデア。語り部と本文を書く Claude の材料(`whole.whole_ideas_at`)。"""
 
-    # その時刻までに始まった履歴の行。場所・終わりを問わず、非公開の行も含む
+    # その時刻までに始まった履歴の行。場所・終わり・知る相手を問わない
     histories: list[IdeaHistoryWholeMaterial]
 
 
@@ -192,7 +191,7 @@ def whole_idea_for_prompt(whole: WholeIdeaMaterial) -> dict[str, Any]:
              "効く場所": None if history.location is None else history.location.name,
              "始まり": None if history.start is None else str(history.start),
              "終わり": None if history.end is None else str(history.end),
-             "非公開": history.private, "知る相手": knowers_for_prompt(history.knowers)}
+             "知る相手": knowers_for_prompt(history.knowers)}
             for history in whole.histories],
     }
 
