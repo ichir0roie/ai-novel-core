@@ -85,6 +85,11 @@ export const T = {
     nextEpisode: "Next ▶",
     noPreviousEpisode: "No earlier episode in this story",
     noNextEpisode: "No later episode in this story",
+    openClaude: "Claude ↗",
+    openClaudeHint: "Open a new Claude Code session for this episode in a new tab",
+    // 初めのメッセージは Claude とスキルに向けるので日本語で書く
+    claudePromptWrite: (label: string) => `スキル episode で、エピソード ${label} の本文を書いて。`,
+    claudePromptRevise: (label: string) => `スキル revise-episode で、エピソード ${label} を書き直して。直したいところ: `,
   },
 
   create: {
@@ -153,6 +158,9 @@ export const T = {
     move: "Move",
     cancelMove: "Cancel move",
     moveModeHint: (name: string) => `Moving "${name}" — click another story to make it the new parent (Esc to cancel)`,
+    moveUp: "Move up among its siblings",
+    moveDown: "Move down among its siblings",
+    reorderFailed: (error: string) => `Could not reorder: ${error}`,
     collapseAll: "Collapse all",
     addChild: "Add child story",
     addEpisode: "Add episode",
@@ -242,6 +250,7 @@ export const T = {
     story: "Story",
     location: "Location",
     moved: (label: string, at: string) => `Moved "${label}" to ${at}`,
+    movedToStory: (label: string, story: string) => `Moved "${label}" to story ${story}`,
     moveFailed: (error: string) => `Could not move: ${error}`,
     gap: "No episodes (squeezed)",
     skipped: (days: number) =>
@@ -253,11 +262,9 @@ export const T = {
   },
 
   episodeSheet: {
-    characters: (n: number, at: string | null) => `Characters (${n})${at ? ` at ${at}` : ""}`,
     relation: (partner: string, relation: string) => `→ ${partner}: ${relation}`,
     noRelations: "(no relations)",
     toggleRelations: (open: boolean) => (open ? "Hide relations ▴" : "Show relations ▾"),
-    mentioned: (names: string) => `Mentioned only: ${names}`,
   },
 
   stamp: {

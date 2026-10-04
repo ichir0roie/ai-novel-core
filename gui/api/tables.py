@@ -77,7 +77,7 @@ class TableSpec:
 
 TABLES: tuple[TableSpec, ...] = (
     TableSpec("story", Story, CommitStory, UpdateStory, StoryCreateForm, StoryUpdateForm, StoryRecord,
-              ("name", "text")),
+              ("name", "text"), sort="display_order", order="asc"),
     TableSpec("episode", Episode, CommitEpisode, CommitEpisode, EpisodeCreateForm, EpisodeCommitForm,
               EpisodeRecord, ("title", "plot_text"), sort="start", order="desc"),
     TableSpec("character", Character, CommitCharacter, UpdateCharacter, CharacterCreateForm,

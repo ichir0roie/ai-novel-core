@@ -17,6 +17,7 @@ import {
   type Rec,
   type RecordResponse,
 } from "@/lib/api";
+import { claudeSessionUrl } from "@/lib/claude";
 import { PageTitle, useTable } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
@@ -204,6 +205,21 @@ export default function RecordPage() {
                   <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
                     {T.record.save}
                   </button>
+                  {table === "episode" && (
+                    <a
+                      className="button-link"
+                      href={claudeSessionUrl(
+                        (String(loaded.record.main_text ?? "").trim() ? T.record.claudePromptRevise : T.record.claudePromptWrite)(
+                          T.nameId(loaded.label, id),
+                        ),
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={T.record.openClaudeHint}
+                    >
+                      {T.record.openClaude}
+                    </a>
+                  )}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
                   {table === "episode" && (

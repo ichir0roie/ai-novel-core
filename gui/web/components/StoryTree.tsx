@@ -24,11 +24,31 @@ type MoveState = {
   onCancelMove: () => void;
   onMoveHere: (target: MoveTarget) => void;
   onContextMenu: (menu: ContextMenuState) => void;
+  // 兄弟の中で一つ上(-1)・下(+1)へ並べ替える。保存の間は押せない
+  reordering: boolean;
+  onShift: (siblings: StoryNode[], index: number, delta: -1 | 1) => void;
 };
 
-function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
+type RowProps = { node: StoryNode; siblings: StoryNode[]; index: number; move: MoveState };
+
+function StoryRow({ node, siblings, index, move }: RowProps) {
   const inMoveMode = move.movingId !== null;
   const isSelf = move.movingId === node.id;
+  const shiftButton = (delta: -1 | 1) => (
+    <button
+      type="button"
+      className="tree-move-btn"
+      title={delta < 0 ? T.storyTree.moveUp : T.storyTree.moveDown}
+      disabled={inMoveMode || move.reordering || !siblings[index + delta]}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        move.onShift(siblings, index, delta);
+      }}
+    >
+      {delta < 0 ? "▲" : "▼"}
+    </button>
+  );
   return (
     <>
       <Link href={`/tables/story/${node.id}`} className="tree-name" onClick={(e) => e.stopPropagation()}>
@@ -51,11 +71,13 @@ function StoryRow({ node, move }: { node: StoryNode; move: MoveState }) {
       >
         {isSelf ? T.storyTree.cancelMove : T.storyTree.move}
       </button>
+      {shiftButton(-1)}
+      {shiftButton(1)}
     </>
   );
 }
 
-function StoryNodeView({ node, openState, move }: { node: StoryNode; openState: OpenState; move: MoveState }) {
+function StoryNodeView({ node, siblings, index, openState, move }: RowProps & { openState: OpenState }) {
   const inMoveMode = move.movingId !== null;
   const isSelf = move.movingId === node.id;
   const isBlocked = inMoveMode && (isSelf || move.blocked.has(node.id));
@@ -82,7 +104,7 @@ function StoryNodeView({ node, openState, move }: { node: StoryNode; openState: 
     return (
       <li className="tree-story tree-leaf">
         <div {...rowProps}>
-          <StoryRow node={node} move={move} />
+          <StoryRow node={node} siblings={siblings} index={index} move={move} />
         </div>
       </li>
     );
@@ -92,11 +114,11 @@ function StoryNodeView({ node, openState, move }: { node: StoryNode; openState: 
     <li className="tree-parent">
       <details open={openState.isOpen(key)} onToggle={(e) => openState.setOpen(key, e.currentTarget.open)}>
         <summary {...rowProps}>
-          <StoryRow node={node} move={move} />
+          <StoryRow node={node} siblings={siblings} index={index} move={move} />
         </summary>
         <ul className="tree">
-          {node.children.map((child) => (
-            <StoryNodeView key={child.id} node={child} openState={openState} move={move} />
+          {node.children.map((child, i) => (
+            <StoryNodeView key={child.id} node={child} siblings={node.children} index={i} openState={openState} move={move} />
           ))}
         </ul>
       </details>
@@ -108,6 +130,7 @@ type Source = { stories: Rec[]; episodes: Rec[] };
 
 /** 作品・話の一覧をそのまま引いて、作品の親子(`parent_story_id`)の木をブラウザで組む。タブに戻ったときに引き直す。
  *  親の付け替えは、Move ボタンで移動モードに入って別の作品をクリックする(一番上の欄なら親なし)。
+ *  兄弟の中の並びは ▲▼ で入れ替え、兄弟みんなの `display_order` を上から 1, 2, … に振り直す。
  *  ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない。行の右クリックで、子の作品・話を足すメニューを出す。 */
 export default function StoryTree() {
   const openPage = useOpenPage();
@@ -116,6 +139,7 @@ export default function StoryTree() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<number | null>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [reordering, setReordering] = useState(false);
   const openState = useTreeOpen("story");
 
   useEffect(() => {
@@ -169,6 +193,26 @@ export default function StoryTree() {
     [load],
   );
 
+  const shift = useCallback(
+    async (siblings: StoryNode[], index: number, delta: -1 | 1) => {
+      const next = [...siblings];
+      [next[index], next[index + delta]] = [next[index + delta], next[index]];
+      setSaveError(null);
+      setReordering(true);
+      try {
+        await Promise.all(
+          next.flatMap((n, i) => (n.displayOrder === i + 1 ? [] : [updateRecord("story", n.id, { display_order: i + 1 })])),
+        );
+      } catch (e) {
+        setSaveError(T.storyTree.reorderFailed(e instanceof Error ? e.message : String(e)));
+      } finally {
+        await load();
+        setReordering(false);
+      }
+    },
+    [load],
+  );
+
   const move: MoveState = {
     movingId,
     blocked,
@@ -179,6 +223,8 @@ export default function StoryTree() {
       void moveTo(movingId, target === ROOT ? null : target);
     },
     onContextMenu: setMenu,
+    reordering,
+    onShift: (siblings, index, delta) => void shift(siblings, index, delta),
   };
 
   if (error) return <div className="status error">{error}</div>;
@@ -200,8 +246,8 @@ export default function StoryTree() {
         {T.storyTree.collapseAll}
       </button>
       <ul className="tree tree-root">
-        {nodes.map((node) => (
-          <StoryNodeView key={node.id} node={node} openState={openState} move={move} />
+        {nodes.map((node, i) => (
+          <StoryNodeView key={node.id} node={node} siblings={nodes} index={i} openState={openState} move={move} />
         ))}
       </ul>
       {menu && (

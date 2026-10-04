@@ -2,7 +2,6 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import EpisodeSheetModal from "@/components/EpisodeSheetModal";
 import NewEpisodeModal from "@/components/NewEpisodeModal";
 import { ChoicePicker } from "@/components/Picker";
 import ReferenceSelect from "@/components/ReferenceSelect";
@@ -55,7 +54,8 @@ type Gap = { from: number; to: number; x: number };
 // since〜until が軸の全体で、width はその横幅(px)
 type Scale = { since: number; until: number; width: number; pxPerDay: number; gaps: Gap[]; toX: (day: number) => number; fromX: (x: number) => number };
 
-type Drag = { item: Item; startX: number; dx: number };
+// from は掴んだ段、over は落とす先の作品(掴んだ段の上・作品の無い段の上では null)
+type Drag = { item: Item; from: string; startX: number; startY: number; dx: number; dy: number; over: number | null };
 
 function dayOf(value: unknown): number | null {
   const parts = parseStamp(value);
@@ -320,8 +320,7 @@ export default function TimelinePage() {
   const [drag, setDrag] = useState<Drag | null>(null);
   // 保存を待つあいだ、落とした所に置いておく
   const [pending, setPending] = useState<{ key: string; days: number } | null>(null);
-  // 押した話(閲覧専用で見る)と、空いた所を押して足す話の初期値・作品の名前
-  const [viewing, setViewing] = useState<number | null>(null);
+  // 空いた所を押して足す話の初期値・作品の名前
   const [adding, setAdding] = useState<{ initial: Rec; storyLabel: string | null } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -522,47 +521,62 @@ export default function TimelinePage() {
   const daysAt = (item: Item, dx: number) => (pxPerDay > 0 ? Math.round(fromX(toX(item.start) + dx) - item.start) : 0);
 
   const dragDays = (item: Item) => {
-    if (drag?.item.key === item.key) return daysAt(item, drag.dx);
+    if (drag?.item.key === item.key) return Math.abs(drag.dx) > DRAG_THRESHOLD ? daysAt(item, drag.dx) : 0;
     if (pending?.key === item.key) return pending.days;
     return 0;
   };
 
-  const move = async (item: Item, days: number) => {
+  const storyLabel = (id: number) => T.nameId(stories?.get(id)?.name ?? labels.story_id?.[id], id);
+
+  const move = async (item: Item, days: number, story: number | null) => {
     const changes = shifted(item, days);
+    if (story !== null) changes.story_id = story;
     setPending({ key: item.key, days });
     setMessage(null);
     try {
       await updateRecord("episode", item.id, changes);
-      setMessage(T.timeline.moved(item.label, String(changes.start)));
+      setMessage([days !== 0 && T.timeline.moved(item.label, String(changes.start)),
+        story !== null && T.timeline.movedToStory(item.label, storyLabel(story))].filter(Boolean).join(" / "));
     } catch (e) {
       setError(T.timeline.moveFailed(e instanceof Error ? e.message : String(e)));
     }
     setVersion((v) => v + 1);
   };
 
-  const onItemDown = (e: PointerEvent<HTMLDivElement>, item: Item) => {
+  const onItemDown = (e: PointerEvent<HTMLDivElement>, item: Item, row: Row) => {
     if (e.button !== 0 || pending) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     hide();
-    setDrag({ item, startX: e.clientX, dx: 0 });
+    setDrag({ item, from: row.key, startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, over: null });
+  };
+
+  /** 指の下の段の作品。札は掴んだ段に留まるので、掴んだ札ではなく位置から段を探す */
+  const storyUnder = (x: number, y: number, from: string, item: Item): number | null => {
+    const row = document.elementsFromPoint(x, y).map((el) => el.closest<HTMLElement>(".timeline-row[data-story]")).find(Boolean);
+    const story = Number(row?.dataset.story);
+    if (!row || row.dataset.key === from || !story || story === item.record.story_id) return null;
+    return story;
   };
 
   const onItemMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (drag) setDrag({ ...drag, dx: e.clientX - drag.startX });
+    if (drag) setDrag({ ...drag, dx: e.clientX - drag.startX, dy: e.clientY - drag.startY,
+      over: storyUnder(e.clientX, e.clientY, drag.from, drag.item) });
   };
 
   const onItemUp = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag) return;
-    const { item } = drag;
+    const { item, over } = drag;
     const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
     setDrag(null);
-    if (Math.abs(dx) <= DRAG_THRESHOLD) {
-      setViewing(item.id);
+    if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) {
+      window.open(`/tables/episode/${item.id}`, "_blank", "noopener,noreferrer");
       return;
     }
-    const days = daysAt(item, dx);
-    if (days !== 0) void move(item, days);
+    // 段を移すときの手ぶれで時刻が動かないよう、横にしきい値を超えて動かしたときだけ時刻を送る
+    const days = Math.abs(dx) > DRAG_THRESHOLD ? daysAt(item, dx) : 0;
+    if (days !== 0 || over !== null) void move(item, days, over);
   };
 
   /** 空いた所を押したら、その日・その段の作品で話を足す(時刻を直して、追加ページを別タブに開く) */
@@ -573,7 +587,7 @@ export default function TimelinePage() {
     const story = row.storyId ?? storyId;
     if (story !== null) initial.story_id = story;
     if (locationId !== null) initial.location_id = locationId;
-    setAdding({ initial, storyLabel: story === null ? null : T.nameId(stories?.get(story)?.name ?? labels.story_id?.[story], story) });
+    setAdding({ initial, storyLabel: story === null ? null : storyLabel(story) });
   };
 
   const tooltipLines = (item: Item) => {
@@ -585,7 +599,8 @@ export default function TimelinePage() {
   const gapLines = (g: Gap) => [T.timeline.gap, `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`];
 
   const renderRow = (row: Row) => (
-    <div key={row.key} className="timeline-row">
+    <div key={row.key} className={`timeline-row ${row.storyId !== null && drag?.over === row.storyId ? "drop-target" : ""}`}
+      data-key={row.key} data-story={row.storyId ?? undefined}>
       <div className="timeline-label" title={row.label} style={{ paddingLeft: `calc(0.3rem + ${row.depth * 0.9}rem)` }}>
         {row.foldable ? (
           <button type="button" className="timeline-toggle" aria-expanded={row.open} onClick={() => setOpen(row.key, !row.open)}>
@@ -617,7 +632,7 @@ export default function TimelinePage() {
               className={className}
               style={{ left: item.x, top: 3 + item.lane * LANE_HEIGHT, transform: offset ? `translateX(${offset}px)` : undefined,
                 ...(dragging ? { minWidth: item.width } : { width: item.width }) }}
-              onPointerDown={(e) => onItemDown(e, item)}
+              onPointerDown={(e) => onItemDown(e, item, row)}
               onPointerMove={onItemMove}
               onPointerUp={onItemUp}
               onPointerCancel={() => setDrag(null)}
@@ -629,6 +644,7 @@ export default function TimelinePage() {
               <span className="timeline-text">
                 {row.open && item.label}
                 {target && <span className="timeline-target"> → {String(target.start)}</span>}
+                {dragging && drag.over !== null && <span className="timeline-target"> → {storyLabel(drag.over)}</span>}
               </span>
             </div>
           );
@@ -726,7 +742,6 @@ export default function TimelinePage() {
           {scale && <div className="timeline-center" style={{ left: box.label + box.viewport / 2 }} />}
         </div>
       )}
-      {viewing !== null && <EpisodeSheetModal episodeId={viewing} onClose={() => setViewing(null)} />}
       {adding && <NewEpisodeModal initial={adding.initial} storyLabel={adding.storyLabel} onClose={() => setAdding(null)} />}
       <Tooltip tip={tip} />
     </div>

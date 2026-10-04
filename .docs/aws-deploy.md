@@ -164,6 +164,8 @@ db のロール `novel_app`(行の読み書きだけ。IAM データベース認
 | `NOVEL_WEB_API_KEY` | Lambda の `NOVEL_API_KEYS` の `web=` と同じ値。web のセッションの `/api/*` を、Amplify の段でも確かめるのに使う |
 | `NEXT_PUBLIC_NOVEL_USER_POOL_ID` | SSM の `/novel/auth/user-pool-id`(`npx cdk deploy NovelAuth` のあと) |
 | `NEXT_PUBLIC_NOVEL_USER_POOL_CLIENT_ID` | SSM の `/novel/auth/user-pool-client-id` |
+| `NEXT_PUBLIC_NOVEL_CLAUDE_REPOSITORIES` | エピソード画面の「Claude ↗」で開く Claude Code on the web のセッションに選ぶリポジトリ(`<owner>/<repo>`、`,` 区切りで複数)。無ければ選ばずに開く |
+| `NEXT_PUBLIC_NOVEL_CLAUDE_ENVIRONMENT` | 同じセッションに選ぶクラウド環境の名前か ID(`web-session.md` の db が要る作業の専用の環境)。無ければ選ばずに開く |
 
 `amplify.yml` がビルドのときに `NOVEL_*` を `.env.production` に写す(SSR のサーバーは実行時にコンソールの環境変数を
 読めないため。Amplify の案内どおりの形)。`NEXT_PUBLIC_*` は秘密ではなく、`next build` がブラウザ向けのコードにも埋め込む。

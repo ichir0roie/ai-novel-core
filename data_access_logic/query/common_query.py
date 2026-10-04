@@ -274,7 +274,7 @@ def characters_select() -> Select:
 # ---------------------------------------------------------------- 作品
 
 def stories_select() -> Select:
-    return select(Story).order_by(Story.id)
+    return select(Story).order_by(Story.display_order.asc().nulls_last(), Story.id)
 
 
 def story_location_id(s: Session, story_id: int, until: Stamp) -> int | None:

@@ -721,6 +721,9 @@ class Story(TextBase):
     __tablename__ = "story"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
+    display_order: Mapped[int | None] = mapped_column(
+        Integer, comment="作品一覧で同じ親の作品の中の並び。小さいほど上。空の作品は後ろに、一番早い話の順",
+        sort_order=210)
 
     parent_story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)

@@ -1,11 +1,13 @@
 import type { Rec } from "./api";
 import { parseStamp, stampOrder } from "./stamp";
 
-/** 作品一覧のツリー。作品を `parent_story_id` で木にする。親が見つからない作品は根に置く。 */
+/** 作品一覧のツリー。作品を `parent_story_id` で木にする。親が見つからない作品は根に置く。
+ *  兄弟は `display_order` の順。`display_order` の空の作品は後ろに、一番早い話の順(話の無い作品はさらに後ろ)、同じなら id 順。 */
 
 export type StoryNode = {
   id: number;
   name: string;
+  displayOrder: number | null;
   // 話(episode)の数
   episodes: number;
   children: StoryNode[];
@@ -38,11 +40,12 @@ export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
     }
   }
 
-  // 一番早い話の順(話の無い作品は後ろ)。同じなら id 順
+  const orderOf = (story: Rec) => num(story.display_order) ?? Infinity;
   const firstOf = (story: Rec) => firstAt.get(Number(story.id)) ?? Infinity;
-  const byFirst = (a: Rec, b: Rec) => firstOf(a) - firstOf(b) || Number(a.id) - Number(b.id);
+  const compare = (a: Rec, b: Rec) =>
+    orderOf(a) - orderOf(b) || firstOf(a) - firstOf(b) || Number(a.id) - Number(b.id);
   const childrenOf = new Map<number | null, Rec[]>();
-  for (const story of [...stories].sort(byFirst)) {
+  for (const story of [...stories].sort(compare)) {
     const key = parentOf(story);
     childrenOf.set(key, [...(childrenOf.get(key) ?? []), story]);
   }
@@ -50,7 +53,7 @@ export function buildStoryTree(stories: Rec[], episodes: Rec[]): StoryNode[] {
   const node = (story: Rec): StoryNode => {
     const id = Number(story.id);
     return {
-      id, name: String(story.name ?? story.label ?? ""), episodes: episodeCount.get(id) ?? 0,
+      id, name: String(story.name ?? story.label ?? ""), displayOrder: num(story.display_order), episodes: episodeCount.get(id) ?? 0,
       children: (childrenOf.get(id) ?? []).map(node),
     };
   };

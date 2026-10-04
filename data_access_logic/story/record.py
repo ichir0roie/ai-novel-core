@@ -5,6 +5,7 @@ class StoryRecord(Material):
     id: int
     name: str
     parent_story_id: int | None = None
+    display_order: int | None = None
     text: str
 
 
