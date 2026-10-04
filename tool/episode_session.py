@@ -4,7 +4,7 @@
 手元は入口を直に回し、web のセッション(`CLAUDE_CODE_REMOTE=true`)は API の入口を呼ぶ。待つコマンドは、
 返すものが来るまで表を一定の間隔で見て、来たら結果の JSON を出して終わる(待つあいだ Claude は考えない)。
 
-    人物役: knowledge / wait-turn / answer
+    人物役: knowledge / wait-turn / answer(--wait で、入れたあと次の番まで待つ)
     語り部: stage / appearance / add / wait-answers / read / close
     演じ直す前: clear
 
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
@@ -25,7 +26,7 @@ from data_access_logic.logs import configure_logging
 
 def call(entrance_id: str, args: dict[str, Any]) -> Any:
     if os.environ.get("CLAUDE_CODE_REMOTE") == "true":
-        from web_session.api import run_entrance
+        from web_session.transport import run_entrance
         return run_entrance(entrance_id, args)
     from gui.api import interface
     entrance = interface.db_entrance_of(entrance_id)
@@ -79,6 +80,9 @@ def main() -> None:
     answer.add_argument("--thought")
     answer.add_argument("--speech")
     answer.add_argument("--aim")
+    answer.add_argument("--wait", action="store_true", help="入れたあと、次の番か話の終わりまで待ち、wait-turn と同じ JSON を返す")
+    answer.add_argument("--episode", type=int, help="--wait のときの話")
+    answer.add_argument("--character", type=int, help="--wait のときの人物")
 
     appearance = commands.add_parser("appearance", help="初対面の相手から見て分かること(名前なし)を読む")
     appearance.add_argument("--character", type=int, required=True)
@@ -105,12 +109,16 @@ def main() -> None:
     clear = commands.add_parser("clear", help="話のセッションの行をすべて消す(手番を演じ直す前に)")
     clear.add_argument("--episode", type=int, required=True)
 
-    for waiting in (wait, answers, add):
-        waiting.add_argument("--interval", type=float, default=1.0)
+    for waiting in (wait, answers, add, answer):
+        waiting.add_argument("--interval", type=float, default=0.3)
         waiting.add_argument("--timeout", type=float, default=3000.0)
 
     args = parser.parse_args()
+    if args.command == "answer" and args.wait and (args.episode is None or args.character is None):
+        parser.error("answer --wait には --episode と --character が要る")
     configure_logging()
+    # 待つあいだの呼び出しごとのログが、人物役・語り部の読む出力に積もって入力のトークンを食う
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     match args.command:
         case "knowledge":
             result = call("character.read_knowledge.ReadKnowledge", {"episode_id": args.episode, "character_id": args.character})
@@ -120,6 +128,8 @@ def main() -> None:
             fields = {"thought": args.thought, "action": args.action, "speech": args.speech, "aim": args.aim}
             result = call("episode_session.answer_turn.AnswerTurn", {
                 "record_id": args.record, "answer": {name: value for name, value in fields.items() if value is not None}})
+            if args.wait:
+                result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "appearance":
             result = call("character.read_appearance.ReadAppearance", {"character_id": args.character, "time": args.time})
         case "stage":
