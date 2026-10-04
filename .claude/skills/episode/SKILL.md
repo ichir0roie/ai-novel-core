@@ -33,6 +33,17 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 場所を足す | `location.commit_location.CommitLocation` | `{'location': {'name': …, 'kind': …, 'text': …, 'parent_id': …}}` |
 | 作品の話の並び(`start` 順) | `episode.read_episodes.ReadEpisodes` | `{'story_id': …, 'count': 500, 'text': False}` |
 
+### 入口の返す形
+
+見出しは推測せず、ここか `jq 'keys'` で確かめてから引く(無い見出しは黙って null になる。`jq` の書き方は `.claude/docs/setup.md` の「jq」)。web のセッションで `flows.run` から返るものは `.result` に包まれない。
+
+- `ReadEpisodeCasting`: `この話`(`話id`・`題`・`時刻`・`場所(広い順)`・`視点`・`プロット`)・`登場人物`・`名前だけ出る人物`・`登場人物の候補`・`この場所の中の既知の場所`。人物には `人物id`・`名前`・`人物像` などと `関わった話(古い順)` が付く(`登場人物の候補` には付かない)
+- `ReadEpisodeBrief`: `書き方`・`作品`・`前の話の概要(古い順)`・`文体の見本(古い順)`・`この話`・`この場所の直近の出来事(古い順)`・`この時点より後に既に決まっている出来事`
+  - `文体の見本(古い順)` は本文の文字列の配列(`.["文体の見本(古い順)"][-1]` で一話ぶん。鍵は無い)
+  - `この話` の中は `話id`・`題`・`時刻`・`終わり`・`同期`・`場所(広い順)`・`視点`・`登場人物`・`名前だけ出る人物`・`登場人物の関係`・`設定`・`プロット`・`今の本文`
+- `ReadEpisodeTexts`: 列名の英語(`id`・`title`・`main_text`・`summary_text` など)の配列
+- `tool.episode_session read` の行: `id`・`episode_id`・`character`(`id`・`name`)・`time`・`request`・`closing`・`thought`・`action`・`speech`・`aim`
+
 ## 流れ
 
 - **プロットを書く前に、出す人物が関わった話を読む**。人物の設定(芯の `text`・来歴の `histories`)だけを見て書かない(これまでの出来事は話の本文にしか無いことが多い)

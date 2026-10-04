@@ -20,9 +20,9 @@
 
 - `curl` は `.venv` の用意を待たずに打てる
 - コマンドの頭に `api="${NOVEL_API_URL%/}"; h="x-novel-api-key: $NOVEL_API_KEY"` を置く(末尾の `/` を落とさないと 308 が返り、`jq` が `Invalid numeric literal` で落ちる)
-- 応答の JSON は、一覧が `.items`、一件が `.record`、入口の呼び出しが `.result` に入る
-- 入口の返す見出しは入口ごとに違う(`ReadEpisodeCasting` / `ReadEpisodeBrief` は日本語、`ReadEpisodeTexts` は列名の英語)。決めつけて整形せず、先に一件を見て確かめる
-- 日本語の見出しを `jq` で引くときは `.["話id"]` のように引用する
+- curl の応答の JSON は、一覧が `.items`、一件が `.record`、入口の呼び出しが `.result` に入る。`flows.run` の返りは `.result` に包まれず、入口の結果がそのまま返る
+- 入口の返す見出しは入口ごとに違う(`ReadEpisodeCasting` / `ReadEpisodeBrief` は日本語、`ReadEpisodeTexts` は列名の英語)。決めつけて整形せず、先に `jq 'keys'` で見出しを見て確かめる(話の入口の見出しはスキル `episode` の「入口の返す形」)
+- `jq` の書き方は `.claude/docs/setup.md` の「jq」(日本語の見出しの引用・無い鍵が黙って null になること)
 - 状態コードを見たいときは、本文を `-o <ファイル>` に書き出し、`-w '%{http_code}'` を本文と分ける(混ぜると JSON が読めない)
 
 | したいこと | 呼び方 |
@@ -30,8 +30,33 @@
 | id を名前から引く | `curl -sS -G -H "$h" "$api/api/tables/<表>/options" --data-urlencode 'q=<名>'`(`q` は本文にも当たる) |
 | 行を並べる・絞る | `curl -sS -H "$h" "$api/api/tables/<表>/records?<列>=<値>&sort=<列>&order=asc&limit=500"` |
 | 行を一つ読む | `curl -sS -H "$h" "$api/api/tables/<表>/records/<id>"`(`.record` に列が入る) |
-| db だけの入口(claude を叩かない) | `curl -sS -H "$h" -H 'content-type: application/json' -d '{"args":{...}}' "$api/api/interface/<入口の id>"` |
-| claude を叩く入口 | `web_session/flows.py` の `run` で、入口の id と引数(手元と同じ)を渡して python で回す。下の例 |
+| db だけの入口(claude を叩かない) | `curl -sS -H "$h" -H 'content-type: application/json' -d '{"args":{...}}' "$api/api/interface/<入口の id>"`(結果は `.result`) |
+| claude を叩く入口 | `web_session/flows.py` の `run` で、入口の id と引数(手元と同じ)を渡して python で回す。下の例(結果は包まれずにそのまま返る) |
+
+- どちらで呼ぶかは、`curl -sS -H "$h" "$api/api/interface" | jq -r '.entrances[].id'` の一覧で見る。一覧にあるのが db だけの入口で、無いもの(`ReadEpisodeCasting`・`ReadEpisodeBrief`・`CommitEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
+- claude を叩く入口を curl で呼ぶと、`{"detail":"… は claude コマンドを叩くので API からは呼べない …"}` が返る。打ち直さずに `flows.run` に替える
+
+## 表の API(`/api/tables`)
+
+- 表の API で読めるのは `story`・`episode`・`character`・`character_relation`・`event`・`location`・`idea`・`meme`・`oracle`・`style_preference` だけ。ほかの表(`episode_character`・`character_location`・`episode_character_session` など)は `{"detail":"GUI で扱わないテーブル: …"}` が返る。消す口(DELETE)も無い。代わりに次を使う:
+
+| 読みたいもの | 読み方 |
+| --- | --- |
+| 話の登場人物・名前だけ出る人物 | `episode` の行の `character_ids` / `mentioned_character_ids` |
+| 人物の居場所 | 入口 `character.read_character.ReadCharacter` の `locations` |
+| 話のセッションの行(読む・消す) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>` |
+| 話の概要(`summary_text`) | 入口 `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[…]}` の `.result[].summary_text`(表の API の行には入らない) |
+
+- 列名は推測しない。`curl -sS -H "$h" "$api/api/tables" | jq -c '.tables[] | {name, columns: [.columns[].key]}'` で表ごとの列を見る。取り違えやすいもの:
+
+| 表 | 正しい列 | 取り違えた名前 |
+| --- | --- | --- |
+| `story` | `name`・`parent_story_id` | `title`・`parent_id` |
+| `idea` | `parent_idea_id` | `parent_id` |
+| `character_relation` | `character_1_id`・`character_2_id` | `from_character_id`・`to_character_id`・`character_id` |
+| `episode` | (概要は表の API に無い。上の表) | `summary`・`summary_text` |
+
+- 一覧(`/records?…`)の項目には本文の列(`text`、`episode` は `plot_text`・`main_text`、`character` は `appearance`・`meme`・`principle`・`plot` も)が入らず、代わりに `label` と本文の頭の `preview` が入る。話に本文があるかは `letters`(字数)で見る。本文そのものは一件(`/records/<id>` の `.record.main_text`)か `ReadEpisodeTexts` で読む
 
 claude を叩く入口は、手元と同じ流れ(`data_access_logic/flows/`)で AI(`claude -p`)をこのセッションで回し、db の段だけを API で呼ぶ。数分〜十数分かかるので `run_in_background` で回す。入口の id と引数(JSON の形)で回す例:
 

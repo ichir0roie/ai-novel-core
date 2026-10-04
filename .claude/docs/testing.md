@@ -32,9 +32,29 @@
   - 話と人物の結び `episode_character` と作品の親 `parent_story_id` は足されない。登場人物・章の要る確かめでは自分で足す
   - 件数・時期をそろえたいときは、`tool.test` を先に import した使い捨てのスクリプトで `randomizer.mock_factories` に値を渡して足す
 
+使い捨てのスクリプトで `novel_test` を読み書きするとき:
+
+- 一行目で `import tool.test` を読む(`db.schema` より先。`db.schema` は import した時に db を固定するので、先に読まれると `db.schema がテスト用の db 以外で先に読み込まれている` で止まる)。pytest のプラグインも同じ
+- 向け先は `DEM_DEV_DATABASE_URL=$dev` で渡す(`tool.test` がそこから `novel_test` を組む)。`DEM_DATABASE_URL` に `novel_test` の URL を入れない(`テスト用の db が手元の PostGIS を指していない` で止まる)
+- 行は `randomizer.mock_factories` か `seed_mock_db` で足す。手で `insert` や ORM の行を組むと、既定値の無い NOT NULL の列(`idea.meme_seeded`・`episode.letters`・`story.narration` など)で落ちる
+- ORM の関連は `lazy="noload"` のものが多く、`s.get_one(Episode, id).characters` は空になる。入口と同じ読み方(`data_access_logic.episode.material.load_episode(s, id)` など)で読む
+- AI の差し替え: 引数 `ai` を持つ入口・関数にだけ `MockAIClient()` を渡す。持たない入口(`CommitIdea` など)は `mock.patch("ai.claude_code.ai_client.generate", MockAIClient().generate)` の中で呼ぶ
+
 使うときの注意:
 
 - pytest を回すと行が足される。確かめに使う id は決め打ちせず、回すたびに引き直す
+- 前に回した行が溜まると、件数・`limit` に頼るテストが落ちる。マイグレーション・表の定義を変えたあとも、`init_db` は表のある db には作らずに止まり(`表が既にある…`)、古い表のまま回すと列が足りずに落ちる。どちらも `novel_test` を作り直す。手元は `tool.test.recreate_db`、web のセッションは消してから「用意」と「行を足す」を回し直す:
+
+```
+dev=$(bash infra_local/postgis.sh .venv/bin/python) && .venv/bin/python -c "
+import sys
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+admin = create_engine(make_url(sys.argv[1]).set(database='postgres'), isolation_level='AUTOCOMMIT')
+with admin.connect() as c:
+    c.execute(text('DROP DATABASE IF EXISTS novel_test WITH (FORCE)'))
+" "$dev"
+```
 - セッションの途中で PostGIS が止まることがある(`connection refused`、API の 500)。`infra_local/postgis.sh` を回し直せば立ち上がり、db の中身は残る
 - AI を呼ぶ処理では本物の claude を呼ばない。`tool.test.mock_ai_client.MockAIClient` を `ai` に渡すか、`ai.claude_code.ai_client.generate` を差し替える
 
