@@ -55,7 +55,9 @@ def knows(knowers: Sequence[KnowerMixin], viewer: Viewer) -> bool:
 
 
 def _lives_in_effect(row: IdeaHistory, viewer: Viewer) -> bool:
-    """効く場所が空の行はどこにも効く。"""
+    """効く場所が空の行はどこにも効く。非公開の行は、住む人物には効かない。"""
+    if row.private:
+        return False
     place = row.location_id is None or row.location_id in viewer.location_ids
     return place and (row.start is None or row.start <= viewer.time) and (row.end is None or row.end > viewer.time)
 

@@ -69,7 +69,7 @@ class StageSerialized(Stage):
                      for member in self.cast],
             "登場人物どうしの関係": [{"誰から": relation.character_1.name, "誰へ": relation.character_2.name,
                              "関係": relation.relation, "説明": relation.text} for relation in self.relations],
-            "関係する設定": [idea_for_prompt(related) for related in self.ideas],
+            "関係する設定": [idea_for_prompt(related, with_text=True) for related in self.ideas],
         }
 
 

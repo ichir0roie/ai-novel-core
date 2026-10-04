@@ -20,12 +20,14 @@ from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
 from data_access_logic.episode_session.read_session import ReadSession
 from data_access_logic.episode_session.read_stage import ReadStage
 from data_access_logic.episode_session.read_turn import ReadTurn
+from data_access_logic.idea.alias import called
 from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
 from data_access_logic.idea.link_ideas import LinkIdeas
 from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
+from db.schema import Stamp, get_env_session
 from tool import episode_session
 
 
@@ -147,12 +149,10 @@ def test_read_knowledge_without_knowing(shown, world, mock_ai):
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=taro, meme="- 今表: 残るミーム", knowers=[])))
     shown(CommitIdea(IdeaCreateForm(name="村の秘薬", kind="技術", text="村だけの薬", histories=[
-        IdeaHistoryRow(location_id=world.neighbor_id, name="秘薬", knowers=[KnowerRow(knower_id=taro)])]),
-        fact_check=False))
+        IdeaHistoryRow(location_id=world.neighbor_id, name="秘薬", knowers=[KnowerRow(knower_id=taro)])])))
     shown(CommitIdea(IdeaCreateForm(name="遠い技", kind="技術", text="村だけの技", histories=[
-        IdeaHistoryRow(location_id=world.neighbor_id, name="遠い技")]), fact_check=False))
-    shown(CommitIdea(IdeaCreateForm(name="履歴の無い技", kind="技術", text="都の技", location_id=world.location_id),
-                     fact_check=False))
+        IdeaHistoryRow(location_id=world.neighbor_id, name="遠い技")])))
+    shown(CommitIdea(IdeaCreateForm(name="履歴の無い技", kind="技術", text="都の技")))
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
@@ -163,6 +163,21 @@ def test_read_knowledge_without_knowing(shown, world, mock_ai):
     names = [name["呼び名"] for idea in result["知っているアイデア"] for name in idea["知っている呼び名"]]
     assert "秘薬" in names and "遠い技" not in names and "履歴の無い技" not in names
 
+
+def test_read_knowledge_private_idea_history(shown, world, mock_ai):
+    taro, hanako = world.character_ids
+    idea = shown(CommitIdea(IdeaCreateForm(name="里の暦", kind="概念", text="里だけの数え方", histories=[
+        IdeaHistoryRow(name="古い数え方", detail="里では六千年台と記す", private=True, knowers=[KnowerRow(knower_id=taro)])])))
+
+    # 場所も期間も空の行でも、非公開なら住む人物は知らず、知る相手だけが知る
+    def names(character_id: int) -> list[str]:
+        result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=character_id))
+        return [name["呼び名"] for known in result["知っているアイデア"] for name in known["知っている呼び名"]]
+    assert "古い数え方" in names(taro)
+    assert "古い数え方" not in names(hanako)
+    # 非公開の行は作中の呼び名に使わない
+    with get_env_session() as s:
+        assert idea["id"] not in called(s, [idea["id"]], world.location_id, Stamp.parse("1200/01/01"))
 
 def test_read_appearance(shown, world):
     shown(UpdateCharacter(CharacterUpdateForm(id=world.character_ids[1], appearance="髪が赤い")))

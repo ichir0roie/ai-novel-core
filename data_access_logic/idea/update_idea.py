@@ -8,7 +8,7 @@ from data_access_logic.idea.form import IdeaUpdateForm
 from data_access_logic.idea.record import IdeaRecord
 from data_access_logic.query import common_query
 from db.child_lists import replaced_histories
-from db.schema import Idea, IdeaHistory, Location
+from db.schema import Idea, IdeaHistory
 
 
 class UpdateIdea(CommitEntrypoint):
@@ -22,7 +22,6 @@ class UpdateIdea(CommitEntrypoint):
         self.check_knowers(s, form)
         record = common_query.get_row(s, Idea, form.id)
 
-        self.check_exists(s, Location, form.location_id, "location_id")
         if form.parent_idea_id == form.id:
             raise ValueError(f"parent_idea_id={form.id} が自分自身を指している")
         self.check_exists(s, Idea, form.parent_idea_id, "parent_idea_id")

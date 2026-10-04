@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Collection
 
 from sqlalchemy import ColumnElement, Select, and_, false, or_, select, true
+from sqlalchemy.orm import aliased
 
 from data_access_logic.query.period import alive_at
 from db.schema import Idea, IdeaHistory
@@ -11,12 +12,24 @@ from db.stamp import Stamp
 
 
 def idea_in_scope(location_ids: Collection[int] | None = None, time: Stamp | None = None) -> ColumnElement[bool]:
-    """`location_ids` は現在地から最上位までの場所(`common_query.idea_scope_ids`)。"""
+    """`location_ids` は現在地から最上位までの場所(`common_query.idea_scope_ids`)。
+
+    アイデアの効く場所は本体に持たず、履歴の行(非公開の行も含む)で持つ。履歴の行の無いアイデアはどこでも効き、
+    あれば、場所・期間の当たる行が一つでもあれば効く。期間は本体の `start` / `end` でも絞る。
+    """
     conditions = []
-    if location_ids is not None:
-        conditions.append(Idea.location_id.in_(list(location_ids)))
     if time is not None:
         conditions.append(alive_at(Idea, time))
+    if location_ids is not None or time is not None:
+        # 呼び名の検索で外側の問い合わせが IdeaHistory を結合していても、それと混ざらないよう別名にする
+        row = aliased(IdeaHistory)
+        rows = select(row.id).where(row.idea_id == Idea.id).correlate(Idea)
+        placed = []
+        if location_ids is not None:
+            placed.append(or_(row.location_id.is_(None), row.location_id.in_(list(location_ids))))
+        if time is not None:
+            placed.append(and_(or_(row.start.is_(None), row.start <= time), or_(row.end.is_(None), row.end > time)))
+        conditions.append(or_(~rows.exists(), rows.where(*placed).exists()))
     return and_(true(), *conditions)
 
 
@@ -36,7 +49,9 @@ def history_in_scope(location_ids: Collection[int] | None = None, time: Stamp | 
 
 def histories_select(essence_ids: Collection[int], location_ids: Collection[int] | None = None,
                         time: Stamp | None = None) -> Select:
-    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time)]
+    # 非公開の行は知る相手だけの秘密で、その場所・時代の呼び名ではない
+    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time),
+                  IdeaHistory.private.is_(False)]
     return (select(IdeaHistory)
             .where(*conditions)
             .order_by(IdeaHistory.start.desc().nulls_last(), IdeaHistory.id))
@@ -74,5 +89,5 @@ def ideas_by_parent_select(parent_ids: Collection[int], location_ids: Collection
 def later_ideas_select(location_ids: Collection[int], time: Stamp) -> Select:
     """`time` より後に始まる、`location_ids` の場所で効くアイデア。"""
     return (select(Idea)
-            .where(Idea.location_id.in_(list(location_ids)), Idea.start > time)
+            .where(idea_in_scope(location_ids), Idea.start > time)
             .order_by(Idea.start, Idea.id))

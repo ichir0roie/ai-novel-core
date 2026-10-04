@@ -14,7 +14,9 @@ class IdeaHistoryRow(Form):
     end: Timestamp | None = None
     name: str
     detail: str | None = None
-    # 知る相手(効く場所・期間に住む人物は、行が無くても知る)。渡さなければ、新しい行は行の無いまま、今ある行はそのまま
+    # 非公開の行は、効く場所・期間に住む人物も知らず、知る相手だけが知る
+    private: bool = False
+    # 知る相手(非公開でなければ、効く場所・期間に住む人物は、行が無くても知る)。渡さなければ、新しい行は行の無いまま、今ある行はそのまま
     # (`db/child_lists.py` の `replaced_histories`)
     knowers: list[KnowerRow] | None = None
 
@@ -23,11 +25,9 @@ class IdeaRecord(Material):
     id: int
     name: str
     kind: str
-    location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     parent_idea_id: int | None = None
-    meme_seeded: bool
     histories: list[IdeaHistoryRow]
     text: str
 

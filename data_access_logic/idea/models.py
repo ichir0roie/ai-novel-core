@@ -146,17 +146,20 @@ class RelatedIdeaMaterial(Material):
     history: IdeaHistoryMaterial | None = None
 
 
-def idea_for_prompt(related: RelatedIdeaMaterial) -> dict[str, Any]:
+def idea_for_prompt(related: RelatedIdeaMaterial, with_text: bool) -> dict[str, Any]:
+    """本文(本質)は、語り部と、話を書くセッションの Claude の材料にだけ載せ(`with_text`)、AI の生成には渡さない。"""
     idea, history = related.idea, related.history
-    text = idea.text or ""
-    if len(text) > constants.IDEA_CONTEXT_LETTERS:
-        text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
-    return {
+    shown: dict[str, Any] = {
         "名前": history.name if history else idea.name,
         "種類": idea.kind,
         "作中での受け止め方": history.detail if history else None,
-        "内容": text,
     }
+    if with_text:
+        text = idea.text or ""
+        if len(text) > constants.IDEA_CONTEXT_LETTERS:
+            text = text[:constants.IDEA_CONTEXT_LETTERS] + "…"
+        shown["内容"] = text
+    return shown
 
 
 class IdeaContextMaterial(Material):
@@ -173,7 +176,7 @@ class IdeaContextSerialized(IdeaContextMaterial):
 
     @model_serializer
     def _for_prompt(self) -> list[dict[str, Any]]:
-        return [idea_for_prompt(related) for related in self.related]
+        return [idea_for_prompt(related, with_text=False) for related in self.related]
 
 
 class IdeaHit(Material):

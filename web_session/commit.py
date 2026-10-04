@@ -16,8 +16,6 @@ from data_access_logic.event import steps as event_steps
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
 from data_access_logic.event.record import EventRecord
 from data_access_logic.fact_check import steps as fact_steps
-from data_access_logic.idea import steps as idea_steps
-from data_access_logic.idea.form import IdeaCreateForm
 from data_access_logic.oracle import steps as oracle_steps
 from data_access_logic.oracle.form import OracleCreateForm
 from data_access_logic.step import RowId
@@ -67,13 +65,6 @@ def _meme_source_follow_up(ai: AIClient, table: str, record_id: int, text: str, 
     if fact_check_enabled:
         fact_check.check_new_memes(last_id)
     return added
-
-
-def commit_idea(idea: IdeaCreateForm, fact_check: bool = True, ai: AIClient = ai_client) -> MemeSourceCommitted:
-    committed = call(idea_steps.commit_idea, idea)
-    added = _meme_source_follow_up(ai, "idea", committed.id, committed.text, fact_check)
-    # 検めた結果は本文の末尾に足されるので、読み直して返す
-    return MemeSourceCommitted(record=call(idea_steps.idea_record, RowId(id=committed.id)), memes_added=added)
 
 
 def commit_oracle(oracle: OracleCreateForm, fact_check: bool = True, ai: AIClient = ai_client) -> MemeSourceCommitted:

@@ -20,7 +20,7 @@ from data_access_logic.material import Material
 from data_access_logic.source_text import (
     FACT_CHECK_HEADING, SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check,
 )
-from db.schema import Idea, Meme, Oracle, Session
+from db.schema import Meme, Oracle, Session
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def _append_fact_check(text: str | None, fact_check: str) -> str:
 
 _SYSTEM_PROMPT = f"""\
 あなたは創作の設定を検める、科学・歴史・思想に詳しい校閲者です。
-小説の世界の設定(アイデア)か、著者の創作・AI についての覚え書き(oracle)か、人物の行動原理の芯になる考え方(ミーム)を番号つきの JSON で渡すので、\
+著者の創作・AI についての覚え書き(oracle)か、人物の行動原理の芯になる考え方(ミーム)を番号つきの JSON で渡すので、\
 それぞれをDラボのナレッジとネット検索で調べ、内容の妥当性を検め、書き手の役に立つ補足を書いてください。
 - Dラボのナレッジ検索(search_dlab_knowledge。見当たらなければ ToolSearch で「dlab」を探す)が使えるなら、\
   必ず先にそれで調べる。心理学・行動科学・脳科学・健康・人間関係・社会・AI に関わる内容は特に、Dラボの知見を軸にする。\
@@ -92,7 +92,7 @@ class FactChecked(BaseModel):
     memes_added: int
 
 
-MODELS = {"idea": Idea, "oracle": Oracle, "meme": Meme}
+MODELS = {"oracle": Oracle, "meme": Meme}
 
 
 def tools() -> tuple[str, ...]:
@@ -100,14 +100,12 @@ def tools() -> tuple[str, ...]:
     return WEB_TOOLS + tuple(tool.strip() for tool in dlab.split(",") if tool.strip())
 
 
-_Checked = Idea | Oracle | Meme
+_Checked = Oracle | Meme
 
 
 def _source(record: _Checked) -> SourceText:
     """前に検めた結果は外して、素の本文だけを検めさせる。"""
     text = strip_fact_check(record.text)
-    if isinstance(record, Idea):
-        return source_of(record, f"アイデア「{record.name}」(種類: {record.kind})", text)
     if isinstance(record, Oracle):
         return source_of(record, "覚え書き(oracle)", text)
     return source_of(record, f"ミーム(分類: {record.category or '未分類'})", text)
@@ -178,7 +176,7 @@ def check_new_memes(s: Session, last_id: int) -> int:
 
 
 def check_and_extract(s: Session, table: str, ids: list[int] | None = None, limit: int | None = None) -> FactChecked:
-    """検めたあと、ミームの元(アイデア・oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
+    """検めたあと、ミームの元(oracle)なら本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
     checked = check(s, table, ids, limit)
     if table == "meme":
         return FactChecked(checked=checked, memes_added=0)

@@ -248,15 +248,21 @@ function FlowCard({
         {extraColumns.filter((extra) => extra.after === "start").map((extra) => (
           <span key={extra.key} className="flow-period" title={extra.label}>{extra.render(row)}</span>
         ))}
-        {otherLineColumns.map((column) => (
-          <div key={column.key} className="flow-field" title={column.comment ?? column.key}>
-            {editing ? (
-              <FieldInput column={column} value={row[column.key]} onChange={(v) => onChange(column.key, v)} compact />
-            ) : (
-              <ReadValue column={column} value={row[column.key]} />
-            )}
-          </div>
-        ))}
+        {otherLineColumns.map((column) => {
+          // 真偽の欄は Yes / No だけでは何の欄か読めないので、欄の名前を添え、表示では立っているときだけ出す
+          const flag = column.type === "boolean";
+          if (flag && !editing && !row[column.key]) return null;
+          return (
+            <div key={column.key} className="flow-field" title={column.comment ?? column.key}>
+              {flag && <span className="flow-flag">{column.label}</span>}
+              {editing ? (
+                <FieldInput column={column} value={row[column.key]} onChange={(v) => onChange(column.key, v)} compact />
+              ) : (
+                !flag && <ReadValue column={column} value={row[column.key]} />
+              )}
+            </div>
+          );
+        })}
         {editing && (
           <button type="button" className="ghost flow-remove" onClick={onRemove} title={T.childList.removeRow}>
             ×

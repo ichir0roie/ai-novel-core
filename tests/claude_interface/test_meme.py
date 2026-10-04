@@ -13,7 +13,10 @@ from data_access_logic.oracle.commit_oracle import CommitOracle
 from data_access_logic.oracle.form import OracleCreateForm, OracleUpdateForm
 from data_access_logic.oracle.update_oracle import UpdateOracle
 from data_access_logic.review.list_pending_reviews import ListPendingReviews
-from db.schema import MemeCategory
+from data_access_logic.episode.commit_episode import CommitEpisode
+from data_access_logic.episode.form import EpisodeCommitForm
+from data_access_logic.meme.extractor import pending_sources
+from db.schema import Episode, MemeCategory, get_env_session
 
 
 def test_commit_meme(shown):
@@ -95,3 +98,21 @@ def test_list_pending_reviews(shown, world):
 
     assert {"key", "kind", "title", "detail"} <= set(result[0])
     assert f"todo:meme:{world.meme_id}" in [item["key"] for item in result]
+
+
+def test_meme_sources_are_episodes_not_ideas_or_characters(world):
+    with get_env_session() as s:
+        sources = {(source.table, source.id) for source in pending_sources(s)}
+
+    assert ("episode", world.episode_id) in sources
+    assert not {table for table, _ in sources} & {"idea", "character"}
+
+
+def test_commit_episode_resets_meme_seeded(world):
+    with get_env_session() as s, s.begin():
+        s.get_one(Episode, world.episode_id).meme_seeded = True
+    with get_env_session() as s, s.begin():
+        CommitEpisode(EpisodeCommitForm(id=world.episode_id, main_text="市で二人が別れた。")).execute(s)
+
+    with get_env_session() as s:
+        assert s.get_one(Episode, world.episode_id).meme_seeded is False
