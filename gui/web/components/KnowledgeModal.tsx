@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  addHistoryKnowers,
   getCharacterLocations,
   listAllRecords,
-  readKnowableHistories,
-  type KnowableHistories,
+  readKnowableRows,
+  readKnownRows,
+  updateKnowledge,
+  type KnowableRows,
+  type KnowledgeChange,
+  type KnownRows,
   type Rec,
 } from "@/lib/api";
 import { buildCharacterTree, type TreeCharacter, type TreeNode } from "@/lib/characterTree";
@@ -19,10 +22,17 @@ import StampInput from "./StampInput";
 
 type Source = { kind: "character" | "idea"; id: number; name: string | null };
 
-/** 選んだ行。来歴・履歴の行の id は人物とアイデアで重なりうるので、種類と組にして持つ */
-type Picked = { kind: Source["kind"]; id: number; owner: Source; text: string };
+/** 知る相手を付け外しする行。人物の芯(text)は人物の id、来歴・履歴は行の id で指す */
+type RowKind = "text" | "character" | "idea";
 
-const pickKey = (kind: Source["kind"], id: number) => `${kind}:${id}`;
+type RowState = { known: boolean; start: string | null };
+
+/** 保存前の付け外し。人物・アイデアを移っても残る */
+type Change = RowState & { kind: RowKind; id: number; owner: Source; label: string };
+
+const rowKey = (kind: RowKind, id: number) => `${kind}:${id}`;
+const sourceKey = (source: Pick<Source, "kind" | "id">) => `${source.kind}:${source.id}`;
+const sameState = (a: RowState, b: RowState) => a.known === b.known && (a.start ?? null) === (b.start ?? null);
 
 /** 名前の一部か id(先頭の # は無くてよい)で当てる。 */
 function matcher(filter: string): (name: string | null, id: number) => boolean {
@@ -32,37 +42,68 @@ function matcher(filter: string): (name: string | null, id: number) => boolean {
   return (name, id) => String(id) === asId || (name ?? "").toLowerCase().includes(q);
 }
 
-/** 当たる人物のいる場所だけを残す。 */
-function filterLocations(nodes: TreeNode[], hit: (name: string | null, id: number) => boolean): TreeNode[] {
+type Keep = (kind: Source["kind"], name: string | null, id: number) => boolean;
+
+/** 残す人物のいる場所だけを残す。 */
+function filterLocations(nodes: TreeNode[], keep: Keep): TreeNode[] {
   return nodes.flatMap((node) => {
-    const characters = node.characters.filter((c) => hit(c.name, c.id));
-    const children = filterLocations(node.children, hit);
+    const characters = node.characters.filter((c) => keep("character", c.name, c.id));
+    const children = filterLocations(node.children, keep);
     if (characters.length === 0 && children.length === 0) return [];
     return [{ ...node, characters, children }];
   });
 }
 
-/** 当たるアイデアと、その祖先を残す(当たったアイデアの下位はそのまま出す)。 */
-function filterIdeas(nodes: IdeaNode[], hit: (name: string | null, id: number) => boolean): IdeaNode[] {
+/** 残すアイデアと、その祖先を残す。 */
+function filterIdeas(nodes: IdeaNode[], keep: Keep): IdeaNode[] {
   return nodes.flatMap((node) => {
-    if (hit(node.name, node.id)) return [node];
-    const children = filterIdeas(node.children, hit);
-    return children.length > 0 ? [{ ...node, children }] : [];
+    const children = filterIdeas(node.children, keep);
+    if (keep("idea", node.name, node.id) || children.length > 0) return [{ ...node, children }];
+    return [];
   });
 }
 
-type TreeProps = { selected: Source | null; onSelect: (source: Source) => void };
+/** 保存した知る行に付け外しを重ね、人物・アイデアごとに知る行の数を数える。 */
+function knownCounts(saved: KnownRows | null, changes: Map<string, Change>): Map<string, number> {
+  const owners = new Map<string, string>();
+  if (saved) {
+    saved.character_ids.forEach((id) => owners.set(rowKey("text", id), sourceKey({ kind: "character", id })));
+    saved.character_histories.forEach((row) => owners.set(rowKey("character", row.id), sourceKey({ kind: "character", id: row.character_id })));
+    saved.idea_histories.forEach((row) => owners.set(rowKey("idea", row.id), sourceKey({ kind: "idea", id: row.idea_id })));
+  }
+  for (const [key, change] of changes) {
+    if (change.known) owners.set(key, sourceKey(change.owner));
+    else owners.delete(key);
+  }
+  const counts = new Map<string, number>();
+  for (const owner of owners.values()) counts.set(owner, (counts.get(owner) ?? 0) + 1);
+  return counts;
+}
 
-function CharacterItem({ character, selected, onSelect }: TreeProps & { character: TreeCharacter }) {
+type TreeProps = { selected: Source | null; counts: Map<string, number>; onSelect: (source: Source) => void };
+
+function SourceLabel({ source, counts, selfId }: { source: Source; counts: Map<string, number>; selfId?: number }) {
+  const count = counts.get(sourceKey(source)) ?? 0;
+  return (
+    <>
+      <NameId name={source.name} id={source.id} />
+      {source.id === selfId && source.kind === "character" && <span className="hint"> {T.knowledge.self}</span>}
+      {count > 0 && <span className="knowledge-count">{T.knowledge.knownCount(count)}</span>}
+    </>
+  );
+}
+
+function CharacterItem({ character, selected, counts, onSelect, selfId }: TreeProps & { character: TreeCharacter; selfId: number }) {
+  const source: Source = { kind: "character", id: character.id, name: character.name };
   const on = selected?.kind === "character" && selected.id === character.id;
   return (
-    <li className={`knowledge-item ${on ? "on" : ""}`} onClick={() => onSelect({ kind: "character", id: character.id, name: character.name })}>
-      <NameId name={character.name} id={character.id} />
+    <li className={`knowledge-item ${on ? "on" : ""}`} onClick={() => onSelect(source)}>
+      <SourceLabel source={source} counts={counts} selfId={selfId} />
     </li>
   );
 }
 
-function LocationBranch({ node, ...props }: TreeProps & { node: TreeNode }) {
+function LocationBranch({ node, ...props }: TreeProps & { node: TreeNode; selfId: number }) {
   return (
     <li>
       <details open>
@@ -82,7 +123,8 @@ function LocationBranch({ node, ...props }: TreeProps & { node: TreeNode }) {
   );
 }
 
-function IdeaItem({ node, selected, onSelect }: TreeProps & { node: IdeaNode }) {
+function IdeaItem({ node, selected, counts, onSelect }: TreeProps & { node: IdeaNode }) {
+  const source: Source = { kind: "idea", id: node.id, name: node.name };
   const on = selected?.kind === "idea" && selected.id === node.id;
   const item = (
     <span
@@ -90,10 +132,10 @@ function IdeaItem({ node, selected, onSelect }: TreeProps & { node: IdeaNode }) 
       onClick={(e) => {
         // 見出しの中で押しても枝を開閉しない(開閉は印で行う)
         e.preventDefault();
-        onSelect({ kind: "idea", id: node.id, name: node.name });
+        onSelect(source);
       }}
     >
-      <NameId name={node.name} id={node.id} />
+      <SourceLabel source={source} counts={counts} />
     </span>
   );
   if (node.children.length === 0) return <li>{item}</li>;
@@ -103,7 +145,7 @@ function IdeaItem({ node, selected, onSelect }: TreeProps & { node: IdeaNode }) 
         <summary className="knowledge-branch">{item}</summary>
         <ul className="tree">
           {node.children.map((child) => (
-            <IdeaItem key={child.id} node={child} selected={selected} onSelect={onSelect} />
+            <IdeaItem key={child.id} node={child} selected={selected} counts={counts} onSelect={onSelect} />
           ))}
         </ul>
       </details>
@@ -111,7 +153,7 @@ function IdeaItem({ node, selected, onSelect }: TreeProps & { node: IdeaNode }) 
   );
 }
 
-/** 行の知る相手を名前で並べる(読むだけ)。 */
+/** 行の知る相手を名前で並べる(読むだけ。保存した値)。 */
 function KnowerNames({ knowers }: { knowers: Rec[] }) {
   const characters = useOptions("character");
   const locations = useOptions("location");
@@ -142,17 +184,20 @@ function KnowerNames({ knowers }: { knowers: Rec[] }) {
   );
 }
 
-type Props = { characterId: number; characterName: string; onClose: () => void };
+type Props = { characterId: number; characterName: string; onClose: () => void; onSaved: () => void };
 
-/** 知識整理。左の人物・アイデアの木から一つ選ぶと、右にその来歴・履歴の行が並ぶ。行を押すと選んだ行に溜まり
- * (別の人物・アイデアに移っても残る)、登録で、この人物を溜めた行すべての知る相手に足す。
- * この人物自身の来歴は記録の画面で直すので、木には出さない(画面の編集中の値と食い違わないように)。 */
-export default function KnowledgeModal({ characterId, characterName, onClose }: Props) {
+/** 知識整理。この人物が、ほかの人物の芯(人物像)・人物の来歴・アイデアの履歴の行を知るかを、まとめて付け外しする。
+ * 左の人物・アイデアの木(この人物が知る行の数つき)から一つ選ぶと、右にその行が並ぶ。行を押すと知る/知らないが
+ * 切り替わり、知る行には知った時刻を入れられる。付け外しは人物・アイデアを移っても残り、保存で一度に直す。
+ * 場所として知る相手に入っている行(その場所に住むので知る)は、ここでは付け外ししない。 */
+export default function KnowledgeModal({ characterId, characterName, onClose, onSaved }: Props) {
   const [tree, setTree] = useState<{ locations: TreeNode[]; unplaced: TreeCharacter[]; ideas: IdeaNode[] } | null>(null);
+  const [saved, setSaved] = useState<KnownRows | null>(null);
   const [filter, setFilter] = useState("");
+  const [onlyKnown, setOnlyKnown] = useState(false);
   const [selected, setSelected] = useState<Source | null>(null);
-  const [histories, setHistories] = useState<KnowableHistories | null>(null);
-  const [picked, setPicked] = useState<Map<string, Picked>>(new Map());
+  const [rows, setRows] = useState<KnowableRows | null>(null);
+  const [changes, setChanges] = useState<Map<string, Change>>(new Map());
   const [since, setSince] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,12 +211,13 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
       listAllRecords("character", { sort: "id", order: "asc" }),
       getCharacterLocations(),
       listAllRecords("idea", { sort: "id", order: "asc" }),
+      readKnownRows(characterId),
     ])
-      .then(([locations, characters, characterLocations, ideas]) => {
+      .then(([locations, characters, characterLocations, ideas, known]) => {
         if (cancelled) return;
-        const others = characters.filter((character) => Number(character.id) !== characterId);
-        const characterTree = buildCharacterTree(locations, others, characterLocations.locations);
+        const characterTree = buildCharacterTree(locations, characters, characterLocations.locations);
         setTree({ locations: characterTree.nodes, unplaced: characterTree.unplaced, ideas: buildIdeaTree(ideas) });
+        setSaved(known);
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
@@ -179,10 +225,10 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
     };
   }, [characterId]);
 
-  const loadHistories = useCallback(async (source: Source) => {
-    setHistories(null);
+  const loadRows = useCallback(async (source: Source) => {
+    setRows(null);
     try {
-      setHistories(await readKnowableHistories(source.kind === "character" ? { character_id: source.id } : { idea_id: source.id }));
+      setRows(await readKnowableRows(source.kind === "character" ? { character_id: source.id } : { idea_id: source.id }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -190,33 +236,40 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
 
   const select = (source: Source) => {
     setSelected(source);
-    void loadHistories(source);
+    void loadRows(source);
   };
 
-  const toggle = (item: Picked) =>
-    setPicked((prev) => {
-      const next = new Map(prev);
-      const key = pickKey(item.kind, item.id);
-      if (next.has(key)) next.delete(key);
-      else next.set(key, item);
-      return next;
+  /** 保存した値(この人物が人物として知る相手に入っているか、知った時刻) */
+  const savedState = (knowers: Rec[]): RowState => {
+    const own = knowers.find((knower) => knower.knower_id === characterId);
+    return own ? { known: true, start: (own.start as string | null) ?? null } : { known: false, start: null };
+  };
+
+  const setState = (row: Omit<Change, "known" | "start">, original: RowState, next: RowState) =>
+    setChanges((prev) => {
+      const copy = new Map(prev);
+      const key = rowKey(row.kind, row.id);
+      if (sameState(original, next)) copy.delete(key);
+      else copy.set(key, { ...row, ...next });
+      return copy;
     });
 
-  const register = async () => {
-    const rows = [...picked.values()];
+  const save = async () => {
+    const list = [...changes.values()];
+    const of = (kind: RowKind): KnowledgeChange[] =>
+      list.filter((change) => change.kind === kind).map(({ id, known, start }) => ({ id, known, start: known ? start : null }));
     setBusy(true);
     setError(null);
     setDone(null);
     try {
-      const added = await addHistoryKnowers({
-        knower_id: characterId,
-        character_history_ids: rows.filter((row) => row.kind === "character").map((row) => row.id),
-        idea_history_ids: rows.filter((row) => row.kind === "idea").map((row) => row.id),
-        start: since,
+      const known = await updateKnowledge({
+        knower_id: characterId, characters: of("text"), character_histories: of("character"), idea_histories: of("idea"),
       });
-      setDone(T.knowledge.registered(added.character_history_ids.length + added.idea_history_ids.length));
-      setPicked(new Map());
-      if (selected) await loadHistories(selected);
+      setSaved(known);
+      setDone(T.knowledge.saved(list.length));
+      setChanges(new Map());
+      if (selected) await loadRows(selected);
+      onSaved();
     } catch (e) {
       setError(T.knowledge.failed(e instanceof Error ? e.message : String(e)));
     } finally {
@@ -224,26 +277,44 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
     }
   };
 
-  const hit = matcher(filter);
-  const locations = tree ? filterLocations(tree.locations, hit) : [];
-  const unplaced = tree ? tree.unplaced.filter((c) => hit(c.name, c.id)) : [];
-  const ideas = tree ? filterIdeas(tree.ideas, hit) : [];
-  const knows = (knowers: Rec[]) => knowers.some((knower) => knower.knower_id === characterId);
+  const close = () => {
+    if (changes.size === 0 || window.confirm(T.knowledge.confirmDiscard(changes.size))) onClose();
+  };
 
-  const row = (item: Picked, knowers: Rec[], heading: ReactNode, body: string | null) => {
-    const known = knows(knowers);
-    const on = picked.has(pickKey(item.kind, item.id));
+  const counts = knownCounts(saved, changes);
+  const hit = matcher(filter);
+  const keep: Keep = (kind, name, id) => hit(name, id) && (!onlyKnown || (counts.get(sourceKey({ kind, id })) ?? 0) > 0);
+  const locations = tree ? filterLocations(tree.locations, keep) : [];
+  const unplaced = tree ? tree.unplaced.filter((c) => keep("character", c.name, c.id)) : [];
+  const ideas = tree ? filterIdeas(tree.ideas, keep) : [];
+  const treeProps = { selected, counts, onSelect: select };
+
+  const row = (kind: RowKind, id: number, knowers: Rec[], label: string, heading: ReactNode, body: string | null) => {
+    if (!selected) return null;
+    const original = savedState(knowers);
+    const change = changes.get(rowKey(kind, id));
+    const state: RowState = change ?? original;
+    const base = { kind, id, owner: selected, label };
     return (
       <li
-        key={pickKey(item.kind, item.id)}
-        className={`knowledge-row ${on ? "on" : ""} ${known ? "known" : ""}`}
-        onClick={() => !known && toggle(item)}
+        key={rowKey(kind, id)}
+        className={`knowledge-row ${state.known ? "known" : ""} ${change ? "changed" : ""}`}
+        onClick={() => setState(base, original, state.known ? { known: false, start: null } : { known: true, start: original.known ? original.start : since })}
       >
         <div className="knowledge-row-head">
+          <span className="knowledge-check" aria-hidden>
+            {state.known ? "✓" : ""}
+          </span>
           {heading}
-          {known && <span className="chip">{T.knowledge.known}</span>}
+          {change && <span className="chip on">{!original.known ? T.knowledge.adding : !state.known ? T.knowledge.removing : T.knowledge.retiming}</span>}
         </div>
-        {body && <div className="knowledge-row-body">{body}</div>}
+        {body && <div className={`knowledge-row-body ${kind === "text" ? "clamp" : ""}`}>{body}</div>}
+        {state.known && (
+          <div className="knowledge-row-since" onClick={(e) => e.stopPropagation()}>
+            <span className="hint">{T.knowledge.knownSince}</span>
+            <StampInput value={state.start} onChange={(start) => setState(base, original, { known: true, start })} disabled={busy} />
+          </div>
+        )}
         <KnowerNames knowers={knowers} />
       </li>
     );
@@ -252,23 +323,26 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
   return (
     <Modal
       title={T.knowledge.title(characterName)}
-      onClose={onClose}
+      onClose={close}
       wide
       actions={
         <>
-          <span className="meta">{T.knowledge.picked(picked.size)}</span>
-          <label className="knowledge-since" title={T.knowledge.since}>
-            <span className="hint">{T.knowledge.since}</span>
+          <span className="meta">{T.knowledge.changes(changes.size)}</span>
+          <label className="knowledge-since" title={T.knowledge.defaultSince}>
+            <span className="hint">{T.knowledge.defaultSince}</span>
             <StampInput value={since} onChange={setSince} disabled={busy} />
           </label>
           <span className="spacer" />
           {error && <span className="status error">{error}</span>}
           {done && !error && <span className="status ok">{done}</span>}
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={() => setChanges(new Map())} disabled={busy || changes.size === 0}>
+            {T.record.revert}
+          </button>
+          <button type="button" onClick={close}>
             {T.close}
           </button>
-          <button type="button" className="primary" onClick={() => void register()} disabled={busy || picked.size === 0}>
-            {T.knowledge.register}
+          <button type="button" className="primary" onClick={() => void save()} disabled={busy || changes.size === 0}>
+            {T.record.save}
           </button>
         </>
       }
@@ -276,6 +350,10 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
       <div className="knowledge">
         <div className="knowledge-sources">
           <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={T.knowledge.filter} />
+          <label className="knowledge-only-known">
+            <input type="checkbox" checked={onlyKnown} onChange={(e) => setOnlyKnown(e.target.checked)} />
+            {T.knowledge.onlyKnown}
+          </label>
           <div className="knowledge-tree">
             {!tree ? (
               !error && <div className="status info">{T.loading}</div>
@@ -287,7 +365,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
                 ) : (
                   <ul className="tree">
                     {locations.map((node) => (
-                      <LocationBranch key={node.id} node={node} selected={selected} onSelect={select} />
+                      <LocationBranch key={node.id} node={node} selfId={characterId} {...treeProps} />
                     ))}
                     {unplaced.length > 0 && (
                       <li>
@@ -295,7 +373,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
                           <summary className="knowledge-branch">{T.characterTree.noLocation}</summary>
                           <ul className="tree">
                             {unplaced.map((character) => (
-                              <CharacterItem key={character.id} character={character} selected={selected} onSelect={select} />
+                              <CharacterItem key={character.id} character={character} selfId={characterId} {...treeProps} />
                             ))}
                           </ul>
                         </details>
@@ -309,7 +387,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
                 ) : (
                   <ul className="tree">
                     {ideas.map((node) => (
-                      <IdeaItem key={node.id} node={node} selected={selected} onSelect={select} />
+                      <IdeaItem key={node.id} node={node} {...treeProps} />
                     ))}
                   </ul>
                 )}
@@ -325,24 +403,28 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
               <h3>
                 <NameId name={selected.name} id={selected.id} />
               </h3>
-              {!histories ? (
+              {!rows ? (
                 <div className="status info">{T.loading}</div>
-              ) : histories.character_histories.length + histories.idea_histories.length === 0 ? (
-                <div className="hint">{T.knowledge.noHistories}</div>
               ) : (
                 <ul className="knowledge-rows">
-                  {histories.character_histories.map((history) =>
+                  {rows.character &&
+                    row("text", rows.character.id, rows.character.knowers, T.knowledge.profile, <strong>{T.knowledge.profile}</strong>, rows.character.text)}
+                  {rows.character_histories.map((history) =>
                     row(
-                      { kind: "character", id: history.id, owner: selected, text: history.description },
+                      "character",
+                      history.id,
                       history.knowers,
+                      history.description,
                       <span>{history.start === null ? T.knowledge.undated : T.knowledge.year(history.start)}</span>,
                       history.description,
                     ),
                   )}
-                  {histories.idea_histories.map((history) =>
+                  {rows.idea_histories.map((history) =>
                     row(
-                      { kind: "idea", id: history.id, owner: selected, text: history.name },
+                      "idea",
+                      history.id,
                       history.knowers,
+                      history.name,
                       <>
                         <strong>{history.name}</strong>
                         <span className="hint">
@@ -355,19 +437,32 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
                       history.detail,
                     ),
                   )}
+                  {!rows.character && rows.idea_histories.length === 0 && <li className="hint">{T.knowledge.noHistories}</li>}
                 </ul>
               )}
             </>
           )}
         </div>
       </div>
-      {picked.size > 0 && (
+      {changes.size > 0 && (
         <div className="knowledge-picked">
-          {[...picked.entries()].map(([key, item]) => (
-            <span key={key} className="knower-chip">
-              <NameId name={item.owner.name} id={item.owner.id} />
-              <span className="knowledge-picked-text">{item.text}</span>
-              <button type="button" className="ghost" onClick={() => toggle(item)} title={T.knowledge.unpick}>
+          {[...changes.entries()].map(([key, change]) => (
+            <span key={key} className={`knower-chip ${change.known ? "" : "removing"}`}>
+              <span>{change.known ? (saved && isSaved(saved, change) ? "⏱" : "+") : "−"}</span>
+              <NameId name={change.owner.name} id={change.owner.id} />
+              <span className="knowledge-picked-text">{change.label}</span>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() =>
+                  setChanges((prev) => {
+                    const copy = new Map(prev);
+                    copy.delete(key);
+                    return copy;
+                  })
+                }
+                title={T.knowledge.undo}
+              >
                 ×
               </button>
             </span>
@@ -376,4 +471,11 @@ export default function KnowledgeModal({ characterId, characterName, onClose }: 
       )}
     </Modal>
   );
+}
+
+/** 付け外しの行が、保存した値ですでに知る行か(知った時刻だけを直す行)。 */
+function isSaved(saved: KnownRows, change: Change): boolean {
+  if (change.kind === "text") return saved.character_ids.includes(change.id);
+  if (change.kind === "character") return saved.character_histories.some((row) => row.id === change.id);
+  return saved.idea_histories.some((row) => row.id === change.id);
 }

@@ -256,7 +256,10 @@ export default function RecordPage() {
                     </a>
                   )}
                   {table === "character" && (
-                    <button onClick={() => setOrganizing(true)}>{T.knowledge.open}</button>
+                    // 自分の芯・来歴の知る相手も直すので、画面の編集中の値と食い違わないよう保存してから開く
+                    <button onClick={() => setOrganizing(true)} disabled={busy || dirty} title={dirty ? T.knowledge.openDisabled : undefined}>
+                      {T.knowledge.open}
+                    </button>
                   )}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
@@ -270,7 +273,12 @@ export default function RecordPage() {
             }
           />
           {organizing && (
-            <KnowledgeModal characterId={Number(id)} characterName={T.nameId(loaded.label, id)} onClose={() => setOrganizing(false)} />
+            <KnowledgeModal
+              characterId={Number(id)}
+              characterName={T.nameId(loaded.label, id)}
+              onClose={() => setOrganizing(false)}
+              onSaved={() => void load()}
+            />
           )}
         </div>
       )}

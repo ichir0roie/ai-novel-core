@@ -4,16 +4,19 @@ import pytest
 from pydantic import ValidationError
 
 from ai.claude_code import ai_client
-from data_access_logic.character.add_history_knowers import AddHistoryKnowers
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.delete_character import DeleteCharacter
-from data_access_logic.character.form import CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm
+from data_access_logic.character.form import (
+    CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm, KnowledgeChange, KnowledgeForm,
+)
 from data_access_logic.character.read_appearance import ReadAppearance
-from data_access_logic.character.read_knowable_histories import ReadKnowableHistories
+from data_access_logic.character.read_knowable_rows import ReadKnowableRows
+from data_access_logic.character.read_known_rows import ReadKnownRows
 from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
+from data_access_logic.character.update_knowledge import UpdateKnowledge
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode_session.add_turns import AddTurns
@@ -191,35 +194,41 @@ def test_read_knowledge_idea_history_only_by_knowers(shown, world, mock_ai):
     with get_env_session() as s:
         assert called(s, [idea["id"]], world.location_id, Stamp.parse("1200/01/01"))[idea["id"]].name == "古い数え方"
 
-def test_add_history_knowers(shown, world, mock_ai):
+def test_update_knowledge(shown, world, mock_ai):
     taro, hanako = world.character_ids
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, knowers=[KnowerRow(knower_id=hanako)], histories=[
         CharacterHistoryRow(start=1191, description="花子の打ち明け話", knowers=[KnowerRow(knower_id=hanako)]),
-        CharacterHistoryRow(start=1192, description="太郎がもう知る話", knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro)])])))
+        CharacterHistoryRow(start=1192, description="太郎が忘れる話", knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro)])])))
     idea = shown(CommitIdea(IdeaCreateForm(name="里の暗号", kind="概念", text="里だけの暗号", histories=[
-        IdeaHistoryRow(name="符丁", detail="里の者だけが使う")])))
-    character_rows = shown(ReadKnowableHistories(character_id=hanako))["character_histories"]
-    idea_rows = shown(ReadKnowableHistories(idea_id=idea["id"]))["idea_histories"]
-    assert [row["description"] for row in character_rows] == ["花子の打ち明け話", "太郎がもう知る話"]
-    assert [row["name"] for row in idea_rows] == ["符丁"]
+        IdeaHistoryRow(name="符丁", detail="里の者だけが使う", knowers=[KnowerRow(knower_id=taro, start="1150/01/01")])])))
+    rows = shown(ReadKnowableRows(character_id=hanako))
+    told, forgotten = (row["id"] for row in rows["character_histories"])
+    assert (rows["character"]["id"], rows["character"]["text"]) == (hanako, "テスト花子の説明")
+    idea_row = shown(ReadKnowableRows(idea_id=idea["id"]))["idea_histories"][0]
+    assert idea_row["name"] == "符丁"
 
-    added = shown(AddHistoryKnowers(knower_id=taro, character_history_ids=[row["id"] for row in character_rows],
-                                    idea_history_ids=[idea_rows[0]["id"]], start="1195/01/01"))
+    result = shown(UpdateKnowledge(KnowledgeForm(
+        knower_id=taro,
+        characters=[KnowledgeChange(id=hanako, known=True, start="1195/01/01")],
+        character_histories=[KnowledgeChange(id=told, known=True), KnowledgeChange(id=forgotten, known=False)],
+        # 知る相手に入っている行は、知った時刻だけを直す
+        idea_histories=[KnowledgeChange(id=idea_row["id"], known=True, start="1190/01/01")])))
 
-    # すでに知る相手に入っている行には足さない
-    assert added == {"character_history_ids": [character_rows[0]["id"]], "idea_history_ids": [idea_rows[0]["id"]]}
-    assert shown(ReadKnowableHistories(character_id=hanako))["character_histories"][0]["knowers"] == [
-        {"knower_id": hanako, "location_id": None, "start": None},
-        {"knower_id": taro, "location_id": None, "start": "1195/01/01 00:00:00"}]
-    result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
-    hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
-    assert _histories(hanako_known) == ["花子の打ち明け話", "太郎がもう知る話"]
-    assert "符丁" in [name["呼び名"] for known in result["知っているアイデア"] for name in known["知っている呼び名"]]
+    assert hanako in result["character_ids"]
+    histories = [row["id"] for row in result["character_histories"]]
+    assert told in histories and forgotten not in histories
+    assert result == shown(ReadKnownRows(knower_id=taro))
+    assert shown(ReadKnowableRows(idea_id=idea["id"]))["idea_histories"][0]["knowers"] == [
+        {"knower_id": taro, "location_id": None, "start": "1190/01/01 00:00:00"}]
+    knowledge = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
+    hanako_known = next(character for character in knowledge["知っている人物"] if character["名前"] == "テスト花子")
+    assert hanako_known["人物像"] == "テスト花子の説明"
+    assert _histories(hanako_known) == ["花子の打ち明け話"]
 
 
-def test_read_knowable_histories_needs_one_source():
+def test_read_knowable_rows_needs_one_source():
     with pytest.raises(ValueError):
-        ReadKnowableHistories()
+        ReadKnowableRows()
 
 
 def test_read_appearance(shown, world):

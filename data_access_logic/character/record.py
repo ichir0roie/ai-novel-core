@@ -120,8 +120,18 @@ class CharacterMove(BaseModel):
     location_id: int = Field(description="移動先の場所id")
 
 
+
+class CharacterTextEntry(Material):
+    """知る相手を直すために読む、人物の芯(`text`)とその知る相手(`ReadKnowableRows`)。"""
+
+    id: int
+    name: str | None = None
+    text: str | None = None
+    knowers: list[KnowerRow]
+
+
 class CharacterHistoryEntry(Material):
-    """知る相手を足すために、行を id で指せる人物の来歴の行(`ReadKnowableHistories`)。"""
+    """知る相手を直すために、行を id で指せる人物の来歴の行(`ReadKnowableRows`)。"""
 
     id: int
     character_id: int
@@ -131,7 +141,7 @@ class CharacterHistoryEntry(Material):
 
 
 class IdeaHistoryEntry(Material):
-    """知る相手を足すために、行を id で指せるアイデアの履歴の行(`ReadKnowableHistories`)。"""
+    """知る相手を直すために、行を id で指せるアイデアの履歴の行(`ReadKnowableRows`)。"""
 
     id: int
     idea_id: int
@@ -143,13 +153,27 @@ class IdeaHistoryEntry(Material):
     knowers: list[KnowerRow]
 
 
-class KnowableHistories(Material):
-    # 人物を渡したときはその来歴、アイデアを渡したときはその履歴だけが入る
+class KnowableRows(Material):
+    # 人物を渡したときはその芯と来歴、アイデアを渡したときはその履歴だけが入る
+    character: CharacterTextEntry | None = None
     character_histories: list[CharacterHistoryEntry]
     idea_histories: list[IdeaHistoryEntry]
 
 
-class AddedHistoryKnowers(Material):
-    # 知る相手に足した行の id(すでに知る相手に入っていた行は入らない)
-    character_history_ids: list[int]
-    idea_history_ids: list[int]
+class KnownCharacterHistory(Material):
+    id: int
+    character_id: int
+
+
+class KnownIdeaHistory(Material):
+    id: int
+    idea_id: int
+
+
+class KnownRows(Material):
+    """人物が知る相手の行(人物として直に入った行)を持つもの。場所として入った行は含まない(`ReadKnownRows`)。"""
+
+    # 芯を知る人物の id
+    character_ids: list[int]
+    character_histories: list[KnownCharacterHistory]
+    idea_histories: list[KnownIdeaHistory]
