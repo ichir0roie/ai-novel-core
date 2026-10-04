@@ -40,3 +40,12 @@ class SessionCleared(Material):
     episode_id: int
     # 消した行の数
     deleted: int
+
+
+class SessionIdeas(Material):
+    """語り部が足した語の行き先。本文は返さず、名前だけ(語り部は設定を読まない)。"""
+
+    # 候補のアイデアとして足したものの名前
+    added: list[str]
+    # 足さなかった語(既にあるアイデアに当たったか、人物・場所の名前)
+    kept: list[str]

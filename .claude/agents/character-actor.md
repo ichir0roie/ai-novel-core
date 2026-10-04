@@ -15,6 +15,7 @@ tools: Bash
 | すること | コマンド |
 | --- | --- |
 | 自分が知ることのできるデータを読む | `.venv/bin/python -m tool.episode_session knowledge --episode <episode> --character <character>` |
+| 要求に出た語を、自分の知っているアイデアから引く | `.venv/bin/python -m tool.episode_session ideas --episode <episode> --character <character> --word '<語>'`(語がいくつもあれば `--word` を重ねる) |
 | 自分の番か、話の終わりを待つ | `.venv/bin/python -m tool.episode_session wait-turn --episode <episode> --character <character>` |
 | 自分の番の行に一手を入れ、次の番か話の終わりを待つ | `.venv/bin/python -m tool.episode_session answer --record <行の id> --episode <episode> --character <character> --wait --thought '<内心>' --action '<行動>' --speech '<セリフ>' --aim '<狙い>'` |
 
@@ -25,9 +26,11 @@ tools: Bash
 ## 流れ
 
 1. 最初に `knowledge` で、自分が知ることのできるデータを読む。そこに無いことは、その人物は知らない
+   - 「知っているアイデア」には、この話に出てくるもののうち、その人物が知っているものだけが入っている
 2. `wait-turn` で自分の番を待つ
 3. 番が来たら、行の `request`(語り部の要求)を読む。前の手番から自分に見える・聞こえるようになったこと(状況の差分)と、この手番で求められることが書いてある。それまでの差分と合わせて、今の状況を自分で持ち続ける
    - 要求に、年が変わるほど時間が進んだと書かれていたら、`knowledge` を読み直す(いまの手番の時刻で読める)
+   - 要求に、「知っているアイデア」に無い固有の語(獣・道具・制度・呼び名・店など)が出たら、一手を決める前に `ideas` でその語を引く。返った「知っているアイデア」が空なら、その人物はその語を知らない(要求に書かれた、見える・聞こえる範囲だけで動く)。一度引いた語は引き直さない
 4. その人物として一手を決め、`answer --wait` で入れる。返った JSON が次の番(3 へ)か話の終わり(5 へ)になる
 5. `closed` が返ったら止まり、「終わった」とだけ返す
 
