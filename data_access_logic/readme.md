@@ -74,6 +74,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この下書きから人物を AI に作らせて」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None, plot_text=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢(0〜90歳。渡さなければ 0〜40歳)にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、没年は `main_character` を立てて渡したときだけ持たせる。`character` の `text` と `histories` の各行の説明は、人物像・役どころの下書きとして核にする。`character` に `id` を渡せば(GUI の詳細画面)、その人物の芯(`text`)が空のときに限り、決まっている名前・属性・出自を核に芯と来歴だけを書いて埋める(来歴の節目は今の行に足す。他の欄は変えない) |
 | 「この下書きから出来事を AI に作らせて」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None)`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、名前・場所・当事者から記録の本文だけを書いて埋める(`data_access_logic/event/writer.py`。他の欄は変えない) |
 | 「この人物の出自・居場所を足して」   | `character.commit_character_location.CommitCharacterLocation(location)`              |
+| 「この人物たちを〇〇へ移して」「話のあとで居場所を変えて」 | `character.move_characters.MoveCharacters(moves=[CharacterMove(character_id=…, location_id=…)], time=…)`(`CharacterMove` は `character.record`)。人物ごとに、`time` に続いている居場所の行を `time` で閉じ、移動先の行を `time` から足す(没年があればそこまで)。人物・場所が無ければ止める。出来事の生成・話の確定のあとの移動も、この書き換え(`character/moves.py` の `update_locations`)を使う |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`。`text` は時期を限らない関係の芯、関係の中で起きたことは起きた年ごとの `histories` の行に書く(下の「関係の芯と来歴」)。来歴を書き足すときは `UpdateCharacterRelation` に今の行ごと渡す(配列はまるごと置き換わる) |
 | 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea)`。本体は場所を持たず、効く場所は `histories` の行(非公開の行も含む)の `location_id` で持つ(行の無いアイデアはどこでも効く)。効く期間は本体の `start` / `end`(出来事の時刻と比べる。空なら限らない)。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を、場所のある最初の行の `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。本文は作者だけが読むので、確定のあとに AI(事実確認・ミームの抜き出し)を回さない。確定したアイデアを返す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
@@ -371,8 +372,8 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 世界ごとの文体の好み(`style_preference`)は使わない。
 当事者を省けば、その時刻にその場所にいて(`character_location`)、別の出来事の最中でない、生きているサブキャラクターから選ぶ。
 場所を名指しするので、場所の `active_random_generation` は見ない。作品の本文(筋書き)は渡さない。
-記録の段は、住まい・拠点が変わった人物ごとの移動先(`character_moves`。人物 id と場所 id の組のリスト)も返す。空なら居場所は変えず、あれば今の居場所の行を出来事の時刻で閉じ、移動先の行をその時刻から足す(`character/moves.py`)。移動先の候補は、出来事の場所から `constants.REACH_LEVELS` 段上までの配下で、その時刻にある場所。
-話も同じく、`CommitEpisode` で本文を確定したあとの段(`episode/moves.py`)が、本文の中で住まい・拠点が変わった登場人物ごとの移動先を AI に返させ、空でなければ話の時刻で居場所を移す(移動先の候補は話の場所から同じように引く)。
+記録の段は、住まい・拠点が変わった人物ごとの移動先(`character_moves`。人物 id と場所 id の組 `CharacterMove` のリスト)も返す。空なら居場所は変えず、あれば居合わせた人物と移動先の候補に当たる組だけで、今の居場所の行を出来事の時刻で閉じ、移動先の行をその時刻から足す(`character/moves.py` の `update_locations`)。移した組は `GenerateEvent` のレスポンスの `moves` に返る。移動先の候補は、出来事の場所から `constants.REACH_LEVELS` 段上までの配下で、その時刻にある場所。
+話も同じく、`CommitEpisode` で本文を確定したあとの段(`episode/moves.py`)が、本文の中で住まい・拠点が変わった登場人物ごとの移動先を AI に返させ、空でなければ話の時刻で居場所を移す(移動先の候補は話の場所から同じように引く)。移した組は `CommitEpisode` のレスポンスの `moves` に返る。
 出来事の候補は、出来事の種(`event_seed` テーブル)からランダムに引いた種か、直前の出来事からの連想で立てる。
 種は作品の本文・話のプロット(`plot_text`、無ければ本文)・人物の `plot`・出来事の本文から、時代・場所・固有名詞を抜いて抜き出したもの
 (`data_access_logic/event_seed/extractor.py` の `refresh`。`event_seeded` が false の元だけから抜き出して true にする。

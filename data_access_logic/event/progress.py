@@ -20,7 +20,7 @@ from ai.instructions.naming import PLACE_NAMING_INSTRUCTION, fill_name_placehold
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
-from data_access_logic.character.moves import apply_moves
+from data_access_logic.character.moves import allowed_moves
 from data_access_logic.character.histories import add_history
 from data_access_logic.event.progress_models import (
     CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, LocationSituationMaterial,
@@ -144,9 +144,9 @@ def save_progress(
 ) -> Event:
     by_id = {character.id: character for character in characters}
     involved_ids = list(dict.fromkeys(character_id for character_id in draft.character_ids if character_id in by_id))
-    # 移した人物も当事者に入れる
-    moved = apply_moves(s, draft.character_moves, characters, destinations, time)
-    involved_ids.extend(move.character_id for move in moved if move.character_id not in involved_ids)
+    # 居場所を移す人物も当事者に入れる(移すのは流れが `character.steps.move_characters` で行う)
+    moves = allowed_moves(draft.character_moves, by_id, [destination.id for destination in destinations])
+    involved_ids.extend(move.character_id for move in moves if move.character_id not in involved_ids)
 
     end = time.plus_days(draft.event_duration_days)
     record = Event(

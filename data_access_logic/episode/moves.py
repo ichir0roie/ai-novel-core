@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """話の本文を確定したあと、本文の中で住まい・拠点が変わった登場人物の移動先を AI に返させる(`character/moves.py`)。
 
-db だけの段(`moves_material` → `save_moves`)と AI だけの段(`moves_draft`)に分けてあり、流れ(`flows/commit.py`)がつなぐ。
+db だけの段(`moves_material`)と AI だけの段(`moves_draft`)に分けてあり、流れ(`flows/commit.py`)がつないで、
+居場所は `character.steps.move_characters` で移す。
 """
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer
 from sqlalchemy.orm import Session
 
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.moves import CharacterMove, apply_moves, move_destinations
+from data_access_logic.character.moves import move_destinations
+from data_access_logic.character.record import CharacterMove
 from data_access_logic.episode.material import episode_location_id, load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.location.models import LocationMaterial
@@ -96,12 +98,3 @@ def moves_draft(ai: AIClient, material: EpisodeMovesMaterial) -> list[CharacterM
         logger.warning(f"話 id={material.episode_id} の移動先が得られなかったので、居場所は変えない")
         return []
     return draft.character_moves
-
-
-def save_moves(s: Session, episode_id: int, moves: list[CharacterMove]) -> list[CharacterMove]:
-    """登場人物と移動先の候補に当たる移動だけを書く。書いた分を返す。"""
-    episode = load_episode(s, episode_id)
-    location_id = episode_location_id(episode)
-    if episode.start is None or location_id is None:
-        return []
-    return apply_moves(s, moves, cast_characters(episode), move_destinations(s, location_id, episode.start), episode.start)

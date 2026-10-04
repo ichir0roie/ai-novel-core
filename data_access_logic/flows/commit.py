@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
+from data_access_logic.character import steps as character_steps
+from data_access_logic.character.moves import allowed_moves
+from data_access_logic.character.record import CharacterMove
 from data_access_logic.episode import moves as episode_moves
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeCommitForm
-from data_access_logic.episode.record import EpisodeRecord
+from data_access_logic.episode.record import CommittedEpisode
 from data_access_logic.event import steps as event_steps
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
 from data_access_logic.event.record import EventRecord
@@ -27,18 +30,26 @@ from data_access_logic.caller import call
 from data_access_logic.flows.summary import rewrite_episode_summaries, rewrite_event_summaries
 
 
-def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> EpisodeRecord:
-    """本文を渡したときは、本文の中で住まい・拠点が変わった登場人物の居場所も移す(移動先が空なら何もしない)。"""
+def _move_cast(ai: AIClient, episode_id: int) -> list[CharacterMove]:
+    """本文の中で住まい・拠点が変わった登場人物の移動先を AI に返させ、登場人物と移動先の候補に当たるものだけで居場所を移す。"""
+    material = call(episode_steps.moves_material, RowId(id=episode_id))
+    if material is None:
+        return []
+    moves = allowed_moves(episode_moves.moves_draft(ai, material), [member.id for member in material.cast],
+                          [destination.id for destination in material.destinations])
+    if not moves:
+        return []
+    return call(character_steps.move_characters, character_steps.MovesForm(moves=moves, time=material.time))
+
+
+def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> CommittedEpisode:
+    """本文を渡したときは、本文の中で住まい・拠点が変わった登場人物の居場所も移し、その移動先をレスポンスの `moves` に返す
+    (移動先が空なら何もしない)。"""
     record = call(episode_steps.commit_episode, episode)
     meme.refresh(ai)
     rewrite_episode_summaries(ai, [record.id])
-    if episode.main_text is not None:
-        material = call(episode_steps.moves_material, RowId(id=record.id))
-        if material is not None:
-            character_moves = episode_moves.moves_draft(ai, material)
-            if character_moves:
-                call(episode_steps.save_moves, episode_steps.MovesForm(episode_id=record.id, moves=character_moves))
-    return record
+    moved = _move_cast(ai, record.id) if episode.main_text is not None else []
+    return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved})
 
 
 def commit_event(event: EventCreateForm, ai: AIClient = ai_client) -> EventRecord:

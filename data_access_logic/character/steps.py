@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from data_access_logic import constants
 from data_access_logic.character import generator
 from data_access_logic.character.generator_models import BirthSources, CharacterCreation, CharacterWriting, CompletionTarget
-from data_access_logic.character.record import CharacterRecord
+from data_access_logic.character.moves import update_locations
+from data_access_logic.character.record import CharacterMove, CharacterRecord
 from data_access_logic.query import common_query, world_creation_query
 from data_access_logic.step import RowId, RowIds, db_step
 from db.schema import Location
@@ -30,6 +31,12 @@ class BirthSourcesForm(BaseModel):
 
 class ResidentRoomsForm(BaseModel):
     location_ids: list[int]
+    time: Stamp
+
+
+class MovesForm(BaseModel):
+    moves: list[CharacterMove]
+    # 移した時刻
     time: Stamp
 
 
@@ -87,3 +94,8 @@ def completion_target(s: Session, form: RowId) -> CompletionTarget:
 @db_step
 def save_completed_text(s: Session, form: CompletedTextForm) -> CharacterRecord:
     return CharacterRecord.model_validate(generator.save_completed_text(s, form.id, form.writing))
+
+
+@db_step
+def move_characters(s: Session, form: MovesForm) -> list[CharacterMove]:
+    return update_locations(s, form.moves, form.time)

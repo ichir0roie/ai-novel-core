@@ -5,7 +5,7 @@ from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import Entrypoint
 from data_access_logic.event.form import EventForm
-from data_access_logic.event.record import EventRecord
+from data_access_logic.event.record import GeneratedEvent
 from data_access_logic.flows import event
 
 
@@ -25,5 +25,5 @@ class GenerateEvent(Entrypoint):
         self.seed = seed
         self.ai = ai
 
-    def result(self) -> EventRecord:
+    def result(self) -> GeneratedEvent:
         return event.generate_event(self.event, self.seed, self.ai)

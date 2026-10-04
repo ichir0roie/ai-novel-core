@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 from ai.instructions.event_writing import EVENT_DURATION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.character.models import ParticipantMaterial, ParticipantSerialized
-from data_access_logic.character.moves import CharacterMove
+from data_access_logic.character.record import CharacterMove
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
