@@ -166,10 +166,7 @@ export default function IdeaTree() {
 
   const onDelete = useCallback(
     async (node: IdeaNode) => {
-      const hasChildren = node.children.length > 0;
-      if (hasChildren) {
-        if (!window.confirm(T.ideaTree.confirmDeleteWithChildren(T.nameId(node.name, node.id), node.children.length))) return;
-      }
+      if (!window.confirm(T.record.confirmDeleteIdea(T.nameId(node.name, node.id), node.children.length))) return;
       setSaveError(null);
       try {
         await deleteIdeaDetachingChildren(node.id, node.children.map((child) => child.id));

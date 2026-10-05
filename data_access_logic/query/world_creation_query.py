@@ -11,9 +11,10 @@ from db.schema import (
 )
 
 
-def siblings_area_sum_select(parent_id: int) -> Select:
-    return (select(func.coalesce(func.sum(Location.area), 0))
-            .where(Location.parent_id == parent_id))
+def siblings_area_sum_select(parent_id: int, exclude_id: int | None = None) -> Select:
+    query = (select(func.coalesce(func.sum(Location.area), 0))
+             .where(Location.parent_id == parent_id))
+    return query if exclude_id is None else query.where(Location.id != exclude_id)
 
 
 def busy_character_ids_select(time: Stamp) -> Select:

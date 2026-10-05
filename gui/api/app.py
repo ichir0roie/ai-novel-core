@@ -85,11 +85,6 @@ def session_dep() -> Iterator[Session]:
         yield s
 
 
-@app.exception_handler(KeyError)
-async def _unknown_table(_request: Request, error: KeyError):
-    return JSONResponse(status_code=404, content={"detail": str(error.args[0]) if error.args else "not found"})
-
-
 @app.exception_handler(UnknownRecordError)
 async def _unknown_record(_request: Request, error: UnknownRecordError):
     return JSONResponse(status_code=404, content={"detail": str(error)})
@@ -113,11 +108,17 @@ async def _bad_bound_value(_request: Request, error: StatementError):
     return JSONResponse(status_code=500, content={"detail": str(error)})
 
 
+# ロック待ちの打ち切り・デッドロック・直列化の失敗。少し待って再試行してもらう
+_DB_BUSY_SQLSTATES = {"55P03", "40P01", "40001"}
+
+
 @app.exception_handler(OperationalError)
 async def _db_busy(_request: Request, error: OperationalError):
-    # 他のセッションが書き込み中。少し待って再試行してもらう
-    status = 503 if "locked" in str(error) else 500
-    return JSONResponse(status_code=status, content={"detail": str(error.orig or error)})
+    if getattr(error.orig, "sqlstate", None) in _DB_BUSY_SQLSTATES:
+        return JSONResponse(status_code=503, content={"detail": "db is busy; retry later"})
+    # 接続先などの db の内部を呼ぶ側へ出さない
+    logger.error("db の操作に失敗した", exc_info=error)
+    return JSONResponse(status_code=500, content={"detail": "db operation failed"})
 
 
 @app.get("/api/ping")

@@ -147,9 +147,7 @@ export default function RecordPage() {
         ? T.record.confirmDeleteEpisode(label)
         : table === "character_skill"
           ? T.record.confirmDeleteSkill(label)
-          : childIds.length > 0
-            ? T.ideaTree.confirmDeleteWithChildren(label, childIds.length)
-            : T.record.confirmDeleteIdea(label);
+          : T.record.confirmDeleteIdea(label, childIds.length);
     if (!window.confirm(message)) return;
     setBusy(true);
     try {
