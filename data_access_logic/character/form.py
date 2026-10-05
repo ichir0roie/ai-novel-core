@@ -5,7 +5,6 @@ from pydantic import Field, field_validator, model_validator
 from data_access_logic.character.record import (
     CharacterHistoryRow, CharacterLocationRow, CharacterParameterRow, CharacterRelationHistoryRow,
 )
-from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
 
@@ -76,8 +75,6 @@ class CharacterCreateForm(Form):
     end: Timestamp | None = None
     parameters: list[CharacterParameterRow] = []
     histories: list[CharacterHistoryRow] = []
-    # 本文(`text`)を知る相手。本人はいつも入るので、ここには本人のほかの相手を渡す
-    knowers: list[KnowerRow] = []
 
 
 class CharacterUpdateForm(Form):
@@ -97,8 +94,6 @@ class CharacterUpdateForm(Form):
     parameters: list[CharacterParameterRow] | None = None
     locations: list[CharacterLocationRow] | None = None
     histories: list[CharacterHistoryRow] | None = None
-    # 渡すとまるごと置き換える(本人も知る相手に入れるなら、本人の行も渡す)
-    knowers: list[KnowerRow] | None = None
 
 
 class CharacterLocationCreateForm(Form):
@@ -146,7 +141,7 @@ class CharacterRelationUpdateForm(Form):
 
 
 class KnowledgeChange(Form):
-    # 知られる行の id(人物の芯なら人物の id、来歴・履歴ならその行の id)
+    # 知られる来歴・履歴の行の id
     id: int
     # true なら知る相手に入れ(入っていれば知った時刻を直す)、false なら外す
     known: bool
@@ -155,9 +150,8 @@ class KnowledgeChange(Form):
 
 
 class KnowledgeForm(Form):
-    """人物が知るもの(ほかの人物の芯・人物の来歴・アイデアの履歴)の知る相手の付け外しを、まとめて渡す(GUI の知識整理)。"""
+    """人物が知るもの(人物の来歴・アイデアの履歴)の知る相手の付け外しを、まとめて渡す(GUI の知識整理)。"""
 
     knower_id: Annotated[int, References("character")]
-    characters: list[KnowledgeChange] = []
     character_histories: list[KnowledgeChange] = []
     idea_histories: list[KnowledgeChange] = []

@@ -3,14 +3,14 @@
 人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
 来歴の起きた年は、その時刻から何年前かで渡す。
 
-本文・人物の来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
+人物の来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
 場所ならその時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
 人物の来歴はその時刻までに起きた行だけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
-本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と、知っていれば芯を渡す。plot はだれにも渡さない。
+本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
 """
 from __future__ import annotations
 
@@ -115,7 +115,6 @@ def appearance_of(character: Character, time: Stamp) -> AppearanceSerialized:
 class KnownSelf(Material):
     name: str | None = None
     looks: AppearanceSerialized
-    # 本人も知らない芯(記憶を失った人物など)なら空
     text: str | None = None
     meme: str | None = None
     principle: str | None = None
@@ -125,7 +124,6 @@ class KnownSelf(Material):
 class KnownCharacter(Material):
     name: str | None = None
     looks: AppearanceSerialized
-    # 知らない芯なら空
     text: str | None = None
     histories: list[KnownHistory]
 
@@ -245,16 +243,15 @@ def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> 
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)]
-    knows_oneself = knows(character.knowers, viewer)
     return KnowledgeSerialized(
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(character, time),
-                     text=character.text if knows_oneself else None, meme=character.meme, principle=character.principle,
+                     text=character.text, meme=character.meme, principle=character.principle,
                      histories=known_histories(character.histories, viewer)),
         parameters=parameters_at(character, time),
         relations=relations_at(s, [character], time),
         characters=[KnownCharacter(name=other.name, looks=appearance_of(other, time),
-                                   text=other.text if knows(other.knowers, viewer) else None,
+                                   text=other.text,
                                    histories=known_histories(other.histories, viewer))
                     for other in others],
         ideas=_ideas(s, viewer, _in_text(plot_text)),
