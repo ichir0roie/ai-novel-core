@@ -75,6 +75,9 @@ export const T = {
     saveAndBack: "Save and back",
     save: "Save",
     emptySection: "(empty — click to edit)",
+    edit: "Edit",
+    expand: "Click to show all",
+    collapse: "Click to fold",
     ageAt: "Age",
     ageInYear: (age: number) => `(age ${age})`,
     delete: "Delete",
@@ -230,6 +233,18 @@ export const T = {
     remove: "Remove this knower",
     location: "location: ",
     since: (start: string) => `(from ${start})`,
+  },
+
+  skills: {
+    title: (name: string) => `Skills — ${name}`,
+    add: "+ Add skill",
+    none: "No skills yet",
+    unsaved: "new (not saved)",
+    openRecord: "Open this skill's page in a new tab",
+    changes: (n: number) => `${n} skill${n === 1 ? "" : "s"} changed`,
+    saved: (n: number) => `Saved ${n} skill${n === 1 ? "" : "s"}`,
+    failed: (error: string) => `Could not save: ${error}`,
+    confirmDiscard: (n: number) => `Discard unsaved changes to ${n} skill${n === 1 ? "" : "s"}?`,
   },
 
   knowledge: {

@@ -211,7 +211,7 @@ export default function RecordPage() {
             side={
               <Related
                 related={loaded.related ?? {}}
-                owner={{ table, id }}
+                owner={{ table, id, label: T.nameId(loaded.label, id) }}
                 {...(table === "episode"
                   ? {
                       characterIds: (value.character_ids as number[] | null) ?? [],

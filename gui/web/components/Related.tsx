@@ -1,10 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import EpisodeContext from "@/components/EpisodeContext";
+import SkillsModal from "@/components/SkillsModal";
 import { T } from "@/lib/text";
 
 type EpisodeLink = { table: string; id: number; label: string; synced: boolean; letters: number };
 
-type Owner = { table: string; id: number | string };
+/** label は見出しに出す名前(スキルのモーダルの題に使う) */
+type Owner = { table: string; id: number | string; label?: string };
 
 type EpisodeCharactersProps = {
   characterIds: number[];
@@ -25,7 +30,8 @@ export default function Related({
     : owner?.table === "episode" && episodeStoryId != null
       ? { href: `/maps?story=${episodeStoryId}&episode=${owner.id}`, ...T.related.episodeRoute }
     : null;
-  const skills = owner?.table === "character" ? { href: `/tables/character_skill?character_id=${owner.id}`, ...T.related.skills } : null;
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const skills = owner?.table === "character" ? owner : null;
   const hasContext = context && Object.values(context).some((block) => block.items.length > 0);
   const showCharacters = characterIds !== undefined && onChangeCharacterIds !== undefined;
   if (!episodes && !graph && !hasContext && !showCharacters) return null;
@@ -40,10 +46,10 @@ export default function Related({
             </Link>
           )}
           {skills && (
-            <Link href={skills.href} className="jump">
-              <span className="jump-title">{skills.title}</span>
-              <span className="jump-sub">{skills.sub}</span>
-            </Link>
+            <button type="button" className="jump" onClick={() => setSkillsOpen(true)}>
+              <span className="jump-title">{T.related.skills.title}</span>
+              <span className="jump-sub">{T.related.skills.sub}</span>
+            </button>
           )}
           {episodes && owner?.table === "story" && (
             <Link href={`/tables/episode?story_id=${owner.id}`} className="jump">
@@ -55,6 +61,9 @@ export default function Related({
             </Link>
           )}
         </div>
+      )}
+      {skills && skillsOpen && (
+        <SkillsModal characterId={Number(skills.id)} characterName={skills.label ?? T.idMark(skills.id)} onClose={() => setSkillsOpen(false)} />
       )}
       {(hasContext || showCharacters) && (
         <EpisodeContext
