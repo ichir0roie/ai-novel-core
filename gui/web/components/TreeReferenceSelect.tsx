@@ -14,7 +14,6 @@ type Props = {
   value: number | null;
   nullable: boolean;
   onChange: (value: number | null) => void;
-  disabled?: boolean;
   // 選ぶモーダルの見出し(欄の名前)
   title?: string;
 };
@@ -78,7 +77,7 @@ function matchedSubtrees(nodes: OptionNode[], matches: (node: OptionNode) => boo
 
 /** 場所・アイデアのように親子を持つテーブルの参照選択。押すとモーダルに親子のツリーを大きく表示し、
  * クリックした行を選ぶ。絞り込み文字列があるあいだは、一致した行とその子孫だけのツリーにする。 */
-export default function TreeReferenceSelect({ table, value, nullable, onChange, disabled, title }: Props) {
+export default function TreeReferenceSelect({ table, value, nullable, onChange, title }: Props) {
   const options = useOptions(table);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -107,7 +106,6 @@ export default function TreeReferenceSelect({ table, value, nullable, onChange, 
         label={value !== null ? T.nameId(current?.label, value) : nullable ? T.none : T.select}
         empty={value === null}
         onClick={() => setOpen(true)}
-        disabled={disabled}
       />
       {value !== null && <RecordLink table={table} id={value} />}
       {open && (

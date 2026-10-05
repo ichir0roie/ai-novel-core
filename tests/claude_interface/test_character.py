@@ -27,7 +27,8 @@ from data_access_logic.character.record import (
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
-from db.schema import PersonalityLevel, Stamp, get_env_session
+from db.schema import PersonalityLevel, get_env_session
+from db.stamp import Stamp
 
 _LEVELS = {
     "sincerity": PersonalityLevel.HIGH, "curiosity": PersonalityLevel.LOW, "proactivity": PersonalityLevel.MUST,

@@ -14,14 +14,14 @@ from typing import Any
 
 import httpx
 from fastapi import Body, Depends, FastAPI, Query, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
 from data_access_logic import step
 from data_access_logic.character.latest_locations import latest_location_ids
 from data_access_logic.character.location_characters import location_character_ids
-from data_access_logic.character.relation_graph import relation_graph
+from data_access_logic.character.relation_graph import RELATION_COLORS, relation_graph
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.episode import reading as episode_reading
 from data_access_logic.episode.record import EpisodeRecord
@@ -29,13 +29,12 @@ from data_access_logic.logs import configure_logging
 from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from data_access_logic.map.collect import planet_maps
 from data_access_logic.map.geometry import BEARINGS
-from data_access_logic.map.render_svg import COLORS, render_svg
 from data_access_logic.map.story_route import StoryRoute, story_route
-from db.schema import engine, get_env_session
+from db.schema import get_env_session
 from db.stamp import Stamp
 from gui.api import interface, meta, records, timeline
 from gui.api.models import (
-    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Created, EntranceList, EntranceMeta, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
+    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, EntranceList, EntranceMeta, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
     RunRequest, RunResult, TablesResponse, TimelineResponse,
 )
 from gui.api.tables import spec_of
@@ -124,11 +123,6 @@ async def _db_busy(_request: Request, error: OperationalError):
 @app.get("/api/ping")
 def ping() -> dict[str, bool]:
     return {"ok": True}
-
-
-@app.get("/api/health", response_model=Health)
-def health() -> Health:
-    return Health(dialect=engine.dialect.name)
 
 
 @app.get("/api/tables", response_model=TablesResponse)
@@ -225,14 +219,6 @@ def maps(s: Session = Depends(session_dep)) -> MapsResponse:
                         bearings=list(BEARINGS))
 
 
-@app.get("/api/maps/{planet_id}.svg")
-def map_svg(planet_id: int, s: Session = Depends(session_dep)) -> Response:
-    for planet_map in planet_maps(s):
-        if planet_map.planet.id == planet_id:
-            return Response(render_svg(planet_map.planet, planet_map.points, planet_map.shapes), media_type="image/svg+xml")
-    raise UnknownRecordError(f"id={planet_id} の星に地図が無い(座標を持つ場所が無いか、星でない)")
-
-
 @app.get("/api/story_route", response_model=StoryRoute)
 def get_story_route(story_id: int, s: Session = Depends(session_dep)) -> StoryRoute:
     """作品の話を順に並べ、それぞれを地図に置く位置。地図(`/maps?story=`)が場所の移り変わりを描く"""
@@ -243,7 +229,7 @@ def get_story_route(story_id: int, s: Session = Depends(session_dep)) -> StoryRo
 def relations(s: Session = Depends(session_dep)) -> RelationsResponse:
     """人物相関図の元データ。画面(`/relations`)が描く"""
     graph = relation_graph(s)
-    return RelationsResponse(characters=graph.characters, relations=graph.relations, colors=list(COLORS))
+    return RelationsResponse(characters=graph.characters, relations=graph.relations, colors=list(RELATION_COLORS))
 
 
 @app.get("/api/character_locations", response_model=CharacterLocationsResponse)
@@ -279,6 +265,3 @@ def previous_episode(story_id: int, before: str | None = None,
 def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> episode_reading.EpisodeNeighbors:
     """同じ作品の時刻の順で前後の話。話の画面のタイトルの横の移動ボタンが使う"""
     return episode_reading.neighbor_episodes(s, episode_id)
-
-
-_ = Created  # OpenAPI に出す型として残す

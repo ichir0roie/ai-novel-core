@@ -25,8 +25,6 @@ class ColumnMeta(BaseModel):
     # 本文とは別に参照するだけの短いメモ)
     side: bool = False
     choices: list[str] | None = None
-    # choices のうち、空欄のときに実際に使われる値(プルダウンにその選択肢だと分かるよう "(default)" を添える)
-    default: str | None = None
     # 他のテーブルの id を指すなら、そのテーブル名
     references: str | None = None
     readonly: bool = False
@@ -126,14 +124,6 @@ class TimelineResponse(BaseModel):
     # 一覧(`RecordList`)の一行と同じ形
     items: list[dict[str, Any]]
     labels: dict[str, dict[int, str]] = Field(default_factory=dict)
-
-
-class Health(BaseModel):
-    dialect: str
-
-
-class Created(BaseModel):
-    id: int
 
 
 class EntranceParam(BaseModel):

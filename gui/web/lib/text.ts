@@ -25,7 +25,6 @@ export const T = {
   no: "No",
   zoom: "Zoom",
   invalidJson: (error: string) => `Invalid JSON: ${error}`,
-  cannotReachApi: (error: string) => `Cannot reach API: ${error} (check that uvicorn is running)`,
   signInRequired: "Sign in required.",
   span,
   idMark,
@@ -113,9 +112,7 @@ export const T = {
   endpoints: {
     title: "Call endpoint",
     area: {
-      world: "Read world",
       story: "Stories / episodes",
-      randomizer: "Add / edit / delete",
       idea: "Idea staging",
       meme: "Memes",
       review: "Review",
@@ -204,10 +201,6 @@ export const T = {
     collapseAll: "Collapse all",
     delete: "Delete",
     deleteFailed: (error: string) => `Could not delete: ${error}`,
-    previousEpisode: "◀ Prev",
-    nextEpisode: "Next ▶",
-    noPreviousEpisode: "No earlier episode in this story",
-    noNextEpisode: "No later episode in this story",
   },
 
   picker: {
@@ -312,7 +305,6 @@ export const T = {
 
   timeline: {
     title: "Timeline",
-    centeredOn: (at: string) => `Timeline around ${at}`,
     center: "Center",
     scale: "Scale",
     years: (n: number) => `${n} year${n === 1 ? "" : "s"}`,

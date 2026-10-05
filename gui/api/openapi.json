@@ -27,24 +27,6 @@
         }
       }
     },
-    "/api/health": {
-      "get": {
-        "summary": "Health",
-        "operationId": "health_api_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Health"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/tables": {
       "get": {
         "summary": "Tables",
@@ -590,43 +572,6 @@
         }
       }
     },
-    "/api/maps/{planet_id}.svg": {
-      "get": {
-        "summary": "Map Svg",
-        "operationId": "map_svg_api_maps__planet_id__svg_get",
-        "parameters": [
-          {
-            "name": "planet_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Planet Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/story_route": {
       "get": {
         "summary": "Get Story Route",
@@ -1082,17 +1027,6 @@
             ],
             "title": "Choices"
           },
-          "default": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default"
-          },
           "references": {
             "anyOf": [
               {
@@ -1415,19 +1349,6 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
-      },
-      "Health": {
-        "properties": {
-          "dialect": {
-            "type": "string",
-            "title": "Dialect"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dialect"
-        ],
-        "title": "Health"
       },
       "LocationCharactersResponse": {
         "properties": {

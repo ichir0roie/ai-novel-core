@@ -377,7 +377,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 前日譚をここで閉じる。父の顔は最後まで見せない。
 ```
-- 星ごとの地図と人物相関図は GUI の画面 `/maps`・`/relations` で描く(星ごとの svg は `/api/maps/{id}.svg`)
+- 星ごとの地図と人物相関図は GUI の画面 `/maps`・`/relations` で描く
 - 場所の輪郭は `polygon` 欄(GeoJSON の Polygon。`[[経度, 緯度], ...]` の環を渡せば
   閉じて揃える)で `CommitLocation` / `UpdateLocation` から入れる。経緯度が無い面の場所
   (大陸など)にも持たせられ、地図では薄い面として描く

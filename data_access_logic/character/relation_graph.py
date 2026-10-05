@@ -10,6 +10,10 @@ from data_access_logic.character.parameters import parameters_at
 from db.schema import Character, CharacterRelation
 from db.stamp import Stamp
 
+# 人物相関図の色。地図の色は区分ごとの `map.category.CATEGORY_COLORS`
+RELATION_COLORS = ("#c0392b", "#2471a3", "#1e8449", "#b9770e", "#7d3c98",
+                   "#148f77", "#a04000", "#5d6d7e", "#d4ac0d", "#884ea0")
+
 
 class RelationCharacter(BaseModel):
     id: int

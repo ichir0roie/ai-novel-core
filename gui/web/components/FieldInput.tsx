@@ -54,7 +54,6 @@ type Props = {
   value: unknown;
   onChange: (value: unknown) => void;
   compact?: boolean;
-  disabled?: boolean;
   /** 本文(section)欄の高さを、枠いっぱい(既定)ではなく中身の行数ぶんにする。
    * すぐ下に続けて出す一覧(アイデアの呼び名など)のために空間を残したいときに使う。 */
   autoHeight?: boolean;
@@ -64,7 +63,7 @@ type Props = {
   defaultIds?: number[] | null;
 };
 
-function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
+function JsonInput({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
   const [text, setText] = useState(value == null ? "" : JSON.stringify(value, null, 2));
   const [error, setError] = useState<string | null>(null);
   // 親が値を差し替えたら(読み直し・戻す)、表示中の文字列も追従させる
@@ -88,15 +87,14 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   };
   return (
     <>
-      <textarea className="mono" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} disabled={disabled} />
+      <textarea className="mono" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} />
       {error && <span className="error">{T.invalidJson(error)}</span>}
     </>
   );
 }
 
-export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, collapsible, defaultIds }: Props) {
-  const readonly = disabled || column.readonly;
-  if (readonly) {
+export default function FieldInput({ column, value, onChange, compact, autoHeight, collapsible, defaultIds }: Props) {
+  if (column.readonly) {
     return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
   }
 
@@ -110,14 +108,11 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
     return <ReferenceSelect table={column.references} value={(value as number | null) ?? null} nullable={column.nullable} onChange={onChange} defaultIds={defaultIds} title={column.key} />;
   }
   if (column.choices) {
-    // 値がまだ無ければ、選択肢の既定値(column.default)を選んだものとして出す(何も選ばず実行すれば、
-    // 入口側もこの既定値を使うので見た目と動きが揃う)
-    const shown = (value as string | null) ?? column.default ?? null;
     return (
       <ChoicePicker
         title={column.key}
-        choices={column.choices.map((choice) => ({ value: choice, label: choice === column.default ? `${choice} (default)` : choice }))}
-        value={shown}
+        choices={column.choices.map((choice) => ({ value: choice, label: choice }))}
+        value={(value as string | null) ?? null}
         onChange={onChange}
         emptyLabel={column.nullable ? T.none : undefined}
         placeholder={column.nullable ? column.comment ?? T.none : T.select}
@@ -146,7 +141,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
     return <JsonInput value={value} onChange={onChange} />;
   }
   if (column.type === "stamp") {
-    return <StampInput value={(value as string | null) ?? null} onChange={onChange} disabled={disabled} />;
+    return <StampInput value={(value as string | null) ?? null} onChange={onChange} />;
   }
   if (column.section && !compact) {
     return column.markdown === false ? (

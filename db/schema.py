@@ -6,33 +6,11 @@ import hashlib
 import os
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Integer, String, DECIMAL, JSON, TypeDecorator,
-    event,
-    create_engine,
-    ForeignKey,
-    UniqueConstraint,
-    select,
-    Select,
-    update,
-    or_,
-    and_,
-    delete,
+    BigInteger, Boolean, CheckConstraint, DECIMAL, ForeignKey, Integer, String, TypeDecorator, UniqueConstraint,
+    create_engine, event,
 )
-from sqlalchemy.orm import (
-    Session,
-    joinedload,
-    selectinload,
-    lazyload,
-    DeclarativeBase,
-    Mapped,
-    mapped_column,
-    relationship,
-    validates,
-)
-
-from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.engine import make_url
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, validates
 
 from db.polygon import parse_polygon
 from db.stamp import Stamp
@@ -57,18 +35,13 @@ class StampType(TypeDecorator):
 
 class PolygonType(TypeDecorator):
 
-    impl = JSON
+    # PostgreSQL の json は等値の演算子を持たず、行ごとの DISTINCT・GROUP BY で落ちるので jsonb にする
+    impl = JSONB
     cache_ok = True
 
     def __init__(self):
         # 既定だと None が JSON の 'null' 文字列で入り、IS NULL で引けなくなる
         super().__init__(none_as_null=True)
-
-    def load_dialect_impl(self, dialect):
-        # PostgreSQL の json は等値の演算子を持たず、行ごとの DISTINCT・GROUP BY で落ちるので jsonb にする
-        if dialect.name == "postgresql":
-            return dialect.type_descriptor(JSONB(none_as_null=True))
-        return dialect.type_descriptor(JSON(none_as_null=True))
 
     def process_bind_param(self, value, dialect):
         return parse_polygon(value)
@@ -76,8 +49,6 @@ class PolygonType(TypeDecorator):
 
 class Base(DeclarativeBase):
 
-    # SQLite は「INTEGER PRIMARY KEY」だけを rowid の別名として autoincrement する。
-    # Integer だと型名が INTEGER と一致せず insert のたびに id が NULL のまま失敗する。
     # sort_order は列の並び順を明示するための番号。継承の段が一段深くなるごとに
     # 開始値を 100 増やし、同じクラス内では 10 刻みで振る(あとで列を挟みやすい)。
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
@@ -196,12 +167,6 @@ class Event(EventSeededMixin, MemeSeededMixin, TextBase):
     start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
-    parent_event: Mapped["Event | None"] = relationship(
-        remote_side="Event.id", back_populates="child_events", lazy="noload"
-    )
-    child_events: Mapped[list["Event"]] = relationship(
-        back_populates="parent_event", lazy="noload", cascade="all, delete-orphan"
-    )
     summary: Mapped["EventSummary | None"] = relationship(lazy="noload", viewonly=True)
 
 
@@ -331,15 +296,11 @@ class PersonalityLevelOption(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, sort_order=10)
 
 
+# マイグレーション(7e4ab2f14e6c)が読む
 PERSONALITY_COLUMNS = (
     "sincerity", "curiosity", "proactivity", "cooperativeness", "sociability",
     "emotional_expression", "self_esteem", "self_efficacy", "stress_resilience",
     "flexibility_of_values", "sensitivity", "imagination",
-)
-
-
-PERSON_PARAMETER_COLUMNS = (
-    "family_name", "sex", "height", "build", "first_person", "second_person", "third_person", "tone", "dialect",
 )
 
 
@@ -439,10 +400,6 @@ class Character(EventSeededMixin, ContentBase):
         order_by="CharacterHistory.start.desc().nulls_last()",
         doc="来歴を、起きた年ごとに一行で持つ。話・出来事には、その時刻の年までに始まった行だけを渡す。"
         "年が空の行は構想で、作者だけが読む。行は知る相手だけが知る"
-    )
-    events: Mapped[list[Event]] = relationship(
-        secondary="event_character", viewonly=True, lazy="noload",
-        order_by="Event.start.desc().nulls_last()"
     )
 
 
@@ -918,8 +875,6 @@ def database_url() -> str:
 
 
 def make_url_engine(url: str, iam_auth: bool = False):
-    if make_url(url).get_backend_name() == "sqlite":
-        return create_engine(url)
     # Lambda は凍結をはさんで接続を使い回し、手元の転送は 1 時間で張り直すので、切れた接続を使う前に確かめる
     engine = create_engine(url, pool_pre_ping=True, pool_recycle=300)
     if iam_auth:

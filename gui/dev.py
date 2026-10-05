@@ -280,14 +280,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         api = spawn_api()
         web = spawn_web()
-        if not (_wait_for(args.api_port, "API", api, "/api/health") and _wait_for(args.web_port, "画面", web)):
+        if not (_wait_for(args.api_port, "API", api, "/api/ping") and _wait_for(args.web_port, "画面", web)):
             return 1
         url = f"http://localhost:{args.web_port}/"
         logger.info(f"API http://127.0.0.1:{args.api_port}/docs / 画面 {url}(Ctrl+C で止める)")
         if not args.no_browser:
             _open_browser(url)
         while True:
-            api = watch(api, args.api_port, "API", spawn_api, "/api/health")
+            api = watch(api, args.api_port, "API", spawn_api, "/api/ping")
             web = watch(web, args.web_port, "画面", spawn_web)
             time.sleep(WATCH_INTERVAL)
     except KeyboardInterrupt:

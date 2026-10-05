@@ -143,7 +143,7 @@ npx cdk deploy    # 当てる
 | `DEM_DATABASE_IAM_AUTH` | `1`。接続を張るたびに IAM データベース認証の token を作り、パスワードの代わりに渡す |
 | `NOVEL_API_KEYS` | 呼ぶ側ごとの合言葉(`gui=<鍵>,web=<鍵>`)。それぞれ長い乱数(`openssl rand -hex 32`)。どの鍵で来たかをログに出す |
 
-確かめ: `curl <関数 URL>/api/ping` が `{"ok":true}`、`curl -H 'x-novel-api-key: …' <関数 URL>/api/health` が `"dialect":"postgresql"`。
+確かめ: `curl <関数 URL>/api/ping` が `{"ok":true}`、`curl -H 'x-novel-api-key: …' <関数 URL>/api/tables` が 200(合言葉が通る)。
 
 db のロール `novel_app`(行の読み書きだけ。IAM データベース認証で繋ぐ)は、マスターで `infra/sql/novel_app.sql` を流して作る。
 続けて、マイグレーションを流すロール `novel_migrator`(表の持ち主。IAM データベース認証で繋ぐ)を `infra/sql/novel_migrator.sql` で作る

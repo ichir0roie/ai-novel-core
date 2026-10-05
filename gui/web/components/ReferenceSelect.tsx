@@ -10,15 +10,15 @@ import { T } from "@/lib/text";
 
 const cache = new Map<string, Promise<Option[]>>();
 // 取り置きを捨てたとき、いま出ている選択欄にも読み直させる
-const listeners = new Set<(table: string | null) => void>();
+const listeners = new Set<(table: string) => void>();
 
 /** 参照先のテーブルの選択肢。テーブルごとに一度だけ読み、取り置きを捨てられたら読み直す。 */
 export function useOptions(table: string | null | undefined): Option[] {
   const [options, setOptions] = useState<Option[]>([]);
   const [version, setVersion] = useState(0);
   useEffect(() => {
-    const listener = (changed: string | null) => {
-      if (changed === null || changed === table) setVersion((v) => v + 1);
+    const listener = (changed: string) => {
+      if (changed === table) setVersion((v) => v + 1);
     };
     listeners.add(listener);
     return () => {
@@ -42,18 +42,11 @@ export function invalidateOptions(table: string) {
   for (const listener of listeners) listener(table);
 }
 
-/** AI の生成は他のテーブルにも行を足す(話のプロット補完が人物・場所を作るなど)ので、全部の取り置きを捨てる。 */
-export function invalidateAllOptions() {
-  cache.clear();
-  for (const listener of listeners) listener(null);
-}
-
 type Props = {
   table: string;
   value: number | null;
   nullable: boolean;
   onChange: (value: number | null) => void;
-  disabled?: boolean;
   // 絞り込み欄が空のときに出す選択肢の id。null・省略なら全部出す
   defaultIds?: number[] | null;
   // 選ぶモーダルの見出し(欄の名前)
@@ -61,7 +54,7 @@ type Props = {
 };
 
 /** 参照先の行を一つ選ぶ欄。ボタンに今の行を出し、押すとモーダルで大きく並べて選ぶ。 */
-export default function ReferenceSelect({ table, value, nullable, onChange, disabled, defaultIds, title }: Props) {
+export default function ReferenceSelect({ table, value, nullable, onChange, defaultIds, title }: Props) {
   const options = useOptions(table);
   const [open, setOpen] = useState(false);
   const choices = useMemo(() => options.map((o) => ({ value: o.id, label: T.nameId(o.label, o.id) })), [options]);
@@ -73,7 +66,6 @@ export default function ReferenceSelect({ table, value, nullable, onChange, disa
         label={current?.label ?? (value !== null ? T.idMark(value) : nullable ? T.none : T.select)}
         empty={value === null}
         onClick={() => setOpen(true)}
-        disabled={disabled}
       />
       {value !== null && <RecordLink table={table} id={value} />}
       {open && (

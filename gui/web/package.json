@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "types": "openapi-typescript ../api/openapi.json -o lib/openapi.d.ts",
-    "typecheck": "next typegen && tsc --noEmit",
-    "icons": "node scripts/icons.mjs"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@aws-amplify/adapter-nextjs": "^1.8.0",

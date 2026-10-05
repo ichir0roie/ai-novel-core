@@ -97,7 +97,6 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | POST | `/api/interface/{id}` | `{"args": {...}}`。`id` は `location.list_locations.ListLocations` のような「領域.ファイル.クラス」。`claude` を叩く入口は 403 |
 | GET | `/api/ping` | 起きているかだけ(`NOVEL_API_KEYS` があっても合言葉なしで通す) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
-| GET | `/api/maps/{planet_id}.svg` | 星ひとつの地図(svg)。場所の座標・領域から python で描く |
 | GET | `/api/timeline?story_id=` | 全期間の話(開始〜終了。終了が空なら開始の一点。開始の無い話は出さない)。`story_id` はその作品で絞る。画面 `/timeline` が描く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
 

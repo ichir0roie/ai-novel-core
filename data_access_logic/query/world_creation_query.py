@@ -6,9 +6,8 @@ from collections.abc import Collection
 from sqlalchemy import ColumnElement, Select, func, or_, select
 
 from data_access_logic.query.period import alive_at
-from db.schema import (
-    Character, CharacterParameter, Event, EventCharacter, Location, Stamp,
-)
+from db.schema import Character, CharacterParameter, Event, EventCharacter, Location
+from db.stamp import Stamp
 
 
 def siblings_area_sum_select(parent_id: int, exclude_id: int | None = None) -> Select:

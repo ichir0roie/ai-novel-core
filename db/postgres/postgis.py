@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PostgreSQL 側だけに足す PostGIS の物。
 
-列の正は `db/schema.py`(SQLite と共通)に一つだけ置き、PostGIS の幾何はそこから作る生成列にする。
+列の正は `db/schema.py` に一つだけ置き、PostGIS の幾何はそこから作る生成列にする。
 書き込みは今まで通り経度・緯度(`location_longitude` / `location_latitude`)と輪郭(`polygon`。GeoJSON)だけに行い、
 幾何の列は db が作り直すので、コードから書かない。範囲・距離の検索や GIS の道具で覗くときにだけ使う。
 

@@ -16,15 +16,13 @@ type Props = {
   characterIds: number[];
   /** 話の開始(`episode.start`)。歳と、どの年の関係を出すかに使う */
   start: unknown;
-  /** 人物の選択肢に無い id の名前(`RecordResponse.labels.character_ids`) */
-  fallbackLabels?: Record<string | number, string>;
   /** 初めは名前と歳だけを一行に並べ、ボタンを押すと関係ごとの並びに開く。話のページで下のプロットを押し縮めないため */
   collapsible?: boolean;
 };
 
 /** 話の登場人物ごとに、話の開始の時点の歳と、その時点の登場人物どうしの関係を並べる(閲覧専用)。
  * 名前を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
-export default function EpisodeCharacterRelations({ characterIds, start, fallbackLabels, collapsible = false }: Props) {
+export default function EpisodeCharacterRelations({ characterIds, start, collapsible = false }: Props) {
   const characters = useOptions("character");
   const [relations, setRelations] = useState<Relation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +47,7 @@ export default function EpisodeCharacterRelations({ characterIds, start, fallbac
   const byId = useMemo(() => new Map(characters.map((o) => [o.id, o])), [characters]);
   const time = typeof start === "string" ? start : null;
   const year = parseStamp(time)?.year ?? null;
-  const nameOf = (id: number) => byId.get(id)?.label ?? fallbackLabels?.[id];
+  const nameOf = (id: number) => byId.get(id)?.label;
   const withAge = (id: number) => {
     const name = nameOf(id);
     const age = ageAt(byId.get(id)?.born ?? null, time);

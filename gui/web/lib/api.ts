@@ -94,11 +94,8 @@ export const createRecord = (table: string, data: Rec) =>
 export const updateRecord = (table: string, id: number | string, data: Rec) =>
   api<RecordResponse>(`/api/tables/${table}/records/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
-export const getOptions = (table: string, q?: string) => {
-  const params = new URLSearchParams({ limit: "2000" });
-  if (q) params.set("q", q);
-  return api<components["schemas"]["OptionList"]>(`/api/tables/${table}/options?${params}`);
-};
+export const getOptions = (table: string) =>
+  api<components["schemas"]["OptionList"]>(`/api/tables/${table}/options?limit=2000`);
 
 /** 読んだときの値から変わった欄だけを返す(入口は「渡した欄だけ直す」)。 */
 export function diff(initial: Rec, current: Rec): Rec {

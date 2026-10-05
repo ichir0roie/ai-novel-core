@@ -13,14 +13,6 @@ def client() -> Iterator[TestClient]:
         yield test_client
 
 
-def test_health(client):
-    response = client.get("/api/health")
-
-    assert response.status_code == 200
-    health = response.json()
-    assert health["dialect"] == "postgresql"
-
-
 def test_tables(client, world):
     response = client.get("/api/tables")
 
@@ -159,15 +151,6 @@ def test_maps(client, world):
     assert [shape["id"] for shape in planet_map["shapes"]] == [world.neighbor_id]
     assert body["categories"]
     assert body["bearings"]
-
-
-def test_map_svg(client, world):
-    response = client.get(f"/api/maps/{world.planet_id}.svg")
-
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "image/svg+xml"
-    assert "テスト都" in response.text
-    assert "テスト村" in response.text
 
 
 def test_relations(client, world):

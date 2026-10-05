@@ -21,23 +21,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Health */
-        get: operations["health_api_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/tables": {
         parameters: {
             query?: never;
@@ -199,23 +182,6 @@ export interface paths {
          * @description 星ごとの地図の元データ。画面(`/maps`)が場所の座標・領域から描く
          */
         get: operations["maps_api_maps_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/maps/{planet_id}.svg": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Map Svg */
-        get: operations["map_svg_api_maps__planet_id__svg_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -445,8 +411,6 @@ export interface components {
             side: boolean;
             /** Choices */
             choices?: string[] | null;
-            /** Default */
-            default?: string | null;
             /** References */
             references?: string | null;
             /**
@@ -561,11 +525,6 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
-        };
-        /** Health */
-        Health: {
-            /** Dialect */
-            dialect: string;
         };
         /** LocationCharactersResponse */
         LocationCharactersResponse: {
@@ -876,26 +835,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
-                };
-            };
-        };
-    };
-    health_api_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Health"];
                 };
             };
         };
@@ -1238,37 +1177,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MapsResponse"];
-                };
-            };
-        };
-    };
-    map_svg_api_maps__planet_id__svg_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                planet_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

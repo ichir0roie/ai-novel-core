@@ -55,14 +55,12 @@ DEM_DATABASE_URL="$DEM_DEV_DATABASE_URL" DEM_DATABASE_IAM_AUTH=0 .venv/bin/pytho
 .venv/bin/python -m db.postgres.copy_db --source-url <写し元の URL> --url <写し先の URL>
 ```
 
-写し元は PostgreSQL でも SQLite(`sqlite:////<絶対パス>`)でもよい。本番の `novel.db`(SQLite)を RDS へ移したのもこれで、
-テスト用の db に本番を写すのもこれ(`tool.test.copy_production_db`)。
+テスト用の db に本番を写すのもこれ(`tool.test.copy_production_db`)。以前は SQLite の `novel.db` を写し元にでき、本番を RDS へ移したのもこれ(SQLite を読む分岐は、移し終えたので消した)。
 
 - 写し元・写し先の alembic のバージョンが違えば止まる
 - 写し先に行があれば止まる(`--truncate` で空にしてから写す)
-- 指す先の無い外部キーの行(SQLite は外部キーを確かめない)があれば、写す前に一覧を出して止まる
 - 自分の表を指す外部キー(`location.parent_id` など)は、親が後ろの id にあっても入るよう、いったん空で入れて後から埋める
-- 値は型を通さず生のまま運び、真偽(0/1)だけ `boolean` に直す。PostGIS の生成列は写さない。最後に連番(`id`)を最大値へ寄せ、件数を突き合わせる
+- 値は型を通さず生のまま運ぶ。PostGIS の生成列は写さない。最後に連番(`id`)を最大値へ寄せ、件数を突き合わせる
 - 全部を一つのトランザクションで写すので、途中で落ちれば何も入らない
 
 `novel.db` の写し(84 場所・118 人物・50 話ほど)で、写したあとの API の応答(334 の GET と読み取りの入口)が
@@ -124,15 +122,15 @@ alembic の autogenerate は、これらの列・索引と PostGIS の `spatial_
 
 ## SQLite との違いで直したところ
 
-以前は SQLite(`novel.db`)でも動かしていた。そのときに PostgreSQL との違いで直したところ。
+以前は SQLite(`novel.db`)でも動かしていた。そのときに PostgreSQL との違いで直したところ。SQLite 向けの分岐は、RDS へ移し終えたので消した。
 
 | 違い | 直し方 |
 | --- | --- |
-| PostgreSQL の `json` は等値が無く、行ごとの `DISTINCT` で落ちる | `polygon` は PostgreSQL では `jsonb`(`PolygonType.load_dialect_impl`) |
+| PostgreSQL の `json` は等値が無く、行ごとの `DISTINCT` で落ちる | `polygon` は `jsonb`(`PolygonType`) |
 | NULL の並び(SQLite は最小、PostgreSQL は最大) | NULL を持てる列の並びに、SQLite と同じ向き(降順は `.nulls_last()`、昇順は `.nulls_first()`)を明示(人物の居場所・来歴・出来事・呼び名のリレーション、`character_location_select`、`episode/summary.py`) |
 | `DISTINCT` の並び(PostgreSQL は崩れる) | 居合わせる人物の id(`resident_character_ids_select`)を id の順に並べる |
-| `boolean` に 0/1 を入れられない | 移すときに `bool` に直す |
-| ALTER の強さ | alembic は SQLite でだけ batch(表の作り直し)で書く |
+| `boolean` に 0/1 を入れられない | 移すときに `bool` に直した |
+| ALTER の強さ | alembic は SQLite でだけ batch(表の作り直し)で書いていた |
 
 ## マイグレーション
 

@@ -5,7 +5,7 @@
         .venv/bin/python -m db.postgres.init_db --create-database
 
 過去のマイグレーション(SQLite 向けに積んできたもの)は流さず、`schema.py` から今の形をそのまま作って
-alembic を head に stamp する。以降の変更は SQLite と同じく `alembic upgrade head` で当てる。
+alembic を head に stamp する。以降の変更は `alembic upgrade head` で当てる。
 表が一つでもあれば何もせずに止まる(作り直すなら db ごと消してからやり直す)。
 """
 from __future__ import annotations

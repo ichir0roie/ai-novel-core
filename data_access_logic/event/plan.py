@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy.orm import Session
+
 from data_access_logic.event.form import EventForm
 from data_access_logic.material import Material
 from data_access_logic.query import common_query, world_creation_query
-from db.schema import Character, CharacterLocation, Event, Location, Session, Stamp
+from db.schema import Character, CharacterLocation, Event, Location
+from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 

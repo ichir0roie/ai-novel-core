@@ -61,8 +61,6 @@ def _as_migration_role(connection: Connection) -> None:
     """この db の表の持ち主が `MIGRATION_ROLE` で、自分がそれに入っていれば(AWS の db にマスターで繋いだとき)SET ROLE する。
     新しい表の持ち主がそのロールになり、そのロールに掛けた既定の権限で novel_app が読み書きできる。
     手元の開発用の db は表の持ち主が別なので何もしない。"""
-    if connection.dialect.name != "postgresql":
-        return
     member = connection.scalar(
         text("SELECT pg_has_role(current_user, tableowner, 'MEMBER') AND current_user <> tableowner FROM pg_tables "
              "WHERE schemaname = 'public' AND tablename = 'alembic_version' AND tableowner = :role"),
@@ -82,8 +80,6 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # SQLite は ALTER が弱いので表を作り直す batch で書く。PostgreSQL はそのまま ALTER する
-            render_as_batch=connection.dialect.name == "sqlite",
             include_object=include_object,
         )
 

@@ -12,6 +12,7 @@ import os
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
 from data_access_logic.ai_client import AIClient
@@ -19,7 +20,7 @@ from data_access_logic.material import Material
 from data_access_logic.source_text import (
     FACT_CHECK_HEADING, SourceBatchSerialized, SourceText, row_of, source_of, strip_fact_check,
 )
-from db.schema import Meme, Oracle, Session
+from db.schema import Meme, Oracle
 
 logger = logging.getLogger(__name__)
 

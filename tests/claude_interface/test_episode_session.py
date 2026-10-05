@@ -37,7 +37,8 @@ from data_access_logic.idea.models import IdeaDraft, IdeaDraftByAI, IdeaDraftsBy
 from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
-from db.schema import Episode, Idea, IdeaHistory, Stamp, get_env_session
+from db.schema import Episode, Idea, IdeaHistory, get_env_session
+from db.stamp import Stamp
 from tool import episode_session
 
 
