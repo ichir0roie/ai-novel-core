@@ -11,7 +11,7 @@ from db.stamp import Stamp
 
 
 class KnowerRow(Form):
-    """知る人物か知る場所のどちらか一方を持つ(id と知られる側への外部キーは持たない。行は配列の並びで決まる)。"""
+    """知る人物か知る場所のどちらか一方を持つ(id と知られる側への外部キーは持たない。今ある行とは知る人物・場所で対応させる)。"""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
