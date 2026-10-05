@@ -3,12 +3,13 @@
 人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
 来歴の起きた年は、その時刻から何年前かで渡す。
 
-人物の来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
+人物の来歴・スキルの来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
 場所ならその時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
 人物の来歴はその時刻までに起きた行だけ。
+スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
 """
@@ -25,11 +26,14 @@ from sqlalchemy.orm import Session, joinedload
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character import skills
 from data_access_logic.idea.models import normalized
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.query.period import alive_at
-from db.schema import Character, CharacterHistory, CharacterRelation, IdeaHistory, IdeaHistoryKnower, KnowerMixin
+from db.schema import (
+    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, IdeaHistory, IdeaHistoryKnower, KnowerMixin,
+)
 from db.stamp import Stamp
 
 
@@ -65,8 +69,14 @@ class KnownHistory(Material):
     description: str
 
 
-def known_histories(rows: Sequence[CharacterHistory], viewer: Viewer) -> list[KnownHistory]:
-    """本人か関係のある人物の来歴を渡す。古い順。"""
+class KnownSkill(Material):
+    name: str
+    # 知っている来歴の行
+    histories: list[KnownHistory]
+
+
+def known_histories(rows: Sequence[CharacterHistory | CharacterSkillHistory], viewer: Viewer) -> list[KnownHistory]:
+    """本人か関係のある人物の来歴・スキルの来歴を渡す。古い順。"""
     known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
     return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
 
@@ -80,6 +90,10 @@ def _ago(start: int | None, year: int) -> str | None:
 
 def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[dict[str, Any]]:
     return [{"いつ": _ago(history.start, year), "来歴": history.description} for history in histories]
+
+
+def _skills_for_prompt(known: list[KnownSkill], year: int) -> list[dict[str, Any]]:
+    return [{"名前": skill.name, "来歴(古い順)": _histories_for_prompt(skill.histories, year)} for skill in known]
 
 
 def _relations_for_prompt(relations: list[CharacterRelationLine], year: int) -> list[dict[str, Any]]:
@@ -119,6 +133,7 @@ class KnownSelf(Material):
     meme: str | None = None
     principle: str | None = None
     histories: list[KnownHistory]
+    skills: list[KnownSkill]
 
 
 class KnownCharacter(Material):
@@ -126,6 +141,7 @@ class KnownCharacter(Material):
     looks: AppearanceSerialized
     text: str | None = None
     histories: list[KnownHistory]
+    skills: list[KnownSkill]
 
 
 class KnownIdea(Material):
@@ -154,11 +170,13 @@ class KnowledgeSerialized(Material):
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
                 "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
                 "行動原理": me.principle, "来歴(古い順)": _histories_for_prompt(me.histories, year),
+                "スキル": _skills_for_prompt(me.skills, year),
             },
             "関係": _relations_for_prompt(self.relations, year),
             "知っている人物": [
                 {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
-                 "来歴(古い順)": _histories_for_prompt(character.histories, year)}
+                 "来歴(古い順)": _histories_for_prompt(character.histories, year),
+                 "スキル": _skills_for_prompt(character.skills, year)}
                 for character in self.characters],
             "知っているアイデア": [_idea_for_prompt(idea) for idea in self.ideas],
         }
@@ -192,6 +210,13 @@ def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
     ids = [relation.character_2_id if relation.character_1_id == character.id else relation.character_1_id
            for relation in relations]
     return [id_ for id_ in dict.fromkeys(ids) if id_ != character.id]
+
+
+def _skills(s: Session, character: Character, viewer: Viewer) -> list[KnownSkill]:
+    """来歴の行を一つも知らないスキルは、持っていることも知らないので入れない。"""
+    known = [KnownSkill(name=skill.name, histories=known_histories(skill.histories, viewer))
+             for skill in skills.skills_of(s, character.id)]
+    return [skill for skill in known if skill.histories]
 
 
 def _ideas(s: Session, viewer: Viewer, mentioned: Callable[[list[str]], bool]) -> list[KnownIdea]:
@@ -247,12 +272,12 @@ def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> 
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(character, time),
                      text=character.text, meme=character.meme, principle=character.principle,
-                     histories=known_histories(character.histories, viewer)),
+                     histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer)),
         parameters=parameters_at(character, time),
         relations=relations_at(s, [character], time),
         characters=[KnownCharacter(name=other.name, looks=appearance_of(other, time),
                                    text=other.text,
-                                   histories=known_histories(other.histories, viewer))
+                                   histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
                     for other in others],
         ideas=_ideas(s, viewer, _in_text(plot_text)),
     )

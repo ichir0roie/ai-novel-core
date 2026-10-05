@@ -10,7 +10,10 @@ from data_access_logic.character.read_known_rows import known_rows
 from data_access_logic.character.record import KnownRows
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
-from db.schema import Character, CharacterHistory, CharacterHistoryKnower, IdeaHistory, IdeaHistoryKnower, KnowerMixin
+from db.schema import (
+    Character, CharacterHistory, CharacterHistoryKnower, CharacterSkillHistory, CharacterSkillHistoryKnower, IdeaHistory,
+    IdeaHistoryKnower, KnowerMixin,
+)
 
 
 def _apply[K: KnowerMixin](knowers: list[K], knower_id: int, change: KnowledgeChange, knower: Callable[[], K]) -> None:
@@ -27,7 +30,7 @@ def _apply[K: KnowerMixin](knowers: list[K], knower_id: int, change: KnowledgeCh
 
 
 class UpdateKnowledge(CommitEntrypoint):
-    """人物を、人物の来歴・アイデアの履歴の行の知る相手に、まとめて入れる・外す(GUI の知識整理)。
+    """人物を、人物の来歴・スキルの来歴・アイデアの履歴の行の知る相手に、まとめて入れる・外す(GUI の知識整理)。
     場所として入っている知る相手の行には触らない。直したあとの、その人物が知る行を返す。"""
 
     def __init__(self, knowledge: KnowledgeForm):
@@ -40,6 +43,9 @@ class UpdateKnowledge(CommitEntrypoint):
         for change in form.character_histories:
             character_history = common_query.get_row(s, CharacterHistory, change.id)
             _apply(character_history.knowers, form.knower_id, change, CharacterHistoryKnower)
+        for change in form.character_skill_histories:
+            skill_history = common_query.get_row(s, CharacterSkillHistory, change.id)
+            _apply(skill_history.knowers, form.knower_id, change, CharacterSkillHistoryKnower)
         for change in form.idea_histories:
             idea_history = common_query.get_row(s, IdeaHistory, change.id)
             _apply(idea_history.knowers, form.knower_id, change, IdeaHistoryKnower)

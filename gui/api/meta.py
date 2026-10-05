@@ -24,9 +24,12 @@ _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "character": {"parameters": "periodic", "locations": "periodic", "histories": "flow"},
     "idea": {"histories": "flow"},
     "character_relation": {"histories": "flow"},
+    "character_skill": {"histories": "flow"},
 }
 # 行の知る相手を GUI で選べる子リスト
-_CHILD_LIST_KNOWERS: dict[str, set[str]] = {"character": {"histories"}, "idea": {"histories"}}
+_CHILD_LIST_KNOWERS: dict[str, set[str]] = {
+    "character": {"histories"}, "character_skill": {"histories"}, "idea": {"histories"},
+}
 
 
 def _column_type(column: Column) -> str:

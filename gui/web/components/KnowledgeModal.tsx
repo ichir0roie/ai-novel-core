@@ -22,8 +22,8 @@ import StampInput from "./StampInput";
 
 type Source = { kind: "character" | "idea"; id: number; name: string | null };
 
-/** 知る相手を付け外しする行(人物の来歴・アイデアの履歴)。行の id で指す */
-type RowKind = "character" | "idea";
+/** 知る相手を付け外しする行(人物の来歴・スキルの来歴・アイデアの履歴)。行の id で指す */
+type RowKind = "character" | "skill" | "idea";
 
 type RowState = { known: boolean; start: string | null };
 
@@ -68,6 +68,7 @@ function knownCounts(saved: KnownRows | null, changes: Map<string, Change>): Map
   const owners = new Map<string, string>();
   if (saved) {
     saved.character_histories.forEach((row) => owners.set(rowKey("character", row.id), sourceKey({ kind: "character", id: row.character_id })));
+    saved.character_skill_histories.forEach((row) => owners.set(rowKey("skill", row.id), sourceKey({ kind: "character", id: row.character_id })));
     saved.idea_histories.forEach((row) => owners.set(rowKey("idea", row.id), sourceKey({ kind: "idea", id: row.idea_id })));
   }
   for (const [key, change] of changes) {
@@ -185,7 +186,7 @@ function KnowerNames({ knowers }: { knowers: Rec[] }) {
 
 type Props = { characterId: number; characterName: string; onClose: () => void; onSaved: () => void };
 
-/** 知識整理。この人物が、人物の来歴・アイデアの履歴の行を知るかを、まとめて付け外しする。
+/** 知識整理。この人物が、人物の来歴・スキルの来歴・アイデアの履歴の行を知るかを、まとめて付け外しする。
  * 左の人物・アイデアの木(この人物が知る行の数つき)から一つ選ぶと、右にその行が並ぶ。行を押すと知る/知らないが
  * 切り替わり、知る行には知った時刻を入れられる。付け外しは人物・アイデアを移っても残り、保存で一度に直す。
  * 場所として知る相手に入っている行(その場所に住むので知る)は、ここでは付け外ししない。 */
@@ -262,7 +263,8 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
     setDone(null);
     try {
       const known = await updateKnowledge({
-        knower_id: characterId, character_histories: of("character"), idea_histories: of("idea"),
+        knower_id: characterId, character_histories: of("character"), character_skill_histories: of("skill"),
+        idea_histories: of("idea"),
       });
       setSaved(known);
       setDone(T.knowledge.saved(list.length));
@@ -416,6 +418,21 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
                       history.description,
                     ),
                   )}
+                  {rows.character_skills.flatMap((skill) =>
+                    skill.histories.map((history) =>
+                      row(
+                        "skill",
+                        history.id,
+                        history.knowers,
+                        `${skill.name}: ${history.description}`,
+                        <>
+                          <strong>{T.knowledge.skill(skill.name)}</strong>
+                          <span>{history.start === null ? T.knowledge.undated : T.knowledge.year(history.start)}</span>
+                        </>,
+                        history.description,
+                      ),
+                    ),
+                  )}
                   {rows.idea_histories.map((history) =>
                     row(
                       "idea",
@@ -434,7 +451,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
                       history.detail,
                     ),
                   )}
-                  {rows.character_histories.length === 0 && rows.idea_histories.length === 0 && (
+                  {rows.character_histories.length === 0 && rows.character_skills.length === 0 && rows.idea_histories.length === 0 && (
                     <li className="hint">{T.knowledge.noHistories}</li>
                   )}
                 </ul>
@@ -475,5 +492,6 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
 /** 付け外しの行が、保存した値ですでに知る行か(知った時刻だけを直す行)。 */
 function isSaved(saved: KnownRows, change: Change): boolean {
   if (change.kind === "character") return saved.character_histories.some((row) => row.id === change.id);
+  if (change.kind === "skill") return saved.character_skill_histories.some((row) => row.id === change.id);
   return saved.idea_histories.some((row) => row.id === change.id);
 }

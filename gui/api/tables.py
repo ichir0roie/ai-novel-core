@@ -13,12 +13,15 @@ from pydantic import BaseModel
 
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
+from data_access_logic.character.commit_character_skill import CommitCharacterSkill
 from data_access_logic.character.form import (
-    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
+    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterSkillCreateForm,
+    CharacterSkillUpdateForm, CharacterUpdateForm,
 )
-from data_access_logic.character.record import CharacterRecord, CharacterRelationRecord
+from data_access_logic.character.record import CharacterRecord, CharacterRelationRecord, CharacterSkillRecord
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
+from data_access_logic.character.update_character_skill import UpdateCharacterSkill
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeCreateForm
 from data_access_logic.episode.record import EpisodeRecord
@@ -51,7 +54,9 @@ from data_access_logic.style_preference.commit_style_preference import CommitSty
 from data_access_logic.style_preference.form import StylePreferenceCreateForm, StylePreferenceUpdateForm
 from data_access_logic.style_preference.record import StylePreferenceRecord
 from data_access_logic.style_preference.update_style_preference import UpdateStylePreference
-from db.schema import Character, CharacterRelation, Episode, Event, Idea, Location, Meme, Oracle, Story, StylePreference
+from db.schema import (
+    Character, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle, Story, StylePreference,
+)
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,8 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("character_relation", CharacterRelation, CommitCharacterRelation,
               UpdateCharacterRelation, CharacterRelationCreateForm, CharacterRelationUpdateForm,
               CharacterRelationRecord, ("relation", "text", "histories.description")),
+    TableSpec("character_skill", CharacterSkill, CommitCharacterSkill, UpdateCharacterSkill, CharacterSkillCreateForm,
+              CharacterSkillUpdateForm, CharacterSkillRecord, ("name", "text", "histories.description")),
     TableSpec("event", Event, CommitEvent, UpdateEvent, EventCreateForm, EventUpdateForm, EventRecord,
               ("name", "text")),
     TableSpec("location", Location, CommitLocation, UpdateLocation, LocationCreateForm, LocationUpdateForm,

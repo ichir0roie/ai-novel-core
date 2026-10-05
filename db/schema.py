@@ -633,6 +633,75 @@ class CharacterHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
+class CharacterSkill(TextBase):
+    """人物の持つスキル(技・術・技能)を一行で持つ。
+
+    本文(`text`)はスキルの本質(何ができるか・仕組み・限界)で、アイデアの本文と同じく作者(語り部と、話を書くセッションの Claude)
+    だけが読み、人物役にも AI の生成にも渡さない。身につけた・伸びた・衰えたなど、作中で起きたことは、人物の来歴と同じく
+    起きた年ごとの行(CharacterSkillHistory)に積み、入口では `histories` の配列で出し入れする。人物が知るのはその行だけ。
+    """
+
+    __tablename__ = "character_skill"
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="スキルを持つ人物", sort_order=100)
+    name: Mapped[str] = mapped_column(String, nullable=False, comment="スキルの名前", sort_order=200)
+    text: Mapped[str] = mapped_column(
+        String, nullable=False, comment="スキルの本質(何ができるか・仕組み・限界)。作者だけが読み、人物役には渡さない",
+        sort_order=10000)
+
+    character: Mapped[Character] = relationship(lazy="noload")
+
+    CHILD_LISTS = ("histories",)
+
+    histories: Mapped[list["CharacterSkillHistory"]] = relationship(
+        back_populates="skill", lazy="selectin", cascade="all, delete-orphan",
+        order_by="CharacterSkillHistory.start.desc().nulls_last()",
+        doc="身につけた・伸びた・衰えたなどを、起きた年ごとに一行で持つ。話・人物役には、その時刻の年までに始まった行だけを渡し、"
+        "その年までに始まった行の無いスキルは、まだ持っていないものとして渡さない。年が空の行は構想で、作者だけが読む。行は知る相手だけが知る")
+
+
+class CharacterSkillHistory(Base):
+    """スキルの来歴を、起きた年ごとの一行で持つ子テーブル。スキルの本質は `CharacterSkill.text` に持つ。
+
+    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻の年までに始まった行だけを渡すので、
+    先の時刻の行を書き足しても、それより前には効かない。`start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
+    行は、知る相手(`knowers`)に当たる人物だけが知る(本人も、知る相手に入っていなければ知らない)。
+    """
+
+    __tablename__ = "character_skill_history"
+
+    character_skill_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character_skill.id"), index=True, nullable=False, sort_order=100)
+    start: Mapped[int | None] = mapped_column(
+        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・人物役には渡さない)",
+        sort_order=110)
+    description: Mapped[str] = mapped_column(
+        String, nullable=False, comment="来歴(身につけた・伸びた・衰えたなど、作中で起きたこと)", sort_order=120)
+
+    skill: Mapped[CharacterSkill] = relationship(back_populates="histories", lazy="noload")
+    # 人物役(`data_access_logic/character/knowledge.py`)には、知る相手に当たる人物にだけ渡す
+    knowers: Mapped[list["CharacterSkillHistoryKnower"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan",
+        order_by="CharacterSkillHistoryKnower.id")
+
+    def covers(self, time: Stamp) -> bool:
+        return self.start is not None and self.start <= time.year
+
+
+class CharacterSkillHistoryKnower(KnowerMixin, Base):
+    """スキルの来歴の行を知る相手。この行に当たる人物だけが来歴を知る。"""
+
+    __tablename__ = "character_skill_history_knower"
+    __table_args__ = _knower_args("character_skill_history_knower", "character_skill_history_id")
+
+    character_skill_history_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character_skill_history.id"), index=True, nullable=False, sort_order=100)
+
+    history: Mapped[CharacterSkillHistory] = relationship(back_populates="knowers", lazy="noload")
+    knower: Mapped["Character | None"] = relationship(lazy="noload")
+
+
 class Idea(TextBase):
     __tablename__ = "idea"
 

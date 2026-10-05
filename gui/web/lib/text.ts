@@ -82,6 +82,8 @@ export const T = {
       `Delete episode "${label}"? Its cast is removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,
     confirmDeleteIdea: (label: string) =>
       `Delete idea "${label}"? Its histories are removed too. This cannot be undone.`,
+    confirmDeleteSkill: (label: string) =>
+      `Delete skill "${label}"? Its histories and who knows them are removed too. This cannot be undone.`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
     previousEpisode: "◀ Prev",
     nextEpisode: "Next ▶",
@@ -124,6 +126,7 @@ export const T = {
 
   related: {
     relationGraph: { title: "Relation graph", sub: "Only relations involving this character" },
+    skills: { title: "Skills", sub: "Skills this character has" },
     mapCentered: { title: "Map centered here", sub: "Map centered on this location" },
     storyRoute: { title: "Route map", sub: "Locations of the episodes, in story order" },
     episodeRoute: { title: "Route map", sub: "Locations of this story's episodes, with this one selected" },
@@ -242,6 +245,7 @@ export const T = {
     noMatch: "No match",
     pickSource: "Pick a character or an idea on the left to see its rows. Click a row to switch between known and not known",
     noHistories: "No rows",
+    skill: (name: string) => `Skill: ${name}`,
     undated: "undated",
     year: (year: number) => `${year}`,
     anywhere: "anywhere",
