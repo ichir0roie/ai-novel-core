@@ -21,6 +21,7 @@ from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
+from data_access_logic.query.period import dated_alive_at
 from db.schema import Episode, EpisodeCharacter, Location
 
 
@@ -81,7 +82,7 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
     location_id = episode.location_id
     characters = cast_characters(episode)
     cast_ids = {character.id for character in characters}
-    relations = [line for line in relations_at(s, characters, time)
+    relations = [line for line in relations_at(s, characters, time, dated_alive_at)
                  if line.character_1.id in cast_ids and line.character_2.id in cast_ids]
     return StageSerialized(
         main_episode=episode,

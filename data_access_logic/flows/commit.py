@@ -10,8 +10,10 @@ from ai.claude_code import ai_client
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character import steps as character_steps
 from data_access_logic.character.moves import allowed_moves
-from data_access_logic.character.record import CharacterMove
+from data_access_logic.character.record import CharacterMove, CharacterRelationRecord
 from data_access_logic.episode import moves as episode_moves
+from data_access_logic.episode import relations as episode_relations
+from data_access_logic.episode.relations import RelationsForm, allowed_relations
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeCommitForm
 from data_access_logic.episode.record import CommittedEpisode
@@ -39,14 +41,27 @@ def _move_cast(ai: AIClient, episode_id: int) -> list[CharacterMove]:
     return call(character_steps.move_characters, character_steps.MovesForm(moves=moves, time=material.time))
 
 
+def _relate_cast(ai: AIClient, episode_id: int) -> list[CharacterRelationRecord]:
+    """本文で会った・知り合いだと分かった登場人物どうしの関係を AI に返させ、まだ関係の無い向きだけを話の時刻から足す。"""
+    material = call(episode_steps.relations_material, RowId(id=episode_id))
+    if material is None:
+        return []
+    drafts = allowed_relations(episode_relations.relations_draft(ai, material),
+                               [member.id for member in material.cast], material.relations)
+    if not drafts:
+        return []
+    return call(episode_steps.add_relations, RelationsForm(relations=drafts, time=material.time))
+
+
 def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> CommittedEpisode:
     """本文を渡したときは、本文の中で住まい・拠点が変わった登場人物の居場所も移し、その移動先をレスポンスの `moves` に返す
-    (移動先が空なら何もしない)。"""
+    (移動先が空なら何もしない)。本文で会った・知り合いだと分かった登場人物どうしの関係も足し、レスポンスの `relations` に返す。"""
     record = call(episode_steps.commit_episode, episode)
     meme.refresh(ai)
     rewrite_episode_summaries(ai, [record.id])
     moved = _move_cast(ai, record.id) if episode.main_text is not None else []
-    return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved})
+    related = _relate_cast(ai, record.id) if episode.main_text is not None else []
+    return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
 
 
 def commit_event(event: EventCreateForm, ai: AIClient = ai_client) -> EventRecord:

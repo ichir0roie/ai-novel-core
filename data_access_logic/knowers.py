@@ -18,7 +18,7 @@ class KnowerRow(Form):
     knower_id: Annotated[int | None, References("character")] = None
     # その時刻にこの場所(配下も含む)に住む人物が知る
     location_id: Annotated[int | None, References("location")] = None
-    # 知った時刻。空なら初めから知っている
+    # 知った時刻。空なら、知る人物の生まれ(場所なら、知られる行の始まりか場所のできた時刻)が入る
     start: Timestamp | None = None
 
     @model_validator(mode="after")

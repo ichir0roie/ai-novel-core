@@ -37,10 +37,10 @@ def test_commit_character_skill_knows_its_owner(shown, world):
             CharacterSkillHistoryRow(start=1195, description="免許皆伝", knowers=[KnowerRow(knower_id=hanako)])])))
 
     assert (skill["character_id"], skill["name"], skill["text"]) == (taro, "テスト剣術", "型を重んじる剣")
-    # knowers を渡さない新しい行は、スキルを持つ本人だけが知る
+    # knowers を渡さない新しい行は、スキルを持つ本人だけが知る。知った時刻を渡さなければ、知る人物の生まれから知る
     by_description = {history["description"]: history["knowers"] for history in skill["histories"]}
-    assert by_description == {"道場に入る": [{"knower_id": taro, "location_id": None, "start": None}],
-                              "免許皆伝": [{"knower_id": hanako, "location_id": None, "start": None}]}
+    assert by_description == {"道場に入る": [{"knower_id": taro, "location_id": None, "start": "1170/01/01 00:00:00"}],
+                              "免許皆伝": [{"knower_id": hanako, "location_id": None, "start": "1170/01/01 00:00:00"}]}
 
 
 def test_commit_character_skill_needs_the_character(shown):
@@ -60,8 +60,8 @@ def test_update_character_skill_keeps_knowers_of_kept_rows(shown, world):
     assert updated["name"] == "テスト弓術改"
     # knowers を渡さない行は、今ある行なら知る相手をそのままにし、新しい行なら本人だけにする
     assert {history["description"]: history["knowers"] for history in updated["histories"]} == {
-        "弓を習う": [{"knower_id": hanako, "location_id": None, "start": None}],
-        "遠矢を覚える": [{"knower_id": taro, "location_id": None, "start": None}]}
+        "弓を習う": [{"knower_id": hanako, "location_id": None, "start": "1170/01/01 00:00:00"}],
+        "遠矢を覚える": [{"knower_id": taro, "location_id": None, "start": "1170/01/01 00:00:00"}]}
 
 
 def test_read_knowledge_skills_only_known_rows_until_the_time(shown, world):

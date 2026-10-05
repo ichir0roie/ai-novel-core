@@ -1,4 +1,6 @@
-from sqlalchemy import Select
+from collections.abc import Callable
+
+from sqlalchemy import ColumnElement, Select
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
@@ -12,6 +14,7 @@ from data_access_logic.character import skills
 from data_access_logic.event.summary import events_of
 from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
+from data_access_logic.query.period import Period, alive_at
 from db.schema import Character, CharacterHistory, CharacterSkillHistory, Event
 from db.stamp import Stamp
 
@@ -23,12 +26,16 @@ def age_at(character: Character, time: Stamp) -> int | None:
     return time.year - born.year - ((time.month, time.day) < (born.month, born.day))
 
 
-def relations_at(s: Session, characters: list[Character], time: Stamp) -> list[CharacterRelationLine]:
-    """`time` に続いている関係を、`time` の年までに起きた来歴だけを付けて返す。
+def relations_at(
+    s: Session, characters: list[Character], time: Stamp,
+    period: Callable[[Period, Stamp], ColumnElement[bool]] = alive_at,
+) -> list[CharacterRelationLine]:
+    """`time` に続いている(`period` に当たる)関係を、`time` の年までに起きた来歴だけを付けて返す。
 
     関係の芯(`text`)は時期を限らないので、先のことは来歴の行に書けば、それより前の話・人物役には渡らない。
     """
-    rows = s.scalars(common_query.character_relations_at_select([character.id for character in characters], time)).all()
+    rows = s.scalars(common_query.character_relations_at_select(
+        [character.id for character in characters], time, period)).all()
     return [
         CharacterRelationLine(
             character_1=row.character_1, character_2=row.character_2, relation=row.relation, text=row.text,
