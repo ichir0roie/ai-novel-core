@@ -4,8 +4,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.record import (
-    CharacterHistoryEntry, CharacterSkillEntry, CharacterSkillHistoryEntry, CharacterTextEntry, IdeaHistoryEntry,
-    KnowableRows,
+    CharacterHistoryEntry, CharacterSkillEntry, CharacterSkillHistoryEntry, IdeaHistoryEntry, KnowableRows,
 )
 from data_access_logic.character.skills import skills_of
 from data_access_logic.entrypoint import SessionEntrypoint
@@ -19,7 +18,7 @@ def _dated_order(row: CharacterHistory | CharacterSkillHistory) -> tuple[bool, i
 
 
 class ReadKnowableRows(SessionEntrypoint):
-    """人物の芯と来歴とスキルの来歴か、アイデアの履歴の行を、id と知る相手つきで読む。GUI の知識整理で、行を選んで知る相手を付け外しするのに使う。"""
+    """人物の来歴とスキルの来歴か、アイデアの履歴の行を、id と知る相手つきで読む。GUI の知識整理で、行を選んで知る相手を付け外しするのに使う。"""
 
     def __init__(self, character_id: int | None = None, idea_id: int | None = None):
         if (character_id is None) == (idea_id is None):
@@ -31,8 +30,7 @@ class ReadKnowableRows(SessionEntrypoint):
         if self.character_id is not None:
             character = common_query.get_row(s, Character, self.character_id)
             rows = sorted(character.histories, key=_dated_order)
-            return KnowableRows(character=CharacterTextEntry.model_validate(character),
-                                character_histories=[CharacterHistoryEntry.model_validate(row) for row in rows],
+            return KnowableRows(character_histories=[CharacterHistoryEntry.model_validate(row) for row in rows],
                                 character_skills=[
                                     CharacterSkillEntry(id=skill.id, name=skill.name, histories=[
                                         CharacterSkillHistoryEntry.model_validate(row)

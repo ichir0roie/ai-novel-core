@@ -89,8 +89,6 @@ class CharacterRecord(CharacterHead):
     plot: str | None = None
     # すべての来歴の行。話・出来事に渡すときは、その時刻までに起きた行だけに絞る(`histories_at`)
     histories: list[CharacterHistoryRow]
-    # 本文(`text`)を知る相手
-    knowers: list[KnowerRow]
 
 
 class CharacterLocationRecord(Material):
@@ -146,15 +144,6 @@ class CharacterMove(BaseModel):
 
 
 
-class CharacterTextEntry(Material):
-    """知る相手を直すために読む、人物の芯(`text`)とその知る相手(`ReadKnowableRows`)。"""
-
-    id: int
-    name: str | None = None
-    text: str | None = None
-    knowers: list[KnowerRow]
-
-
 class CharacterHistoryEntry(Material):
     """知る相手を直すために、行を id で指せる人物の来歴の行(`ReadKnowableRows`)。"""
 
@@ -197,8 +186,7 @@ class IdeaHistoryEntry(Material):
 
 
 class KnowableRows(Material):
-    # 人物を渡したときはその芯と来歴とスキルの来歴、アイデアを渡したときはその履歴だけが入る
-    character: CharacterTextEntry | None = None
+    # 人物を渡したときはその来歴とスキルの来歴、アイデアを渡したときはその履歴だけが入る
     character_histories: list[CharacterHistoryEntry]
     character_skills: list[CharacterSkillEntry]
     idea_histories: list[IdeaHistoryEntry]
@@ -223,8 +211,6 @@ class KnownIdeaHistory(Material):
 class KnownRows(Material):
     """人物が知る相手の行(人物として直に入った行)を持つもの。場所として入った行は含まない(`ReadKnownRows`)。"""
 
-    # 芯を知る人物の id
-    character_ids: list[int]
     character_histories: list[KnownCharacterHistory]
     character_skill_histories: list[KnownCharacterSkillHistory]
     idea_histories: list[KnownIdeaHistory]

@@ -9,8 +9,8 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, CharacterHistoryKnower, CharacterKnower, CharacterRelation, CharacterSkillHistoryKnower, Episode,
-    EpisodeCharacter, EpisodeCharacterSession, EventCharacter, IdeaHistoryKnower,
+    Character, CharacterHistoryKnower, CharacterRelation, CharacterSkillHistoryKnower, Episode, EpisodeCharacter,
+    EpisodeCharacterSession, EventCharacter, IdeaHistoryKnower,
 )
 
 
@@ -22,7 +22,7 @@ class DeletedCharacter(Material):
 
 class DeleteCharacter(CommitEntrypoint):
     """人物を消す。期間ごとの値・説明の変化・出自と居場所・相関・スキル・話に名前だけ出る行・
-    本文・来歴を知る人の行・話のセッションの行も消す。
+    来歴を知る人の行・話のセッションの行も消す。
 
     出来事の当事者か、話の登場人物・視点になっている人物は止まる(先に出来事・話から外す)。
     """
@@ -46,8 +46,8 @@ class DeleteCharacter(CommitEntrypoint):
         # 期間ごとの値・説明の変化・出自と居場所は selectin で読まれ、cascade で消える。それ以外は先に消す
         for model in (EpisodeCharacter, EpisodeCharacterSession):
             s.execute(delete(model).where(model.character_id == record.id))
-        # 自分の本文・来歴の知る人の行は cascade で消える。ほかの人物・スキル・アイデアの履歴の知る人に入った行は先に消す
-        for knower_model in (CharacterKnower, CharacterHistoryKnower, CharacterSkillHistoryKnower, IdeaHistoryKnower):
+        # 自分の来歴の知る人の行は cascade で消える。ほかの人物の来歴・スキルの来歴・アイデアの履歴の知る人に入った行は先に消す
+        for knower_model in (CharacterHistoryKnower, CharacterSkillHistoryKnower, IdeaHistoryKnower):
             s.execute(delete(knower_model).where(knower_model.knower_id == record.id))
         # スキルは人物から辿らない(`Character` にリレーションが無い)ので、来歴・知る相手の行ごと cascade で消えるよう一行ずつ消す
         for skill in skills_of(s, record.id):

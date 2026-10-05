@@ -102,9 +102,8 @@ class CommitEntrypoint(SessionEntrypoint):
 
     @classmethod
     def check_knowers(cls, s: Session, form: BaseModel) -> None:
-        """本文と来歴の行の `knowers`(知る相手)の人物・場所があるか。"""
-        holders = [form, *(getattr(form, "histories", None) or [])]
-        for knower in (knower for holder in holders for knower in (getattr(holder, "knowers", None) or [])):
+        """来歴・履歴の行の `knowers`(知る相手)の人物・場所があるか。"""
+        for knower in (knower for row in (getattr(form, "histories", None) or []) for knower in (row.knowers or [])):
             cls.check_exists(s, Character, knower.knower_id, "knowers.knower_id")
             cls.check_exists(s, Location, knower.location_id, "knowers.location_id")
 

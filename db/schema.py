@@ -344,7 +344,7 @@ PERSON_PARAMETER_COLUMNS = (
 
 
 class KnowerMixin:
-    """本文・来歴を知る相手と、知った時刻(`data_access_logic/character/knowledge.py`)。
+    """来歴・履歴を知る相手と、知った時刻(`data_access_logic/character/knowledge.py`)。
 
     知る相手は人物か場所のどちらか一方。場所なら、その時刻にその場所(配下も含む)に住む人物が知る。誰もが知ることは世界の場所で表す。
     """
@@ -379,7 +379,7 @@ class Character(EventSeededMixin, ContentBase):
     appearance: Mapped[str | None] = mapped_column(
         String, comment="外見。見て分かること(顔立ち・体つき・身なり・目に見える持ち物)", sort_order=9990)
     text: Mapped[str | None] = mapped_column(
-        String, nullable=True, comment="人物の芯(経歴・立場・性格の説明)。いつの話・出来事にも渡す", sort_order=10000)
+        String, nullable=True, comment="人物の芯(経歴・立場・性格の説明)。いつの話・出来事にも渡す。本人と関係のある人物が知る", sort_order=10000)
     meme: Mapped[str | None] = mapped_column(
         String, comment="持つミーム。`- <古今表裏>: <文面>` の箇条書き", sort_order=10010)
     principle: Mapped[str | None] = mapped_column(
@@ -405,8 +405,8 @@ class Character(EventSeededMixin, ContentBase):
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
     # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。本文を知る相手は `knowers` の配列で出し入れする。
-    CHILD_LISTS = ("parameters", "locations", "histories", "knowers")
+    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。
+    CHILD_LISTS = ("parameters", "locations", "histories")
 
     @property
     def start(self) -> Stamp | None:
@@ -432,7 +432,7 @@ class Character(EventSeededMixin, ContentBase):
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterLocation.start.desc().nulls_last()",
         doc="住まい・拠点を期間ごとに一行で持つ。一番古い行が出自。出来事の当事者はこの居場所から選び、"
-        "場所を知る相手にした本文・来歴は、その時刻にそこ(配下も含む)に住む人物が知る"
+        "場所を知る相手にした来歴は、その時刻にそこ(配下も含む)に住む人物が知る"
     )
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
@@ -444,33 +444,6 @@ class Character(EventSeededMixin, ContentBase):
         secondary="event_character", viewonly=True, lazy="noload",
         order_by="Event.start.desc().nulls_last()"
     )
-    knowers: Mapped[list["CharacterKnower"]] = relationship(
-        foreign_keys="CharacterKnower.character_id", back_populates="character", lazy="selectin",
-        cascade="all, delete-orphan", order_by="CharacterKnower.id",
-        doc="人物の芯(text)を知る相手(人物か場所のどちらか)と、知った時刻。"
-        "足すとき本人が入る。本人も知らない芯(記憶を失った人物など)なら本人を外す")
-
-
-
-@event.listens_for(Character, "init")
-def _knows_oneself(target: Character, args, kwargs) -> None:
-    # 人物は自分の本文を知っている。本人も知らない本文(記憶を失った人物など)にするときは、知る相手から本人を外す
-    if "knowers" not in kwargs:
-        target.knowers = [CharacterKnower(knower=target)]
-
-
-class CharacterKnower(KnowerMixin, Base):
-    """人物の本文(`text`)を知る相手。"""
-
-    __tablename__ = "character_knower"
-    __table_args__ = _knower_args("character_knower", "character_id")
-
-    character_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="知られる人物", sort_order=100)
-
-    character: Mapped[Character] = relationship(
-        foreign_keys="CharacterKnower.character_id", back_populates="knowers", lazy="noload")
-    knower: Mapped[Character | None] = relationship(foreign_keys="CharacterKnower.knower_id", lazy="noload")
 
 
 class CharacterParameter(Base):

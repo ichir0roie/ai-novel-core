@@ -153,9 +153,8 @@ export const deleteCharacterSkill = (skillId: number) =>
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
 
-/** 人物の芯と来歴とスキルの来歴か、アイデアの履歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
+/** 人物の来歴とスキルの来歴か、アイデアの履歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
 export type KnowableRows = {
-  character: { id: number; name: string | null; text: string | null; knowers: Rec[] } | null;
   character_histories: { id: number; character_id: number; start: number | null; description: string; knowers: Rec[] }[];
   character_skills: {
     id: number; name: string;
@@ -172,7 +171,6 @@ export const readKnowableRows = async (source: { character_id: number } | { idea
 
 /** 人物が知る相手に人物として入っている行(`character.read_known_rows.ReadKnownRows`)。 */
 export type KnownRows = {
-  character_ids: number[];
   character_histories: { id: number; character_id: number }[];
   character_skill_histories: { id: number; character_id: number }[];
   idea_histories: { id: number; idea_id: number }[];
@@ -185,8 +183,8 @@ export type KnowledgeChange = { id: number; known: boolean; start: string | null
 
 /** 知る相手の付け外しをまとめて直し、直したあとの知る行を返す(`character.update_knowledge.UpdateKnowledge`)。 */
 export const updateKnowledge = async (knowledge: {
-  knower_id: number; characters: KnowledgeChange[]; character_histories: KnowledgeChange[];
-  character_skill_histories: KnowledgeChange[]; idea_histories: KnowledgeChange[];
+  knower_id: number; character_histories: KnowledgeChange[]; character_skill_histories: KnowledgeChange[];
+  idea_histories: KnowledgeChange[];
 }) => (await runEntrance("character.update_knowledge.UpdateKnowledge", { knowledge })).result as KnownRows;
 
 export type MapsResponse = components["schemas"]["MapsResponse"];

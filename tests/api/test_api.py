@@ -27,9 +27,9 @@ def test_tables(client, world):
     assert response.status_code == 200
     body = response.json()
     tables = {table["name"]: table for table in body["tables"]}
-    assert set(tables) == {"story", "episode", "character", "character_relation", "event", "location", "idea",
+    assert set(tables) == {"story", "episode", "character", "character_relation", "character_skill", "event", "location", "idea",
                            "meme", "oracle", "style_preference"}
-    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories", "knowers"}
+    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
 
 
 def test_list_records(client, world):
