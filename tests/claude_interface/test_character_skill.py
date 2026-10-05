@@ -168,3 +168,24 @@ def test_delete_location_removes_skill_history_knowers(shown, world):
     with get_env_session() as s:
         [history] = s.scalars(select(CharacterSkillHistory).where(CharacterSkillHistory.character_skill_id == skill["id"])).all()
         assert history.knowers == []
+
+
+def test_update_character_skill_matches_rows_by_year_not_by_order(shown, world):
+    taro, hanako = world.character_ids
+    skill = shown(CommitCharacterSkill(CharacterSkillCreateForm(character_id=taro, name="テスト槍術", histories=[
+        CharacterSkillHistoryRow(start=1185, description="槍を握る", knowers=[KnowerRow(knower_id=hanako)]),
+        CharacterSkillHistoryRow(start=1190, description="師に就く", knowers=[KnowerRow(knower_id=taro)]),
+        CharacterSkillHistoryRow(start=1195, description="皆伝",
+                                 knowers=[KnowerRow(knower_id=taro), KnowerRow(knower_id=hanako)])])))
+
+    # 古い順に並べ直し、知る相手の並びも入れ替えて渡しても、別の年の行の知る相手を書き換えない(一意制約にも当たらない)
+    updated = shown(UpdateCharacterSkill(CharacterSkillUpdateForm(id=skill["id"], histories=[
+        CharacterSkillHistoryRow(start=1185, description="槍を握る"),
+        CharacterSkillHistoryRow(start=1190, description="師に就く"),
+        CharacterSkillHistoryRow(start=1195, description="皆伝",
+                                 knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro)]),
+        CharacterSkillHistoryRow(description="年未定の構想")])))
+
+    knowers = {history["description"]: sorted(knower["knower_id"] for knower in history["knowers"])
+               for history in updated["histories"]}
+    assert knowers == {"槍を握る": [hanako], "師に就く": [taro], "皆伝": sorted([taro, hanako]), "年未定の構想": [taro]}
