@@ -354,7 +354,8 @@ class KnowerMixin:
     location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"), index=True,
         comment="知る場所。その時刻にこの場所(配下も含む)に住む人物が知る", sort_order=120)
-    start: Mapped[Stamp | None] = mapped_column(StampType, comment="知った時刻。空なら初めから知っている", sort_order=130)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="知った時刻。空ならいつ知ったか決まっておらず、人物役には渡さない", sort_order=130)
 
 
 def _knower_args(table: str, subject: str) -> tuple:
@@ -772,6 +773,39 @@ class IdeaHistoryKnower(KnowerMixin, Base):
 
     history: Mapped[IdeaHistory] = relationship(back_populates="knowers", lazy="noload")
     knower: Mapped["Character | None"] = relationship(lazy="noload")
+
+
+def _subject_start(s: Session, row: KnowerMixin) -> Stamp | None:
+    """知る相手の行の、知られる行の始まり。人物・スキルの来歴は年で持つので、その年の初め。"""
+    match row:
+        case IdeaHistoryKnower():
+            history = row.history or s.get(IdeaHistory, row.idea_history_id)
+            return None if history is None else history.start
+        case CharacterHistoryKnower():
+            year = (row.history or s.get_one(CharacterHistory, row.character_history_id)).start
+        case CharacterSkillHistoryKnower():
+            year = (row.history or s.get_one(CharacterSkillHistory, row.character_skill_history_id)).start
+        case _:
+            return None
+    return None if year is None else Stamp(year)
+
+
+def _knower_start(s: Session, row: KnowerMixin) -> Stamp | None:
+    """知る人物なら生まれ。場所なら、知られる行の始まりか、場所のできた時刻。"""
+    character = getattr(row, "knower", None) or (None if row.knower_id is None else s.get(Character, row.knower_id))
+    if character is not None:
+        return character.start
+    location = None if row.location_id is None else s.get(Location, row.location_id)
+    return _subject_start(s, row) or (None if location is None else location.start)
+
+
+@event.listens_for(Session, "before_flush")
+def _date_new_knowers(s: Session, _flush_context, _instances) -> None:
+    """知った時刻を渡さずに足した・直した知る相手に、知った時刻を入れる。
+    知った時刻の空いた行は人物役に読ませない(`data_access_logic/character/knowledge.py`)ので、空のまま書かない。"""
+    for row in [*s.new, *s.dirty]:
+        if isinstance(row, KnowerMixin) and row.start is None:
+            row.start = _knower_start(s, row)
 
 
 class Story(TextBase):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 import re
 
 from sqlalchemy import ColumnElement, Select, func, or_, select
@@ -10,7 +10,7 @@ from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
-from data_access_logic.query.period import alive_at
+from data_access_logic.query.period import Period, alive_at
 from db.schema import (
     Base, Character, CharacterLocation, CharacterRelation, CharacterSkill, Episode, Event, EventCharacter, Idea,
     Location, Story,
@@ -323,13 +323,15 @@ def ideas_select(location_ids: Collection[int] | None, time: Stamp | None = None
             .order_by(Idea.id))
 
 
-def character_relations_at_select(character_ids: Collection[int], time: Stamp) -> Select[CharacterRelation]:
-    """`character_ids` のどれかが片側にいて、`time` に続いている関係を、両側の人物と来歴ごと読む。"""
+def character_relations_at_select(
+    character_ids: Collection[int], time: Stamp, period: Callable[[Period, Stamp], ColumnElement[bool]] = alive_at,
+) -> Select[CharacterRelation]:
+    """`character_ids` のどれかが片側にいて、`time` に続いている(`period` に当たる)関係を、両側の人物と来歴ごと読む。"""
     return (select(CharacterRelation)
             .options(selectinload(CharacterRelation.character_1), selectinload(CharacterRelation.character_2))
             .where(or_(CharacterRelation.character_1_id.in_(character_ids),
                        CharacterRelation.character_2_id.in_(character_ids)),
-                   alive_at(CharacterRelation, time))
+                   period(CharacterRelation, time))
             .order_by(CharacterRelation.id)
             .execution_options(populate_existing=True))
 

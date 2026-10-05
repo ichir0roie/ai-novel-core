@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
-from data_access_logic.episode import brief, framer, material, moves, plot_completer
+from data_access_logic.episode import brief, framer, material, moves, plot_completer, relations
 from data_access_logic.episode.moves import EpisodeMovesMaterial
+from data_access_logic.episode.relations import EpisodeRelationsMaterial, RelationsForm
+from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, has_cast, save_frame, set_characters
@@ -219,3 +221,13 @@ def episode_record(s: Session, form: RowId) -> EpisodeRecord:
 @db_step
 def moves_material(s: Session, form: RowId) -> EpisodeMovesMaterial | None:
     return moves.moves_material(s, form.id)
+
+
+@db_step
+def relations_material(s: Session, form: RowId) -> EpisodeRelationsMaterial | None:
+    return relations.relations_material(s, form.id)
+
+
+@db_step
+def add_relations(s: Session, form: RelationsForm) -> list[CharacterRelationRecord]:
+    return relations.add_relations(s, form)

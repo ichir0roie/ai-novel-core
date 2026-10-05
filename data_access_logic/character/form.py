@@ -164,7 +164,7 @@ class KnowledgeChange(Form):
     id: int
     # true なら知る相手に入れ(入っていれば知った時刻を直す)、false なら外す
     known: bool
-    # 知った時刻。空なら初めから知っている。known が false なら使わない
+    # 知った時刻。空なら、知る人物の生まれ(場所なら、知られる行の始まりか場所のできた時刻)が入る。known が false なら使わない
     start: Timestamp | None = None
 
 

@@ -9,6 +9,7 @@
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
 人物の来歴はその時刻までに起きた行だけ。
+期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
@@ -30,7 +31,7 @@ from data_access_logic.character import skills
 from data_access_logic.idea.models import normalized
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
-from data_access_logic.query.period import alive_at
+from data_access_logic.query.period import dated_alive_at
 from db.schema import (
     Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, IdeaHistory, IdeaHistoryKnower, KnowerMixin,
 )
@@ -54,7 +55,8 @@ def viewer_of(s: Session, character: Character, time: Stamp) -> Viewer:
 
 
 def knows(knowers: Sequence[KnowerMixin], viewer: Viewer) -> bool:
-    return any((knower.start is None or knower.start <= viewer.time)
+    """知った時刻の決まっていない相手は、まだ知らないものとする。"""
+    return any(knower.start is not None and knower.start <= viewer.time
                and (knower.knower_id == viewer.character_id or knower.location_id in viewer.location_ids)
                for knower in knowers)
 
@@ -206,7 +208,7 @@ class KnownIdeasSerialized(Material):
 def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
     relations = s.scalars(select(CharacterRelation).where(
         or_(CharacterRelation.character_1_id == character.id, CharacterRelation.character_2_id == character.id),
-        alive_at(CharacterRelation, time)).order_by(CharacterRelation.id)).all()
+        dated_alive_at(CharacterRelation, time)).order_by(CharacterRelation.id)).all()
     ids = [relation.character_2_id if relation.character_1_id == character.id else relation.character_1_id
            for relation in relations]
     return [id_ for id_ in dict.fromkeys(ids) if id_ != character.id]
@@ -225,7 +227,7 @@ def _ideas(s: Session, viewer: Viewer, mentioned: Callable[[list[str]], bool]) -
         IdeaHistoryKnower.knower_id == viewer.character_id, IdeaHistoryKnower.location_id.in_(list(viewer.location_ids))))
     rows = s.scalars(
         select(IdeaHistory)
-        .where(IdeaHistory.id.in_(told))
+        .where(IdeaHistory.id.in_(told), dated_alive_at(IdeaHistory, viewer.time))
         .options(joinedload(IdeaHistory.idea))
         .order_by(IdeaHistory.idea_id, IdeaHistory.id)
         .execution_options(populate_existing=True)).all()
@@ -274,7 +276,7 @@ def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> 
                      text=character.text, meme=character.meme, principle=character.principle,
                      histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer)),
         parameters=parameters_at(character, time),
-        relations=relations_at(s, [character], time),
+        relations=relations_at(s, [character], time, dated_alive_at),
         characters=[KnownCharacter(name=other.name, looks=appearance_of(other, time),
                                    text=other.text,
                                    histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
