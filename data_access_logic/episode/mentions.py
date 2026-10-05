@@ -2,7 +2,8 @@
 """話に名前だけ出る人物(`episode_character.mentioned`)を、プロット・本文から拾い直す。
 
 登場人物(`mentioned` でない行)は作者が決めるので触らない。拾うのは、人物・対象のうち、
-登場人物でなく、名前がプロット・本文に語として出るもの。
+登場人物でなく、名前がプロット・本文に語として出るもの。ただし話の時刻に別の星に住んでいる人物は、
+同じ名の別人(地球のテオと港町のテオなど)なので拾わない。
 """
 from __future__ import annotations
 
@@ -12,7 +13,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from data_access_logic.material import Named
+from data_access_logic.query import common_query
 from db.schema import Character, Episode, EpisodeCharacter
+from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,17 @@ def named_characters(s: Session) -> list[Named]:
     return [Named(id=row.id, name=row.name) for row in rows if len(row.name) >= _MIN_NAME_LENGTH]
 
 
+def _planet_id(s: Session, location_id: int) -> int | None:
+    return next((step.id for step in common_query.location_path(s, location_id) if step.kind == "星"), None)
+
+
+def _elsewhere(s: Session, character_id: int, planet_id: int, time: Stamp) -> bool:
+    """その時刻の居場所がどれも別の星にある人物。居場所が無いか、星の分からない居場所があれば別とは言えないので拾う。"""
+    planets = [_planet_id(s, row.location_id)
+               for row in s.scalars(common_query.character_location_select(character_id, time))]
+    return bool(planets) and all(planet is not None and planet != planet_id for planet in planets)
+
+
 def save_mentions(s: Session, episode_id: int, characters: list[Named] | None = None) -> list[int]:
     """名前だけ出る人物の行を、今のプロット・本文から拾った人物で置き換え、その人物の id を返す。
     何話も続けて拾い直すときは、`named_characters` を一度だけ読んで渡す。"""
@@ -80,6 +94,9 @@ def save_mentions(s: Session, episode_id: int, characters: list[Named] | None = 
     text = "\n".join([episode.plot_text, episode.main_text])
     found = [character for character in (named_characters(s) if characters is None else characters)
              if character.id not in cast_ids and character.name and named_in(text, character.name)]
+    planet_id = _planet_id(s, episode.location_id) if episode.location_id is not None else None
+    if planet_id is not None and episode.start is not None:
+        found = [character for character in found if not _elsewhere(s, character.id, planet_id, episode.start)]
     s.execute(delete(EpisodeCharacter).where(EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.mentioned))
     s.add_all([EpisodeCharacter(episode_id=episode_id, character_id=character.id, mentioned=True)
                for character in found])
