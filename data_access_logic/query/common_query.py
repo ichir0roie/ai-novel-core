@@ -12,8 +12,8 @@ from data_access_logic.location.models import LocationMaterial
 from data_access_logic.query import dictionary_query
 from data_access_logic.query.period import alive_at
 from db.schema import (
-    Base, Character, CharacterLocation, CharacterRelation, Episode, Event, EventCharacter, Idea, Location,
-    Story,
+    Base, Character, CharacterLocation, CharacterRelation, CharacterSkill, Episode, Event, EventCharacter, Idea,
+    Location, Story,
 )
 from db.stamp import Stamp, StampError
 
@@ -331,6 +331,13 @@ def character_relations_at_select(character_ids: Collection[int], time: Stamp) -
                        CharacterRelation.character_2_id.in_(character_ids)),
                    alive_at(CharacterRelation, time))
             .order_by(CharacterRelation.id)
+            .execution_options(populate_existing=True))
+
+
+def character_skills_select(character_id: int) -> Select[CharacterSkill]:
+    return (select(CharacterSkill)
+            .where(CharacterSkill.character_id == character_id)
+            .order_by(CharacterSkill.id)
             .execution_options(populate_existing=True))
 
 

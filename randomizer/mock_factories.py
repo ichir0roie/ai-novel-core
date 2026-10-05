@@ -8,8 +8,8 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from db.schema import (
     CHARACTER_KIND_PERSON,
-    Base, Character, CharacterHistory, CharacterParameter, CharacterLocation, Episode, Event, EventCharacter,
-    Idea, Location, Story,
+    Base, Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterSkill, CharacterSkillHistory,
+    Episode, Event, EventCharacter, Idea, Location, Story,
 )
 from db.stamp import Stamp
 from randomizer.random_character_generator import _personality
@@ -34,6 +34,7 @@ _SAMPLE_REGIONS = ("北欧", "地中海沿岸", "東アジア", "中東", "南�
 _SAMPLE_CULTURES = ("遊牧", "稲作", "狩猟採集", "交易", "漁労", "牧畜", "都市商業")
 _SAMPLE_ERAS = ("古代", "中世", "近世", "産業革命期", "近代", "現代", "近未来")
 _CHARACTER_KINDS = (CHARACTER_KIND_PERSON,) * 7 + ("国", "組織", "商会", "氏族", "集団", "物")
+_SKILL_NAMES = ("剣術", "弓術", "火の魔法", "治癒の術", "鍛冶", "交渉", "読み書き", "薬草の見分け", "操船", "隠密")
 _IDEA_KINDS = ("地名", "人名", "組織", "技術", "魔法", "制度", "道具", "生物", "慣習")
 
 
@@ -178,6 +179,25 @@ class CharacterHistoryFactory(_ModelFactory):
     description = _text()
 
 
+class CharacterSkillFactory(_ModelFactory):
+    class Meta:
+        model = CharacterSkill
+
+    character_id = _pool(Character, "CharacterFactory")
+    name = factory.Faker("random_element", elements=_SKILL_NAMES)
+    text = _text()
+
+
+class CharacterSkillHistoryFactory(_ModelFactory):
+    class Meta:
+        model = CharacterSkillHistory
+
+    character_skill_id = _pool(CharacterSkill, "CharacterSkillFactory")
+    # 起きた年。空なら年未定
+    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp().year)
+    description = _text()
+
+
 class EventFactory(_ModelFactory):
     class Meta:
         model = Event
@@ -251,6 +271,8 @@ ALL_FACTORIES = (
     CharacterFactory,
     CharacterParameterFactory,
     CharacterHistoryFactory,
+    CharacterSkillFactory,
+    CharacterSkillHistoryFactory,
     EventFactory,
     EventCharacterFactory,
     CharacterLocationFactory,

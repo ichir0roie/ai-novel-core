@@ -4,10 +4,15 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from data_access_logic.character.record import KnownCharacterHistory, KnownIdeaHistory, KnownRows
+from data_access_logic.character.record import (
+    KnownCharacterHistory, KnownCharacterSkillHistory, KnownIdeaHistory, KnownRows,
+)
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.query import common_query
-from db.schema import Character, CharacterHistory, CharacterHistoryKnower, CharacterKnower, IdeaHistory, IdeaHistoryKnower
+from db.schema import (
+    Character, CharacterHistory, CharacterHistoryKnower, CharacterKnower, CharacterSkill, CharacterSkillHistory,
+    CharacterSkillHistoryKnower, IdeaHistory, IdeaHistoryKnower,
+)
 
 
 def known_rows(s: Session, knower_id: int) -> KnownRows:
@@ -17,6 +22,9 @@ def known_rows(s: Session, knower_id: int) -> KnownRows:
         character_histories=[KnownCharacterHistory.model_validate(row) for row in s.scalars(
             select(CharacterHistory).join(CharacterHistoryKnower).where(CharacterHistoryKnower.knower_id == knower_id)
             .order_by(CharacterHistory.id))],
+        character_skill_histories=[KnownCharacterSkillHistory(id=id_, character_id=character_id) for id_, character_id in s.execute(
+            select(CharacterSkillHistory.id, CharacterSkill.character_id).join(CharacterSkill).join(CharacterSkillHistoryKnower)
+            .where(CharacterSkillHistoryKnower.knower_id == knower_id).order_by(CharacterSkillHistory.id))],
         idea_histories=[KnownIdeaHistory.model_validate(row) for row in s.scalars(
             select(IdeaHistory).join(IdeaHistoryKnower).where(IdeaHistoryKnower.knower_id == knower_id)
             .order_by(IdeaHistory.id))],
@@ -24,7 +32,7 @@ def known_rows(s: Session, knower_id: int) -> KnownRows:
 
 
 class ReadKnownRows(SessionEntrypoint):
-    """人物が知る相手に人物として入っている、人物の芯・人物の来歴・アイデアの履歴の行を読む(GUI の知識整理の木の印)。"""
+    """人物が知る相手に人物として入っている、人物の芯・人物の来歴・スキルの来歴・アイデアの履歴の行を読む(GUI の知識整理の木の印)。"""
 
     def __init__(self, knower_id: int):
         self.knower_id = knower_id

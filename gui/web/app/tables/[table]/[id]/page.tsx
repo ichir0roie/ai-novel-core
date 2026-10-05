@@ -9,6 +9,7 @@ import { invalidateOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
 import StoryEpisodes from "@/components/StoryEpisodes";
 import {
+  deleteCharacterSkill,
   deleteEpisode,
   deleteIdeaDetachingChildren,
   diff,
@@ -26,9 +27,11 @@ import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-/** start が空の行を最後に並べる子リスト。人物・関係の来歴の空の start は「年未定」(`db/schema.py` の CharacterHistory.start)。
+/** start が空の行を最後に並べる子リスト。人物・関係・スキルの来歴の空の start は「年未定」(`db/schema.py` の CharacterHistory.start)。
  * ほかの子リストの空の start は「初めから」なので先頭に置く。 */
-const UNDATED_LAST: Record<string, string[]> = { character: ["histories"], character_relation: ["histories"] };
+const UNDATED_LAST: Record<string, string[]> = {
+  character: ["histories"], character_relation: ["histories"], character_skill: ["histories"],
+};
 
 /** 期間ごとの行(各要素が start を持つ子リスト)を、その画面のためだけに start 昇順で並べ直す。 */
 function sortChildListsByStart(table: string, record: Rec): Rec {
@@ -50,9 +53,11 @@ function sortChildListsByStart(table: string, record: Rec): Rec {
   return sorted;
 }
 
-/** 記録のページから戻る一覧。話は同じ作品で絞った一覧に戻す。 */
+/** 記録のページから戻る一覧。話は同じ作品で、スキルは同じ人物で絞った一覧に戻す。 */
 function listHref(table: string, record: Rec): string {
-  return table === "episode" && record.story_id != null ? `/tables/${table}?story_id=${record.story_id}` : `/tables/${table}`;
+  if (table === "episode" && record.story_id != null) return `/tables/${table}?story_id=${record.story_id}`;
+  if (table === "character_skill" && record.character_id != null) return `/tables/${table}?character_id=${record.character_id}`;
+  return `/tables/${table}`;
 }
 
 export default function RecordPage() {
@@ -140,13 +145,16 @@ export default function RecordPage() {
     const message =
       table === "episode"
         ? T.record.confirmDeleteEpisode(label)
-        : childIds.length > 0
-          ? T.ideaTree.confirmDeleteWithChildren(label, childIds.length)
-          : T.record.confirmDeleteIdea(label);
+        : table === "character_skill"
+          ? T.record.confirmDeleteSkill(label)
+          : childIds.length > 0
+            ? T.ideaTree.confirmDeleteWithChildren(label, childIds.length)
+            : T.record.confirmDeleteIdea(label);
     if (!window.confirm(message)) return;
     setBusy(true);
     try {
       if (table === "episode") await deleteEpisode(Number(id));
+      else if (table === "character_skill") await deleteCharacterSkill(Number(id));
       else await deleteIdeaDetachingChildren(Number(id), childIds);
       invalidateOptions(table);
       openPage(listHref(table, loaded.record));
@@ -263,7 +271,7 @@ export default function RecordPage() {
                   )}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
-                  {(table === "episode" || table === "idea") && (
+                  {(table === "episode" || table === "idea" || table === "character_skill") && (
                     <button className="danger" onClick={() => void remove()} disabled={busy}>
                       {T.record.delete}
                     </button>

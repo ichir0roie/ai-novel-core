@@ -51,6 +51,15 @@ class CharacterHistoryRow(_ChildRow):
     knowers: list[KnowerRow] | None = None
 
 
+class CharacterSkillHistoryRow(_ChildRow):
+    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・人物役には渡さない)
+    start: int | None = None
+    description: str
+    # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行はスキルを持つ本人だけ、
+    # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
+    knowers: list[KnowerRow] | None = None
+
+
 class CharacterRelationHistoryRow(_ChildRow):
     # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・人物役には渡さない)
     start: int | None = None
@@ -105,6 +114,22 @@ class CharacterRelationRecord(Material):
     histories: list[CharacterRelationHistoryRow]
 
 
+class CharacterSkillRecord(Material):
+    id: int
+    character_id: int
+    name: str
+    # すべての来歴の行。話・人物役に渡すときは、その時刻までに起きた行だけに絞る(`skills.skills_at`)
+    histories: list[CharacterSkillHistoryRow]
+    # スキルの本質。作者だけが読む
+    text: str
+
+
+class CharacterSkillName(Material):
+    id: int
+    character_id: int
+    name: str
+
+
 class GeneratedCharacter(Material):
     id: int
     name: str | None = None
@@ -140,6 +165,24 @@ class CharacterHistoryEntry(Material):
     knowers: list[KnowerRow]
 
 
+class CharacterSkillHistoryEntry(Material):
+    """知る相手を直すために、行を id で指せるスキルの来歴の行(`ReadKnowableRows`)。"""
+
+    id: int
+    character_skill_id: int
+    start: int | None = None
+    description: str
+    knowers: list[KnowerRow]
+
+
+class CharacterSkillEntry(Material):
+    """知る相手を直すために読む、スキルとその来歴の行(`ReadKnowableRows`)。スキルの本文は作者だけが読むので持たない。"""
+
+    id: int
+    name: str
+    histories: list[CharacterSkillHistoryEntry]
+
+
 class IdeaHistoryEntry(Material):
     """知る相手を直すために、行を id で指せるアイデアの履歴の行(`ReadKnowableRows`)。"""
 
@@ -154,14 +197,21 @@ class IdeaHistoryEntry(Material):
 
 
 class KnowableRows(Material):
-    # 人物を渡したときはその芯と来歴、アイデアを渡したときはその履歴だけが入る
+    # 人物を渡したときはその芯と来歴とスキルの来歴、アイデアを渡したときはその履歴だけが入る
     character: CharacterTextEntry | None = None
     character_histories: list[CharacterHistoryEntry]
+    character_skills: list[CharacterSkillEntry]
     idea_histories: list[IdeaHistoryEntry]
 
 
 class KnownCharacterHistory(Material):
     id: int
+    character_id: int
+
+
+class KnownCharacterSkillHistory(Material):
+    id: int
+    # スキルを持つ人物(知識整理の木の、人物の行に印を付ける)
     character_id: int
 
 
@@ -176,4 +226,5 @@ class KnownRows(Material):
     # 芯を知る人物の id
     character_ids: list[int]
     character_histories: list[KnownCharacterHistory]
+    character_skill_histories: list[KnownCharacterSkillHistory]
     idea_histories: list[KnownIdeaHistory]

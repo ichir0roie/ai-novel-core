@@ -96,21 +96,39 @@ class CharacterHistoryMaterial(Material):
     knowers: list[KnowerMaterial]
 
 
+class CharacterSkillMaterial(Material):
+    """作者の目で読むスキル。"""
+
+    name: str
+    # スキルの本質。作者だけが読む
+    text: str
+    # その時刻までに起きた来歴(`skills.rows_at`)。知る相手に関わらずすべて
+    histories: list[CharacterHistoryMaterial]
+
+
 class CharacterSecrets(Material):
-    """人物の芯・来歴を、誰が知っているか。語り部と本文を書く Claude の材料に添える(`cast.secrets_at`)。"""
+    """人物の芯・来歴・スキルを、誰が知っているか。語り部と本文を書く Claude の材料に添える(`cast.secrets_at`)。"""
 
     # 芯(`text`)を知る相手
     knowers: list[KnowerMaterial]
     # その時刻までに起きた来歴(`histories.rows_at`)。知る相手に関わらずすべて
     histories: list[CharacterHistoryMaterial]
+    # その時刻までに来歴の行が始まったスキル(まだ持っていないスキルは入らない)
+    skills: list[CharacterSkillMaterial]
+
+
+def _dated_histories_for_prompt(histories: list[CharacterHistoryMaterial]) -> list[dict[str, Any]]:
+    return [{"年": history.start, "来歴": history.description, "知る相手": knowers_for_prompt(history.knowers)}
+            for history in histories]
 
 
 def secrets_for_prompt(secrets: CharacterSecrets) -> dict[str, Any]:
     """`_sheet` の来歴を、知る相手つきの行に置き換える。"""
     return {
         "人物像を知る相手": knowers_for_prompt(secrets.knowers),
-        "来歴(古い順)": [{"年": history.start, "来歴": history.description,
-                       "知る相手": knowers_for_prompt(history.knowers)} for history in secrets.histories],
+        "来歴(古い順)": _dated_histories_for_prompt(secrets.histories),
+        "スキル": [{"名前": skill.name, "本質": skill.text, "来歴(古い順)": _dated_histories_for_prompt(skill.histories)}
+                 for skill in secrets.skills],
     }
 
 

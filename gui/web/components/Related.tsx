@@ -25,6 +25,7 @@ export default function Related({
     : owner?.table === "episode" && episodeStoryId != null
       ? { href: `/maps?story=${episodeStoryId}&episode=${owner.id}`, ...T.related.episodeRoute }
     : null;
+  const skills = owner?.table === "character" ? { href: `/tables/character_skill?character_id=${owner.id}`, ...T.related.skills } : null;
   const hasContext = context && Object.values(context).some((block) => block.items.length > 0);
   const showCharacters = characterIds !== undefined && onChangeCharacterIds !== undefined;
   if (!episodes && !graph && !hasContext && !showCharacters) return null;
@@ -36,6 +37,12 @@ export default function Related({
             <Link href={graph.href} className="jump">
               <span className="jump-title">{graph.title}</span>
               <span className="jump-sub">{graph.sub}</span>
+            </Link>
+          )}
+          {skills && (
+            <Link href={skills.href} className="jump">
+              <span className="jump-title">{skills.title}</span>
+              <span className="jump-sub">{skills.sub}</span>
             </Link>
           )}
           {episodes && owner?.table === "story" && (

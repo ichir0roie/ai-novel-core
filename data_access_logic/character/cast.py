@@ -4,14 +4,15 @@ from sqlalchemy.orm import Session
 from data_access_logic import constants
 from data_access_logic.character.models import (
     CastCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine, CharacterSecrets,
-    MentionedSerialized, ParticipantSerialized,
+    CharacterSkillMaterial, MentionedSerialized, ParticipantSerialized,
 )
 from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character import skills
 from data_access_logic.event.summary import events_of
 from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
-from db.schema import Character, Event
+from db.schema import Character, CharacterHistory, CharacterSkillHistory, Event
 from db.stamp import Stamp
 
 
@@ -60,12 +61,18 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
     ]
 
 
+def _history_material(s: Session, row: CharacterHistory | CharacterSkillHistory, time: Stamp) -> CharacterHistoryMaterial:
+    return CharacterHistoryMaterial(start=row.start, description=row.description, knowers=knowers_at(s, row.knowers, time))
+
+
 def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecrets:
+    skill_rows = [(skill, skills.rows_at(skill, time)) for skill in skills.skills_of(s, character.id)]
     return CharacterSecrets(
         knowers=knowers_at(s, character.knowers, time),
-        histories=[CharacterHistoryMaterial(start=row.start, description=row.description,
-                                            knowers=knowers_at(s, row.knowers, time))
-                   for row in rows_at(character, time)],
+        histories=[_history_material(s, row, time) for row in rows_at(character, time)],
+        skills=[CharacterSkillMaterial(name=skill.name, text=skill.text,
+                                       histories=[_history_material(s, row, time) for row in rows])
+                for skill, rows in skill_rows if rows],
     )
 
 

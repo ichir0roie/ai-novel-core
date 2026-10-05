@@ -145,14 +145,22 @@ export const updateEpisodes = (episodes: Rec[]) => runEntrance("episode.update_e
 /** ミームをまとめて消す(一つでも無ければ何も消さない)。`meme.delete_meme.DeleteMeme` を呼ぶ。 */
 export const deleteMemes = (memeIds: number[]) => runEntrance("meme.delete_meme.DeleteMeme", { meme_ids: memeIds });
 
+/** 人物のスキルを消す(来歴の行と、その知る相手の行も消える)。`character.delete_character_skill.DeleteCharacterSkill` を呼ぶ。 */
+export const deleteCharacterSkill = (skillId: number) =>
+  runEntrance("character.delete_character_skill.DeleteCharacterSkill", { character_skill_id: skillId });
+
 /** 話を消す(登場人物・踏まえたアイデアとの中間テーブルの行も消える)。`episode.delete_episode.DeleteEpisode` を呼ぶ。 */
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
 
-/** 人物の芯と来歴か、アイデアの履歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
+/** 人物の芯と来歴とスキルの来歴か、アイデアの履歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
 export type KnowableRows = {
   character: { id: number; name: string | null; text: string | null; knowers: Rec[] } | null;
   character_histories: { id: number; character_id: number; start: number | null; description: string; knowers: Rec[] }[];
+  character_skills: {
+    id: number; name: string;
+    histories: { id: number; character_skill_id: number; start: number | null; description: string; knowers: Rec[] }[];
+  }[];
   idea_histories: {
     id: number; idea_id: number; location_id: number | null; start: string | null; end: string | null;
     name: string; detail: string | null; knowers: Rec[];
@@ -166,6 +174,7 @@ export const readKnowableRows = async (source: { character_id: number } | { idea
 export type KnownRows = {
   character_ids: number[];
   character_histories: { id: number; character_id: number }[];
+  character_skill_histories: { id: number; character_id: number }[];
   idea_histories: { id: number; idea_id: number }[];
 };
 
@@ -176,7 +185,8 @@ export type KnowledgeChange = { id: number; known: boolean; start: string | null
 
 /** 知る相手の付け外しをまとめて直し、直したあとの知る行を返す(`character.update_knowledge.UpdateKnowledge`)。 */
 export const updateKnowledge = async (knowledge: {
-  knower_id: number; characters: KnowledgeChange[]; character_histories: KnowledgeChange[]; idea_histories: KnowledgeChange[];
+  knower_id: number; characters: KnowledgeChange[]; character_histories: KnowledgeChange[];
+  character_skill_histories: KnowledgeChange[]; idea_histories: KnowledgeChange[];
 }) => (await runEntrance("character.update_knowledge.UpdateKnowledge", { knowledge })).result as KnownRows;
 
 export type MapsResponse = components["schemas"]["MapsResponse"];
