@@ -17,7 +17,7 @@ from typing import Any, Callable
 from pydantic import BaseModel, TypeAdapter
 
 import data_access_logic
-from data_access_logic.entrypoint import CommitEntrypoint, Entrypoint, RandomDraft, SessionEntrypoint
+from data_access_logic.entrypoint import CommitEntrypoint, Entrypoint, RandomDraft, SessionEntrypoint, UnknownRecordError
 
 # `result()` を上書きしていない(= 確定のあとに AI を回さない)基底
 _PLAIN_RESULTS = {SessionEntrypoint.result, CommitEntrypoint.result, RandomDraft.result}
@@ -112,7 +112,7 @@ ENTRANCES: dict[str, Entrance] = {
 def entrance_of(entrance_id: str) -> Entrance:
     entrance = ENTRANCES.get(entrance_id)
     if entrance is None:
-        raise KeyError(f"入口が無い: {entrance_id}")
+        raise UnknownRecordError(f"入口が無い: {entrance_id}")
     return entrance
 
 

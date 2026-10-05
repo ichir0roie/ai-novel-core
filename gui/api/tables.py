@@ -24,6 +24,7 @@ from data_access_logic.character.update_character_relation import UpdateCharacte
 from data_access_logic.character.update_character_skill import UpdateCharacterSkill
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeCreateForm
+from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.commit_event import CommitEvent
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
@@ -113,5 +114,5 @@ TABLE_BY_NAME: dict[str, TableSpec] = {spec.name: spec for spec in TABLES}
 def spec_of(table: str) -> TableSpec:
     spec = TABLE_BY_NAME.get(table)
     if spec is None:
-        raise KeyError(f"GUI で扱わないテーブル: {table}")
+        raise UnknownRecordError(f"GUI で扱わないテーブル: {table}")
     return spec

@@ -83,8 +83,10 @@ export const T = {
     delete: "Delete",
     confirmDeleteEpisode: (label: string) =>
       `Delete episode "${label}"? Its cast is removed too. Events, ideas and memes taken from its text stay. This cannot be undone.`,
-    confirmDeleteIdea: (label: string) =>
-      `Delete idea "${label}"? Its histories are removed too. This cannot be undone.`,
+    confirmDeleteIdea: (label: string, childCount: number) =>
+      childCount > 0
+        ? `"${label}" has ${childCount} child idea${childCount === 1 ? "" : "s"}. They will be detached (moved to root) and then "${label}" will be deleted. Continue?`
+        : `Delete idea "${label}"? Its histories are removed too. This cannot be undone.`,
     confirmDeleteSkill: (label: string) =>
       `Delete skill "${label}"? Its histories and who knows them are removed too. This cannot be undone.`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
@@ -201,8 +203,6 @@ export const T = {
     expand: "Expand",
     collapseAll: "Collapse all",
     delete: "Delete",
-    confirmDeleteWithChildren: (name: string, count: number) =>
-      `"${name}" has ${count} child idea${count === 1 ? "" : "s"}. They will be detached (moved to root) and then "${name}" will be deleted. Continue?`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
     previousEpisode: "◀ Prev",
     nextEpisode: "Next ▶",

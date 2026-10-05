@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
+from data_access_logic.entrypoint import UnknownRecordError
 from db.schema import get_env_session
 
 _STEPS: dict[str, Callable[..., Any]] = {}
@@ -45,11 +46,18 @@ def step_of(id_: str) -> Callable[..., Any]:
     """登録した段だけを返す(API に、段でない関数を呼ばせない)。"""
     module_name, _, _ = id_.rpartition(".")
     if not module_name.endswith(".steps"):
-        raise KeyError(f"段が無い: {id_}")
-    importlib.import_module(f"data_access_logic.{module_name}")
+        raise UnknownRecordError(f"段が無い: {id_}")
+    module = f"data_access_logic.{module_name}"
+    try:
+        importlib.import_module(module)
+    except ModuleNotFoundError as error:
+        # 段のモジュールそのものが無いときだけ。中で他の import が落ちたのは実装の誤りなので通す
+        if error.name is None or not module.startswith(error.name):
+            raise
+        raise UnknownRecordError(f"段が無い: {id_}") from error
     step = _STEPS.get(id_)
     if step is None:
-        raise KeyError(f"段が無い: {id_}")
+        raise UnknownRecordError(f"段が無い: {id_}")
     return step
 
 
