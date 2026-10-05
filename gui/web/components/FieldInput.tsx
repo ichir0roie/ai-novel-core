@@ -58,6 +58,8 @@ type Props = {
   /** 本文(section)欄の高さを、枠いっぱい(既定)ではなく中身の行数ぶんにする。
    * すぐ下に続けて出す一覧(アイデアの呼び名など)のために空間を残したいときに使う。 */
   autoHeight?: boolean;
+  /** 本文(section)欄を、初めは枠に収まる行数だけ出して畳む(MarkdownField の collapsible) */
+  collapsible?: boolean;
   // 参照の欄で、絞り込み欄が空のときに出す選択肢の id(ReferenceSelect へ渡す)
   defaultIds?: number[] | null;
 };
@@ -92,7 +94,7 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   );
 }
 
-export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, defaultIds }: Props) {
+export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, collapsible, defaultIds }: Props) {
   const readonly = disabled || column.readonly;
   if (readonly) {
     return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
@@ -150,7 +152,7 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
     return column.markdown === false ? (
       <textarea className="section" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value)} />
     ) : (
-      <MarkdownField value={(value as string | null) ?? null} onChange={onChange} autoHeight={autoHeight} />
+      <MarkdownField value={(value as string | null) ?? null} onChange={onChange} autoHeight={autoHeight} collapsible={collapsible} />
     );
   }
   if (!compact && CHILD_FREEFORM_TEXT_KEYS.has(column.key)) {

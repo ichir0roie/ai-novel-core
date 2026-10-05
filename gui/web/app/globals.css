@@ -209,6 +209,18 @@ a.button-link:hover { border-color: var(--accent); }
 .record-text .field.section.auto .markdown-preview { height: auto; min-height: 3rem; resize: none; overflow: visible; flex: none; }
 /* textarea は overflow: visible を無視して auto 扱いにするブラウザの仕様があり、その結果 flex アイテムとしての
    自動最小サイズが中身の高さではなく 0 相当になって、上の flex: none が無いと JS が付けた高さを無視して縮む */
+/* 畳める本文(人物の本文)。閉じているときは数行ぶんの高さで切り、はみ出す分は下をぼかす。
+   クリックは全文の開閉だけで、編集は右上に重ねた編集ボタンから入る */
+.markdown-collapsible { position: relative; }
+.record-text .field.section .markdown-collapsible .markdown-preview { min-height: 3rem; cursor: default; padding-right: 4.2rem; }
+.record-text .field.section .markdown-collapsible .markdown-preview:hover { border-color: var(--line); }
+.record-text .field.section .markdown-collapsible .markdown-preview:is(.toggle, :has(> .hint)) { cursor: pointer; }
+.record-text .field.section .markdown-collapsible .markdown-preview:is(.toggle, :has(> .hint)):hover { border-color: var(--accent); }
+.record-text .field.section .markdown-collapsible .markdown-preview.closed { max-height: 7.6em; overflow: hidden; }
+.record-text .field.section .markdown-collapsible .markdown-preview.clipped {
+  mask-image: linear-gradient(to bottom, #000 55%, transparent); -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.markdown-collapsible .markdown-edit { position: absolute; top: 0.3rem; right: 0.3rem; padding: 0.15rem 0.6rem; font-size: 0.8rem; background: var(--panel); }
 /* 左側に置く section 欄(話のキーテキストなど)。本文とは並べないが、残った高さいっぱいまで使う。
    左の欄が画面に収まりきるよう、足りなければこの欄だけを縮めて中でスクロールする
    (保存ボタンを見るのに左の欄ごとスクロールしなくてよい)。登場人物の関係を開いても、プロットを書ける高さは残す
@@ -361,6 +373,17 @@ a.button-link:hover { border-color: var(--accent); }
 .jump-title { font-size: 1.6rem; font-weight: 700; }
 .jump-sub { font-size: 0.9rem; opacity: 0.85; }
 .jump + .jump { margin-top: 0.6rem; }
+/* モーダルを開く .jump(人物のスキル) */
+button.jump { width: 100%; border: none; cursor: pointer; }
+
+/* 人物のスキルのモーダル(SkillsModal)。スキルを一枚ずつ札にして縦に並べ、その場で直す */
+.skills { display: flex; flex-direction: column; gap: 0.8rem; }
+.skill-card { border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem 0.9rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.skill-card.changed { border-color: var(--accent); }
+.skill-head { display: flex; align-items: center; gap: 0.6rem; }
+.skill-head .spacer { flex: 1; }
+.skill-head input.skill-name { width: auto; flex: 0 1 20rem; font-weight: 600; }
+.skill-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
 .pager { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem; }
 .kbd { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--line); border-radius: 4px; padding: 0 0.3rem; color: var(--muted); }
 

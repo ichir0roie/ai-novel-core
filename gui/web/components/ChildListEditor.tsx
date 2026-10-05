@@ -221,10 +221,14 @@ function FlowCard({
     (c) => !CHILD_FREEFORM_TEXT_KEYS.has(c.key) && c.key !== "start" && c.key !== "end" && c.key !== "name");
 
   // カードの外をクリックするか、Tab でカードの外へ焦点が移ったら編集を終える。カードの欄から開いた選択のモーダル
-  // (場所の木など)は body の直下に描かれるので、モーダルの中もカードの中とみなす。焦点の行き先(activeElement)では
+  // (場所の木など)は body の直下に描かれるので、モーダルの中もカードの中とみなす(カード自身を置いたモーダル
+  // (人物のスキルなど)の中は外とする)。焦点の行き先(activeElement)では
   // 見ない: モーダルを開くと焦点がその入力欄へ、閉じると body へ落ち、どちらも「外へ出た」と取り違えてモーダルごと消える
-  const outside = (target: EventTarget | null) =>
-    target instanceof Element && !ref.current?.contains(target) && !target.closest(".modal-backdrop");
+  const outside = (target: EventTarget | null) => {
+    if (!(target instanceof Element) || ref.current?.contains(target)) return false;
+    const modal = target.closest(".modal-backdrop");
+    return modal === null || modal === ref.current?.closest(".modal-backdrop");
+  };
   useEffect(() => {
     if (!editing) return;
     const onPointerDown = (e: PointerEvent) => {
