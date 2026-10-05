@@ -242,7 +242,6 @@ export const T = {
     noMatch: "No match",
     pickSource: "Pick a character or an idea on the left to see its rows. Click a row to switch between known and not known",
     noHistories: "No rows",
-    profile: "Profile (text)",
     undated: "undated",
     year: (year: number) => `${year}`,
     anywhere: "anywhere",
