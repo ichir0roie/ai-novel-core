@@ -1,10 +1,13 @@
 """claude が CLI から `show()` で呼ぶ、場所(`data_access_logic/location/`)の入口。"""
+import json
+
 from data_access_logic.location.commit_location import CommitLocation
 from data_access_logic.location.create_random_location import CreateRandomLocation
 from data_access_logic.location.delete_location import DeleteLocation
 from data_access_logic.location.form import LocationCreateForm, LocationUpdateForm
 from data_access_logic.location.list_neighbors import ListNeighbors
 from data_access_logic.location.list_locations import ListLocations
+from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode_session.read_stage import ReadStage
 from data_access_logic.location.record import LocationHistoryRow
@@ -108,3 +111,15 @@ def test_episode_materials_have_location_text_and_histories(shown, world):
 
     stage = shown(ReadStage(episode_id=world.episode_id))
     assert stage["場所の来歴(古い順)"] == expected
+
+
+def test_character_role_does_not_get_location_text(shown, world):
+    shown(UpdateLocation(LocationUpdateForm(id=world.location_id, text="作者だけが読む町の芯", histories=[
+        LocationHistoryRow(start=1190, description="作者だけが読む町の来歴")])))
+    taro, _ = world.character_ids
+
+    knowledge = json.dumps(shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro)), ensure_ascii=False)
+
+    # 場所の説明と来歴は本文と語り部の材料にだけ渡し、人物役には渡さない
+    assert "作者だけが読む町の芯" not in knowledge
+    assert "作者だけが読む町の来歴" not in knowledge
