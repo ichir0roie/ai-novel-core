@@ -135,6 +135,7 @@ export const T = {
     mapCentered: { title: "Map centered here", sub: "Map centered on this location" },
     storyRoute: { title: "Route map", sub: "Locations of the episodes, in story order" },
     episodeRoute: { title: "Route map", sub: "Locations of this story's episodes, with this one selected" },
+    storyTimeline: { title: "Timeline", sub: "This story's episodes, centered on its period" },
     episodeList: "Episode list",
     episodeSummary: (episodes: number, letters: number) => `${episodes} episodes / ${letters.toLocaleString()} chars`,
     unsynced: (n: number) => ` / ${n} unsynced`,

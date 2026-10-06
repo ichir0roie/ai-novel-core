@@ -237,6 +237,14 @@ function itemsOf(data: TimelineResponse): Item[] {
   return items;
 }
 
+function saveFilter(filter: Record<string, string | number | null | undefined>) {
+  try {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filter));
+  } catch {
+    // 覚えられなくても、この画面の中では絞り込みが効く
+  }
+}
+
 /** 覚えておいた絞り込みのうち、値のあるもの。無ければ null */
 function savedFilter(): Record<string, string> | null {
   try {
@@ -346,10 +354,24 @@ function defaultCenter(data: TimelineResponse): string {
   return formatStamp({ year: 1, month: 1, day: 1, hour: 0, minute: 0, second: 0 });
 }
 
+/** 話の全部が収まる期間(最初の話の始め〜最後の話の終わり)の真ん中。話が無ければ {@link defaultCenter} */
+function middleCenter(data: TimelineResponse): string {
+  let [lo, hi] = [Infinity, -Infinity];
+  for (const record of data.items) {
+    const start = dayOf(record.start);
+    if (start === null) continue;
+    lo = Math.min(lo, start);
+    hi = Math.max(hi, dayOf(record.end) ?? start);
+  }
+  return lo <= hi ? formatStamp(fromDayNumber((lo + hi) / 2)) : defaultCenter(data);
+}
+
 export default function TimelinePage() {
   const router = useRouter();
   const search = useSearchParams();
   const at = search.get("at");
+  // 作品の画面から飛んできた印(`focus=story`)。話を引いたら、その作品の期間の真ん中を中心にして印を消す
+  const focus = search.get("focus");
   const storyId = Number(search.get("story_id")) || null;
   const centerParts = parseStamp(at);
   const center = centerParts ? dayNumber(centerParts) : null;
@@ -420,18 +442,18 @@ export default function TimelinePage() {
 
   /** 絞り込みを変え、次に絞り込みを付けずに開いたときのために覚えておく */
   const filter = (changes: Partial<Record<(typeof FILTER_KEYS)[number], string | number | null>>) => {
-    const next = Object.fromEntries(FILTER_KEYS.map((key) => [key, key in changes ? changes[key] : search.get(key)]));
-    try {
-      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // 覚えられなくても、この画面の中では絞り込みが効く
-    }
+    saveFilter(Object.fromEntries(FILTER_KEYS.map((key) => [key, key in changes ? changes[key] : search.get(key)])));
     navigate(changes);
   };
 
   useEffect(() => {
-    if (!at && data) navigate({ at: defaultCenter(data) });
-  }, [at, data, navigate]);
+    if (!data) return;
+    if (focus === "story") {
+      // 飛んできた先の絞り込みも、選び直したときと同じく次に開いたときのために覚えておく
+      saveFilter({ story_id: storyId });
+      navigate({ at: middleCenter(data), focus: null });
+    } else if (!at) navigate({ at: defaultCenter(data) });
+  }, [at, focus, data, storyId, navigate]);
 
   // URL の中心が変わったら(スクロールしたときなど)入力欄も合わせる
   const [shownAt, setShownAt] = useState(at);
