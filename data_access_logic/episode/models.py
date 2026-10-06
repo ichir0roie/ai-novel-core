@@ -10,7 +10,7 @@ from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.idea.models import (
     IdeaContextMaterial, IdeaContextSerialized, WholeIdeaMaterial, whole_idea_for_prompt,
 )
-from data_access_logic.location.models import LocationMaterial
+from data_access_logic.location.models import LocationLine, LocationMaterial
 from data_access_logic.material import Material, Named
 from db.stamp import Stamp
 
@@ -119,6 +119,12 @@ def _location(locations: list[LocationMaterial]) -> str | None:
         for location in locations if location.name) or None
 
 
+def _location_lines(locations: list[LocationLine]) -> list[dict[str, Any]]:
+    return [{"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment,
+             "来歴(古い順)": [f"{history.start}年: {history.description}" for history in location.histories]}
+            for location in locations]
+
+
 def _story(story: StoryMaterial) -> dict[str, Any]:
     return {"作品名": story.name, "筋書き": story.text,
             "親の作品": None if story.parent_story is None else _story(story.parent_story)}
@@ -129,8 +135,8 @@ class EpisodeMaterial(Material):
     main_episode: TargetEpisode
     # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 話の場所とその親。広い順
-    locations: list[LocationMaterial]
+    # 話の場所とその親。広い順。来歴は話の時刻の年まで
+    locations: list[LocationLine]
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
     mentioned: list[MentionedMaterial]
@@ -160,6 +166,7 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
             "書く話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
+                "場所の説明(広い順)": _location_lines(self.locations),
                 "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
                 "登場人物": [member.model_dump() for member in self.cast],
                 "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
@@ -236,8 +243,8 @@ class EpisodeBrief(Material):
     past_episodes: list[PastEpisode]
     # 文体の見本にする、同じ作品の直前の話。古い順
     recent_episodes: list[RecentEpisode]
-    # 話の場所とその親。広い順
-    locations: list[LocationMaterial]
+    # 話の場所とその親。広い順。来歴は話の時刻の年まで
+    locations: list[LocationLine]
     cast: list[CastMaterial]
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
     mentioned: list[MentionedMaterial]
@@ -286,7 +293,8 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "時刻": str(episode.start),
                 "終わり": str(episode.end) if episode.end else None,
                 "同期": episode.synced,
-                "場所(広い順)": [_place(location) for location in self.locations],
+                "場所(広い順)": [{**_place(location), **line}
+                               for location, line in zip(self.locations, _location_lines(self.locations))],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
                 "登場人物": [{"人物id": member.character.id, **member.model_dump(),
                           **secrets_for_prompt(self.secrets[member.character.id]),

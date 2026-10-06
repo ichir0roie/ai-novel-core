@@ -7,7 +7,8 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.location.form import LocationCreateForm
 from data_access_logic.location.parent import check_under_parent
 from data_access_logic.location.record import LocationRecord
-from db.schema import Location
+from db.child_lists import replaced_rows
+from db.schema import Location, LocationHistory
 
 
 class CommitLocation(CommitEntrypoint):
@@ -21,6 +22,7 @@ class CommitLocation(CommitEntrypoint):
 
         record = Location()
         form.write_to(record)
+        record.histories = replaced_rows([], form.histories, LocationHistory)
         s.add(record)
         self.finalize(s, record)
         return LocationRecord.model_validate(record)

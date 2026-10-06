@@ -81,6 +81,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、本文の末尾の `# 検証結果` の節に入れる(前の節は置き換える)。`ids` を省くとまだその節の無いものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。oracle は検めたあと、その節を含む本文からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `location.update_location.UpdateLocation(location)`                                 |
+| 「この場所の来歴を足して」「〇年にこの町で起きたことを記録して」 | `location.update_location.UpdateLocation(LocationUpdateForm(id=…, histories=[...]))`。起きた年ごとの行の配列をまるごと渡す(今の行は表の API の `location` の行の `histories`)。下の「場所の芯と来歴」 |
 | 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, parameters=[...]))`。変わった時ごとの行の配列をまるごと渡す(下の「変わった時ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
 | 「この人物の来歴を足して」「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」「年の決まっていない構想を足して」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, histories=[...]))`。起きた年ごとの行の配列をまるごと渡す(今の配列は `ReadCharacter` の `histories` で読む。時刻を渡すとその時刻までの行だけになるので、書き足すときは時刻を渡さずに読む)。年の決まっていない構想は `start` を空にした行に書く。下の「人物の芯と来歴」 |
 | 「人物を直して」                     | `character.update_character.UpdateCharacter(character)`。名字・体格・口調・性格は `parameters` に、外見は `appearance`、芯は `text`、ミームは `meme`、行動原理は `principle`、筋書きは `plot` に、来歴は `histories` に入れる(渡さなければ触らない)。出自・居場所は `character.update_character_location.UpdateCharacterLocation(location)`、相関は `character.update_character_relation.UpdateCharacterRelation(relation)` |
@@ -291,6 +292,11 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 二人のあいだで起きたこと(出会い・やり取り・師事・対立・別れ)は関係の来歴にだけ書き、人物の来歴には繰り返さない。
 人物の来歴には、その人自身に起きたこと・変わったこと(体・立場・考え方・居場所・一人で決めたこと)を書く。
 ただし秘密(知る相手を絞るもの)は、知る相手を持たない関係の来歴には書けないので、人物の来歴に書く。
+
+**場所の芯と来歴**: 場所(`location`)の `text` は、その場所の時期を限らない姿(土地・暮らし・棲むもの)だけを書く。
+場所で起きたこと・変わったことは、関係の来歴と同じく、起きた年を `start` にした `histories` の行(`location_history`)に書く。
+話の材料(`ReadEpisodeBrief` の「場所(広い順)」・話の生成の「場所の説明(広い順)」)・語り部(`ReadStage`)・出来事の生成には、話の場所とその親の説明と、その時刻の年までに起きた行だけが渡る(`location/reading.py` の `location_at`)。
+年の決まっていない構想は `start` を空にした行に書く。場所の来歴は、その場所に住む者なら知っているものとして、知る相手を持たない。
 
 人物が持つミーム(行動原理の芯。`meme` テーブル)は、その人物の `meme` 列に、持つミームの文面を
 `- <古今表裏>: <文面>` の箇条書きでそのまま書く。人物は複数のミームを持ってよい。ミームどうしの関係の整理は、

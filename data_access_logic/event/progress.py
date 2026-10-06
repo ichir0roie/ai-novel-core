@@ -27,7 +27,8 @@ from data_access_logic.event.progress_models import (
     LocationSituationSerialized, RecordRequestSerialized,
 )
 from data_access_logic.event.summary import events_of
-from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
+from data_access_logic.location.models import LocationMaterial
+from data_access_logic.location.reading import location_at
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Event, EventCharacter, Location
@@ -95,7 +96,7 @@ def situation(
     """要約は揃えてある前提でそのまま読む。"""
     return LocationSituationSerialized(
         time=time,
-        location=LocationTextMaterial.model_validate(s.get_one(Location, location_id)),
+        location=location_at(s.get_one(Location, location_id), time),
         participants=participants_at(s, characters[:_PARTICIPANT_LIMIT], time),
         recent_events=s.scalars(
             common_query.events_of_location_select(location_id, until=time, limit=constants.RECENT_EVENT_LIMIT)).all(),

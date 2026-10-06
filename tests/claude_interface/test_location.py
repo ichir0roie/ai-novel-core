@@ -5,6 +5,9 @@ from data_access_logic.location.delete_location import DeleteLocation
 from data_access_logic.location.form import LocationCreateForm, LocationUpdateForm
 from data_access_logic.location.list_neighbors import ListNeighbors
 from data_access_logic.location.list_locations import ListLocations
+from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
+from data_access_logic.episode_session.read_stage import ReadStage
+from data_access_logic.location.record import LocationHistoryRow
 from data_access_logic.location.update_location import UpdateLocation
 
 _POLYGON = {"type": "Polygon", "coordinates": [[[135.0, 34.0], [135.2, 34.0], [135.2, 34.2], [135.0, 34.0]]]}
@@ -71,3 +74,37 @@ def test_update_location(shown, world):
     assert (result["environment"], result["sample_region"]) == ("高地", "アルプス")
     assert (result["sample_culture"], result["sample_era"]) == ("牧畜", "中世")
     assert (result["start"], result["end"]) == ("1160/01/01 00:00:00", "2800/01/01 00:00:00")
+
+
+def test_location_histories(shown, world):
+    created = shown(CommitLocation(LocationCreateForm(
+        name="テスト関所", kind="関所", parent_id=world.planet_id,
+        histories=[LocationHistoryRow(start=1180, description="関所が置かれる")])))
+    assert created["histories"] == [{"start": 1180, "description": "関所が置かれる"}]
+
+    # 来歴は配列でまるごと置き換え、渡さなければ触らない
+    shown(UpdateLocation(LocationUpdateForm(id=created["id"], histories=[
+        LocationHistoryRow(start=1180, description="関所が置かれる"), LocationHistoryRow(description="年の決まっていない構想")])))
+    result = shown(UpdateLocation(LocationUpdateForm(id=created["id"], text="山あいの関所")))
+
+    assert result["text"] == "山あいの関所"
+    assert sorted(result["histories"], key=str) == sorted(
+        [{"start": 1180, "description": "関所が置かれる"}, {"start": None, "description": "年の決まっていない構想"}], key=str)
+
+
+def test_episode_materials_have_location_text_and_histories(shown, world):
+    shown(UpdateLocation(LocationUpdateForm(id=world.location_id, histories=[
+        LocationHistoryRow(start=1250, description="先に起きること"),
+        LocationHistoryRow(start=1190, description="市が立つ"),
+        LocationHistoryRow(description="年未定の構想")])))
+    expected = ["1190年: 市が立つ"]
+
+    brief = shown(ReadEpisodeBrief(episode_id=world.episode_id))
+    # 話の時刻(1200 年)の年までに起きた来歴だけを、場所の説明と一緒に渡す
+    place = brief["この話"]["場所(広い順)"][-1]
+    assert place["場所id"] == world.location_id
+    assert place["説明"]
+    assert place["来歴(古い順)"] == expected
+
+    stage = shown(ReadStage(episode_id=world.episode_id))
+    assert stage["場所の来歴(古い順)"] == expected

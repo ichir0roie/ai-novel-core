@@ -153,6 +153,38 @@ class Location(TextBase):
         remote_side="Location.id", viewonly=True, lazy="noload")
     children: Mapped[list[Location]] = relationship(viewonly=True)
 
+    CHILD_LISTS = ("histories",)
+
+    histories: Mapped[list["LocationHistory"]] = relationship(
+        back_populates="location", lazy="selectin", cascade="all, delete-orphan",
+        order_by="LocationHistory.start.desc().nulls_last()",
+        doc="場所で起きたこと・変わったことを、起きた年ごとに一行で持つ。話・出来事には、その時刻の年までに始まった行だけを渡す。"
+        "年が空の行は構想で、作者だけが読む")
+
+
+class LocationHistory(Base):
+    """場所の来歴を、起きた年ごとの一行で持つ子テーブル。場所の芯(時期を限らない姿)は `Location.text` に持つ。
+
+    関係の来歴(CharacterRelationHistory)と同じく、ある時刻の話・出来事には、その時刻の年までに始まった行だけを渡す
+    (`data_access_logic/location/reading.py` の `location_at`)ので、先の時刻の行を書き足しても、それより前には効かない。
+    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
+    場所のことは、その場所に住む者なら知っているものとして、知る相手を持たない。
+    """
+
+    __tablename__ = "location_history"
+
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("location.id"), index=True, nullable=False, sort_order=100)
+    start: Mapped[int | None] = mapped_column(
+        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
+        sort_order=110)
+    description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=120)
+
+    location: Mapped[Location] = relationship(back_populates="histories", lazy="noload")
+
+    def covers(self, time: Stamp) -> bool:
+        return self.start is not None and self.start <= time.year
+
 
 class EventSeededMixin:
     event_seeded: Mapped[bool] = mapped_column(

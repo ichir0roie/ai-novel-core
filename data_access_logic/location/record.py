@@ -1,4 +1,16 @@
-from data_access_logic.material import Material, Timestamp
+from pydantic import ConfigDict
+
+from data_access_logic.material import Form, Material, Timestamp
+
+
+class LocationHistoryRow(Form):
+    """場所の来歴の行(id と location_id は持たない。行は配列の並びで決まる)。入口の引数とレスポンスの両方に使う。"""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
+    start: int | None = None
+    description: str
 
 
 class LocationRecord(Material):
@@ -20,6 +32,7 @@ class LocationRecord(Material):
     start: Timestamp | None = None
     end: Timestamp | None = None
     active_random_generation: bool
+    histories: list[LocationHistoryRow]
     text: str
 
 
