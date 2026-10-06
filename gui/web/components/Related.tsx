@@ -51,6 +51,12 @@ export default function Related({
               <span className="jump-sub">{T.related.skills.sub}</span>
             </button>
           )}
+          {owner?.table === "story" && (
+            <Link href={`/timeline?story_id=${owner.id}&focus=story`} className="jump">
+              <span className="jump-title">{T.related.storyTimeline.title}</span>
+              <span className="jump-sub">{T.related.storyTimeline.sub}</span>
+            </Link>
+          )}
           {episodes && owner?.table === "story" && (
             <Link href={`/tables/episode?story_id=${owner.id}`} className="jump">
               <span className="jump-title">{T.related.episodeList}</span>

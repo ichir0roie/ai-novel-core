@@ -368,11 +368,11 @@ a.button-link:hover { border-color: var(--accent); }
 /* 作品から話の一覧へ飛ぶ大きなボタン */
 /* 選択欄の横に置く、選んだ行のページへのリンク(RecordLink) */
 .record-link { align-self: center; white-space: nowrap; font-size: 0.85rem; }
-.jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
+.jump { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.5rem 0.8rem; border-radius: 8px; background: var(--accent); color: var(--accent-ink); text-align: center; }
 .jump:hover { text-decoration: none; filter: brightness(1.08); }
-.jump-title { font-size: 1.6rem; font-weight: 700; }
-.jump-sub { font-size: 0.9rem; opacity: 0.85; }
-.jump + .jump { margin-top: 0.6rem; }
+.jump-title { font-size: 1rem; font-weight: 700; }
+.jump-sub { font-size: 0.78rem; opacity: 0.85; }
+.jump + .jump { margin-top: 0.4rem; }
 /* モーダルを開く .jump(人物のスキル) */
 button.jump { width: 100%; border: none; cursor: pointer; }
 
