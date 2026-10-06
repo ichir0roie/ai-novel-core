@@ -38,33 +38,24 @@ export default function Related({
   return (
     <>
       {(episodes || graph) && (
-        <div className="panel related">
-          {graph && (
-            <Link href={graph.href} className="jump">
-              <span className="jump-title">{graph.title}</span>
-              <span className="jump-sub">{graph.sub}</span>
-            </Link>
-          )}
+        <div className="panel related jumps">
+          {graph && <Link href={graph.href} className="button-link" title={graph.sub}>{graph.title}</Link>}
           {skills && (
-            <button type="button" className="jump" onClick={() => setSkillsOpen(true)}>
-              <span className="jump-title">{T.related.skills.title}</span>
-              <span className="jump-sub">{T.related.skills.sub}</span>
-            </button>
+            <button type="button" title={T.related.skills.sub} onClick={() => setSkillsOpen(true)}>{T.related.skills.title}</button>
           )}
           {owner?.table === "story" && (
-            <Link href={`/timeline?story_id=${owner.id}&focus=story`} className="jump">
-              <span className="jump-title">{T.related.storyTimeline.title}</span>
-              <span className="jump-sub">{T.related.storyTimeline.sub}</span>
+            <Link href={`/timeline?story_id=${owner.id}&focus=story`} className="button-link" title={T.related.storyTimeline.sub}>
+              {T.related.storyTimeline.title}
             </Link>
           )}
           {episodes && owner?.table === "story" && (
-            <Link href={`/tables/episode?story_id=${owner.id}`} className="jump">
-              <span className="jump-title">{T.related.episodeList}</span>
-              <span className="jump-sub">
-                {T.related.episodeSummary(episodes.length, episodes.reduce((sum, p) => sum + p.letters, 0))}
-                {episodes.some((p) => !p.synced) ? T.related.unsynced(episodes.filter((p) => !p.synced).length) : ""}
-              </span>
-            </Link>
+            <Link href={`/tables/episode?story_id=${owner.id}`} className="button-link">{T.related.episodeList}</Link>
+          )}
+          {episodes && owner?.table === "story" && (
+            <span className="jumps-note">
+              {T.related.episodeSummary(episodes.length, episodes.reduce((sum, p) => sum + p.letters, 0))}
+              {episodes.some((p) => !p.synced) ? T.related.unsynced(episodes.filter((p) => !p.synced).length) : ""}
+            </span>
           )}
         </div>
       )}
