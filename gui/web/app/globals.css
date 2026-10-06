@@ -147,7 +147,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 button.ghost { background: transparent; }
-/* ボタンの見た目のリンク(別タブで外へ開くもの) */
+/* ボタンの見た目のリンク */
 a.button-link { padding: 0.45rem 0.9rem; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: inherit; text-decoration: none; }
 a.button-link:hover { border-color: var(--accent); }
 
@@ -365,16 +365,11 @@ a.button-link:hover { border-color: var(--accent); }
 .character-sheet div.markdown-preview.sheet-text:hover { border-color: var(--line); }
 .childlist.flow .flow-card.sheet-history { cursor: default; }
 .childlist.flow .flow-card.sheet-history:hover { background: none; }
-/* 作品から話の一覧へ飛ぶ大きなボタン */
 /* 選択欄の横に置く、選んだ行のページへのリンク(RecordLink) */
 .record-link { align-self: center; white-space: nowrap; font-size: 0.85rem; }
-.jump { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 1.4rem 1rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); text-align: center; }
-.jump:hover { text-decoration: none; filter: brightness(1.08); }
-.jump-title { font-size: 1.6rem; font-weight: 700; }
-.jump-sub { font-size: 0.9rem; opacity: 0.85; }
-.jump + .jump { margin-top: 0.6rem; }
-/* モーダルを開く .jump(人物のスキル) */
-button.jump { width: 100%; border: none; cursor: pointer; }
+/* 人物・場所・作品・話の画面から、関係図・地図・タイムライン・一覧へ飛ぶボタンの並び */
+.related.jumps { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.6rem 1.1rem; }
+.jumps-note { color: var(--muted); font-size: 0.85rem; }
 
 /* 人物のスキルのモーダル(SkillsModal)。スキルを一枚ずつ札にして縦に並べ、その場で直す */
 .skills { display: flex; flex-direction: column; gap: 0.8rem; }
