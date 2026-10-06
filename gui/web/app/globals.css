@@ -561,49 +561,51 @@ a.button-link:hover { border-color: var(--accent); }
   .viz-body { grid-template-rows: minmax(0, 1fr) 45%; gap: 0.6rem; }
 }
 
-/* タイムライン(/timeline)。左に段の名前、右に時刻の軸。話は作品ごとの段、出来事は一つの段に、重ならないよう下へ積む。
-   全期間の軸を一つの欄で縦横にスクロールし、段の名前は左に、目盛りの欄は上に貼り付ける */
+/* タイムライン(/timeline)。上に作品の列の名前、左に時刻の軸。話は作品ごとの列に、重ならないよう右へ並べる。
+   全期間の軸を一つの欄で縦横にスクロールし、列の名前の行は上に、目盛りの欄は左に貼り付ける */
 .timeline-center-input { display: inline-flex; align-items: center; gap: 0.4rem; }
 .timeline-center-input input[type="text"] { width: 12.5rem; }
 .timeline-filter { display: inline-flex; align-items: center; gap: 0.4rem; }
 .timeline-years { min-width: 4.5rem; text-align: center; color: var(--ink); }
-.timeline { --timeline-label: 220px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.timeline-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-x: contain; }
-.timeline-body { position: relative; width: max-content; }
-.timeline-lines { position: absolute; top: 0; bottom: 0; pointer-events: none; }
-.timeline-row { display: flex; width: max-content; border-bottom: 1px solid var(--line); }
+.timeline { --timeline-axis: 64px; --timeline-head: 0px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.timeline-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain; }
+.timeline-body { position: relative; display: flex; width: max-content; }
+.timeline-lines { position: absolute; top: 0; bottom: 0; left: var(--timeline-axis); right: 0; pointer-events: none; }
+.timeline-head { position: sticky; top: 0; z-index: 5; display: grid; width: max-content; background: var(--panel); border-bottom: 1px solid var(--line); }
+.timeline-corner { position: sticky; left: 0; z-index: 1; background: var(--panel); border-right: 1px solid var(--line); }
 .timeline-label {
-  position: sticky; left: 0; z-index: 4; width: var(--timeline-label); flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel);
-  border-right: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  box-sizing: border-box; padding: 0.25rem 0.5rem 0.25rem 0.3rem; font-size: 0.85rem; background: var(--panel);
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 段の木の開閉。子の無い段も同じ幅を空けて、名前の頭をそろえる */
+.timeline-label.drop-target { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+/* 列の木の開閉。子の無い列も同じ幅を空けて、名前の頭をそろえる */
 .timeline-toggle { display: inline-block; width: 1rem; padding: 0; border: 0; background: none; color: var(--muted); font-size: 0.75rem; text-align: left; cursor: pointer; }
-/* hidden だと段がスクロールの基準になり、札の名前の sticky が効かない */
-.timeline-track { position: relative; flex-shrink: 0; overflow: clip; cursor: cell; }
-.timeline-axis { position: sticky; top: 0; z-index: 5; background: var(--panel); }
-.timeline-axis .timeline-track { height: 28px; cursor: default; }
-.timeline-tick { position: absolute; top: 0; bottom: 0; padding: 4px 0 0 4px; border-left: 1px solid var(--line); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
-.timeline-tick.major { border-left-color: var(--muted); color: var(--ink); font-weight: 600; }
-.timeline-grid { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--line) 60%, transparent); pointer-events: none; }
-.timeline-grid.major { border-left-color: var(--line); }
+.timeline-col { flex-shrink: 0; border-right: 1px solid var(--line); }
+/* hidden だと列がスクロールの基準になり、札の名前の sticky が効かない */
+.timeline-track { position: relative; overflow: clip; cursor: cell; }
+.timeline-axis { position: sticky; left: 0; z-index: 4; flex-shrink: 0; width: var(--timeline-axis); background: var(--panel); border-right: 1px solid var(--line); overflow: clip; }
+.timeline-tick { position: absolute; left: 0; right: 0; padding: 1px 4px 0; border-top: 1px solid var(--line); font-size: 0.75rem; line-height: 1; color: var(--muted); white-space: nowrap; }
+.timeline-tick.major { border-top-color: var(--muted); color: var(--ink); font-weight: 600; }
+.timeline-grid { position: absolute; left: 0; right: 0; border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); pointer-events: none; }
+.timeline-grid.major { border-top-color: var(--line); }
 /* 話の無い区間を詰めた帯。目盛りの欄には詰めた長さを出す */
 .timeline-gap {
-  position: absolute; top: 0; bottom: 0; pointer-events: none; border-left: 1px dashed var(--line); border-right: 1px dashed var(--line);
+  position: absolute; left: 0; right: 0; pointer-events: none; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--line) 70%, transparent) 0 2px, transparent 2px 7px);
 }
 .timeline-axis .timeline-gap {
   pointer-events: auto; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: var(--muted); white-space: nowrap;
 }
-.timeline-center { position: absolute; top: 0; bottom: 0; z-index: 6; border-left: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); pointer-events: none; }
+.timeline-center { position: absolute; left: 0; right: 0; z-index: 6; border-top: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); pointer-events: none; }
 .timeline-item {
-  position: absolute; height: 22px; padding: 0 6px; border: 1px solid; border-radius: 4px; font-size: 0.8rem; line-height: 20px;
+  position: absolute; box-sizing: border-box; min-height: 22px; padding: 0 6px; border: 1px solid; border-radius: 4px; font-size: 0.8rem; line-height: 20px;
   cursor: grab; user-select: none; touch-action: none; white-space: nowrap; z-index: 1;
   background: color-mix(in srgb, var(--accent) 12%, var(--panel)); border-color: var(--accent);
 }
-/* 一点の時刻は左端の太線がその時刻 */
-.timeline-item.point { border-left-width: 3px; }
-/* 閉じた段の札は、名前の無い印にする */
-.timeline-item.folded { padding: 0; }
+/* 一点の時刻は上端の太線がその時刻 */
+.timeline-item.point { border-top-width: 3px; }
+/* 閉じた列の札は、名前の無い印にする */
+.timeline-item.folded { padding: 0; min-height: 0; }
 .timeline-item.folded.dragging .timeline-text { padding: 0 6px; }
 .timeline-item.dragging { cursor: grabbing; z-index: 3; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); }
 .timeline-item.saving { opacity: 0.6; }
@@ -613,15 +615,15 @@ a.button-link:hover { border-color: var(--accent); }
 .timeline-item.changed { border-style: dashed; border-color: var(--danger); }
 .timeline-item:hover { z-index: 2; }
 .timeline-bar {
-  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; pointer-events: none;
+  position: absolute; left: 0; right: 0; top: 0; border-radius: 3px; pointer-events: none;
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
-/* 長い帯の頭が左へ隠れても、名前は見えている所の左端に残す */
-.timeline-text { position: sticky; left: calc(var(--timeline-label) + 6px); display: inline-block; max-width: 100%; vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
+/* 長い帯の頭が上へ隠れても、名前は見えている所の上端に残す */
+.timeline-text { position: sticky; top: calc(var(--timeline-head) + 1px); display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .timeline-item.dragging .timeline-text { overflow: visible; }
 .timeline-target { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
-/* 札を別の段へ運んでいるあいだ、落とす先の段 */
-.timeline-row.drop-target .timeline-track { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* 札を別の列へ運んでいるあいだ、落とす先の列 */
+.timeline-col.drop-target .timeline-track { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 /* タイムラインから開く編集・追加のモーダル。人物のモーダルと同じく、左右の欄がそれぞれスクロールする */
 /* 表は画面の端まで使う。操作の行だけ余白を取り、左はメニューボタンの分を空ける */
 main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
@@ -634,7 +636,7 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
   .timeline-page > .toolbar > * { flex-shrink: 0; }
   .timeline-page > .toolbar h1 { display: none; }
   .timeline-page > .status { margin: 0 8px 6px; }
-  .timeline { --timeline-label: 96px; }
+  .timeline { --timeline-axis: 52px; }
 }
 .episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
 .episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
