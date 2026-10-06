@@ -5,6 +5,7 @@
 - 話(`episode`)を書くのはスキル `episode`、書き直すのはスキル `revise-episode`
 - 語り部をユーザがチャットで務めて話の手番を回すのはスキル `interactive-episode`
 - 「ep<話id>」は、その話をスキル `episode` で語り部と人物役に手番を回させて自動で書く合図。「ep<話id> in」は、その話をスキル `interactive-episode` でユーザが語り部を務めて書く合図
+- 「ep<話id> plot」は、その話のプロットだけをスキル `plot-focus` で詰める合図(本文は書かない)
 
 # 作業する場所
 
