@@ -8,7 +8,7 @@ from data_access_logic.location.form import LocationUpdateForm
 from data_access_logic.location.parent import check_under_parent
 from data_access_logic.location.record import LocationRecord
 from data_access_logic.query import common_query
-from db.child_lists import replaced_rows
+from db.child_lists import replaced_histories
 from db.schema import Location, LocationHistory
 
 _PLACEMENT = ("parent_id", "area", "start", "end")
@@ -29,6 +29,6 @@ class UpdateLocation(CommitEntrypoint):
             check_under_parent(s, after["parent_id"], after["area"], after["start"], after["end"], location_id=record.id)
         form.write_changes_to(record)
         if form.histories is not None:
-            record.histories = replaced_rows(record.histories, form.histories, LocationHistory)
+            record.histories = replaced_histories(record.histories, form.histories, LocationHistory, owner=record)
         self.finalize(s, record)
         return LocationRecord.model_validate(record)

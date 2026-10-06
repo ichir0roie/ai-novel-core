@@ -1,5 +1,6 @@
 from pydantic import ConfigDict
 
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Form, Material, Timestamp
 
 
@@ -11,6 +12,9 @@ class LocationHistoryRow(Form):
     # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
     start: int | None = None
     description: str
+    # 知る相手。この相手だけが来歴を知る。渡さなければ、新しい行はその場所(住む人物が知る)、今ある行はそのまま
+    # (`db/child_lists.py` の `replaced_histories`)
+    knowers: list[KnowerRow] | None = None
 
 
 class LocationRecord(Material):

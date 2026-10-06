@@ -1,14 +1,14 @@
 """人物がある時刻に知ることのできるデータ(人物役が自分で読む材料)と、会った相手から見て分かること。
 
 人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
-来歴の起きた年は、その時刻から何年前かで渡す。
+来歴・履歴の行は、その時刻から何年前かと本文をつないだ一文(「10年前、〜」「今年、〜」)で渡す。
 
-人物の来歴・スキルの来歴・アイデアの履歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
+人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
 場所ならその時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
-人物の来歴はその時刻までに起きた行だけ。
+人物の来歴・場所の来歴はその時刻までに起きた行だけ。場所の説明(`text`)は作者の目で書くものなので渡さない。
 期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
@@ -34,6 +34,7 @@ from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
     Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, IdeaHistory, IdeaHistoryKnower, KnowerMixin,
+    LocationHistory, LocationHistoryKnower,
 )
 from db.stamp import Stamp
 
@@ -77,7 +78,15 @@ class KnownSkill(Material):
     histories: list[KnownHistory]
 
 
-def known_histories(rows: Sequence[CharacterHistory | CharacterSkillHistory], viewer: Viewer) -> list[KnownHistory]:
+class KnownPlace(Material):
+    name: str | None = None
+    # 知っている来歴の行
+    histories: list[KnownHistory]
+
+
+def known_histories(
+    rows: Sequence[CharacterHistory | CharacterSkillHistory | LocationHistory], viewer: Viewer,
+) -> list[KnownHistory]:
     """本人か関係のある人物の来歴・スキルの来歴を渡す。古い順。"""
     known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
     return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
@@ -90,8 +99,13 @@ def _ago(start: int | None, year: int) -> str | None:
     return "今年" if start == year else f"{year - start}年前"
 
 
-def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[dict[str, Any]]:
-    return [{"いつ": _ago(history.start, year), "来歴": history.description} for history in histories]
+def _history_line(start: int | None, description: str, year: int) -> str:
+    """何年前かと本文を一文につなぐ(「10年前、〜」)。"""
+    return f"{_ago(start, year)}、{description}"
+
+
+def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[str]:
+    return [_history_line(history.start, history.description, year) for history in histories]
 
 
 def _skills_for_prompt(known: list[KnownSkill], year: int) -> list[dict[str, Any]]:
@@ -102,8 +116,7 @@ def _relations_for_prompt(relations: list[CharacterRelationLine], year: int) -> 
     return [
         {"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation,
          "説明": relation.text,
-         "来歴(古い順)": [{"いつ": _ago(history.start, year), "来歴": history.description}
-                         for history in relation.histories]}
+         "来歴(古い順)": [_history_line(history.start, history.description, year) for history in relation.histories]}
         for relation in relations
     ]
 
@@ -162,6 +175,7 @@ class KnowledgeSerialized(Material):
     relations: list[CharacterRelationLine]
     characters: list[KnownCharacter]
     ideas: list[KnownIdea]
+    places: list[KnownPlace]
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -181,6 +195,8 @@ class KnowledgeSerialized(Material):
                  "スキル": _skills_for_prompt(character.skills, year)}
                 for character in self.characters],
             "知っているアイデア": [_idea_for_prompt(idea) for idea in self.ideas],
+            "知っている場所": [{"名前": place.name, "来歴(古い順)": _histories_for_prompt(place.histories, year)}
+                         for place in self.places],
         }
 
 
@@ -242,6 +258,25 @@ def _ideas(s: Session, viewer: Viewer, mentioned: Callable[[list[str]], bool]) -
     return [idea for idea_id, idea in known.items() if mentioned(names[idea_id])]
 
 
+def _places(s: Session, viewer: Viewer) -> list[KnownPlace]:
+    """知っている場所の来歴を、場所ごとに。知る相手に当たる行が一つも無い場所は入れない。"""
+    told = select(LocationHistoryKnower.location_history_id).where(or_(
+        LocationHistoryKnower.knower_id == viewer.character_id,
+        LocationHistoryKnower.location_id.in_(list(viewer.location_ids))))
+    rows = s.scalars(
+        select(LocationHistory)
+        .where(LocationHistory.id.in_(told))
+        .options(joinedload(LocationHistory.location))
+        .order_by(LocationHistory.location_id, LocationHistory.id)
+        .execution_options(populate_existing=True)).all()
+    by_location: dict[int, list[LocationHistory]] = {}
+    for row in rows:
+        by_location.setdefault(row.location_id, []).append(row)
+    places = [KnownPlace(name=histories[0].location.name, histories=known_histories(histories, viewer))
+              for histories in by_location.values()]
+    return [place for place in places if place.histories]
+
+
 def _in_text(text: str) -> Callable[[list[str]], bool]:
     text = normalized(text)
 
@@ -282,6 +317,7 @@ def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> 
                                    histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
                     for other in others],
         ideas=_ideas(s, viewer, _in_text(plot_text)),
+        places=_places(s, viewer),
     )
 
 

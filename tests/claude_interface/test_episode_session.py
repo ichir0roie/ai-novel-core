@@ -42,7 +42,8 @@ from tool import episode_session
 
 
 def _histories(person: dict) -> list[str]:
-    return [history["来歴"] for history in person["来歴(古い順)"]]
+    """「何年前、来歴」の一文から来歴だけを取る。"""
+    return [history.split("、", 1)[1] for history in person["来歴(古い順)"]]
 
 
 def _set_plot(world, plot_text: str) -> None:
@@ -147,9 +148,9 @@ def test_read_knowledge_tells_years_ago_instead_of_years(shown, world):
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
     assert "時刻" not in result
-    assert result["自分"]["来歴(古い順)"] == [{"いつ": "10年前", "来歴": "市に越してくる"}, {"いつ": "今年", "来歴": "店を継ぐ"}]
+    assert result["自分"]["来歴(古い順)"] == ["10年前、市に越してくる", "今年、店を継ぐ"]
     relation = next(relation for relation in result["関係"] if relation["関係"] == "幼なじみ")
-    assert relation["来歴(古い順)"] == [{"いつ": "5年前", "来歴": "市で再会する"}]
+    assert relation["来歴(古い順)"] == ["5年前、市で再会する"]
 
 
 def test_read_knowledge_at_the_latest_turn(shown, world):
@@ -163,7 +164,7 @@ def test_read_knowledge_at_the_latest_turn(shown, world):
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
-    assert result["自分"]["来歴(古い順)"] == [{"いつ": "13年前", "来歴": "市に越してくる"}, {"いつ": "今年", "来歴": "店を畳む"}]
+    assert result["自分"]["来歴(古い順)"] == ["13年前、市に越してくる", "今年、店を畳む"]
 
 
 def test_read_knowledge_relation_histories_until_the_time(shown, world):
@@ -176,7 +177,7 @@ def test_read_knowledge_relation_histories_until_the_time(shown, world):
 
     relation = next(relation for relation in result["関係"] if relation["関係"] == "幼なじみ")
     assert relation["説明"] == "同じ通りで育った"
-    assert [history["来歴"] for history in relation["来歴(古い順)"]] == ["市で再会する"]
+    assert [history.split("、", 1)[1] for history in relation["来歴(古い順)"]] == ["市で再会する"]
 
 
 def test_read_knowledge_leaves_out_undated_relations(shown, world):
@@ -403,7 +404,7 @@ def test_read_stage(shown, world):
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
                           "外見": "髪が赤い"}
     assert result["知り合い"] == [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
-    assert set(result) == {"この話", "場所(広い順)", "場所の説明", "登場人物", "知り合い"}
+    assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い"}
 
 
 def test_read_episode_brief(shown, world, mock_ai, monkeypatch):

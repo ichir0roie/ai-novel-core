@@ -168,7 +168,8 @@ class LocationHistory(Base):
     関係の来歴(CharacterRelationHistory)と同じく、ある時刻の話・出来事には、その時刻の年までに始まった行だけを渡す
     (`data_access_logic/location/reading.py` の `location_at`)ので、先の時刻の行を書き足しても、それより前には効かない。
     `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
-    場所のことは、その場所に住む者なら知っているものとして、知る相手を持たない。
+    行は、知る相手(`knowers`)に当たる人物だけが知る(人物の来歴・アイデアの履歴と同じ形)。既定の知る相手はその場所自身で、
+    その時刻にその場所(配下も含む)に住む人物が知る。秘密は人物だけを知る相手にする。
     """
 
     __tablename__ = "location_history"
@@ -181,6 +182,9 @@ class LocationHistory(Base):
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=120)
 
     location: Mapped[Location] = relationship(back_populates="histories", lazy="noload")
+    # 人物役(`data_access_logic/character/knowledge.py`)には、知る相手に当たる人物にだけ渡す
+    knowers: Mapped[list["LocationHistoryKnower"]] = relationship(
+        back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="LocationHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
         return self.start is not None and self.start <= time.year
@@ -807,6 +811,19 @@ class IdeaHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
+class LocationHistoryKnower(KnowerMixin, Base):
+    """場所の来歴の行を知る相手。この行に当たる人物だけが来歴を知る。"""
+
+    __tablename__ = "location_history_knower"
+    __table_args__ = _knower_args("location_history_knower", "location_history_id")
+
+    location_history_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("location_history.id"), index=True, nullable=False, sort_order=100)
+
+    history: Mapped[LocationHistory] = relationship(back_populates="knowers", lazy="noload")
+    knower: Mapped["Character | None"] = relationship(lazy="noload")
+
+
 def _subject_start(s: Session, row: KnowerMixin) -> Stamp | None:
     """知る相手の行の、知られる行の始まり。人物・スキルの来歴は年で持つので、その年の初め。"""
     match row:
@@ -817,6 +834,8 @@ def _subject_start(s: Session, row: KnowerMixin) -> Stamp | None:
             year = (row.history or s.get_one(CharacterHistory, row.character_history_id)).start
         case CharacterSkillHistoryKnower():
             year = (row.history or s.get_one(CharacterSkillHistory, row.character_skill_history_id)).start
+        case LocationHistoryKnower():
+            year = (row.history or s.get_one(LocationHistory, row.location_history_id)).start
         case _:
             return None
     return None if year is None else Stamp(year)

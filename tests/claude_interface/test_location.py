@@ -7,7 +7,11 @@ from data_access_logic.location.delete_location import DeleteLocation
 from data_access_logic.location.form import LocationCreateForm, LocationUpdateForm
 from data_access_logic.location.list_neighbors import ListNeighbors
 from data_access_logic.location.list_locations import ListLocations
+from data_access_logic.character.form import KnowledgeChange, KnowledgeForm
+from data_access_logic.character.read_knowable_rows import ReadKnowableRows
 from data_access_logic.character.read_knowledge import ReadKnowledge
+from data_access_logic.character.update_knowledge import UpdateKnowledge
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode_session.read_stage import ReadStage
 from data_access_logic.location.record import LocationHistoryRow
@@ -83,7 +87,9 @@ def test_location_histories(shown, world):
     created = shown(CommitLocation(LocationCreateForm(
         name="テスト関所", kind="関所", parent_id=world.planet_id,
         histories=[LocationHistoryRow(start=1180, description="関所が置かれる")])))
-    assert created["histories"] == [{"start": 1180, "description": "関所が置かれる"}]
+    assert [(row["start"], row["description"]) for row in created["histories"]] == [(1180, "関所が置かれる")]
+    # 知る相手を渡さなければ、その場所に住む人物が知る
+    assert [knower["location_id"] for knower in created["histories"][0]["knowers"]] == [created["id"]]
 
     # 来歴は配列でまるごと置き換え、渡さなければ触らない
     shown(UpdateLocation(LocationUpdateForm(id=created["id"], histories=[
@@ -91,8 +97,8 @@ def test_location_histories(shown, world):
     result = shown(UpdateLocation(LocationUpdateForm(id=created["id"], text="山あいの関所")))
 
     assert result["text"] == "山あいの関所"
-    assert sorted(result["histories"], key=str) == sorted(
-        [{"start": 1180, "description": "関所が置かれる"}, {"start": None, "description": "年の決まっていない構想"}], key=str)
+    assert sorted((row["start"] or 0, row["description"]) for row in result["histories"]) == [
+        (0, "年の決まっていない構想"), (1180, "関所が置かれる")]
 
 
 def test_episode_materials_have_location_text_and_histories(shown, world):
@@ -120,6 +126,32 @@ def test_character_role_does_not_get_location_text(shown, world):
 
     knowledge = json.dumps(shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro)), ensure_ascii=False)
 
-    # 場所の説明と来歴は本文と語り部の材料にだけ渡し、人物役には渡さない
+    # 場所の説明は本文と語り部の材料にだけ渡し、人物役には渡さない。来歴は知る相手(既定は住む人物)に当たれば渡す
     assert "作者だけが読む町の芯" not in knowledge
-    assert "作者だけが読む町の来歴" not in knowledge
+    assert "10年前、作者だけが読む町の来歴" in knowledge
+
+
+def test_location_histories_reach_character_role_through_knowers(shown, world):
+    taro, hanako = world.character_ids
+    # 知る相手を渡さない行は、その場所に住む人物が知る。秘密は人物だけを知る相手にする
+    shown(UpdateLocation(LocationUpdateForm(id=world.location_id, histories=[
+        LocationHistoryRow(start=1190, description="市が立つ"),
+        LocationHistoryRow(start=1195, description="井戸の底に抜け道が掘られる", knowers=[KnowerRow(knower_id=hanako)]),
+        LocationHistoryRow(start=1250, description="先に起きること")])))
+    rows = shown(ReadKnowableRows(location_id=world.location_id))["location_histories"]
+    market = next(row for row in rows if row["description"] == "市が立つ")
+    assert [knower["location_id"] for knower in market["knowers"]] == [world.location_id]
+
+    def places(character_id: int) -> list[dict]:
+        return shown(ReadKnowledge(episode_id=world.episode_id, character_id=character_id))["知っている場所"]
+
+    # 住む人物には「何年前、来歴」の一文で、話の時刻の年までの行だけを渡す
+    assert places(taro) == [{"名前": "テスト都", "来歴(古い順)": ["10年前、市が立つ"]}]
+    assert places(hanako) == [{"名前": "テスト都", "来歴(古い順)": ["10年前、市が立つ", "5年前、井戸の底に抜け道が掘られる"]}]
+
+    # 知識整理で、人物を知る相手に入れる・外す
+    secret = next(row for row in rows if row["description"] == "井戸の底に抜け道が掘られる")
+    known = shown(UpdateKnowledge(KnowledgeForm(knower_id=taro, location_histories=[
+        KnowledgeChange(id=secret["id"], known=True, start="1199/01/01")])))
+    assert [row["id"] for row in known["location_histories"]] == [secret["id"]]
+    assert places(taro) == [{"名前": "テスト都", "来歴(古い順)": ["10年前、市が立つ", "5年前、井戸の底に抜け道が掘られる"]}]

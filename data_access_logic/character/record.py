@@ -185,11 +185,22 @@ class IdeaHistoryEntry(Material):
     knowers: list[KnowerRow]
 
 
+class LocationHistoryEntry(Material):
+    """知る相手を直すために、行を id で指せる場所の来歴の行(`ReadKnowableRows`)。"""
+
+    id: int
+    location_id: int
+    start: int | None = None
+    description: str
+    knowers: list[KnowerRow]
+
+
 class KnowableRows(Material):
-    # 人物を渡したときはその来歴とスキルの来歴、アイデアを渡したときはその履歴だけが入る
+    # 人物を渡したときはその来歴とスキルの来歴、アイデアを渡したときはその履歴、場所を渡したときはその来歴だけが入る
     character_histories: list[CharacterHistoryEntry]
     character_skills: list[CharacterSkillEntry]
     idea_histories: list[IdeaHistoryEntry]
+    location_histories: list[LocationHistoryEntry]
 
 
 class KnownCharacterHistory(Material):
@@ -208,9 +219,15 @@ class KnownIdeaHistory(Material):
     idea_id: int
 
 
+class KnownLocationHistory(Material):
+    id: int
+    location_id: int
+
+
 class KnownRows(Material):
     """人物が知る相手の行(人物として直に入った行)を持つもの。場所として入った行は含まない(`ReadKnownRows`)。"""
 
     character_histories: list[KnownCharacterHistory]
     character_skill_histories: list[KnownCharacterSkillHistory]
     idea_histories: list[KnownIdeaHistory]
+    location_histories: list[KnownLocationHistory]
