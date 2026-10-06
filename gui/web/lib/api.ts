@@ -153,7 +153,7 @@ export const deleteCharacterSkill = (skillId: number) =>
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
 
-/** 人物の来歴とスキルの来歴か、アイデアの履歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
+/** 人物の来歴とスキルの来歴か、アイデアの履歴か、場所の来歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
 export type KnowableRows = {
   character_histories: { id: number; character_id: number; start: number | null; description: string; knowers: Rec[] }[];
   character_skills: {
@@ -164,9 +164,10 @@ export type KnowableRows = {
     id: number; idea_id: number; location_id: number | null; start: string | null; end: string | null;
     name: string; detail: string | null; knowers: Rec[];
   }[];
+  location_histories: { id: number; location_id: number; start: number | null; description: string; knowers: Rec[] }[];
 };
 
-export const readKnowableRows = async (source: { character_id: number } | { idea_id: number }) =>
+export const readKnowableRows = async (source: { character_id: number } | { idea_id: number } | { location_id: number }) =>
   (await runEntrance("character.read_knowable_rows.ReadKnowableRows", source)).result as KnowableRows;
 
 /** 人物が知る相手に人物として入っている行(`character.read_known_rows.ReadKnownRows`)。 */
@@ -174,6 +175,7 @@ export type KnownRows = {
   character_histories: { id: number; character_id: number }[];
   character_skill_histories: { id: number; character_id: number }[];
   idea_histories: { id: number; idea_id: number }[];
+  location_histories: { id: number; location_id: number }[];
 };
 
 export const readKnownRows = async (knowerId: number) =>
@@ -184,7 +186,7 @@ export type KnowledgeChange = { id: number; known: boolean; start: string | null
 /** 知る相手の付け外しをまとめて直し、直したあとの知る行を返す(`character.update_knowledge.UpdateKnowledge`)。 */
 export const updateKnowledge = async (knowledge: {
   knower_id: number; character_histories: KnowledgeChange[]; character_skill_histories: KnowledgeChange[];
-  idea_histories: KnowledgeChange[];
+  idea_histories: KnowledgeChange[]; location_histories: KnowledgeChange[];
 }) => (await runEntrance("character.update_knowledge.UpdateKnowledge", { knowledge })).result as KnownRows;
 
 export type MapsResponse = components["schemas"]["MapsResponse"];

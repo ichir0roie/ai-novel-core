@@ -25,6 +25,7 @@ _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
     "idea": {"histories": "flow"},
     "character_relation": {"histories": "flow"},
     "character_skill": {"histories": "flow"},
+    "location": {"histories": "flow"},
 }
 # 行の知る相手を GUI で選べる子リスト
 _CHILD_LIST_KNOWERS: dict[str, set[str]] = {
