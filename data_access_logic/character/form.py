@@ -169,9 +169,10 @@ class KnowledgeChange(Form):
 
 
 class KnowledgeForm(Form):
-    """人物が知るもの(人物の来歴・スキルの来歴・アイデアの履歴)の知る相手の付け外しを、まとめて渡す(GUI の知識整理)。"""
+    """人物が知るもの(人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴)の知る相手の付け外しを、まとめて渡す(GUI の知識整理)。"""
 
     knower_id: Annotated[int, References("character")]
     character_histories: list[KnowledgeChange] = []
     character_skill_histories: list[KnowledgeChange] = []
     idea_histories: list[KnowledgeChange] = []
+    location_histories: list[KnowledgeChange] = []

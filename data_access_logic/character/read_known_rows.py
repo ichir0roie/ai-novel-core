@@ -5,13 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.record import (
-    KnownCharacterHistory, KnownCharacterSkillHistory, KnownIdeaHistory, KnownRows,
+    KnownCharacterHistory, KnownCharacterSkillHistory, KnownIdeaHistory, KnownLocationHistory, KnownRows,
 )
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.query import common_query
 from db.schema import (
     Character, CharacterHistory, CharacterHistoryKnower, CharacterSkill, CharacterSkillHistory,
-    CharacterSkillHistoryKnower, IdeaHistory, IdeaHistoryKnower,
+    CharacterSkillHistoryKnower, IdeaHistory, IdeaHistoryKnower, LocationHistory, LocationHistoryKnower,
 )
 
 
@@ -26,11 +26,14 @@ def known_rows(s: Session, knower_id: int) -> KnownRows:
         idea_histories=[KnownIdeaHistory.model_validate(row) for row in s.scalars(
             select(IdeaHistory).join(IdeaHistoryKnower).where(IdeaHistoryKnower.knower_id == knower_id)
             .order_by(IdeaHistory.id))],
+        location_histories=[KnownLocationHistory.model_validate(row) for row in s.scalars(
+            select(LocationHistory).join(LocationHistoryKnower).where(LocationHistoryKnower.knower_id == knower_id)
+            .order_by(LocationHistory.id))],
     )
 
 
 class ReadKnownRows(SessionEntrypoint):
-    """人物が知る相手に人物として入っている、人物の来歴・スキルの来歴・アイデアの履歴の行を読む(GUI の知識整理の木の印)。"""
+    """人物が知る相手に人物として入っている、人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴の行を読む(GUI の知識整理の木の印)。"""
 
     def __init__(self, knower_id: int):
         self.knower_id = knower_id

@@ -12,7 +12,7 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
 from db.schema import (
     Character, CharacterHistory, CharacterHistoryKnower, CharacterSkillHistory, CharacterSkillHistoryKnower, IdeaHistory,
-    IdeaHistoryKnower, KnowerMixin,
+    IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
 )
 
 
@@ -30,7 +30,7 @@ def _apply[K: KnowerMixin](knowers: list[K], knower_id: int, change: KnowledgeCh
 
 
 class UpdateKnowledge(CommitEntrypoint):
-    """人物を、人物の来歴・スキルの来歴・アイデアの履歴の行の知る相手に、まとめて入れる・外す(GUI の知識整理)。
+    """人物を、人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴の行の知る相手に、まとめて入れる・外す(GUI の知識整理)。
     場所として入っている知る相手の行には触らない。直したあとの、その人物が知る行を返す。"""
 
     def __init__(self, knowledge: KnowledgeForm):
@@ -49,5 +49,8 @@ class UpdateKnowledge(CommitEntrypoint):
         for change in form.idea_histories:
             idea_history = common_query.get_row(s, IdeaHistory, change.id)
             _apply(idea_history.knowers, form.knower_id, change, IdeaHistoryKnower)
+        for change in form.location_histories:
+            location_history = common_query.get_row(s, LocationHistory, change.id)
+            _apply(location_history.knowers, form.knower_id, change, LocationHistoryKnower)
         s.flush()
         return known_rows(s, form.knower_id)

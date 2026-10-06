@@ -7,14 +7,15 @@ from data_access_logic import constants
 from data_access_logic.character.models import ParticipantMaterial, ParticipantSerialized
 from data_access_logic.character.record import CharacterMove
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
-from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
+from data_access_logic.location.models import LocationLine, LocationMaterial
 from data_access_logic.material import Material
 from db.stamp import Stamp
 
 
 class LocationSituationMaterial(Material):
     time: Stamp
-    location: LocationTextMaterial
+    # 来歴は時刻の年まで
+    location: LocationLine
     participants: list[ParticipantMaterial]
     # 新しい順
     recent_events: list[EventBase]
@@ -34,7 +35,8 @@ class LocationSituationSerialized(LocationSituationMaterial):
         location = self.location
         return {
             "現在の時刻": str(self.time),
-            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment},
+            "場所": {"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment,
+                   "来歴(古い順)": [f"{history.start}年: {history.description}" for history in location.histories]},
             "居合わせる人物・対象": [participant.model_dump() for participant in self.participants],
             "この場所の直近の出来事(新しい順)": [event.name for event in self.recent_events],
             "この時点より後に既に決まっている出来事": [event.model_dump() for event in self.later_events],

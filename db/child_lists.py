@@ -11,10 +11,10 @@ from typing import TypeVar
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 
-from db.schema import Character, CharacterHistory, CharacterSkillHistory, IdeaHistory
+from db.schema import Character, CharacterHistory, CharacterSkillHistory, IdeaHistory, Location, LocationHistory
 
 Child = TypeVar("Child")
-History = TypeVar("History", CharacterHistory, CharacterSkillHistory, IdeaHistory)
+History = TypeVar("History", CharacterHistory, CharacterSkillHistory, IdeaHistory, LocationHistory)
 
 
 def child_model(model: type, name: str) -> type:
@@ -61,12 +61,12 @@ def _replaced_knowers(current: Sequence[Child], rows: Sequence[BaseModel], child
 
 
 def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], child: type[History],
-                       owner: Character | None = None) -> list[History]:
+                       owner: Character | Location | None = None) -> list[History]:
     """来歴の行を置き換え、行の `knowers`(知る相手の行の配列)で知る相手を置き換える。
     今ある行とは、並びではなく鍵(`_history_key`)で対応させる(読み出しの入口は古い順に、relationship は新しい順に並べるので、
     並びで対応させると別の年の行を書き換えてしまう)。鍵の同じ行が幾つもあれば、その中では並びの順に対応させる。
     `knowers` を渡さない行は、今ある行に当たれば知る相手をそのままにし、当たらない新しい行なら `owner`(人物の来歴・
-    スキルの来歴の本人)だけを知る相手にする(`owner` が無ければ行の無いまま)。余った今ある行は、返したリストで置き換えると消える。"""
+    スキルの来歴の本人、場所の来歴の場所)だけを知る相手にする(`owner` が無ければ行の無いまま)。余った今ある行は、返したリストで置き換えると消える。"""
     knower = child_model(child, "knowers")
     by_key: dict[tuple[object, ...], list[History]] = {}
     for existing in current:
@@ -85,7 +85,10 @@ def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], ch
         knowers = getattr(row, "knowers")
         if knowers is not None:
             setattr(target, "knowers", _replaced_knowers(target.knowers, knowers, knower))
-        elif is_new and owner is not None:
+        elif is_new and isinstance(owner, Character):
             setattr(target, "knowers", [knower(knower=owner)])
+        elif is_new and owner is not None:
+            # 場所の来歴は、その場所に住む人物が知る
+            setattr(target, "knowers", [knower(location_id=owner.id)])
         replaced.append(target)
     return replaced

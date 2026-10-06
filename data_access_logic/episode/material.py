@@ -22,6 +22,7 @@ from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.location.models import LocationMaterial
+from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Episode, EpisodeCharacter, Event, Location
@@ -109,7 +110,7 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> 
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
         past_episodes=past_episodes(s, episode, characters),
-        locations=common_query.location_path(s, location_id) if location_id is not None else [],
+        locations=location_path_at(s, location_id, main_episode.start) if location_id is not None else [],
         cast=cast_of(s, characters, main_episode.start),
         mentioned=mentioned_of(mentioned_in(episode), main_episode.start),
         relations=relations_at(s, characters, main_episode.start),

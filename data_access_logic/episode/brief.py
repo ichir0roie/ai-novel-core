@@ -32,6 +32,7 @@ from data_access_logic.episode_session.turns import session_select
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.idea.whole import whole_ideas
+from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
 from data_access_logic.summary_targets import SummaryTargets
@@ -120,7 +121,7 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
         main_episode=main_episode,
         past_episodes=past_episodes(s, episode, characters),
         recent_episodes=recent_episodes(s, episode),
-        locations=common_query.location_path(s, location_id) if location_id is not None else [],
+        locations=location_path_at(s, location_id, time) if location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned, time),
         secrets={character.id: secrets_at(s, character, time) for character in [*characters, *mentioned]},

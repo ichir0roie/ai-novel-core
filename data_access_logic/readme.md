@@ -81,6 +81,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、本文の末尾の `# 検証結果` の節に入れる(前の節は置き換える)。`ids` を省くとまだその節の無いものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。oracle は検めたあと、その節を含む本文からミームを抜き出し直し、足したミームも検める。`{"checked", "memes_added"}` を返す |
 | 「場所を直して」                     | `location.update_location.UpdateLocation(location)`                                 |
+| 「この場所の来歴を足して」「〇年にこの町で起きたことを記録して」 | `location.update_location.UpdateLocation(LocationUpdateForm(id=…, histories=[...]))`。起きた年ごとの行の配列をまるごと渡す(今の行は表の API の `location` の行の `histories`)。下の「場所の芯と来歴」 |
 | 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, parameters=[...]))`。変わった時ごとの行の配列をまるごと渡す(下の「変わった時ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
 | 「この人物の来歴を足して」「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」「年の決まっていない構想を足して」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, histories=[...]))`。起きた年ごとの行の配列をまるごと渡す(今の配列は `ReadCharacter` の `histories` で読む。時刻を渡すとその時刻までの行だけになるので、書き足すときは時刻を渡さずに読む)。年の決まっていない構想は `start` を空にした行に書く。下の「人物の芯と来歴」 |
 | 「人物を直して」                     | `character.update_character.UpdateCharacter(character)`。名字・体格・口調・性格は `parameters` に、外見は `appearance`、芯は `text`、ミームは `meme`、行動原理は `principle`、筋書きは `plot` に、来歴は `histories` に入れる(渡さなければ触らない)。出自・居場所は `character.update_character_location.UpdateCharacterLocation(location)`、相関は `character.update_character_relation.UpdateCharacterRelation(relation)` |
@@ -104,7 +105,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「その時点の顔ぶれは?」             | `story.read_cast.ReadCast(story_id, time=None)`。`time` を省けば作品の最後の話の時刻 |
 | 「その場所・その時点の様子は?」     | `story.read_brief.ReadBrief(location_id, time)`                                 |
 | 「この人物の周りで何が起きている?」 | `character.read_surroundings.ReadSurroundings(character_id, time)`               |
-| 「この人物がその時に知っていることを読ませて」 | `character.read_knowledge.ReadKnowledge(episode_id, character_id)`。人物役が、話のセッションでいる時刻(その人物の一番新しい手番の行の `time`、無ければ話の時刻)に知ることのできるデータ。時刻・年は渡さず、来歴の年はその時刻から何年前か(「今年」「13年前」)で出す。本人の外見・芯・ミーム・行動原理・その時の名字や口調、その時刻に関係のある人物の外見と芯、本人と関係のある人物の来歴とスキル(名前と来歴)、その時刻に続いている関係(芯と、時刻の年までに起きた来歴)、知っているアイデア(住む場所に効くものと、知る相手に入ったもの)のうち、話のプロットに名前(本質の名前か知っている呼び名)が出るものの呼び名と受け止め方を返す。来歴・スキルの来歴は知る相手に当たるものだけ(知っている来歴の行の無いスキルは出さない)。来歴は時刻の年までに起きた行だけ。筋書き(`plot`)とスキルの本質は出さない(下の「来歴・履歴を知る相手」) |
+| 「この人物がその時に知っていることを読ませて」 | `character.read_knowledge.ReadKnowledge(episode_id, character_id)`。人物役が、話のセッションでいる時刻(その人物の一番新しい手番の行の `time`、無ければ話の時刻)に知ることのできるデータ。時刻・年は渡さず、来歴・履歴の行はその時刻から何年前かと本文をつないだ一文(「13年前、〜」「今年、〜」)で出す。本人の外見・芯・ミーム・行動原理・その時の名字や口調、その時刻に関係のある人物の外見と芯、本人と関係のある人物の来歴とスキル(名前と来歴)、その時刻に続いている関係(芯と、時刻の年までに起きた来歴)、知っているアイデア(住む場所に効くものと、知る相手に入ったもの)のうち、話のプロットに名前(本質の名前か知っている呼び名)が出るものの呼び名と受け止め方、知っている場所の来歴(場所の名前ごと。場所の説明は出さない)を返す。来歴・スキルの来歴は知る相手に当たるものだけ(知っている来歴の行の無いスキルは出さない)。来歴は時刻の年までに起きた行だけ。筋書き(`plot`)とスキルの本質は出さない(下の「来歴・履歴を知る相手」) |
 | 「この語を、この人物は知っている?」 | `character.read_known_ideas.ReadKnownIdeas(episode_id, character_id, words)`。人物役が手番の要求に出た語を引く。語ごとに、`ReadKnowledge` と同じ時刻・同じ範囲で知っているアイデアのうち、本質の名前か知っている呼び名が語と重なる(語が名前の一部か、二字以上の名前が語の一部)ものの呼び名と受け止め方を返す。知らなければ空 |
 | 「初対面の相手の見た目を読ませて」 | `character.read_appearance.ReadAppearance(character_id, time)`。会った相手から見て分かること(種別・歳・性別・背丈・体格・外見)。名前は出さない。語り部が初対面の人物の状況の差分を書くときに使う |
 | 「話のセッションに手番を足して」「人物役の一手を待って」 | スキル `episode` の「語り部と人物役」。表(`episode_character_session`)は `tool.episode_session` のコマンドで扱う。入口は `episode_session.add_turns.AddTurns(episode_id, turns)`(語り部が要求の行を足す)・`answer_turn.AnswerTurn(record_id, answer)`(人物役が番の行に一手を入れる)・`read_turn.ReadTurn(episode_id, character_id)`(人物役の番か: turn / waiting / closed。番の行は要求と終了の印だけで、時刻は返さない)・`read_session.ReadSession(episode_id)`(すべての行)・`read_stage.ReadStage(episode_id)`(語り部が読む材料。プロット・時刻・場所・登場人物の表層(名前・年齢・性別・外見)・登場人物のだれとだれが知り合いか(関係の名前だけ)。人物の芯・来歴、関係の説明・来歴、設定、前の話・本文は入らない)・`add_ideas.AddIdeas(episode_id, ideas)`(語り部・話を書く Claude が、場面に出した新しい語(`IdeaDraft`)を話の場所・時刻でアイデアと照らし、当たらなければ候補として足す。種別は話の場所の世界にある分類から選ばせ、無ければ一覧を添えて断る。足した語 `added` と足さなかった語 `kept` の名前だけを返し、アイデアの本文は返さない)・`close_session.CloseSession(episode_id)`(出た人物に終了の行)・`clear_session.ClearSession(episode_id)`(その話の行をすべて消す。演じ直す前に)。行動の入っていない一番古い行の人物が、いま動く番 |
@@ -232,8 +233,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - `MergeIdea` は `source_id` の `histories` を `target_id` へ付け替えてから `source_id` を消す。
   `DeleteIdea` は下位のアイデアが残っていなければそのまま消し、`histories` も一緒に消える
 
-**来歴・履歴を知る相手**: 人物の来歴の行、スキルの来歴の行、アイデアの履歴の行は、知る相手の表(`character_history_knower` /
-`character_skill_history_knower` / `idea_history_knower`)の行に当たる人物だけが知る。知る相手の行のほかに、知る人物を決めるものは無い。
+**来歴・履歴を知る相手**: 人物の来歴の行、スキルの来歴の行、アイデアの履歴の行、場所の来歴の行は、知る相手の表(`character_history_knower` /
+`character_skill_history_knower` / `idea_history_knower` / `location_history_knower`)の行に当たる人物だけが知る。知る相手の行のほかに、知る人物を決めるものは無い。
 人物の芯(`text`)は知る相手を持たず、本人と関係(`character_relation`)のある人物が知る。秘密は芯に書かず、知る相手を絞った来歴の行に書く。
 アイデアとスキルの本文は誰も知らない(作者だけが読む)。
 
@@ -243,12 +244,12 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 人物の来歴・スキルの来歴の行は、本人も関係(`character_relation`)のある人物も、知る相手に入っていなければ知らない
 - アイデアの履歴の行は、行の効く場所(`location_id`)・期間に住む人物も、知る相手に入っていなければ知らない。
   その場所の住人に知らせるなら、その場所を知る相手にする。履歴の行の無いアイデアは、人物役のだれも知らない
-- 入口では人物の来歴の行、スキルの来歴の行、アイデアの履歴の行の `knowers`(行の配列)で出し入れする。渡すとまるごと置き換える
-- ある人物が知るもの(人物の来歴・スキルの来歴・アイデアの履歴の行)を、まとめて付け外しするのは
-  `character.update_knowledge.UpdateKnowledge(KnowledgeForm(knower_id, character_histories, character_skill_histories, idea_histories))`
+- 入口では人物の来歴の行、スキルの来歴の行、アイデアの履歴の行、場所の来歴の行の `knowers`(行の配列)で出し入れする。渡すとまるごと置き換える
+- ある人物が知るもの(人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴の行)を、まとめて付け外しするのは
+  `character.update_knowledge.UpdateKnowledge(KnowledgeForm(knower_id, character_histories, character_skill_histories, idea_histories, location_histories))`
   (GUI の人物の画面の「Organize knowledge」)。各行は `KnowledgeChange(id, known, start)` で、`known` が true なら知る相手に入れ
   (入っていれば知った時刻を直す)、false なら外す。場所として入っている知る相手の行には触らない。
-  行の id は `character.read_knowable_rows.ReadKnowableRows(character_id=…)`(人物の芯・来歴とスキルの来歴) / `(idea_id=…)`、
+  行の id は `character.read_knowable_rows.ReadKnowableRows(character_id=…)`(人物の芯・来歴とスキルの来歴) / `(idea_id=…)` / `(location_id=…)`、
   その人物が知る行は `character.read_known_rows.ReadKnownRows(knower_id)` で読む
 - 来歴・履歴の行で `knowers` を渡さない行は、今ある行なら知る相手をそのままにし、新しい行なら人物の来歴・スキルの来歴は本人だけ、アイデアの履歴は行の無いまま
   (`db/child_lists.py` の `replaced_histories`)
@@ -288,6 +289,16 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 話の材料・人物役には、その時刻に続いている関係(`start` 〜 `end`)の、時刻の年までに起きた行だけが渡る(`character/cast.py` の `relations_at`)。
 後年のこと(看取る・別れる・最期など)を `text` に書くと、それより前の話・人物役にも渡ってしまうので、その年の行に書く。年の決まっていない構想は `start` を空にした行に書く。
 間柄そのものが変わる(師弟から仲間へ、など)ときは、来歴の行ではなく、`end` で区切った新しい関係の行にする。
+二人のあいだで起きたこと(出会い・やり取り・師事・対立・別れ)は関係の来歴にだけ書き、人物の来歴には繰り返さない。
+人物の来歴には、その人自身に起きたこと・変わったこと(体・立場・考え方・居場所・一人で決めたこと)を書く。
+ただし秘密(知る相手を絞るもの)は、知る相手を持たない関係の来歴には書けないので、人物の来歴に書く。
+
+**場所の芯と来歴**: 場所(`location`)の `text` は、その場所の時期を限らない姿(土地・暮らし・棲むもの)だけを書く。
+場所で起きたこと・変わったことは、関係の来歴と同じく、起きた年を `start` にした `histories` の行(`location_history`)に書く。
+話の材料(`ReadEpisodeBrief` の「場所(広い順)」・話の生成の「場所の説明(広い順)」)・語り部(`ReadStage`)・出来事の生成には、話の場所とその親の説明と、その時刻の年までに起きた行だけが渡る(`location/reading.py` の `location_at`)。
+年の決まっていない構想は `start` を空にした行に書く。
+場所の来歴の行は、人物の来歴と同じく知る相手(`knowers`)に当たる人物だけが知る。知る相手を渡さずに足した行は、その場所自身を知る相手にする(その時刻にその場所・配下に住む人物が知る)。秘密は人物だけを知る相手にし、旅人など住んでいない人物に知らせるなら、その人物を足す。
+人物役(`ReadKnowledge`)には、知っている来歴の行だけを場所の名前ごとに渡す。場所の説明(`text`)は作者の目で書くものなので、人物役には渡さない。
 
 人物が持つミーム(行動原理の芯。`meme` テーブル)は、その人物の `meme` 列に、持つミームの文面を
 `- <古今表裏>: <文面>` の箇条書きでそのまま書く。人物は複数のミームを持ってよい。ミームどうしの関係の整理は、

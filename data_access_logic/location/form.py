@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from data_access_logic.location.record import LocationHistoryRow
 from data_access_logic.material import Form, Timestamp
 from db.polygon import parse_polygon
 
@@ -34,6 +35,8 @@ class LocationCreateForm(_LocationColumns):
     kind: str = Field(min_length=1)
     text: str = ""
     active_random_generation: bool = False
+    # 来歴(起きた年ごとの行)
+    histories: list[LocationHistoryRow] = []
 
 
 class LocationUpdateForm(_LocationColumns):
@@ -42,3 +45,5 @@ class LocationUpdateForm(_LocationColumns):
     kind: str | None = None
     text: str | None = None
     active_random_generation: bool | None = None
+    # 渡せば来歴の行をまるごと置き換える
+    histories: list[LocationHistoryRow] | None = None
