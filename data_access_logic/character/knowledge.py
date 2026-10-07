@@ -29,7 +29,8 @@ from data_access_logic.character.models import CharacterParameterValues, Charact
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character import skills
 from data_access_logic.idea.models import normalized
-from data_access_logic.material import Material
+from data_access_logic.history_start import by_start
+from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
@@ -68,7 +69,7 @@ class KnownName(Material):
 
 
 class KnownHistory(Material):
-    start: int | None = None
+    start: Timestamp | None = None
     description: str
 
 
@@ -89,17 +90,17 @@ def known_histories(
 ) -> list[KnownHistory]:
     """本人か関係のある人物の来歴・スキルの来歴を渡す。古い順。"""
     known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
-    return [KnownHistory.model_validate(row) for row in sorted(known, key=lambda row: row.start or 0)]
+    return [KnownHistory.model_validate(row) for row in sorted(known, key=by_start)]
 
 
-def _ago(start: int | None, year: int) -> str | None:
-    """起きた年を、その時刻から何年前かで言う。"""
+def _ago(start: Stamp | None, year: int) -> str | None:
+    """起きた時刻を、その時刻の年から何年前かで言う(人物の覚えは年で足りる)。"""
     if start is None:
         return None
-    return "今年" if start == year else f"{year - start}年前"
+    return "今年" if start.year == year else f"{year - start.year}年前"
 
 
-def _history_line(start: int | None, description: str, year: int) -> str:
+def _history_line(start: Stamp | None, description: str, year: int) -> str:
     """何年前かと本文を一文につなぐ(「10年前、〜」)。"""
     return f"{_ago(start, year)}、{description}"
 

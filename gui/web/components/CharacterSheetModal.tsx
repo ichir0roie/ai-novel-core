@@ -9,10 +9,10 @@ import Modal from "@/components/Modal";
 import { runEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
 import { columnHint } from "@/lib/hint";
 import { useTable } from "@/lib/meta";
-import { ageAt, ageInYear } from "@/lib/stamp";
+import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
-type History = { start: number | null; description: string };
+type History = { start: string | null; description: string };
 
 /** `character.read_character.ReadCharacter` の結果。人物の列に、`time` の時点で重ねたパラメータが同じ段に並ぶ
  * (`data_access_logic/character/reading.py` の `CharacterSheet`)。 */
@@ -22,7 +22,7 @@ type CharacterSheet = Record<string, unknown> & {
   end: string | null;
   // 人物の芯(説明・meme・行動原理・plot)
   text: string | null;
-  // `time` の時点までに起きた行だけ(時点が無ければ、年の決まっていない行も含めてすべて)
+  // `time` の時点までに起きた行だけ(時点が無ければ、時期の決まっていない行も含めてすべて)
   histories: History[];
   location: { location_id: number; location_name: string | null } | null;
 };
@@ -160,12 +160,12 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
                 <div className="childlist flow">
                   <div className="flowlist">
                     {histories.map((history, i) => {
-                      const historyAge = ageInYear(sheet.start, history.start);
+                      const historyAge = ageAt(sheet.start, history.start);
                       return (
                         <div key={i} className="flow-card sheet-history">
                           <div className="flow-line">
                             <span className="flow-index">#{i + 1}</span>
-                            <span className="flow-period">{history.start === null ? T.characterSheet.undated : `${history.start}年 ~`}</span>
+                            <span className="flow-period">{history.start === null ? T.characterSheet.undated : `${history.start.split(" ")[0]} ~`}</span>
                             {historyAge !== null && <span className="flow-period">{T.record.ageInYear(historyAge)}</span>}
                           </div>
                           <div className="flow-detail-text">{history.description}</div>

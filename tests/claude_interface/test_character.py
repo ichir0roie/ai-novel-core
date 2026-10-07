@@ -83,7 +83,7 @@ def test_commit_character_relation(shown, world):
     assert result["relation"] == "商売敵"
     assert result["text"] == "市で客を取り合う"
     assert (result["start"], result["end"]) == ("1200/04/01 00:00:00", "1210/01/01 00:00:00")
-    assert result["histories"] == [{"start": 1205, "description": "値下げで競り合う"}]
+    assert result["histories"] == [{"start": "1205/01/01 00:00:00", "description": "値下げで競り合う"}]
 
 
 def test_create_random_character(shown):
@@ -223,6 +223,19 @@ def test_read_character(shown, world):
     assert [history["description"] for history in result["histories"]] == ["テスト太郎の来歴"]
 
 
+def test_read_character_hides_later_rows_of_the_same_year(shown, world):
+    created = shown(CommitCharacter(CharacterCreateForm(
+        name="来歴の時刻テスト", text="説明", kind="人物", location_id=world.location_id, start="1180/05/06",
+        histories=[CharacterHistoryRow(start="1200/03/01", description="春に村へ来る"),
+                   CharacterHistoryRow(start="1200/10/01", description="秋に村を出る")])))
+
+    result = shown(ReadCharacter(character_id=created["id"], time="1200/06/01"))
+
+    # 同じ年でも、その時刻より後に始まる行は出さない
+    assert [(history["start"], history["description"]) for history in result["histories"]] == [
+        ("1200/03/01 00:00:00", "春に村へ来る")]
+
+
 def test_read_character_without_time(shown, world):
     result = shown(ReadCharacter(character_id=world.character_ids[0]))
 
@@ -276,8 +289,8 @@ def test_update_character_relation(shown, world):
     assert (result["character_1_id"], result["character_2_id"]) == (world.character_ids[1], world.character_ids[0])
     assert (result["relation"], result["text"]) == ("許嫁", "親が決めた")
     assert (result["start"], result["end"]) == ("1190/01/01 00:00:00", "1205/01/01 00:00:00")
-    assert result["histories"] == [{"start": 1195, "description": "縁談が流れかける"}]
+    assert result["histories"] == [{"start": "1195/01/01 00:00:00", "description": "縁談が流れかける"}]
 
     # 来歴を渡さなければ、今の行はそのまま
     result = shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, text="親が決めた縁")))
-    assert result["histories"] == [{"start": 1195, "description": "縁談が流れかける"}]
+    assert result["histories"] == [{"start": "1195/01/01 00:00:00", "description": "縁談が流れかける"}]

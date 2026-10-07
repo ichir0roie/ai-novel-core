@@ -9,8 +9,8 @@ class LocationHistoryRow(Form):
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
-    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
-    start: int | None = None
+    # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
+    start: Timestamp | None = None
     description: str
     # 知る相手。この相手だけが来歴を知る。渡さなければ、新しい行はその場所(住む人物が知る)、今ある行はそのまま
     # (`db/child_lists.py` の `replaced_histories`)

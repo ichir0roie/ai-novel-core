@@ -144,7 +144,7 @@ def add_relations(s: Session, form: RelationsForm) -> list[CharacterRelationReco
         CommitCharacterRelation(CharacterRelationCreateForm(
             character_1_id=draft.character_1_id, character_2_id=draft.character_2_id, relation=draft.relation,
             text=draft.text, start=form.time,
-            histories=[CharacterRelationHistoryRow(start=form.time.year, description=draft.history)],
+            histories=[CharacterRelationHistoryRow(start=form.time, description=draft.history)],
         )).execute(s)
         for draft in form.relations
     ]

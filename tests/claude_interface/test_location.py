@@ -87,18 +87,18 @@ def test_location_histories(shown, world):
     created = shown(CommitLocation(LocationCreateForm(
         name="テスト関所", kind="関所", parent_id=world.planet_id,
         histories=[LocationHistoryRow(start=1180, description="関所が置かれる")])))
-    assert [(row["start"], row["description"]) for row in created["histories"]] == [(1180, "関所が置かれる")]
+    assert [(row["start"], row["description"]) for row in created["histories"]] == [("1180/01/01 00:00:00", "関所が置かれる")]
     # 知る相手を渡さなければ、その場所に住む人物が知る
     assert [knower["location_id"] for knower in created["histories"][0]["knowers"]] == [created["id"]]
 
     # 来歴は配列でまるごと置き換え、渡さなければ触らない
     shown(UpdateLocation(LocationUpdateForm(id=created["id"], histories=[
-        LocationHistoryRow(start=1180, description="関所が置かれる"), LocationHistoryRow(description="年の決まっていない構想")])))
+        LocationHistoryRow(start=1180, description="関所が置かれる"), LocationHistoryRow(description="時期の決まっていない構想")])))
     result = shown(UpdateLocation(LocationUpdateForm(id=created["id"], text="山あいの関所")))
 
     assert result["text"] == "山あいの関所"
-    assert sorted((row["start"] or 0, row["description"]) for row in result["histories"]) == [
-        (0, "年の決まっていない構想"), (1180, "関所が置かれる")]
+    assert sorted((row["start"] or "", row["description"]) for row in result["histories"]) == [
+        ("", "時期の決まっていない構想"), ("1180/01/01 00:00:00", "関所が置かれる")]
 
 
 def test_episode_materials_have_location_text_and_histories(shown, world):
@@ -106,7 +106,7 @@ def test_episode_materials_have_location_text_and_histories(shown, world):
         LocationHistoryRow(start=1250, description="先に起きること"),
         LocationHistoryRow(start=1190, description="市が立つ"),
         LocationHistoryRow(description="年未定の構想")])))
-    expected = ["1190年: 市が立つ"]
+    expected = ["1190/01/01: 市が立つ"]
 
     brief = shown(ReadEpisodeBrief(episode_id=world.episode_id))
     # 話の時刻(1200 年)の年までに起きた来歴だけを、場所の説明と一緒に渡す

@@ -521,7 +521,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
                       history.id,
                       history.knowers,
                       history.description,
-                      <span>{history.start === null ? T.knowledge.undated : T.knowledge.year(history.start)}</span>,
+                      <span>{history.start === null ? T.knowledge.undated : T.knowledge.date(history.start)}</span>,
                       history.description,
                     ),
                   )}
@@ -534,7 +534,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
                         `${skill.name}: ${history.description}`,
                         <>
                           <strong>{T.knowledge.skill(skill.name)}</strong>
-                          <span>{history.start === null ? T.knowledge.undated : T.knowledge.year(history.start)}</span>
+                          <span>{history.start === null ? T.knowledge.undated : T.knowledge.date(history.start)}</span>
                         </>,
                         history.description,
                       ),
@@ -564,7 +564,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
                       history.id,
                       history.knowers,
                       history.description,
-                      <span>{history.start === null ? T.knowledge.undated : T.knowledge.year(history.start)}</span>,
+                      <span>{history.start === null ? T.knowledge.undated : T.knowledge.date(history.start)}</span>,
                       history.description,
                     ),
                   )}
