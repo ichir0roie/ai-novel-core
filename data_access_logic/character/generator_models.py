@@ -45,6 +45,8 @@ class CharacterBirthMaterial(Material):
     nearby_characters: list[NearbyCharacter]
     # 同じ場所にいる人物・対象の名。中身の段には渡さず、名付けで避ける
     resident_names: list[str]
+    # 世界のどこかで使われている人物・対象の名。AI には渡さず、名付けで候補が余れば避ける
+    world_names: list[str]
     # 人物なら、作者の指定(芯を埋めるときは今の値)で決まっている値。決まっていない値は None で、AI が決める
     parameters: CharacterParameterForm | None = None
     # 以下は決まっている値。None なら AI が決める
@@ -142,6 +144,8 @@ class CharacterNameMaterial(Material):
     born_location: BirthLocationMaterial | None = None
     # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
     avoided_names: list[str]
+    # 世界のどこかで使われている名。多いので AI には渡さず、候補が余ればコードの側で避ける
+    used_names: list[str]
     hint_name: str | None = None
 
 
@@ -310,6 +314,7 @@ class PersonNameDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(description="名字を含めない名")
+    reading: str = Field(description="名(名字を含めない)の読み。ひらがな")
     family_name: str = Field(description="名字。その土地・身分で名字を持たないのが自然なら空文字")
 
     @field_validator("name", "family_name")
@@ -371,6 +376,8 @@ class BirthSources(Material):
     nearby_characters: list[NearbyCharacter]
     # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
     resident_names: list[str]
+    # 世界のどこかで使われている人物・対象の名。名付けで候補が余れば避ける
+    world_names: list[str]
     # 引く元になるミーム(`meme.extractor.draw_from`)
     meme_pool: list[PooledMeme]
 
