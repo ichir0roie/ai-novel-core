@@ -11,17 +11,17 @@ from data_access_logic.idea.models import (
     IdeaContextMaterial, IdeaContextSerialized, WholeIdeaMaterial, whole_idea_for_prompt,
 )
 from data_access_logic.location.models import LocationLine, LocationMaterial
-from data_access_logic.material import Material, Named
+from data_access_logic.material import Dated, Material, Named, updated_at_for_claude
 from db.stamp import Stamp
 
 
-class StoryMaterial(Material):
+class StoryMaterial(Dated):
     name: str
     text: str
     parent_story: "StoryMaterial | None" = None
 
 
-class EpisodeBase(Material):
+class EpisodeBase(Dated):
     title: str
 
 
@@ -96,7 +96,8 @@ def _past_episodes(past_episodes: list[PastEpisode]) -> list[dict[str, Any]]:
 
 def _appearance(link: CharacterEpisode) -> dict[str, Any]:
     return {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
-            "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
+            "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場",
+            "更新時刻": updated_at_for_claude(link.episode)}
 
 
 def _appearances(appearances: list[CharacterEpisode], character_id: int) -> list[dict[str, Any]]:
@@ -283,8 +284,8 @@ class EpisodeBriefSerialized(EpisodeBrief):
         viewpoint = episode.viewpoint_character
         return {
             "書き方": self.guide,
-            "作品": _story(self.story),
-            "前の話の概要(古い順)": [{"話id": past.id, **entry}
+            "作品": {**_story(self.story), "更新時刻": updated_at_for_claude(self.story)},
+            "前の話の概要(古い順)": [{"話id": past.id, **entry, "更新時刻": updated_at_for_claude(past)}
                                      for past, entry in zip(self.past_episodes, _past_episodes(self.past_episodes))],
             "文体の見本(古い順)": _style_samples(self.recent_episodes),
             "この話": {
@@ -293,17 +294,21 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "時刻": str(episode.start),
                 "終わり": str(episode.end) if episode.end else None,
                 "同期": episode.synced,
-                "場所(広い順)": [{**_place(location), **line}
+                "更新時刻": updated_at_for_claude(episode),
+                "場所(広い順)": [{**_place(location), **line, "更新時刻": updated_at_for_claude(location)}
                                for location, line in zip(self.locations, _location_lines(self.locations))],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
-                "登場人物": [{"人物id": member.character.id, **member.model_dump(),
-                          **secrets_for_prompt(self.secrets[member.character.id]),
+                "登場人物": [{"人物id": member.character.id, "更新時刻": updated_at_for_claude(member.character),
+                          **member.model_dump(), **secrets_for_prompt(self.secrets[member.character.id]),
                           "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
                          for member in self.cast],
-                "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump(),
-                              **secrets_for_prompt(self.secrets[member.character.id])} for member in self.mentioned],
-                "登場人物の関係": relations_for_prompt(self.relations),
-                "設定": [{"アイデアid": whole.idea.id, **whole_idea_for_prompt(whole)} for whole in self.ideas],
+                "名前だけ出る人物": [{"人物id": member.character.id, "更新時刻": updated_at_for_claude(member.character),
+                              **member.model_dump(), **secrets_for_prompt(self.secrets[member.character.id])}
+                             for member in self.mentioned],
+                "登場人物の関係": [{**line, "更新時刻": updated_at_for_claude(relation)}
+                            for relation, line in zip(self.relations, relations_for_prompt(self.relations))],
+                "設定": [{"アイデアid": whole.idea.id, "更新時刻": updated_at_for_claude(whole.idea),
+                        **whole_idea_for_prompt(whole)} for whole in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
             },
@@ -353,17 +358,19 @@ class EpisodeCastingSerialized(EpisodeCasting):
                 "話id": episode.id,
                 "題": episode.title,
                 "時刻": str(episode.start),
+                "更新時刻": updated_at_for_claude(episode),
                 "場所(広い順)": [_place(location) for location in self.locations],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
                 "プロット": episode.plot_text,
             },
-            "登場人物": [{**member.model_dump(),
+            "登場人物": [{**member.model_dump(), "更新時刻": updated_at_for_claude(member.character),
                       "関わった話(古い順)": _summarized_appearances(self.appearances, member.character.id)}
                      for member in self.cast],
-            "名前だけ出る人物": [{**member.model_dump(),
+            "名前だけ出る人物": [{**member.model_dump(), "更新時刻": updated_at_for_claude(member.character),
                           "関わった話(古い順)": _summarized_appearances(self.appearances, member.character.id)}
                          for member in self.mentioned],
-            "登場人物の候補": [member.model_dump() for member in self.candidates],
+            "登場人物の候補": [{**member.model_dump(), "更新時刻": updated_at_for_claude(member.character)}
+                         for member in self.candidates],
             "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
         }
 

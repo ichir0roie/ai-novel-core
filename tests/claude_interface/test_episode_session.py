@@ -428,7 +428,10 @@ def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
     episode = result["この話"]
     hanako_row = next(member for member in episode["登場人物"] if member["人物id"] == hanako)
     assert hanako_row["来歴(古い順)"] == HANAKO_HISTORIES
+    # 更新時刻は回すたびに変わるので、あることだけを見る
+    assert all(relation.pop("更新時刻") for relation in episode["登場人物の関係"])
     assert episode["登場人物の関係"] == RELATIONS
+    assert episode["更新時刻"] and hanako_row["更新時刻"]
     # 語はプロットと話のセッションの行から、元ごとに挙げる
     assert any("市で出会う" in prompt for prompt in sources)
     assert any("テスト術で灯をともす" in prompt for prompt in sources)

@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
 from data_access_logic.knowers import KnowerRow
-from data_access_logic.material import Form, Material, Timestamp
+from data_access_logic.material import Dated, Form, Material, Timestamp
 
 
 class IdeaHistoryRow(Form):
@@ -19,7 +19,7 @@ class IdeaHistoryRow(Form):
     knowers: list[KnowerRow] | None = None
 
 
-class IdeaRecord(Material):
+class IdeaRecord(Dated):
     id: int
     name: str
     kind: str

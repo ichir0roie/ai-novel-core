@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, PlainSerializer, PlainValidator, WithJsonSchema, model_validator
@@ -12,6 +13,17 @@ class Material(BaseModel):
 
     # このモデルに詰めるのに要る、noload のリレーションの読み方(`entrypoint.record_of` / `entrypoint.loading` が使う)
     LOAD_OPTIONS: ClassVar[tuple] = ()
+
+
+class Dated(Material):
+    """行を最後に直した時刻(`Base.updated_at`)を持つ。本文・プロット・設定のどれが後から直されたかを見分けるのに使う。"""
+
+    updated_at: datetime
+
+
+def updated_at_for_claude(row: Dated) -> str:
+    """このセッションの Claude が読む形(`*Serialized` の `_for_claude`)に添える。AI の生成には渡さない。"""
+    return row.updated_at.isoformat(timespec="seconds")
 
 
 class Named(Material):

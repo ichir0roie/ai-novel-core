@@ -9,6 +9,7 @@
 - 引数名は何の数・何の範囲かが分かる名前にする(`count` ではなく `past_episode_count`)
 - 理由の言えない構文(キーワード専用の `*` など)は付けない
 - select の結果は pydantic のモデル(マテリアル。基底は `data_access_logic/material.py` の `Material`)に、ORM のまま渡して詰める。`reportArgumentType` は `pyrightconfig.json` で切ってあるので、`Model(story=story_row)` と渡してよい
+- 行を最後に直した時刻(`updated_at`)を読ませるマテリアルは `Dated`(`data_access_logic/material.py`)を継ぐ。`*Serialized` の `_for_claude` では `updated_at_for_claude()` で「更新時刻」として添え、AI の生成(`_for_prompt`)には渡さない
 - マテリアルは ORM の列とリレーションに忠実に写す。リレーションは同じ名前のフィールドに、関係先のモデルを入れ子で持つ(`AliasPath` などで平らにしない)。共通の列は基底のモデルに置き、継承先にはそのとき読むリレーションだけを書く
 - リレーションは要るものだけを `joinedload` / `selectinload` で読み、`execution_options(populate_existing=True)` を付ける(無いと、同じセッションに残った行で eager load が効かず黙って空になる)
 - 問い合わせの回数が増えても、シンプルに持てる方を選ぶ

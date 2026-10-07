@@ -5,11 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validat
 
 from data_access_logic import constants
 from data_access_logic.knowers import KnowerMaterial, knowers_for_prompt
-from data_access_logic.material import Material, Named
+from data_access_logic.material import Dated, Material, Named
 from db.stamp import Stamp, StampError
 
 
-class IdeaMaterial(Material):
+class IdeaMaterial(Dated):
     id: int
     name: str
     kind: str

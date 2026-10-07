@@ -13,6 +13,7 @@ def location_at(location: Location, time: Stamp) -> LocationLine:
     それより前の話・出来事には渡らない。"""
     return LocationLine(
         id=location.id, name=location.name, kind=location.kind, text=location.text, environment=location.environment,
+        updated_at=location.updated_at,
         histories=sorted((history for history in location.histories if history.covers(time)),
                          key=lambda history: history.start or 0))
 

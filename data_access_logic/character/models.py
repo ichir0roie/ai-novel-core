@@ -6,7 +6,7 @@ from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.knowers import KnowerMaterial, knowers_for_prompt
-from data_access_logic.material import Material
+from data_access_logic.material import Dated, Material
 from db.schema import PersonalityLevel
 
 
@@ -26,11 +26,11 @@ class CharacterWholeBase(CharacterBase):
     plot: str | None = None
 
 
-class CharacterMaterial(CharacterWholeBase):
+class CharacterMaterial(Dated, CharacterWholeBase):
     id: int
 
 
-class ParticipantCharacter(CharacterWholeBase):
+class ParticipantCharacter(Dated, CharacterWholeBase):
     # 出来事の記録で、関わった人物・移動した人物を AI に id で選ばせる
     id: int
 
@@ -66,7 +66,7 @@ class RelationParty(Material):
     name: str | None = None
 
 
-class CharacterRelationLine(Material):
+class CharacterRelationLine(Dated):
     """ある時刻に続いている関係。`character_1` から見た `character_2` との関係。"""
 
     character_1: RelationParty

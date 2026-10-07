@@ -1,7 +1,7 @@
 from pydantic import ConfigDict
 
 from data_access_logic.knowers import KnowerRow
-from data_access_logic.material import Form, Material, Timestamp
+from data_access_logic.material import Dated, Form, Material, Timestamp
 
 
 class LocationHistoryRow(Form):
@@ -17,7 +17,7 @@ class LocationHistoryRow(Form):
     knowers: list[KnowerRow] | None = None
 
 
-class LocationRecord(Material):
+class LocationRecord(Dated):
     id: int
     name: str | None = None
     kind: str | None = None

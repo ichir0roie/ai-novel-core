@@ -516,6 +516,11 @@ export interface components {
         };
         /** EpisodeRecord */
         EpisodeRecord: {
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Id */
             id: number;
             /** Story Id */

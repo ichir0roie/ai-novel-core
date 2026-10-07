@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from data_access_logic.knowers import KnowerRow
-from data_access_logic.material import Form, Material, Timestamp
+from data_access_logic.material import Dated, Form, Material, Timestamp
 from db.schema import PersonalityLevel
 
 
@@ -66,7 +66,7 @@ class CharacterRelationHistoryRow(_ChildRow):
     description: str
 
 
-class CharacterHead(Material):
+class CharacterHead(Dated):
     id: int
     name: str | None = None
     kind: str
@@ -99,7 +99,7 @@ class CharacterLocationRecord(Material):
     end: Timestamp | None = None
 
 
-class CharacterRelationRecord(Material):
+class CharacterRelationRecord(Dated):
     id: int
     character_1_id: int
     character_2_id: int

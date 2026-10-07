@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic.entrypoint import record_of
 from data_access_logic.episode.record import EpisodeHead, EpisodeRecord, EpisodeRow
-from data_access_logic.material import Material, Named, Timestamp
+from data_access_logic.material import Dated, Material, Named, Timestamp
 from data_access_logic.query import common_query
 from db.schema import Episode, Story
 from db.stamp import Stamp
@@ -36,7 +36,7 @@ class EpisodeNeighbors(Material):
     next: EpisodeTitle | None = None
 
 
-class EpisodeText(Material):
+class EpisodeText(Dated):
     id: int
     story: Named
     title: str

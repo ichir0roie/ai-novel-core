@@ -1,7 +1,7 @@
-from data_access_logic.material import Material
+from data_access_logic.material import Dated, Material
 
 
-class StoryRecord(Material):
+class StoryRecord(Dated):
     id: int
     name: str
     parent_story_id: int | None = None

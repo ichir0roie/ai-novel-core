@@ -4,11 +4,11 @@ from pydantic import Field, computed_field, model_validator
 from sqlalchemy.orm import selectinload
 
 from data_access_logic.character.record import CharacterMove, CharacterRelationRecord
-from data_access_logic.material import Material, Timestamp
+from data_access_logic.material import Dated, Material, Timestamp
 from db.schema import Episode
 
 
-class EpisodeHead(Material):
+class EpisodeHead(Dated):
     id: int
     story_id: int
     title: str

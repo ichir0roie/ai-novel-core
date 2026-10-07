@@ -41,8 +41,9 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 - `ReadEpisodeCasting`: `この話`(`話id`・`題`・`時刻`・`場所(広い順)`・`視点`・`プロット`)・`登場人物`・`名前だけ出る人物`・`登場人物の候補`・`この場所の中の既知の場所`。人物には `人物id`・`名前`・`人物像` などと `関わった話(古い順)` が付く(`登場人物の候補` には付かない)
 - `ReadEpisodeBrief`: `書き方`・`作品`・`前の話の概要(古い順)`・`文体の見本(古い順)`・`この話`・`この場所の直近の出来事(古い順)`・`この時点より後に既に決まっている出来事`
   - `文体の見本(古い順)` は本文の文字列の配列(`.["文体の見本(古い順)"][-1]` で一話ぶん。鍵は無い)
-  - `この話` の中は `話id`・`題`・`時刻`・`終わり`・`同期`・`場所(広い順)`・`視点`・`登場人物`・`名前だけ出る人物`・`登場人物の関係`・`設定`・`プロット`・`今の本文`
-- `ReadEpisodeTexts`: 列名の英語(`id`・`title`・`main_text`・`summary_text` など)の配列
+  - `この話` の中は `話id`・`題`・`時刻`・`終わり`・`同期`・`更新時刻`・`場所(広い順)`・`視点`・`登場人物`・`名前だけ出る人物`・`登場人物の関係`・`設定`・`プロット`・`今の本文`
+- `ReadEpisodeTexts`: 列名の英語(`id`・`title`・`main_text`・`summary_text`・`updated_at` など)の配列
+- 行を最後に直した時刻: `ReadEpisodeBrief` / `ReadEpisodeCasting` は話・作品・人物・関係・場所・設定の行に `更新時刻`、`ReadEpisodes`・`ReadEpisodeTexts`・`ReadCharacter`・`ListCharacterRelations`・`ListStories` と表の API の行は `updated_at`(UTC)。人物・関係・場所・設定がこの話より後に直されていれば、プロット・本文がそれに追いついているかを確かめる。行のどの列を直しても進み(話は概要の作り直し・`synced` でも進む)、来歴などの子の行だけを直したときは親の行は進まない
 - `tool.episode_session read` の行: `id`・`episode_id`・`character`(`id`・`name`)・`time`・`request`・`closing`・`thought`・`action`・`speech`・`aim`
 
 ## 流れ

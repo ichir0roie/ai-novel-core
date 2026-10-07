@@ -39,6 +39,7 @@ def relations_at(
     return [
         CharacterRelationLine(
             character_1=row.character_1, character_2=row.character_2, relation=row.relation, text=row.text,
+            updated_at=row.updated_at,
             histories=sorted((history for history in row.histories if history.covers(time)),
                              key=lambda history: history.start or 0))
         for row in rows

@@ -1265,6 +1265,11 @@
       },
       "EpisodeRecord": {
         "properties": {
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
           "id": {
             "type": "integer",
             "title": "Id"
@@ -1361,6 +1366,7 @@
         },
         "type": "object",
         "required": [
+          "updated_at",
           "id",
           "story_id",
           "title",
