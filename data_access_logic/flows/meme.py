@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ミームの抜き出しと分類の流れ。
+"""ミームの抜き出し・分類と、対の無いミームにアンチミームを足す流れ。
 
 AI の結果は束ごとに、得たその場で書き戻す。抜き出せなかった元は印を付けずに残し、次の回に抜き出し直す。
 """
@@ -30,8 +30,23 @@ def _classify(ai: AIClient) -> int:
     return classified
 
 
+def _pair(ai: AIClient) -> int:
+    """分類を振った後に回す(アンチミームは元のミームの分類を引き継ぐ)。"""
+    unpaired = call(meme_steps.unpaired_sources)
+    added = 0
+    for batch in batches(unpaired, constants.MEME_BATCH_LETTERS):
+        antis = extractor.anti_draft(ai, batch)
+        if antis is None:
+            logger.warning(f"ミーム{len(batch)}件のアンチミームを作れなかった。次の回に作り直す")
+            continue
+        added += call(meme_steps.save_anti_memes, meme_steps.AntiMemesForm(antis=antis))
+    if unpaired:
+        logger.info(f"アンチミームの無いミーム{len(unpaired)}件のうち、{added}件にアンチミームを足した")
+    return added
+
+
 def refresh(ai: AIClient) -> int:
-    """足したミームの件数を返す。"""
+    """足したミームの件数(アンチミームを含む)を返す。"""
     pending = call(meme_steps.pending_sources)
     added = 0
     for batch in batches(pending, constants.MEME_BATCH_LETTERS):
@@ -47,4 +62,4 @@ def refresh(ai: AIClient) -> int:
     if pending:
         logger.info(f"元{len(pending)}件から抜き出し、ミームを{added}件足した")
     _classify(ai)
-    return added
+    return added + _pair(ai)

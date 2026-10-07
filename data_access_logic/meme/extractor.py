@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。元の側の `meme_seeded` で抜き出し済みかだけを持つ。
+ミームどうしで持つのは、反転した対(アンチミーム、`anti_meme_id`)だけ。抜き出すときに対で作り、対の無いミームには後から作る。
 
-db だけの段(`pending_sources` / `meme_texts` / `save_memes` / `unclassified_sources` / `save_categories` / `meme_pool`)と、
-AI だけの段(`extraction_draft` → `without_duplicates`、`classify_draft`)に分けてある。
+db だけの段(`pending_sources` / `meme_texts` / `save_memes` / `unpaired_sources` / `save_anti_memes` /
+`unclassified_sources` / `save_categories` / `meme_pool`)と、
+AI だけの段(`extraction_draft` → `without_duplicates`、`anti_draft`、`classify_draft`)に分けてある。
 流れ(`data_access_logic/flows/meme.py`)がつなぐ。
 """
 from __future__ import annotations
@@ -18,8 +20,8 @@ from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.meme.models import (
-    ClassifyDraft, ClassifyRequestSerialized, DedupeDraft, DedupeRequestSerialized,
-    DrawnMeme, MemeCategory, MemeDraft, MemesDraft, MemeText, PooledMeme,
+    AntiMeme, AntisDraft, ClassifyDraft, DedupeDraft, DedupeRequestSerialized,
+    DrawnMeme, MemeCategory, MemeDraft, MemesDraft, MemeText, NumberedMemesSerialized, PooledMeme,
 )
 from data_access_logic.query import meme_query
 from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
@@ -37,12 +39,20 @@ CATEGORY_DESCRIPTIONS = {
 
 _CATEGORY_GUIDE = "\n".join(f"  - {name}: {CATEGORY_DESCRIPTIONS[name]}" for name in MEME_CATEGORIES)
 
+# 長い一文は、引いた人物の行動原理に条件や筋書きまで持ち込むので、芯だけに絞らせる
+_CONCISE_GUIDE = "一つのミームは一文で簡潔に書く(40字以内を目安)。何を大事にし、何をきっかけにどう動くかの芯だけを残し、条件・例・理由を重ねない。"
+
+_ANTI_GUIDE = """アンチミームは、ミームを反転した考え方。ミームが大事にするものを退け、避けるものを選ぶ。
+  - 「〜しない」と打ち消しただけの文にせず、それだけで一つの行動原理として立つように書く。
+  - ミームと同じ分類に収まるように書く(理なら、その法則が逆に働く世界の理として書く)。
+  - ミームと同じく一文で簡潔に書く(40字以内を目安)。"""
+
 _SYSTEM_PROMPT = f"""\
 あなたは物語の編集者です。
 著者の創作についての覚え書き・その検証結果・起きた出来事・話の本文を、番号つきの JSON で渡すので、それぞれから、\
 人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出してください。
 - 人名・地名・組織名・その作品だけの固有名詞を抜き、他の人物にも乗り移りうる普遍的な考え方として書く。
-- 一つのミームは一文。何を大事にし、何を避け、何をきっかけに動くかが分かるように書く。
+- {_CONCISE_GUIDE}
 - 固有名詞を抜いても特定の人物の役どころ・筋書き上の境遇をなぞるだけのもの(その人物にしか当てはまらない立場や状況)は抜き出さない。引いた人物がその人物の写しになるため。
 - 作者の前書き・使用環境・書き方の約束など、考え方にならない文からは抜き出さない。
 - 出来事と話の本文からは、当事者がその出来事を経て選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの記録からは抜き出さない。
@@ -52,6 +62,8 @@ _SYSTEM_PROMPT = f"""\
 - 一つの元から 0〜3 件。同じ元の中で似たミームは一つにまとめる。
 - それぞれに、次の分類から一つを振る。
 {_CATEGORY_GUIDE}
+- それぞれに、反転したアンチミームを一つ添える。
+{_ANTI_GUIDE}
 {BIO_ABSTRACTION_INSTRUCTION}"""
 
 _DEDUPE_SYSTEM_PROMPT = """\
@@ -60,6 +72,12 @@ _DEDUPE_SYSTEM_PROMPT = """\
 既にあるミームか、それより前の番号の新しいミームと同じ考え方を言い換えただけのものを見つけてください。
 - 何を大事にし、何をきっかけに、どう動くかがほぼ同じものだけを重複とする。題材が近いだけで、大事にするものや動き方が違うものは重複にしない。
 - 重複が無ければ duplicates は空のリストにする。"""
+
+_ANTI_SYSTEM_PROMPT = f"""\
+あなたは物語の編集者です。
+人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれを反転したアンチミームを一つずつ書いてください。
+{_ANTI_GUIDE}
+{BIO_ABSTRACTION_INSTRUCTION}"""
 
 _CLASSIFY_SYSTEM_PROMPT = f"""\
 あなたは物語の編集者です。
@@ -122,14 +140,57 @@ def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list
     return fresh
 
 
+def _pair(s: Session, meme: Meme, anti_text: str) -> Meme:
+    anti = Meme(text=anti_text, category=meme.category)
+    s.add(anti)
+    s.flush()
+    meme.anti_meme_id = anti.id
+    anti.anti_meme_id = meme.id
+    return anti
+
+
 def save_memes(s: Session, memes: list[MemeDraft], sources: list[SourceText]) -> int:
-    """ミームを足し、元に抜き出し済みの印を付ける。足した件数を返す。"""
+    """ミームとアンチミームを対で足し、元に抜き出し済みの印を付ける。足した件数(アンチミームを含む)を返す。"""
     for candidate in memes:
-        s.add(Meme(text=candidate.text, category=candidate.known_category))
+        meme = Meme(text=candidate.text, category=candidate.known_category)
+        s.add(meme)
+        s.flush()
+        _pair(s, meme, candidate.anti_text)
     for source in sources:
         row_of(s, source.table, source.id).meme_seeded = True
     s.flush()
-    return len(memes)
+    return len(memes) * 2
+
+
+def unpaired_sources(s: Session) -> list[SourceText]:
+    """アンチミームの無いミーム。GUI で手で足したもの、アンチミームを作る前からあったもの。"""
+    memes = s.scalars(select(Meme).where(Meme.anti_meme_id.is_(None)).order_by(Meme.id)).all()
+    return [source_of(meme, "ミーム", strip_fact_check(meme.text)) for meme in memes]
+
+
+def anti_draft(ai: AIClient, batch: list[SourceText]) -> list[AntiMeme] | None:
+    request = NumberedMemesSerialized(memes=[MemeText(text=source.text) for source in batch])
+    decided = ai.generate(
+        "\n".join([request.model_dump_json(indent=2),
+                   "それぞれのミームのアンチミームを書いてください。"]),
+        AntisDraft, system=_ANTI_SYSTEM_PROMPT)
+    if decided is None:
+        return None
+    return [AntiMeme(id=batch[item.number - 1].id, text=item.anti_text)
+            for item in decided.antis if 1 <= item.number <= len(batch) and item.anti_text]
+
+
+def save_anti_memes(s: Session, antis: list[AntiMeme]) -> int:
+    """対の無いミームにアンチミームを足す。間に対ができた(GUI で直したなど)ミームには足さない。"""
+    added = 0
+    for item in antis:
+        meme = s.get_one(Meme, item.id)
+        if meme.anti_meme_id is not None:
+            continue
+        _pair(s, meme, item.text)
+        added += 1
+    s.flush()
+    return added
 
 
 def unclassified_sources(s: Session) -> list[SourceText]:
@@ -138,7 +199,7 @@ def unclassified_sources(s: Session) -> list[SourceText]:
 
 
 def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] | None:
-    request = ClassifyRequestSerialized(memes=[MemeText(text=source.text) for source in batch])
+    request = NumberedMemesSerialized(memes=[MemeText(text=source.text) for source in batch])
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "それぞれのミームに分類を振ってください。"]),

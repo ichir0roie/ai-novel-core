@@ -1,5 +1,8 @@
 """claude が CLI から `show()` で呼ぶ、ミーム(`data_access_logic/meme/`)・覚え書き(`oracle/`)・レビュー(`review/`)の入口。"""
+import json
+
 import pytest
+from sqlalchemy import select
 
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.meme.commit_meme import CommitMeme
@@ -15,8 +18,11 @@ from data_access_logic.oracle.update_oracle import UpdateOracle
 from data_access_logic.review.list_pending_reviews import ListPendingReviews
 from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm
-from data_access_logic.meme.extractor import pending_sources
-from db.schema import Episode, MemeCategory, get_env_session
+from data_access_logic.meme.extractor import pending_sources, save_anti_memes, save_memes, unpaired_sources
+from data_access_logic.flows import meme as meme_flow
+from data_access_logic.meme.models import AntiDraft, AntiMeme, AntisDraft, MemeDraft
+from db.schema import Episode, Meme, MemeCategory, get_env_session
+from tool.test.mock_ai_client import MockAIClient
 
 
 def test_commit_meme(shown):
@@ -31,8 +37,20 @@ def test_delete_meme(shown, world):
 
     result = shown(DeleteMeme(meme_ids=[world.meme_id, other["id"]]))
 
-    assert result == [{"id": world.meme_id, "category": "信条", "text": "テストの信条"},
-                      {"id": other["id"], "category": "信条", "text": "一緒に消える信条"}]
+    assert result == [{"id": world.meme_id, "category": "信条", "anti_meme_id": None, "text": "テストの信条"},
+                      {"id": other["id"], "category": "信条", "anti_meme_id": None, "text": "一緒に消える信条"}]
+
+
+def test_delete_meme_deletes_its_anti_meme(shown, world, mock_ai):
+    with get_env_session() as s, s.begin():
+        save_anti_memes(s, [AntiMeme(id=world.meme_id, text="テストの信条の反転")])
+        anti_id = s.get_one(Meme, world.meme_id).anti_meme_id
+
+    result = shown(DeleteMeme(meme_ids=[world.meme_id]))
+
+    assert [record["id"] for record in result] == [world.meme_id, anti_id]
+    with get_env_session() as s:
+        assert s.get(Meme, anti_id) is None
 
 
 def test_delete_meme_keeps_all_when_one_is_missing(shown, world):
@@ -70,7 +88,7 @@ def test_update_meme(shown, world):
     result = shown(UpdateMeme(MemeUpdateForm(
         id=world.meme_id, text="約束は守る", category=MemeCategory.LAW)))
 
-    assert result == {"id": world.meme_id, "category": "理", "text": "約束は守る"}
+    assert result == {"id": world.meme_id, "category": "理", "anti_meme_id": None, "text": "約束は守る"}
 
 
 def test_commit_oracle(shown, mock_ai):
@@ -116,3 +134,41 @@ def test_commit_episode_resets_meme_seeded(world):
 
     with get_env_session() as s:
         assert s.get_one(Episode, world.episode_id).meme_seeded is False
+
+
+def test_extracted_memes_are_saved_with_their_anti_memes(world):
+    with get_env_session() as s, s.begin():
+        added = save_memes(s, [MemeDraft(text="約束は命より重い", anti_text="命は約束より重い", category="信条")], [])
+        meme = s.scalars(select(Meme).where(Meme.text == "約束は命より重い").order_by(Meme.id.desc())).first()
+        assert meme is not None and meme.anti_meme_id is not None
+        anti = s.get_one(Meme, meme.anti_meme_id)
+
+        assert added == 2
+        assert (anti.text, anti.category, anti.anti_meme_id) == ("命は約束より重い", "信条", meme.id)
+
+
+class _AntiWritingAI(MockAIClient):
+    """モックは配列を空で返すので、アンチミームだけは渡したミームの番号ごとに書く。"""
+
+    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort=""):
+        if output is AntisDraft:
+            memes = json.loads(prompt[:prompt.rindex("]") + 1])
+            return AntisDraft(antis=[AntiDraft(number=item["番号"], anti_text=f"{item['ミーム']}の反転") for item in memes])
+        return super().generate(prompt, output, system, timeout, tools, model, effort)
+
+
+def test_extract_memes_pairs_unpaired_memes(world):
+    meme_flow.refresh(_AntiWritingAI(seed=0))
+
+    with get_env_session() as s:
+        meme = s.get_one(Meme, world.meme_id)
+        assert meme.anti_meme_id is not None
+        anti = s.get_one(Meme, meme.anti_meme_id)
+        assert (anti.text, anti.anti_meme_id, anti.category) == ("テストの信条の反転", meme.id, meme.category)
+        assert not unpaired_sources(s)
+
+
+def test_save_anti_memes_skips_paired_memes(world):
+    with get_env_session() as s, s.begin():
+        assert save_anti_memes(s, [AntiMeme(id=world.meme_id, text="一つ目")]) == 1
+        assert save_anti_memes(s, [AntiMeme(id=world.meme_id, text="二つ目")]) == 0

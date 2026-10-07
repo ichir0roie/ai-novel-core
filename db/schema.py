@@ -287,7 +287,7 @@ MEME_CATEGORIES = tuple(category.value for category in MemeCategory)
 
 class Meme(TextBase):
     """ミームは移り変わり・伝染していくものなので、どの元から抜き出したか、どの人物が持つかは持たない
-    (元の側の `meme_seeded` で、抜き出し済みかだけを管理する)。
+    (元の側の `meme_seeded` で、抜き出し済みかだけを管理する)。ミームどうしで持つのは、反転した対(アンチミーム)だけ。
     """
 
     __tablename__ = "meme"
@@ -296,6 +296,10 @@ class Meme(TextBase):
         String, nullable=True,
         comment=f"分類。{'/'.join(MEME_CATEGORIES)} のいずれか。空なら次の抽出で AI が振る",
         sort_order=200)
+    anti_meme_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("meme.id", ondelete="SET NULL"), nullable=True, index=True,
+        comment="反転したミーム(アンチミーム)。対の二行が互いを指す。空なら次の抽出で AI が作る",
+        sort_order=210)
 
 
 class Oracle(MemeSeededMixin, TextBase):
