@@ -1,9 +1,11 @@
 from logging.config import fileConfig
 
 from alembic import context
+from alembic.operations import ops
 from sqlalchemy import Connection, text
 
 from db.postgres.postgis import POSTGIS_COLUMNS, POSTGIS_TABLES
+from db.postgres.timestamps import trigger_sql
 from db.schema import DATABASE_IAM_AUTH, Base, database_url, make_url_engine
 
 # this is the Alembic Config object, which provides
@@ -43,6 +45,17 @@ def include_object(obj, name, type_, reflected, compare_to):
     return True
 
 
+def add_updated_at_triggers(context, revision, directives) -> None:
+    """autogenerate で足す表に、直した時刻を入れるトリガー(`db/postgres/timestamps.py`)を掛ける文を書き足す。
+    `op.create_table` は schema.py の表を作らないので、schema.py の after_create は効かない。"""
+    for script in directives:
+        upgrade = script.upgrade_ops
+        if upgrade is None:
+            continue
+        created = [operation.table_name for operation in upgrade.ops if isinstance(operation, ops.CreateTableOp)]
+        upgrade.ops.extend(ops.ExecuteSQLOp(trigger_sql(name)) for name in created)
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -51,6 +64,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,
+        process_revision_directives=add_updated_at_triggers,
     )
 
     with context.begin_transaction():
@@ -85,6 +99,7 @@ def run_migrations_online() -> None:
             # SQLite は ALTER が弱いので表を作り直す batch で書く。PostgreSQL はそのまま ALTER する
             render_as_batch=connection.dialect.name == "sqlite",
             include_object=include_object,
+            process_revision_directives=add_updated_at_triggers,
         )
 
         with context.begin_transaction():

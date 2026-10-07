@@ -11,7 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 
-from db.schema import Character, CharacterHistory, CharacterSkillHistory, IdeaHistory, Location, LocationHistory
+from db.schema import TIMESTAMP_COLUMNS, Character, CharacterHistory, CharacterSkillHistory, IdeaHistory, Location, LocationHistory
 
 Child = TypeVar("Child")
 History = TypeVar("History", CharacterHistory, CharacterSkillHistory, IdeaHistory, LocationHistory)
@@ -25,7 +25,7 @@ def child_columns(model: type, name: str) -> list[str]:
     relationship = sa_inspect(model).relationships[name]
     foreign_keys = {remote.key for _, remote in relationship.local_remote_pairs}
     return [column.key for column in relationship.mapper.class_.__table__.columns
-            if column.key != "id" and column.key not in foreign_keys]
+            if column.key != "id" and column.key not in foreign_keys and column.key not in TIMESTAMP_COLUMNS]
 
 
 def replaced_rows(current: Sequence[Child], rows: Sequence[BaseModel], child: type[Child]) -> list[Child]:

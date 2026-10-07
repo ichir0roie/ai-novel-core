@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
-from db.schema import PolygonType, StampType
+from db.schema import TIMESTAMP_COLUMNS, PolygonType, StampType
 from gui.api.fields import choices_of, field_meta
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec
@@ -107,7 +107,7 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     plain_text_columns = {"main_text"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
-        if column.key in hidden_columns:
+        if column.key in hidden_columns or column.key in TIMESTAMP_COLUMNS:
             continue
         meta = column_meta(column, spec.create_form.model_fields.get(column.key), section=column.key in sections,
                            readonly=column.key in readonly_columns,
