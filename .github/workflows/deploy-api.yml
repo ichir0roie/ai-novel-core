@@ -51,13 +51,14 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # Lambda は複数アーキの目録(provenance の添付で出来る)を受け付けないので、一つのアーキだけで push する。
+      # Lambda は複数アーキの目録(provenance の添付で出来る)を受け付けないので、一つのアーキ(arm64)だけで push する。
+      # Dockerfile は建てる先のアーキの段で RUN を回さないので、x86 のランナーのまま QEMU 無しで建つ。
       # main の tag は infra/(CDK)が関数を作るときに指す先。関数の差し替えは commit の sha の tag で行う
       - name: build and push
         env:
           REPOSITORY: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
         run: |
-          docker buildx build --platform linux/amd64 --provenance=false \
+          docker buildx build --platform linux/arm64 --provenance=false \
             -f infra/lambda/Dockerfile -t "$REPOSITORY:${{ github.sha }}" -t "$REPOSITORY:main" --push .
           echo "IMAGE=$REPOSITORY:${{ github.sha }}" >> "$GITHUB_ENV"
 
@@ -75,7 +76,7 @@ jobs:
           sudo sysctl -q -w net.ipv4.tcp_keepalive_time=60 net.ipv4.tcp_keepalive_intvl=30
           aws configure set tcp_keepalive true
           aws lambda update-function-code --function-name "$FUNCTION" \
-            --image-uri "$IMAGE" --output text --query 'LastUpdateStatus'
+            --image-uri "$IMAGE" --architectures arm64 --output text --query 'LastUpdateStatus'
           aws lambda wait function-updated-v2 --function-name "$FUNCTION"
           aws lambda invoke --function-name "$FUNCTION" --cli-read-timeout 960 \
             --cli-binary-format raw-in-base64-out --payload '{}' result.json > invoke.json
@@ -83,10 +84,11 @@ jobs:
           if jq -e '.FunctionError' invoke.json > /dev/null; then exit 1; fi
           jq -e '.after != null and .after == .head' result.json > /dev/null
 
+      # 関数のアーキはイメージのアーキと揃って替わらないと起動できないので、コードと一緒に渡す(infra/ の CDK と同じ arm64)
       - name: update lambda
         run: |
           aws lambda update-function-code --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}" \
-            --image-uri "$IMAGE" --output text --query 'LastUpdateStatus'
+            --image-uri "$IMAGE" --architectures arm64 --output text --query 'LastUpdateStatus'
           aws lambda wait function-updated-v2 --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
 
       # 関数 URL の認証は AWS_IAM なので、引き受けたロールの一時的な鍵で SigV4 の署名を付ける
