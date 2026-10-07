@@ -167,8 +167,8 @@ def save_progress(
         if character is None or not update.text:
             continue
         note = fill_name_placeholder(update.text, character.name or "")
-        # 出来事の年から始まる行にするので、それより前の出来事・話には効かない
-        add_history(character, time.year, note)
+        # 出来事の時刻から始まる行にするので、それより前の出来事・話には効かない
+        add_history(character, time, note)
         update_notes.append(f"{character.name}: histories+={note}")
 
     location = s.get_one(Location, location_id)

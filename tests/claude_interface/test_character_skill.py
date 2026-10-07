@@ -104,7 +104,7 @@ def test_episode_brief_has_skills_with_knowers(shown, world):
     hanako_row = next(member for member in result["この話"]["登場人物"] if member["人物id"] == hanako)
     # 作者には、知る相手に関わらず話の時刻までに始まった行を、本質と知る相手を添えて渡す。まだ持っていないスキルは渡さない
     assert hanako_row["スキル"] == [{"名前": "テスト治癒", "本質": "傷の治りを早める", "来歴(古い順)": [
-        {"年": 1190, "来歴": "傷をふさぐ", "知る相手": [{"人物": "テスト太郎", "場所": None, "知った時刻": "1199/01/01 00:00:00"}]}]}]
+        {"時期": "1190/01/01", "来歴": "傷をふさぐ", "知る相手": [{"人物": "テスト太郎", "場所": None, "知った時刻": "1199/01/01 00:00:00"}]}]}]
 
 
 def test_update_knowledge_of_skill_histories(shown, world):

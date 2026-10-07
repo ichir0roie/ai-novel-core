@@ -12,6 +12,7 @@ from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character import skills
 from data_access_logic.event.summary import events_of
+from data_access_logic.history_start import by_start
 from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
 from data_access_logic.query.period import Period, alive_at
@@ -40,7 +41,7 @@ def relations_at(
         CharacterRelationLine(
             character_1=row.character_1, character_2=row.character_2, relation=row.relation, text=row.text,
             histories=sorted((history for history in row.histories if history.covers(time)),
-                             key=lambda history: history.start or 0))
+                             key=by_start))
         for row in rows
     ]
 

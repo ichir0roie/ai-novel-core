@@ -7,6 +7,7 @@ from data_access_logic.character.models import (
     CharacterSecrets, MentionedMaterial, MentionedSerialized, relations_for_prompt, secrets_for_prompt,
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
+from data_access_logic.history_start import start_for_prompt
 from data_access_logic.idea.models import (
     IdeaContextMaterial, IdeaContextSerialized, WholeIdeaMaterial, whole_idea_for_prompt,
 )
@@ -121,7 +122,7 @@ def _location(locations: list[LocationMaterial]) -> str | None:
 
 def _location_lines(locations: list[LocationLine]) -> list[dict[str, Any]]:
     return [{"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment,
-             "来歴(古い順)": [f"{history.start}年: {history.description}" for history in location.histories]}
+             "来歴(古い順)": [f"{start_for_prompt(history.start)}: {history.description}" for history in location.histories]}
             for location in locations]
 
 

@@ -18,6 +18,7 @@ from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterMaterial, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.episode.mentions import cast_characters
+from data_access_logic.history_start import start_for_prompt
 from data_access_logic.location.models import LocationLine, LocationMaterial
 from data_access_logic.location.reading import location_at
 from data_access_logic.material import Material, Timestamp
@@ -59,7 +60,7 @@ class StageSerialized(Stage):
             "場所(広い順)": [location.name for location in self.locations],
             "場所の説明": None if self.location is None else self.location.text,
             "場所の来歴(古い順)": [] if self.location is None else [
-                f"{history.start}年: {history.description}" for history in self.location.histories],
+                f"{start_for_prompt(history.start)}: {history.description}" for history in self.location.histories],
             "登場人物": [{"人物id": member.character.id, "名前": member.character.name, "年齢": member.age,
                       "性別": member.sex, "外見": member.character.appearance}
                      for member in self.cast],

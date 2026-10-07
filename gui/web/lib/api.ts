@@ -155,16 +155,16 @@ export const deleteEpisode = (episodeId: number) =>
 
 /** 人物の来歴とスキルの来歴か、アイデアの履歴か、場所の来歴の行を、id と知る相手つきで読む(`character.read_knowable_rows.ReadKnowableRows`)。 */
 export type KnowableRows = {
-  character_histories: { id: number; character_id: number; start: number | null; description: string; knowers: Rec[] }[];
+  character_histories: { id: number; character_id: number; start: string | null; description: string; knowers: Rec[] }[];
   character_skills: {
     id: number; name: string;
-    histories: { id: number; character_skill_id: number; start: number | null; description: string; knowers: Rec[] }[];
+    histories: { id: number; character_skill_id: number; start: string | null; description: string; knowers: Rec[] }[];
   }[];
   idea_histories: {
     id: number; idea_id: number; location_id: number | null; start: string | null; end: string | null;
     name: string; detail: string | null; knowers: Rec[];
   }[];
-  location_histories: { id: number; location_id: number; start: number | null; description: string; knowers: Rec[] }[];
+  location_histories: { id: number; location_id: number; start: string | null; description: string; knowers: Rec[] }[];
 };
 
 export const readKnowableRows = async (source: { character_id: number } | { idea_id: number } | { location_id: number }) =>

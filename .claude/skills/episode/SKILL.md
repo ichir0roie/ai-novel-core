@@ -27,7 +27,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 本文の材料を読む(登場人物・場所を結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
 | 話に出た新しい語を足す | `episode_session.add_ideas.AddIdeas` | `{'episode_id': …, 'ideas': [{'keyword': …, 'description': …, 'kind': …}]}`(場所・時刻は話から取る。種別は分類のあるものから選ぶ。返るのは足した語 `added` と足さなかった語 `kept` の名前だけ) |
 | 設定を引く | `idea.resolve_ideas.ResolveIdeas` | `{'ideas': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
-| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'appearance': <見た目>, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': <年の整数>, 'description': <来歴の節目>}]}}` |
+| 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'appearance': <見た目>, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': '<年/月/日>', 'description': <来歴の節目>}]}}` |
 | 人物を AI に組ませて足す | `character.generate_character.GenerateCharacter` | `{'character': {'name': …, 'text': <人物像と役どころ>, 'location_id': …}, 'time': '<話の時刻>', 'plot_text': <話のプロット>}` |
 | 人物の来歴を読む | `character.read_character.ReadCharacter` | `{'character_id': …}`(時刻を渡さず、すべての行を読む) |
 | 人物の来歴に足す | `character.update_character.UpdateCharacter` | `{'character': {'id': …, 'histories': [<今の行すべて>, …]}}`(配列はまるごと置き換わる) |
@@ -94,9 +94,9 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
     - 対象は、本文の確定後に限り、主要人物・サブキャラクターを問わない(主要人物の設定も、本文の結果に応じて直してよい)。本文を書く前・書く途中には主要人物の設定を触らない
     - 本文で変わった立場・仕事・住まい・人間関係・主要人物との関わりと、その人物が見た・知ったことを、来歴(`histories`)に足す
     - 知らせる相手は行の `knowers` に入れる(周りの人物も知ることはその人物か住む場所を、本人だけが知ることは本人だけを入れる)。`knowers` を渡さない新しい行は本人だけが知る
-    - 今の行は、時刻を渡さない `ReadCharacter(character_id)` の `histories` ですべて読む(年の決まっていない `start` が空の行も残す)
-    - `start` はこの話の年(整数)。その年の行があればその説明の末尾に改行して書き足し、無ければその年の行を足す(一年に一行)
-    - 足した配列を `UpdateCharacter` で渡す(配列はまるごと置き換わる)。すでにある説明は書き換えず、足すだけにする
+    - 今の行は、時刻を渡さない `ReadCharacter(character_id)` の `histories` ですべて読む(時期の決まっていない `start` が空の行も残す)
+    - `start` はこの話の時刻(`'<年/月/日>'`)。この話で起きたことを一行にして足す(同じ年の別の行に書き足さない。後の出来事が前の話に漏れ、知る相手も分けられなくなる)
+    - 足した配列を `UpdateCharacter` で渡す(配列はまるごと置き換わる)。すでにある行は書き換えず、足すだけにする
     - この話の時刻より後のこと(後年の立場・死・予定)は書かない(`data_access_logic/readme.md` の「人物の来歴」)
     - 人物の設定と本文が食い違っていれば、足す前にユーザに報告する
 
@@ -123,7 +123,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 本文を確定したあと(手順 9 のあと)、このセッションの Claude がセッションの行(`read --episode <id>`)を読み、話の中で人物が知ったことを db に残す。足すのは主要人物・サブキャラクターを問わない(手順 10 の来歴の書き足しとは別)。関係と知る相手(`knowers`)は、本文の結果に応じて、尋ねずに足す。知った時刻(`start`)はその話の時刻にし、それより前の話には効かないようにする。
 
-- 初めて会って名乗り合った・言葉を交わした人物どうしの関係は、確定のときに AI が足す(手順 9)。足りない組・前から知り合いだったと分かった組があれば、尋ねずに関係(`character.commit_character_relation.CommitCharacterRelation`)を足す。知り合った時刻が決まっていなければ、`start` は話の時刻にする。`relation` は短い名前(「宿を貸した旅人」など)、`text` は時期を限らない間柄、`start` は話の時刻、会ったいきさつは `histories` にその年の行(`{'start': <年>, 'description': …}`)で書く。すでにある関係に話で起きたことを足すときも、`text` には書かず、その年の行に足す(`data_access_logic/readme.md` の「関係の芯と来歴」)
+- 初めて会って名乗り合った・言葉を交わした人物どうしの関係は、確定のときに AI が足す(手順 9)。足りない組・前から知り合いだったと分かった組があれば、尋ねずに関係(`character.commit_character_relation.CommitCharacterRelation`)を足す。知り合った時刻が決まっていなければ、`start` は話の時刻にする。`relation` は短い名前(「宿を貸した旅人」など)、`text` は時期を限らない間柄、`start` は話の時刻、会ったいきさつは `histories` に話の時刻の行(`{'start': '<年/月/日>', 'description': …}`)で書く。すでにある関係に話で起きたことを足すときも、`text` には書かず、話の時刻の行を足す(`data_access_logic/readme.md` の「関係の芯と来歴」)
 - 話の中で明かされた来歴(打ち明けた秘密・名乗った身の上)は、聞いた人物を、その行の知る相手(`knowers` に `{"knower_id": <聞いた人物>, "start": "<話の時刻>"}`)に足す。来歴の行は `UpdateCharacter` の `histories` の配列ごと渡す(まるごと置き換わるので、今の行を時刻を渡さない `ReadCharacter` で読んでから足す)
 - 話の中で初めて知った設定(アイデア)も同じく、`UpdateIdea` の `knowers` に足す
 - 何を足したかを、報告に書く
@@ -154,7 +154,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 - 話題・回想・噂に名前が出るだけの人物は入れない(`mentioned=true` の行として自動で拾われる)。群衆・名前の要らない通りすがりも入れない
 - 呼び名が違っても(役職・続柄・あだ名など)、人物像から同じ人物と分かれば既存の人物を使う
 - db にいない人物が要るなら、作ってから `character_ids` に入れる。作品・場所・時刻に馴染む人物にする
-  - `CommitCharacter`: 説明は `text` に書く。来歴の節目はその年(整数)を `start` にした行にし、サブキャラクターの来歴はこの話の時刻までにする
+  - `CommitCharacter`: 説明は `text` に書く。来歴の節目は起きた時刻(`'<年/月/日>'`。年だけ決まっていれば年の整数)を `start` にした行にし、サブキャラクターの来歴はこの話の時刻までにする
   - AI に組ませるなら `GenerateCharacter`(プロットを渡すと、その時刻・場所で役どころを果たせる年齢になる)
 - 場所: 主な舞台が材料の場所より細かければ、「この場所の中の既知の場所」から選んで `location_id` にする。無ければ `CommitLocation` で足す(`parent_id` は材料の一番細かい場所id)
 - 視点(`viewpoint_character_id`)は、頼まれたかプロットで決まっているときだけ入れる

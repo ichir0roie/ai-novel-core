@@ -176,16 +176,16 @@ class Location(TextBase):
     histories: Mapped[list["LocationHistory"]] = relationship(
         back_populates="location", lazy="selectin", cascade="all, delete-orphan",
         order_by="LocationHistory.start.desc().nulls_last()",
-        doc="場所で起きたこと・変わったことを、起きた年ごとに一行で持つ。話・出来事には、その時刻の年までに始まった行だけを渡す。"
-        "年が空の行は構想で、作者だけが読む")
+        doc="場所で起きたこと・変わったことを、出来事ごとに一行で持つ。話・出来事には、その時刻までに始まった行だけを渡す。"
+        "時刻が空の行は構想で、作者だけが読む")
 
 
 class LocationHistory(Base):
-    """場所の来歴を、起きた年ごとの一行で持つ子テーブル。場所の芯(時期を限らない姿)は `Location.text` に持つ。
+    """場所の来歴を、起きた出来事ごとの一行で持つ子テーブル。場所の芯(時期を限らない姿)は `Location.text` に持つ。
 
-    関係の来歴(CharacterRelationHistory)と同じく、ある時刻の話・出来事には、その時刻の年までに始まった行だけを渡す
+    関係の来歴(CharacterRelationHistory)と同じく、ある時刻の話・出来事には、その時刻までに始まった行だけを渡す
     (`data_access_logic/location/reading.py` の `location_at`)ので、先の時刻の行を書き足しても、それより前には効かない。
-    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
+    `start` が空の行は、起きる時期がまだ決まっていない構想で、作者が読むときだけ出す。
     行は、知る相手(`knowers`)に当たる人物だけが知る(人物の来歴・アイデアの履歴と同じ形)。既定の知る相手はその場所自身で、
     その時刻にその場所(配下も含む)に住む人物が知る。秘密は人物だけを知る相手にする。
     """
@@ -194,8 +194,8 @@ class LocationHistory(Base):
 
     location_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("location.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[int | None] = mapped_column(
-        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・出来事には渡さない)",
         sort_order=110)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=120)
 
@@ -205,7 +205,7 @@ class LocationHistory(Base):
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="LocationHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is not None and self.start <= time.year
+        return self.start is not None and self.start <= time
 
 
 class EventSeededMixin:
@@ -425,7 +425,7 @@ class Character(EventSeededMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
-    人物の芯(説明・meme・行動原理・plot)は `text` に、年ごとの来歴は `CharacterHistory` に持つ。
+    人物の芯(説明・meme・行動原理・plot)は `text` に、出来事ごとの来歴は `CharacterHistory` に持つ。
     """
 
     __tablename__ = "character"
@@ -463,7 +463,7 @@ class Character(EventSeededMixin, ContentBase):
     # 名字・体格・口調・性格は CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
     # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
     # `parameters` の一番早く始まる行の start として表す(下の `start`)。
-    # 年ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
+    # 出来事ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
     # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。
     CHILD_LISTS = ("parameters", "locations", "histories")
 
@@ -496,8 +496,8 @@ class Character(EventSeededMixin, ContentBase):
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterHistory.start.desc().nulls_last()",
-        doc="来歴を、起きた年ごとに一行で持つ。話・出来事には、その時刻の年までに始まった行だけを渡す。"
-        "年が空の行は構想で、作者だけが読む。行は知る相手だけが知る"
+        doc="来歴を、起きた出来事ごとに一行で持つ。話・出来事には、その時刻までに始まった行だけを渡す。"
+        "時刻が空の行は構想で、作者だけが読む。行は知る相手だけが知る"
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",
@@ -592,7 +592,7 @@ class CharacterRelation(TextBase):
     """`character_1_id` から見た `character_2_id` との関係を一行で持つ。
 
     `text` は時期を限らない関係の芯(どういう間柄か)。関係の中で起きたこと・変わったことは、人物の来歴と同じく
-    起きた年ごとの行(CharacterRelationHistory)に積み、入口では `histories` の配列で出し入れする。
+    起きた出来事ごとの行(CharacterRelationHistory)に積み、入口では `histories` の配列で出し入れする。
     """
 
     __tablename__ = "character_relation"
@@ -621,24 +621,24 @@ class CharacterRelation(TextBase):
     histories: Mapped[list["CharacterRelationHistory"]] = relationship(
         back_populates="relation_row", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterRelationHistory.start.desc().nulls_last()",
-        doc="関係の中で起きたこと・変わったことを、起きた年ごとに一行で持つ。話・人物役には、その時刻の年までに始まった行だけを渡す。"
-        "年が空の行は構想で、作者だけが読む")
+        doc="関係の中で起きたこと・変わったことを、出来事ごとに一行で持つ。話・人物役には、その時刻までに始まった行だけを渡す。"
+        "時刻が空の行は構想で、作者だけが読む")
 
 
 class CharacterRelationHistory(Base):
-    """関係の来歴を、起きた年ごとの一行で持つ子テーブル。関係の芯は `CharacterRelation.text` に持つ。
+    """関係の来歴を、起きた出来事ごとの一行で持つ子テーブル。関係の芯は `CharacterRelation.text` に持つ。
 
-    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻の年までに始まった行だけを渡す
+    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻までに始まった行だけを渡す
     (`data_access_logic/character/cast.py` の `relations_at`)ので、先の時刻の行を書き足しても、それより前には効かない。
-    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
+    `start` が空の行は、起きる時期がまだ決まっていない構想で、作者が読むときだけ出す。
     """
 
     __tablename__ = "character_relation_history"
 
     character_relation_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character_relation.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[int | None] = mapped_column(
-        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・人物役には渡さない)",
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・人物役には渡さない)",
         sort_order=110)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=120)
 
@@ -646,17 +646,17 @@ class CharacterRelationHistory(Base):
     relation_row: Mapped[CharacterRelation] = relationship(back_populates="histories", lazy="noload")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is not None and self.start <= time.year
+        return self.start is not None and self.start <= time
 
 
 class CharacterHistory(Base):
-    """人物の来歴を、起きた年ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
+    """人物の来歴を、起きた出来事ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
-    時が進むにつれて起きたこと・変わった立場・境遇などを、起きた年を `start` にした行として書き足す。行は終わりを持たない。
-    行が増えすぎないよう、始まりは年単位にし、同じ年のことは一行にまとめる。
+    時が進むにつれて起きたこと・変わった立場・境遇などを、起きた時刻を `start` にした行として書き足す。行は終わりを持たない。
+    一つの行に時期の違う出来事をまとめない(同じ年でも、後の出来事が前の時刻の話に漏れ、知る相手も分けられなくなる)。
     ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
-    `start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出し、話・出来事には渡さない。
+    `start` が空の行は、起きる時期がまだ決まっていない構想で、作者が読むときだけ出し、話・出来事には渡さない。
     行は、知る相手(`knowers`)に当たる人物だけが知る(本人も、知る相手に入っていなければ知らない。アイデアの履歴と同じ形)。
     """
 
@@ -664,8 +664,8 @@ class CharacterHistory(Base):
 
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[int | None] = mapped_column(
-        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・出来事には渡さない)",
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・出来事には渡さない)",
         sort_order=110)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
@@ -675,7 +675,7 @@ class CharacterHistory(Base):
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="CharacterHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is not None and self.start <= time.year
+        return self.start is not None and self.start <= time
 
 
 
@@ -697,7 +697,7 @@ class CharacterSkill(TextBase):
 
     本文(`text`)はスキルの本質(何ができるか・仕組み・限界)で、アイデアの本文と同じく作者(語り部と、話を書くセッションの Claude)
     だけが読み、人物役にも AI の生成にも渡さない。身につけた・伸びた・衰えたなど、作中で起きたことは、人物の来歴と同じく
-    起きた年ごとの行(CharacterSkillHistory)に積み、入口では `histories` の配列で出し入れする。人物が知るのはその行だけ。
+    起きた出来事ごとの行(CharacterSkillHistory)に積み、入口では `histories` の配列で出し入れする。人物が知るのはその行だけ。
     """
 
     __tablename__ = "character_skill"
@@ -716,15 +716,16 @@ class CharacterSkill(TextBase):
     histories: Mapped[list["CharacterSkillHistory"]] = relationship(
         back_populates="skill", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterSkillHistory.start.desc().nulls_last()",
-        doc="身につけた・伸びた・衰えたなどを、起きた年ごとに一行で持つ。話・人物役には、その時刻の年までに始まった行だけを渡し、"
-        "その年までに始まった行の無いスキルは、まだ持っていないものとして渡さない。年が空の行は構想で、作者だけが読む。行は知る相手だけが知る")
+        doc="身につけた・伸びた・衰えたなどを、出来事ごとに一行で持つ。話・人物役には、その時刻までに始まった行だけを渡し、"
+        "その時刻までに始まった行の無いスキルは、まだ持っていないものとして渡さない。時刻が空の行は構想で、作者だけが読む。"
+        "行は知る相手だけが知る")
 
 
 class CharacterSkillHistory(Base):
-    """スキルの来歴を、起きた年ごとの一行で持つ子テーブル。スキルの本質は `CharacterSkill.text` に持つ。
+    """スキルの来歴を、起きた出来事ごとの一行で持つ子テーブル。スキルの本質は `CharacterSkill.text` に持つ。
 
-    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻の年までに始まった行だけを渡すので、
-    先の時刻の行を書き足しても、それより前には効かない。`start` が空の行は、起きる年がまだ決まっていない構想で、作者が読むときだけ出す。
+    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻までに始まった行だけを渡すので、
+    先の時刻の行を書き足しても、それより前には効かない。`start` が空の行は、起きる時期がまだ決まっていない構想で、作者が読むときだけ出す。
     行は、知る相手(`knowers`)に当たる人物だけが知る(本人も、知る相手に入っていなければ知らない)。
     """
 
@@ -732,8 +733,8 @@ class CharacterSkillHistory(Base):
 
     character_skill_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character_skill.id"), index=True, nullable=False, sort_order=100)
-    start: Mapped[int | None] = mapped_column(
-        Integer, comment="起きた年(この来歴が効き始める年)。空なら年が決まっていない(話・人物役には渡さない)",
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・人物役には渡さない)",
         sort_order=110)
     description: Mapped[str] = mapped_column(
         String, nullable=False, comment="来歴(身につけた・伸びた・衰えたなど、作中で起きたこと)", sort_order=120)
@@ -745,7 +746,7 @@ class CharacterSkillHistory(Base):
         order_by="CharacterSkillHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is not None and self.start <= time.year
+        return self.start is not None and self.start <= time
 
 
 class CharacterSkillHistoryKnower(KnowerMixin, Base):
@@ -847,20 +848,19 @@ class LocationHistoryKnower(KnowerMixin, Base):
 
 
 def _subject_start(s: Session, row: KnowerMixin) -> Stamp | None:
-    """知る相手の行の、知られる行の始まり。人物・スキルの来歴は年で持つので、その年の初め。"""
+    """知る相手の行の、知られる行の始まり。"""
     match row:
         case IdeaHistoryKnower():
             history = row.history or s.get(IdeaHistory, row.idea_history_id)
             return None if history is None else history.start
         case CharacterHistoryKnower():
-            year = (row.history or s.get_one(CharacterHistory, row.character_history_id)).start
+            return (row.history or s.get_one(CharacterHistory, row.character_history_id)).start
         case CharacterSkillHistoryKnower():
-            year = (row.history or s.get_one(CharacterSkillHistory, row.character_skill_history_id)).start
+            return (row.history or s.get_one(CharacterSkillHistory, row.character_skill_history_id)).start
         case LocationHistoryKnower():
-            year = (row.history or s.get_one(LocationHistory, row.location_history_id)).start
+            return (row.history or s.get_one(LocationHistory, row.location_history_id)).start
         case _:
             return None
-    return None if year is None else Stamp(year)
 
 
 def _knower_start(s: Session, row: KnowerMixin) -> Stamp | None:

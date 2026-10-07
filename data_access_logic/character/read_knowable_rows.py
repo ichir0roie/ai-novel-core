@@ -9,13 +9,14 @@ from data_access_logic.character.record import (
 )
 from data_access_logic.character.skills import skills_of
 from data_access_logic.entrypoint import SessionEntrypoint
+from data_access_logic.history_start import by_start
 from data_access_logic.query import common_query
 from db.schema import Character, CharacterHistory, CharacterSkillHistory, Idea, Location, LocationHistory
 
 
-def _dated_order(row: CharacterHistory | CharacterSkillHistory | LocationHistory) -> tuple[bool, int, int]:
-    """年の決まっていない行は最後。"""
-    return row.start is None, row.start or 0, row.id
+def _dated_order(row: CharacterHistory | CharacterSkillHistory | LocationHistory) -> tuple[tuple[bool, int], int]:
+    """時期の決まっていない行は最後。"""
+    return by_start(row), row.id
 
 
 class ReadKnowableRows(SessionEntrypoint):

@@ -41,7 +41,7 @@ def replaced_rows(current: Sequence[Child], rows: Sequence[BaseModel], child: ty
 
 
 def _history_key(child: type, row: object) -> tuple[object, ...]:
-    """今ある来歴の行と渡された行を対応させる鍵。人物・スキルの来歴は一年に一行なので年、アイデアの履歴は効く場所と始まり。"""
+    """今ある来歴の行と渡された行を対応させる鍵。人物・スキル・関係・場所の来歴は始まりの時刻、アイデアの履歴は効く場所と始まり。"""
     if child is IdeaHistory:
         return getattr(row, "location_id"), getattr(row, "start")
     return (getattr(row, "start"),)
@@ -64,7 +64,7 @@ def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], ch
                        owner: Character | Location | None = None) -> list[History]:
     """来歴の行を置き換え、行の `knowers`(知る相手の行の配列)で知る相手を置き換える。
     今ある行とは、並びではなく鍵(`_history_key`)で対応させる(読み出しの入口は古い順に、relationship は新しい順に並べるので、
-    並びで対応させると別の年の行を書き換えてしまう)。鍵の同じ行が幾つもあれば、その中では並びの順に対応させる。
+    並びで対応させると別の時刻の行を書き換えてしまう)。鍵の同じ行が幾つもあれば、その中では並びの順に対応させる。
     `knowers` を渡さない行は、今ある行に当たれば知る相手をそのままにし、当たらない新しい行なら `owner`(人物の来歴・
     スキルの来歴の本人、場所の来歴の場所)だけを知る相手にする(`owner` が無ければ行の無いまま)。余った今ある行は、返したリストで置き換えると消える。"""
     knower = child_model(child, "knowers")

@@ -3,10 +3,11 @@ from typing import Any
 from pydantic import model_serializer
 
 from data_access_logic.character.histories import histories_for_prompt
+from data_access_logic.history_start import start_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
 from data_access_logic.knowers import KnowerMaterial, knowers_for_prompt
-from data_access_logic.material import Material
+from data_access_logic.material import Material, Timestamp
 from db.schema import PersonalityLevel
 
 
@@ -90,7 +91,7 @@ class CharacterAt(Material):
 class CharacterHistoryMaterial(Material):
     """作者の目で読む来歴の行。"""
 
-    start: int | None = None
+    start: Timestamp | None = None
     description: str
     # その時刻までに知った相手(`knowers.knowers_at`)
     knowers: list[KnowerMaterial]
@@ -116,7 +117,8 @@ class CharacterSecrets(Material):
 
 
 def _dated_histories_for_prompt(histories: list[CharacterHistoryMaterial]) -> list[dict[str, Any]]:
-    return [{"年": history.start, "来歴": history.description, "知る相手": knowers_for_prompt(history.knowers)}
+    return [{"時期": start_for_prompt(history.start), "来歴": history.description,
+             "知る相手": knowers_for_prompt(history.knowers)}
             for history in histories]
 
 
@@ -180,7 +182,8 @@ def relations_for_prompt(relations: list[CharacterRelationLine]) -> list[dict[st
     return [
         {"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation,
          "説明": relation.text,
-         "来歴(古い順)": [{"年": history.start, "来歴": history.description} for history in relation.histories]}
+         "来歴(古い順)": [{"時期": start_for_prompt(history.start), "来歴": history.description}
+                         for history in relation.histories]}
         for relation in relations
     ]
 

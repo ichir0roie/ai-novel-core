@@ -174,8 +174,8 @@ class CharacterHistoryFactory(_ModelFactory):
         model = CharacterHistory
 
     character_id = _pool(Character, "CharacterFactory")
-    # 起きた年。空なら年未定
-    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp().year)
+    # 起きた時刻。空なら時期未定
+    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp())
     description = _text()
 
 
@@ -193,8 +193,8 @@ class CharacterSkillHistoryFactory(_ModelFactory):
         model = CharacterSkillHistory
 
     character_skill_id = _pool(CharacterSkill, "CharacterSkillFactory")
-    # 起きた年。空なら年未定
-    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp().year)
+    # 起きた時刻。空なら時期未定
+    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp())
     description = _text()
 
 

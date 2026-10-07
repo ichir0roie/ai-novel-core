@@ -241,7 +241,7 @@ def _history(items: Sequence[HistoryItemDraft], born_year: int, age: int) -> lis
         if item.text.strip() and item.age <= age:
             by_year.setdefault(born_year + item.age, []).append(item.text.strip())
     # 知る相手を渡さないので、本人だけが知る行になる(AI の書いた節目には秘密が混じりうる。広めるなら作者が知る相手を足す)
-    return [CharacterHistoryRow(start=year, description="\n".join(texts)) for year, texts in by_year.items()]
+    return [CharacterHistoryRow(start=Stamp(year), description="\n".join(texts)) for year, texts in by_year.items()]
 
 
 def _writing(fixed: Reconciled, memes: list[DrawnMeme], time: Stamp, age: int, name: str | None) -> CharacterWriting:
@@ -415,7 +415,7 @@ def completed_text(
 
 
 def save_completed_text(s: Session, character_id: int, writing: CharacterWriting) -> Character:
-    """芯を書き、来歴の節目は今の行に足す(同じ年の行があればその説明に書き足す)。ほかの列は変えない。"""
+    """芯を書き、来歴の節目は今の行に足す(同じ時刻の行があればその説明に書き足す)。ほかの列は変えない。"""
     record = s.get_one(Character, character_id)
     record.text = writing.text
     for row in writing.histories:

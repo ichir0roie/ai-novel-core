@@ -160,7 +160,7 @@ export const T = {
     location: "Location",
     noText: "(no text)",
     noHistory: "(no history)",
-    undated: "Year undecided",
+    undated: "Date undecided",
   },
 
   storyTree: {
@@ -267,7 +267,7 @@ export const T = {
     noHistories: "No rows",
     skill: (name: string) => `Skill: ${name}`,
     undated: "undated",
-    year: (year: number) => `${year}`,
+    date: (stamp: string) => stamp.split(" ")[0],
     anywhere: "anywhere",
     adding: "will know",
     removing: "will forget",

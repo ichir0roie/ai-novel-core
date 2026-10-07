@@ -43,8 +43,8 @@ class CharacterLocationRow(_ChildRow):
 
 
 class CharacterHistoryRow(_ChildRow):
-    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・出来事には渡さない)
-    start: int | None = None
+    # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
+    start: Timestamp | None = None
     description: str
     # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行は本人だけ、
     # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
@@ -52,8 +52,8 @@ class CharacterHistoryRow(_ChildRow):
 
 
 class CharacterSkillHistoryRow(_ChildRow):
-    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・人物役には渡さない)
-    start: int | None = None
+    # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・人物役には渡さない)
+    start: Timestamp | None = None
     description: str
     # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行はスキルを持つ本人だけ、
     # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
@@ -61,8 +61,8 @@ class CharacterSkillHistoryRow(_ChildRow):
 
 
 class CharacterRelationHistoryRow(_ChildRow):
-    # 起きた年。同じ年のことは一行にまとめる。空なら年が決まっていない(話・人物役には渡さない)
-    start: int | None = None
+    # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・人物役には渡さない)
+    start: Timestamp | None = None
     description: str
 
 
@@ -149,7 +149,7 @@ class CharacterHistoryEntry(Material):
 
     id: int
     character_id: int
-    start: int | None = None
+    start: Timestamp | None = None
     description: str
     knowers: list[KnowerRow]
 
@@ -159,7 +159,7 @@ class CharacterSkillHistoryEntry(Material):
 
     id: int
     character_skill_id: int
-    start: int | None = None
+    start: Timestamp | None = None
     description: str
     knowers: list[KnowerRow]
 
@@ -190,7 +190,7 @@ class LocationHistoryEntry(Material):
 
     id: int
     location_id: int
-    start: int | None = None
+    start: Timestamp | None = None
     description: str
     knowers: list[KnowerRow]
 

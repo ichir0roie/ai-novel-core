@@ -25,7 +25,7 @@ description: 話(episode)の手番を、語り部のエージェントの代わ�
 3. **設定(アイデア)と照らす(任意)**: 設定は話に結ばず、本文の材料を読むときに、プロット・話のセッションの行に出た語で引かれる。プロットが世界の設定と食い違っていないかを先に確かめたいときだけ、スキル `episode` の手順 5 で `ResolveIdeas` に照らす
 4. **関係を整える**: 登場人物ごとに `character.list_character_relations.ListCharacterRelations(character_id)` で関係を読む
    - 関係(`character_relation`)の無い二人は、人物役には初対面として渡る。前の話・プロットからすでに知り合いのはずの二人に関係が無ければ、`CommitCharacterRelation` で足す(`start` は知り合った時刻。話の時刻より後にしない)
-   - 間柄が前の話と食い違っていれば、`UpdateCharacterRelation` で直す(`text` は時期を限らない芯だけ、起きたことは年ごとの `histories`。`data_access_logic/readme.md` の「関係の芯と来歴」)
+   - 間柄が前の話と食い違っていれば、`UpdateCharacterRelation` で直す(`text` は時期を限らない芯だけ、起きたことは出来事ごとの `histories`(`start` は起きた時刻)。`data_access_logic/readme.md` の「関係の芯と来歴」)
    - 芯(`text`)に、関係のある人物も知らないはずの秘密があれば、来歴(知る相手を絞った行)へ移すようユーザに伝える
 5. **語り部の材料を読む**: `.venv/bin/python -m tool.episode_session stage --episode <episode>`。中身はプロット・場所・登場人物の表層(名前・年齢・性別・外見)・知り合いの組だけ。人物の内側と、だれが何を知っているかは人物役が自分のデータから出すので、ここには無い
 6. **ユーザに返す**: 時刻・場所・登場人物(人物役を起こす人物)・足した設定の候補(3 で照らしたとき)・足した/直した関係・プロットの場面(あれば)を短く返し、最初の場面を待つ。直す指示があれば 2〜5 をやり直す
