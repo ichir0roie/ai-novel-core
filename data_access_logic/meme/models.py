@@ -48,11 +48,18 @@ class DedupeRequestSerialized(DedupeRequest):
         }
 
 
-class ClassifyRequest(Material):
+class AntiMeme(Material):
+    """対の無いミームに足すアンチミーム。分類は元のミームのものを引き継ぐ。"""
+
+    id: int
+    text: str
+
+
+class NumberedMemes(Material):
     memes: list[MemeText]
 
 
-class ClassifyRequestSerialized(ClassifyRequest):
+class NumberedMemesSerialized(NumberedMemes):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     @model_serializer
@@ -64,9 +71,10 @@ class MemeDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(description="ミームの一文")
+    anti_text: str = Field(description="ミームを反転したアンチミームの一文")
     category: str = Field(description="分類", json_schema_extra={"enum": list(MEME_CATEGORIES)})
 
-    @field_validator("text")
+    @field_validator("text", "anti_text")
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()
@@ -86,7 +94,7 @@ class MemesDraft(BaseModel):
     @field_validator("memes")
     @classmethod
     def _written(cls, value: list[MemeDraft]) -> list[MemeDraft]:
-        return [meme for meme in value if meme.text]
+        return [meme for meme in value if meme.text and meme.anti_text]
 
 
 class DedupeDraft(BaseModel):
@@ -108,3 +116,22 @@ class ClassifyDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     categories: list[CategoryDraft] = Field(description="ミームごとの分類")
+
+
+class AntiDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    number: int = Field(description="ミームの番号")
+    anti_text: str = Field(description="ミームを反転したアンチミームの一文")
+
+    @field_validator("anti_text")
+    @classmethod
+    def _stripped(cls, value: str) -> str:
+        return value.strip()
+
+
+class AntisDraft(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
+
+    antis: list[AntiDraft] = Field(description="ミームごとのアンチミーム")

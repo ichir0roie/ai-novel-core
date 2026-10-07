@@ -92,11 +92,11 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「アイデアを消して」                 | `idea.delete_idea.DeleteIdea(idea_id)`。下位のアイデアが残っていれば止まる。結んだ本文との中間テーブルの行、履歴(呼び名)の行も消す |
 | 「覚え書きを足して」「oracle に書いて」 | `oracle.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは、検めて(`fact_check`。本文の末尾に `# 検証結果` の節を足す)、その節を含む本文からミームを抜き出し(`memes_added`)、足したミームも検める |
 | 「覚え書きを直して」                 | `oracle.update_oracle.UpdateOracle(oracle)`。`id` 必須、渡した欄だけ直す |
-| 「ミームを足して」「この考え方をミームに入れて」 | `meme.commit_meme.CommitMeme(meme)`。`text` 必須。`category` は 信条/欲求/境遇/集団/理 のいずれか(空でもよい。次の抽出で AI が振る)。置き場所は分類のディレクトリ |
+| 「ミームを足して」「この考え方をミームに入れて」 | `meme.commit_meme.CommitMeme(meme)`。`text` 必須。`category` は 信条/欲求/境遇/集団/理 のいずれか(空でもよい。次の抽出で AI が振る)。置き場所は分類のディレクトリ。アンチミーム(反転したミーム)は次の抽出で AI が作って対にする(下の「アンチミーム」) |
 | 「ミームを直して」「ミームの分類を直して」 | `meme.update_meme.UpdateMeme(meme)`。`id` 必須、渡した欄だけ直す。`category` は 信条/欲求/境遇/集団/理 のいずれか |
-| 「ミームを消して」                   | `meme.delete_meme.DeleteMeme(meme_ids)`。id の配列をまとめて一つのトランザクションで消す(一つでも無ければ何も消さない)。GUI のミームの一覧で選んで消すのもこれ |
+| 「ミームを消して」                   | `meme.delete_meme.DeleteMeme(meme_ids)`。id の配列をまとめて一つのトランザクションで消す(一つでも無ければ何も消さない)。対のアンチミームも一緒に消す。GUI のミームの一覧で選んで消すのもこれ |
 | 「出来事の種を直して」               | `event_seed.update_event_seed.UpdateEventSeed(seed)`。`id` 必須、渡した欄だけ直す。語の置き換えなどは db を読んで id を拾ってから呼ぶ |
-| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。oracle(著者の覚え書き)の本文(`# 検証結果` の節を含む)・出来事の本文・話の本文(`main_text`)から抜き出し(アイデアの本文と人物の筋書きからは抜き出さない)、分類を振って `meme` テーブルへ足す。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振る。足したミームは AI が Dラボのナレッジとネット検索で検め、本文の末尾の `# 検証結果` の節に書く(`ExtractMemes(fact_check=False)` で飛ばす。重複の確かめ・分類・人物へ引くときは、この節を除いた文面を使う)。足した件数を `{"memes_added"}` で返す。承認の段は無く、分類の付いたミームは足したその時から `DrawMemes` で人物へ引かれる |
+| 「ミームを抜き出して」               | `meme.extract_memes.ExtractMemes()`。oracle(著者の覚え書き)の本文(`# 検証結果` の節を含む)・出来事の本文・話の本文(`main_text`)から抜き出し(アイデアの本文と人物の筋書きからは抜き出さない)、分類を振って、アンチミームと対で `meme` テーブルへ足す(一文で簡潔に。40字以内が目安)。既にあるミームと同じ考え方の言い換えは足さない。最後に、分類の空いたミーム(手で足したものなど)に分類を振り、アンチミームの無いミームにアンチミームを足す。足したミームは AI が Dラボのナレッジとネット検索で検め、本文の末尾の `# 検証結果` の節に書く(`ExtractMemes(fact_check=False)` で飛ばす。重複の確かめ・分類・人物へ引くときは、この節を除いた文面を使う)。足した件数(アンチミームを含む)を `{"memes_added"}` で返す。承認の段は無く、分類の付いたミームは足したその時から `DrawMemes` で人物へ引かれる |
 | 「ミームを引いて」                   | `meme.draw_memes.DrawMemes(person=True, seed=None)`。ミームから、分類ごとに 0〜2 件引き、それぞれに古今表裏を割り振って返す。db には書かない |
 | 「ミームと要約の取りこぼしをまとめて作って」 | `meme.refresh_generated_content.RefreshGeneratedContent()`。`ExtractMemes` に加えて、要約が無いか本文と食い違っている出来事・話をすべて拾って `event_summary` と話の `summary_text` を作り直す(数は作り直した件数)。`CommitEvent` / `CommitStory` / `CommitEpisode` は確定した一件だけを見るので、GUI から直した分などの取りこぼしを拾うのはこちら |
 | 「作品の一覧」                       | `story.list_stories.ListStories()`                                           |
@@ -355,6 +355,15 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 `meme` テーブル自体は oracle・出来事・話の本文から抜き出して貯めるだけで、
 人物との FK は持たない(ミームは人物の間を移り変わり・伝染していくため)。
+
+### アンチミーム
+
+ミームはどれも、反転したもう一つのミーム(アンチミーム)と対で持つ。アンチミームも分類を持つ普通のミームの一行で、
+対の二行が `anti_meme_id` で互いを指す。分類は元のミームと同じにし、人物へ引くときもほかのミームと区別しない。
+
+- 抜き出し(`ExtractMemes` など、`data_access_logic/flows/meme.py`)は、ミームとアンチミームを一度の AI 呼び出しで作って対で足す
+- 対の無いミーム(GUI・`CommitMeme` で手で足したもの)は、次の抽出で分類を振ったあとに AI がアンチミームを作る
+- ミームを消すと対のアンチミームも消える(`DeleteMeme`)
 
 補足:
 

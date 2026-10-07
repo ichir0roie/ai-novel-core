@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.meme import extractor
-from data_access_logic.meme.models import MemeCategory, MemeDraft
+from data_access_logic.meme.models import AntiMeme, MemeCategory, MemeDraft
 from data_access_logic.source_text import SourceText
 from data_access_logic.step import db_step
 
@@ -19,6 +19,10 @@ class MemesForm(BaseModel):
 
 class CategoriesForm(BaseModel):
     categories: list[MemeCategory]
+
+
+class AntiMemesForm(BaseModel):
+    antis: list[AntiMeme]
 
 
 @db_step
@@ -34,6 +38,16 @@ def meme_texts(s: Session) -> list[str]:
 @db_step
 def save_memes(s: Session, form: MemesForm) -> int:
     return extractor.save_memes(s, form.memes, form.sources)
+
+
+@db_step
+def unpaired_sources(s: Session) -> list[SourceText]:
+    return extractor.unpaired_sources(s)
+
+
+@db_step
+def save_anti_memes(s: Session, form: AntiMemesForm) -> int:
+    return extractor.save_anti_memes(s, form.antis)
 
 
 @db_step
