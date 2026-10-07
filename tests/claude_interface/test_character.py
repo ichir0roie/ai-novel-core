@@ -16,7 +16,7 @@ from data_access_logic.character.generate_character import GenerateCharacter
 from data_access_logic.character import steps as character_steps
 from data_access_logic.character.generate_characters import GenerateCharacters
 from data_access_logic.character.generator_models import CharacterNameMaterialSerialized, PersonNameDraft
-from data_access_logic.character.naming import PersonNameCandidates, named
+from data_access_logic.character.naming import NameSound, PersonNameCandidates, drawn_sound, named
 from data_access_logic.character.list_character_relations import ListCharacterRelations
 from data_access_logic.character.list_characters import ListCharacters
 from data_access_logic.character.read_character import ReadCharacter
@@ -142,23 +142,61 @@ class _NamingAI:
         self.names = names
 
     def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
-        return PersonNameCandidates(candidates=[PersonNameDraft(name=name, family_name="") for name in self.names])
+        return PersonNameCandidates(candidates=[PersonNameDraft(name=name, reading=name, family_name="")
+                                                for name in self.names])
+
+
+def _name_material(avoided_names: list[str], used_names: list[str] | None = None,
+                   hint_name: str | None = None) -> CharacterNameMaterialSerialized:
+    return CharacterNameMaterialSerialized(kind="人物", text="市の荷運び", age=30, avoided_names=avoided_names,
+                                           used_names=used_names or [], hint_name=hint_name)
+
+
+def _picked_names(names: list[str], material: CharacterNameMaterialSerialized) -> set[str]:
+    drafts = [named(_NamingAI(names), random.Random(seed), material, True) for seed in range(30)]
+    return {draft.name for draft in drafts if draft is not None}
 
 
 def test_named_avoids_names_in_the_same_place():
-    material = CharacterNameMaterialSerialized(kind="人物", text="市の荷運び", age=30, avoided_names=["ジャコモ", "グイド"])
-    ai = _NamingAI(["ジャコモ", "グイド", "ルカ", "ルカ", "エリオ"])
+    assert _picked_names(["ジャコモ", "グイド", "ルカ", "ルカ", "エリオ"],
+                         _name_material(["ジャコモ", "グイド"])) == {"ルカ", "エリオ"}
 
-    drafts = [named(ai, random.Random(seed), material, True) for seed in range(20)]
 
-    assert {draft.name for draft in drafts if draft is not None} == {"ルカ", "エリオ"}
+def test_named_avoids_resembling_names_in_the_same_place():
+    assert _picked_names(["ゼノス", "エリオ", "トーマ"], _name_material(["ゼノ", "とうま"])) == {"エリオ"}
+
+
+def test_named_prefers_names_unused_in_the_world():
+    assert _picked_names(["ルカ", "エリオ"], _name_material([], used_names=["ルカ"])) == {"エリオ"}
+    # 世界で使われていない候補が無ければ、使われている名からも選ぶ
+    assert _picked_names(["ルカ"], _name_material([], used_names=["ルカ"])) == {"ルカ"}
+
+
+def test_named_prefers_the_drawn_sound():
+    readings = ["ありさ", "かりな", "さらさ", "たにあ", "なおみ", "はるか", "まりえ", "やよい", "らうら", "がりあ",
+                "ざざみ", "だりあ", "ばるば", "ありさな", "あり", "かなりあ", "さくらこ", "りりあな"]
+
+    class _ReadingAI:
+        def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
+            return PersonNameCandidates(candidates=[PersonNameDraft(name=reading, reading=reading, family_name="")
+                                                    for reading in readings])
+
+    for seed in range(30):
+        sound = drawn_sound(random.Random(seed))
+        draft = named(_ReadingAI(), random.Random(seed), _name_material([]), True)
+        assert isinstance(draft, PersonNameDraft)
+        if any(sound.fits(reading) for reading in readings):
+            assert sound.fits(draft.reading), (sound, draft)
+
+
+def test_name_sound_counts_moras():
+    sound = NameSound(row="か行", moras=3)
+    assert sound.fits("きょうか") and sound.fits("かっと") and not sound.fits("きょう") and not sound.fits("あかね")
 
 
 def test_named_keeps_the_authors_name():
-    material = CharacterNameMaterialSerialized(kind="人物", text="市の荷運び", age=30, avoided_names=["ジャコモ"],
-                                               hint_name="ジャコモ")
-
-    draft = named(_NamingAI(["ジャコモ", "ルカ"]), random.Random(0), material, True)
+    draft = named(_NamingAI(["ジャコモ", "ルカ"]), random.Random(0), _name_material(["ジャコモ"], hint_name="ジャコモ"),
+                  True)
 
     assert draft is not None and draft.name == "ジャコモ"
 

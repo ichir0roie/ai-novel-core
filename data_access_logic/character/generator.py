@@ -2,7 +2,7 @@
 """人物・人物以外の対象(国・組織・集団・物)を一件生む。中身(説明・年齢・口調)→ 関係する設定と世界との食い違いの検め
 (`consistency.py`)→ 名付け(`naming.py`)、の順に AI に決めさせる。
 
-名前は中身が決まったあとに、その内容と居場所から候補を出させ、同じ場所にいる人物・対象の名を避けてサイコロで選ぶ。
+名前は中身が決まったあとに、その内容と居場所から候補を出させ、同じ場所・世界にいる人物・対象の名を避けてサイコロで選ぶ。
 
 db だけの段(`birth_sources` → 語をアイデアと照らす `resolve_ideas` → `save_character`)と、AI・乱数だけの段
 (`character_content` → `character_creation`)に分けてある。流れ(`data_access_logic/flows/character.py`)がつなぐ。
@@ -177,6 +177,7 @@ def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person:
                                            histories=histories_at(character, time))
                            for character in _nearby_characters(s, born_location_id, time)],
         resident_names=_resident_names(s, born_location_id, time),
+        world_names=list(s.scalars(common_query.character_names_select()).all()),
         meme_pool=meme_pool(s, _meme_categories(person)),
     )
 
@@ -208,6 +209,7 @@ def _birth_material(
         memes=draw_from(rng, sources.meme_pool, _meme_categories(person)) if draw_memes else [],
         nearby_characters=sources.nearby_characters,
         resident_names=sources.resident_names,
+        world_names=sources.world_names,
         parameters=parameters,
         name=name,
         kind=kind,
@@ -319,7 +321,7 @@ def character_creation(
     draft = named(ai, rng, CharacterNameMaterialSerialized(
         kind=decided.kind, text=fixed.text, age=decided.age, parameters=parameters if person else None,
         born_location=material.born_location, avoided_names=material.resident_names,
-        hint_name=form.name if form else None,
+        used_names=material.world_names, hint_name=form.name if form else None,
     ), person)
     subject = "人物" if person else "対象"
     name = draft.name if draft is not None else (form.name if form and form.name else subject)
