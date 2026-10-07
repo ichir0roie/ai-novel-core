@@ -36,6 +36,7 @@
 - 列の定義は `db/schema.py` が唯一の正。列名・型は db に問い合わせず推測もせず、`db/schema.py` を Read して確かめる(`episode` の題は `title`。推測で書くと `UndefinedColumn` で落ちる)
 - NULL を持てる列で並べるときは NULL の向きを明示する(降順は `.nulls_last()`)。`DISTINCT` の結果を順番どおりに使うなら `order_by` を付ける
 - PostGIS の列は `db/postgres/postgis.py`(`.docs/postgres.md`)
+- すべての表は基底の `Base` から `created_at`(作った時刻)・`updated_at`(直した時刻)を持つ。どちらも db が入れる(既定値の `now()` と、PostgreSQL の関数 `set_updated_at` を呼ぶ表ごとのトリガー。`db/postgres/timestamps.py`)ので、コードから書かない。表を足すときのトリガーは `init_db` と alembic の autogenerate が自動で掛ける
 
 ### マイグレーション
 

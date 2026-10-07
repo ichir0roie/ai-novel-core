@@ -4,9 +4,10 @@ from __future__ import annotations
 import enum
 import hashlib
 import os
+from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Integer, String, DECIMAL, JSON, TypeDecorator,
+    BigInteger, Boolean, CheckConstraint, DateTime, FetchedValue, Integer, String, DECIMAL, JSON, TypeDecorator,
     event,
     create_engine,
     ForeignKey,
@@ -35,6 +36,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import make_url
 
 from db.polygon import parse_polygon
+from db.postgres.timestamps import install_updated_at
 from db.stamp import Stamp
 
 
@@ -81,6 +83,22 @@ class Base(DeclarativeBase):
     # sort_order は列の並び順を明示するための番号。継承の段が一段深くなるごとに
     # 開始値を 100 増やし、同じクラス内では 10 刻みで振る(あとで列を挟みやすい)。
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
+    # 二つとも db が入れる(`db/postgres/timestamps.py`)ので、コードから書かない
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), comment="行を作った時刻", sort_order=90000)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), server_onupdate=FetchedValue(),
+        comment="行を最後に直した時刻", sort_order=90010)
+
+
+# 画面・入口の欄に出さない、db が入れる列
+TIMESTAMP_COLUMNS = frozenset({"created_at", "updated_at"})
+
+
+@event.listens_for(Base.metadata, "after_create")
+def _install_updated_at(_metadata, connection, tables, **_kw) -> None:
+    if connection.dialect.name == "postgresql":
+        install_updated_at(connection, [table.name for table in tables])
 
 
 class ContentBase(Base):
