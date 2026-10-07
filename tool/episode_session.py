@@ -62,17 +62,22 @@ def wait_answers(episode_id: int, after: int, interval: float, timeout: float) -
     return _waited(check, interval, timeout) or {"status": "timeout"}
 
 
+def _moment(args: argparse.Namespace) -> dict[str, Any]:
+    """話か時刻の、渡された方だけ。`time` を知らない古い API にも、話で呼ぶぶんはそのまま通るように。"""
+    return {"episode_id": args.episode} if args.episode is not None else {"time": args.time}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    knowledge = commands.add_parser("knowledge", help="人物が、話のセッションでいる時刻に知ることのできるデータを読む")
-    knowledge.add_argument("--episode", type=int, required=True)
-    knowledge.add_argument("--character", type=int, required=True)
-
+    knowledge = commands.add_parser("knowledge", help="人物が、話のセッションでいる時刻(--time なら、その時刻)に知ることのできるデータを読む")
     ideas = commands.add_parser("ideas", help="手番の要求に出た語を、人物が知っているアイデアから引く")
-    ideas.add_argument("--episode", type=int, required=True)
-    ideas.add_argument("--character", type=int, required=True)
+    for knowing in (knowledge, ideas):
+        knowing.add_argument("--character", type=int, required=True)
+        moment = knowing.add_mutually_exclusive_group(required=True)
+        moment.add_argument("--episode", type=int)
+        moment.add_argument("--time", help="話を渡さないときの時刻(スキル call-character で歳を言って呼ぶとき)")
     ideas.add_argument("--word", action="append", required=True, help="引く語。いくつも渡すなら --word を重ねる")
 
     wait = commands.add_parser("wait-turn", help="自分の番(turn)か話の終わり(closed)が来るまで待つ")
@@ -131,10 +136,10 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     match args.command:
         case "knowledge":
-            result = call("character.read_knowledge.ReadKnowledge", {"episode_id": args.episode, "character_id": args.character})
+            result = call("character.read_knowledge.ReadKnowledge", {"character_id": args.character, **_moment(args)})
         case "ideas":
             result = call("character.read_known_ideas.ReadKnownIdeas",
-                          {"episode_id": args.episode, "character_id": args.character, "words": args.word})
+                          {"character_id": args.character, "words": args.word, **_moment(args)})
         case "wait-turn":
             result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "answer":

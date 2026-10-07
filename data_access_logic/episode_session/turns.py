@@ -59,3 +59,13 @@ def actor_time(s: Session, episode_id: int, character_id: int) -> Stamp:
     if time is None:
         raise ValueError(f"話 id={episode_id} に時刻が無い")
     return time
+
+
+def knowing_time(s: Session, character_id: int, episode_id: int | None, time: Stamp | str | None) -> Stamp:
+    """人物が知ることを読む時刻。話があれば `actor_time`、無ければ渡された時刻。"""
+    if episode_id is not None:
+        return actor_time(s, episode_id, character_id)
+    stamp = Stamp.parse(time)
+    if stamp is None:
+        raise ValueError("話か時刻のどちらかが要る")
+    return stamp

@@ -167,6 +167,21 @@ def test_read_knowledge_at_the_latest_turn(shown, world):
     assert result["自分"]["来歴(古い順)"] == ["13年前、市に越してくる", "今年、店を畳む"]
 
 
+def test_read_knowledge_at_a_time_without_episode(shown, world):
+    taro, _ = world.character_ids
+    shown(UpdateCharacter(CharacterUpdateForm(id=taro, histories=[
+        CharacterHistoryRow(start=1190, description="市に越してくる", knowers=[KnowerRow(knower_id=taro)]),
+        CharacterHistoryRow(start=1203, description="店を畳む", knowers=[KnowerRow(knower_id=taro)])])))
+
+    result = shown(ReadKnowledge(character_id=taro, time="1195/01/01"))
+
+    assert result["自分"]["来歴(古い順)"] == ["5年前、市に越してくる"]
+    # プロットが無いので、知っているアイデアは語から引くものだけ
+    assert result["知っているアイデア"] == []
+    with pytest.raises(ValueError):
+        shown(ReadKnowledge(character_id=taro))
+
+
 def test_read_knowledge_relation_histories_until_the_time(shown, world):
     shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, histories=[
         CharacterRelationHistoryRow(start=1250, description="先に起きること"),
