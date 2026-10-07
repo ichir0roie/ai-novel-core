@@ -471,8 +471,10 @@ def test_clear_session_lets_the_actors_play_again(shown, world):
     taro, hanako = world.character_ids
     shown(AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=taro, request="市に着いた")]))
     shown(CloseSession(episode_id=world.episode_id))
+    # 一度も番の回らなかった登場人物の人物役も止まる
+    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "closed"
 
-    assert shown(ClearSession(episode_id=world.episode_id)) == {"episode_id": world.episode_id, "deleted": 2}
+    assert shown(ClearSession(episode_id=world.episode_id)) == {"episode_id": world.episode_id, "deleted": 3}
     assert shown(ReadSession(episode_id=world.episode_id)) == []
     # 前の終了の行が消えたので、新しい手番が回る
     shown(AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=hanako, request="市に着いた")]))
