@@ -90,5 +90,6 @@ def test_commit_episode_relates_the_cast(world):
     with get_env_session() as s:
         added = s.get_one(CharacterRelation, result.relations[0].id)
         assert (str(added.start), added.text) == ("1200/04/01 12:00:00", "同じ市で商う")
-        assert [(history.start, history.description) for history in added.histories] == [(1200, "市で名乗り合った")]
+        assert [(str(history.start), history.description) for history in added.histories] == [
+            ("1200/04/01 12:00:00", "市で名乗り合った")]
     assert '"誰から(人物id)"' in ai.calls[-1]["prompt"]
