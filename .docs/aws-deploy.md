@@ -133,7 +133,7 @@ npx cdk deploy    # 当てる
 
 2. `npx cdk deploy NovelCi`(ECR リポジトリ `novel-api` と CI のロール。[ci-cd.md](ci-cd.md#aws-側の用意一度だけ))
 3. 最初のイメージを手元で建て、`main` の tag で push する(`infra/lambda/push-image.sh`)。以降は GitHub Actions が `<sha>` と `main` で push する
-4. `npx cdk deploy NovelApi` で関数(メモリ 1024 MB・タイムアウト 30 秒・private subnet は二つの AZ のもの)と関数 URL(認証 `NONE`)を deploy する。
+4. `npx cdk deploy NovelApi` で関数(arm64・メモリ 1024 MB・タイムアウト 30 秒・private subnet は二つの AZ のもの)と関数 URL(認証 `NONE`)を deploy する。
    関数は `novel-api:main` のイメージで作り、CDK は自分でイメージを建てない(CI との分担は [ci-cd.md](ci-cd.md#cdk-との分担))
 5. 環境変数は CDK が置く
 

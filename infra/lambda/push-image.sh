@@ -5,5 +5,5 @@ set -euo pipefail
 
 registry=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$(aws configure get region).amazonaws.com
 aws ecr get-login-password | docker login --username AWS --password-stdin "$registry" >&2
-docker buildx build --platform linux/amd64 --provenance=false \
+docker buildx build --platform linux/arm64 --provenance=false \
   -f infra/lambda/Dockerfile -t "$registry/novel-api:main" --push .

@@ -59,7 +59,7 @@ export class NovelApiStack extends Stack {
     const fn = new lambda.DockerImageFunction(this, "Function", {
       functionName: api.functionName,
       code: lambda.DockerImageCode.fromEcr(repository, { tagOrDigest: api.imageTag }),
-      architecture: lambda.Architecture.X86_64,
+      architecture: lambda.Architecture.ARM_64,
       memorySize: 1024,
       timeout: Duration.seconds(30),
       // 署名を持つ呼ぶ側が暴れても、費用と db の接続数がこれ以上に膨らまないようにする
@@ -116,7 +116,7 @@ export class NovelApiStack extends Stack {
     const migrationFunction = new lambda.DockerImageFunction(this, "MigrationFunction", {
       functionName: migration.functionName,
       code: lambda.DockerImageCode.fromEcr(repository, { tagOrDigest: api.imageTag, cmd: migration.command }),
-      architecture: lambda.Architecture.X86_64,
+      architecture: lambda.Architecture.ARM_64,
       memorySize: 1024,
       timeout: Duration.minutes(15),
       // 二つのマイグレーションが同時に流れないようにする

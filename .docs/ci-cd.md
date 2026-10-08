@@ -10,11 +10,12 @@
 
 1. `ruff check`(実行時の誤りだけを見る設定。`ruff.toml`)
 2. OIDC で AWS のロールを引き受ける(鍵を GitHub に置かない)
-3. `infra/lambda/Dockerfile` を `linux/amd64` で建て、ECR に `<commit の sha>` と `main` の二つの tag で push
-   (`--provenance=false`。Lambda は複数アーキの目録を受け付けない)
+3. `infra/lambda/Dockerfile` を `linux/arm64` で建て、ECR に `<commit の sha>` と `main` の二つの tag で push
+   (`--provenance=false`。Lambda は複数アーキの目録を受け付けない)。依存は建てる側のアーキで arm64 の wheel を落として入れ、
+   arm64 の段では RUN を回さないので、x86 のランナーのまま QEMU 無しで建つ
 4. 変数 `MIGRATION_FUNCTION_NAME` があれば、マイグレーションの関数を同じイメージに差し替えて呼び、db を新しいバージョンにする(下の「マイグレーション」)。
    失敗したら API は差し替えない
-5. `aws lambda update-function-code`(`<commit の sha>` の tag)→ 反映を待つ
+5. `aws lambda update-function-code`(`<commit の sha>` の tag。関数のアーキ `arm64` も一緒に渡す)→ 反映を待つ
 6. 秘密の `API_BASE_URL` があれば `/api/ping` を叩いて確かめる
 
 変数 `LAMBDA_FUNCTION_NAME` が無ければ、ジョブは飛ばされる(このリポジトリは公開なので、フォークや設定前に落ちないようにしている)。
