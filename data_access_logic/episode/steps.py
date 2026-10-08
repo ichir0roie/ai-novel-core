@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
-from data_access_logic.episode import brief, framer, material, moves, plot_completer, relations
+from data_access_logic.episode import brief, framer, material, moves, plot_completer, relations, voices
 from data_access_logic.episode.moves import EpisodeMovesMaterial
 from data_access_logic.episode.relations import EpisodeRelationsMaterial, RelationsForm
 from data_access_logic.character.record import CharacterRelationRecord
@@ -20,6 +20,7 @@ from data_access_logic.episode.models import (
     EpisodeMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
+from data_access_logic.episode.voices import VoiceForm, VoiceSource
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.step import RowId, db_step
@@ -145,6 +146,16 @@ def casting_targets(s: Session, form: RowId) -> SummaryTargets:
 @db_step
 def episode_casting(s: Session, form: RowId) -> EpisodeCasting:
     return brief.episode_casting(s, form.id)
+
+
+@db_step
+def voice_source(s: Session, form: RowId) -> VoiceSource | None:
+    return voices.voice_source(s, form.id)
+
+
+@db_step
+def write_voices(s: Session, form: VoiceForm) -> list[int]:
+    return voices.write_voices(s, form.episode_id, form.voices)
 
 
 @db_step

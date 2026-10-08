@@ -13,7 +13,7 @@ import random
 from ai.claude_code import ai_client
 from ai.claude_code.ai_client import EFFORT, MODEL
 from data_access_logic.ai_client import AIClient
-from data_access_logic.episode import framer, plot_completer
+from data_access_logic.episode import framer, plot_completer, voices
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeForm
 from data_access_logic.episode.models import (
@@ -107,11 +107,26 @@ def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCa
     return EpisodeCastingSerialized.model_validate(call(episode_steps.episode_casting, RowId(id=episode_id)))
 
 
+def refresh_voices(ai: AIClient, episode_id: int) -> None:
+    """文体の見本(直前の五話)のセリフから、登場人物の話し方を調整して書き戻す。AI が答えなくても材料は読む。"""
+    source = call(episode_steps.voice_source, RowId(id=episode_id))
+    if source is None:
+        return
+    drafts = voices.voice_draft(ai, source)
+    if drafts is None:
+        logger.warning(f"話 id={episode_id} の登場人物の話し方を調整できなかった(AI が答えなかった)")
+        return
+    written = call(episode_steps.write_voices, voices.VoiceForm(episode_id=episode_id, voices=drafts.voices))
+    if written:
+        logger.info(f"話 id={episode_id} の直前の話から、人物 id={written} の話し方を調整した")
+
+
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
-    """`ReadEpisodeBrief` に当たる。設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。
-    語の数を AI が絞るので、元ごとに挙げさせる。"""
+    """`ReadEpisodeBrief` に当たる。直前の五話のセリフで登場人物の話し方を調整してから材料を読む。
+    設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。"""
     targets = call(episode_steps.brief_targets, RowId(id=episode_id))
     refresh(ai, targets)
+    refresh_voices(ai, episode_id)
     keywords = [keyword for text in targets.word_sources for keyword in keywords_of(text, ai, targets.start)]
     return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, episode_steps.BriefForm(
         episode_id=episode_id, keywords=keywords)))
