@@ -2,12 +2,14 @@
 import random
 
 import pytest
+from sqlalchemy import select
 
 from data_access_logic import constants
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.commit_character_location import CommitCharacterLocation
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.create_random_character import CreateRandomCharacter
+from data_access_logic.character.delete_character_relation import DeleteCharacterRelation
 from data_access_logic.character.form import (
     CharacterCreateForm, CharacterForm, CharacterParameterForm, CharacterLocationCreateForm, CharacterLocationUpdateForm,
     CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
@@ -27,7 +29,7 @@ from data_access_logic.character.record import (
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
-from db.schema import PersonalityLevel, Stamp, get_env_session
+from db.schema import CharacterRelation, CharacterRelationHistory, PersonalityLevel, Stamp, get_env_session
 
 _LEVELS = {
     "sincerity": PersonalityLevel.HIGH, "curiosity": PersonalityLevel.LOW, "proactivity": PersonalityLevel.MUST,
@@ -84,6 +86,20 @@ def test_commit_character_relation(shown, world):
     assert result["text"] == "市で客を取り合う"
     assert (result["start"], result["end"]) == ("1200/04/01 00:00:00", "1210/01/01 00:00:00")
     assert result["histories"] == [{"start": "1205/01/01 00:00:00", "description": "値下げで競り合う"}]
+
+
+def test_delete_character_relation(shown, world):
+    relation = shown(CommitCharacterRelation(CharacterRelationCreateForm(
+        character_1_id=world.character_ids[0], character_2_id=world.character_ids[1], relation="消す仲",
+        histories=[CharacterRelationHistoryRow(start=1205, description="出会う")])))
+
+    deleted = shown(DeleteCharacterRelation(relation["id"]))
+
+    assert (deleted["id"], deleted["relation"]) == (relation["id"], "消す仲")
+    with get_env_session() as s:
+        assert s.get(CharacterRelation, relation["id"]) is None
+        assert s.scalars(select(CharacterRelationHistory).where(
+            CharacterRelationHistory.character_relation_id == relation["id"])).all() == []
 
 
 def test_create_random_character(shown):
