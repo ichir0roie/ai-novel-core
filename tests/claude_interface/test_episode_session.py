@@ -30,6 +30,7 @@ from data_access_logic.episode_session.close_session import CloseSession
 from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
 from data_access_logic.episode_session.read_played_turns import ReadPlayedTurns
 from data_access_logic.episode_session.read_session import ReadSession
+from data_access_logic.episode_session.read_session_since import ReadSessionSince
 from data_access_logic.episode_session.read_stage import ReadStage
 from data_access_logic.episode_session.read_turn import ReadTurn
 from data_access_logic.idea.alias import called
@@ -550,6 +551,20 @@ def test_clear_session_from_a_record_replays_from_there(shown, world):
     assert shown(ReadPlayedTurns(episode_id=world.episode_id, character_id=hanako)) == []
     with pytest.raises(ValueError):
         ClearSession(episode_id=world.episode_id, from_record_id=third).run()
+
+
+def test_read_session_since_returns_the_newer_rows(shown, world):
+    taro, hanako = world.character_ids
+    first, second = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, turns=[
+        TurnRequest(character_id=taro, request="市に着いた"),
+        TurnRequest(character_id=hanako, request="太郎が来た")])))
+
+    assert [record["id"] for record in shown(ReadSessionSince(episode_id=world.episode_id))["records"]] == [first, second]
+    assert shown(ReadSessionSince(episode_id=world.episode_id, after_record_id=second)) == {"records": [], "count": 2}
+    # 一手が入った行も、その手前から引き直せば読める
+    shown(AnswerTurn(record_id=first, answer=TurnAnswer(action="辺りを見回す")))
+    since = shown(ReadSessionSince(episode_id=world.episode_id, after_record_id=first - 1))
+    assert [(record["id"], record["action"]) for record in since["records"]] == [(first, "辺りを見回す"), (second, None)]
 
 
 def test_wait_turn_returns_when_the_turn_comes(shown, world, monkeypatch: pytest.MonkeyPatch):

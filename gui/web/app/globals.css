@@ -692,3 +692,27 @@ summary .knowledge-item { display: inline-block; }
   .knowledge-since .hint { display: none; }
   .modal-actions:has(.knowledge-since) { flex-wrap: wrap; }
 }
+
+/* 話のセッション(/episode_session)。手番の行を一列に並べ、一覧の欄だけをスクロールする */
+.session-toolbar { margin-bottom: 0.5rem; }
+.session-toolbar h2 { margin: 0; }
+.session-toolbar .spacer { flex: 1; }
+.session-toolbar .meta { color: var(--muted); font-size: 0.85rem; }
+.session-live { font-size: 0.85rem; color: var(--muted); }
+.session-live.on { color: var(--accent); }
+.session-live.on::before { content: "● "; animation: session-blink 1s step-end infinite; }
+.session-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 1rem; }
+.session-row { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.8rem; }
+.session-row.waiting { border-color: var(--accent); }
+.session-row.queued, .session-row.closing { color: var(--muted); }
+.session-row.fresh { animation: session-fresh 2s ease-out; }
+.session-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.session-head .meta { color: var(--muted); font-size: 0.85rem; }
+.session-state { font-size: 0.8rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--chip); }
+.session-row.waiting .session-state { color: var(--accent); }
+.session-row dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.8rem; margin: 0.4rem 0 0; }
+.session-row dl > div { display: contents; }
+.session-row dt { color: var(--muted); font-size: 0.85rem; }
+.session-row dd { margin: 0; white-space: pre-wrap; }
+@keyframes session-fresh { from { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); } to { background: var(--panel); } }
+@keyframes session-blink { 50% { opacity: 0; } }
