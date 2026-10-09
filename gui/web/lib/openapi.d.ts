@@ -374,7 +374,7 @@ export interface paths {
         };
         /**
          * Episode Session
-         * @description 話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が毎秒引いて増分を足す
+         * @description 話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す
          */
         get: operations["episode_session_api_episode_session_get"];
         put?: never;

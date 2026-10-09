@@ -285,7 +285,7 @@ def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> epi
 
 @app.get("/api/episode_session", response_model=SessionSince)
 def episode_session(episode_id: int, after_id: int | None = None, s: Session = Depends(session_dep)) -> SessionSince:
-    """話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が毎秒引いて増分を足す"""
+    """話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す"""
     return ReadSessionSince(episode_id, after_id).execute(s)
 
 

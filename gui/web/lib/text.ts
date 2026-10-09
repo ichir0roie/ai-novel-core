@@ -109,7 +109,7 @@ export const T = {
   session: {
     title: "Session",
     noEpisode: "Open this page from an episode (?episode=<id>)",
-    live: "Live (every second)",
+    live: "Live (every 3 seconds)",
     paused: "Paused",
     pause: "Pause",
     resume: "Resume",

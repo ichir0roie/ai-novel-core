@@ -8,7 +8,7 @@ import { getEpisodeSession, getRecord, type SessionRecord } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
 import { T } from "@/lib/text";
 
-const INTERVAL_MS = 1000;
+const INTERVAL_MS = 3000;
 
 const isPending = (row: SessionRecord) => row.action == null && !row.closing;
 
