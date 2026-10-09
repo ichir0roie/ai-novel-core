@@ -29,6 +29,17 @@ class TurnRecord(Material):
     closing: bool
 
 
+class PlayedTurn(Material):
+    """人物役が読み直す、自分がもう動いた手番の行。時刻は渡さない(`character/knowledge.py`)。"""
+
+    id: int
+    request: str
+    thought: str | None = None
+    action: str
+    speech: str | None = None
+    aim: str | None = None
+
+
 class TurnState(Material):
     # turn: いまこの人物が動く番 / waiting: ほかの人物の番か、まだ要求が無い / closed: 話が終わった
     status: Literal["turn", "waiting", "closed"]

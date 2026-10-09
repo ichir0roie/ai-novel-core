@@ -44,7 +44,7 @@
 | --- | --- |
 | 話の登場人物・名前だけ出る人物 | `episode` の行の `character_ids` / `mentioned_character_ids` |
 | 人物の居場所 | 入口 `character.read_character.ReadCharacter` の `locations` |
-| 話のセッションの行(読む・消す) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>` |
+| 話のセッションの行(読む・消す) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>`(`--from <行の id>` でその行から後だけ) |
 | 話の概要(`summary_text`) | 入口 `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[…]}` の `.result[].summary_text`(表の API の行には入らない) |
 
 - 列名は推測しない。`curl -sS -H "$h" "$api/api/tables" | jq -c '.tables[] | {name, columns: [.columns[].key]}'` で表ごとの列を見る。取り違えやすいもの:

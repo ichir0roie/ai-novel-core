@@ -4,9 +4,9 @@
 手元は入口を直に回し、web のセッション(`CLAUDE_CODE_REMOTE=true`)は API の入口を呼ぶ。待つコマンドは、
 返すものが来るまで表を一定の間隔で見て、来たら結果の JSON を出して終わる(待つあいだ Claude は考えない)。
 
-    人物役: knowledge / ideas / wait-turn / answer(--wait で、入れたあと次の番まで待つ)
+    人物役: knowledge / ideas / played / wait-turn / answer(--wait で、入れたあと次の番まで待つ)
     語り部: stage / appearance / add / add-ideas / wait-answers / read / close
-    演じ直す前: clear
+    演じ直す前: clear(--from で、その行から後だけ)
 
     .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
 """
@@ -80,6 +80,10 @@ def main() -> None:
         moment.add_argument("--time", help="話を渡さないときの時刻(スキル call-character で歳を言って呼ぶとき)")
     ideas.add_argument("--word", action="append", required=True, help="引く語。いくつも渡すなら --word を重ねる")
 
+    played = commands.add_parser("played", help="自分がもう動いた手番(要求と自分の一手)を読む(起こし直されたときに)")
+    played.add_argument("--episode", type=int, required=True)
+    played.add_argument("--character", type=int, required=True)
+
     wait = commands.add_parser("wait-turn", help="自分の番(turn)か話の終わり(closed)が来るまで待つ")
     wait.add_argument("--episode", type=int, required=True)
     wait.add_argument("--character", type=int, required=True)
@@ -123,6 +127,7 @@ def main() -> None:
 
     clear = commands.add_parser("clear", help="話のセッションの行をすべて消す(手番を演じ直す前に)")
     clear.add_argument("--episode", type=int, required=True)
+    clear.add_argument("--from", dest="from_record", type=int, help="この行の id から後(この行を含む)だけを消す")
 
     for waiting in (wait, answers, add, answer):
         waiting.add_argument("--interval", type=float, default=0.3)
@@ -140,6 +145,9 @@ def main() -> None:
         case "ideas":
             result = call("character.read_known_ideas.ReadKnownIdeas",
                           {"character_id": args.character, "words": args.word, **_moment(args)})
+        case "played":
+            result = call("episode_session.read_played_turns.ReadPlayedTurns",
+                          {"episode_id": args.episode, "character_id": args.character})
         case "wait-turn":
             result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "answer":
@@ -167,7 +175,8 @@ def main() -> None:
         case "close":
             result = call("episode_session.close_session.CloseSession", {"episode_id": args.episode})
         case "clear":
-            result = call("episode_session.clear_session.ClearSession", {"episode_id": args.episode})
+            result = call("episode_session.clear_session.ClearSession", {"episode_id": args.episode} | (
+                {} if args.from_record is None else {"from_record_id": args.from_record}))
         case _:
             parser.error(f"知らないコマンド: {args.command}")
     print(json.dumps(result, ensure_ascii=False, indent=2))

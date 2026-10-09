@@ -60,7 +60,7 @@ uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.tx
 - auto mode の判定が返らず(no verdict)ツールが止まった: 一時的なもの。少し置いてやり直す
 - `npm ci`・`pip`・`curl` がプロキシで落ちた(`proxy`・`403`・TLS): `/root/.ccr/README.md` と `curl -sS "$HTTPS_PROXY/__agentproxy/status"` を見て、道具ごとの直し方でやり直す。通らなければユーザに伝えて止まる。落ちたチェック(typecheck・lint など)を飛ばして先へ進まない
 - AWS の MCP が `expired or invalid AWS credentials` で落ちた: 打ち直しても直らない。ユーザに伝え、実データを見ずに答えるならそう明記する
-- heredoc の中身が途中で切れた(`SyntaxError: unterminated …` のあと、残りの文を bash が打って `syntax error near unexpected token`): 中身(`.claude/agents/narrator.md` など)に同じ区切り `EOF` があった。区切りは `PYEOF` のように中身に無い語にする
+- heredoc の中身が途中で切れた(`SyntaxError: unterminated …` のあと、残りの文を bash が打って `syntax error near unexpected token`): 中身(`.claude/skills/episode/SKILL.md` など)に同じ区切り `EOF` があった。区切りは `PYEOF` のように中身に無い語にする
 - 裏のコマンドの出力を `until grep …; do sleep …; done` で待ったら終わらなかった: 待つ文字列が出力に出ないことがある(約 1 時間を空費した)。裏で回したものは終わりの知らせを待つか、`Monitor` で待つ。ループで待つなら上限の時間を付ける
 - git の出力の日本語のファイル名が `"\346…"` になって `cat` が落ちた: `git -c core.quotePath=false status` で出すか、glob(`ls db/alembic/versions/…/000058_*.py`)で引く
 - `from sqlalchemy import InstrumentedAttribute` が `ImportError`: `from sqlalchemy.orm import InstrumentedAttribute`
