@@ -52,14 +52,34 @@ def wait_turn(episode_id: int, character_id: int, interval: float, timeout: floa
     return _waited(check, interval, timeout) or {"status": "timeout"}
 
 
+def _row(record: dict[str, Any]) -> dict[str, Any]:
+    """語り部の読む行。人物は名前だけにし(空なら語りの行)、見聞きする人物は id だけにする。"""
+    return {"id": record["id"], "character": record["character"] and record["character"]["name"], "time": record["time"],
+            "witnesses": [witness["character_id"] for witness in record["witnesses"]], "request": record["request"],
+            "closing": record["closing"], **{name: record[name] for name in ("thought", "action", "speech", "aim")}}
+
+
+def _answer(record: dict[str, Any]) -> dict[str, Any]:
+    """返った一手。要求は語り部が書いたばかりなので返さない。"""
+    return {"id": record["id"], "character": record["character"]["name"],
+            **{name: record[name] for name in ("thought", "action", "speech", "aim")}}
+
+
 def wait_answers(episode_id: int, after: int, interval: float, timeout: float) -> dict[str, Any]:
-    """手番がすべて埋まったら、`after` より後の行を返す。"""
+    """手番がすべて埋まったら、`after` より後の手番の一手を返す。"""
     def check():
         records = call("episode_session.read_session.ReadSession", {"episode_id": episode_id})
-        if any(record["action"] is None and not record["closing"] for record in records):
+        turns = [record for record in records if record["character"] is not None and not record["closing"]]
+        if any(record["action"] is None for record in turns):
             return None
-        return {"status": "answered", "records": [record for record in records if record["id"] > after]}
+        return {"status": "answered", "answers": [_answer(record) for record in turns if record["id"] > after]}
     return _waited(check, interval, timeout) or {"status": "timeout"}
+
+
+def _turns_args(text: str) -> dict[str, Any]:
+    """`add` の JSON。手番の配列か、語りと見聞きする人物を添えた `{"narration", "witness_ids", "turns"}`。"""
+    value = json.loads(text)
+    return {"turns": value} if isinstance(value, list) else value
 
 
 def _moment(args: argparse.Namespace) -> dict[str, Any]:
@@ -105,17 +125,17 @@ def main() -> None:
     stage = commands.add_parser("stage", help="語り部が読む材料(プロット・場所・登場人物の表層・知り合いの組)を読む")
     stage.add_argument("--episode", type=int, required=True)
 
-    add = commands.add_parser("add", help="手番の要求の行を足す(JSON の配列: character_id・time・request)")
+    add = commands.add_parser("add", help="手番の要求の行を足す(JSON: narration・witness_ids と、turns の配列: character_id・time・request・witness_ids)")
     add.add_argument("--episode", type=int, required=True)
     add.add_argument("--turns", required=True, help="JSON のファイル。- なら標準入力から読む")
-    add.add_argument("--wait", action="store_true", help="足したあと、手番がすべて埋まるまで待ち、足した行から後を返す")
+    add.add_argument("--wait", action="store_true", help="足したあと、手番がすべて埋まるまで待ち、足した行から後の一手を返す")
 
     add_ideas = commands.add_parser(
         "add-ideas", help="場面に出した新しい語をアイデアと照らし、当たらなければ候補として足す(JSON の配列: keyword・description・kind)")
     add_ideas.add_argument("--episode", type=int, required=True)
     add_ideas.add_argument("--ideas", required=True, help="JSON のファイル。- なら標準入力から読む")
 
-    answers = commands.add_parser("wait-answers", help="手番がすべて埋まるまで待ち、--after より後の行を返す")
+    answers = commands.add_parser("wait-answers", help="手番がすべて埋まるまで待ち、--after より後の一手を返す")
     answers.add_argument("--episode", type=int, required=True)
     answers.add_argument("--after", type=int, default=0)
 
@@ -162,16 +182,18 @@ def main() -> None:
             result = call("episode_session.read_stage.ReadStage", {"episode_id": args.episode})
         case "add":
             text = sys.stdin.read() if args.turns == "-" else Path(args.turns).read_text(encoding="utf-8")
-            result = call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, "turns": json.loads(text)})
+            result = call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, **_turns_args(text)})
             if args.wait and result:
                 result = wait_answers(args.episode, min(record["id"] for record in result) - 1, args.interval, args.timeout)
+            else:
+                result = [_row(record) for record in result]
         case "add-ideas":
             text = sys.stdin.read() if args.ideas == "-" else Path(args.ideas).read_text(encoding="utf-8")
             result = call("episode_session.add_ideas.AddIdeas", {"episode_id": args.episode, "ideas": json.loads(text)})
         case "wait-answers":
             result = wait_answers(args.episode, args.after, args.interval, args.timeout)
         case "read":
-            result = call("episode_session.read_session.ReadSession", {"episode_id": args.episode})
+            result = [_row(record) for record in call("episode_session.read_session.ReadSession", {"episode_id": args.episode})]
         case "close":
             result = call("episode_session.close_session.CloseSession", {"episode_id": args.episode})
         case "clear":

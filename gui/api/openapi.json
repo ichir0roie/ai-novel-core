@@ -2318,7 +2318,21 @@
             "title": "Episode Id"
           },
           "character": {
-            "$ref": "#/components/schemas/Named"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Named"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "witnesses": {
+            "items": {
+              "$ref": "#/components/schemas/Witness"
+            },
+            "type": "array",
+            "title": "Witnesses"
           },
           "time": {
             "anyOf": [
@@ -2388,7 +2402,7 @@
         "required": [
           "id",
           "episode_id",
-          "character",
+          "witnesses",
           "request",
           "closing"
         ],
@@ -2583,6 +2597,19 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "Witness": {
+        "properties": {
+          "character_id": {
+            "type": "integer",
+            "title": "Character Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "character_id"
+        ],
+        "title": "Witness"
       }
     }
   }

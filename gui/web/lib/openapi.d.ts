@@ -821,7 +821,9 @@ export interface components {
             id: number;
             /** Episode Id */
             episode_id: number;
-            character: components["schemas"]["Named"];
+            character?: components["schemas"]["Named"] | null;
+            /** Witnesses */
+            witnesses: components["schemas"]["Witness"][];
             /** Time */
             time?: string | null;
             /** Request */
@@ -907,6 +909,11 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** Witness */
+        Witness: {
+            /** Character Id */
+            character_id: number;
         };
     };
     responses: never;

@@ -25,6 +25,7 @@ from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import Episode, EpisodeCharacter, Location
+from db.stamp import Stamp
 
 
 class StageEpisode(Material):
@@ -69,7 +70,7 @@ class StageSerialized(Stage):
         }
 
 
-def stage_of(s: Session, episode_id: int) -> StageSerialized:
+def _staged_episode(s: Session, episode_id: int) -> tuple[Episode, Stamp]:
     episode = s.scalar(
         select(Episode)
         .where(Episode.id == episode_id)
@@ -81,19 +82,32 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
     )
     if episode is None:
         raise ValueError(f"話 id={episode_id} が見つからない")
-    time = episode.start
-    if time is None:
+    if episode.start is None:
         raise ValueError(f"話 id={episode_id} の時刻(start)が空")
-    location_id = episode.location_id
+    return episode, episode.start
+
+
+def _cast_relations(s: Session, episode: Episode, time: Stamp) -> list[CharacterRelationLine]:
     characters = cast_characters(episode)
     cast_ids = {character.id for character in characters}
-    relations = [line for line in relations_at(s, characters, time, dated_alive_at)
-                 if line.character_1.id in cast_ids and line.character_2.id in cast_ids]
+    return [line for line in relations_at(s, characters, time, dated_alive_at)
+            if line.character_1.id in cast_ids and line.character_2.id in cast_ids]
+
+
+def acquaintances(s: Session, episode_id: int) -> set[frozenset[int]]:
+    """話の時刻に知り合いの、登場人物の二人の組(向きを問わない)。語り部の材料の「知り合い」と同じ。"""
+    episode, time = _staged_episode(s, episode_id)
+    return {frozenset((line.character_1.id, line.character_2.id)) for line in _cast_relations(s, episode, time)}
+
+
+def stage_of(s: Session, episode_id: int) -> StageSerialized:
+    episode, time = _staged_episode(s, episode_id)
+    location_id = episode.location_id
     return StageSerialized(
         main_episode=episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         location=location_at(common_query.get_row(s, Location, location_id), time) if location_id is not None else None,
         cast=[StageMember(character=character, age=age_at(character, time), sex=parameters_at(character, time).sex)
-              for character in characters],
-        relations=relations,
+              for character in cast_characters(episode)],
+        relations=_cast_relations(s, episode, time),
     )

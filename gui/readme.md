@@ -26,7 +26,7 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
   Cancel で溜めた分を捨てる。変更モードの外では札は動かない。札のクリックで編集、空の所のクリックで話を足すモーダル(`RecordModal`)を開く
   (押した時刻・列の作品を初期値にする)。`at` を省けば最後の話の時刻を中心にする。
   絞り込み(`span`・`story_id`)は変えるたびにブラウザの localStorage に覚え、どれも付けずに開いたとき(ナビのリンクなど)は覚えた絞り込みに戻す
-- 話のセッション(`/episode_session?episode=<話の id>`)。話の画面の Session ボタンから飛ぶ。語り部と人物役が回す手番の行(`episode_character_session`)を一列に並べ、
+- 話のセッション(`/episode_session?episode=<話の id>`)。話の画面の Session ボタンから飛ぶ。語り部と人物役が回す手番の行(`episode_character_session`)を一列に並べ(語りの行は人物の代わりに Narration と出し、行を見聞きする人物を添える)、
   3 秒ごとに `/api/episode_session` を引いて増分を足す。持っている行のうち一手の入っていない一番古い行の手前(無ければ最後の行)を `after_id` に渡し、それより新しい行を置き換える
   (一手が書き込まれた行も読み直す)。行の総数が食い違えば、手前の行が消えた(手番からの回し直し)ので全部を引き直す。増えた・変わった行は色を付けて知らせ、一番下を見ているときだけ下へ送る。Pause で止める
 - `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
