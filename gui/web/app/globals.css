@@ -705,6 +705,8 @@ summary .knowledge-item { display: inline-block; }
 .session-row { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.8rem; }
 .session-row.waiting { border-color: var(--accent); }
 .session-row.queued, .session-row.closing { color: var(--muted); }
+.session-row.narration { background: var(--chip); }
+.session-narrator { font-weight: 600; color: var(--muted); }
 .session-row.fresh { animation: session-fresh 2s ease-out; }
 .session-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
 .session-head .meta { color: var(--muted); font-size: 0.85rem; }

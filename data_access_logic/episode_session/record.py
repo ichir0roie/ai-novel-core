@@ -1,17 +1,23 @@
 from typing import Literal
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from data_access_logic.material import Material, Named, Timestamp
 from db.schema import EpisodeCharacterSession
 
 
+class Witness(Material):
+    character_id: int
+
+
 class SessionRecord(Material):
-    LOAD_OPTIONS = (joinedload(EpisodeCharacterSession.character),)
+    LOAD_OPTIONS = (joinedload(EpisodeCharacterSession.character), selectinload(EpisodeCharacterSession.witnesses))
 
     id: int
     episode_id: int
-    character: Named
+    # 空なら語りの行
+    character: Named | None = None
+    witnesses: list[Witness]
     time: Timestamp | None = None
     request: str
     closing: bool
@@ -31,6 +37,8 @@ class TurnRecord(Material):
     """人物役が読む自分の番の行。時刻は渡さない(`character/knowledge.py`)。"""
 
     id: int
+    # 前の自分の番から後に、見聞きした語りとほかの人物の一手(`turns.seen_lines`)
+    seen: list[str] = []
     request: str
     closing: bool
 
@@ -39,6 +47,7 @@ class PlayedTurn(Material):
     """人物役が読み直す、自分がもう動いた手番の行。時刻は渡さない(`character/knowledge.py`)。"""
 
     id: int
+    seen: list[str] = []
     request: str
     thought: str | None = None
     action: str
@@ -66,3 +75,14 @@ class SessionIdeas(Material):
     added: list[str]
     # 足さなかった語(既にあるアイデアに当たったか、人物・場所の名前)
     kept: list[str]
+
+
+class KnowerGap(Material):
+    """登場人物の来歴の行のうち、ほかの登場人物の名前が出るのに、その人物が知る相手に入っていない行。"""
+
+    history_id: int
+    character: Named
+    start: Timestamp
+    description: str
+    # 名前が出るが、話の時刻に知らない登場人物
+    unknowing: list[Named]

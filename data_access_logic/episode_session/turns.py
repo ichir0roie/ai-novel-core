@@ -1,15 +1,16 @@
 """話のセッションの手番。行動の入っていない一番古い要求の行の人物が、いま動く番。
 
-終了の行(`closing`)は手番に数えない。人物の次の行が終了の行なら、その人物の話は終わり。
+終了の行(`closing`)と語りの行(人物の無い行)は手番に数えない。人物の次の行が終了の行なら、その人物の話は終わり。
+人物役は自分の番に、前の自分の番から後の、自分が見聞きする語りとほかの人物の一手を、要求といっしょに受け取る。
 """
 from __future__ import annotations
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from data_access_logic.episode_session.record import SessionRecord, TurnRecord, TurnState
 from data_access_logic.query import common_query
-from db.schema import Episode, EpisodeCharacterSession
+from db.schema import Episode, EpisodeCharacterSession, EpisodeCharacterSessionWitness
 from db.stamp import Stamp
 
 
@@ -23,7 +24,34 @@ def _pending() -> Select[EpisodeCharacterSession]:
 
 def current_turn(s: Session, episode_id: int) -> EpisodeCharacterSession | None:
     return s.scalars(_pending().where(EpisodeCharacterSession.episode_id == episode_id,
+                                      EpisodeCharacterSession.character_id.is_not(None),
                                       EpisodeCharacterSession.closing.is_(False))).first()
+
+
+def _seen_line(row: EpisodeCharacterSession) -> str:
+    if row.character is None:
+        return row.request
+    return f"{row.character.name}: {row.action}" + (f"「{row.speech}」" if row.speech else "")
+
+
+def seen_lines(s: Session, record: EpisodeCharacterSession) -> list[str]:
+    """`record` の人物が、前の自分の番から `record` までに見聞きした語りと、ほかの人物の一手(内心・狙いは入れない)。
+    手番は id の順に回るので、前の番より手前の行は、前の番で受け取っている。"""
+    session = EpisodeCharacterSession
+    previous = s.scalar(select(func.max(session.id)).where(
+        session.episode_id == record.episode_id, session.character_id == record.character_id,
+        session.closing.is_(False), session.id < record.id))
+    rows = s.scalars(session_select(record.episode_id).where(
+        session.id > (previous or 0), session.id < record.id,
+        or_(session.character_id.is_(None),
+            and_(session.character_id != record.character_id, session.action.is_not(None))),
+        session.witnesses.any(EpisodeCharacterSessionWitness.character_id == record.character_id))).all()
+    return [_seen_line(row) for row in rows]
+
+
+def turn_record(s: Session, record: EpisodeCharacterSession) -> TurnRecord:
+    return TurnRecord(id=record.id, seen=[] if record.closing else seen_lines(s, record), request=record.request,
+                      closing=record.closing)
 
 
 def turn_of(s: Session, episode_id: int, character_id: int) -> TurnState:
@@ -32,10 +60,10 @@ def turn_of(s: Session, episode_id: int, character_id: int) -> TurnState:
     if own is None:
         return TurnState(status="waiting")
     if own.closing:
-        return TurnState(status="closed", record=TurnRecord.model_validate(own))
+        return TurnState(status="closed", record=turn_record(s, own))
     current = current_turn(s, episode_id)
     if current is not None and current.id == own.id:
-        return TurnState(status="turn", record=TurnRecord.model_validate(own))
+        return TurnState(status="turn", record=turn_record(s, own))
     return TurnState(status="waiting")
 
 
