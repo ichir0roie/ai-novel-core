@@ -224,6 +224,15 @@ export type EpisodeNeighbors = components["schemas"]["EpisodeNeighbors"];
 export const getEpisodeNeighbors = (episodeId: number | string) =>
   api<EpisodeNeighbors>(`/api/episode_neighbors?${new URLSearchParams({ episode_id: String(episodeId) })}`);
 
+export type SessionSince = components["schemas"]["SessionSince"];
+export type SessionRecord = components["schemas"]["SessionRecord"];
+
+export const getEpisodeSession = (episodeId: number, afterId: number | null) => {
+  const query = new URLSearchParams({ episode_id: String(episodeId) });
+  if (afterId != null) query.set("after_id", String(afterId));
+  return api<SessionSince>(`/api/episode_session?${query}`);
+};
+
 export type TimelineResponse = components["schemas"]["TimelineResponse"];
 
 export const getTimeline = (params: { story_id?: number | null }) => {

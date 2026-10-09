@@ -25,6 +25,8 @@ from data_access_logic.character.relation_graph import relation_graph
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.episode import reading as episode_reading
 from data_access_logic.episode.record import EpisodeRecord
+from data_access_logic.episode_session.read_session_since import ReadSessionSince
+from data_access_logic.episode_session.record import SessionSince
 from data_access_logic.logs import configure_logging
 from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
 from data_access_logic.map.collect import planet_maps
@@ -279,6 +281,12 @@ def previous_episode(story_id: int, before: str | None = None,
 def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> episode_reading.EpisodeNeighbors:
     """同じ作品の時刻の順で前後の話。話の画面のタイトルの横の移動ボタンが使う"""
     return episode_reading.neighbor_episodes(s, episode_id)
+
+
+@app.get("/api/episode_session", response_model=SessionSince)
+def episode_session(episode_id: int, after_id: int | None = None, s: Session = Depends(session_dep)) -> SessionSince:
+    """話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す"""
+    return ReadSessionSince(episode_id, after_id).execute(s)
 
 
 _ = Created  # OpenAPI に出す型として残す

@@ -21,6 +21,12 @@ class SessionRecord(Material):
     aim: str | None = None
 
 
+class SessionSince(Material):
+    records: list[SessionRecord]
+    # その話の行の総数。見る側が持つ行と食い違えば、途中の行が消えた(`ClearSession`)ので全部を引き直す
+    count: int
+
+
 class TurnRecord(Material):
     """人物役が読む自分の番の行。時刻は渡さない(`character/knowledge.py`)。"""
 

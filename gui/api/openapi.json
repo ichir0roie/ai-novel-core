@@ -904,6 +904,62 @@
           }
         }
       }
+    },
+    "/api/episode_session": {
+      "get": {
+        "summary": "Episode Session",
+        "description": "話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す",
+        "operationId": "episode_session_api_episode_session_get",
+        "parameters": [
+          {
+            "name": "episode_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Episode Id"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSince"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1697,6 +1753,31 @@
         ],
         "title": "MapsResponse"
       },
+      "Named": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "Named",
+        "description": "行を id と名前だけで指す。"
+      },
       "Option": {
         "properties": {
           "id": {
@@ -2225,6 +2306,114 @@
           "entrance"
         ],
         "title": "RunResult"
+      },
+      "SessionRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "episode_id": {
+            "type": "integer",
+            "title": "Episode Id"
+          },
+          "character": {
+            "$ref": "#/components/schemas/Named"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "request": {
+            "type": "string",
+            "title": "Request"
+          },
+          "closing": {
+            "type": "boolean",
+            "title": "Closing"
+          },
+          "thought": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thought"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "speech": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speech"
+          },
+          "aim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aim"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "episode_id",
+          "character",
+          "request",
+          "closing"
+        ],
+        "title": "SessionRecord"
+      },
+      "SessionSince": {
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/SessionRecord"
+            },
+            "type": "array",
+            "title": "Records"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "records",
+          "count"
+        ],
+        "title": "SessionSince"
       },
       "StoryRoute": {
         "properties": {

@@ -26,6 +26,9 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
   Cancel で溜めた分を捨てる。変更モードの外では札は動かない。札のクリックで編集、空の所のクリックで話を足すモーダル(`RecordModal`)を開く
   (押した時刻・列の作品を初期値にする)。`at` を省けば最後の話の時刻を中心にする。
   絞り込み(`span`・`story_id`)は変えるたびにブラウザの localStorage に覚え、どれも付けずに開いたとき(ナビのリンクなど)は覚えた絞り込みに戻す
+- 話のセッション(`/episode_session?episode=<話の id>`)。話の画面の Session ボタンから飛ぶ。語り部と人物役が回す手番の行(`episode_character_session`)を一列に並べ、
+  3 秒ごとに `/api/episode_session` を引いて増分を足す。持っている行のうち一手の入っていない一番古い行の手前(無ければ最後の行)を `after_id` に渡し、それより新しい行を置き換える
+  (一手が書き込まれた行も読み直す)。行の総数が食い違えば、手前の行が消えた(手番からの回し直し)ので全部を引き直す。増えた・変わった行は色を付けて知らせ、一番下を見ているときだけ下へ送る。Pause で止める
 - `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
   `claude` コマンドを叩く入口は出さず、呼んでも 403 にする(AI は Claude のセッションが回す。`.docs/claude-tasks.md`)
 - 参照の選択欄(場所の木の選択を含む)と話の登場人物の並びには、選んだ行のページへのリンク(`RecordLink`)を添える
@@ -98,6 +101,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
 | GET | `/api/maps/{planet_id}.svg` | 星ひとつの地図(svg)。場所の座標・領域から python で描く |
 | GET | `/api/timeline?story_id=` | 全期間の話(開始〜終了。終了が空なら開始の一点。開始の無い話は出さない)。`story_id` はその作品で絞る。画面 `/timeline` が描く |
+| GET | `/api/episode_session?episode_id=&after_id=` | 話のセッションの行のうち `after_id` より新しい行(手番の順)と、その話の行の総数(`count`)。`after_id` を省けば全部。画面 `/episode_session` が 3 秒ごとに引く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。

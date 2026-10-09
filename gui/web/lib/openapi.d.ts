@@ -365,6 +365,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/episode_session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Episode Session
+         * @description 話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す
+         */
+        get: operations["episode_session_api_episode_session_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -630,6 +650,16 @@ export interface components {
             /** Bearings */
             bearings: string[];
         };
+        /**
+         * Named
+         * @description 行を id と名前だけで指す。
+         */
+        Named: {
+            /** Id */
+            id: number;
+            /** Name */
+            name?: string | null;
+        };
         /** Option */
         Option: {
             /** Id */
@@ -784,6 +814,35 @@ export interface components {
             entrance: string;
             /** Result */
             result?: unknown;
+        };
+        /** SessionRecord */
+        SessionRecord: {
+            /** Id */
+            id: number;
+            /** Episode Id */
+            episode_id: number;
+            character: components["schemas"]["Named"];
+            /** Time */
+            time?: string | null;
+            /** Request */
+            request: string;
+            /** Closing */
+            closing: boolean;
+            /** Thought */
+            thought?: string | null;
+            /** Action */
+            action?: string | null;
+            /** Speech */
+            speech?: string | null;
+            /** Aim */
+            aim?: string | null;
+        };
+        /** SessionSince */
+        SessionSince: {
+            /** Records */
+            records: components["schemas"]["SessionRecord"][];
+            /** Count */
+            count: number;
         };
         /** StoryRoute */
         StoryRoute: {
@@ -1457,6 +1516,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EpisodeNeighbors"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    episode_session_api_episode_session_get: {
+        parameters: {
+            query: {
+                episode_id: number;
+                after_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSince"];
                 };
             };
             /** @description Validation Error */

@@ -251,6 +251,11 @@ export default function RecordPage() {
                     </a>
                   )}
                   {table === "episode" && (
+                    <Link className="button-link" href={`/episode_session?episode=${id}`} title={T.record.openSessionHint}>
+                      {T.record.openSession}
+                    </Link>
+                  )}
+                  {table === "episode" && (
                     <a
                       className="button-link"
                       href={claudeSessionUrl(T.record.claudePromptInteractive(id))}
