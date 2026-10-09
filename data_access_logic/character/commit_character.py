@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.form import CharacterCreateForm
+from data_access_logic.character.parameters import warn_same_starts
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import world_creation_query
@@ -36,5 +37,6 @@ class CommitCharacter(CommitEntrypoint):
         if form.location_id is not None:
             s.add(CharacterLocation(
                 character_id=record.id, location_id=form.location_id, start=form.start, end=form.end))
+        warn_same_starts(record)
         self.finalize(s, record)
         return CharacterRecord.model_validate(record)

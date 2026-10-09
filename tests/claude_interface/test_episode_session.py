@@ -488,6 +488,27 @@ def test_read_episode_brief_adjusts_voices(shown, world, mock_ai, monkeypatch):
     assert "直前の話の本文(古い順)" in prompts[0]
 
 
+
+def test_read_episode_brief_keeps_voices_the_ai_left_unchanged(shown, world, mock_ai, monkeypatch):
+    taro, _ = world.character_ids
+    with get_env_session() as s:
+        s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
+                      start="1200/03/01 12:00:00", event_seeded=True))
+        s.commit()
+
+    def generate(prompt, output, *args, **kwargs):
+        if output is VoiceDrafts:
+            return VoiceDrafts(voices=[VoiceDraft(character_id=taro, first_person=None, second_person=None,
+                                                  third_person=None, tone=None, dialect=None)])
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    shown(ReadEpisodeBrief(episode_id=world.episode_id))
+
+    # 直す欄が無ければ、話の時刻の行を足さない
+    with get_env_session() as s:
+        assert [row.start for row in s.get_one(Character, taro).parameters] == [Stamp.parse("1170/01/01")]
+
 def test_session_turns(shown, world):
     taro, hanako = world.character_ids
     added = shown(AddTurns(episode_id=world.episode_id, turns=[

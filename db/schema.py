@@ -475,8 +475,14 @@ class Character(EventSeededMixin, ContentBase):
 
     @start.setter
     def start(self, value) -> None:
-        row = self.parameters[0] if self.parameters else CharacterParameter()
-        if not self.parameters:
+        # 並びの先頭の行に書くと、別の時期の行の始まりを誕生へ書き換えて、誕生の行が二つになる
+        dated = [(start, row) for row in self.parameters if (start := Stamp.parse(row.start)) is not None]
+        if dated:
+            row = min(dated, key=lambda dated_row: dated_row[0].to_int())[1]
+        elif self.parameters:
+            row = self.parameters[0]
+        else:
+            row = CharacterParameter()
             self.parameters.append(row)
         row.start = Stamp.parse(value)
 
@@ -484,8 +490,8 @@ class Character(EventSeededMixin, ContentBase):
 
     parameters: Mapped[list[CharacterParameter]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
-        order_by="CharacterParameter.id",
-        doc="名字・体格・口調・性格を、変わった時ごとに一行で持つ。行は start から先ずっと効き、後に始まる行が上書きする。"
+        order_by="[CharacterParameter.start.asc().nulls_first(), CharacterParameter.id]",
+        doc="名字・体格・口調・性格を、変わった時ごとに一行で持つ。始まりの順(空の行が先)に並ぶ。行は start から先ずっと効き、後に始まる行が上書きする。"
         "一番早く始まる行の start が誕生")
     locations: Mapped[list[CharacterLocation]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",

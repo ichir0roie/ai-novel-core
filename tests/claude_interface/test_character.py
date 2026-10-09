@@ -286,6 +286,26 @@ def test_update_character(shown, world):
     assert [history["description"] for history in result["histories"]] == ["改名して村へ移った"]
 
 
+
+def test_update_character_keeps_one_birth_row(shown, world, caplog):
+    # 誕生は一番早く始まる行に書く。並びの先頭(始まりの空の行)や後の時期の行を誕生に書き換えない
+    result = shown(UpdateCharacter(CharacterUpdateForm(
+        id=world.character_ids[1], start="1172/01/01",
+        parameters=[CharacterParameterRow(start="1190/01/01", tone="大人の口調"),
+                    CharacterParameterRow(family_name="テスト家"),
+                    CharacterParameterRow(start="1170/01/01", tone="子どもの口調")])))
+
+    assert [(row["start"], row["family_name"], row["tone"]) for row in result["parameters"]] == [
+        (None, "テスト家", None), ("1172/01/01 00:00:00", None, "子どもの口調"), ("1190/01/01 00:00:00", None, "大人の口調")]
+    assert result["start"] == "1172/01/01 00:00:00"
+    assert "始まりの同じ行" not in caplog.text
+
+    shown(UpdateCharacter(CharacterUpdateForm(
+        id=world.character_ids[1],
+        parameters=[CharacterParameterRow(start="1172/01/01", tone="子どもの口調"),
+                    CharacterParameterRow(start="1172/01/01", height=120.0)])))
+    assert "始まりの同じ行がある: 1172/01/01" in caplog.text
+
 def test_update_character_location(shown, world):
     result = shown(UpdateCharacterLocation(CharacterLocationUpdateForm(
         id=world.character_location_id, character_id=world.character_ids[0], location_id=world.neighbor_id,

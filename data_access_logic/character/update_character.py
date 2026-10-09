@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.form import CharacterUpdateForm
+from data_access_logic.character.parameters import warn_same_starts
 from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
@@ -32,5 +33,6 @@ class UpdateCharacter(CommitEntrypoint):
         if "start" in form.model_fields_set:
             record.start = form.start
         form.write_changes_to(record)
+        warn_same_starts(record)
         self.finalize(s, record)
         return CharacterRecord.model_validate(record)
