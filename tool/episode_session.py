@@ -5,7 +5,7 @@
 返すものが来るまで表を一定の間隔で見て、来たら結果の JSON を出して終わる(待つあいだ Claude は考えない)。
 
     人物役: knowledge / ideas / played / wait-turn / answer(--wait で、入れたあと次の番まで待つ)
-    語り部: stage / appearance / add / add-ideas / wait-answers / read / close
+    語り部: knower-gaps / stage / appearance / add / add-ideas / wait-answers / read / close
     演じ直す前: clear(--from で、その行から後だけ)
 
     .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
@@ -122,6 +122,10 @@ def main() -> None:
     appearance.add_argument("--character", type=int, required=True)
     appearance.add_argument("--time", required=True)
 
+    knower_gaps = commands.add_parser(
+        "knower-gaps", help="登場人物の来歴のうち、ほかの登場人物の名前が出るのに、その人物が知る相手に入っていない行を挙げる")
+    knower_gaps.add_argument("--episode", type=int, required=True)
+
     stage = commands.add_parser("stage", help="語り部が読む材料(プロット・場所・登場人物の表層・知り合いの組)を読む")
     stage.add_argument("--episode", type=int, required=True)
 
@@ -178,6 +182,8 @@ def main() -> None:
                 result = wait_turn(args.episode, args.character, args.interval, args.timeout)
         case "appearance":
             result = call("character.read_appearance.ReadAppearance", {"character_id": args.character, "time": args.time})
+        case "knower-gaps":
+            result = call("episode_session.read_knower_gaps.ReadKnowerGaps", {"episode_id": args.episode})
         case "stage":
             result = call("episode_session.read_stage.ReadStage", {"episode_id": args.episode})
         case "add":

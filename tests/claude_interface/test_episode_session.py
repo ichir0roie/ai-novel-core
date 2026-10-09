@@ -28,6 +28,7 @@ from data_access_logic.episode_session.answer_turn import AnswerTurn
 from data_access_logic.episode_session.clear_session import ClearSession
 from data_access_logic.episode_session.close_session import CloseSession
 from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
+from data_access_logic.episode_session.read_knower_gaps import ReadKnowerGaps
 from data_access_logic.episode_session.read_played_turns import ReadPlayedTurns
 from data_access_logic.episode_session.read_session import ReadSession
 from data_access_logic.episode_session.read_session_since import ReadSessionSince
@@ -425,6 +426,25 @@ def test_read_stage(shown, world):
                           "外見": "髪が赤い"}
     assert result["知り合い"] == [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
     assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い"}
+
+
+def test_read_knower_gaps(shown, world):
+    taro, hanako = world.character_ids
+    shown(UpdateCharacter(CharacterUpdateForm(id=taro, histories=[
+        CharacterHistoryRow(start=1190, description="テスト花子と市で会う", knowers=[KnowerRow(knower_id=taro)]),
+        CharacterHistoryRow(start=1191, description="テスト花子と組む",
+                            knowers=[KnowerRow(knower_id=taro), KnowerRow(knower_id=hanako, start="1191/01/01")]),
+        # 話の時刻より後に知る行と、話の時刻より後に起きた行
+        CharacterHistoryRow(start=1192, description="テスト花子に打ち明ける",
+                            knowers=[KnowerRow(knower_id=taro), KnowerRow(knower_id=hanako, start="1250/01/01")]),
+        CharacterHistoryRow(start=1250, description="テスト花子と別れる", knowers=[KnowerRow(knower_id=taro)]),
+        CharacterHistoryRow(description="テスト花子との先の構想")])))
+
+    gaps = shown(ReadKnowerGaps(episode_id=world.episode_id))
+
+    assert [(gap["character"]["id"], gap["description"], gap["unknowing"]) for gap in gaps] == [
+        (taro, "テスト花子と市で会う", [{"id": hanako, "name": "テスト花子"}]),
+        (taro, "テスト花子に打ち明ける", [{"id": hanako, "name": "テスト花子"}])]
 
 
 def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
