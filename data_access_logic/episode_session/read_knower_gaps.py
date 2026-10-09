@@ -35,12 +35,12 @@ class ReadKnowerGaps(SessionEntrypoint):
         time = episode.start
         if time is None:
             raise ValueError(f"話 id={self.episode_id} の時刻(start)が空")
-        cast = [character for character in cast_characters(episode) if character.name]
+        cast = cast_characters(episode)
         gaps = []
         for character in cast:
             for history in sorted((row for row in character.histories if row.covers(time)), key=by_start):
                 unknowing = [Named.model_validate(other) for other in cast
-                             if other.id != character.id and other.name in history.description
+                             if other.id != character.id and other.name and other.name in history.description
                              and not _knows(history, other.id, time)]
                 if unknowing:
                     gaps.append(KnowerGap(history_id=history.id, character=character, start=history.start,
