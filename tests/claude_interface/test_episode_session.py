@@ -28,6 +28,7 @@ from data_access_logic.episode_session.answer_turn import AnswerTurn
 from data_access_logic.episode_session.clear_session import ClearSession
 from data_access_logic.episode_session.close_session import CloseSession
 from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
+from data_access_logic.episode_session.read_played_turns import ReadPlayedTurns
 from data_access_logic.episode_session.read_session import ReadSession
 from data_access_logic.episode_session.read_stage import ReadStage
 from data_access_logic.episode_session.read_turn import ReadTurn
@@ -529,6 +530,26 @@ def test_clear_session_lets_the_actors_play_again(shown, world):
     assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "turn"
     with pytest.raises(ValueError, match="episode_id"):
         ClearSession(episode_id=10**9).run()
+
+
+def test_clear_session_from_a_record_replays_from_there(shown, world):
+    taro, hanako = world.character_ids
+    first, second, third = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, turns=[
+        TurnRequest(character_id=taro, request="市に着いた"),
+        TurnRequest(character_id=hanako, request="太郎が来た"),
+        TurnRequest(character_id=taro, request="花子が笑った")])))
+    shown(AnswerTurn(record_id=first, answer=TurnAnswer(thought="混んでいる", action="辺りを見回す", speech="さて")))
+    shown(AnswerTurn(record_id=second, answer=TurnAnswer(action="笑う")))
+
+    assert shown(ClearSession(episode_id=world.episode_id, from_record_id=second)) == {
+        "episode_id": world.episode_id, "deleted": 2}
+    assert [record["id"] for record in shown(ReadSession(episode_id=world.episode_id))] == [first]
+    # 起こし直した人物役は、残った自分の手番だけを読む(時刻とほかの人物の行は入らない)
+    assert shown(ReadPlayedTurns(episode_id=world.episode_id, character_id=taro)) == [{
+        "id": first, "request": "市に着いた", "thought": "混んでいる", "action": "辺りを見回す", "speech": "さて", "aim": None}]
+    assert shown(ReadPlayedTurns(episode_id=world.episode_id, character_id=hanako)) == []
+    with pytest.raises(ValueError):
+        ClearSession(episode_id=world.episode_id, from_record_id=third).run()
 
 
 def test_wait_turn_returns_when_the_turn_comes(shown, world, monkeypatch: pytest.MonkeyPatch):
