@@ -125,7 +125,7 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
     }
   }
 
-  // 体格・口調・方言・呼び名の注釈は自由記述で長い文になりがちなので、札には収めず 1 項目 1 行のまま出す
+  // 体格・装い・口調・方言・呼び名の注釈は自由記述で長い文になりがちなので、札には収めず 1 項目 1 行のまま出す
   // (どの列が対象かは編集用の textarea 化(FieldInput)と共有する)
   const soloColumns = [...CHILD_FREEFORM_TEXT_KEYS].map((key) => byKey.get(key)).filter((c): c is ColumnMeta => c != null);
   for (const column of soloColumns) {

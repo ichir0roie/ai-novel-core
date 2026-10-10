@@ -125,6 +125,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
                 "性別": parameters.sex if parameters else None,
                 "背丈": parameters.height if parameters else None,
                 "体格": parameters.build if parameters else None,
+                "装い": parameters.outfit if parameters else None,
                 "一人称": parameters.first_person if parameters else None,
                 "二人称": parameters.second_person if parameters else None,
                 "三人称": parameters.third_person if parameters else None,
@@ -163,6 +164,7 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
             "性別": parameters.sex if parameters else None,
             "背丈": parameters.height if parameters else None,
             "体格": parameters.build if parameters else None,
+            "装い": parameters.outfit if parameters else None,
             "一人称": parameters.first_person if parameters else None,
             "二人称": parameters.second_person if parameters else None,
             "三人称": parameters.third_person if parameters else None,
@@ -249,6 +251,9 @@ class PersonContentDraft(BaseModel):
     sex: str = Field(description="性別。「男」「女」に限らず、この人物に合う性のあり方を自由に決めてよい")
     height: float = Field(gt=0, description="背丈(cm)。年齢・性別・体格・出自に合う値")
     build: str = Field(description="体格。肉付き・立ち姿など、生活・仕事と行動原理(ミーム)に合う体つきを1文で")
+    outfit: str = Field(description=(
+        "装い。ふだんの身なりと、人目に見える持ち物(武器・道具)・傷・印を1文で。"
+        "人に隠している物・印は書かない"))
     first_person: str = Field(description="一人称。年齢・性別・性格・出自・話し相手との間柄に合わせる")
     second_person: str = Field(description="二人称。この人物が相手を呼ぶときの言葉")
     third_person: str = Field(description="三人称。この人物が他者に付ける呼び方(敬称)")
@@ -265,7 +270,7 @@ class PersonContentDraft(BaseModel):
     def _age(cls, value: Any) -> Any:
         return _not_negative(value)
 
-    @field_validator("text", "principle", "sex", "build", "first_person", "second_person", "third_person",
+    @field_validator("text", "principle", "sex", "build", "outfit", "first_person", "second_person", "third_person",
                      "tone", "dialect")
     @classmethod
     def _stripped(cls, value: str) -> str:

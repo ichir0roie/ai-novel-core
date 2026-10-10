@@ -263,6 +263,7 @@ def _decided_parameters(content: PersonContentDraft, fixed: CharacterParameterFo
     """AI が決めた年齢以外の値に、作者が決めた値を重ねる(作者の値が勝つ)。"""
     parameters = CharacterParameterValues(
         sex=content.sex or None, height=round(content.height, 1), build=content.build or None,
+        outfit=content.outfit or None,
         first_person=content.first_person or None, second_person=content.second_person or None,
         third_person=content.third_person or None, tone=content.tone or None, dialect=content.dialect or None,
         **content.personality.model_dump())

@@ -15,7 +15,7 @@ from data_access_logic.character.read_knowable_rows import ReadKnowableRows
 from data_access_logic.character.read_known_rows import ReadKnownRows
 from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.character.read_known_ideas import ReadKnownIdeas
-from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterRelationHistoryRow
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
@@ -360,12 +360,23 @@ def test_add_ideas_picks_a_kind_of_the_world(shown, world):
         IdeaDraft(keyword="テスト泥鰻", description="水路の獣", kind="モンスター")]))["added"] == ["テスト泥鰻"]
 
 
+# 花子の装いは 1190 年から木剣、1210 年から大剣(体格も変わる)
+HANAKO_OUTFITS = [
+    CharacterParameterRow(start="1170/01/01", sex="女", height=170.5, build="細身"),
+    CharacterParameterRow(start="1190/01/01", outfit="腰に木剣"),
+    CharacterParameterRow(start="1210/01/01", build="肩の厚い体", outfit="背に大剣")]
+
+
 def test_read_appearance(shown, world):
-    shown(UpdateCharacter(CharacterUpdateForm(id=world.character_ids[1], appearance="髪が赤い")))
+    shown(UpdateCharacter(CharacterUpdateForm(id=world.character_ids[1], appearance="髪が赤い", parameters=HANAKO_OUTFITS)))
 
     result = shown(ReadAppearance(character_id=world.character_ids[1], time="1200/01/01"))
+    later = shown(ReadAppearance(character_id=world.character_ids[1], time="1220/01/01"))
 
-    assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身", "外見": "髪が赤い"}
+    # 体格・装いは、その時刻までに始まった一番新しい行の値
+    assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身", "装い": "腰に木剣",
+                      "外見": "髪が赤い"}
+    assert (later["体格"], later["装い"]) == ("肩の厚い体", "背に大剣")
 
 
 def test_read_knowledge_skips_unrelated_cast(shown, world):
@@ -414,6 +425,7 @@ RELATIONS = [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関�
 def test_read_stage(shown, world):
     _, hanako = world.character_ids
     _secrets(shown, world)
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, parameters=HANAKO_OUTFITS)))
 
     result = shown(ReadStage(episode_id=world.episode_id))
 
@@ -423,7 +435,7 @@ def test_read_stage(shown, world):
     # 語り部には人物の表層と知り合いの組だけを渡し、芯・来歴・関係の説明・設定は渡さない
     hanako_row = next(member for member in result["登場人物"] if member["人物id"] == hanako)
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
-                          "外見": "髪が赤い"}
+                          "体格": "細身", "装い": "腰に木剣", "外見": "髪が赤い"}
     assert result["知り合い"] == [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
     assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い"}
 
