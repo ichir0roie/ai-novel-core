@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic.character.moves import move_destinations
@@ -136,9 +137,8 @@ def commit_event(s: Session, form: EventCreateForm) -> EventRecord:
 @db_step
 def update_event(s: Session, form: EventUpdateForm) -> EventRecord:
     record = reloaded(s, common_query.get_row(s, Event, form.id), selectinload(Event.event_characters))
-    if form.parent_event_id == form.id:
-        raise ValueError(f"parent_event_id={form.id} が自分自身を指している")
     CommitEntrypoint.check_exists(s, Event, form.parent_event_id, "parent_event_id")
+    _check_parent(s, form.id, form.parent_event_id)
     CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
     for character_id in form.character_ids or []:
         CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")
@@ -147,6 +147,17 @@ def update_event(s: Session, form: EventUpdateForm) -> EventRecord:
         record.event_characters = [EventCharacter(character_id=character_id) for character_id in form.character_ids]
     CommitEntrypoint.finalize(s, record)
     return record_of(s, EventRecord, record)
+
+
+def _check_parent(s: Session, event_id: int, parent_id: int | None) -> None:
+    """親を付け替えて、親をたどると自分に戻る(自分か子孫を親にする)なら止める。"""
+    seen: set[int] = set()
+    at = parent_id
+    while at is not None and at not in seen:
+        if at == event_id:
+            raise ValueError(f"parent_event_id={parent_id} は event_id={event_id} 自身かその子孫")
+        seen.add(at)
+        at = s.scalar(select(Event.parent_event_id).where(Event.id == at))
 
 
 @db_step

@@ -57,6 +57,7 @@ export default function Nav() {
     { href: "/", label: T.appName },
     ...visibleTables.map((table) => ({ href: `/tables/${table.name}`, label: table.name })),
     { href: "/timeline", label: T.nav.timeline },
+    { href: "/event_timeline", label: T.nav.eventTimeline },
     { href: "/interface", label: T.nav.endpoints },
   ];
 
@@ -91,6 +92,7 @@ export default function Nav() {
           </span>
           <span className="group">
             <Link href="/timeline" className={isActive("/timeline") ? "active" : ""}>{T.nav.timeline}</Link>
+            <Link href="/event_timeline" className={isActive("/event_timeline") ? "active" : ""}>{T.nav.eventTimeline}</Link>
             <Link href="/interface" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
             <span className="hint">{T.nav.searchHint}</span>
           </span>

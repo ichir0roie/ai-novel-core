@@ -646,6 +646,14 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 .episode-sheet-characters.collapsed .episode-sheet-character { display: inline; padding-bottom: 0; border-bottom: none; }
 .episode-relations-toggle { font-size: 0.8rem; padding: 0.1rem 0.5rem; }
 /* タイムラインで押した話のモーダル。吹き出しと同じ行を並べる */
+/* 出来事のタイムライン(/event_timeline)。一本の帯に層を横へ並べ、親の札から子の札へ折れ線を引く */
+.event-timeline-track { background-image: linear-gradient(to left, var(--line) 1px, transparent 1px); }
+.event-timeline-links { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.event-timeline-links path { fill: none; stroke: color-mix(in srgb, var(--accent) 55%, var(--muted)); stroke-width: 1.5; }
+.event-timeline-item.hidden-event { border-style: dotted; opacity: 0.75; }
+.event-timeline-item.context-event { opacity: 0.45; }
+.event-timeline-item.drop-target { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .timeline-sheet { white-space: pre-wrap; line-height: 1.7; margin-bottom: 0.8rem; }
 
 /* 知識整理(人物の画面): 左に人物・アイデアの木(この人物が知る行の数つき)、右に選んだものの芯・来歴・履歴の行。

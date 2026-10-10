@@ -33,6 +33,7 @@ db の触り方(入口越し・読み取り)は `.claude/docs/db.md` を見る�
 | `CommitCharacterRelation` / `UpdateCharacterRelation` | `character.form.CharacterRelationCreateForm` / `CharacterRelationUpdateForm` |
 | `CommitCharacterSkill` / `UpdateCharacterSkill` | `character.form.CharacterSkillCreateForm` / `CharacterSkillUpdateForm`(来歴の行は `character.record.CharacterSkillHistoryRow`、その行を知る相手の行は `knowers.KnowerRow`) |
 | `CommitEvent` / `UpdateEvent` | `event.form.EventCreateForm` / `EventUpdateForm` |
+| `UpdateEvents` | `event.form.EventUpdateForm` のリスト |
 | `CommitIdea` / `UpdateIdea` | `idea.form.IdeaCreateForm` / `IdeaUpdateForm`(呼び名の行は `idea.record.IdeaHistoryRow`、その行を知る相手の行は `knowers.KnowerRow`) |
 | `CommitMeme` / `UpdateMeme` | `meme.form.MemeCreateForm` / `MemeUpdateForm` |
 | `CommitOracle` / `UpdateOracle` | `oracle.form.OracleCreateForm` / `OracleUpdateForm` |
@@ -87,7 +88,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「人物を直して」                     | `character.update_character.UpdateCharacter(character)`。名字・体格・装い・口調・性格は `parameters` に、外見は `appearance`、芯は `text`、ミームは `meme`、行動原理は `principle`、筋書きは `plot` に、来歴は `histories` に入れる(渡さなければ触らない)。出自・居場所は `character.update_character_location.UpdateCharacterLocation(location)`、相関は `character.update_character_relation.UpdateCharacterRelation(relation)` |
 | 「場所を消して」                     | `location.delete_location.DeleteLocation(location_id)`                              |
 | 「出来事を直して」                   | `event.update_event.UpdateEvent(event)`。`id` 必須、渡した欄だけ直す。`character_ids` を渡すと当事者をまるごと置き換える。直したあと要約(`event_summary`)を作り直す |
-| 「出来事を消して」「出来事を作り直して」 | `event.delete_event.DeleteEvent(event_id)`。子の出来事が残っていれば止まる。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `histories` に積み足した行と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
+| 「出来事を消して」「出来事を作り直して」 | `event.delete_event.DeleteEvent(event_id, with_children=False)`。子の出来事が残っていれば止まる。`with_children=True` なら子孫の出来事もいっしょに消す。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `histories` に積み足した行と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
+| 「出来事の時刻・親をまとめて直して」 | `event.update_events.UpdateEvents(events=[EventUpdateForm(id=…, time=…, start=…, end=…, parent_event_id=…), …])`。一つのトランザクションで書く(一つでも通らなければ何も直さない)。一件ずつは `UpdateEvent` の `execute` と同じに書き、要約・ミームの AI は回さない。親を自分か子孫にすると止まる(`UpdateEvent` も同じ)。GUI の出来事のタイムラインの変更モードが使う |
 | 「アイデアを直して」                 | `idea.update_idea.UpdateIdea(idea)`。`id` 必須、渡した欄だけ直す。`histories` を渡すと配列をまるごと置き換える(下の「アイデアの履歴(呼び名)」) |
 | 「アイデアを消して」                 | `idea.delete_idea.DeleteIdea(idea_id)`。下位のアイデアが残っていれば止まる。結んだ本文との中間テーブルの行、履歴(呼び名)の行も消す |
 | 「覚え書きを足して」「oracle に書いて」 | `oracle.commit_oracle.CommitOracle(oracle, fact_check=True)`。`text` 必須。題は `title`。確定したあとは、検めて(`fact_check`。本文の末尾に `# 検証結果` の節を足す)、その節を含む本文からミームを抜き出し(`memes_added`)、足したミームも検める |
