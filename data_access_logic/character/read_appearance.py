@@ -11,7 +11,7 @@ from db.stamp import Stamp
 
 
 class ReadAppearance(SessionEntrypoint):
-    """初対面の相手から見て分かること(種別・歳・性別・背丈・体格・外見)を読む。名前は入れない。
+    """初対面の相手から見て分かること(種別・歳・性別・背丈・体格・装い・外見)を読む。名前は入れない。
     語り部が、初対面の人物の状況の差分を書くときに使う。"""
 
     def __init__(self, character_id: int, time: Stamp | str):

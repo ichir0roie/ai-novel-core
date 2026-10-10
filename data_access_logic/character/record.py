@@ -17,6 +17,7 @@ class CharacterParameterRow(_ChildRow):
     sex: str | None = None
     height: float | None = None
     build: str | None = None
+    outfit: str | None = None
     first_person: str | None = None
     second_person: str | None = None
     third_person: str | None = None

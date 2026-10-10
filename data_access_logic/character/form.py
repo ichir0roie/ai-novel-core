@@ -11,12 +11,13 @@ from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
 
 
 class CharacterParameterForm(Draft):
-    """作者が決めた性別・体格・口調・性格など。空の欄は、人物の生成で AI がミームと人物像から決める。"""
+    """作者が決めた性別・体格・装い・口調・性格など。空の欄は、人物の生成で AI がミームと人物像から決める。"""
 
     family_name: str | None = None
     sex: str | None = None
     height: float | None = None
     build: str | None = None
+    outfit: str | None = None
     first_person: str | None = None
     second_person: str | None = None
     third_person: str | None = None

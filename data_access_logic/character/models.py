@@ -43,6 +43,7 @@ class CharacterParameterValues(Material):
     sex: str | None = None
     height: float | None = None
     build: str | None = None
+    outfit: str | None = None
     first_person: str | None = None
     second_person: str | None = None
     third_person: str | None = None
@@ -169,6 +170,8 @@ def _sheet(character: CharacterWholeBase, at: CharacterAt) -> dict[str, Any]:
         "三人称": parameters.third_person,
         "口調": parameters.tone,
         "方言": parameters.dialect,
+        "体格": parameters.build,
+        "装い": parameters.outfit,
         "外見": character.appearance,
         "人物像": character.text,
         "ミーム": character.meme,

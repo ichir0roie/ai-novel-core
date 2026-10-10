@@ -397,7 +397,7 @@ PERSONALITY_COLUMNS = (
 
 
 PERSON_PARAMETER_COLUMNS = (
-    "family_name", "sex", "height", "build", "first_person", "second_person", "third_person", "tone", "dialect",
+    "family_name", "sex", "height", "build", "outfit", "first_person", "second_person", "third_person", "tone", "dialect",
 )
 
 
@@ -506,11 +506,11 @@ class Character(EventSeededMixin, ContentBase):
 
 
 class CharacterParameter(Base):
-    """人物の名字・体格・口調・性格を、変わった時ごとに一行で持つ。
+    """人物の名字・体格・装い・口調・性格を、変わった時ごとに一行で持つ。
 
     行は `start` から先ずっと効き、終わりを持たない(後に始まる行が上書きする)。空の列は「この行では決めない」。
     ある時刻の値は `data_access_logic/character/parameters.py` の `parameters_at` が、その時刻までに始まった行を
-    始まりの古い順に重ねて決める。名字・体格・口調は人物だけが持ち、人物以外の対象は空のまま。
+    始まりの古い順に重ねて決める。名字・体格・装い・口調は人物だけが持ち、人物以外の対象は空のまま。
     """
 
     __tablename__ = "character_parameter"
@@ -528,6 +528,11 @@ class CharacterParameter(Base):
     sex: Mapped[str | None] = mapped_column(String,  comment="性別", sort_order=320)
     height: Mapped[float | None] = mapped_column(DECIMAL, comment="背丈 cm", sort_order=330)
     build: Mapped[str | None] = mapped_column(String,  comment="体格", sort_order=340)
+
+    # --- 装い -------------------------------------------------------------
+    # 見た人にそのまま知れるので、袋の中の物・隠している印のような秘密は書かず、来歴に知る相手を絞って書く
+    outfit: Mapped[str | None] = mapped_column(
+        String, comment="装い。身なりと、人目に見える持ち物・武器・傷・印", sort_order=345)
 
     # --- 口調 -------------------------------------------------------------
     first_person: Mapped[str | None] = mapped_column(String,  comment="一人称", sort_order=350)

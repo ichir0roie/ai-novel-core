@@ -1,7 +1,7 @@
 """語り部(話を書くセッションの Claude か、スキル interactive-episode のユーザ)が手番を回すときに読む材料。
 
 語り部の受け持ちはプロットと場所・時刻と人物の表層なので、話のプロット・時刻、場所、登場人物の外から見て分かること
-(名前・年齢・性別・外見)と、登場人物のだれとだれが知り合いか(関係の名前だけ)を渡す。
+(名前・年齢・性別・体格・装い・外見)と、登場人物のだれとだれが知り合いか(関係の名前だけ)を渡す。
 人物の芯・来歴、関係の説明・来歴、設定(アイデア)、前の話・本文は渡さない。人物の内側と、人物がこれまでに何をしたかは、
 人物役が自分の知ることのできるデータ(`character/knowledge.py`)から動いて出す。
 本文は手番を終えたあと、本体の Claude が本文の材料(`episode/brief.py`)を読んで書く。
@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from data_access_logic.character.cast import age_at, relations_at
-from data_access_logic.character.models import CharacterMaterial, CharacterRelationLine
+from data_access_logic.character.models import CharacterMaterial, CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.history_start import start_for_prompt
@@ -37,7 +37,8 @@ class StageEpisode(Material):
 class StageMember(Material):
     character: CharacterMaterial
     age: int | None = None
-    sex: str | None = None
+    # 話の時刻の値
+    parameters: CharacterParameterValues
 
 
 class Stage(Material):
@@ -63,7 +64,8 @@ class StageSerialized(Stage):
             "場所の来歴(古い順)": [] if self.location is None else [
                 f"{start_for_prompt(history.start)}: {history.description}" for history in self.location.histories],
             "登場人物": [{"人物id": member.character.id, "名前": member.character.name, "年齢": member.age,
-                      "性別": member.sex, "外見": member.character.appearance}
+                      "性別": member.parameters.sex, "体格": member.parameters.build,
+                      "装い": member.parameters.outfit, "外見": member.character.appearance}
                      for member in self.cast],
             "知り合い": [{"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation}
                      for relation in self.relations],
@@ -107,7 +109,7 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
         main_episode=episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         location=location_at(common_query.get_row(s, Location, location_id), time) if location_id is not None else None,
-        cast=[StageMember(character=character, age=age_at(character, time), sex=parameters_at(character, time).sex)
+        cast=[StageMember(character=character, age=age_at(character, time), parameters=parameters_at(character, time))
               for character in cast_characters(episode)],
         relations=_cast_relations(s, episode, time),
     )

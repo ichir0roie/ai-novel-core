@@ -134,7 +134,7 @@ class AppearanceSerialized(Material):
     def _for_prompt(self) -> dict[str, Any]:
         parameters = self.parameters
         return {"種別": self.kind, "年齢": self.age, "性別": parameters.sex, "背丈": parameters.height,
-                "体格": parameters.build, "外見": self.appearance}
+                "体格": parameters.build, "装い": parameters.outfit, "外見": self.appearance}
 
 
 def appearance_of(character: Character, time: Stamp) -> AppearanceSerialized:
