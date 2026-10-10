@@ -118,7 +118,6 @@ export const T = {
     count: (count: number) => `${count} rows`,
     request: "Request",
     narration: "Narration",
-    narrationText: "Scene",
     witnesses: (names: string[]) => `Seen by ${names.join(", ")}`,
     thought: "Thought",
     action: "Action",

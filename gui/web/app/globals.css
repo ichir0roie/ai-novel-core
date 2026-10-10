@@ -693,7 +693,7 @@ summary .knowledge-item { display: inline-block; }
   .modal-actions:has(.knowledge-since) { flex-wrap: wrap; }
 }
 
-/* 話のセッション(/episode_session)。手番の行を一列に並べ、一覧の欄だけをスクロールする */
+/* 話のセッション(/episode_session)。手番の行を request・thought・action・speech・aim の五列の表に並べ、一覧の欄だけをスクロールする */
 .session-toolbar { margin-bottom: 0.5rem; }
 .session-toolbar h2 { margin: 0; }
 .session-toolbar .spacer { flex: 1; }
@@ -701,20 +701,23 @@ summary .knowledge-item { display: inline-block; }
 .session-live { font-size: 0.85rem; color: var(--muted); }
 .session-live.on { color: var(--accent); }
 .session-live.on::before { content: "● "; animation: session-blink 1s step-end infinite; }
-.session-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 1rem; }
-.session-row { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.8rem; }
-.session-row.waiting { border-color: var(--accent); }
+.session-list { flex: 1; min-height: 0; overflow: auto; padding-bottom: 1rem; }
+/* 狭い画面でも五列を潰さず、欄の中で横にスクロールさせる */
+.session-table { width: 100%; min-width: 900px; table-layout: fixed; border-collapse: separate; border-spacing: 0; background: var(--panel); }
+.session-table th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 0.4rem 0.6rem; background: var(--chip); color: var(--muted); font-weight: 600; font-size: 0.85rem; border-bottom: 1px solid var(--line); }
+.session-table td { padding: 0.35rem 0.6rem; vertical-align: top; white-space: pre-wrap; font-size: 0.9rem; }
+.session-table td + td { border-left: 1px solid var(--line); }
+.session-row > tr:last-child > td { border-bottom: 1px solid var(--line); }
+.session-row > tr:first-child > td { padding-top: 0.5rem; }
+.session-row.waiting > tr > td { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
 .session-row.queued, .session-row.closing { color: var(--muted); }
-.session-row.narration { background: var(--chip); }
+.session-row.narration > tr > td { background: var(--chip); }
 .session-narrator { font-weight: 600; color: var(--muted); }
-.session-row.fresh { animation: session-fresh 2s ease-out; }
-.session-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.session-row.fresh > tr > td { animation: session-fresh 2s ease-out; }
+.session-table td.session-head { white-space: normal; }
+.session-head > * + * { margin-left: 0.6rem; }
 .session-head .meta { color: var(--muted); font-size: 0.85rem; }
 .session-state { font-size: 0.8rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--chip); }
 .session-row.waiting .session-state { color: var(--accent); }
-.session-row dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 0.8rem; margin: 0.4rem 0 0; }
-.session-row dl > div { display: contents; }
-.session-row dt { color: var(--muted); font-size: 0.85rem; }
-.session-row dd { margin: 0; white-space: pre-wrap; }
 @keyframes session-fresh { from { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); } to { background: var(--panel); } }
 @keyframes session-blink { 50% { opacity: 0; } }

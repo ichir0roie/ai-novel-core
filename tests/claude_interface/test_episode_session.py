@@ -562,7 +562,7 @@ def test_narration_and_moves_reach_the_witnesses_once(shown, world):
         "id": taro_turn, "seen": ["市に鐘が鳴った"], "request": "鐘を聞いての一手", "closing": False}
     shown(AnswerTurn(record_id=taro_turn, answer=TurnAnswer(thought="花子だ", action="手を振る", speech="よう", aim="気づかせる")))
     [hanako_turn] = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, turns=[
-        TurnRequest(character_id=hanako, request="この手番で求めること: 返事")], witness_ids=[taro])))
+        TurnRequest(character_id=hanako, request="返事")], witness_ids=[taro])))
     # ほかの人物の一手は行動とセリフだけが名前付きで届き、内心・狙いは届かない
     assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["record"]["seen"] == [
         "市に鐘が鳴った", "テスト太郎: 手を振る「よう」"]

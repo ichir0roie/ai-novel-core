@@ -10,6 +10,9 @@ import { T } from "@/lib/text";
 
 const INTERVAL_MS = 3000;
 
+/** 手番の行を並べる列。文言の鍵も兼ねる */
+const COLUMNS = ["request", "thought", "action", "speech", "aim"] as const;
+
 /** 一手を待つ手番の行。語りの行(人物の無い行)は手番でない */
 const isPending = (row: SessionRecord) => row.character != null && row.action == null && !row.closing;
 
@@ -119,65 +122,67 @@ export default function EpisodeSessionPage() {
       >
         {rows == null && <div className="status info">{T.loading}</div>}
         {rows?.length === 0 && <div className="status info">{T.session.empty}</div>}
-        {rows?.map((row) => {
-          const state =
-            row.character == null
-              ? "narration"
-              : row.closing
-                ? "closing"
-                : row.action != null
-                  ? "played"
-                  : row.id === current
-                    ? "waiting"
-                    : "queued";
-          return (
-            // 一手が入ったら描き直し、色の変わるのを出す
-            <div key={`${row.id}:${row.action != null}`} className={`session-row ${state}${fresh.has(row.id) ? " fresh" : ""}`}>
-              <div className="session-head">
-                <span className="meta">{T.idMark(row.id)}</span>
-                {row.character ? (
-                  <Link href={`/tables/character/${row.character.id}`}>
-                    <NameId name={row.character.name} id={row.character.id} />
-                  </Link>
-                ) : (
-                  <span className="session-narrator">{T.session.narration}</span>
-                )}
-                {row.time && <span className="meta">{row.time}</span>}
-                {row.witnesses.length > 0 && (
-                  <span className="meta">
-                    {T.session.witnesses(row.witnesses.map((w) => names.get(w.character_id) ?? T.idMark(w.character_id)))}
-                  </span>
-                )}
-                {state !== "played" && state !== "narration" && (
-                  <span className="session-state">
-                    {state === "closing" ? T.session.closing : state === "waiting" ? T.session.waiting : T.session.queued}
-                  </span>
-                )}
-              </div>
-              {!row.closing && (
-                <dl>
-                  {(
-                    [
-                      [row.character ? T.session.request : T.session.narrationText, row.request],
-                      [T.session.thought, row.thought],
-                      [T.session.action, row.action],
-                      [T.session.speech, row.speech],
-                      [T.session.aim, row.aim],
-                    ] as const
-                  ).map(
-                    ([name, text]) =>
-                      text != null && (
-                        <div key={name}>
-                          <dt>{name}</dt>
-                          <dd>{text}</dd>
-                        </div>
-                      ),
+        {rows != null && rows.length > 0 && (
+          <table className="session-table">
+            <thead>
+              <tr>
+                {COLUMNS.map((column) => (
+                  <th key={column}>{T.session[column]}</th>
+                ))}
+              </tr>
+            </thead>
+            {rows.map((row) => {
+              const state =
+                row.character == null
+                  ? "narration"
+                  : row.closing
+                    ? "closing"
+                    : row.action != null
+                      ? "played"
+                      : row.id === current
+                        ? "waiting"
+                        : "queued";
+              return (
+                // 一手が入ったら描き直し、色の変わるのを出す
+                <tbody key={`${row.id}:${row.action != null}`} className={`session-row ${state}${fresh.has(row.id) ? " fresh" : ""}`}>
+                  <tr>
+                    <td colSpan={COLUMNS.length} className="session-head">
+                      <span className="meta">{T.idMark(row.id)}</span>
+                      {row.character ? (
+                        <Link href={`/tables/character/${row.character.id}`}>
+                          <NameId name={row.character.name} id={row.character.id} />
+                        </Link>
+                      ) : (
+                        <span className="session-narrator">{T.session.narration}</span>
+                      )}
+                      {row.time && <span className="meta">{row.time}</span>}
+                      {row.witnesses.length > 0 && (
+                        <span className="meta">
+                          {T.session.witnesses(row.witnesses.map((w) => names.get(w.character_id) ?? T.idMark(w.character_id)))}
+                        </span>
+                      )}
+                      {state !== "played" && state !== "narration" && (
+                        <span className="session-state">
+                          {state === "closing" ? T.session.closing : state === "waiting" ? T.session.waiting : T.session.queued}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                  {/* 語りの行は場面だけなので、列を分けずに一つの欄へ書く */}
+                  {!row.closing && (
+                    <tr>
+                      {row.character ? (
+                        COLUMNS.map((column) => <td key={column}>{row[column]}</td>)
+                      ) : (
+                        <td colSpan={COLUMNS.length}>{row.request}</td>
+                      )}
+                    </tr>
                   )}
-                </dl>
-              )}
-            </div>
-          );
-        })}
+                </tbody>
+              );
+            })}
+          </table>
+        )}
       </div>
     </div>
   );
