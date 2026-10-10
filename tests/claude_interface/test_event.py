@@ -1,4 +1,6 @@
 """claude が CLI から `show()` で呼ぶ、出来事(`data_access_logic/event/`・`event_seed/`)の入口。"""
+import pytest
+
 from data_access_logic.event.commit_event import CommitEvent
 from data_access_logic.event.create_random_event import CreateRandomEvent
 from data_access_logic.event.delete_event import DeleteEvent
@@ -7,8 +9,10 @@ from data_access_logic.event.generate_event import GenerateEvent
 from data_access_logic.event.list_events import ListEvents
 from data_access_logic.event.read_events import ReadEvents
 from data_access_logic.event.update_event import UpdateEvent
+from data_access_logic.event.update_events import UpdateEvents
 from data_access_logic.event_seed.form import EventSeedUpdateForm
 from data_access_logic.event_seed.update_event_seed import UpdateEventSeed
+from db.schema import Event, get_env_session
 
 
 def test_commit_event(shown, world, mock_ai):
@@ -39,6 +43,17 @@ def test_delete_event(shown, world):
     result = shown(DeleteEvent(event_id=world.child_event_id))
 
     assert result == {"id": world.child_event_id, "name": "テスト取引"}
+
+
+def test_delete_event_with_children(shown, world):
+    with pytest.raises(ValueError):
+        shown(DeleteEvent(event_id=world.event_id))
+
+    result = shown(DeleteEvent(event_id=world.event_id, with_children=True))
+
+    assert result == {"id": world.event_id, "name": "テスト市"}
+    with get_env_session() as s:
+        assert s.get(Event, world.child_event_id) is None
 
 
 def test_generate_event(shown, world, mock_ai):
@@ -83,6 +98,21 @@ def test_update_event(shown, world, mock_ai):
     assert (result["start"], result["end"]) == ("1200/04/01 16:00:00", "1200/04/01 17:00:00")
     assert result["character_ids"] == [world.character_ids[1]]
     assert mock_ai.calls
+
+
+def test_update_events(shown, world):
+    result = shown(UpdateEvents(events=[
+        EventUpdateForm(id=world.event_id, time="1200/05/01 12:00:00", start="1200/05/01", end="1200/05/02"),
+        EventUpdateForm(id=world.child_event_id, parent_event_id=None)]))
+
+    assert [(event["id"], event["start"]) for event in result][0] == (world.event_id, "1200/05/01 00:00:00")
+    assert result[0]["name"] == "テスト市"
+    assert result[1]["parent_event_id"] is None
+
+
+def test_update_events_rejects_cycle(shown, world):
+    with pytest.raises(ValueError):
+        shown(UpdateEvents(events=[EventUpdateForm(id=world.event_id, parent_event_id=world.child_event_id)]))
 
 
 def test_update_event_seed(shown, world):

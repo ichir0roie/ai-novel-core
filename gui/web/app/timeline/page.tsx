@@ -34,15 +34,30 @@ import {
   dayNumber,
   formatStamp,
   fromDayNumber,
-  pad2,
   parseStamp,
   shiftDays,
 } from "@/lib/stamp";
 import { T } from "@/lib/text";
+import {
+  axisTicksOf,
+  DAYS_PER_YEAR,
+  dayOf,
+  daySpan,
+  DRAG_THRESHOLD,
+  FULL_STAMP,
+  GAP_PX,
+  ITEM_GAP,
+  ITEM_HEIGHT,
+  labelWidth,
+  savedView,
+  scaleOf,
+  SCROLL_SETTLE_MS,
+  type Gap,
+  type Scale,
+  type View,
+} from "@/lib/timelineAxis";
 import { useTreeOpen } from "@/lib/treeOpen";
 
-// 画面の高さに見せる期間は年の単位。全期間はこの縮尺で縦に並べ、スクロールで見て回る
-const DAYS_PER_YEAR = 365.2425;
 // 縮尺(画面の高さの年数)と、話の無い区間を詰めるかを覚えておく localStorage のキー
 const VIEW_STORAGE_KEY = "timeline-view";
 // 作品の列の中の筋(札を並べる縦長の帯)の幅の上限(px)。筋は列の一番長い名前に合わせ、これを超える名前は筋の幅で切れる(全部の名前はかざすと出る)
@@ -51,28 +66,8 @@ const LANE_WIDTH = 180;
 const MIN_LANE_WIDTH = 10;
 // 作品の列の右に空けておく空の筋の数。話を足すときにクリックする所を残す
 const STORY_SPARE_LANES = 1;
-// 札の最低の高さ(px)。名前が一行入る
-const ITEM_HEIGHT = 22;
-const ITEM_GAP = 4;
 // 閉じた列で、札の代わりに置く印の高さ(px)
 const MARKER_PX = 8;
-// スクロールが止まってから中心の時刻を URL に書くまでの間(ms)
-const SCROLL_SETTLE_MS = 200;
-// ドラッグとクリックを分けるしきい値(px)
-const DRAG_THRESHOLD = 4;
-// 話の無い区間を詰めた帯の高さ(px)。これより広く空く区間だけ詰める
-const GAP_PX = 40;
-const MIN_GAP_PX = 2 * GAP_PX;
-// 札の前後に空けておく余白(px)。札のすぐ脇から帯にならないようにする
-const OCCUPY_MARGIN_PX = 24;
-// 帯の直前・帯の上端の目盛りは、文字が帯に掛かるので文字を出さない
-const TICK_LABEL_PX = 24;
-// 目盛りの文字の高さ(px)
-const TICK_TEXT_PX = 20;
-// 等間隔の軸で、年の目盛りの間・月の目盛りの間に取る最小の高さ(px)
-const YEAR_TICK_PX = 28;
-const MONTH_TICK_PX = 20;
-const FULL_STAMP = /^\d+\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/;
 // 絞り込みの URL の引数と、それを覚えておく localStorage のキー
 const FILTER_KEYS = ["story_id"] as const;
 const FILTER_STORAGE_KEY = "timeline-filter";
@@ -116,21 +111,6 @@ type Row = {
   span: number;
 };
 type StoryInfo = { name: string; parent: number | null; order: number | null };
-// years は画面の幅に見せる年数。squeeze は話の無い広い区間を帯に詰めるか
-type View = { years: number; squeeze: boolean };
-type Tick = { at: number; label: string; major: boolean };
-type Gap = { from: number; to: number; y: number };
-// since〜until が軸の全体で、height はその縦の長さ(px)
-type Scale = {
-  since: number;
-  until: number;
-  height: number;
-  pxPerDay: number;
-  gaps: Gap[];
-  toY: (day: number) => number;
-  fromY: (y: number) => number;
-};
-
 // from は掴んだ列、over は落とす先の作品(掴んだ列の上・作品の無い列の上では null)
 type Drag = {
   item: Item;
@@ -143,18 +123,6 @@ type Drag = {
 };
 // 変更モードで溜めた移し。base は読み込んだときの話で、days はそこから何日ずらすか、story は移す先の作品(移さないなら null)
 type Change = { base: Item; days: number; story: number | null };
-
-function dayOf(value: unknown): number | null {
-  const parts = parseStamp(value);
-  return parts ? dayNumber(parts) : null;
-}
-
-/** 札の名前の幅。枠と余白に 22px、全角は 14px、半角は 8px ほどで見積もる */
-function labelWidth(label: string): number {
-  let width = 22;
-  for (const c of label) width += c.charCodeAt(0) > 0xff ? 14 : 8;
-  return width;
-}
 
 const byTime = (a: Item, b: Item) =>
   a.start - b.start || a.at - b.at || a.id - b.id;
@@ -188,168 +156,6 @@ function pack(
     return { ...item, y, height, barHeight, lane };
   });
   return { placed, lanes: Math.max(1, laneEnds.length) };
-}
-
-/**
- * 縮尺 `pxPerDay` で札が占めない区間(日の単位)。札は少なくともその日いっぱいを占め、札の高さは px なので縮尺が上がるほど占める日数は減る。
- * 期間の帯は頭(名前の札)と終わりの日だけを占めるとみなす。何年も続く帯が間を全部埋めると、全期間の軸がどこも詰められず長くなりすぎる
- */
-function emptiesAt(
-  since: number,
-  until: number,
-  pxPerDay: number,
-  items: Item[],
-): { from: number; to: number }[] {
-  const margin = OCCUPY_MARGIN_PX / pxPerDay;
-  const occupied = items
-    .flatMap((item) => {
-      const head = Math.max(
-        item.start + 1,
-        item.start + ITEM_HEIGHT / pxPerDay,
-      );
-      return item.end === null || item.end <= head
-        ? [[item.start, Math.max(head, item.end ?? head)]]
-        : [
-            [item.start, head],
-            [item.end - 1, item.end],
-          ];
-    })
-    .map(([from, to]) => [
-      Math.max(since, from - margin),
-      Math.min(until, to + margin),
-    ])
-    .filter(([from, to]) => from < to)
-    .sort((a, b) => a[0] - b[0]);
-  const empties: { from: number; to: number }[] = [];
-  let cursor = since;
-  const push = (from: number, to: number) => {
-    const [a, b] = [
-      Math.max(since, Math.ceil(from)),
-      Math.min(until, Math.floor(to)),
-    ];
-    if (b - a >= 1) empties.push({ from: a, to: b });
-  };
-  for (const [from, to] of occupied) {
-    if (from > cursor) push(cursor, from);
-    cursor = Math.max(cursor, to);
-  }
-  if (occupied.length > 0 && cursor < until) push(cursor, until);
-  return empties;
-}
-
-/**
- * 時刻と縦の位置の対応。縮尺は `pxPerDay` に決めておく。`squeeze` なら、lo〜hi の中で話の無い広い区間だけを幅 {@link GAP_PX} の帯に詰める。
- * lo〜hi の外(前後の余白)は詰めない。画面の高さより短ければ、後ろへ延ばして画面を埋める。
- */
-function compress(
-  since: number,
-  until: number,
-  lo: number,
-  hi: number,
-  pxPerDay: number,
-  viewport: number,
-  items: Item[],
-  squeeze: boolean,
-): Scale {
-  const empties = squeeze
-    ? emptiesAt(lo, hi, pxPerDay, items).filter(
-        (g) => (g.to - g.from) * pxPerDay > MIN_GAP_PX,
-      )
-    : [];
-  const gaps: Gap[] = [];
-  const knots: [number, number][] = [[since, 0]];
-  let y = 0;
-  let day = since;
-  for (const g of empties) {
-    y += (g.from - day) * pxPerDay;
-    gaps.push({ ...g, y });
-    knots.push([g.from, y]);
-    y += GAP_PX;
-    knots.push([g.to, y]);
-    day = g.to;
-  }
-  let height = y + (until - day) * pxPerDay;
-  if (height < viewport) {
-    until += (viewport - height) / pxPerDay;
-    height = viewport;
-  }
-  knots.push([until, height]);
-
-  // knots の from 列の値を to 列へ。端より外は詰めない縮尺で延ばす
-  const along = (value: number, from: 0 | 1): number => {
-    const to = 1 - from;
-    const outside = from === 0 ? pxPerDay : 1 / pxPerDay;
-    const first = knots[0];
-    const last = knots[knots.length - 1];
-    if (value <= first[from])
-      return first[to] + (value - first[from]) * outside;
-    if (value >= last[from]) return last[to] + (value - last[from]) * outside;
-    const i = knots.findIndex((k) => k[from] > value);
-    const [a, b] = [knots[i - 1], knots[i]];
-    return a[to] + ((value - a[from]) * (b[to] - a[to])) / (b[from] - a[from]);
-  };
-  return {
-    since,
-    until,
-    height,
-    pxPerDay,
-    gaps,
-    toY: (d) => along(d, 0),
-    fromY: (px) => along(px, 1),
-  };
-}
-
-/** 札の開始日ごとの目盛り。年が変わる所を太くする */
-function startTicks(items: Item[]): Tick[] {
-  let year: number | null = null;
-  return [...new Set(items.map((item) => item.start))]
-    .sort((a, b) => a - b)
-    .map((at) => {
-      const { year: y } = fromDayNumber(at);
-      const major = y !== year;
-      year = y;
-      return { at, label: String(y), major };
-    });
-}
-
-/**
- * 等間隔の軸の、from〜to の日の目盛り。年の境目を、間が {@link YEAR_TICK_PX} より広くなる刻み(1・2・5 の 10 のべき倍の年)で置き、
- * 1 年が広ければ月の境目も置く
- */
-function calendarTicks(scale: Scale, from: number, to: number): Tick[] {
-  const pxPerYear = scale.pxPerDay * DAYS_PER_YEAR;
-  let step = 1;
-  for (let k = 1; step * pxPerYear < YEAR_TICK_PX; k++)
-    step = [1, 2, 5][k % 3] * 10 ** Math.floor(k / 3);
-  const months = pxPerYear / 12 >= MONTH_TICK_PX;
-  const [lo, hi] = [Math.max(from, scale.since), Math.min(to, scale.until)];
-  const at = (year: number, month: number) =>
-    dayNumber({ year, month, day: 1, hour: 0, minute: 0, second: 0 });
-  const ticks: Tick[] = [];
-  for (
-    let year = Math.ceil(fromDayNumber(lo).year / step) * step;
-    year <= fromDayNumber(hi).year;
-    year += step
-  ) {
-    ticks.push({ at: at(year, 1), label: String(year), major: true });
-    if (months)
-      for (let month = 2; month <= 12; month++)
-        ticks.push({ at: at(year, month), label: pad2(month), major: false });
-  }
-  return ticks.filter((tick) => tick.at >= lo && tick.at <= hi);
-}
-
-/** 時刻を日の単位に丸める。期間はその日の始めから、終わりの日の終わりまで */
-function daySpan(
-  start: number,
-  end: number | null,
-): { at: number; start: number; end: number | null } {
-  const from = Math.floor(start);
-  return {
-    at: start,
-    start: from,
-    end: end === null ? null : Math.max(from + 1, Math.ceil(end)),
-  };
 }
 
 /** 溜めた移しを当てた話。札はこの時刻・作品の所に描く */
@@ -413,20 +219,6 @@ function savedFilter(): Record<string, string> | null {
     return Object.keys(filter).length > 0 ? filter : null;
   } catch {
     return null;
-  }
-}
-
-/** 覚えておいた縮尺と詰め方。無い・読めない値は既定(1 年、詰めない)にする */
-function savedView(): View {
-  try {
-    const saved = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY) ?? "null");
-    const years = Number(saved?.years);
-    return {
-      years: Number.isInteger(years) && years >= 1 ? years : 1,
-      squeeze: saved?.squeeze === true,
-    };
-  } catch {
-    return { years: 1, squeeze: false };
   }
 }
 
@@ -643,7 +435,7 @@ export default function TimelinePage() {
   const { tip, show, hide } = useTooltip();
   // 縮尺と詰め方は URL に載せず、このブラウザに覚えておく。サーバで描いた初めの画面と合わせるため、読むのは描いたあと
   const [view, setView] = useState<View>({ years: 1, squeeze: false });
-  useEffect(() => setView(savedView()), []);
+  useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
   const span = view.years * DAYS_PER_YEAR;
 
   const changeView = (changes: Partial<View>) => {
@@ -812,26 +604,10 @@ export default function TimelinePage() {
     [loaded, changes],
   );
 
-  // 軸は全部の札(と飛ばした先の中心)を含め、前後に画面の半分ずつ余白を取る。端の札も画面の中ほどまで持ってこられる
-  const scale = useMemo(() => {
-    let lo = anchor ?? Infinity;
-    let hi = anchor ?? -Infinity;
-    for (const item of items) {
-      lo = Math.min(lo, item.start);
-      hi = Math.max(hi, item.end ?? item.start + 1);
-    }
-    if (box.viewport === 0 || lo > hi) return null;
-    return compress(
-      Math.floor(lo - span / 2),
-      Math.ceil(hi + span / 2),
-      lo,
-      hi,
-      box.viewport / span,
-      box.viewport,
-      items,
-      view.squeeze,
-    );
-  }, [anchor, items, span, view.squeeze, box.viewport]);
+  const scale = useMemo(
+    () => scaleOf(items, anchor, view, box.viewport),
+    [anchor, items, view, box.viewport],
+  );
   const pxPerDay = scale?.pxPerDay ?? 0;
   const toY = useCallback((day: number) => scale?.toY(day) ?? 0, [scale]);
   const fromY = useCallback((y: number) => scale?.fromY(y) ?? 0, [scale]);
@@ -927,33 +703,13 @@ export default function TimelinePage() {
       );
   }, [headDepth, data, stories]);
 
-  const axisTicks = useMemo(() => {
-    if (!scale) return [];
-    // 詰めた軸は、話の開始日に目盛りを置く(暦の境目は帯に飲まれる)。等間隔の軸は、暦の境目に置く。
-    // 詰めた軸の年の文字は、その年でまだ出していなければ出す。前の文字・詰めた帯に掛かるときは、同じ年の次の目盛りに回す
-    let labelEnd = -Infinity;
-    let shownYear: string | null = null;
-    const ticks = view.squeeze
-      ? startTicks(items)
-      : calendarTicks(
-          scale,
-          scale.fromY((screen - 1) * box.viewport),
-          scale.fromY((screen + 2) * box.viewport),
-        );
-    return ticks.map((tick) => {
-      const y = scale.toY(tick.at);
-      if (
-        (view.squeeze && tick.label === shownYear) ||
-        y < labelEnd ||
-        scale.gaps.some((g) => y > g.y - TICK_LABEL_PX && y < g.y + GAP_PX)
-      ) {
-        return { ...tick, label: "" };
-      }
-      shownYear = tick.label;
-      labelEnd = y + TICK_TEXT_PX;
-      return tick;
-    });
-  }, [scale, items, view.squeeze, screen, box.viewport]);
+  const axisTicks = useMemo(
+    () =>
+      scale
+        ? axisTicksOf(scale, items, view.squeeze, screen, box.viewport)
+        : [],
+    [scale, items, view.squeeze, screen, box.viewport],
+  );
 
   /** 縦に dy px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
   const daysAt = (item: Item, dy: number) =>

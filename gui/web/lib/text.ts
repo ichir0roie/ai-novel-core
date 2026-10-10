@@ -35,6 +35,7 @@ export const T = {
     menu: "Menu",
     endpoints: "Endpoints",
     timeline: "Timeline",
+    eventTimeline: "Event timeline",
     search: "Jump to a page (type a table or page name)",
     noMatch: "No matching page",
     searchHint: "Ctrl+K: search pages",
@@ -370,6 +371,39 @@ export const T = {
     newEpisodePlot: "plot_text",
     newEpisodeNoStory: "Pick a story row to add here, or open the full form",
     addEpisode: "Add",
+  },
+
+  eventTimeline: {
+    title: "Event timeline",
+    layer: (n: number) => `Layer ${n}`,
+    location: "Location",
+    outsideFilter: "outside the location filter (shown as a parent)",
+    editHint:
+      "Drag a card up or down to move it in time (its child events move with it), or drop it on another card to make it that card's child. Nothing is saved until you apply.",
+    applied: (n: number) => `Saved ${n} event${n === 1 ? "" : "s"}`,
+    gap: "No events (squeezed)",
+    parent: (label: string) => `parent: ${label}`,
+    becomesChildOf: (label: string) => `→ child of ${label}`,
+    becomesRoot: "→ root",
+    hidden: "hidden",
+    was: (span: string, parent: string) => `before: ${span} / ${parent}`,
+    root: "(root)",
+    newEvent: "New event",
+    newChildOf: (label: string) => `Child of: ${label}`,
+    newRoot: "A root event (no parent)",
+    name: "name",
+    start: "Start",
+    end: "End (empty for a point in time)",
+    text: "text",
+    add: "Add",
+    addChild: "Add child event",
+    detach: "Detach from parent",
+    delete: "Delete",
+    confirmDelete: (label: string, children: number) =>
+      children > 0
+        ? `Delete ${label} and its ${children} child event${children === 1 ? "" : "s"}?`
+        : `Delete ${label}?`,
+    deleted: (label: string) => `Deleted ${label}`,
   },
 
   episodeSheet: {

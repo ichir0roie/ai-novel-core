@@ -142,6 +142,13 @@ export const updateStories = (stories: Rec[]) => runEntrance("story.update_stori
 /** 話の時刻・作品をまとめて直す(一つでも通らなければ何も直さない)。`episode.update_episodes.UpdateEpisodes` を呼ぶ。 */
 export const updateEpisodes = (episodes: Rec[]) => runEntrance("episode.update_episodes.UpdateEpisodes", { episodes });
 
+/** 出来事の時刻・親をまとめて直す(一つでも通らなければ何も直さない)。`event.update_events.UpdateEvents` を呼ぶ。 */
+export const updateEvents = (events: Rec[]) => runEntrance("event.update_events.UpdateEvents", { events });
+
+/** 出来事を子孫の出来事ごと消す。`event.delete_event.DeleteEvent` を呼ぶ。 */
+export const deleteEventWithChildren = (eventId: number) =>
+  runEntrance("event.delete_event.DeleteEvent", { event_id: eventId, with_children: true });
+
 /** ミームをまとめて消す(一つでも無ければ何も消さない)。`meme.delete_meme.DeleteMeme` を呼ぶ。 */
 export const deleteMemes = (memeIds: number[]) => runEntrance("meme.delete_meme.DeleteMeme", { meme_ids: memeIds });
 
