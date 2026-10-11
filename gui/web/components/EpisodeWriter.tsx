@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { getRecord, updateRecord } from "@/lib/api";
+import EpisodeMaterials from "@/components/EpisodeMaterials";
+import { getRecord, updateRecord, type Rec } from "@/lib/api";
+import { claudeSessionUrl } from "@/lib/claude";
 import { T } from "@/lib/text";
+
+/** 書いている本文を保存する間隔 */
+const AUTOSAVE_MS = 5000;
 
 export type EpisodeWriterHandle = {
   /** カーソルの位置(選んだ範囲はそれと置き換える)に、行として差し込む */
@@ -14,17 +19,23 @@ type Props = {
   ref?: Ref<EpisodeWriterHandle>;
 };
 
-/** 話の本文を自分で書く欄。プロットを上に添え、本文(`main_text`)だけを保存する。 */
+/** 話の本文を自分で書く欄。上に材料を添え、本文(`main_text`)だけを 5 秒ごとに保存する。 */
 export default function EpisodeWriter({ episodeId, ref }: Props) {
-  const [plot, setPlot] = useState<string | null>(null);
-  const [savedText, setSavedText] = useState<string | null>(null);
+  const [episode, setEpisode] = useState<Rec | null>(null);
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
+  // 最後に保存へ送った本文。保存すると改行が整えられて返るが、書いている欄は置き換えない(カーソルと打ちかけの文を崩さない)
+  const [sent, setSent] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   // 差し込んだあとのカーソルの位置。値が描き直されてから置く
   const caret = useRef<number | null>(null);
+  // 保存はタイマーと離れるときにも呼ぶので、描画をまたいで今の値を持つ
+  const latest = useRef({ text: "", sent: null as string | null, saving: false });
+  useEffect(() => {
+    latest.current = { text, sent, saving };
+  }, [text, sent, saving]);
 
   useEffect(() => {
     let alive = true;
@@ -32,8 +43,8 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
       .then((result) => {
         if (!alive) return;
         const main = String(result.record.main_text ?? "");
-        setPlot(String(result.record.plot_text ?? ""));
-        setSavedText(main);
+        setEpisode(result.record);
+        setSent(main);
         setText(main);
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
@@ -42,7 +53,36 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
     };
   }, [episodeId]);
 
-  const dirty = savedText != null && text !== savedText;
+  const dirty = sent != null && text !== sent;
+
+  const save = async () => {
+    const { text: body, sent: last, saving: busy } = latest.current;
+    if (last == null || body === last || busy) return;
+    setSaving(true);
+    try {
+      await updateRecord("episode", episodeId, { main_text: body });
+      setSent(body);
+      setSavedAt(new Date().toLocaleTimeString());
+      setError(null);
+    } catch (e) {
+      // 次の間隔でまた送る
+      setError(T.writer.saveFailed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => void save(), AUTOSAVE_MS);
+    return () => {
+      clearInterval(timer);
+      // 欄を閉じたときに、まだ送っていない分を送る(返りは待たない)
+      const { text: body, sent: last } = latest.current;
+      if (last != null && body !== last) void updateRecord("episode", episodeId, { main_text: body });
+    };
+    // save は latest から今の値を読むので、間隔を張り直さない
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [episodeId]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -80,45 +120,31 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
     [text],
   );
 
-  const save = async () => {
-    if (!dirty || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await updateRecord("episode", episodeId, { main_text: text });
-      const main = String(result.record.main_text ?? "");
-      setSavedText(main);
-      setText(main);
-      setSavedAt(new Date().toLocaleTimeString());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (savedText == null) {
+  if (episode == null || sent == null) {
     return <div className="writer">{error ? <div className="status error">{error}</div> : <div className="status info">{T.loading}</div>}</div>;
   }
 
   return (
     <div className="writer">
-      {plot !== "" && (
-        <details className="writer-plot" open>
-          <summary>{T.writer.plot}</summary>
-          <div className="writer-plot-text">{plot}</div>
-        </details>
-      )}
+      <EpisodeMaterials episode={episode} />
       <div className="toolbar writer-toolbar">
         <span className="meta">{T.writer.letters(text.length)}</span>
-        <span className="meta">{dirty ? T.writer.unsaved : savedAt ? T.writer.savedAt(savedAt) : T.writer.noChanges}</span>
+        <span className="meta">
+          {saving ? T.writer.saving : dirty ? T.writer.unsaved : savedAt ? T.writer.savedAt(savedAt) : T.writer.autosave}
+        </span>
         <span className="spacer" />
-        <button onClick={() => setText(savedText)} disabled={busy || !dirty}>
-          {T.writer.revert}
-        </button>
-        <button className="primary" onClick={() => void save()} disabled={busy || !dirty} title={T.writer.saveHint}>
-          {T.writer.save}
-        </button>
+        {/* 後工程は保存した本文を読むので、送っていない分があるうちは開かない */}
+        <a
+          className={`button-link${dirty || saving || text.trim() === "" ? " disabled" : ""}`}
+          href={claudeSessionUrl(T.writer.claudePromptFinish(String(episodeId)))}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={T.writer.finishHint}
+          aria-disabled={dirty || saving || text.trim() === ""}
+          onClick={(e) => (dirty || saving || text.trim() === "") && e.preventDefault()}
+        >
+          {T.writer.finish}
+        </a>
       </div>
       {error && <div className="status error">{error}</div>}
       <textarea

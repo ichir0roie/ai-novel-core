@@ -39,6 +39,7 @@ export default function EpisodeSessionPage() {
   const search = useSearchParams();
   const episodeId = Number(search.get("episode")) || null;
   const [label, setLabel] = useState<string | null>(null);
+  const [viewpoint, setViewpoint] = useState<number | null>(null);
   const [rows, setRows] = useState<SessionRecord[] | null>(null);
   const [fresh, setFresh] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,10 @@ export default function EpisodeSessionPage() {
   useEffect(() => {
     if (episodeId == null) return;
     getRecord("episode", episodeId)
-      .then((result) => setLabel(T.nameId(result.label, episodeId)))
+      .then((result) => {
+        setLabel(T.nameId(result.label, episodeId));
+        setViewpoint((result.record.viewpoint_character_id as number | null) ?? null);
+      })
       .catch(() => setLabel(T.idMark(episodeId)));
   }, [episodeId]);
 
@@ -204,11 +208,18 @@ export default function EpisodeSessionPage() {
                         {row.character ? (
                           COLUMNS.map((column) => {
                             const cell = row[column];
+                            // 視点の決まった話では、視点人物でない人物の内心は地の文に書けない
+                            const offView = column === "thought" && viewpoint != null && row.character?.id !== viewpoint;
                             return (
-                              <td key={column} data-label={T.session[column]}>
+                              <td
+                                key={column}
+                                data-label={T.session[column]}
+                                className={writing && offView && cell ? "session-offview" : undefined}
+                                title={writing && offView && cell ? T.session.offViewHint : undefined}
+                              >
                                 {cell}
                                 {/* 人物役への要求は語り部の指示なので、本文には差し込まない */}
-                                {writing && column !== "request" && cell && (
+                                {writing && column !== "request" && !offView && cell && (
                                   <InsertButton onClick={() => writer.current?.insert(insertable(column, cell))} />
                                 )}
                               </td>
