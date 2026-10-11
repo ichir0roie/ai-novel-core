@@ -729,3 +729,50 @@ summary .knowledge-item { display: inline-block; }
 .session-row.waiting .session-state { color: var(--accent); }
 @keyframes session-fresh { from { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); } to { background: var(--panel); } }
 @keyframes session-blink { 50% { opacity: 0; } }
+
+/* 本文を書く欄(Write)。手番の一覧を左、本文を右に並べ、それぞれをスクロールする。狭い画面では上下に積む */
+.session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.session-split .session-body { flex-direction: row; gap: 0.75rem; }
+.session-split .session-list { flex: 1 1 0; min-width: 0; }
+.session-split .session-table { min-width: 0; }
+/* 半分の幅では五列が狭いので、一手を列の名前を添えた縦の並びにする */
+.session-split .session-table thead { display: none; }
+.session-split .session-row > tr { display: block; }
+.session-split .session-table td { display: block; border-left: none; padding: 0.15rem 0.6rem; }
+.session-split .session-table td:empty { display: none; }
+.session-split .session-table td[data-label]::before { content: attr(data-label); display: block; font-size: 0.75rem; color: var(--muted); }
+.session-split .session-row > tr:last-child > td:last-child { padding-bottom: 0.45rem; }
+.session-split .session-row > tr:last-child > td { border-bottom: none; }
+.session-split .session-row > tr:last-child { border-bottom: 1px solid var(--line); }
+.session-insert { padding: 0 0.4rem; margin-left: 0.4rem; font-size: 0.8rem; line-height: 1.4; vertical-align: baseline; color: var(--muted); }
+.session-insert:hover { color: var(--accent); }
+.writer { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.writer-materials { flex-shrink: 0; margin-bottom: 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--chip); }
+.writer-materials summary { cursor: pointer; padding: 0.3rem 0.6rem; font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.writer-tabs { display: inline-flex; gap: 0.2rem; flex-wrap: wrap; }
+.writer-tabs button { padding: 0.1rem 0.55rem; font-size: 0.8rem; border-color: transparent; }
+.writer-tabs button.on { border-color: var(--accent); color: var(--accent); background: var(--panel); }
+.writer-materials-body { max-height: 32vh; overflow: auto; padding: 0 0.6rem 0.5rem; font-size: 0.9rem; }
+.writer-materials-body .meta { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.2rem; }
+.writer-plain { white-space: pre-wrap; }
+.writer-cast + .writer-cast { border-top: 1px solid var(--line); margin-top: 0.4rem; padding-top: 0.4rem; }
+.writer-cast-head { display: flex; align-items: center; gap: 0.5rem; }
+.writer-cast-head button { padding: 0.05rem 0.3rem; font-weight: 600; }
+.writer-cast-head .meta { margin: 0; }
+.writer-pov { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+.writer-cast dl { margin: 0.2rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.1rem 0.6rem; }
+.writer-cast dl > div { display: contents; }
+.writer-cast dt { color: var(--muted); font-size: 0.8rem; }
+.writer-cast dd { margin: 0; white-space: pre-wrap; }
+.writer-styles { margin: 0; padding-left: 1.2rem; }
+.writer-styles li { white-space: pre-wrap; }
+.session-split .session-table td.session-offview { color: var(--muted); opacity: 0.6; }
+a.button-link.disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+.writer-toolbar { margin-bottom: 0.4rem; }
+.writer-toolbar .spacer { flex: 1; }
+.writer-toolbar .meta { color: var(--muted); font-size: 0.85rem; }
+.writer-text { flex: 1; min-height: 12rem; resize: none; font-size: 1rem; line-height: 1.8; padding: 0.6rem 0.8rem; }
+@media (max-width: 800px) {
+  .session-split .session-body { flex-direction: column; }
+  .session-split .session-list { flex-basis: 40%; }
+}
