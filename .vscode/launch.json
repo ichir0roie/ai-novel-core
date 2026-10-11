@@ -19,6 +19,31 @@
       "windows": {
         "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
       }
+    },
+    {
+      "name": "Brave: attach (GUI :3000)",
+      "type": "chrome",
+      "request": "attach",
+      // GUI 用のプロファイル(gui.dev と同じ .brave-profile/)で、Brave をデバッグのポートを開けて起こしておく:
+      //   brave-browser --user-data-dir=.brave-profile --remote-debugging-port=9222 http://localhost:3000
+      // 同じプロファイルの Brave が起きているとフラグが効かないので、そのウィンドウは閉じてから起こす(普段のプロファイルの Brave は閉じなくてよい)
+      "port": 9222,
+      "urlFilter": "http://localhost:3000/*",
+      "webRoot": "${workspaceFolder}/gui/web"
+    },
+    {
+      "name": "Brave: launch (GUI :3000)",
+      "type": "chrome",
+      "request": "launch",
+      // 画面(タスク「app」)が起きている前提で、GUI 用のプロファイル(gui.dev と同じ .brave-profile/)の Brave を起こしてつなぐ。
+      // 同じプロファイルの Brave(gui.dev が開いたもの)が起きているとつながらないので、そのウィンドウは閉じてから起こす
+      "runtimeExecutable": "/usr/bin/brave-browser",
+      "userDataDir": "${workspaceFolder}/.brave-profile",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/gui/web",
+      "windows": {
+        "runtimeExecutable": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe"
+      }
     }
   ]
 }
