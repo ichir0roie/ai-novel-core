@@ -729,3 +729,32 @@ summary .knowledge-item { display: inline-block; }
 .session-row.waiting .session-state { color: var(--accent); }
 @keyframes session-fresh { from { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); } to { background: var(--panel); } }
 @keyframes session-blink { 50% { opacity: 0; } }
+
+/* 本文を書く欄(Write)。手番の一覧を左、本文を右に並べ、それぞれをスクロールする。狭い画面では上下に積む */
+.session-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.session-split .session-body { flex-direction: row; gap: 0.75rem; }
+.session-split .session-list { flex: 1 1 0; min-width: 0; }
+.session-split .session-table { min-width: 0; }
+/* 半分の幅では五列が狭いので、一手を列の名前を添えた縦の並びにする */
+.session-split .session-table thead { display: none; }
+.session-split .session-row > tr { display: block; }
+.session-split .session-table td { display: block; border-left: none; padding: 0.15rem 0.6rem; }
+.session-split .session-table td:empty { display: none; }
+.session-split .session-table td[data-label]::before { content: attr(data-label); display: block; font-size: 0.75rem; color: var(--muted); }
+.session-split .session-row > tr:last-child > td:last-child { padding-bottom: 0.45rem; }
+.session-split .session-row > tr:last-child > td { border-bottom: none; }
+.session-split .session-row > tr:last-child { border-bottom: 1px solid var(--line); }
+.session-insert { padding: 0 0.4rem; margin-left: 0.4rem; font-size: 0.8rem; line-height: 1.4; vertical-align: baseline; color: var(--muted); }
+.session-insert:hover { color: var(--accent); }
+.writer { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.writer-plot { flex-shrink: 0; margin-bottom: 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--chip); }
+.writer-plot summary { cursor: pointer; padding: 0.3rem 0.6rem; font-size: 0.85rem; color: var(--muted); }
+.writer-plot-text { max-height: 30vh; overflow: auto; padding: 0 0.6rem 0.5rem; white-space: pre-wrap; font-size: 0.9rem; }
+.writer-toolbar { margin-bottom: 0.4rem; }
+.writer-toolbar .spacer { flex: 1; }
+.writer-toolbar .meta { color: var(--muted); font-size: 0.85rem; }
+.writer-text { flex: 1; min-height: 12rem; resize: none; font-size: 1rem; line-height: 1.8; padding: 0.6rem 0.8rem; }
+@media (max-width: 800px) {
+  .session-split .session-body { flex-direction: column; }
+  .session-split .session-list { flex-basis: 40%; }
+}

@@ -127,6 +127,23 @@ export const T = {
     waiting: "Waiting for the character…",
     queued: "Queued",
     closing: "Closed",
+    write: "Write",
+    closeWrite: "Close writing",
+    writeHint: "Write this episode's main text yourself beside the turns",
+    insert: "＋",
+    insertHint: "Insert into the main text at the cursor",
+  },
+
+  writer: {
+    plot: "Plot",
+    letters: (count: number) => `${count.toLocaleString()} chars`,
+    unsaved: "Unsaved changes",
+    savedAt: (time: string) => `Saved ${time}`,
+    noChanges: "No changes",
+    revert: "Revert",
+    save: "Save",
+    saveHint: "Save the main text (Ctrl+S)",
+    placeholder: "Write the main text here. ＋ on a turn inserts its line at the cursor.",
   },
 
   create: {
