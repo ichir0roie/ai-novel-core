@@ -48,9 +48,9 @@ _ANTI_GUIDE = """アンチミームは、ミームを反転した考え方。ミ
   - ミームと同じく一文で簡潔に書く(40字以内を目安)。"""
 
 _SYSTEM_PROMPT = f"""\
-あなたは物語の編集者です。
+あなたは物語の編集者だ。
 著者の創作についての覚え書き・その検証結果・起きた出来事・話の本文を、番号つきの JSON で渡すので、それぞれから、\
-人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出してください。
+人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出す。
 - 人名・地名・組織名・その作品だけの固有名詞を抜き、他の人物にも乗り移りうる普遍的な考え方として書く。
 - {_CONCISE_GUIDE}
 - 固有名詞を抜いても特定の人物の役どころ・筋書き上の境遇をなぞるだけのもの(その人物にしか当てはまらない立場や状況)は抜き出さない。引いた人物がその人物の写しになるため。
@@ -67,21 +67,21 @@ _SYSTEM_PROMPT = f"""\
 {BIO_ABSTRACTION_INSTRUCTION}"""
 
 _DEDUPE_SYSTEM_PROMPT = """\
-あなたは物語の編集者です。
+あなたは物語の編集者だ。
 人物の行動原理になる「ミーム」を「新しいミーム」と「既にあるミーム」に分けて渡すので、新しいミームのうち、\
-既にあるミームか、それより前の番号の新しいミームと同じ考え方を言い換えただけのものを見つけてください。
+既にあるミームか、それより前の番号の新しいミームと同じ考え方を言い換えただけのものを見つける。
 - 何を大事にし、何をきっかけに、どう動くかがほぼ同じものだけを重複とする。題材が近いだけで、大事にするものや動き方が違うものは重複にしない。
 - 重複が無ければ duplicates は空のリストにする。"""
 
 _ANTI_SYSTEM_PROMPT = f"""\
-あなたは物語の編集者です。
-人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれを反転したアンチミームを一つずつ書いてください。
+あなたは物語の編集者だ。
+人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれを反転したアンチミームを一つずつ書く。
 {_ANTI_GUIDE}
 {BIO_ABSTRACTION_INSTRUCTION}"""
 
 _CLASSIFY_SYSTEM_PROMPT = f"""\
-あなたは物語の編集者です。
-人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれに次の分類から一つを振ってください。
+あなたは物語の編集者だ。
+人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれに次の分類から一つを振る。
 {_CATEGORY_GUIDE}"""
 
 def pending_sources(s: Session) -> list[SourceText]:
@@ -105,7 +105,7 @@ def meme_texts(s: Session) -> list[str]:
 def extraction_draft(ai: AIClient, batch: list[SourceText]) -> MemesDraft | None:
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
-                   "それぞれの元からミームを抜き出してください。"]),
+                   "それぞれの元からミームを抜き出す。"]),
         MemesDraft, system=_SYSTEM_PROMPT)
 
 
@@ -128,7 +128,7 @@ def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list
         request = DedupeRequestSerialized(fresh=[candidate.text for candidate in fresh], existing=chunk)
         decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
-                       "新しいミームのうち、重複しているものの番号を挙げてください。"]),
+                       "新しいミームのうち、重複しているものの番号を挙げる。"]),
             DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT)
         if decided is None:
             return None
@@ -172,7 +172,7 @@ def anti_draft(ai: AIClient, batch: list[SourceText]) -> list[AntiMeme] | None:
     request = NumberedMemesSerialized(memes=[MemeText(text=source.text) for source in batch])
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
-                   "それぞれのミームのアンチミームを書いてください。"]),
+                   "それぞれのミームのアンチミームを書く。"]),
         AntisDraft, system=_ANTI_SYSTEM_PROMPT)
     if decided is None:
         return None
@@ -202,7 +202,7 @@ def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] 
     request = NumberedMemesSerialized(memes=[MemeText(text=source.text) for source in batch])
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
-                   "それぞれのミームに分類を振ってください。"]),
+                   "それぞれのミームに分類を振る。"]),
         ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT)
     if decided is None:
         return None

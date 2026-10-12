@@ -86,16 +86,16 @@ _MATERIAL_INSTRUCTION = """\
 def _meme_instruction(subject: str) -> str:
     return (
         f"「行動原理(ミーム)」を渡したときは、それぞれに振られた古今表裏({position_legend()})を変えずに、"
-        f"ミームどうしの関係を整理して principle に書いてください。何を経て古いものを手放したか、表と裏がどう食い違い、"
+        f"ミームどうしの関係を整理して principle に書く。何を経て古いものを手放したか、表と裏がどう食い違い、"
         f"この{subject}の中でどう折り合っているかを、出来事や人との関わりとして書く。食い違うミームも、どちらかを捨てずに両方を生かす。"
         f"ミームの文面をそのまま書き写さない。説明もこの整理と矛盾させない。"
     )
 
 
 _PERSON_CONTENT_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観を構築する設定作家です。
-新しく生まれる人物1件について、人物説明・年齢・口調などを、自然な日本語で決めてください。
-出身地の説明・参考地域・参考文化・参考時代や、所属する地域、この場所・時刻に関連する筋書きに、この人物の生活・仕事・性格が自然に馴染むよう考慮してください(参考地域・参考文化・参考時代は、固有名詞をそのまま持ち込むのではなく、地理・気候・生業・価値観の手がかりとして使ってください)。
+あなたは架空の世界観を構築する設定作家だ。
+新しく生まれる人物1件について、人物説明・年齢・口調などを、自然な日本語で決める。
+出身地の説明・参考地域・参考文化・参考時代や、所属する地域、この場所・時刻に関連する筋書きに、この人物の生活・仕事・性格が自然に馴染むよう考慮する(参考地域・参考文化・参考時代は、固有名詞をそのまま持ち込むのではなく、地理・気候・生業・価値観の手がかりとして使う)。
 {_MATERIAL_INSTRUCTION}
 {_LATER_INSTRUCTION}
 {_PRESENT_INSTRUCTION}
@@ -108,8 +108,8 @@ _PERSON_CONTENT_SYSTEM_PROMPT = f"""\
 誰にでも当てはまる無難なものに寄せず、この人物固有の言葉づかいにする。"""
 
 _NON_PERSON_CONTENT_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観を構築する設定作家です。
-ある場所と、そこに居る人物・既にある対象を渡すので、この場所を拠り所に生まれる人物以外の対象(国・組織・商会・氏族・集団など、まとまりとして動くもの。あるいは物)を1件だけ考えてください。
+あなたは架空の世界観を構築する設定作家だ。
+ある場所と、そこに居る人物・既にある対象を渡すので、この場所を拠り所に生まれる人物以外の対象(国・組織・商会・氏族・集団など、まとまりとして動くもの。あるいは物)を1件だけ考える。
 出身地の説明・環境・人間関係のうち少なくとも一つを具体的に使う。
 {_MATERIAL_INSTRUCTION}
 {_LATER_INSTRUCTION}
@@ -120,11 +120,11 @@ _NON_PERSON_CONTENT_SYSTEM_PROMPT = f"""\
 {_PLACEHOLDER_INSTRUCTION}"""
 
 _ELEMENT_SYSTEM_PROMPT = """\
-あなたは筋書きの構成を分析する設定作家です。
-渡す筋書きの本文から、その筋書きの中で人物が生きうる、互いに重ならない具体的な立場・職業・関わり方を抜き出してください。
-筋書きが複数の立場を挙げている場合は、それぞれを一つずつの要素にして漏らさず拾ってください。
-筋書きに出てくる特定の人物(主人公やその家族・仲間など)が担う役どころそのものは抜き出さないでください。その人物の写しになってしまうため、同じ筋書きの世界で別の人物が就きうる立場として書いてください。
-筋書きは時の流れをまたいで書かれている。渡す現在の時刻にまだ始まっていない立場(筋書きの中で後の年に起きる出来事や、「この時刻より後に始まる設定(まだ無い)」を前提にする立場)は抜き出さないでください。"""
+あなたは筋書きの構成を分析する設定作家だ。
+渡す筋書きの本文から、その筋書きの中で人物が生きうる、互いに重ならない具体的な立場・職業・関わり方を抜き出す。
+筋書きが複数の立場を挙げている場合は、それぞれを一つずつの要素にして漏らさず拾う。
+筋書きに出てくる特定の人物(主人公やその家族・仲間など)が担う役どころそのものは抜き出さない。その人物の写しになってしまうため、同じ筋書きの世界で別の人物が就きうる立場として書く。
+筋書きは時の流れをまたいで書かれている。渡す現在の時刻にまだ始まっていない立場(筋書きの中で後の年に起きる出来事や、「この時刻より後に始まる設定(まだ無い)」を前提にする立場)は抜き出さない。"""
 
 
 def story_elements(ai: AIClient, sources: BirthSources, time: Stamp) -> list[str]:
@@ -291,7 +291,7 @@ def character_content(
         None, None if person else fixed_kind, fixed_age, form.name if form else None, _hint_text(form), plot_text,
         elements, draw_memes=True)
     subject = "人物" if person else "対象"
-    content = _content(ai, material, f"この場所に自然な{subject}を1件、決めてください。")
+    content = _content(ai, material, f"この場所に自然な{subject}を1件、決める。")
     if content is None:
         return None
 
@@ -399,7 +399,7 @@ def completion_content(
         None if target.parameters is None else CharacterParameterForm.model_validate(target.parameters.model_dump()), target.name,
         None if target.person else target.kind, target.age, None, target.hint_text, None, None, draw_memes=False)
     subject = "人物" if target.person else "対象"
-    content = _content(ai, material, f"この{subject}の説明を決めてください。")
+    content = _content(ai, material, f"この{subject}の説明を決める。")
     if content is None:
         raise ValueError("説明が得られなかった")
     return material, content

@@ -15,8 +15,10 @@ from sqlalchemy.orm import Session
 
 from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
+from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
 from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
+from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic.character.cast import candidate_at, cast_of, mentioned_of, relations_at, secrets_at
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
@@ -52,6 +54,8 @@ def _guide(s: Session) -> str:
     return "\n".join([
         EVENT_AGE_INSTRUCTION,
         MENTIONED_INSTRUCTION,
+        IDEA_CONTEXT_INSTRUCTION,
+        BIO_ABSTRACTION_INSTRUCTION,
         PAST_EPISODES_INSTRUCTION,
         STYLE_SAMPLE_INSTRUCTION,
         style.style_instruction(read_style_extras(s)),

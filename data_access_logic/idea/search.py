@@ -15,8 +15,8 @@ from db.schema import Idea
 from db.stamp import Stamp
 
 _SYSTEM_PROMPT = f"""\
-あなたは物語の設定資料の編集者です。
-渡す文から、世界の設定資料(用語集)と照らし合わせるべき語を抜き出し、それぞれに検索用の言い換えを付けてください。
+あなたは物語の設定資料の編集者だ。
+渡す文から、世界の設定資料(用語集)と照らし合わせるべき語を抜き出し、それぞれに検索用の言い換えを付ける。
 - 抜き出すのは、その世界に固有の、または世界の設定に関わる語: 技術・道具・現象・病や体質・制度・身分・種族・組織の種類・信仰・歴史上の出来事・作中の呼び名など。
 - 人名と、固有の場所の名前は抜き出さない。誰にでも通じる日常の語(剣・雨・食事・鍛冶師・交易路など)も、設定上の意味を帯びていなければ抜き出さない。
 - 文に語として出ていなくても、文が描いている設定上の事柄(症状の描写なら、その原因になっている体質や病など)があれば、その事柄を指す語を keyword にしてよい。
@@ -38,7 +38,7 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
         return []
     when = f"この文の時刻: {time}\n\n" if time is not None else ""
     decided = ai.generate(
-        f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げてください。",
+        f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げる。",
         IdeaDraftsByAI, system=_SYSTEM_PROMPT)
     if decided is None:
         return []

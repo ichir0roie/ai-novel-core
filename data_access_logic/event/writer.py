@@ -26,9 +26,9 @@ from db.schema import Character, Event, EventCharacter
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = f"""\
-あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家です。
-ある出来事の名前・時刻・場所・当事者などを日本語の見出しを付けた JSON で渡すので、この出来事の記録の本文を書いてください。
-出来事の名前は、ジャンルや場面を一言で決めたものです。その中身に沿った出来事にしてください。
+あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家だ。
+ある出来事の名前・時刻・場所・当事者などを日本語の見出しを付けた JSON で渡すので、この出来事の記録の本文を書く。
+出来事の名前は、ジャンルや場面を一言で決めたもの。その中身に沿った出来事にする。
 {EVENT_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
 {EVENT_RECORD_INSTRUCTION}"""
@@ -77,7 +77,7 @@ def text_material(s: Session, event_id: int) -> EventTextMaterialSerialized:
 def text_draft(ai: AIClient, material: EventTextMaterial) -> EventTextDraft | None:
     prompt = "\n".join([
         EventTextMaterialSerialized.model_validate(material).model_dump_json(indent=2),
-        "この出来事の記録の本文を書いてください。",
+        "この出来事の記録の本文を書く。",
     ])
     return ai.generate(prompt, EventTextDraft, system=_SYSTEM_PROMPT)
 

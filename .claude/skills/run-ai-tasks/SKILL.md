@@ -3,7 +3,7 @@ name: run-ai-tasks
 description: GUI で足した・直した行に後回しになっている AI の段(ミームの抜き出し・アンチミームの作成・古い要約の作り直し)を、このセッションでまとめて回して報告する。「作業やって」「溜まった AI の作業を回して」「後回しの AI を片付けて」などの依頼で使う。
 ---
 
-`CLAUDE.md` のルールに従う。GUI の追加・修正は確定だけして AI の段を回さないので、その分をここで回す(`.docs/claude-tasks.md` の「後回しの段」)。
+GUI の追加・修正は確定だけして AI の段を回さないので、その分をここで回す(`.docs/claude-tasks.md` の「後回しの段」)。
 回すのは入口 `meme.refresh_generated_content.RefreshGeneratedContent`(引数なし)。
 
 ## 1. 回す

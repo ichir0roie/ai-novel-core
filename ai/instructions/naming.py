@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""名づけの基準(人物は `data_access_logic/character/naming.py`、場所は出来事の生成の新設の場所)と、名前の仮置き。"""
+"""名づけの基準(語・場所・人物)と、名前の仮置き。"""
 from __future__ import annotations
 
 import re

@@ -25,9 +25,9 @@ from db.stamp import Stamp
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
-あなたは日本語のライトノベルの設定を整える編集者です。
+あなたは日本語のライトノベルの設定を整える編集者だ。
 話の本文と、登場人物の今の居場所、移動先の候補を日本語の見出しを付けた JSON で渡すので、
-この話の中で住まい・拠点が変わった登場人物(旅立ち・移住・避難・帰還・奉公に出るなど)ごとに、移動先を移動先の候補から選んでください。
+この話の中で住まい・拠点が変わった登場人物(旅立ち・移住・避難・帰還・奉公に出るなど)ごとに、移動先を移動先の候補から選ぶ。
 - 一時の外出や、話の舞台へ出かけてきただけの人物は入れない。本文の終わりの時点で、住まい・拠点が前と変わった人物だけを入れる。
 - 移動先は移動先の候補の場所idからだけ選ぶ。候補に当てはまる場所が無ければ、その人物は入れない。
 - 誰も変わっていなければ character_moves は空のリストにする。"""
@@ -92,7 +92,7 @@ def moves_draft(ai: AIClient, material: EpisodeMovesMaterial) -> list[CharacterM
     """AI が答えなければ空(居場所は変えない)。"""
     draft = ai.generate(
         "\n".join([EpisodeMovesMaterialSerialized.model_validate(material).model_dump_json(indent=2),
-                   "この話で住まい・拠点が変わった登場人物の移動先を挙げてください。"]),
+                   "この話で住まい・拠点が変わった登場人物の移動先を挙げる。"]),
         EpisodeMovesDraft, system=_SYSTEM_PROMPT)
     if draft is None:
         logger.warning(f"話 id={material.episode_id} の移動先が得られなかったので、居場所は変えない")

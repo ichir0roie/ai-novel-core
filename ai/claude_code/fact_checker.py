@@ -36,9 +36,9 @@ def _append_fact_check(text: str | None, fact_check: str) -> str:
 
 
 _SYSTEM_PROMPT = f"""\
-あなたは創作の設定を検める、科学・歴史・思想に詳しい校閲者です。
+あなたは創作の設定を検める、科学・歴史・思想に詳しい校閲者だ。
 著者の創作・AI についての覚え書き(oracle)か、人物の行動原理の芯になる考え方(ミーム)を番号つきの JSON で渡すので、\
-それぞれをDラボのナレッジとネット検索で調べ、内容の妥当性を検め、書き手の役に立つ補足を書いてください。
+それぞれをDラボのナレッジとネット検索で調べ、内容の妥当性を検め、書き手の役に立つ補足を書く。
 - Dラボのナレッジ検索(search_dlab_knowledge。見当たらなければ ToolSearch で「dlab」を探す)が使えるなら、\
   必ず先にそれで調べる。心理学・行動科学・脳科学・健康・人間関係・社会・AI に関わる内容は特に、Dラボの知見を軸にする。\
   Dラボで足りない部分と、物理・天文・歴史などの事実はネット検索で補う。
@@ -126,7 +126,7 @@ def check_sources(s: Session, table: str, ids: list[int] | None = None, limit: i
 def check_draft(ai: AIClient, batch: list[SourceText]) -> list[FactCheckNote] | None:
     decided = ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
-                   "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書いてください。"]),
+                   "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書く。"]),
         FactChecksDraft, system=_SYSTEM_PROMPT, timeout=TIMEOUT, tools=tools())
     if decided is None:
         return None

@@ -31,14 +31,14 @@ from db.stamp import Stamp, StampError
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = f"""\
-あなたは日本語のライトノベルの構成を考える作家です。
-作品・前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・プロット・時刻)を決めてください。
+あなたは日本語のライトノベルの構成を考える作家だ。
+作品・前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・プロット・時刻)を決める。
 {PLOT_FORMAT_INSTRUCTION}
-作者の指定の題・プロットは核にして、足りないところを補って書き直してください(プロットにある出来事・人物・狙いは落とさない)。
-作者の指定の時刻・視点・場所は、null でなければ決まっているので変えず、それに沿う場面にしてください(視点・場所自体はここでは決めません)。
-時刻が決まっていなければ、「年/月/日」の形で、直前の話より後から選んでください。決まっていれば start は null にしてください。
-前の話は概要で古い順に渡します。その続きとして自然に立つ話にし、直前の話をなぞり直さないでください。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしないでください。
+作者の指定の題・プロットは核にして、足りないところを補って書き直す(プロットにある出来事・人物・狙いは落とさない)。
+作者の指定の時刻・視点・場所は、null でなければ決まっているので変えず、それに沿う場面にする(視点・場所自体はここでは決めない)。
+時刻が決まっていなければ、「年/月/日」の形で、直前の話より後から選ぶ。決まっていれば start は null にする。
+前の話は概要で古い順に渡す。その続きとして自然に立つ話にし、直前の話をなぞり直さない。
+「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしない。
 {PAST_EPISODES_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
 {MENTIONED_INSTRUCTION}"""
@@ -83,7 +83,7 @@ def frame_material(s: Session, episode_id: int) -> EpisodeFrameMaterialSerialize
 def frame_draft(ai: AIClient, material: EpisodeFrameMaterial) -> EpisodeFrameDraft:
     prompt = "\n".join([
         EpisodeFrameMaterialSerialized.model_validate(material).model_dump_json(indent=2),
-        "この作品の次の一話の枠を決めてください。",
+        "この作品の次の一話の枠を決める。",
     ])
     draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM_PROMPT)
     if draft is None:

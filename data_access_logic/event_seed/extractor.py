@@ -24,16 +24,16 @@ from db.schema import Character, Episode, Event, EventSeed
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
-あなたは物語の編集者です。
-話の骨組み・人物の筋書き・起きた出来事を番号つきの JSON で渡すので、それぞれから、ほかの時代・ほかの場所・ほかの人物にも起こせる「出来事の種」を抜き出してください。
+あなたは物語の編集者だ。
+話の骨組み・人物の筋書き・起きた出来事を番号つきの JSON で渡すので、それぞれから、ほかの時代・ほかの場所・ほかの人物にも起こせる「出来事の種」を抜き出す。
 - 人名・地名・組織名・その作品だけの用語と、年代を抜く。人物は「古参の番兵」「商家の娘」のような立場で書く。
 - 一つの種は一〜二文。誰が、何をきっかけに、何をして、どんな揺れや変化が起きるかを書く。
 - 作者の前書き・使用環境・書き方の約束・構成表など、出来事にならない文からは抜き出さない。
 - 一つの元から 0〜3 件。同じ元の中で似た種は一つにまとめる。"""
 
 _CONSOLIDATE_SYSTEM_PROMPT = """\
-あなたは物語の編集者です。
-出来事の種を「新しい種」と「棚卸し済みの種」に分けて番号つきで渡すので、同じ出来事を言い換えただけの種の組を見つけ、一つにまとめてください。
+あなたは物語の編集者だ。
+出来事の種を「新しい種」と「棚卸し済みの種」に分けて番号つきで渡すので、同じ出来事を言い換えただけの種の組を見つけ、一つにまとめる。
 - 立場・きっかけ・展開・結末がほぼ同じものだけをまとめる。題材が近いだけで展開の違うものはまとめない。
 - 組には新しい種を一つ以上含める。棚卸し済みの種どうしは、既に見比べてあるのでまとめない。
 - まとめた種は一〜二文。まとめる種の要素を落とさず、人名・地名・年代は入れない。
@@ -54,7 +54,7 @@ def pending_sources(s: Session) -> list[SourceText]:
 def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None:
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
-                   "それぞれの元から出来事の種を抜き出してください。"]),
+                   "それぞれの元から出来事の種を抜き出す。"]),
         SeedsDraft, system=_SYSTEM_PROMPT)
 
 
@@ -83,7 +83,7 @@ def merges_draft(ai: AIClient, fresh: list[StoredSeed], settled: list[StoredSeed
     request = ConsolidateRequestSerialized(fresh=fresh, settled=settled)
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
-                   "同じ出来事を言い換えただけの種の組をまとめてください。"]),
+                   "同じ出来事を言い換えただけの種の組をまとめる。"]),
         ConsolidateDraft, system=_CONSOLIDATE_SYSTEM_PROMPT)
     if decided is None:
         return None

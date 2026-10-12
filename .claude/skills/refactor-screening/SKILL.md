@@ -3,7 +3,7 @@ name: refactor-screening
 description: core リポジトリ全体を定期的にスクリーニングし、処理の共通化・シンプルな実装・余計な機能が無いかを確認してリファクタリングする。実装がモックに合わせて不自然に分岐していないかも見る。見つけて直したら core に PR を作る(直接 main へは入れない)。「リファクタのスクリーニング」「定期リファクタ」「コードの健全性チェック」「core を整理して」などの依頼で使う。
 ---
 
-`CLAUDE.md` のルールに従う。ただし次は違う。
+`CLAUDE.md` の決まりのうち、次は違う。
 
 - `CLAUDE.md` の「実装からプルリクまで」の 2(ユーザに示して認めてもらう)は、PR のレビューで代える
 - 網羅テストは認めを待たずに、PR の前に回す(4)
@@ -14,7 +14,6 @@ description: core リポジトリ全体を定期的にスクリーニングし�
 
 - 1 の worktree は切らない。セッションが指定したブランチで、リポジトリのルートのまま作業する(5 の worktree の後始末も要らない)
 - 4 の本番を写したテスト用の db は作れない(RDS に繋がない)。schema から作ってモックの行を足した `novel_test`(`.claude/docs/testing.md`)で確かめ、本番の写しで確かめていないことを PR と報告に書く
-- 5 の PR は `gh` ではなく GitHub の MCP のツールで作る
 
 ## 1. 作業場所を用意する
 
@@ -59,8 +58,9 @@ git worktree add ../core-refactor -b refactor/screening-<YYYYMMDD>
 
 ```
 git -C ../core-refactor push -u origin refactor/screening-<YYYYMMDD>
-gh pr create --head refactor/screening-<YYYYMMDD> --title "<短い要約>" --body "<見つけた項目・直した内容・テストの結果>"
 ```
+
+- PR は GitHub の MCP のツール(`create_pull_request`)で、`head` をそのブランチにして作る。本文には見つけた項目・直した内容・テストの結果を書く
 
 - 終わったら worktree を消す(`git worktree remove ../core-refactor`)
 - 見つけた項目・直した項目・見送った項目・テスト結果・PR の URL(作った場合)を短く報告する

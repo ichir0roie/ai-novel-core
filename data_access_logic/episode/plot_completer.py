@@ -35,35 +35,35 @@ from db.stamp import Stamp
 logger = logging.getLogger(__name__)
 
 _PLOT_SYSTEM_PROMPT = f"""\
-あなたは日本語のライトノベルを書く作家です。
-作品・前の話・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この話のプロットを書き直してください。
-書き直したプロットは今のプロットとそっくり置き換わり、本文はそれだけを元に書きます。今のプロットにある出来事・人物・場面・狙いは、一つも落とさずに書き直したプロットへ含めてください。
+あなたは日本語のライトノベルを書く作家だ。
+作品・前の話・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この話のプロットを書き直す。
+書き直したプロットは今のプロットとそっくり置き換わり、本文はそれだけを元に書く。今のプロットにある出来事・人物・場面・狙いは、一つも落とさずに書き直したプロットへ含める。
 {PLOT_FORMAT_INSTRUCTION}
-今のプロットに無い出来事は足さないでください。
-「作者の注文」が null でなければ、今のプロットに加えて作者が新しいプロットに望むこと(展開・焦点・雰囲気など)です。今のプロットと合わせて取り入れてください。注文が求める出来事は足してかまいません。
-場面に要るなら、登場人物にいない人物や、書く話の場所より細かい舞台(店・屋敷・部屋など)を出してかまいません。その人物・舞台には呼び名を付けてください。
+今のプロットに無い出来事は足さない。
+「作者の注文」は、今のプロットに加えて作者が新しいプロットに望むこと(展開・焦点・雰囲気など)。null でなければ、今のプロットと合わせて取り入れる。注文が求める出来事は足してかまわない。
+場面に要るなら、登場人物にいない人物や、書く話の場所より細かい舞台(店・屋敷・部屋など)を出してかまわない。その人物・舞台には呼び名を付ける。
 {PAST_EPISODES_INSTRUCTION}
-登場人物それぞれの直近の出来事は、この話の前に済んだことです。なぞり直さず、その後の人物として書いてください。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かないでください。
+登場人物それぞれの直近の出来事は、この話の前に済んだこと。なぞり直さず、その後の人物として書く。
+「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かない。
 {EVENT_AGE_INSTRUCTION}
 {MENTIONED_INSTRUCTION}
 {IDEA_CONTEXT_INSTRUCTION}"""
 
 _CASTING_SYSTEM_PROMPT = f"""\
-あなたは日本語のライトノベルの設定を整える作家です。
-話の材料と、その話の新しいプロットを日本語の見出しを付けた JSON で渡すので、新しいプロットに出てくるのに材料に無い人物・舞台を挙げてください。材料の「書く話」のプロットは、新しいプロットです。
-characters には、新しいプロットで台詞や行動のある人物のうち、登場人物にいない人物を挙げてください。群衆や、名前の要らない通りすがりは挙げません。
-「新しいプロットに名前の出る既知の人物」は、もういる人物なので挙げません。
-人物の説明は、材料の作品・場所・時刻に馴染むように書いてください。
-location には、新しいプロットの主な舞台が書く話の場所より細かい場所で、「この場所の中の既知の場所」にも無いときだけ、その舞台を書いてください。
-location の名前は次の基準で名づけます。
+あなたは日本語のライトノベルの設定を整える作家だ。
+話の材料と、その話の新しいプロットを日本語の見出しを付けた JSON で渡すので、新しいプロットに出てくるのに材料に無い人物・舞台を挙げる。材料の「書く話」のプロットは、新しいプロット。
+characters には、新しいプロットで台詞や行動のある人物のうち、登場人物にいない人物を挙げる。群衆や、名前の要らない通りすがりは挙げない。
+「新しいプロットに名前の出る既知の人物」は、もういる人物なので挙げない。
+人物の説明は、材料の作品・場所・時刻に馴染むように書く。
+location には、新しいプロットの主な舞台が書く話の場所より細かい場所で、「この場所の中の既知の場所」にも無いときだけ、その舞台を書く。
+location の名前は次の基準で名づける。
 {PLACE_NAMING_INSTRUCTION}"""
 
 
 def plot_draft(ai: AIClient, material: EpisodeMaterial, order: str | None, model: str, effort: str) -> str:
     request = EpisodePlotRequestSerialized(material=material, order=order)
     draft = ai.generate(
-        "\n".join([request.model_dump_json(indent=2), "この話のプロットを書き直してください。"]),
+        "\n".join([request.model_dump_json(indent=2), "この話のプロットを書き直す。"]),
         EpisodePlotDraft, system=_PLOT_SYSTEM_PROMPT,
         model=model, effort=effort)
     if draft is None:
@@ -91,7 +91,7 @@ def casting_draft(
     request = EpisodeCastingRequestSerialized(
         material=material, plot_text=plot_text, known_locations=known, known_characters=known_people)
     draft = ai.generate(
-        "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げてください。"]),
+        "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げる。"]),
         EpisodeCastingDraft, system=_CASTING_SYSTEM_PROMPT,
         model=model, effort=effort)
     if draft is None:

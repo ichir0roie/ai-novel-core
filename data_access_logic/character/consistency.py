@@ -27,8 +27,8 @@ from db.stamp import Stamp
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = f"""\
-あなたは架空の世界観の整合を検める校閲者です。
-新しく生まれた人物・対象1件の説明・行動原理・来歴と、それを足す世界の材料を渡すので、世界と食い違うところを探し、食い違いだけを直してください。
+あなたは架空の世界観の整合を検める校閲者だ。
+新しく生まれた人物・対象1件の説明・行動原理・来歴と、それを足す世界の材料を渡すので、世界と食い違うところを探し、食い違いだけを直す。
 検めること:
 - 居場所: この一件は「居場所」で生まれ(成り立ち)、現在の時刻もそこ(かその中の場所)で暮らし・働いている。現在の住まい・仕事場・拠点が別の場所になっていれば食い違い。
   居場所でその役を担う形に移すか、居場所から通う・関わる形に直す。一時よそへ出た来歴はよいが、現在は居場所にいるようにする
@@ -123,7 +123,7 @@ def reconciled(
         text=text, principle=content.principle, history=history)
     output = PersonConsistencyDraft if isinstance(content, PersonContentDraft) else ConsistencyDraft
     draft = ai.generate(
-        "\n".join([request.model_dump_json(indent=2), "この一件を検めてください。"]), output, system=_SYSTEM_PROMPT)
+        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output, system=_SYSTEM_PROMPT)
     if draft is None or not draft.issues or not draft.text.strip():
         return Reconciled(text=text, principle=content.principle, history=history)
     logger.info("世界・設定との食い違いを直した:\n" + "".join(f"    {issue}\n" for issue in draft.issues))

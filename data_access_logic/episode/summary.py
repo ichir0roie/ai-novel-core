@@ -12,16 +12,16 @@ from db.schema import Character, Episode, EpisodeCharacter, Story, summary_sourc
 
 
 _SYSTEM_PROMPT = """\
-あなたは日本語のライトノベルの担当編集者です。
-話の題と本文を一話ぶん日本語の見出しを付けた JSON で渡すので、次の話を書く作家へ渡す概要を作ってください。
-概要には、誰が何をして何がどうなったか、次の話へ引き継ぐ筋と、人物の立場・関係の変わりようを書いてください。
-本文を写さず、四〜六文にまとめてください。"""
+あなたは日本語のライトノベルの担当編集者だ。
+話の題と本文を一話ぶん日本語の見出しを付けた JSON で渡すので、次の話を書く作家へ渡す概要を作る。
+概要には、誰が何をして何がどうなったか、次の話へ引き継ぐ筋と、人物の立場・関係の変わりようを書く。
+本文を写さず、四〜六文にまとめる。"""
 
 
 def summary_draft(ai: AIClient, episode: EpisodeSource) -> EpisodeSummaryDraft | None:
     prompt = "\n".join([
         EpisodeSourceSerialized.model_validate(episode).model_dump_json(indent=2),
-        "この話の概要を作ってください。",
+        "この話の概要を作る。",
     ])
     return ai.generate(prompt, EpisodeSummaryDraft, system=_SYSTEM_PROMPT)
 

@@ -47,11 +47,11 @@ _SITUATION_INSTRUCTION = f"""\
 {EVENT_SITUATION_INSTRUCTION}"""
 
 _CANDIDATE_SYSTEM_PROMPT = f"""\
-あなたは、ある場所に起こる出来事を列挙する作家です。
+あなたは、ある場所に起こる出来事を列挙する作家だ。
 場所の状況を渡すので、居合わせる人物・対象それぞれの人物像・性格・関係・立場から、
-それぞれがいま取りそうな行動が同じ場で重なった結果として、この時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。
+それぞれがいま取りそうな行動が同じ場で重なった結果として、この時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げる。
 日常の小さな、感情がぶつかる、偶発的な(事故・天候・病・思いがけない出会い)、居場所が変わる(旅立ち・帰還・避難)、
-笑いや祝い、取り決めや対立が動くなど、種類の違うものを混ぜてください。
+笑いや祝い、取り決めや対立が動くなど、種類の違うものを混ぜる。
 各候補は当事者の人物像・性格と矛盾しない範囲で立てる。
 出来事の種(この世界のほかの場面の筋から、時代・場所・固有名詞を抜いたもの)を渡したときは、候補は、この種のどれかをこの場所・この時点・この当事者に合わせて具体化したものか、直前・直近の出来事から連想したものにする。
 {_SITUATION_INSTRUCTION}
@@ -59,8 +59,8 @@ _CANDIDATE_SYSTEM_PROMPT = f"""\
 {EVENT_PROGRESSION_INSTRUCTION}"""
 
 _RECORD_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家です。
-場所の状況、移動先の候補、サイコロで選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こしてください。
+あなたは架空の世界観の中で、ある場所に起きたことを記録する設定作家だ。
+場所の状況、移動先の候補、サイコロで選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こす。
 候補の名前は event_name にそのまま使うか、整えてもよい。
 {_SITUATION_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
@@ -110,7 +110,7 @@ def rolled_candidate(
 ) -> CandidateDraft | None:
     prompt = "\n".join([
         CandidateRequestSerialized(situation=situation, seeds=seeds).model_dump_json(indent=2),
-        f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げてください。",
+        f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げる。",
     ])
     decided = ai.generate(prompt, CandidatesDraft, system=_CANDIDATE_SYSTEM_PROMPT)
     if decided is None or not decided.candidates:
@@ -127,7 +127,7 @@ def record_draft(
     prompt = "\n".join([
         RecordRequestSerialized(situation=situation, destinations=destinations, candidate=candidate)
         .model_dump_json(indent=2),
-        "この候補を、この場所にこの時点で起きた出来事として記録してください。",
+        "この候補を、この場所にこの時点で起きた出来事として記録する。",
     ])
     draft = ai.generate(prompt, EventRecordDraft, system=_RECORD_SYSTEM_PROMPT)
     if draft is None:
