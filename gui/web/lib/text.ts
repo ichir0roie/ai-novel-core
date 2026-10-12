@@ -455,6 +455,7 @@ export const T = {
     newEvent: "New event",
     newChildOf: (label: string) => `Child of: ${label}`,
     newRoot: "A root event (no parent)",
+    newLocation: (label: string) => `Location: ${label}`,
     name: "name",
     start: "Start",
     end: "End (empty for a point in time)",
@@ -468,6 +469,8 @@ export const T = {
         ? `Delete ${label} and its ${children} child event${children === 1 ? "" : "s"}?`
         : `Delete ${label}?`,
     deleted: (label: string) => `Deleted ${label}`,
+    saved: (label: string) => `Saved ${label}`,
+    confirmDiscardEdit: "Discard the unsaved name / text?",
   },
 
   episodeSheet: {

@@ -14,7 +14,7 @@ import {
 } from "react";
 import Modal from "@/components/Modal";
 import NewEventModal from "@/components/NewEventModal";
-import { useOptions } from "@/components/ReferenceSelect";
+import { invalidateOptions, useOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import TreeReferenceSelect from "@/components/TreeReferenceSelect";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
@@ -23,6 +23,7 @@ import {
   getRecord,
   listAllRecords,
   updateEvents,
+  updateRecord,
   type Rec,
 } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
@@ -91,6 +92,9 @@ type Drag = {
 // 変更モードで溜めた移し。base は読み込んだときの出来事で、days はそこから何日ずらすか、
 // parent は付け替える先の親(根にするなら null、付け替えないなら undefined)
 type Change = { base: Item; days: number; parent?: number | null };
+
+// 押した出来事のモーダルで直せる欄
+type EventForm = { name: string; text: string };
 
 // 動かすと一緒にずらす時刻の欄
 const TIME_KEYS = ["time", "start", "end"] as const;
@@ -291,9 +295,11 @@ export default function EventTimelinePage() {
   const [editing, setEditing] = useState(false);
   const [changes, setChanges] = useState<Map<number, Change>>(new Map());
   const [applying, setApplying] = useState(false);
-  // 押した出来事と、その本文(開いてから引く)
+  // 押した出来事と、その名前・本文(開いてから引く)。saved は db の値、form は書きかけの値
   const [viewing, setViewing] = useState<Item | null>(null);
-  const [viewingText, setViewingText] = useState<string | null>(null);
+  const [saved, setSaved] = useState<EventForm | null>(null);
+  const [form, setForm] = useState<EventForm | null>(null);
+  const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState<{
     start: string | null;
     parent: { id: number; label: string } | null;
@@ -403,9 +409,15 @@ export default function EventTimelinePage() {
   useEffect(() => {
     if (!viewing) return;
     let alive = true;
-    setViewingText(null);
+    setSaved(null);
+    setForm(null);
     getRecord("event", viewing.id)
-      .then((r) => alive && setViewingText(String(r.record.text ?? "")))
+      .then((r) => {
+        if (!alive) return;
+        const loaded = { name: String(r.record.name ?? ""), text: String(r.record.text ?? "") };
+        setSaved(loaded);
+        setForm(loaded);
+      })
       .catch(
         (e) => alive && setError(e instanceof Error ? e.message : String(e)),
       );
@@ -629,6 +641,47 @@ export default function EventTimelinePage() {
     }
   };
 
+  const dirty =
+    saved !== null && form !== null && (form.name !== saved.name || form.text !== saved.text);
+
+  /** 押した出来事のモーダルを閉じる。書きかけの名前・本文があれば捨ててよいかを尋ね、捨てないなら false */
+  const closeViewing = () => {
+    if (dirty && !window.confirm(T.eventTimeline.confirmDiscardEdit)) return false;
+    setViewing(null);
+    return true;
+  };
+
+  /** 押した出来事の名前・本文を保存する。変えた欄だけを渡す */
+  const saveViewing = async (item: Item) => {
+    if (!form || !saved) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await updateRecord("event", item.id, {
+        ...(form.name !== saved.name ? { name: form.name } : {}),
+        ...(form.text !== saved.text ? { text: form.text } : {}),
+      });
+      invalidateOptions("event");
+      const next = { name: String(response.record.name ?? ""), text: String(response.record.text ?? "") };
+      setSaved(next);
+      setForm(next);
+      const fresh = await listAllRecords("event");
+      setRecords(fresh);
+      // 移しを溜めた出来事の札は移しの元(読み込んだときの行)から描くので、元も読み直した行に替えて直した名前を出す
+      const base = itemOf(fresh.find((r) => r.id === item.id) ?? {});
+      setChanges((previous) => {
+        const change = previous.get(item.id);
+        return change && base ? new Map(previous).set(item.id, { ...change, base }) : previous;
+      });
+      setMessage(T.eventTimeline.saved(response.label));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const onItemDown = (e: PointerEvent<HTMLDivElement>, item: Item) => {
     if (e.button !== 0 || applying) return;
     e.stopPropagation();
@@ -676,13 +729,31 @@ export default function EventTimelinePage() {
     if (days !== 0) shift(item, days);
   };
 
-  /** 空いた所を押したら、その日に根の出来事を足す */
+  /** 絞り込んでいる場所。新しく足す出来事はこの場所で起きたことにする */
+  const filteredPlace =
+    locationId === null
+      ? null
+      : {
+          id: locationId,
+          label: T.nameId(locations.find((option) => option.id === locationId)?.label, locationId),
+        };
+
+  /**
+   * 空いた所を押したら、その日に出来事を足す。押した所の左の層に、同じ高さの札があれば、
+   * そのうち一番近い(右の)札を親にする。無ければ根に足す
+   */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>) => {
     if (pxPerDay === 0) return;
-    const day = Math.floor(
-      fromY(e.clientY - e.currentTarget.getBoundingClientRect().top),
-    );
-    setAdding({ start: formatStamp(fromDayNumber(day)), parent: null });
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const layer = Math.floor((e.clientX - rect.left) / LAYER_WIDTH);
+    const parent = placed
+      .filter((item) => item.layer < layer && item.y <= y && y <= item.y + item.height)
+      .reduce<Placed | null>((nearest, item) => (nearest && nearest.layer >= item.layer ? nearest : item), null);
+    setAdding({
+      start: formatStamp(fromDayNumber(Math.floor(fromY(y)))),
+      parent: parent && { id: parent.id, label: parent.label },
+    });
   };
 
   const spanOf = (r: Rec) => T.span(r.start ?? r.time, r.end) || String(r.time);
@@ -965,7 +1036,7 @@ export default function EventTimelinePage() {
       {viewingNow && (
         <Modal
           title={viewingNow.label}
-          onClose={() => setViewing(null)}
+          onClose={closeViewing}
           actions={
             <>
               {editing ? (
@@ -973,8 +1044,7 @@ export default function EventTimelinePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      reparent(viewingNow, null);
-                      setViewing(null);
+                      if (closeViewing()) reparent(viewingNow, null);
                     }}
                   >
                     {T.eventTimeline.detach}
@@ -988,11 +1058,11 @@ export default function EventTimelinePage() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!closeViewing()) return;
                       setAdding({
                         start: String(viewingNow.record.start ?? viewingNow.record.time),
                         parent: { id: viewingNow.id, label: viewingNow.label },
                       });
-                      setViewing(null);
                     }}
                   >
                     {T.eventTimeline.addChild}
@@ -1000,15 +1070,22 @@ export default function EventTimelinePage() {
                 </>
               )}
               <span className="spacer" />
-              <button type="button" onClick={() => setViewing(null)}>
+              <button type="button" onClick={closeViewing}>
                 {T.close}
               </button>
               <button
                 type="button"
-                className="primary"
                 onClick={() => window.open(`/tables/event/${viewingNow.id}`, "_blank", "noopener,noreferrer")}
               >
                 {T.timeline.openInNewTab}
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={!dirty || saving || !form?.name.trim()}
+                onClick={() => void saveViewing(viewingNow)}
+              >
+                {T.record.save}
               </button>
             </>
           }
@@ -1016,15 +1093,36 @@ export default function EventTimelinePage() {
           <div className="timeline-sheet">
             {detailLines(viewingNow).filter(Boolean).join("\n")}
           </div>
-          <div className="timeline-sheet">
-            {viewingText === null ? T.loading : viewingText || T.characterSheet.noText}
-          </div>
+          {form === null ? (
+            <div className="status info">{T.loading}</div>
+          ) : (
+            <>
+              <div className="field">
+                <label>{T.eventTimeline.name}</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  disabled={saving}
+                />
+              </div>
+              <div className="field">
+                <label>{T.eventTimeline.text}</label>
+                <textarea
+                  value={form.text}
+                  onChange={(e) => setForm({ ...form, text: e.target.value })}
+                  disabled={saving}
+                />
+              </div>
+            </>
+          )}
         </Modal>
       )}
       {adding && (
         <NewEventModal
           start={adding.start}
           parent={adding.parent}
+          location={filteredPlace}
           onClose={() => setAdding(null)}
           onAdded={() => setReloads((n) => n + 1)}
         />
