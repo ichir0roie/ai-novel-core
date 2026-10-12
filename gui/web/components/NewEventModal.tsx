@@ -12,14 +12,16 @@ type Props = {
   start: string | null;
   /** 親の出来事。根に足すなら null */
   parent: { id: number; label: string } | null;
+  /** 起きた場所(タイムラインで絞り込んでいる場所)。絞り込んでいなければ null */
+  location: { id: number; label: string } | null;
   onClose: () => void;
   /** その場で出来事を足し終えたとき */
   onAdded: () => void;
 };
 
 /** 出来事のタイムラインで出来事を足す小さなモーダル。名前・期間・本文だけでその場で足すか、
- * ほかの欄(場所・当事者)も書くなら追加ページを別タブに開く。 */
-export default function NewEventModal({ start: initialStart, parent, onClose, onAdded }: Props) {
+ * ほかの欄(当事者など)も書くなら追加ページを別タブに開く。 */
+export default function NewEventModal({ start: initialStart, parent, location, onClose, onAdded }: Props) {
   const [name, setName] = useState("");
   const [start, setStart] = useState<string | null>(initialStart);
   const [end, setEnd] = useState<string | null>(null);
@@ -37,6 +39,7 @@ export default function NewEventModal({ start: initialStart, parent, onClose, on
     hidden,
     text,
     parent_event_id: parent?.id ?? null,
+    location_id: location?.id ?? null,
   });
 
   const open = () => {
@@ -84,6 +87,7 @@ export default function NewEventModal({ start: initialStart, parent, onClose, on
     >
       {error && <div className="status error">{error}</div>}
       <div className="hint">{parent ? T.eventTimeline.newChildOf(parent.label) : T.eventTimeline.newRoot}</div>
+      <div className="hint">{T.eventTimeline.newLocation(location?.label ?? T.none)}</div>
       <div className="field">
         <label>{T.eventTimeline.name}</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
