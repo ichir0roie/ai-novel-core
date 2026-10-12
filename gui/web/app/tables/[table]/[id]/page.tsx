@@ -256,6 +256,11 @@ export default function RecordPage() {
                     </Link>
                   )}
                   {table === "episode" && (
+                    <Link className="button-link" href={`/episode_comment?episode=${id}`} title={T.record.openCommentHint}>
+                      {T.record.openComment}
+                    </Link>
+                  )}
+                  {table === "episode" && (
                     <a
                       className="button-link"
                       href={claudeSessionUrl(T.record.claudePromptInteractive(id))}

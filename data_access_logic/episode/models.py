@@ -50,8 +50,9 @@ class CharacterEpisode(Material):
 
 
 class RecentEpisode(Material):
-    """文体の見本にする話。中身を読み取らせないので、本文だけを持つ。"""
+    """文体の見本にする話。中身を読み取らせないので、本文と、話し方の根拠にできるかを決める時刻だけを持つ。"""
 
+    start: Stamp | None = None
     main_text: str
 
 

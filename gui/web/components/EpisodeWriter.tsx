@@ -6,21 +6,24 @@ import { getRecord, updateRecord, type Rec } from "@/lib/api";
 import { claudeSessionUrl } from "@/lib/claude";
 import { T } from "@/lib/text";
 
-/** 書いている本文を保存する間隔 */
-const AUTOSAVE_MS = 5000;
-
 export type EpisodeWriterHandle = {
   /** カーソルの位置(選んだ範囲はそれと置き換える)に、行として差し込む */
   insert: (text: string) => void;
+  /** 本文の中の `quote` を選んで見せる。見つからなければ false */
+  reveal: (quote: string) => boolean;
 };
 
 type Props = {
   episodeId: number;
+  /** 本文を送る先。省けば話の `main_text` を直す */
+  save?: (text: string) => Promise<unknown>;
   ref?: Ref<EpisodeWriterHandle>;
 };
 
-/** 話の本文を自分で書く欄。上に材料を添え、本文(`main_text`)だけを 5 秒ごとに保存する。 */
-export default function EpisodeWriter({ episodeId, ref }: Props) {
+const saveMainText = (episodeId: number) => (text: string) => updateRecord("episode", episodeId, { main_text: text });
+
+/** 話の本文を自分で書く欄。上に材料を添え、本文(`main_text`)を Save(Ctrl+S)で保存する。 */
+export default function EpisodeWriter({ episodeId, save: send = saveMainText(episodeId), ref }: Props) {
   const [episode, setEpisode] = useState<Rec | null>(null);
   const [text, setText] = useState("");
   // 最後に保存へ送った本文。保存すると改行が整えられて返るが、書いている欄は置き換えない(カーソルと打ちかけの文を崩さない)
@@ -31,11 +34,11 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
   const areaRef = useRef<HTMLTextAreaElement>(null);
   // 差し込んだあとのカーソルの位置。値が描き直されてから置く
   const caret = useRef<number | null>(null);
-  // 保存はタイマーと離れるときにも呼ぶので、描画をまたいで今の値を持つ
-  const latest = useRef({ text: "", sent: null as string | null, saving: false });
+  // 保存は欄を閉じるときにも呼ぶので、描画をまたいで今の値を持つ
+  const latest = useRef({ text: "", sent: null as string | null, saving: false, send });
   useEffect(() => {
-    latest.current = { text, sent, saving };
-  }, [text, sent, saving]);
+    latest.current = { text, sent, saving, send };
+  }, [text, sent, saving, send]);
 
   useEffect(() => {
     let alive = true;
@@ -56,33 +59,29 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
   const dirty = sent != null && text !== sent;
 
   const save = async () => {
-    const { text: body, sent: last, saving: busy } = latest.current;
+    const { text: body, sent: last, saving: busy, send: post } = latest.current;
     if (last == null || body === last || busy) return;
     setSaving(true);
     try {
-      await updateRecord("episode", episodeId, { main_text: body });
+      await post(body);
       setSent(body);
       setSavedAt(new Date().toLocaleTimeString());
       setError(null);
     } catch (e) {
-      // 次の間隔でまた送る
       setError(T.writer.saveFailed(e instanceof Error ? e.message : String(e)));
     } finally {
       setSaving(false);
     }
   };
 
-  useEffect(() => {
-    const timer = setInterval(() => void save(), AUTOSAVE_MS);
-    return () => {
-      clearInterval(timer);
+  useEffect(
+    () => () => {
       // 欄を閉じたときに、まだ送っていない分を送る(返りは待たない)
-      const { text: body, sent: last } = latest.current;
-      if (last != null && body !== last) void updateRecord("episode", episodeId, { main_text: body });
-    };
-    // save は latest から今の値を読むので、間隔を張り直さない
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [episodeId]);
+      const { text: body, sent: last, send: post } = latest.current;
+      if (last != null && body !== last) void post(body);
+    },
+    [episodeId],
+  );
 
   useEffect(() => {
     if (!dirty) return;
@@ -116,6 +115,25 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
         caret.current = start + inserted.length;
         setText(before + inserted + after);
       },
+      reveal: (quote: string) => {
+        const area = areaRef.current;
+        const start = quote ? text.indexOf(quote) : -1;
+        if (!area || start < 0) return false;
+        area.focus();
+        area.setSelectionRange(start, start + quote.length);
+        // textarea は選んだ所までスクロールしないので、同じ幅と字形の写しに手前の文を流して高さを測る
+        const style = getComputedStyle(area);
+        const mirror = document.createElement("div");
+        for (const name of ["font", "lineHeight", "letterSpacing", "padding", "border", "boxSizing", "tabSize"] as const) {
+          mirror.style[name] = style[name];
+        }
+        Object.assign(mirror.style, { position: "absolute", visibility: "hidden", whiteSpace: "pre-wrap", overflowWrap: "break-word", width: `${area.clientWidth}px` });
+        mirror.textContent = text.slice(0, start);
+        document.body.append(mirror);
+        area.scrollTop = Math.max(0, mirror.scrollHeight - area.clientHeight / 3);
+        mirror.remove();
+        return true;
+      },
     }),
     [text],
   );
@@ -129,9 +147,6 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
       <EpisodeMaterials episode={episode} />
       <div className="toolbar writer-toolbar">
         <span className="meta">{T.writer.letters(text.length)}</span>
-        <span className="meta">
-          {saving ? T.writer.saving : dirty ? T.writer.unsaved : savedAt ? T.writer.savedAt(savedAt) : T.writer.autosave}
-        </span>
         <span className="spacer" />
         {/* 後工程は保存した本文を読むので、送っていない分があるうちは開かない */}
         <a
@@ -160,6 +175,14 @@ export default function EpisodeWriter({ episodeId, ref }: Props) {
           }
         }}
       />
+      <div className="writer-footer">
+        <span className={`meta${dirty ? " writer-unsaved" : ""}`}>
+          {saving ? T.writer.saving : dirty ? T.writer.unsaved : savedAt ? T.writer.savedAt(savedAt) : T.writer.saved}
+        </span>
+        <button className={dirty ? "primary" : undefined} onClick={() => void save()} disabled={!dirty || saving} title={T.writer.saveHint}>
+          {T.writer.save}
+        </button>
+      </div>
     </div>
   );
 }

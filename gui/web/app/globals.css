@@ -772,6 +772,26 @@ a.button-link.disabled { opacity: 0.5; cursor: default; pointer-events: none; }
 .writer-toolbar .spacer { flex: 1; }
 .writer-toolbar .meta { color: var(--muted); font-size: 0.85rem; }
 .writer-text { flex: 1; min-height: 12rem; resize: none; font-size: 1rem; line-height: 1.8; padding: 0.6rem 0.8rem; }
+.writer-footer { flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.4rem; }
+.writer-footer .meta { color: var(--muted); font-size: 0.85rem; }
+.writer-footer .writer-unsaved { color: var(--accent); font-weight: 600; }
+/* 本文への反応(`/episode_comment`)。左に反応、右に書く欄 */
+.comment-body { flex: 1; min-height: 0; display: flex; gap: 0.75rem; }
+.comment-list { flex: 1 1 0; min-width: 0; overflow: auto; padding-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.comment-item { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 0.4rem 0.6rem; }
+.comment-item.fresh { border-color: var(--accent); }
+.comment-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; font-size: 0.85rem; }
+.comment-head .meta { color: var(--muted); }
+.comment-who { font-weight: 600; }
+.comment-stance { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--chip); }
+.comment-stance.against { background: var(--accent); color: var(--accent-ink); }
+.comment-quote { display: block; width: 100%; text-align: left; margin: 0.25rem 0 0; padding: 0.1rem 0.5rem; border: none; border-left: 3px solid var(--line); border-radius: 0; background: none; color: var(--muted); font-size: 0.85rem; white-space: pre-wrap; cursor: pointer; }
+.comment-quote:hover { color: var(--accent); border-left-color: var(--accent); }
+.comment-text { margin-top: 0.25rem; white-space: pre-wrap; font-size: 0.9rem; }
+@media (max-width: 800px) {
+  .comment-body { flex-direction: column; }
+  .comment-list { flex-basis: 40%; }
+}
 @media (max-width: 800px) {
   .session-split .session-body { flex-direction: column; }
   .session-split .session-list { flex-basis: 40%; }

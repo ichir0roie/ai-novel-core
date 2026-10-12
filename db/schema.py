@@ -1024,6 +1024,41 @@ class EpisodeCharacterSessionWitness(Base):
         Integer, ForeignKey("character.id"), index=True, nullable=False, comment="見聞きする人物", sort_order=110)
 
 
+class EpisodeCommentDiff(Base):
+    """ユーザが本文を書きながら保存する(Ctrl+S)たびに、前に保存した本文から変わった箇所。語り部と人物役はこれを読んで反応を返す。
+
+    本文の全文は話の `main_text` にだけ持ち、ここには変わった箇所だけを持つ。保存は差分を足す入口(`SaveDraft`)だけが
+    するので、保存の直前の `main_text` が前に送った本文になる。
+    """
+
+    __tablename__ = "episode_comment_diff"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
+    diff_text: Mapped[str] = mapped_column(
+        String, nullable=False, comment="前に保存した本文からの差分(unified diff の形。前後の数行を添える)。終わりの合図の行では空",
+        sort_order=110)
+    closing: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, comment="書き終えた合図。語り部と人物役はこの行を読んだら止まる", sort_order=120)
+
+
+class EpisodeCommentReaction(Base):
+    """本文の差分を読んだ語り部・人物役の反応。画面は実際の時刻(`created_at`)の順に並べる。"""
+
+    __tablename__ = "episode_comment_reaction"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
+    diff_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("episode_comment_diff.id", ondelete="CASCADE"), index=True, nullable=False,
+        comment="どの差分まで読んで返したか", sort_order=110)
+    character_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, comment="反応した人物。空なら語り部", sort_order=120)
+    stance: Mapped[str] = mapped_column(String, nullable=False, comment="感想/同意/反対/修正案 のいずれか", sort_order=130)
+    quote: Mapped[str | None] = mapped_column(String, comment="反応する本文の箇所(本文からそのまま引く)", sort_order=140)
+    text: Mapped[str] = mapped_column(String, nullable=False, comment="反応の文", sort_order=150)
+
+    character: Mapped["Character | None"] = relationship(lazy="noload")
+
+
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、
 # テストは手元の PostGIS(`tool.test`)を指す。web のセッションは db に繋がず表の定義だけを使うので、無くても import はできる
 DATABASE_URL = os.environ.get("DEM_DATABASE_URL") or None

@@ -167,9 +167,26 @@ def _free_port(port: int, name: str) -> bool:
 
 
 # uvicorn --reload はワーカーの起動に失敗しても監視役(reloader)自体は生き続けるため、
-# プロセスの生死だけを見ていると応答しないまま気付けない。応答が無い時間もあわせて見る
+# プロセスの生死だけを見ていると応答しないまま気付けない。読み直しの後だけ、応答が無い時間もあわせて見る
 WATCH_INTERVAL = 20.0
 STALL_TIMEOUT = 20.0
+# 変わった直後はまだ古いワーカーが応答するので、これだけ経ってからの応答で読み直しが済んだとみなす
+RELOAD_SETTLE = 5.0
+
+
+def _latest_source_mtime() -> float:
+    latest = 0.0
+    for source_dir in API_SOURCE_DIRS:
+        for root, dirs, files in os.walk(os.path.join(CORE_DIR, source_dir)):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            for file in files:
+                if not file.endswith(".py"):
+                    continue
+                try:
+                    latest = max(latest, os.stat(os.path.join(root, file)).st_mtime)
+                except FileNotFoundError:
+                    continue
+    return latest
 
 
 def _wait_for(port: int, name: str, process: subprocess.Popen, path: str = "/", timeout: float = 90.0) -> bool:
@@ -249,6 +266,9 @@ def main(argv: list[str] | None = None) -> int:
     api: subprocess.Popen | None = None
     web: subprocess.Popen | None = None
     down_since: dict[str, float | None] = {"API": None, "画面": None}
+    # 応答を HTTP で確かめている間か。API の読み直しの後だけ立てる(ずっと叩き続けない)
+    probing = {"API": False, "画面": False}
+    source_mtime = _latest_source_mtime()
 
     def watch(process: subprocess.Popen, port: int, name: str, spawn, path: str = "/") -> subprocess.Popen:
         # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
@@ -257,9 +277,14 @@ def main(argv: list[str] | None = None) -> int:
             process = spawn()
             _wait_for(port, name, process, path)
             down_since[name] = None
+            probing[name] = False
+            return process
+        if not probing[name]:
             return process
         if _http_alive(port, path):
             down_since[name] = None
+            if time.time() - source_mtime > RELOAD_SETTLE:
+                probing[name] = False
             return process
         since = down_since[name]
         if since is None:
@@ -271,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
             process = spawn()
             _wait_for(port, name, process, path)
             down_since[name] = None
+            probing[name] = False
         return process
 
     # Ctrl+C(SIGINT)だけでなく、タスクの停止などの SIGTERM でも finally を通して両方止める
@@ -280,14 +306,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         api = spawn_api()
         web = spawn_web()
-        if not (_wait_for(args.api_port, "API", api, "/api/health") and _wait_for(args.web_port, "画面", web)):
+        if not (_wait_for(args.api_port, "API", api, "/api/ping") and _wait_for(args.web_port, "画面", web)):
             return 1
         url = f"http://localhost:{args.web_port}/"
         logger.info(f"API http://127.0.0.1:{args.api_port}/docs / 画面 {url}(Ctrl+C で止める)")
         if not args.no_browser:
             _open_browser(url)
         while True:
-            api = watch(api, args.api_port, "API", spawn_api, "/api/health")
+            if not args.no_reload:
+                latest = _latest_source_mtime()
+                if latest != source_mtime:
+                    source_mtime = latest
+                    probing["API"] = True
+            api = watch(api, args.api_port, "API", spawn_api, "/api/ping")
             web = watch(web, args.web_port, "画面", spawn_web)
             time.sleep(WATCH_INTERVAL)
     except KeyboardInterrupt:

@@ -149,8 +149,8 @@ def episode_casting(s: Session, form: RowId) -> EpisodeCasting:
 
 
 @db_step
-def voice_source(s: Session, form: RowId) -> VoiceSource | None:
-    return voices.voice_source(s, form.id)
+def voice_sources(s: Session, form: RowId) -> list[VoiceSource]:
+    return voices.voice_sources(s, form.id)
 
 
 @db_step

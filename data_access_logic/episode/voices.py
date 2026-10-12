@@ -4,6 +4,8 @@
 本文の材料を読む前に流れ(`data_access_logic/flows/episode.py` の `refresh_voices`)が回す。
 調整した値は、話の時刻から効く `character_parameter` の行として書く(それより前の話には効かない)。
 同じ時刻の行が既にあれば、その行を直す(同じ話の材料を読み直しても行が増えない)。
+話し方を最後に決めた行より前に書かれた見本は、その人物の話し方の根拠にしない(作者が変えた話し方を、変える前の
+セリフで戻さない)。根拠にできる見本が無い人物は調整しない。
 """
 from __future__ import annotations
 
@@ -18,7 +20,7 @@ from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.episode.summary import recent_episodes
 from data_access_logic.material import Material
-from db.schema import CharacterParameter
+from db.schema import Character, CharacterParameter
 from db.stamp import Stamp
 
 VOICE_FIELDS = ("first_person", "second_person", "third_person", "tone", "dialect")
@@ -46,7 +48,7 @@ class VoiceCharacter(Material):
 
 class VoiceSource(Material):
     episode_id: int
-    # 文体の見本(同じ作品の直前の五話)。古い順
+    # 文体の見本(同じ作品の直前の五話)のうち、ここの人物の話し方の根拠にできる話。古い順
     samples: list[str]
     # 話の登場人物の、話の時刻の話し方
     characters: list[VoiceCharacter]
@@ -98,17 +100,34 @@ def voice_draft(ai: AIClient, source: VoiceSource) -> VoiceDrafts | None:
     return ai.generate(prompt, VoiceDrafts, system=_SYSTEM_PROMPT)
 
 
-def voice_source(s: Session, episode_id: int) -> VoiceSource | None:
-    """見本の話か登場人物が無い(話し方を調整できない)ときは None。時刻が空でも、登場人物の今の値は始まりの値で読む。"""
+def voice_sources(s: Session, episode_id: int) -> list[VoiceSource]:
+    """人物ごとに、話し方を最後に決めた行から後に書かれた見本だけを根拠にする。根拠の見本が同じ人物を一つの元にまとめる。
+    見本・登場人物が無い話、時刻の空の話(書き戻せない)は空。"""
     episode = load_episode(s, episode_id)
-    samples = [recent.main_text for recent in recent_episodes(s, episode)]
-    characters = [
-        VoiceCharacter(id=character.id, name=character.name,
-                       **{name: getattr(parameters_at(character, episode.start), name) for name in VOICE_FIELDS})
-        for character in cast_characters(episode)]
-    if not samples or not characters:
-        return None
-    return VoiceSource(episode_id=episode_id, samples=samples, characters=characters)
+    start = episode.start
+    if start is None:
+        return []
+    samples = recent_episodes(s, episode)
+    groups: dict[tuple[int, ...], list[VoiceCharacter]] = {}
+    for character in cast_characters(episode):
+        since = _voice_since(character, start)
+        chosen = tuple(index for index, sample in enumerate(samples)
+                       if since is None or (sample.start is not None and sample.start >= since))
+        if not chosen:
+            continue
+        values = parameters_at(character, start)
+        groups.setdefault(chosen, []).append(VoiceCharacter(
+            id=character.id, name=character.name, **{name: getattr(values, name) for name in VOICE_FIELDS}))
+    return [VoiceSource(episode_id=episode_id, samples=[samples[index].main_text for index in chosen],
+                        characters=characters)
+            for chosen, characters in groups.items()]
+
+
+def _voice_since(character: Character, time: Stamp) -> Stamp | None:
+    """時刻までに話し方の欄を決めた行のうち、一番遅く始まる行の始まり。始まりのある行が無ければ None。"""
+    return max((row.start for row in character.parameters
+                if row.start is not None and row.start <= time and any(getattr(row, name) for name in VOICE_FIELDS)),
+               default=None)
 
 
 def write_voices(s: Session, episode_id: int, voices: list[VoiceDraft]) -> list[int]:

@@ -109,16 +109,17 @@ def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCa
 
 def refresh_voices(ai: AIClient, episode_id: int) -> None:
     """文体の見本(直前の五話)のセリフから、登場人物の話し方を調整して書き戻す。AI が答えなくても材料は読む。"""
-    source = call(episode_steps.voice_source, RowId(id=episode_id))
-    if source is None:
-        return
-    drafts = voices.voice_draft(ai, source)
-    if drafts is None:
-        logger.warning(f"話 id={episode_id} の登場人物の話し方を調整できなかった(AI が答えなかった)")
-        return
-    written = call(episode_steps.write_voices, voices.VoiceForm(episode_id=episode_id, voices=drafts.voices))
-    if written:
-        logger.info(f"話 id={episode_id} の直前の話から、人物 id={written} の話し方を調整した")
+    for source in call(episode_steps.voice_sources, RowId(id=episode_id)):
+        drafts = voices.voice_draft(ai, source)
+        if drafts is None:
+            logger.warning(f"話 id={episode_id} の登場人物の話し方を調整できなかった(AI が答えなかった)")
+            continue
+        # 元に入れなかった人物(根拠の見本が無い人物)を AI が返しても書かない
+        asked = {character.id for character in source.characters}
+        written = call(episode_steps.write_voices, voices.VoiceForm(
+            episode_id=episode_id, voices=[draft for draft in drafts.voices if draft.character_id in asked]))
+        if written:
+            logger.info(f"話 id={episode_id} の直前の話から、人物 id={written} の話し方を調整した")
 
 
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:

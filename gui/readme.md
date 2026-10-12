@@ -33,8 +33,12 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
   欄の上の材料(`EpisodeMaterials.tsx`)は、プロット・前の話の終わりの 12 行・登場人物の話し方と体格・装い(話の時刻の値。名前で人物のシートを開く。視点人物を先に置く)・書き方(`style_preference` の行)をタブで切り替える。
   AI を回す材料(`ReadEpisodeBrief`)は呼べないので、設定(アイデア)は出さない。
   手番の内心・行動・セリフと語りの行の ＋ で、その文を本文のカーソルの位置へ一行として差し込む(セリフは鉤括弧で括る。人物役への要求と、視点の決まった話の視点人物でない人物の内心は差し込まない)。
-  本文(`main_text`)は変わっていれば 5 秒ごと(と Ctrl+S、欄を閉じたとき)に保存する。保存すると改行が整えられて同期フラグが外れるが、書いている欄は置き換えない(読み直すと整えた本文が出る)。
+  本文(`main_text`)は Save(Ctrl+S)と欄を閉じたときに保存する(書いている途中では保存しない)。保存していない変更があれば、欄の右下に出す。保存すると改行が整えられて同期フラグが外れるが、書いている欄は置き換えない(読み直すと整えた本文が出る)。
   Finish ↗ は「ep<話id> 書いた」で Claude Code の新しいセッションを開き、書いた本文を世界に反映させる(スキル `episode` の「ユーザが書いた本文を反映する」。保存の済んでいないうちは押せない)
+- 本文への反応(`/episode_comment?episode=<話の id>`)。話の画面の Comment ボタンから飛ぶ。右に本文を書く欄(`EpisodeWriter`)を置き、Save(Ctrl+S)で
+  入口 `episode_comment.save_draft.SaveDraft` が本文を保存して、前に保存した本文からの差分を `episode_comment_diff` に足す。
+  裏で起きた語り部と人物役(スキル `episode-comment`。Start ↗ で「ep<話id> com」のセッションを開く)が差分を読んで返した反応(`episode_comment_reaction`)を、
+  1 秒ごとに `ReadReactionsSince` で引いて左に届いた順に並べる。反応の引用を押すと、本文のその箇所を選ぶ。Close で書き終えた合図を足し、役を止める
 - `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
   `claude` コマンドを叩く入口は出さず、呼んでも 403 にする(AI は Claude のセッションが回す。`.docs/claude-tasks.md`)
 - 参照の選択欄(場所の木の選択を含む)と話の登場人物の並びには、選んだ行のページへのリンク(`RecordLink`)を添える

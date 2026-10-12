@@ -29,6 +29,7 @@ db の触り方(入口越し・読み取り)は `.claude/docs/db.md` を見る�
 | `CommitLocation` / `UpdateLocation` | `location.form.LocationCreateForm` / `LocationUpdateForm` |
 | `CommitCharacter` / `UpdateCharacter` | `character.form.CharacterCreateForm` / `CharacterUpdateForm`(子の行は `character.record.CharacterParameterRow` / `CharacterLocationRow` / `CharacterHistoryRow`) |
 | `AddTurns` / `AnswerTurn` | `episode_session.form.TurnRequest` / `TurnAnswer` |
+| `AddReaction` | `episode_comment.form.ReactionForm` |
 | `CommitCharacterLocation` / `UpdateCharacterLocation` | `character.form.CharacterLocationCreateForm` / `CharacterLocationUpdateForm` |
 | `CommitCharacterRelation` / `UpdateCharacterRelation` | `character.form.CharacterRelationCreateForm` / `CharacterRelationUpdateForm` |
 | `CommitCharacterSkill` / `UpdateCharacterSkill` | `character.form.CharacterSkillCreateForm` / `CharacterSkillUpdateForm`(来歴の行は `character.record.CharacterSkillHistoryRow`、その行を知る相手の行は `knowers.KnowerRow`) |

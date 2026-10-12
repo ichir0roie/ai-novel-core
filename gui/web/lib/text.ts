@@ -99,6 +99,8 @@ export const T = {
     openClaudeHint: "Open a new Claude Code session for this episode in a new tab",
     openSession: "Session",
     openSessionHint: "Watch the turns of this episode's session live",
+    openComment: "Comment",
+    openCommentHint: "Write the main text while the narrator and characters comment on each save",
     openClaudeInteractive: "Interactive ↗",
     openClaudeInteractiveHint: "Open a new Claude Code session in a new tab where you narrate this episode and the characters respond",
     // 初めのメッセージは Claude とスキルに向けるので日本語で書く
@@ -159,13 +161,36 @@ export const T = {
     saving: "Saving…",
     unsaved: "Unsaved changes",
     savedAt: (time: string) => `Saved ${time}`,
-    autosave: "Saved every 5 seconds",
-    saveFailed: (error: string) => `Could not save (retrying): ${error}`,
+    saved: "Saved",
+    save: "Save",
+    saveHint: "Save the main text (Ctrl+S)",
+    saveFailed: (error: string) => `Could not save: ${error}`,
     finish: "Finish ↗",
     finishHint: "Open a new Claude Code session that records this episode's main text into the world (ideas, summary, relations, histories)",
     // 初めのメッセージは Claude とスキルに向けるので日本語で書く
     claudePromptFinish: (id: string) => `ep${id} 書いた`,
-    placeholder: "Write the main text here. ＋ on a turn inserts its line at the cursor. Saved every 5 seconds.",
+    placeholder: "Write the main text here. ＋ on a turn inserts its line at the cursor. Ctrl+S saves.",
+  },
+
+  comment: {
+    title: "Comment",
+    noEpisode: "Open this page from an episode (?episode=<id>)",
+    live: "Live (every second)",
+    paused: "Paused",
+    pause: "Pause",
+    resume: "Resume",
+    empty: "No comments yet. Start the narrator and characters, write, and press Ctrl+S.",
+    count: (count: number) => `${count} comments`,
+    narrator: "Narrator",
+    start: "Start ↗",
+    startHint: "Open a new Claude Code session that starts the narrator and characters for this episode",
+    // 初めのメッセージは Claude とスキルに向けるので日本語で書く
+    claudePromptStart: (id: string) => `ep${id} com`,
+    close: "Close",
+    closeHint: "Tell the narrator and characters that you are done, so they stop",
+    confirmClose: "Stop the narrator and characters? Unsaved text is not sent.",
+    closed: "Sent the stop signal",
+    quoteMissing: "This passage is no longer in the main text",
   },
 
   create: {

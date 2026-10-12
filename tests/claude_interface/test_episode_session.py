@@ -42,7 +42,7 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    Character, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp, get_env_session,
+    Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp, get_env_session,
 )
 from tool import episode_session
 
@@ -520,6 +520,33 @@ def test_read_episode_brief_adjusts_voices(shown, world, mock_ai, monkeypatch):
     member = next(member for member in first["この話"]["登場人物"] if member["人物id"] == taro)
     assert (member["一人称"], member["口調"], member["二人称"]) == ("俺", "砕けた短い言い切り", "あなた")
     assert "直前の話の本文(古い順)" in prompts[0]
+
+
+def test_read_episode_brief_keeps_voices_decided_after_the_samples(shown, world, mock_ai, monkeypatch):
+    taro, hanako = world.character_ids
+    with get_env_session() as s:
+        s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
+                      start="1200/03/01 12:00:00", event_seeded=True))
+        # 見本の話より後に、作者が太郎の口調を変えた
+        s.add(CharacterParameter(character_id=taro, start=Stamp.parse("1200/03/15 12:00:00"), tone="作者が決めた口調"))
+        s.commit()
+    asked = []
+
+    def generate(prompt, output, *args, **kwargs):
+        if output is VoiceDrafts:
+            asked.append(prompt)
+            return VoiceDrafts(voices=[
+                VoiceDraft(character_id=taro, first_person=None, second_person=None, third_person=None,
+                           tone="見本に戻した口調", dialect=None)])
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
+
+    # 変える前の見本では太郎の話し方を直さない。AI が太郎を返しても書かない
+    assert all("テスト太郎" not in prompt for prompt in asked)
+    member = next(member for member in result["この話"]["登場人物"] if member["人物id"] == taro)
+    assert member["口調"] == "作者が決めた口調"
 
 
 def test_session_turns(shown, world):
