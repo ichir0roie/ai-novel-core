@@ -249,9 +249,10 @@ def relations(s: Session = Depends(session_dep)) -> RelationsResponse:
 
 
 @app.get("/api/character_locations", response_model=CharacterLocationsResponse)
-def character_locations(s: Session = Depends(session_dep)) -> CharacterLocationsResponse:
-    """人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う"""
-    return CharacterLocationsResponse(locations=latest_location_ids(s))
+def character_locations(time: str | None = None, s: Session = Depends(session_dep)) -> CharacterLocationsResponse:
+    """人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う。
+    `time` を渡せば、その時刻にいる場所(その時刻にどこにもいない人物は出ない)"""
+    return CharacterLocationsResponse(locations=latest_location_ids(s, Stamp.parse(time)))
 
 
 @app.get("/api/location_characters", response_model=LocationCharactersResponse)

@@ -191,6 +191,18 @@ def test_character_locations(client, world):
     assert all(locations[str(character_id)] == world.location_id for character_id in world.character_ids)
 
 
+def test_character_locations_at_time(client, world):
+    # 居場所は 1170/01/01 から、没年は 1260/01/01
+    def located(time: str) -> set[str]:
+        response = client.get("/api/character_locations", params={"time": time})
+        assert response.status_code == 200
+        return set(response.json()["locations"]) & {str(character_id) for character_id in world.character_ids}
+
+    assert located("1200/01/01") == {str(character_id) for character_id in world.character_ids}
+    assert located("1169/12/31") == set()
+    assert located("1260/01/01") == set()
+
+
 def test_batch(client, world):
     response = client.post("/api/batch", json={"paths": [
         f"/api/tables/episode/records/{world.episode_id}",

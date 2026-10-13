@@ -1,7 +1,10 @@
 import type { Rec } from "./api";
 
 /** 人物一覧のツリー。場所(location)を `parent_id` で木にし、人物は今いる場所(`/api/character_locations` が
- *  返す、一番新しく設定された居場所)の下に置く。居場所を一つも持たない人物は `unplaced` に出す。 */
+ *  返す、一番新しく設定された居場所。時刻で絞ればその時刻の居場所)の下に置く。居場所を一つも持たない人物は `unplaced` に出す。
+ *  `focusLocationId` を渡すと、その場所の配下と、その場所までの上位の場所(そこに住む人物だけ)に絞る。
+ *  居場所は国・地方のように広めに持つことがあるので、上位の場所にいる人物もその場所にいるとみなす
+ *  (`data_access_logic/character/location_characters.py` と同じ)。 */
 
 export type TreeCharacter = {
   id: number;
@@ -28,8 +31,13 @@ export function buildCharacterTree(
   locations: Rec[],
   characters: Rec[],
   characterLocations: Record<string, number>,
+  focusLocationId: number | null = null,
 ): CharacterTree {
   const known = new Set(locations.map((l) => Number(l.id)));
+  const parentOf = new Map(locations.map((l) => [Number(l.id), num(l.parent_id)]));
+  // 絞り込みの場所から最上位までの道筋。辿った先が環になっていても止まる
+  const path = new Set<number>();
+  for (let at = focusLocationId; at !== null && known.has(at) && !path.has(at); at = parentOf.get(at) ?? null) path.add(at);
   const children = new Map<number | null, Rec[]>();
   for (const location of [...locations].sort((a, b) => Number(a.id) - Number(b.id))) {
     const parent = num(location.parent_id);
@@ -50,9 +58,14 @@ export function buildCharacterTree(
     else charactersAt.set(at, [...(charactersAt.get(at) ?? []), entry]);
   }
 
-  const node = (location: Rec): TreeNode | null => {
+  // inside: 絞り込みの場所かその配下にいる(配下はすべて出す)。外なら道筋の上の子だけを辿る
+  const node = (location: Rec, inside: boolean): TreeNode | null => {
     const id = Number(location.id);
-    const subtree = (children.get(id) ?? []).map(node).filter((n): n is TreeNode => n !== null);
+    const within = inside || id === focusLocationId;
+    const subtree = (children.get(id) ?? [])
+      .filter((child) => within || path.has(Number(child.id)))
+      .map((child) => node(child, within))
+      .filter((n): n is TreeNode => n !== null);
     const own = charactersAt.get(id) ?? [];
     if (subtree.length === 0 && own.length === 0) return null;
     return {
@@ -60,7 +73,9 @@ export function buildCharacterTree(
       total: own.length + subtree.reduce((sum, child) => sum + child.total, 0),
     };
   };
-  return { nodes: (children.get(null) ?? []).map(node).filter((n): n is TreeNode => n !== null), unplaced };
+  const all = focusLocationId === null;
+  const roots = (children.get(null) ?? []).filter((root) => all || path.has(Number(root.id)));
+  return { nodes: roots.map((root) => node(root, all)).filter((n): n is TreeNode => n !== null), unplaced: all ? unplaced : [] };
 }
 
 /** 開閉できるノード(場所)の id をすべて集める。「すべて閉じる」で使う。 */

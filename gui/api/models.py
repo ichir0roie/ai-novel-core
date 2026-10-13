@@ -114,7 +114,7 @@ class RelationsResponse(RelationGraph):
 
 
 class CharacterLocationsResponse(BaseModel):
-    # 人物 id をキーに、一番新しく設定された居場所(location の id)。居場所を持たない人物は出ない
+    # 人物 id をキーに、一番新しく設定された居場所(location の id。時刻を渡せばその時刻の居場所)。居場所を持たない人物は出ない
     locations: dict[int, int]
 
 

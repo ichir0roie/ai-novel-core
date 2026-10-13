@@ -278,7 +278,11 @@ export const T = {
     openLocation: "Open location",
     noCharacters: "No characters yet",
     noLocation: "No location",
+    noLocationAt: "No location at this time",
+    noMatch: "No characters at this location and time",
     collapseAll: "Collapse all",
+    location: "Location",
+    at: "At",
   },
 
   ideaTree: {
