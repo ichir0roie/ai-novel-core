@@ -435,11 +435,14 @@ export const T = {
     openInNewTab: "Open in new tab",
     newEpisode: "New episode",
     newEpisodeIn: (story: string) => `Story: ${story}`,
-    newEpisodeStart: "Start",
+    start: "Start",
+    end: "End (empty for a point in time)",
     newEpisodeTitle: "title",
     newEpisodePlot: "plot_text",
     newEpisodeNoStory: "Pick a story row to add here, or open the full form",
     addEpisode: "Add",
+    saved: (label: string) => `Saved ${label}`,
+    confirmDiscardEdit: "Discard the unsaved time / plot_text?",
   },
 
   eventTimeline: {
