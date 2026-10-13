@@ -10,6 +10,7 @@ import NameId from "./NameId";
 import { useOptions } from "./ReferenceSelect";
 import StampInput from "./StampInput";
 import { columnHint, columnsHint } from "@/lib/hint";
+import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 /** スキーマに無い、行から計算するだけの読み取り専用の列(居場所の期間から出す年齢など)。指定した列の右に挿む。 */
@@ -54,12 +55,49 @@ function ChipLabel({ chip }: { chip: Chip }) {
   return chip.hint ? <Spec hint={chip.hint}>{chip.label}</Spec> : <>{chip.label}</>;
 }
 
-function chipOf(column: ColumnMeta): Chip {
+/** 行ごとの、前の行から引き継ぐ値(その行で空の欄だけ)。 */
+type Inherited = WeakMap<Rec, Rec>;
+
+function isEmpty(value: unknown): boolean {
+  return value == null || value === "";
+}
+
+/** 終わりを持たない行(人物のパラメータ)は、空の欄に前に始まった行の値が効き続ける(`data_access_logic/character/parameters.py` の
+ * `parameters_at` と同じ重ね方: 始まりの古い順、同じなら後の行が勝つ)。空の欄だけが「—」に見えて値が消えたように読めないよう、
+ * 引き継ぐ値を引いておく。 */
+function inheritedValues(rows: Rec[], columns: ColumnMeta[]): Inherited {
+  const order = rows.map((row, index) => ({ row, index, at: stampOrder(row.start) }))
+    .sort((a, b) => (a.at === b.at ? a.index - b.index : a.at < b.at ? -1 : 1));
+  const inherited: Inherited = new WeakMap();
+  const current: Rec = {};
+  for (const { row } of order) {
+    const carried: Rec = {};
+    for (const column of columns) {
+      if (column.key === "start") continue;
+      if (isEmpty(row[column.key])) {
+        if (!isEmpty(current[column.key])) carried[column.key] = current[column.key];
+      } else {
+        current[column.key] = row[column.key];
+      }
+    }
+    inherited.set(row, carried);
+  }
+  return inherited;
+}
+
+function chipOf(column: ColumnMeta, inherited?: Inherited): Chip {
   return {
     key: column.key,
     label: column.key,
     hint: columnHint(column),
-    render: (row) => <ReadValue column={column} value={row[column.key]} />,
+    render: (row) => {
+      const carried = isEmpty(row[column.key]) ? inherited?.get(row)?.[column.key] : undefined;
+      return carried === undefined ? (
+        <ReadValue column={column} value={row[column.key]} />
+      ) : (
+        <span className="inherited" title={T.childList.inherited}><ReadValue column={column} value={carried} /></span>
+      );
+    },
   };
 }
 
@@ -97,7 +135,7 @@ function SoloField({ chip, row }: { chip: Chip; row: Rec }) {
  * (一人称・二人称・三人称や性格など)はまとめて 1 行の札の並び(ChipGrid)にして下に置く。 */
 type RowSpec = { key: string; label: ReactNode; render: (row: Rec) => ReactNode };
 
-function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowSpec[] {
+function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[], inherited?: Inherited): RowSpec[] {
   const byKey = new Map(columns.map((c) => [c.key, c]));
   const consumed = new Set<string>();
   const soloSpecs: RowSpec[] = [];
@@ -130,13 +168,13 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
   const soloColumns = [...CHILD_FREEFORM_TEXT_KEYS].map((key) => byKey.get(key)).filter((c): c is ColumnMeta => c != null);
   for (const column of soloColumns) {
     consumed.add(column.key);
-    const chip = chipOf(column);
+    const chip = chipOf(column, inherited);
     soloSpecs.push({ key: `__solo_${column.key}`, label: "", render: (row) => <SoloField chip={chip} row={row} /> });
   }
 
   const chips: Chip[] = [];
   for (const column of columns) {
-    if (!consumed.has(column.key)) chips.push(chipOf(column));
+    if (!consumed.has(column.key)) chips.push(chipOf(column, inherited));
   }
 
   const specs: RowSpec[] = [...soloSpecs];
@@ -155,7 +193,8 @@ function buildRowSpecs(columns: ColumnMeta[], extraColumns: ExtraColumn[]): RowS
  * 列(期間)ごとに幅を固定し、はみ出す分は横スクロールで見せる。
  * クリック・ホバーの単位は列(期間・レコード)全体で、項目(マス)単位ではハイライトしない。 */
 function ReadOnlyTable({ meta, rows, extraColumns, onOpen }: { meta: ChildListMeta; rows: Rec[]; extraColumns: ExtraColumn[]; onOpen: (index: number) => void }) {
-  const rowSpecs = buildRowSpecs(meta.columns, extraColumns);
+  const layered = meta.columns.some((c) => c.key === "start") && !meta.columns.some((c) => c.key === "end");
+  const rowSpecs = buildRowSpecs(meta.columns, extraColumns, layered ? inheritedValues(rows, meta.columns) : undefined);
   const [hovered, setHovered] = useState<number | null>(null);
   const columnProps = (index: number) => ({
     className: `clickable${hovered === index ? " hover" : ""}`,

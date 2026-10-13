@@ -314,6 +314,7 @@ export const T = {
     removeRow: "Remove this row",
     addRow: "+ Add row",
     close: "Close",
+    inherited: "Carried over from an earlier row (this row leaves it empty)",
   },
 
   knowers: {
