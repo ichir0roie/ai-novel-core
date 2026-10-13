@@ -436,6 +436,8 @@ export const T = {
     newEpisodePlot: "plot_text",
     newEpisodeNoStory: "Pick a story row to add here, or open the full form",
     addEpisode: "Add",
+    savedPlot: (label: string) => `Saved the plot of ${label}`,
+    confirmDiscardPlot: "Discard the unsaved plot_text?",
   },
 
   eventTimeline: {

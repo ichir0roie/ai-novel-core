@@ -13,8 +13,7 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { AutoGrowTextarea } from "@/components/FieldInput";
 import Modal from "@/components/Modal";
 import NewEpisodeModal from "@/components/NewEpisodeModal";
 import ReferenceSelect from "@/components/ReferenceSelect";
@@ -196,6 +195,8 @@ function itemsOf(data: TimelineResponse): Item[] {
   }
   return items;
 }
+
+const plotOf = (item: Item) => String(item.record.plot_text ?? "");
 
 function saveFilter(
   filter: Record<string, string | number | null | undefined>,
@@ -417,9 +418,11 @@ export default function TimelinePage() {
   const [editing, setEditing] = useState(false);
   const [changes, setChanges] = useState<Map<number, Change>>(new Map());
   const [applying, setApplying] = useState(false);
-  // 空いた所を押して足す話の初期値・作品の名前
-  // 押した話。吹き出しと同じく読み込んだ話から出し、開くたびに引かない
+  // 押した話。吹き出しと同じく読み込んだ話から出し、開くたびに引かない。plot は書きかけのプロット
   const [viewing, setViewing] = useState<Item | null>(null);
+  const [plot, setPlot] = useState("");
+  const [savingPlot, setSavingPlot] = useState(false);
+  // 空いた所を押して足す話の初期値・作品の名前
   const [adding, setAdding] = useState<{
     initial: Rec;
     storyLabel: string | null;
@@ -824,6 +827,7 @@ export default function TimelinePage() {
     setDrag(null);
     if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) {
       setViewing(item);
+      setPlot(plotOf(item));
       return;
     }
     // 変更モードの外では札を動かさない
@@ -831,6 +835,42 @@ export default function TimelinePage() {
     // 列を移すときの手ぶれで時刻が動かないよう、縦にしきい値を超えて動かしたときだけ時刻を送る
     const days = Math.abs(dy) > DRAG_THRESHOLD ? daysAt(item, dy) : 0;
     if (days !== 0 || over !== null) move(item, days, over);
+  };
+
+  // 保存したプロットを出すよう、押した話は読み直した話から引く
+  const viewingNow = viewing
+    ? (items.find((item) => item.id === viewing.id) ?? viewing)
+    : null;
+  const plotDirty = viewingNow !== null && plot !== plotOf(viewingNow);
+
+  /** 押した話のモーダルを閉じる。書きかけのプロットがあれば捨ててよいかを尋ねる */
+  const closeViewing = () => {
+    if (plotDirty && !window.confirm(T.timeline.confirmDiscardPlot)) return;
+    setViewing(null);
+  };
+
+  const savePlot = async (item: Item) => {
+    setSavingPlot(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await updateEpisodes([{ id: item.id, plot_text: plot }]);
+      const result = await getTimeline({ story_id: storyId });
+      setData(result);
+      // 移しを溜めた話は移しの元(読み込んだときの話)から描くので、元も読み直した話に替えて直したプロットを出す
+      const base = itemsOf(result).find((fresh) => fresh.id === item.id);
+      setChanges((previous) => {
+        const change = previous.get(item.id);
+        return change && base
+          ? new Map(previous).set(item.id, { ...change, base })
+          : previous;
+      });
+      setMessage(T.timeline.savedPlot(item.label));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingPlot(false);
+    }
   };
 
   /** 空いた所を押したら、その日・その列の作品で話を足す(時刻・タイトル・プロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
@@ -1189,22 +1229,21 @@ export default function TimelinePage() {
           )}
         </div>
       )}
-      {viewing && (
+      {viewingNow && (
         <Modal
-          title={viewing.label}
-          onClose={() => setViewing(null)}
+          title={viewingNow.label}
+          onClose={closeViewing}
           actions={
             <>
               <span className="spacer" />
-              <button type="button" onClick={() => setViewing(null)}>
+              <button type="button" onClick={closeViewing}>
                 {T.close}
               </button>
               <button
                 type="button"
-                className="primary"
                 onClick={() =>
                   window.open(
-                    `/tables/episode/${viewing.id}`,
+                    `/tables/episode/${viewingNow.id}`,
                     "_blank",
                     "noopener,noreferrer",
                   )
@@ -1212,23 +1251,24 @@ export default function TimelinePage() {
               >
                 {T.timeline.openInNewTab}
               </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={!plotDirty || savingPlot}
+                onClick={() => void savePlot(viewingNow)}
+              >
+                {T.record.save}
+              </button>
             </>
           }
         >
           <div className="timeline-sheet">
-            {detailLines(viewing).filter(Boolean).join("\n")}
+            {detailLines(viewingNow).filter(Boolean).join("\n")}
           </div>
-          <div className="field section auto">
+          {/* プレビューと切り替える欄(MarkdownField)だと、外れたときに高さが変わって下のボタンの押下が外れるので、常に書ける欄にする */}
+          <div className="field">
             <label>plot_text</label>
-            <div className="section markdown-preview auto">
-              {viewing.record.plot_text ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {String(viewing.record.plot_text)}
-                </ReactMarkdown>
-              ) : (
-                <span className="hint">{T.characterSheet.noText}</span>
-              )}
-            </div>
+            <AutoGrowTextarea value={plot} onChange={setPlot} />
           </div>
         </Modal>
       )}
