@@ -196,7 +196,14 @@ function itemsOf(data: TimelineResponse): Item[] {
   return items;
 }
 
-const plotOf = (item: Item) => String(item.record.plot_text ?? "");
+// 押した話のモーダルで直す欄。時刻は空なら null
+type EpisodeEdit = { start: string | null; end: string | null; plot: string };
+
+const editOf = ({ record }: Item): EpisodeEdit => ({
+  start: (record.start as string | null) ?? null,
+  end: (record.end as string | null) ?? null,
+  plot: String(record.plot_text ?? ""),
+});
 
 function saveFilter(
   filter: Record<string, string | number | null | undefined>,
@@ -418,10 +425,11 @@ export default function TimelinePage() {
   const [editing, setEditing] = useState(false);
   const [changes, setChanges] = useState<Map<number, Change>>(new Map());
   const [applying, setApplying] = useState(false);
-  // 押した話。吹き出しと同じく読み込んだ話から出し、開くたびに引かない。plot は書きかけのプロット
+  // 押した話。吹き出しと同じく読み込んだ話から出し、開くたびに引かない。edit は書きかけの時刻・プロット
   const [viewing, setViewing] = useState<Item | null>(null);
-  const [plot, setPlot] = useState("");
-  const [savingPlot, setSavingPlot] = useState(false);
+  const [edit, setEdit] = useState<EpisodeEdit | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   // 空いた所を押して足す話の初期値・作品の名前
   const [adding, setAdding] = useState<{
     initial: Rec;
@@ -827,7 +835,8 @@ export default function TimelinePage() {
     setDrag(null);
     if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) {
       setViewing(item);
-      setPlot(plotOf(item));
+      setEdit(editOf(item));
+      setEditError(null);
       return;
     }
     // 変更モードの外では札を動かさない
@@ -837,39 +846,58 @@ export default function TimelinePage() {
     if (days !== 0 || over !== null) move(item, days, over);
   };
 
-  // 保存したプロットを出すよう、押した話は読み直した話から引く
+  // 保存した時刻・プロットを出すよう、押した話は読み直した話から引く。移しを溜めた話は移したあとの時刻を出す
   const viewingNow = viewing
     ? (items.find((item) => item.id === viewing.id) ?? viewing)
     : null;
-  const plotDirty = viewingNow !== null && plot !== plotOf(viewingNow);
+  const shown = viewingNow && editOf(viewingNow);
+  const plotChanged = !!edit && !!shown && edit.plot !== shown.plot;
+  const timeChanged =
+    !!edit && !!shown && (edit.start !== shown.start || edit.end !== shown.end);
 
-  /** 押した話のモーダルを閉じる。書きかけのプロットがあれば捨ててよいかを尋ねる */
+  /** 押した話のモーダルを閉じる。書きかけの時刻・プロットがあれば捨ててよいかを尋ねる */
   const closeViewing = () => {
-    if (plotDirty && !window.confirm(T.timeline.confirmDiscardPlot)) return;
+    if (
+      (plotChanged || timeChanged) &&
+      !window.confirm(T.timeline.confirmDiscardEdit)
+    )
+      return;
     setViewing(null);
   };
 
-  const savePlot = async (item: Item) => {
-    setSavingPlot(true);
+  /** 押した話の時刻・プロットを保存する。時刻はどちらかを変えたら両方を渡す(溜めた移しを当てた時刻を書くため) */
+  const saveEdit = async (item: Item) => {
+    if (!edit) return;
+    setSavingEdit(true);
+    setEditError(null);
     setError(null);
     setMessage(null);
     try {
-      await updateEpisodes([{ id: item.id, plot_text: plot }]);
+      await updateEpisodes([
+        {
+          id: item.id,
+          ...(plotChanged ? { plot_text: edit.plot } : {}),
+          ...(timeChanged ? { start: edit.start, end: edit.end } : {}),
+        },
+      ]);
       const result = await getTimeline({ story_id: storyId });
       setData(result);
-      // 移しを溜めた話は移しの元(読み込んだときの話)から描くので、元も読み直した話に替えて直したプロットを出す
+      // 移しを溜めた話は移しの元(読み込んだときの話)から描くので、元も読み直した話に替える。時刻を書いたら、溜めた時刻の移しは書いた時刻に含めたので外す
       const base = itemsOf(result).find((fresh) => fresh.id === item.id);
       setChanges((previous) => {
         const change = previous.get(item.id);
-        return change && base
-          ? new Map(previous).set(item.id, { ...change, base })
-          : previous;
+        if (!change || !base) return previous;
+        const next = new Map(previous);
+        const days = timeChanged ? 0 : change.days;
+        if (days === 0 && change.story === null) next.delete(item.id);
+        else next.set(item.id, { ...change, base, days });
+        return next;
       });
-      setMessage(T.timeline.savedPlot(item.label));
+      setMessage(T.timeline.saved(item.label));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setEditError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSavingPlot(false);
+      setSavingEdit(false);
     }
   };
 
@@ -1254,8 +1282,10 @@ export default function TimelinePage() {
               <button
                 type="button"
                 className="primary"
-                disabled={!plotDirty || savingPlot}
-                onClick={() => void savePlot(viewingNow)}
+                disabled={
+                  !(plotChanged || timeChanged) || savingEdit || !edit?.start
+                }
+                onClick={() => void saveEdit(viewingNow)}
               >
                 {T.record.save}
               </button>
@@ -1265,11 +1295,35 @@ export default function TimelinePage() {
           <div className="timeline-sheet">
             {detailLines(viewingNow).filter(Boolean).join("\n")}
           </div>
-          {/* プレビューと切り替える欄(MarkdownField)だと、外れたときに高さが変わって下のボタンの押下が外れるので、常に書ける欄にする */}
-          <div className="field">
-            <label>plot_text</label>
-            <AutoGrowTextarea value={plot} onChange={setPlot} />
-          </div>
+          {editError && <div className="status error">{editError}</div>}
+          {edit && (
+            <>
+              <div className="field">
+                <label>{T.timeline.start}</label>
+                <StampInput
+                  value={edit.start}
+                  onChange={(start) => setEdit({ ...edit, start })}
+                  disabled={savingEdit}
+                />
+              </div>
+              <div className="field">
+                <label>{T.timeline.end}</label>
+                <StampInput
+                  value={edit.end}
+                  onChange={(end) => setEdit({ ...edit, end })}
+                  disabled={savingEdit}
+                />
+              </div>
+              {/* プレビューと切り替える欄(MarkdownField)だと、外れたときに高さが変わって下のボタンの押下が外れるので、常に書ける欄にする */}
+              <div className="field">
+                <label>plot_text</label>
+                <AutoGrowTextarea
+                  value={edit.plot}
+                  onChange={(plot) => setEdit({ ...edit, plot })}
+                />
+              </div>
+            </>
+          )}
         </Modal>
       )}
       {adding && (

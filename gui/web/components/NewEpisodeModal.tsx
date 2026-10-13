@@ -20,10 +20,11 @@ type Props = {
   onAdded: () => void;
 };
 
-/** タイムラインの空いた所を押したときの小さなモーダル。時刻・タイトル・プロットだけでその場で話を足すか、
+/** タイムラインの空いた所を押したときの小さなモーダル。時刻(start・end)・タイトル・プロットだけでその場で話を足すか、
  * ほかの欄も書くなら追加ページを別タブに開く。 */
 export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded }: Props) {
   const [start, setStart] = useState<string | null>((initial.start as string | null) ?? null);
+  const [end, setEnd] = useState<string | null>((initial.end as string | null) ?? null);
   const [title, setTitle] = useState("");
   const [plot, setPlot] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,7 +33,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
 
   const open = () => {
     const params = new URLSearchParams(
-      Object.entries({ ...initial, start, title: title || null, plot_text: plot || null }).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
+      Object.entries({ ...initial, start, end, title: title || null, plot_text: plot || null }).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
     );
     window.open(`/tables/episode/new?${params}`, "_blank", "noopener,noreferrer");
     onClose();
@@ -43,7 +44,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
     setBusy(true);
     setError(null);
     try {
-      const data: Rec = { ...initial, start, title, plot_text: plot };
+      const data: Rec = { ...initial, start, end, title, plot_text: plot };
       const previous = await getPreviousEpisode(storyId, start);
       for (const key of COPIED_KEYS) {
         const v = previous?.[key];
@@ -81,8 +82,12 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
       {error && <div className="status error">{error}</div>}
       <div className="hint">{storyLabel ? T.timeline.newEpisodeIn(storyLabel) : T.timeline.newEpisodeNoStory}</div>
       <div className="field">
-        <label>{T.timeline.newEpisodeStart}</label>
+        <label>{T.timeline.start}</label>
         <StampInput value={start} onChange={setStart} />
+      </div>
+      <div className="field">
+        <label>{T.timeline.end}</label>
+        <StampInput value={end} onChange={setEnd} />
       </div>
       <div className="field">
         <label>{T.timeline.newEpisodeTitle}</label>
