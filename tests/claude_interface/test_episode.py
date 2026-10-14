@@ -1,11 +1,12 @@
 """claude が CLI から `show()` で呼ぶ、話(`data_access_logic/episode/`)の入口。"""
 from data_access_logic.episode.commit_episode import CommitEpisode
-from data_access_logic.episode.form import EpisodeCommitForm
+from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
 from data_access_logic.episode.read_episodes import ReadEpisodes
+from data_access_logic.episode.revise_episode import ReviseEpisode
 from data_access_logic.episode.rewrite_episode_summary import RewriteEpisodeSummary
 from data_access_logic.episode.set_episode_synced import SetEpisodeSynced
 from data_access_logic.episode.relations import EpisodeRelationsDraft, RelationDraft
-from data_access_logic.flows.commit import commit_episode
+from data_access_logic.flows.commit import commit_episode, revise_episode
 from db.schema import CharacterRelation, Episode, get_env_session, summary_source_hash
 from tool.test.mock_ai_client import MockAIClient
 
@@ -93,3 +94,34 @@ def test_commit_episode_relates_the_cast(world):
         assert [(str(history.start), history.description) for history in added.histories] == [
             ("1200/04/01 12:00:00", "市で名乗り合った")]
     assert '"誰から(人物id)"' in ai.calls[-1]["prompt"]
+
+
+def test_revise_episode(shown, world, mock_ai):
+    with get_env_session() as s, s.begin():
+        s.get_one(Episode, world.episode_id).synced = True
+
+    result = shown(ReviseEpisode(EpisodeReviseForm(id=world.episode_id, main_text="市で二人が出会い、名乗り合った。")))
+
+    assert "名乗り合った。" in result["main_text"]
+    # 推敲は同期フラグを保ち、渡さなかったプロット・題は空で上書きしない
+    assert result["synced"] is True
+    assert result["plot_text"] and result["title"]
+    with get_env_session() as s:
+        episode = s.get_one(Episode, world.episode_id)
+        assert episode.summary_source_hash == summary_source_hash(episode.main_text.strip())
+
+
+def test_revise_episode_leaves_relations(world):
+    taro, hanako = world.character_ids
+    ai = _RelatingAI([RelationDraft(character_1_id=hanako, character_2_id=taro, relation="市で出会った人", text="",
+                                    history="")])
+    with get_env_session() as s:
+        before = s.query(CharacterRelation).count()
+
+    revise_episode(EpisodeReviseForm(id=world.episode_id, main_text="市で花子が太郎に名乗った。", plot_text="名乗り"), ai)
+
+    # 本文から関係・居場所を動かす段は回さない
+    assert not any("誰から(人物id)" in call["prompt"] for call in ai.calls)
+    with get_env_session() as s:
+        assert s.query(CharacterRelation).count() == before
+        assert s.get_one(Episode, world.episode_id).plot_text == "名乗り"
