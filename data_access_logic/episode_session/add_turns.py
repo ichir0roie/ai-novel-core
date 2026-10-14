@@ -16,7 +16,8 @@ class AddTurns(CommitEntrypoint):
 
     `narration` を渡すと、その場の何人もに見える・聞こえる状況を語りの行として手番の前に一つだけ足し、
     `witness_ids` の人物それぞれの次の番で届ける。手番の人物の一手も、見聞きする人物(手番の `witness_ids`、
-    空なら `witness_ids`)の次の番で届く。一手には名前が付くので、届けるのは知り合い(語り部の材料の「知り合い」)にだけ。
+    書かなければ `witness_ids`)の次の番で届く。一手には名前が付くので、届けるのは知り合い(語り部の材料の「知り合い」)にだけ。
+    どちらも渡さない手番は断る。だれにも届けない一手は、`witness_ids` に `[]` を渡す。
     """
 
 
@@ -25,7 +26,7 @@ class AddTurns(CommitEntrypoint):
         self.episode_id = episode_id
         self.turns = turns
         self.narration = narration
-        self.witness_ids = witness_ids or []
+        self.witness_ids = witness_ids
 
     def execute(self, s: Session) -> list[SessionRecord]:
         self.check_exists(s, Episode, self.episode_id, "episode_id")
@@ -35,9 +36,13 @@ class AddTurns(CommitEntrypoint):
             raise ValueError("turns か narration のどちらかが要る")
         if self.narration is not None and not self.witness_ids:
             raise ValueError("narration には、見聞きする人物(witness_ids)が要る")
+        if self.witness_ids is None and any(turn.witness_ids is None for turn in self.turns):
+            # 渡し忘れると、一手がだれにも届かないまま次の手番が進む
+            raise ValueError("手番の一手を見聞きする人物(witness_ids)が決まっていない。"
+                             "手番か全体に witness_ids を渡す(だれにも届けないなら [])")
         cast_ids = set(s.scalars(select(EpisodeCharacter.character_id).where(
             EpisodeCharacter.episode_id == self.episode_id, EpisodeCharacter.mentioned.is_(False))).all())
-        for character_id in {*self.witness_ids, *(id_ for turn in self.turns for id_ in turn.witness_ids or [])}:
+        for character_id in {*(self.witness_ids or []), *(id_ for turn in self.turns for id_ in turn.witness_ids or [])}:
             if character_id not in cast_ids:
                 raise ValueError(f"witness_ids の人物 id={character_id} は話 id={self.episode_id} の登場人物でない")
 
@@ -45,7 +50,7 @@ class AddTurns(CommitEntrypoint):
         if self.narration is not None:
             rows.append(EpisodeCharacterSession(
                 episode_id=self.episode_id, time=self.turns[0].time if self.turns else None, request=self.narration,
-                witnesses=[EpisodeCharacterSessionWitness(character_id=id_) for id_ in dict.fromkeys(self.witness_ids)]))
+                witnesses=[EpisodeCharacterSessionWitness(character_id=id_) for id_ in dict.fromkeys(self.witness_ids or [])]))
         known = acquaintances(s, self.episode_id) if any(self._witnesses_of(turn) for turn in self.turns) else set()
         for turn in self.turns:
             self.check_exists(s, Character, turn.character_id, "character_id")
@@ -69,5 +74,5 @@ class AddTurns(CommitEntrypoint):
         return records
 
     def _witnesses_of(self, turn: TurnRequest) -> list[int]:
-        return [id_ for id_ in dict.fromkeys(self.witness_ids if turn.witness_ids is None else turn.witness_ids)
+        return [id_ for id_ in dict.fromkeys((self.witness_ids or []) if turn.witness_ids is None else turn.witness_ids)
                 if id_ != turn.character_id]

@@ -12,7 +12,7 @@
 期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
-本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
+本人には外見・ミーム・行動原理を、関係のある人物には外見を渡す。芯(`text`)と plot は作者と語り部が持つもので、だれにも渡さない。
 """
 from __future__ import annotations
 
@@ -145,7 +145,6 @@ def appearance_of(character: Character, time: Stamp) -> AppearanceSerialized:
 class KnownSelf(Material):
     name: str | None = None
     looks: AppearanceSerialized
-    text: str | None = None
     meme: str | None = None
     principle: str | None = None
     histories: list[KnownHistory]
@@ -155,7 +154,6 @@ class KnownSelf(Material):
 class KnownCharacter(Material):
     name: str | None = None
     looks: AppearanceSerialized
-    text: str | None = None
     histories: list[KnownHistory]
     skills: list[KnownSkill]
 
@@ -185,13 +183,13 @@ class KnowledgeSerialized(Material):
             "自分": {
                 "名前": me.name, **me.looks.model_dump(), "名字": parameters.family_name,
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
-                "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
+                "口調": parameters.tone, "方言": parameters.dialect, "ミーム": me.meme,
                 "行動原理": me.principle, "来歴(古い順)": _histories_for_prompt(me.histories, year),
                 "スキル": _skills_for_prompt(me.skills, year),
             },
             "関係": _relations_for_prompt(self.relations, year),
             "知っている人物": [
-                {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
+                {"名前": character.name, **character.looks.model_dump(),
                  "来歴(古い順)": _histories_for_prompt(character.histories, year),
                  "スキル": _skills_for_prompt(character.skills, year)}
                 for character in self.characters],
@@ -309,12 +307,11 @@ def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> 
     return KnowledgeSerialized(
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(character, time),
-                     text=character.text, meme=character.meme, principle=character.principle,
+                     meme=character.meme, principle=character.principle,
                      histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer)),
         parameters=parameters_at(character, time),
         relations=relations_at(s, [character], time, dated_alive_at),
         characters=[KnownCharacter(name=other.name, looks=appearance_of(other, time),
-                                   text=other.text,
                                    histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
                     for other in others],
         ideas=_ideas(s, viewer, _in_text(plot_text)),
