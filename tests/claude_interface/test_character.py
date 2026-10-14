@@ -163,8 +163,8 @@ class _NamingAI:
         self.prompts.append((output, prompt))
         if output is NameMeanings:
             return NameMeanings(given=self.meanings, family=["塩田"])
-        return PersonNameCandidates(candidates=[PersonNameDraft(name=name, reading=name, family_name="")
-                                                for name in self.names])
+        return PersonNameCandidates(language="イタリア語", candidates=[
+            PersonNameDraft(name=name, reading=name, family_name="") for name in self.names])
 
 
 def _name_material(avoided_names: list[str], used_names: list[str] | None = None,
