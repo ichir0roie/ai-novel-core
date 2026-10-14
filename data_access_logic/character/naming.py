@@ -5,14 +5,14 @@ AI だけに一つ決めさせると、同じ参考文化から毎回ありが�
 そこで、環境(居場所の参考地域・文化・時代と、その人物の中身)から名前の候補を AI に `NAME_CANDIDATE_COUNT` 個出させ、
 避ける名を除いてから、サイコロで一つ選ぶ。
 
-候補を出させても、材料が似ていれば AI は毎回同じ候補を並べる。人物では、名の頭の音(行)と拍数を先にサイコロで決めて
-縛りとして渡し、AI のありがちな名から外す。
+候補を出させても、材料が似ていれば AI は毎回同じ文化のありがちな名を並べる。人物では、先に名の元にする意味の語を
+ミーム・行動原理・性格から AI に挙げさせ、そこからサイコロで選んだ意味を、参考文化の言語に訳して名にさせる。
+人物ごとに違うミームから意味を取るので、同じ文化の人物でも名の元の語がばらける。
 
 候補は次の順で絞る。絞って何も残らなければ、その段は飛ばす(前の段ほど優先する)。
 1. 同じ場所にいる人物・対象と同じ名を除く
 2. 同じ場所にいる人物・対象と頭の二音が同じ名(「ゼノ」と「ゼノス」)を除く。読みの分からない漢字の名とは比べない
 3. 世界のどこかで使われている名を除く
-4. サイコロで決めた頭の音・拍数に合わない名を除く(AI が縛りを守らなかったとき)
 """
 from __future__ import annotations
 
@@ -29,14 +29,6 @@ from data_access_logic.character.generator_models import CharacterNameMaterialSe
 
 logger = logging.getLogger(__name__)
 
-# 名の頭の音として引く行。ぱ行・わ行は名の頭に来ることが少なく、どの文化でも似合う名が出にくいので引かない
-_HEAD_ROWS = {
-    "あ行": "あいうえお", "か行": "かきくけこ", "さ行": "さしすせそ", "た行": "たちつてと", "な行": "なにぬねの",
-    "は行": "はひふへほ", "ま行": "まみむめも", "や行": "やゆよ", "ら行": "らりるれろ",
-    "が行": "がぎぐげご", "ざ行": "ざじずぜぞ", "だ行": "だぢづでど", "ば行": "ばびぶべぼゔ",
-}
-# 前の音と合わせて一拍になる小書きの仮名(「きゃ」「ふぁ」)。「っ」「ー」「ん」は一拍に数える
-_SMALL_KANA = set("ゃゅょぁぃぅぇぉゎ")
 # 長音「ー」を前の音の母音に読み替える(「トーマ」と「とうま」を同じ響きとして比べる)。お段・え段の長音は
 # 名の読みでは「う」「い」と書くことが多いのでそれに合わせる
 _LONG_VOWELS = {
@@ -52,14 +44,27 @@ _CANDIDATE_INSTRUCTION = (
     "ただし作者が付けたい名を渡したときは、それが似合うなら(同じ場所の名と重なっても)一つ目にその名を置き、合わなければ一つ目を近い響きにする。"
 )
 
+_MEANING_SYSTEM_PROMPT = f"""\
+あなたは架空の世界観を構築する設定作家だ。
+内容が決まっている人物1件の、名と名字の元にする意味の語を挙げる。材料は日本語の見出しを付けた JSON で渡す。
+名の元にする意味は、ミーム・行動原理から、この人物の芯を象徴する語を {constants.NAME_MEANING_COUNT} 個挙げる。ミームが空なら挙げない。
+それとは別に、性格・人物説明から象徴する語を挙げる(ミームが空のときに使う)。仕事の道具・持ち場の語に寄せない。
+どちらも、信条や性格の語(勇敢・優しい)をそのまま挙げず、それを象徴する物・自然・情景・願いの語(灯・潮・鉄・若木・夜明け)に置き換える。
+親が子に託す願いとして通る語にし、互いに重ならないよう散らす。
+名字の元にする意味は、出身地・身分・家業・参考文化から、家の土地・生業・祖先にまつわる語を挙げる。「決まっている名字」が null でなければ空にする。"""
+
 _PERSON_SYSTEM_PROMPT = f"""\
 あなたは架空の世界観を構築する設定作家だ。
 内容が決まっている人物1件に、名前と名字の候補を付ける。材料は日本語の見出しを付けた JSON で渡す。
 {CHARACTER_NAMING_INSTRUCTION}
-人物説明・年齢・性別・性格・体格や口調から連想できる、この人物に似合う名前にする。年齢からは生まれた頃の名づけの流行を、身分や家業からは名の格を考える。
-居場所の参考地域・参考文化・参考時代を名の響きや漢字・カタカナの選び方の手がかりにして、同じ場所の人物として馴染む名にする(固有名詞をそのまま持ち込まない)。
-名字は、生まれたときに名乗るものを、出身地・身分・家業・参考文化から決める。「決まっている名字」が null でなければ、どの候補の名字もその値にする。
-「名の音の縛り」が null でなければ、どの候補の名(名字を含めない)もその頭の音・拍数にする。その音で始まる名がこの文化に無理なく無ければ、近い音でよい。
+先に、名づけに使う言語を、居場所の参考地域・参考文化・参考時代だけから決める。方言・口調・一人称は日本語の読み物としての書き分けなので、言語を決める手がかりにしない。
+「名の意味」が null でなければ、その意味を元に名を作る。意味をその言語の語に訳し、その言語の名として通る形(名らしい語尾・縮め方・語の組み合わせ)に整えてカタカナで書く。
+参考地域が漢字を使う地域(日本・中国・朝鮮など)のときだけ、意味を表す漢字で名を作る。訳した語を普通名詞のまま名にせず、名として通る形に崩す。
+意味が二つなら、片方を選ぶか二つを組み合わせる。候補ごとに訳語・形を変えて響きを散らす。
+「名の意味」が null なら、人物説明・年齢・性別・性格から連想できる、この人物に似合う名にする。
+年齢からは生まれた頃の名づけの流行を、身分や家業からは名の格を考え、同じ場所の人物として馴染む名にする(固有名詞をそのまま持ち込まない)。
+名字は、生まれたときに名乗るものにする。「名字の意味」が null でなければ同じ手順でその意味から作り、null なら出身地・身分・家業・参考文化から決める。
+「決まっている名字」が null でなければ、どの候補の名字もその値にする。
 {_CANDIDATE_INSTRUCTION}"""
 
 _NON_PERSON_SYSTEM_PROMPT = f"""\
@@ -75,6 +80,8 @@ class PersonNameCandidates(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
+    # 候補より先に書かせ、言語を参考地域・参考文化から決めてから名を作らせる
+    language: str = Field(description="名づけに使う言語。参考地域・参考文化・参考時代だけから決める")
     candidates: list[PersonNameDraft] = Field(description=f"名前の候補。{constants.NAME_CANDIDATE_COUNT} 個")
 
 
@@ -85,25 +92,40 @@ class NameCandidates(BaseModel):
     candidates: list[NameDraft] = Field(description=f"名前の候補。{constants.NAME_CANDIDATE_COUNT} 個")
 
 
-class NameSound(BaseModel):
-    """サイコロで決めた、名の頭の音(行)と拍数。"""
+class NameMeanings(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
 
-    row: str
-    moras: int
-
-    def fits(self, reading: str) -> bool:
-        return bool(reading) and reading[0] in _HEAD_ROWS[self.row] and _mora_count(reading) == self.moras
-
-    def __str__(self) -> str:
-        return f"{self.row}で始まる{self.moras}拍"
+    from_memes: list[str] = Field(
+        description=f"ミーム・行動原理から取った、名の元にする意味の語。{constants.NAME_MEANING_COUNT} 個。ミームが空なら空")
+    from_character: list[str] = Field(description="性格・人物説明から取った、名の元にする意味の語")
+    family: list[str] = Field(description="名字の元にする意味の語。決まっている名字があれば空")
 
 
-def drawn_sound(rng: random.Random) -> NameSound:
-    return NameSound(row=rng.choice(sorted(_HEAD_ROWS)), moras=rng.randint(*constants.NAME_MORA_RANGE))
+class DrawnMeanings(BaseModel):
+    """サイコロで選んだ、名と名字の元にする意味。"""
+
+    given: list[str]
+    family: str | None
 
 
-def _mora_count(reading: str) -> int:
-    return sum(1 for char in reading if char not in _SMALL_KANA)
+def drawn_meanings(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSerialized) -> DrawnMeanings | None:
+    """AI に意味の語を挙げさせ、名の意味を `NAME_MEANING_PICK_RANGE` 個・名字の意味を一つ選ぶ。挙がらなければ None。
+    名の意味はミームから取った語を優先し、それが無いときだけ性格・人物説明から取った語を使う。"""
+    meanings = ai.generate("\n".join([material.model_dump_json(indent=2), "この人物の名と名字の元にする意味を挙げる。"]),
+                           NameMeanings, system=_MEANING_SYSTEM_PROMPT)
+    if meanings is None:
+        return None
+    given = _words(meanings.from_memes) or _words(meanings.from_character)
+    if not given:
+        return None
+    family = _words(meanings.family)
+    return DrawnMeanings(given=rng.sample(given, min(rng.randint(*constants.NAME_MEANING_PICK_RANGE), len(given))),
+                         family=rng.choice(family) if family else None)
+
+
+def _words(words: list[str]) -> list[str]:
+    return list(dict.fromkeys(word.strip() for word in words if word.strip()))
 
 
 def _kana(text: str) -> str | None:
@@ -139,11 +161,12 @@ def _narrowed[Draft: PersonNameDraft | NameDraft](
 
 def named(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSerialized,
           person: bool) -> PersonNameDraft | NameDraft | None:
-    """候補が得られなければ None。作者が付けたい名を渡したときは、サイコロを振らず一つ目の候補(その名か近い響き)にする。"""
-    sound = drawn_sound(rng) if person and not material.hint_name else None
+    """候補が得られなければ None。作者が付けたい名を渡したときは、意味を選ばず一つ目の候補(その名か近い響き)にする。"""
+    meanings = drawn_meanings(ai, rng, material) if person and not material.hint_name else None
     drafts = ai.generate(
         "\n".join([material.model_dump_json(indent=2),
-                   *([f"名の音の縛り: {sound or 'null'}"] if person else []),
+                   *([f"名の意味: {'、'.join(meanings.given) if meanings else 'null'}",
+                      f"名字の意味: {(meanings.family if meanings else None) or 'null'}"] if person else []),
                    "この一件の名前の候補を出す。"]),
         PersonNameCandidates if person else NameCandidates,
         system=_PERSON_SYSTEM_PROMPT if person else _NON_PERSON_SYSTEM_PROMPT)
@@ -162,6 +185,4 @@ def named(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSeria
     fresh = _narrowed(fresh, lambda draft: not _resembles(_reading(draft), avoided_heads))
     used = set(material.used_names)
     fresh = _narrowed(fresh, lambda draft: draft.name not in used)
-    if sound is not None:
-        fresh = _narrowed(fresh, lambda draft: (reading := _reading(draft)) is not None and sound.fits(reading))
     return rng.choice(fresh)

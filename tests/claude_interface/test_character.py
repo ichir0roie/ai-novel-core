@@ -18,7 +18,7 @@ from data_access_logic.character.generate_character import GenerateCharacter
 from data_access_logic.character import steps as character_steps
 from data_access_logic.character.generate_characters import GenerateCharacters
 from data_access_logic.character.generator_models import CharacterNameMaterialSerialized, PersonNameDraft
-from data_access_logic.character.naming import NameSound, PersonNameCandidates, drawn_sound, named
+from data_access_logic.character.naming import NameMeanings, PersonNameCandidates, named
 from data_access_logic.character.list_character_relations import ListCharacterRelations
 from data_access_logic.character.list_characters import ListCharacters
 from data_access_logic.character.read_character import ReadCharacter
@@ -154,12 +154,18 @@ def test_generate_characters_stops_at_resident_limit(shown, world, mock_ai, monk
 
 
 class _NamingAI:
-    def __init__(self, names: list[str]):
+    def __init__(self, names: list[str], meanings: list[str] | None = None, from_character: list[str] | None = None):
         self.names = names
+        self.meanings = meanings or ["灯", "潮", "鉄"]
+        self.from_character = from_character or ["櫂", "桟橋"]
+        self.prompts: list[tuple[type, str]] = []
 
     def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
-        return PersonNameCandidates(candidates=[PersonNameDraft(name=name, reading=name, family_name="")
-                                                for name in self.names])
+        self.prompts.append((output, prompt))
+        if output is NameMeanings:
+            return NameMeanings(from_memes=self.meanings, from_character=self.from_character, family=["塩田"])
+        return PersonNameCandidates(language="イタリア語", candidates=[
+            PersonNameDraft(name=name, reading=name, family_name="") for name in self.names])
 
 
 def _name_material(avoided_names: list[str], used_names: list[str] | None = None,
@@ -188,33 +194,48 @@ def test_named_prefers_names_unused_in_the_world():
     assert _picked_names(["ルカ"], _name_material([], used_names=["ルカ"])) == {"ルカ"}
 
 
-def test_named_prefers_the_drawn_sound():
-    readings = ["ありさ", "かりな", "さらさ", "たにあ", "なおみ", "はるか", "まりえ", "やよい", "らうら", "がりあ",
-                "ざざみ", "だりあ", "ばるば", "ありさな", "あり", "かなりあ", "さくらこ", "りりあな"]
+def test_named_draws_meanings_for_the_name():
+    meanings = ["灯", "潮", "鉄", "若木", "夜明け"]
+    for seed in range(20):
+        ai = _NamingAI(["ルカ"], meanings)
+        named(ai, random.Random(seed), _name_material([]), True)
 
-    class _ReadingAI:
-        def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
-            return PersonNameCandidates(candidates=[PersonNameDraft(name=reading, reading=reading, family_name="")
-                                                    for reading in readings])
-
-    for seed in range(30):
-        sound = drawn_sound(random.Random(seed))
-        draft = named(_ReadingAI(), random.Random(seed), _name_material([]), True)
-        assert isinstance(draft, PersonNameDraft)
-        if any(sound.fits(reading) for reading in readings):
-            assert sound.fits(draft.reading), (sound, draft)
+        # 意味を挙げさせてから、選んだ意味を名の候補を出す段に渡す
+        assert [output for output, _ in ai.prompts] == [NameMeanings, PersonNameCandidates]
+        line = next(row for row in ai.prompts[1][1].splitlines() if row.startswith("名の意味: "))
+        drawn = line.removeprefix("名の意味: ").split("、")
+        assert 1 <= len(drawn) <= 2 and set(drawn) <= set(meanings)
+        assert "名字の意味: 塩田" in ai.prompts[1][1]
 
 
-def test_name_sound_counts_moras():
-    sound = NameSound(row="か行", moras=3)
-    assert sound.fits("きょうか") and sound.fits("かっと") and not sound.fits("きょう") and not sound.fits("あかね")
+def test_named_falls_back_to_the_character_without_meme_meanings():
+    for seed in range(10):
+        ai = _NamingAI(["ルカ"])
+        ai.meanings = []
+        named(ai, random.Random(seed), _name_material([]), True)
+
+        line = next(row for row in ai.prompts[1][1].splitlines() if row.startswith("名の意味: "))
+        assert set(line.removeprefix("名の意味: ").split("、")) <= {"櫂", "桟橋"}
+
+
+def test_named_without_meanings():
+    ai = _NamingAI(["ルカ"])
+    ai.meanings = []
+    ai.from_character = []
+
+    draft = named(ai, random.Random(0), _name_material([]), True)
+
+    assert draft is not None and draft.name == "ルカ"
+    assert "名の意味: null" in ai.prompts[1][1]
 
 
 def test_named_keeps_the_authors_name():
-    draft = named(_NamingAI(["ジャコモ", "ルカ"]), random.Random(0), _name_material(["ジャコモ"], hint_name="ジャコモ"),
-                  True)
+    ai = _NamingAI(["ジャコモ", "ルカ"])
+    draft = named(ai, random.Random(0), _name_material(["ジャコモ"], hint_name="ジャコモ"), True)
 
     assert draft is not None and draft.name == "ジャコモ"
+    # 作者の名を通すときは意味を選ばない
+    assert [output for output, _ in ai.prompts] == [PersonNameCandidates]
 
 
 def test_list_character_relations(shown, world):

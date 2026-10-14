@@ -54,6 +54,18 @@ class EpisodeCommitForm(Form):
         return self
 
 
+class EpisodeReviseForm(Form):
+    """本文のある話の本文を直す(推敲)。同期フラグ・時刻・登場人物・場所は変えない。"""
+
+    id: int
+    # 改行を整えてから入れる(`layout_novel_text`)
+    main_text: str
+    # 推敲の覚えを足したプロット。渡さなければそのまま
+    plot_text: str | None = None
+    # 題を直したときだけ渡す
+    title: str | None = None
+
+
 class EpisodeCreateForm(EpisodeCommitForm):
     """新しい話を足すときの `EpisodeCommitForm`(GUI の足す画面が必須の欄を示すのに使う)。"""
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `CommitOracle` の `run()`)。
+"""行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `ReviseEpisode` / `CommitOracle` の `run()`)。
 
 確定は db の段一つで済ませる(GUI の API が呼ぶ `execute(s)` と同じ)。そのあとの AI の段(ミームの抜き出し・要約・種・事実確認)は、
 AI が答えなくても確定は残る。
@@ -15,8 +15,8 @@ from data_access_logic.episode import moves as episode_moves
 from data_access_logic.episode import relations as episode_relations
 from data_access_logic.episode.relations import RelationsForm, allowed_relations
 from data_access_logic.episode import steps as episode_steps
-from data_access_logic.episode.form import EpisodeCommitForm
-from data_access_logic.episode.record import CommittedEpisode
+from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
+from data_access_logic.episode.record import CommittedEpisode, EpisodeRecord
 from data_access_logic.event import steps as event_steps
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
 from data_access_logic.event.record import EventRecord
@@ -62,6 +62,15 @@ def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> Comm
     moved = _move_cast(ai, record.id) if episode.main_text is not None else []
     related = _relate_cast(ai, record.id) if episode.main_text is not None else []
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
+
+
+def revise_episode(episode: EpisodeReviseForm, ai: AIClient = ai_client) -> EpisodeRecord:
+    """`commit_episode` と違い、登場人物の居場所・関係を本文から動かさない。昔の話を推敲すると、
+    今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので。"""
+    record = call(episode_steps.revise_episode, episode)
+    meme.refresh(ai)
+    rewrite_episode_summaries(ai, [record.id])
+    return record
 
 
 def commit_event(event: EventCreateForm, ai: AIClient = ai_client) -> EventRecord:

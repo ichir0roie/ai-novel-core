@@ -13,7 +13,7 @@ from data_access_logic.episode.relations import EpisodeRelationsMaterial, Relati
 from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
-from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, has_cast, save_frame, set_characters
+from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, EpisodeReviseForm, has_cast, save_frame, set_characters
 from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.models import (
     EpisodeBrief, EpisodeCasting, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
@@ -222,6 +222,19 @@ def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
         set_characters(s, record.id, form.character_ids)
     save_mentions(s, record.id)
     return record_of(s, EpisodeRecord, record)
+
+
+@db_step
+def revise_episode(s: Session, form: EpisodeReviseForm) -> EpisodeRecord:
+    # 推敲は筋を変えないので、世界観へ戻したかどうか(同期フラグ)をそのまま保つ
+    synced = common_query.get_row(s, Episode, form.id).synced
+    commit = EpisodeCommitForm(id=form.id, main_text=form.main_text, synced=synced)
+    # 渡した欄だけが書かれるので、プロット・題は渡されたときだけ欄に入れる(None を入れると空で上書きする)
+    if form.plot_text is not None:
+        commit.plot_text = form.plot_text
+    if form.title is not None:
+        commit.title = form.title
+    return commit_episode(s, commit)
 
 
 @db_step

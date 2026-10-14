@@ -143,6 +143,9 @@ class CharacterNameMaterial(Material):
     age: int
     parameters: CharacterParameterValues | None = None
     born_location: BirthLocationMaterial | None = None
+    # 人物の名の元にする意味を、ここから挙げさせる
+    memes: list[str] = []
+    principle: str | None = None
     # 同じ場所(居場所とその上位・配下)にいる人物・対象の名。名付けで避ける
     avoided_names: list[str]
     # 世界のどこかで使われている名。多いので AI には渡さず、候補が余ればコードの側で避ける
@@ -171,6 +174,8 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
             "口調": parameters.tone if parameters else None,
             "方言": parameters.dialect if parameters else None,
             "決まっている名字": parameters.family_name if parameters else None,
+            "ミーム": self.memes,
+            "行動原理": self.principle,
             "居場所": _born_location(self.born_location),
             "同じ場所にいる人物・対象の名": self.avoided_names,
             "作者が付けたい名": self.hint_name,
