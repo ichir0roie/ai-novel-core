@@ -47,8 +47,9 @@ _CANDIDATE_INSTRUCTION = (
 _MEANING_SYSTEM_PROMPT = f"""\
 あなたは架空の世界観を構築する設定作家だ。
 内容が決まっている人物1件の、名と名字の元にする意味の語を挙げる。材料は日本語の見出しを付けた JSON で渡す。
-名の元にする意味は、ミーム・行動原理・性格・人物説明から、この人物の芯を象徴する語を {constants.NAME_MEANING_COUNT} 個挙げる。
-性格の語(勇敢・優しい)をそのまま挙げず、それを象徴する物・自然・情景・願いの語(灯・潮・鉄・若木・夜明け)に置き換える。
+名の元にする意味は、ミーム・行動原理から、この人物の芯を象徴する語を {constants.NAME_MEANING_COUNT} 個挙げる。ミームが空なら挙げない。
+それとは別に、性格・人物説明から象徴する語を挙げる(ミームが空のときに使う)。仕事の道具・持ち場の語に寄せない。
+どちらも、信条や性格の語(勇敢・優しい)をそのまま挙げず、それを象徴する物・自然・情景・願いの語(灯・潮・鉄・若木・夜明け)に置き換える。
 親が子に託す願いとして通る語にし、互いに重ならないよう散らす。
 名字の元にする意味は、出身地・身分・家業・参考文化から、家の土地・生業・祖先にまつわる語を挙げる。「決まっている名字」が null でなければ空にする。"""
 
@@ -95,7 +96,9 @@ class NameMeanings(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    given: list[str] = Field(description=f"名の元にする意味の語。{constants.NAME_MEANING_COUNT} 個")
+    from_memes: list[str] = Field(
+        description=f"ミーム・行動原理から取った、名の元にする意味の語。{constants.NAME_MEANING_COUNT} 個。ミームが空なら空")
+    from_character: list[str] = Field(description="性格・人物説明から取った、名の元にする意味の語")
     family: list[str] = Field(description="名字の元にする意味の語。決まっている名字があれば空")
 
 
@@ -107,15 +110,22 @@ class DrawnMeanings(BaseModel):
 
 
 def drawn_meanings(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSerialized) -> DrawnMeanings | None:
-    """AI に意味の語を挙げさせ、名の意味を `NAME_MEANING_PICK_RANGE` 個・名字の意味を一つ選ぶ。挙がらなければ None。"""
+    """AI に意味の語を挙げさせ、名の意味を `NAME_MEANING_PICK_RANGE` 個・名字の意味を一つ選ぶ。挙がらなければ None。
+    名の意味はミームから取った語を優先し、それが無いときだけ性格・人物説明から取った語を使う。"""
     meanings = ai.generate("\n".join([material.model_dump_json(indent=2), "この人物の名と名字の元にする意味を挙げる。"]),
                            NameMeanings, system=_MEANING_SYSTEM_PROMPT)
-    given = list(dict.fromkeys(word.strip() for word in meanings.given if word.strip())) if meanings else []
+    if meanings is None:
+        return None
+    given = _words(meanings.from_memes) or _words(meanings.from_character)
     if not given:
         return None
-    family = [word.strip() for word in meanings.family if word.strip()] if meanings else []
+    family = _words(meanings.family)
     return DrawnMeanings(given=rng.sample(given, min(rng.randint(*constants.NAME_MEANING_PICK_RANGE), len(given))),
                          family=rng.choice(family) if family else None)
+
+
+def _words(words: list[str]) -> list[str]:
+    return list(dict.fromkeys(word.strip() for word in words if word.strip()))
 
 
 def _kana(text: str) -> str | None:

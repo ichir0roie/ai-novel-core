@@ -154,15 +154,16 @@ def test_generate_characters_stops_at_resident_limit(shown, world, mock_ai, monk
 
 
 class _NamingAI:
-    def __init__(self, names: list[str], meanings: list[str] | None = None):
+    def __init__(self, names: list[str], meanings: list[str] | None = None, from_character: list[str] | None = None):
         self.names = names
         self.meanings = meanings or ["灯", "潮", "鉄"]
+        self.from_character = from_character or ["櫂", "桟橋"]
         self.prompts: list[tuple[type, str]] = []
 
     def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
         self.prompts.append((output, prompt))
         if output is NameMeanings:
-            return NameMeanings(given=self.meanings, family=["塩田"])
+            return NameMeanings(from_memes=self.meanings, from_character=self.from_character, family=["塩田"])
         return PersonNameCandidates(language="イタリア語", candidates=[
             PersonNameDraft(name=name, reading=name, family_name="") for name in self.names])
 
@@ -207,9 +208,20 @@ def test_named_draws_meanings_for_the_name():
         assert "名字の意味: 塩田" in ai.prompts[1][1]
 
 
+def test_named_falls_back_to_the_character_without_meme_meanings():
+    for seed in range(10):
+        ai = _NamingAI(["ルカ"])
+        ai.meanings = []
+        named(ai, random.Random(seed), _name_material([]), True)
+
+        line = next(row for row in ai.prompts[1][1].splitlines() if row.startswith("名の意味: "))
+        assert set(line.removeprefix("名の意味: ").split("、")) <= {"櫂", "桟橋"}
+
+
 def test_named_without_meanings():
     ai = _NamingAI(["ルカ"])
     ai.meanings = []
+    ai.from_character = []
 
     draft = named(ai, random.Random(0), _name_material([]), True)
 
