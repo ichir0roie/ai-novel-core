@@ -85,16 +85,15 @@ def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
     return s.scalars(_story_past_select(episode).limit(1)).first()
 
 
-# 同じ作品(章・外伝を含む)の直前の話(新しい順に `constants.EPISODE_STYLE_SAMPLE_COUNT` 話)は、文体の見本としてだけ本文を渡す。古い順
+# 同じ作品(章・外伝を含む)の直前の話(新しい順に `constants.EPISODE_VOICE_SAMPLE_COUNT` 話)。登場人物の話し方を調整する根拠にする。古い順
 def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
     rows = s.scalars(_past(select(Episode).where(Episode.story_id.in_(_family_ids_select(episode))), episode)
-                     .limit(constants.EPISODE_STYLE_SAMPLE_COUNT)).all()
+                     .limit(constants.EPISODE_VOICE_SAMPLE_COUNT)).all()
     return [RecentEpisode.model_validate(row) for row in reversed(rows)]
 
 
 def _summarized_select(episode: Episode, characters: list[Character]) -> Select[Episode]:
-    """同じ作品と、親・兄弟の作品(章・外伝)のすべての話と、登場人物が関わるすべての話(重ならない)。
-    文体の見本(`recent_episodes`)と同じ作品の範囲にして、見本の話の中身をここの概要で渡す。"""
+    """同じ作品と、親・兄弟の作品(章・外伝)のすべての話と、登場人物が関わるすべての話(重ならない)。"""
     return _past(
         select(Episode).where(
             or_(Episode.story_id.in_(_family_ids_select(episode)), Episode.id.in_(_related_ids_select(characters)))),
