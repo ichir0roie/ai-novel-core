@@ -50,7 +50,7 @@ class CharacterEpisode(Material):
 
 
 class RecentEpisode(Material):
-    """文体の見本にする話。中身を読み取らせないので、本文と、話し方の根拠にできるかを決める時刻だけを持つ。"""
+    """登場人物の話し方を調整する根拠にする話。本文と、話し方の根拠にできるかを決める時刻だけを持つ。"""
 
     start: Stamp | None = None
     main_text: str
@@ -109,10 +109,6 @@ def _summarized_appearances(appearances: list[CharacterEpisode], character_id: i
     """概要は作り直さず、そのときのまま読む(まだ無ければ null)。"""
     return [{**_appearance(link), "概要": link.episode.summary_text}
             for link in appearances if link.character_id == character_id]
-
-
-def _style_samples(recent_episodes: list[RecentEpisode]) -> list[str]:
-    return [recent.main_text for recent in recent_episodes]
 
 
 def _location(locations: list[LocationMaterial]) -> str | None:
@@ -243,8 +239,6 @@ class EpisodeBrief(Material):
     main_episode: BriefEpisode
     # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
     past_episodes: list[PastEpisode]
-    # 文体の見本にする、同じ作品の直前の話。古い順
-    recent_episodes: list[RecentEpisode]
     # 話の場所とその親。広い順。来歴は話の時刻の年まで
     locations: list[LocationLine]
     cast: list[CastMaterial]
@@ -288,7 +282,6 @@ class EpisodeBriefSerialized(EpisodeBrief):
             "作品": _story(self.story),
             "前の話の概要(古い順)": [{"話id": past.id, **entry}
                                      for past, entry in zip(self.past_episodes, _past_episodes(self.past_episodes))],
-            "文体の見本(古い順)": _style_samples(self.recent_episodes),
             "この話": {
                 "話id": episode.id,
                 "題": episode.title,
