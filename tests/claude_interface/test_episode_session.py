@@ -22,6 +22,7 @@ from data_access_logic.character.update_character_relation import UpdateCharacte
 from data_access_logic.character.update_knowledge import UpdateKnowledge
 from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
+from data_access_logic.episode.refresh_voices import RefreshVoices
 from data_access_logic.episode.voices import VoiceDraft, VoiceDrafts
 from data_access_logic.episode_session.add_ideas import AddIdeas
 from data_access_logic.episode_session.add_turns import AddTurns
@@ -511,7 +512,24 @@ def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
     assert samples(6) == ["前の話。"]
 
 
-def test_read_episode_brief_adjusts_voices(shown, world, mock_ai, monkeypatch):
+def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkeypatch):
+    with get_env_session() as s:
+        s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
+                      start="1200/03/01 12:00:00", event_seeded=True))
+        s.commit()
+    asked = []
+
+    def generate(prompt, output, *args, **kwargs):
+        asked.append(output)
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    shown(ReadEpisodeBrief(episode_id=world.episode_id))
+
+    assert VoiceDrafts not in asked
+
+
+def test_refresh_voices(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
     with get_env_session() as s:
         s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
@@ -530,20 +548,24 @@ def test_read_episode_brief_adjusts_voices(shown, world, mock_ai, monkeypatch):
         return mock_ai.generate(prompt, output, *args, **kwargs)
     monkeypatch.setattr(ai_client, "generate", generate)
 
+    adjusted = shown(RefreshVoices(episode_id=world.episode_id))
+    again = shown(RefreshVoices(episode_id=world.episode_id))
     first = shown(ReadEpisodeBrief(episode_id=world.episode_id))
-    shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
+    assert [voice["character_id"] for voice in adjusted] == [taro]
+    # 二度目は変わる欄が無いので書かない
+    assert again == []
     assert "よう" in prompts[0]
     with get_env_session() as s:
         rows = [row for row in s.get_one(Character, taro).parameters if row.start == Stamp.parse("1200/04/01 12:00:00")]
-    # 同じ話の材料を読み直しても、調整の行は増えない。変わった欄だけを書き、ほかは前の行のまま
+    # 調整し直しても、行は増えない。変わった欄だけを書き、ほかは前の行のまま
     assert [(row.first_person, row.tone, row.second_person) for row in rows] == [("俺", "砕けた短い言い切り", None)]
     member = next(member for member in first["この話"]["登場人物"] if member["人物id"] == taro)
     assert (member["一人称"], member["口調"], member["二人称"]) == ("俺", "砕けた短い言い切り", "あなた")
     assert "直前の話の本文(古い順)" in prompts[0]
 
 
-def test_read_episode_brief_keeps_voices_decided_after_the_samples(shown, world, mock_ai, monkeypatch):
+def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
     with get_env_session() as s:
         s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
@@ -562,6 +584,7 @@ def test_read_episode_brief_keeps_voices_decided_after_the_samples(shown, world,
         return mock_ai.generate(prompt, output, *args, **kwargs)
     monkeypatch.setattr(ai_client, "generate", generate)
 
+    shown(RefreshVoices(episode_id=world.episode_id))
     result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
     # 変える前の見本では太郎の話し方を直さない。AI が太郎を返しても書かない
