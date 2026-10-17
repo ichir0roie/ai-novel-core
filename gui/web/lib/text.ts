@@ -278,7 +278,11 @@ export const T = {
     openLocation: "Open location",
     noCharacters: "No characters yet",
     noLocation: "No location",
+    noLocationAt: "No location at this time",
+    noMatch: "No characters at this location and time",
     collapseAll: "Collapse all",
+    location: "Location",
+    at: "At",
   },
 
   ideaTree: {
@@ -314,6 +318,7 @@ export const T = {
     removeRow: "Remove this row",
     addRow: "+ Add row",
     close: "Close",
+    inherited: "Carried over from an earlier row (this row leaves it empty)",
   },
 
   knowers: {
@@ -430,11 +435,14 @@ export const T = {
     openInNewTab: "Open in new tab",
     newEpisode: "New episode",
     newEpisodeIn: (story: string) => `Story: ${story}`,
-    newEpisodeStart: "Start",
+    start: "Start",
+    end: "End (empty for a point in time)",
     newEpisodeTitle: "title",
     newEpisodePlot: "plot_text",
     newEpisodeNoStory: "Pick a story row to add here, or open the full form",
     addEpisode: "Add",
+    saved: (label: string) => `Saved ${label}`,
+    confirmDiscardEdit: "Discard the unsaved time / plot_text?",
   },
 
   eventTimeline: {
@@ -455,6 +463,7 @@ export const T = {
     newEvent: "New event",
     newChildOf: (label: string) => `Child of: ${label}`,
     newRoot: "A root event (no parent)",
+    newLocation: (label: string) => `Location: ${label}`,
     name: "name",
     start: "Start",
     end: "End (empty for a point in time)",
@@ -468,6 +477,8 @@ export const T = {
         ? `Delete ${label} and its ${children} child event${children === 1 ? "" : "s"}?`
         : `Delete ${label}?`,
     deleted: (label: string) => `Deleted ${label}`,
+    saved: (label: string) => `Saved ${label}`,
+    confirmDiscardEdit: "Discard the unsaved name / text?",
   },
 
   episodeSheet: {

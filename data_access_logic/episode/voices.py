@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""直前の五話(文体の見本)のセリフから、登場人物の話し方(一人称・二人称・三人称・口調・方言)を全体として調整する。
+"""同じ作品の直前の五話のセリフから、登場人物の話し方(一人称・二人称・三人称・口調・方言)を全体として調整する。
 
 本文の材料を読む前に流れ(`data_access_logic/flows/episode.py` の `refresh_voices`)が回す。
 調整した値は、話の時刻から効く `character_parameter` の行として書く(それより前の話には効かない)。
@@ -50,7 +50,7 @@ class VoiceCharacter(Material):
 
 class VoiceSource(Material):
     episode_id: int
-    # 文体の見本(同じ作品の直前の五話)のうち、ここの人物の話し方の根拠にできる話。古い順
+    # 同じ作品の直前の五話のうち、ここの人物の話し方の根拠にできる話。古い順
     samples: list[str]
     # 話の登場人物の、話の時刻の話し方
     characters: list[VoiceCharacter]

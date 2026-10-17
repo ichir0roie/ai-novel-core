@@ -108,7 +108,7 @@ def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCa
 
 
 def refresh_voices(ai: AIClient, episode_id: int) -> None:
-    """文体の見本(直前の五話)のセリフから、登場人物の話し方を調整して書き戻す。AI が答えなくても材料は読む。"""
+    """同じ作品の直前の五話のセリフから、登場人物の話し方を調整して書き戻す。AI が答えなくても材料は読む。"""
     for source in call(episode_steps.voice_sources, RowId(id=episode_id)):
         drafts = voices.voice_draft(ai, source)
         if drafts is None:

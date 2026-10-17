@@ -321,7 +321,8 @@ def character_creation(
     fixed = reconciled(ai, material, decided.kind, decided.age, decided.content, ideas)
     draft = named(ai, rng, CharacterNameMaterialSerialized(
         kind=decided.kind, text=fixed.text, age=decided.age, parameters=parameters if person else None,
-        born_location=material.born_location, avoided_names=material.resident_names,
+        born_location=material.born_location, memes=[drawn.text for drawn in material.memes],
+        principle=fixed.principle or None, avoided_names=material.resident_names,
         used_names=material.world_names, hint_name=form.name if form else None,
     ), person)
     subject = "人物" if person else "対象"

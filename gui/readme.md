@@ -6,6 +6,8 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
 - 作品の一覧(`/tables/story`)は既定で、作品の親子(`parent_story_id`)の木。行の Move ボタンで移動モードに入り、親にする作品をクリックして付け替える。
   作品・話の一覧 API を引いてブラウザ側で組む(`gui/web/lib/storyTree.ts`)。兄弟は、その作品と子孫の作品の一番早い話の順(話の無い作品は後ろ)。`?view=list` で表に切り替える。
   枝の開閉はブラウザの localStorage に覚える(`gui/web/lib/treeOpen.ts`。既定は開いた状態)
+- 人物の一覧(`/tables/character`)は既定で、居場所の場所の木に人物を置いたツリー(`gui/web/lib/characterTree.ts`)。
+  場所(`?location_id=`)と時刻(`?at=`)で絞れる。時刻を入れると人物をその時刻の居場所に置き、場所を選ぶとその場所を根にして、その場所と配下にいる人物だけを出す
 - 星ごとの地図(`/maps`)と人物相関図(`/relations`)。元データは `/api/maps` `/api/relations`。ナビには出さず、
   場所の詳細から `/maps?location=<id>`(その場所を中心に置いて描く)へ、人物の詳細から `/relations?character=<id>`
   (その人物に関わる関係だけを描く)へ飛ぶ
@@ -112,6 +114,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/timeline?story_id=` | 全期間の話(開始〜終了。終了が空なら開始の一点。開始の無い話は出さない)。`story_id` はその作品で絞る。画面 `/timeline` が描く |
 | GET | `/api/episode_session?episode_id=&after_id=` | 話のセッションの行のうち `after_id` より新しい行(手番の順)と、その話の行の総数(`count`)。`after_id` を省けば全部。画面 `/episode_session` が 3 秒ごとに引く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
+| GET | `/api/character_locations?time=` | 人物ごとの居場所(一番新しく始まった行)。`time` を渡せば、その時刻に効いている行だけから選び、その時刻に居場所の無い人物・没年を過ぎた人物は出さない。人物一覧のツリーが引く |
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
 話(`episode`)はプロット(`plot_text`)と本文(`main_text`)を一緒に扱う。本文の概要(`summary_text`)は画面に出さない。出来事は `character_ids`(当事者)、

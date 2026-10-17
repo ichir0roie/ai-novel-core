@@ -259,7 +259,8 @@ export interface paths {
         };
         /**
          * Character Locations
-         * @description 人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う
+         * @description 人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う。
+         *     `time` を渡せば、その時刻にいる場所(その時刻にどこにもいない人物は出ない)
          */
         get: operations["character_locations_api_character_locations_get"];
         put?: never;
@@ -1387,7 +1388,9 @@ export interface operations {
     };
     character_locations_api_character_locations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                time?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1401,6 +1404,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CharacterLocationsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

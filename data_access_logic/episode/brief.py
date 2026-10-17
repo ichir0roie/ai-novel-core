@@ -17,7 +17,7 @@ from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
+from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic.character.cast import candidate_at, cast_of, mentioned_of, relations_at, secrets_at
 from data_access_logic.episode.caster import candidate_characters
@@ -28,7 +28,7 @@ from data_access_logic.episode.models import (
 from data_access_logic.episode.material import (
     known_locations, later_events_select, load_episode, location_events_select, summary_targets_of,
 )
-from data_access_logic.episode.summary import appearances, past_episodes, recent_episodes
+from data_access_logic.episode.summary import appearances, past_episodes
 from data_access_logic.event.summary import events_of
 from data_access_logic.episode_session.turns import session_select
 from data_access_logic.idea.context import resolve_ideas
@@ -57,7 +57,6 @@ def _guide(s: Session) -> str:
         IDEA_CONTEXT_INSTRUCTION,
         BIO_ABSTRACTION_INSTRUCTION,
         PAST_EPISODES_INSTRUCTION,
-        STYLE_SAMPLE_INSTRUCTION,
         style.style_instruction(read_style_extras(s)),
     ])
 
@@ -124,7 +123,6 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
         past_episodes=past_episodes(s, episode, characters),
-        recent_episodes=recent_episodes(s, episode),
         locations=location_path_at(s, location_id, time) if location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned, time),

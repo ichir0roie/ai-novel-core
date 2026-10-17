@@ -672,8 +672,26 @@
     "/api/character_locations": {
       "get": {
         "summary": "Character Locations",
-        "description": "人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う",
+        "description": "人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う。\n`time` を渡せば、その時刻にいる場所(その時刻にどこにもいない人物は出ない)",
         "operationId": "character_locations_api_character_locations_get",
+        "parameters": [
+          {
+            "name": "time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Time"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -681,6 +699,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CharacterLocationsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }

@@ -1,7 +1,8 @@
 import type { Rec } from "./api";
 
 /** 人物一覧のツリー。場所(location)を `parent_id` で木にし、人物は今いる場所(`/api/character_locations` が
- *  返す、一番新しく設定された居場所)の下に置く。居場所を一つも持たない人物は `unplaced` に出す。 */
+ *  返す、一番新しく設定された居場所。時刻で絞ればその時刻の居場所)の下に置く。居場所を一つも持たない人物は `unplaced` に出す。
+ *  `focusLocationId` を渡すと、その場所を根にして、その場所と配下にいる人物だけに絞る。 */
 
 export type TreeCharacter = {
   id: number;
@@ -28,6 +29,7 @@ export function buildCharacterTree(
   locations: Rec[],
   characters: Rec[],
   characterLocations: Record<string, number>,
+  focusLocationId: number | null = null,
 ): CharacterTree {
   const known = new Set(locations.map((l) => Number(l.id)));
   const children = new Map<number | null, Rec[]>();
@@ -60,7 +62,9 @@ export function buildCharacterTree(
       total: own.length + subtree.reduce((sum, child) => sum + child.total, 0),
     };
   };
-  return { nodes: (children.get(null) ?? []).map(node).filter((n): n is TreeNode => n !== null), unplaced };
+  const all = focusLocationId === null;
+  const roots = all ? (children.get(null) ?? []) : locations.filter((l) => Number(l.id) === focusLocationId);
+  return { nodes: roots.map(node).filter((n): n is TreeNode => n !== null), unplaced: all ? unplaced : [] };
 }
 
 /** 開閉できるノード(場所)の id をすべて集める。「すべて閉じる」で使う。 */

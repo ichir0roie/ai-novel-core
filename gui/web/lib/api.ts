@@ -210,7 +210,8 @@ export const getRelations = () => api<RelationsResponse>("/api/relations");
 
 export type CharacterLocationsResponse = components["schemas"]["CharacterLocationsResponse"];
 
-export const getCharacterLocations = () => api<CharacterLocationsResponse>("/api/character_locations");
+export const getCharacterLocations = (time: string | null = null) =>
+  api<CharacterLocationsResponse>(`/api/character_locations${time ? `?${new URLSearchParams({ time })}` : ""}`);
 
 export type LocationCharactersResponse = components["schemas"]["LocationCharactersResponse"];
 

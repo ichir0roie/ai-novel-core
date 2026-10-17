@@ -12,8 +12,9 @@ NEARBY_CHARACTER_LIMIT = 20
 # data_access_logic/character/naming
 # AI に出させる名前の候補の数。この中からサイコロで選ぶ
 NAME_CANDIDATE_COUNT = 10
-# 人物の名の拍数。名付けのたびにこの幅からサイコロで一つ選んで AI に縛りとして渡す
-NAME_MORA_RANGE = (3, 5)
+# 人物の名の元にする意味の語を AI に挙げさせる数。この中からサイコロで `NAME_MEANING_PICK_RANGE` 個選ぶ
+NAME_MEANING_COUNT = 10
+NAME_MEANING_PICK_RANGE = (1, 2)
 
 NON_PERSON_KINDS = ("国", "組織", "商会", "氏族", "集団", "物")
 
@@ -76,8 +77,8 @@ MEME_POSITIONS = {
 }
 
 # data_access_logic/episode
-# 文体の見本として本文を渡す、同じ作品(章・外伝を含む)の直前の話の本数。話の中身は、この話より前のすべての話の概要で渡す。
-EPISODE_STYLE_SAMPLE_COUNT = 5
+# 登場人物の話し方を調整する根拠にする、同じ作品(章・外伝を含む)の直前の話の本数。
+EPISODE_VOICE_SAMPLE_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。
