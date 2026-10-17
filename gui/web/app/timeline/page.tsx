@@ -29,6 +29,7 @@ import {
   type TimelineResponse,
 } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
+import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import {
   dayNumber,
   formatStamp,
@@ -760,9 +761,12 @@ export default function TimelinePage() {
     setError(null);
     setMessage(null);
     try {
-      await updateEpisodes([...changes.values()].map(changeForm));
+      const result = await trackSaving(
+        updateEpisodes([...changes.values()].map(changeForm)).then(() =>
+          getTimeline({ story_id: storyId }),
+        ),
+      );
       // 読み直した話と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
-      const result = await getTimeline({ story_id: storyId });
       setData(result);
       setMessage(T.timeline.applied(changes.size));
       leaveEditing();
@@ -873,14 +877,15 @@ export default function TimelinePage() {
     setError(null);
     setMessage(null);
     try {
-      await updateEpisodes([
-        {
-          id: item.id,
-          ...(plotChanged ? { plot_text: edit.plot } : {}),
-          ...(timeChanged ? { start: edit.start, end: edit.end } : {}),
-        },
-      ]);
-      const result = await getTimeline({ story_id: storyId });
+      const result = await trackSaving(
+        updateEpisodes([
+          {
+            id: item.id,
+            ...(plotChanged ? { plot_text: edit.plot } : {}),
+            ...(timeChanged ? { start: edit.start, end: edit.end } : {}),
+          },
+        ]).then(() => getTimeline({ story_id: storyId })),
+      );
       setData(result);
       // 移しを溜めた話は移しの元(読み込んだときの話)から描くので、元も読み直した話に替える。時刻を書いたら、溜めた時刻の移しは書いた時刻に含めたので外す
       const base = itemsOf(result).find((fresh) => fresh.id === item.id);
@@ -900,6 +905,13 @@ export default function TimelinePage() {
       setSavingEdit(false);
     }
   };
+
+  // 話のモーダルを開いていればその時刻・プロットを、閉じていれば溜めた移しを保存する
+  useSaveShortcut(() => {
+    if (viewingNow) {
+      if ((plotChanged || timeChanged) && edit?.start) void saveEdit(viewingNow);
+    } else if (changes.size > 0) void apply();
+  });
 
   /** 空いた所を押したら、その日・その列の作品で話を足す(時刻・タイトル・プロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {

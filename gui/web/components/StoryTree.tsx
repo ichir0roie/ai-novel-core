@@ -6,6 +6,7 @@ import { listAllRecords, updateStories, type Rec } from "@/lib/api";
 import NameId from "./NameId";
 import { buildStoryTree, collapsibleIds, descendantIds, findNode, type StoryNode } from "@/lib/storyTree";
 import { useOpenPage } from "@/lib/nav";
+import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
 
@@ -255,8 +256,7 @@ export default function StoryTree() {
     setSaveError(null);
     setSaving(true);
     try {
-      await updateStories(changes);
-      await load();
+      await trackSaving(updateStories(changes).then(load));
       leaveEditing();
     } catch (e) {
       setSaveError(T.storyTree.applyFailed(e instanceof Error ? e.message : String(e)));
@@ -264,6 +264,8 @@ export default function StoryTree() {
       setSaving(false);
     }
   };
+
+  useSaveShortcut(() => void apply(), editing && changes.length > 0 && !saving);
 
   const move: MoveState = {
     editing,

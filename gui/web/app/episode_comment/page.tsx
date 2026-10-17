@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import EpisodeWriter, { type EpisodeWriterHandle } from "@/components/EpisodeWriter";
-import { getRecord, runEntrance } from "@/lib/api";
+import { getRecord, readEntrance, runEntrance } from "@/lib/api";
 import { claudeSessionUrl } from "@/lib/claude";
 import { PageTitle } from "@/lib/meta";
 import { T } from "@/lib/text";
@@ -51,7 +51,7 @@ export default function EpisodeCommentPage() {
     let stopped = false;
     const poll = async () => {
       try {
-        const result = await runEntrance("episode_comment.read_reactions_since.ReadReactionsSince", {
+        const result = await readEntrance("episode_comment.read_reactions_since.ReadReactionsSince", {
           episode_id: episodeId,
           after_reaction_id: lastId.current,
         });

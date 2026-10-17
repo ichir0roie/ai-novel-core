@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { buildCharacterTree, type TreeCharacter, type TreeNode } from "@/lib/characterTree";
 import { buildIdeaTree, type IdeaNode } from "@/lib/ideaTree";
+import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 import Modal from "./Modal";
 import NameId from "./NameId";
@@ -363,6 +364,8 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
       setBusy(false);
     }
   };
+
+  useSaveShortcut(() => void save(), !busy && changes.size > 0);
 
   const close = () => {
     if (changes.size === 0 || window.confirm(T.knowledge.confirmDiscard(changes.size))) onClose();

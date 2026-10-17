@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { childListHint, columnHint } from "@/lib/hint";
 import { tableMeta } from "@/lib/meta";
+import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 import ChildListEditor from "./ChildListEditor";
 import { AutoGrowTextarea } from "./FieldInput";
@@ -115,6 +116,8 @@ export default function SkillsModal({ characterId, characterName, onClose }: Pro
       setBusy(false);
     }
   };
+
+  useSaveShortcut(() => void save(), !busy && changed.length > 0);
 
   const close = () => {
     if (changed.length > 0 && !window.confirm(T.skills.confirmDiscard(changed.length))) return;

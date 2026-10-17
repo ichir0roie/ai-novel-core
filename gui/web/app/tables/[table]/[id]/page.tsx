@@ -24,6 +24,7 @@ import { claudeSessionUrl } from "@/lib/claude";
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
+import { useSaveShortcut } from "@/lib/saving";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -103,20 +104,22 @@ export default function RecordPage() {
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
 
-  /** 保存できたら true。変更が無ければ何もせず true */
-  const save = async (thenBack: boolean): Promise<boolean> => {
-    if (!dirty) return true;
+  /** 保存できたら true。変更が無ければ何もせず true。only を渡すとその欄の変更だけを送り、ほかの欄の変更は画面に残す */
+  const save = async (thenBack: boolean, only?: string[]): Promise<boolean> => {
+    const sending = only ? Object.fromEntries(Object.entries(changes).filter(([key]) => only.includes(key))) : changes;
+    if (Object.keys(sending).length === 0) return true;
+    const kept = Object.fromEntries(Object.entries(changes).filter(([key]) => !(key in sending)));
     setBusy(true);
     setError(null);
     setSaved(null);
     try {
-      const result = await updateRecord(table, id, changes);
+      const result = await updateRecord(table, id, sending);
       const record = sortChildListsByStart(table, result.record);
       receiveRelated(table, result);
       setLoaded({ ...result, record });
-      setValue(record);
+      setValue({ ...record, ...kept });
       invalidateOptions(table);
-      setSaved(T.record.saved(Object.keys(changes)));
+      setSaved(T.record.saved(Object.keys(sending)));
       if (thenBack) openPage(listHref(table, record));
       return true;
     } catch (e) {
@@ -126,6 +129,9 @@ export default function RecordPage() {
       setBusy(false);
     }
   };
+
+  // 話の画面の Ctrl+S は本文だけを保存する(ほかの欄の変更は Save ボタンで送る)
+  useSaveShortcut(() => void save(false, table === "episode" ? ["main_text"] : undefined), loaded !== null && !busy);
 
   const remove = async () => {
     if (!loaded) return;

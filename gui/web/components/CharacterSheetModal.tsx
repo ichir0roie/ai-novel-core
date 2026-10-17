@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Spec } from "@/components/Hint";
 import Modal from "@/components/Modal";
-import { runEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
+import { readEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
 import { columnHint } from "@/lib/hint";
 import { tableMeta } from "@/lib/meta";
 import { ageAt } from "@/lib/stamp";
@@ -70,7 +70,7 @@ export default function CharacterSheetModal({ characterId, time, onClose }: Prop
 
   useEffect(() => {
     let active = true;
-    runEntrance("character.read_character.ReadCharacter", { character_id: characterId, time: at, count: 0 })
+    readEntrance("character.read_character.ReadCharacter", { character_id: characterId, time: at, count: 0 })
       .then((response) => {
         if (active) setSheet((response as RunResult).result as CharacterSheet);
       })
