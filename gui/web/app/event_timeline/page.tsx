@@ -27,6 +27,7 @@ import {
   type Rec,
 } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
+import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import {
   dayNumber,
   formatStamp,
@@ -614,9 +615,8 @@ export default function EventTimelinePage() {
     setError(null);
     setMessage(null);
     try {
-      await updateEvents([...changes.values()].map(changeForm));
       // 読み直した出来事と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
-      await reload();
+      await trackSaving(updateEvents([...changes.values()].map(changeForm)).then(reload));
       setMessage(T.eventTimeline.applied(changes.size));
       leaveEditing();
     } catch (e) {
@@ -632,9 +632,8 @@ export default function EventTimelinePage() {
     setError(null);
     setMessage(null);
     try {
-      await deleteEventWithChildren(item.id);
+      await trackSaving(deleteEventWithChildren(item.id).then(reload));
       setViewing(null);
-      await reload();
       setMessage(T.eventTimeline.deleted(item.label));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -658,15 +657,16 @@ export default function EventTimelinePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await updateRecord("event", item.id, {
-        ...(form.name !== saved.name ? { name: form.name } : {}),
-        ...(form.text !== saved.text ? { text: form.text } : {}),
-      });
+      const [response, fresh] = await trackSaving(
+        updateRecord("event", item.id, {
+          ...(form.name !== saved.name ? { name: form.name } : {}),
+          ...(form.text !== saved.text ? { text: form.text } : {}),
+        }).then(async (response) => [response, await listAllRecords("event")] as const),
+      );
       invalidateOptions("event");
       const next = { name: String(response.record.name ?? ""), text: String(response.record.text ?? "") };
       setSaved(next);
       setForm(next);
-      const fresh = await listAllRecords("event");
       setRecords(fresh);
       // 移しを溜めた出来事の札は移しの元(読み込んだときの行)から描くので、元も読み直した行に替えて直した名前を出す
       const base = itemOf(fresh.find((r) => r.id === item.id) ?? {});
@@ -808,6 +808,13 @@ export default function EventTimelinePage() {
   };
 
   const viewingNow = viewing ? (byId.get(viewing.id) ?? viewing) : null;
+
+  // 出来事のモーダルを開いていればその名前・本文を、閉じていれば溜めた移しを保存する
+  useSaveShortcut(() => {
+    if (viewingNow) {
+      if (dirty && form?.name.trim()) void saveViewing(viewingNow);
+    } else if (changes.size > 0) void apply();
+  });
 
   return (
     <div className="page-fill timeline-page">

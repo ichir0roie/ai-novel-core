@@ -5,6 +5,7 @@ import AuthGate from "@/components/AuthGate";
 import HintLayer from "@/components/Hint";
 import Nav from "@/components/Nav";
 import ResumeLastPage from "@/components/ResumeLastPage";
+import SavingOverlay from "@/components/SavingOverlay";
 import { T } from "@/lib/text";
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Suspense>{children}</Suspense>
           </main>
           <HintLayer />
+          <SavingOverlay />
         </AuthGate>
       </body>
     </html>

@@ -1,5 +1,6 @@
 import { fetchAuthSession } from "aws-amplify/auth";
 import { loginRequired } from "./auth";
+import { trackSaving } from "./saving";
 import { T } from "./text";
 import type { components } from "./openapi";
 
@@ -90,10 +91,10 @@ export const getRecord = (table: string, id: number | string) =>
   api<RecordResponse>(`/api/tables/${table}/records/${id}`);
 
 export const createRecord = (table: string, data: Rec) =>
-  api<RecordResponse>(`/api/tables/${table}/records`, { method: "POST", body: JSON.stringify(data) });
+  trackSaving(api<RecordResponse>(`/api/tables/${table}/records`, { method: "POST", body: JSON.stringify(data) }));
 
 export const updateRecord = (table: string, id: number | string, data: Rec) =>
-  api<RecordResponse>(`/api/tables/${table}/records/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  trackSaving(api<RecordResponse>(`/api/tables/${table}/records/${id}`, { method: "PATCH", body: JSON.stringify(data) }));
 
 export const getOptions = (table: string, q?: string) => {
   const params = new URLSearchParams({ limit: "2000" });
@@ -121,19 +122,27 @@ export type EntranceMeta = components["schemas"]["EntranceMeta"];
 export type EntranceList = components["schemas"]["EntranceList"];
 export type RunResult = components["schemas"]["RunResult"];
 
-export const runEntrance = (id: string, args: Rec) =>
+/** 入口を呼ぶ。書き込む入口とみなして、返るまで画面をロックする。 */
+export const runEntrance = (id: string, args: Rec) => trackSaving(readEntrance(id, args));
+
+/** 読むだけの入口を呼ぶ(画面をロックしない)。 */
+export const readEntrance = (id: string, args: Rec) =>
   api<RunResult>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args }) });
 
 /** アイデアを消す(下位のアイデアが残っていると失敗する)。`idea.delete_idea.DeleteIdea` を呼ぶ。 */
 export const deleteIdea = (ideaId: number) => runEntrance("idea.delete_idea.DeleteIdea", { idea_id: ideaId });
 
 /** 下位のアイデアを根へ外してから、アイデアを消す。 */
-export async function deleteIdeaDetachingChildren(ideaId: number, childIds: number[]) {
-  for (const childId of childIds) {
-    await updateRecord("idea", childId, { parent_idea_id: null });
-  }
-  await deleteIdea(ideaId);
-}
+export const deleteIdeaDetachingChildren = (ideaId: number, childIds: number[]) =>
+  // 一つずつ送るあいだにロックが途切れないよう、まとめて包む
+  trackSaving(
+    (async () => {
+      for (const childId of childIds) {
+        await updateRecord("idea", childId, { parent_idea_id: null });
+      }
+      await deleteIdea(ideaId);
+    })(),
+  );
 
 /** 作品の並び・親をまとめて直す(一つでも通らなければ何も直さない)。`story.update_stories.UpdateStories` を呼ぶ。 */
 export const updateStories = (stories: Rec[]) => runEntrance("story.update_stories.UpdateStories", { stories });
@@ -174,7 +183,7 @@ export type KnowableRows = {
 };
 
 export const readKnowableRows = async (source: { character_id: number } | { idea_id: number } | { location_id: number }) =>
-  (await runEntrance("character.read_knowable_rows.ReadKnowableRows", source)).result as KnowableRows;
+  (await readEntrance("character.read_knowable_rows.ReadKnowableRows", source)).result as KnowableRows;
 
 /** 人物が知る相手に人物として入っている行(`character.read_known_rows.ReadKnownRows`)。 */
 export type KnownRows = {
@@ -185,7 +194,7 @@ export type KnownRows = {
 };
 
 export const readKnownRows = async (knowerId: number) =>
-  (await runEntrance("character.read_known_rows.ReadKnownRows", { knower_id: knowerId })).result as KnownRows;
+  (await readEntrance("character.read_known_rows.ReadKnownRows", { knower_id: knowerId })).result as KnownRows;
 
 export type KnowledgeChange = { id: number; known: boolean; start: string | null };
 

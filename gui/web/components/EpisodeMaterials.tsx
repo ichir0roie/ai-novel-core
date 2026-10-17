@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import CharacterSheetModal from "@/components/CharacterSheetModal";
 import NameId from "@/components/NameId";
-import { getEpisodeNeighbors, getRecord, listAllRecords, runEntrance, type Rec } from "@/lib/api";
+import { getEpisodeNeighbors, getRecord, listAllRecords, readEntrance, type Rec } from "@/lib/api";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -64,7 +64,7 @@ export default function EpisodeMaterials({ episode }: Props) {
     const time = typeof start === "string" && start.trim() !== "" ? start : null;
     Promise.all(
       ids.map((id) =>
-        runEntrance("character.read_character.ReadCharacter", { character_id: id, time, count: 0 }).then((result) => ({
+        readEntrance("character.read_character.ReadCharacter", { character_id: id, time, count: 0 }).then((result) => ({
           id,
           sheet: result.result as Rec,
         })),

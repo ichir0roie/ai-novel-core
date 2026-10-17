@@ -14,6 +14,7 @@ export const T = {
   pageTitle: (kind: string, record?: string | null) => (record ? `${kind} - ${record}` : kind),
 
   loading: "Loading…",
+  savingOverlay: "Saving…",
   openRecord: "Open record",
   close: "Close",
   required: "required",

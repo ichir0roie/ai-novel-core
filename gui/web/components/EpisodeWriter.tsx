@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 import EpisodeMaterials from "@/components/EpisodeMaterials";
 import { getRecord, updateRecord, type Rec } from "@/lib/api";
 import { claudeSessionUrl } from "@/lib/claude";
+import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
 export type EpisodeWriterHandle = {
@@ -73,6 +74,8 @@ export default function EpisodeWriter({ episodeId, save: send = saveMainText(epi
       setSaving(false);
     }
   };
+
+  useSaveShortcut(() => void save());
 
   useEffect(
     () => () => {
@@ -168,12 +171,6 @@ export default function EpisodeWriter({ episodeId, save: send = saveMainText(epi
         value={text}
         placeholder={T.writer.placeholder}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-            e.preventDefault();
-            void save();
-          }
-        }}
       />
       <div className="writer-footer">
         <span className={`meta${dirty ? " writer-unsaved" : ""}`}>

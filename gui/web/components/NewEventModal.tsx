@@ -5,6 +5,7 @@ import Modal from "@/components/Modal";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import { createRecord, type Rec } from "@/lib/api";
+import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
 type Props = {
@@ -65,6 +66,8 @@ export default function NewEventModal({ start: initialStart, parent, location, o
       setBusy(false);
     }
   };
+
+  useSaveShortcut(() => void add(), !busy && !!name.trim() && !!start);
 
   return (
     <Modal

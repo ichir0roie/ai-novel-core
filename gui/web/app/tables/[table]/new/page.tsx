@@ -8,6 +8,7 @@ import { createRecord, type Rec, type TableMeta } from "@/lib/api";
 import { useCopyFromPreviousEpisode } from "@/lib/previousEpisode";
 import { PageTitle, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
+import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
 /** クエリの中で、その列の型に読める値だけを初期値に取り込む(例: `?parent_idea_id=66` で子を足す)。 */
@@ -43,9 +44,8 @@ export default function NewRecordPage() {
 
   useCopyFromPreviousEpisode(value?.story_id, value?.start, setValue, table === "episode");
 
-  if (!meta || value === null) return <div className="status info">{T.loading}</div>;
-
   const submit = async () => {
+    if (value === null) return;
     setBusy(true);
     setError(null);
     try {
@@ -62,6 +62,10 @@ export default function NewRecordPage() {
       setBusy(false);
     }
   };
+
+  useSaveShortcut(() => void submit(), meta !== undefined && value !== null && !busy);
+
+  if (!meta || value === null) return <div className="status info">{T.loading}</div>;
 
   return (
     <div className="page-fill">

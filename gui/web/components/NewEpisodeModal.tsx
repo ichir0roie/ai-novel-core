@@ -5,6 +5,7 @@ import Modal from "@/components/Modal";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import { createRecord, getPreviousEpisode, type Rec } from "@/lib/api";
+import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
 // 追加ページと同じく、同じ作品の前の話から写す欄(lib/previousEpisode.ts)
@@ -45,12 +46,16 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
     setError(null);
     try {
       const data: Rec = { ...initial, start, end, title, plot_text: plot };
-      const previous = await getPreviousEpisode(storyId, start);
-      for (const key of COPIED_KEYS) {
-        const v = previous?.[key];
-        if (v != null && !(Array.isArray(v) && v.length === 0)) data[key] = v;
-      }
-      await createRecord("episode", data);
+      // 前の話を引くあいだからロックする(引いているうちに欄を直されても、足す行には入らない)
+      await trackSaving(
+        getPreviousEpisode(storyId, start).then((previous) => {
+          for (const key of COPIED_KEYS) {
+            const v = previous?.[key];
+            if (v != null && !(Array.isArray(v) && v.length === 0)) data[key] = v;
+          }
+          return createRecord("episode", data);
+        }),
+      );
       invalidateOptions("episode");
       onAdded();
       onClose();
@@ -59,6 +64,8 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
       setBusy(false);
     }
   };
+
+  useSaveShortcut(() => void add(), !busy && storyId !== null && !!start);
 
   return (
     <Modal
