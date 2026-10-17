@@ -21,10 +21,19 @@ class SessionRecord(Material):
     time: Timestamp | None = None
     request: str
     closing: bool
+    author: bool
     thought: str | None = None
     action: str | None = None
     speech: str | None = None
     aim: str | None = None
+
+
+class TextSaved(Material):
+    episode_id: int
+    # 保存した本文の字数
+    letters: int
+    # 作者の番に保存したとき、前の本文からの差分を入れた作者の行。差分が無いか、作者の番でなければ空
+    record: SessionRecord | None = None
 
 
 class SessionSince(Material):

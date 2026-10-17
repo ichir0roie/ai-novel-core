@@ -2120,6 +2120,10 @@
             "type": "boolean",
             "title": "Closing"
           },
+          "author": {
+            "type": "boolean",
+            "title": "Author"
+          },
           "thought": {
             "anyOf": [
               {
@@ -2171,7 +2175,8 @@
           "episode_id",
           "witnesses",
           "request",
-          "closing"
+          "closing",
+          "author"
         ],
         "title": "SessionRecord"
       },

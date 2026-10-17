@@ -593,40 +593,10 @@
       "writes": true
     },
     {
-      "id": "episode_comment.add_reaction.AddReaction",
-      "area": "episode_comment",
-      "name": "AddReaction",
-      "doc": "語り部・人物役が、本文の差分を読んだ反応(感想・同意・反対・修正案)を足す。",
-      "params": [
-        {
-          "name": "reaction",
-          "required": true,
-          "default": null,
-          "annotation": "ReactionForm"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_comment.close_comment.CloseComment",
-      "area": "episode_comment",
-      "name": "CloseComment",
-      "doc": "書き終えた合図の行を差分の表に足す。反応している語り部と人物役は、それを読んで止まる。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_comment.read_diffs_since.ReadDiffsSince",
-      "area": "episode_comment",
-      "name": "ReadDiffsSince",
-      "doc": "本文の差分のうち、`after_diff_id` より新しいものを古い順に読む(語り部・人物役が新しい差分を待つ)。",
+      "id": "episode_session.add_author_line.AddAuthorLine",
+      "area": "episode_session",
+      "name": "AddAuthorLine",
+      "doc": "作者の発言(チャットで出した場面・指示、画面の Continue)を話のセッションに入れる。作者の番ならその行に入れて番を語り部へ返し、",
       "params": [
         {
           "name": "episode_id",
@@ -635,64 +605,7 @@
           "annotation": "int"
         },
         {
-          "name": "after_diff_id",
-          "required": false,
-          "default": 0,
-          "annotation": "int"
-        }
-      ],
-      "writes": false
-    },
-    {
-      "id": "episode_comment.read_latest_diff.ReadLatestDiff",
-      "area": "episode_comment",
-      "name": "ReadLatestDiff",
-      "doc": "話の一番新しい差分の id(無ければ 0)。反応を始めるとき、それより後の差分だけを待つのに使う。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        }
-      ],
-      "writes": false
-    },
-    {
-      "id": "episode_comment.read_reactions_since.ReadReactionsSince",
-      "area": "episode_comment",
-      "name": "ReadReactionsSince",
-      "doc": "反応のうち、`after_reaction_id` より新しいものを届いた順に読む(画面が見張って増分を足す)。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "after_reaction_id",
-          "required": false,
-          "default": 0,
-          "annotation": "int"
-        }
-      ],
-      "writes": false
-    },
-    {
-      "id": "episode_comment.save_draft.SaveDraft",
-      "area": "episode_comment",
-      "name": "SaveDraft",
-      "doc": "ユーザが書いている本文を保存し、前に保存した本文から変わった箇所を差分の表に足す(語り部と人物役がそれを読んで反応する)。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "main_text",
+          "name": "text",
           "required": true,
           "default": null,
           "annotation": "str"
@@ -776,6 +689,27 @@
       "writes": true
     },
     {
+      "id": "episode_session.append_text.AppendText",
+      "area": "episode_session",
+      "name": "AppendText",
+      "doc": "語り部が、人物役の一手を起こした文を本文の終わりに書き足す。作者の書いた所は直さない。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "text",
+          "required": true,
+          "default": null,
+          "annotation": "str"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "episode_session.clear_session.ClearSession",
       "area": "episode_session",
       "name": "ClearSession",
@@ -812,6 +746,27 @@
           "name": "request",
           "required": false,
           "default": "話はここで終わり。止まってよい。",
+          "annotation": "str"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.hand_over.HandOver",
+      "area": "episode_session",
+      "name": "HandOver",
+      "doc": "語り部が一巡を終え、作者に番を渡す(行動の空いた作者の行を足す)。作者が書く(`SaveText`・`AddAuthorLine`)まで、",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "request",
+          "required": false,
+          "default": "作者の番",
           "annotation": "str"
         }
       ],
@@ -924,6 +879,54 @@
         }
       ],
       "writes": false
+    },
+    {
+      "id": "episode_session.replace_text.ReplaceText",
+      "area": "episode_session",
+      "name": "ReplaceText",
+      "doc": "語り部が、本文のうち `old` の箇所を `new` に置き換える(作者がプロットのように書いた所を、本文の文に起こし直す)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "old",
+          "required": true,
+          "default": null,
+          "annotation": "str"
+        },
+        {
+          "name": "new",
+          "required": true,
+          "default": null,
+          "annotation": "str"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.save_text.SaveText",
+      "area": "episode_session",
+      "name": "SaveText",
+      "doc": "作者が画面で書いた本文を保存する。作者の番なら、前に保存した本文からの差分を作者の行に入れ、番を語り部へ返す。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "main_text",
+          "required": true,
+          "default": null,
+          "annotation": "str"
+        }
+      ],
+      "writes": true
     },
     {
       "id": "event.create_random_event.CreateRandomEvent",
