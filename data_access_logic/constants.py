@@ -79,6 +79,8 @@ MEME_POSITIONS = {
 # data_access_logic/episode
 # 登場人物の話し方を調整する根拠にする、同じ作品(章・外伝を含む)の直前の話の本数。
 EPISODE_VOICE_SAMPLE_COUNT = 5
+# 文体の見本として渡す、同じ作品(章・外伝を含む)の直前の話の本文の字数の上限。新しい話から、まるごと収まるだけ渡す。
+EPISODE_STYLE_SAMPLE_LETTERS = 12000
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。

@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy import delete, select
 
 from ai.claude_code import ai_client
+from data_access_logic import constants
 from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.character.form import (
@@ -488,6 +489,26 @@ def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
     idea = ideas[world.idea_id]
     assert idea["名前"] == "テスト術"
     assert idea["履歴(古い順)"] == IDEA_HISTORIES
+
+
+def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
+    with get_env_session() as s:
+        for title, start, text in [("一番古い話", "1200/02/01 12:00:00", "一番古い話の本文。"),
+                                   ("その前の話", "1200/02/15 12:00:00", "その前の話の本文。"),
+                                   ("前の話", "1200/03/01 12:00:00", "前の話。\n続き。")]:
+            s.add(Episode(story_id=world.story_id, title=title, plot_text=title, main_text=text, start=start,
+                          event_seeded=True))
+        s.commit()
+
+    def samples(letters):
+        monkeypatch.setattr(constants, "EPISODE_STYLE_SAMPLE_LETTERS", letters)
+        return shown(ReadEpisodeBrief(episode_id=world.episode_id))["文体の見本(古い順)"]
+
+    # 新しい話から、まるごと収まるだけ。収まらない話で止め、それより古い話は見ない
+    assert samples(20) == ["その前の話の本文。", "前の話。\n続き。"]
+    assert samples(10) == ["前の話。\n続き。"]
+    # 直前の話だけで上限を超えるときは、収まる行まで
+    assert samples(6) == ["前の話。"]
 
 
 def test_read_episode_brief_adjusts_voices(shown, world, mock_ai, monkeypatch):

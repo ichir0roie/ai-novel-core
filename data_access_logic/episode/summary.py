@@ -85,11 +85,35 @@ def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
     return s.scalars(_story_past_select(episode).limit(1)).first()
 
 
+def _family_past_select(episode: Episode) -> Select[Episode]:
+    return _past(select(Episode).where(Episode.story_id.in_(_family_ids_select(episode))), episode)
+
+
 # 同じ作品(章・外伝を含む)の直前の話(新しい順に `constants.EPISODE_VOICE_SAMPLE_COUNT` 話)。登場人物の話し方を調整する根拠にする。古い順
 def recent_episodes(s: Session, episode: Episode) -> list[RecentEpisode]:
-    rows = s.scalars(_past(select(Episode).where(Episode.story_id.in_(_family_ids_select(episode))), episode)
-                     .limit(constants.EPISODE_VOICE_SAMPLE_COUNT)).all()
+    rows = s.scalars(_family_past_select(episode).limit(constants.EPISODE_VOICE_SAMPLE_COUNT)).all()
     return [RecentEpisode.model_validate(row) for row in reversed(rows)]
+
+
+def _head(text: str, letters: int) -> str:
+    """字数に収まる所までの行。一行目から収まらなければ字数で切る。"""
+    head = text[:letters + 1]
+    return head[:head.rfind("\n")] if "\n" in head else text[:letters]
+
+
+# 同じ作品(章・外伝を含む)の直前の話の本文を、新しい話から `constants.EPISODE_STYLE_SAMPLE_LETTERS` 字に収まるだけ。
+# 本文は校正済みとみなし、文体の見本にする。直前の話だけで上限を超えるときは、その頭を上限まで渡す。古い順
+def style_samples(s: Session, episode: Episode) -> list[str]:
+    samples: list[str] = []
+    left = constants.EPISODE_STYLE_SAMPLE_LETTERS
+    for text in s.scalars(_family_past_select(episode).with_only_columns(Episode.main_text)):
+        if len(text) > left:
+            if not samples:
+                samples.append(_head(text, left))
+            break
+        samples.append(text)
+        left -= len(text)
+    return samples[::-1]
 
 
 def _summarized_select(episode: Episode, characters: list[Character]) -> Select[Episode]:
