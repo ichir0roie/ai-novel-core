@@ -49,6 +49,14 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
 
+      # 土台のイメージ(public.ecr.aws)を認証して引く。匿名の取得は転送量に上限があり、ランナーの共用の IP で使い切られていると
+      # 429(Data limit exceeded)で建てられない。ECR Public の認証は us-east-1 でだけ受け付ける
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+        env:
+          AWS_REGION: us-east-1
+        with:
+          registry-type: public
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Lambda は複数アーキの目録(provenance の添付で出来る)を受け付けないので、一つのアーキ(arm64)だけで push する。
