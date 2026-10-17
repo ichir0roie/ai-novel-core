@@ -36,11 +36,10 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
   AI を回す材料(`ReadEpisodeBrief`)は呼べないので、設定(アイデア)は出さない。
   手番の内心・行動・セリフと語りの行の ＋ で、その文を本文のカーソルの位置へ一行として差し込む(セリフは鉤括弧で括る。人物役への要求と、視点の決まった話の視点人物でない人物の内心は差し込まない)。
   本文(`main_text`)は Save(Ctrl+S)と欄を閉じたときに保存する(書いている途中では保存しない)。保存していない変更があれば、欄の右下に出す。保存すると改行が整えられて同期フラグが外れるが、書いている欄は置き換えない(読み直すと整えた本文が出る)。
-  Finish ↗ は「ep<話id> 書いた」で Claude Code の新しいセッションを開き、書いた本文を世界に反映させる(スキル `episode` の「ユーザが書いた本文を反映する」。保存の済んでいないうちは押せない)
-- 本文への反応(`/episode_comment?episode=<話の id>`)。話の画面の Comment ボタンから飛ぶ。右に本文を書く欄(`EpisodeWriter`)を置き、Save(Ctrl+S)で
-  入口 `episode_comment.save_draft.SaveDraft` が本文を保存して、前に保存した本文からの差分を `episode_comment_diff` に足す。
-  裏で起きた語り部と人物役(スキル `episode-comment`。Start ↗ で「ep<話id> com」のセッションを開く)が差分を読んで返した反応(`episode_comment_reaction`)を、
-  1 秒ごとに `ReadReactionsSince` で引いて左に届いた順に並べる。反応の引用を押すと、本文のその箇所を選ぶ。Close で書き終えた合図を足し、役を止める
+  作者の行(`author`)のあるセッション(スキル `interactive-episode`)では、作者と語り部が本文を代わる代わる書く。
+  本文の欄は Write を押さなくても開き、保存は入口 `episode_session.save_text.SaveText` に送る(作者の番なら、前の本文からの差分を作者の行に入れて語り部に番を返す)。
+  語り部の番のあいだは欄を読むだけにして 3 秒ごとに本文を読み直し(語り部が `AppendText` で書き足す)、作者の番になったら読み直してから書かせる。＋ の差し込みは出さない。
+  作者の番には Continue(書かずに `AddAuthorLine` で番を返す)、閉じるまでは Close(`CloseSession`)を出す。作者の行は、語り部の一言と作者の書いた差分(足した行・消した行を色分け)を一つの欄に出す
 - `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface/{id}`)から呼ぶ。
   `claude` コマンドを叩く入口は出さず、呼んでも 403 にする(AI は Claude のセッションが回す。`.docs/claude-tasks.md`)
 - 参照の選択欄(場所の木の選択を含む)と話の登場人物の並びには、選んだ行のページへのリンク(`RecordLink`)を添える

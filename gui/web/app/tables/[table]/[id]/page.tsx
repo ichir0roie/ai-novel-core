@@ -20,7 +20,6 @@ import {
   type Rec,
   type RecordResponse,
 } from "@/lib/api";
-import { claudeSessionUrl } from "@/lib/claude";
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
@@ -241,40 +240,9 @@ export default function RecordPage() {
                     {T.record.save}
                   </button>
                   {table === "episode" && (
-                    <a
-                      className="button-link"
-                      href={claudeSessionUrl(
-                        String(loaded.record.main_text ?? "").trim()
-                          ? T.record.claudePromptRevise(T.nameId(loaded.label, id))
-                          : T.record.claudePromptWrite(id),
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={T.record.openClaudeHint}
-                    >
-                      {T.record.openClaude}
-                    </a>
-                  )}
-                  {table === "episode" && (
                     <Link className="button-link" href={`/episode_session?episode=${id}`} title={T.record.openSessionHint}>
                       {T.record.openSession}
                     </Link>
-                  )}
-                  {table === "episode" && (
-                    <Link className="button-link" href={`/episode_comment?episode=${id}`} title={T.record.openCommentHint}>
-                      {T.record.openComment}
-                    </Link>
-                  )}
-                  {table === "episode" && (
-                    <a
-                      className="button-link"
-                      href={claudeSessionUrl(T.record.claudePromptInteractive(id))}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={T.record.openClaudeInteractiveHint}
-                    >
-                      {T.record.openClaudeInteractive}
-                    </a>
                   )}
                   {table === "character" && (
                     // 自分の芯・来歴の知る相手も直すので、画面の編集中の値と食い違わないよう保存してから開く

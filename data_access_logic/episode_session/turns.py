@@ -1,6 +1,7 @@
 """話のセッションの手番。行動の入っていない一番古い要求の行の人物が、いま動く番。
 
 終了の行(`closing`)と語りの行(人物の無い行)は手番に数えない。人物の次の行が終了の行なら、その人物の話は終わり。
+作者の行(`author`)は人物の無い手番で、作者が書くまで後の手番を待たせる。人物役には届かない。
 人物役は自分の番に、前の自分の番から後の、自分が見聞きする語りとほかの人物の一手を、要求といっしょに受け取る。
 """
 from __future__ import annotations
@@ -24,8 +25,33 @@ def _pending() -> Select[EpisodeCharacterSession]:
 
 def current_turn(s: Session, episode_id: int) -> EpisodeCharacterSession | None:
     return s.scalars(_pending().where(EpisodeCharacterSession.episode_id == episode_id,
-                                      EpisodeCharacterSession.character_id.is_not(None),
+                                      or_(EpisodeCharacterSession.character_id.is_not(None),
+                                          EpisodeCharacterSession.author.is_(True)),
                                       EpisodeCharacterSession.closing.is_(False))).first()
+
+
+def author_turn(s: Session, episode_id: int) -> EpisodeCharacterSession | None:
+    """いまが作者の番なら、その作者の行。"""
+    current = current_turn(s, episode_id)
+    return current if current is not None and current.author else None
+
+
+def author_session_running(s: Session, episode_id: int) -> bool:
+    """作者の行があり、まだ閉じていないセッション(作者と語り部が本文を代わる代わる書いている)か。"""
+    session = EpisodeCharacterSession
+    rows = s.scalars(select(session.closing).where(
+        session.episode_id == episode_id, or_(session.author.is_(True), session.closing.is_(True)))).all()
+    return bool(rows) and not any(rows)
+
+
+def write_author_line(s: Session, episode_id: int, text: str) -> EpisodeCharacterSession:
+    """作者が書いたことを入れる。作者の番ならその行に、そうでなければ(語り部の番に口を挟んだ)作者の行を新しく足す。"""
+    record = author_turn(s, episode_id)
+    if record is None:
+        record = EpisodeCharacterSession(episode_id=episode_id, author=True, request="")
+        s.add(record)
+    record.action = text
+    return record
 
 
 def _seen_line(row: EpisodeCharacterSession) -> str:
@@ -43,6 +69,7 @@ def seen_lines(s: Session, record: EpisodeCharacterSession) -> list[str]:
         session.closing.is_(False), session.id < record.id))
     rows = s.scalars(session_select(record.episode_id).where(
         session.id > (previous or 0), session.id < record.id,
+        session.author.is_(False),
         or_(session.character_id.is_(None),
             and_(session.character_id != record.character_id, session.action.is_not(None))),
         session.witnesses.any(EpisodeCharacterSessionWitness.character_id == record.character_id))).all()

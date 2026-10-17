@@ -7,8 +7,7 @@
 | 合図 | スキル |
 | --- | --- |
 | 「ep<話id>」(Claude が語り部のセミオート)・「ep<話id> 書いた」(ユーザが書いた本文を反映) | `episode` |
-| 「ep<話id> in」(ユーザが語り部) | `interactive-episode` |
-| 「ep<話id> com」(ユーザが書く本文に反応させる) | `episode-comment` |
+| 「ep<話id> in」(ユーザが作者として書き、語り部と人物役が続ける) | `interactive-episode` |
 | すでに本文のある話を直す | `revise-episode` |
 | 「<人物名>を呼んで」・「<歳>の<人物名>を呼んで」 | `call-character` |
 | 「st<作品id>」(本文は書かずに作品全体を整える) | `story-director` |

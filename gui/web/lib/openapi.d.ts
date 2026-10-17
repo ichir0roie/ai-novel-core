@@ -714,6 +714,8 @@ export interface components {
             request: string;
             /** Closing */
             closing: boolean;
+            /** Author */
+            author: boolean;
             /** Thought */
             thought?: string | null;
             /** Action */

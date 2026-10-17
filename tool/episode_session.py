@@ -6,6 +6,7 @@
 
     人物役: knowledge / ideas / played / wait-turn / answer(--wait で、入れたあと次の番まで待つ)
     語り部: knower-gaps / stage / appearance / add / add-ideas / wait-answers / read / close
+    作者と代わる代わる書く語り部: text / append / replace / hand-over(--wait で、作者が書くまで待つ)/ wait-author / author
     演じ直す前: clear(--from で、その行から後だけ)
 
     .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
@@ -52,10 +53,29 @@ def wait_turn(episode_id: int, character_id: int, interval: float, timeout: floa
 
 
 def _row(record: dict[str, Any]) -> dict[str, Any]:
-    """語り部の読む行。人物は名前だけにし(空なら語りの行)、見聞きする人物は id だけにする。"""
+    """語り部の読む行。人物は名前だけにし(空なら語りか作者の行)、見聞きする人物は id だけにする。"""
     return {"id": record["id"], "character": record["character"] and record["character"]["name"], "time": record["time"],
             "witnesses": [witness["character_id"] for witness in record["witnesses"]], "request": record["request"],
-            "closing": record["closing"], **{name: record[name] for name in ("thought", "action", "speech", "aim")}}
+            "closing": record["closing"], "author": record["author"],
+            **{name: record[name] for name in ("thought", "action", "speech", "aim")}}
+
+
+def wait_author(episode_id: int, interval: float, timeout: float) -> dict[str, Any]:
+    """作者が書く(一番新しい作者の行に行動が入る)か、セッションが閉じるまで待つ。"""
+    def check():
+        records = call("episode_session.read_session.ReadSession", {"episode_id": episode_id})
+        if any(record["closing"] for record in records):
+            return {"status": "closed"}
+        authors = [record for record in records if record["author"]]
+        if not authors or authors[-1]["action"] is None:
+            return None
+        return {"status": "written", "record": {name: authors[-1][name] for name in ("id", "action")}}
+    return _waited(check, interval, timeout) or {"status": "timeout"}
+
+
+def _text_arg(value: str) -> str:
+    """文を引数でそのまま受けるか、- なら標準入力から読む。"""
+    return sys.stdin.read() if value == "-" else value
 
 
 def _answer(record: dict[str, Any]) -> dict[str, Any]:
@@ -148,12 +168,39 @@ def main() -> None:
     close = commands.add_parser("close", help="出た人物すべてに終了の行を足す")
     close.add_argument("--episode", type=int, required=True)
 
+    text = commands.add_parser("text", help="いま保存されている本文の全文を読む")
+    text.add_argument("--episode", type=int, required=True)
+
+    append = commands.add_parser("append", help="人物役の一手を起こした文を本文の終わりに書き足す(作者の番には断られる)")
+    append.add_argument("--episode", type=int, required=True)
+    append.add_argument("--text", required=True, help="書き足す文。- なら標準入力から読む")
+
+    replace = commands.add_parser("replace", help="本文のうち old の箇所を new に置き換える(作者がプロットのように書いた所を起こし直す。作者の番には断られる)")
+    replace.add_argument("--episode", type=int, required=True)
+    replace.add_argument("--edit", required=True, help='JSON {"old": 置き換える文, "new": 置き換えた文} のファイル。- なら標準入力から読む')
+
+    hand_over = commands.add_parser("hand-over", help="一巡を終え、作者に番を渡す(作者の行を足す)")
+    hand_over.add_argument("--episode", type=int, required=True)
+    hand_over.add_argument("--note", help="作者に渡す一言(画面の作者の行に出る)")
+    hand_over.add_argument("--wait", action="store_true", help="渡したあと、作者が書くかセッションが閉じるまで待ち、wait-author と同じ JSON を返す")
+
+    author_wait = commands.add_parser("wait-author", help="作者が書く(written)か、セッションが閉じる(closed)まで待つ")
+    author_wait.add_argument("--episode", type=int, required=True)
+
+    author = commands.add_parser("author", help="作者がチャットで出した発言を作者の行に入れる(作者の番でなければ作者の行を挟む)")
+    author.add_argument("--episode", type=int, required=True)
+    author.add_argument("--text", required=True, help="作者の発言。- なら標準入力から読む")
+
     clear = commands.add_parser("clear", help="話のセッションの行をすべて消す(手番を演じ直す前に)")
     clear.add_argument("--episode", type=int, required=True)
     clear.add_argument("--from", dest="from_record", type=int, help="この行の id から後(この行を含む)だけを消す")
 
     for waiting in (wait, answers, add, answer):
         waiting.add_argument("--interval", type=float, default=0.3)
+        waiting.add_argument("--timeout", type=float, default=3000.0)
+    # 作者は人が書くので、人物役より間を空けて見る
+    for waiting in (hand_over, author_wait):
+        waiting.add_argument("--interval", type=float, default=1.0)
         waiting.add_argument("--timeout", type=float, default=3000.0)
 
     args = parser.parse_args()
@@ -201,6 +248,23 @@ def main() -> None:
             result = [_row(record) for record in call("episode_session.read_session.ReadSession", {"episode_id": args.episode})]
         case "close":
             result = call("episode_session.close_session.CloseSession", {"episode_id": args.episode})
+        case "text":
+            [episode] = call("episode.read_episode_texts.ReadEpisodeTexts", {"episode_ids": [args.episode]})
+            result = {"title": episode["title"], "main_text": episode["main_text"]}
+        case "append":
+            result = call("episode_session.append_text.AppendText", {"episode_id": args.episode, "text": _text_arg(args.text)})
+        case "replace":
+            text = sys.stdin.read() if args.edit == "-" else Path(args.edit).read_text(encoding="utf-8")
+            result = call("episode_session.replace_text.ReplaceText", {"episode_id": args.episode, **json.loads(text)})
+        case "hand-over":
+            result = call("episode_session.hand_over.HandOver",
+                          {"episode_id": args.episode} | ({} if args.note is None else {"request": args.note}))
+            result = wait_author(args.episode, args.interval, args.timeout) if args.wait else _row(result)
+        case "wait-author":
+            result = wait_author(args.episode, args.interval, args.timeout)
+        case "author":
+            result = _row(call("episode_session.add_author_line.AddAuthorLine",
+                               {"episode_id": args.episode, "text": _text_arg(args.text)}))
         case "clear":
             result = call("episode_session.clear_session.ClearSession", {"episode_id": args.episode} | (
                 {} if args.from_record is None else {"from_record_id": args.from_record}))

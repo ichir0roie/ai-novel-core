@@ -96,18 +96,8 @@ export const T = {
     nextEpisode: "Next ▶",
     noPreviousEpisode: "No earlier episode in this story",
     noNextEpisode: "No later episode in this story",
-    openClaude: "Claude ↗",
-    openClaudeHint: "Open a new Claude Code session for this episode in a new tab",
     openSession: "Session",
-    openSessionHint: "Watch the turns of this episode's session live",
-    openComment: "Comment",
-    openCommentHint: "Write the main text while the narrator and characters comment on each save",
-    openClaudeInteractive: "Interactive ↗",
-    openClaudeInteractiveHint: "Open a new Claude Code session in a new tab where you narrate this episode and the characters respond",
-    // 初めのメッセージは Claude とスキルに向けるので日本語で書く
-    claudePromptWrite: (id: string) => `ep${id}`,
-    claudePromptInteractive: (id: string) => `ep${id} in`,
-    claudePromptRevise: (label: string) => `スキル revise-episode で、エピソード ${label} を書き直して。直したいところ: `,
+    openSessionHint: "Watch the turns of this episode's session live, and write the main text in turn with the narrator",
   },
 
   session: {
@@ -136,6 +126,17 @@ export const T = {
     insert: "＋",
     insertHint: "Insert into the main text at the cursor",
     offViewHint: "Thought of a character other than the viewpoint character; not insertable",
+    author: "Author",
+    authorWaiting: "Your turn",
+    yourTurn: "Your turn: write the main text and press Ctrl+S, or Continue to let the narrator go on",
+    narratorTurn: "Narrator's turn: the characters are acting and the main text is updating",
+    continue: "Continue",
+    continueHint: "Hand the turn back to the narrator without writing",
+    // 作者の行に入り、語り部(Claude)が読むので日本語で書く
+    continueText: "(書き足さずに、続きを語り部に任せる)",
+    close: "Close",
+    closeHint: "Tell the narrator and characters that you are done, so they stop",
+    confirmClose: "Stop the narrator and characters? Unsaved text is not sent.",
   },
 
   writer: {
@@ -166,32 +167,8 @@ export const T = {
     save: "Save",
     saveHint: "Save the main text (Ctrl+S)",
     saveFailed: (error: string) => `Could not save: ${error}`,
-    finish: "Finish ↗",
-    finishHint: "Open a new Claude Code session that records this episode's main text into the world (ideas, summary, relations, histories)",
-    // 初めのメッセージは Claude とスキルに向けるので日本語で書く
-    claudePromptFinish: (id: string) => `ep${id} 書いた`,
     placeholder: "Write the main text here. ＋ on a turn inserts its line at the cursor. Ctrl+S saves.",
-  },
-
-  comment: {
-    title: "Comment",
-    noEpisode: "Open this page from an episode (?episode=<id>)",
-    live: "Live (every second)",
-    paused: "Paused",
-    pause: "Pause",
-    resume: "Resume",
-    empty: "No comments yet. Start the narrator and characters, write, and press Ctrl+S.",
-    count: (count: number) => `${count} comments`,
-    narrator: "Narrator",
-    start: "Start ↗",
-    startHint: "Open a new Claude Code session that starts the narrator and characters for this episode",
-    // 初めのメッセージは Claude とスキルに向けるので日本語で書く
-    claudePromptStart: (id: string) => `ep${id} com`,
-    close: "Close",
-    closeHint: "Tell the narrator and characters that you are done, so they stop",
-    confirmClose: "Stop the narrator and characters? Unsaved text is not sent.",
-    closed: "Sent the stop signal",
-    quoteMissing: "This passage is no longer in the main text",
+    locked: "Narrator is writing…",
   },
 
   create: {

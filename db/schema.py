@@ -979,12 +979,14 @@ class EpisodeCharacter(Base):
 
 
 class EpisodeCharacterSession(Base):
-    """話の本文を書く前に、語り部と人物役が場面を手番で進めた記録。語り部と人物役はこの表だけでやり取りする。
+    """話の本文を書く前か書きながら、語り部と人物役が場面を手番で進めた記録。語り部と人物役はこの表だけでやり取りする。
 
     語り部が手番の人物に要求の行を足し、人物役がその行に行動を書き込む。手番は話の中で id の順に回り、
     行動の書かれていない一番古い行の人物が、いま動く番(`data_access_logic/episode_session/`)。
     人物の無い行は語りの行(その場の何人もに見える・聞こえる状況)で、手番に数えない。語りの行と人物の一手は、
     見聞きする人物(`witnesses`)に、その人物の次の番で届く。同じ状況を人物の数だけ書き写さないため。
+    作者の行(`author`)は人物の無い手番で、作者が本文に書いたこと(`action`)を語り部が読み、場面に起こして人物役へ回す。
+    人物役には届かない。作者が書くまでは後の手番が待つので、作者・語り部・人物役の順に一巡する。
     """
 
     __tablename__ = "episode_character_session"
@@ -996,13 +998,17 @@ class EpisodeCharacterSession(Base):
     request: Mapped[str] = mapped_column(
         String, nullable=False,
         comment="語り部の要求。その人物にだけ見える・聞こえるようになったことと、この手番で求めること。語りの行では、"
-                "見聞きする人物に届く状況",
+                "見聞きする人物に届く状況。作者の行では、語り部が作者に番を渡すときの一言",
         sort_order=130)
     closing: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, comment="話が終わった合図。人物役はこの行を読んだら止まる", sort_order=140)
+    author: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, comment="作者の行。人物は空で、作者が書いたことを行動に持つ",
+        sort_order=145)
     thought: Mapped[str | None] = mapped_column(String, comment="人物の内心(言葉にしない思い)", sort_order=150)
     action: Mapped[str | None] = mapped_column(
-        String, comment="人物の行動(外から見える動き)。空ならまだ動いていない", sort_order=160)
+        String, comment="人物の行動(外から見える動き)。作者の行では、作者が本文に書いたこと(前の本文からの差分か発言)。"
+                        "空ならまだ動いていない", sort_order=160)
     speech: Mapped[str | None] = mapped_column(String, comment="人物のセリフ", sort_order=170)
     aim: Mapped[str | None] = mapped_column(String, comment="この手番での人物の狙い", sort_order=180)
 
@@ -1023,41 +1029,6 @@ class EpisodeCharacterSessionWitness(Base):
         sort_order=100)
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, comment="見聞きする人物", sort_order=110)
-
-
-class EpisodeCommentDiff(Base):
-    """ユーザが本文を書きながら保存する(Ctrl+S)たびに、前に保存した本文から変わった箇所。語り部と人物役はこれを読んで反応を返す。
-
-    本文の全文は話の `main_text` にだけ持ち、ここには変わった箇所だけを持つ。保存は差分を足す入口(`SaveDraft`)だけが
-    するので、保存の直前の `main_text` が前に送った本文になる。
-    """
-
-    __tablename__ = "episode_comment_diff"
-
-    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
-    diff_text: Mapped[str] = mapped_column(
-        String, nullable=False, comment="前に保存した本文からの差分(unified diff の形。前後の数行を添える)。終わりの合図の行では空",
-        sort_order=110)
-    closing: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, comment="書き終えた合図。語り部と人物役はこの行を読んだら止まる", sort_order=120)
-
-
-class EpisodeCommentReaction(Base):
-    """本文の差分を読んだ語り部・人物役の反応。画面は実際の時刻(`created_at`)の順に並べる。"""
-
-    __tablename__ = "episode_comment_reaction"
-
-    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
-    diff_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("episode_comment_diff.id", ondelete="CASCADE"), index=True, nullable=False,
-        comment="どの差分まで読んで返したか", sort_order=110)
-    character_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("character.id"), index=True, comment="反応した人物。空なら語り部", sort_order=120)
-    stance: Mapped[str] = mapped_column(String, nullable=False, comment="感想/同意/反対/修正案 のいずれか", sort_order=130)
-    quote: Mapped[str | None] = mapped_column(String, comment="反応する本文の箇所(本文からそのまま引く)", sort_order=140)
-    text: Mapped[str] = mapped_column(String, nullable=False, comment="反応の文", sort_order=150)
-
-    character: Mapped["Character | None"] = relationship(lazy="noload")
 
 
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、

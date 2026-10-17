@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import EpisodeWriter, { type EpisodeWriterHandle } from "@/components/EpisodeWriter";
 import NameId from "@/components/NameId";
-import { getEpisodeSession, getRecord, type SessionRecord } from "@/lib/api";
+import { getEpisodeSession, getRecord, runEntrance, type SessionRecord } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
 import { T } from "@/lib/text";
 
@@ -19,8 +19,12 @@ const COLUMNS = ["request", "thought", "action", "speech", "aim"] as const;
 const insertable = (column: (typeof COLUMNS)[number], value: string) =>
   column === "speech" && !/^[「『]/.test(value) ? `「${value}」` : value;
 
-/** 一手を待つ手番の行。語りの行(人物の無い行)は手番でない */
-const isPending = (row: SessionRecord) => row.character != null && row.action == null && !row.closing;
+/** 一手を待つ手番の行。語りの行(人物も作者も無い行)は手番でない */
+const isPending = (row: SessionRecord) => (row.character != null || row.author) && row.action == null && !row.closing;
+
+/** 作者の書いた差分の行を、足した行・消した行で色分けする */
+const diffLineClass = (line: string) =>
+  line.startsWith("@@") ? "hunk" : line.startsWith("+") ? "added" : line.startsWith("-") ? "removed" : undefined;
 
 /** 持っている行から、次に引く行の境目。まだ一手の入っていない行は後から書き込まれるので、その手前から引き直す */
 function afterIdOf(rows: SessionRecord[]): number | null {
@@ -124,12 +128,39 @@ export default function EpisodeSessionPage() {
 
   if (episodeId == null) return <div className="status error">{T.session.noEpisode}</div>;
 
-  const current = rows?.find(isPending)?.id;
+  const pending = rows?.find(isPending);
+  const current = pending?.id;
   // 見聞きする人物は id だけで返るので、手番の行に出た名前を当てる
   const names = new Map((rows ?? []).flatMap((row) => (row.character ? [[row.character.id, row.character.name]] : [])));
+  // 作者の行があれば、作者と語り部が本文を代わる代わる書いている(スキル interactive-episode)
+  const authorMode = rows?.some((row) => row.author) ?? false;
+  const closed = rows?.some((row) => row.closing) ?? false;
+  const authorTurn = pending?.author ?? false;
+  const running = authorMode && !closed;
+  const showWriter = writing || running;
+  // 語り部が本文を書き足している間に差し込むと、読み直す本文と食い違うので、代わる代わる書く間は出さない
+  const inserting = writing && !running;
+
+  const saveText = (text: string) => runEntrance("episode_session.save_text.SaveText", { episode_id: episodeId, main_text: text });
+
+  const act = async (run: () => Promise<unknown>) => {
+    try {
+      await run();
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handBack = () =>
+    act(() => runEntrance("episode_session.add_author_line.AddAuthorLine", { episode_id: episodeId, text: T.session.continueText }));
+
+  const close = () => {
+    if (window.confirm(T.session.confirmClose)) void act(() => runEntrance("episode_session.close_session.CloseSession", { episode_id: episodeId }));
+  };
 
   return (
-    <div className={`page-fill${writing ? " session-split" : ""}`}>
+    <div className={`page-fill${showWriter ? " session-split" : ""}`}>
       <PageTitle kind={T.session.title} record={label} />
       <div className="toolbar session-toolbar">
         <h2>
@@ -140,11 +171,28 @@ export default function EpisodeSessionPage() {
         {updatedAt && <span className="meta">{T.session.updatedAt(updatedAt)}</span>}
         {rows && <span className="meta">{T.session.count(rows.length)}</span>}
         <button onClick={() => setLive(!live)}>{live ? T.session.pause : T.session.resume}</button>
-        <button className={writing ? "primary" : undefined} onClick={toggleWriting} title={T.session.writeHint}>
-          {writing ? T.session.closeWrite : T.session.write}
-        </button>
+        {running && authorTurn && (
+          <button onClick={() => void handBack()} title={T.session.continueHint}>
+            {T.session.continue}
+          </button>
+        )}
+        {running && (
+          <button onClick={close} title={T.session.closeHint}>
+            {T.session.close}
+          </button>
+        )}
+        {!running && (
+          <button className={writing ? "primary" : undefined} onClick={toggleWriting} title={T.session.writeHint}>
+            {writing ? T.session.closeWrite : T.session.write}
+          </button>
+        )}
       </div>
       {error && <div className="status error">{error}</div>}
+      {running && (
+        <div className={`status info${authorTurn ? " session-your-turn" : ""}`}>
+          {authorTurn ? T.session.yourTurn : T.session.narratorTurn}
+        </div>
+      )}
       <div className="session-body">
         <div
           className="session-list"
@@ -166,8 +214,13 @@ export default function EpisodeSessionPage() {
                 </tr>
               </thead>
               {rows.map((row) => {
-                const state =
-                  row.character == null
+                const state = row.author
+                  ? row.closing
+                    ? "closing author"
+                    : row.id === current
+                      ? "waiting author"
+                      : "author"
+                  : row.character == null
                     ? "narration"
                     : row.closing
                       ? "closing"
@@ -187,7 +240,7 @@ export default function EpisodeSessionPage() {
                             <NameId name={row.character.name} id={row.character.id} />
                           </Link>
                         ) : (
-                          <span className="session-narrator">{T.session.narration}</span>
+                          <span className="session-narrator">{row.author ? T.session.author : T.session.narration}</span>
                         )}
                         {row.time && <span className="meta">{row.time}</span>}
                         {row.witnesses.length > 0 && (
@@ -195,15 +248,38 @@ export default function EpisodeSessionPage() {
                             {T.session.witnesses(row.witnesses.map((w) => names.get(w.character_id) ?? T.idMark(w.character_id)))}
                           </span>
                         )}
-                        {state !== "played" && state !== "narration" && (
+                        {state !== "played" && state !== "narration" && state !== "author" && (
                           <span className="session-state">
-                            {state === "closing" ? T.session.closing : state === "waiting" ? T.session.waiting : T.session.queued}
+                            {row.closing
+                              ? T.session.closing
+                              : row.author
+                                ? T.session.authorWaiting
+                                : state === "waiting"
+                                  ? T.session.waiting
+                                  : T.session.queued}
                           </span>
                         )}
                       </td>
                     </tr>
+                    {/* 作者の行は、語り部の一言と作者の書いたこと(差分)を一つの欄へ書く */}
+                    {row.author && (row.request || row.action) && (
+                      <tr>
+                        <td colSpan={COLUMNS.length}>
+                          {row.request && <div className="meta">{row.request}</div>}
+                          {row.action && (
+                            <div className="session-diff">
+                              {row.action.split("\n").map((line, index) => (
+                                <div key={index} className={diffLineClass(line)}>
+                                  {line}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
                     {/* 語りの行は場面だけなので、列を分けずに一つの欄へ書く */}
-                    {!row.closing && (
+                    {!row.closing && !row.author && (
                       <tr>
                         {row.character ? (
                           COLUMNS.map((column) => {
@@ -214,12 +290,12 @@ export default function EpisodeSessionPage() {
                               <td
                                 key={column}
                                 data-label={T.session[column]}
-                                className={writing && offView && cell ? "session-offview" : undefined}
-                                title={writing && offView && cell ? T.session.offViewHint : undefined}
+                                className={inserting && offView && cell ? "session-offview" : undefined}
+                                title={inserting && offView && cell ? T.session.offViewHint : undefined}
                               >
                                 {cell}
                                 {/* 人物役への要求は語り部の指示なので、本文には差し込まない */}
-                                {writing && column !== "request" && !offView && cell && (
+                                {inserting && column !== "request" && !offView && cell && (
                                   <InsertButton onClick={() => writer.current?.insert(insertable(column, cell))} />
                                 )}
                               </td>
@@ -228,7 +304,7 @@ export default function EpisodeSessionPage() {
                         ) : (
                           <td colSpan={COLUMNS.length}>
                             {row.request}
-                            {writing && row.request && <InsertButton onClick={() => writer.current?.insert(row.request)} />}
+                            {inserting && row.request && <InsertButton onClick={() => writer.current?.insert(row.request)} />}
                           </td>
                         )}
                       </tr>
@@ -239,7 +315,14 @@ export default function EpisodeSessionPage() {
             </table>
           )}
         </div>
-        {writing && <EpisodeWriter ref={writer} episodeId={episodeId} />}
+        {showWriter && (
+          <EpisodeWriter
+            ref={writer}
+            episodeId={episodeId}
+            save={authorMode ? saveText : undefined}
+            locked={running ? !authorTurn : undefined}
+          />
+        )}
       </div>
     </div>
   );
