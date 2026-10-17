@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import KnowledgeModal from "@/components/KnowledgeModal";
 import RecordForm from "@/components/RecordForm";
-import { invalidateOptions } from "@/components/ReferenceSelect";
+import { invalidateOptions, prefetchOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
 import StoryEpisodes from "@/components/StoryEpisodes";
 import {
@@ -13,7 +13,6 @@ import {
   deleteEpisode,
   deleteIdeaDetachingChildren,
   diff,
-  getEpisodeNeighbors,
   getRecord,
   listAllRecords,
   updateRecord,
@@ -22,7 +21,8 @@ import {
   type RecordResponse,
 } from "@/lib/api";
 import { claudeSessionUrl } from "@/lib/claude";
-import { PageTitle, tableMeta } from "@/lib/meta";
+import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
+import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -53,6 +53,12 @@ function sortChildListsByStart(table: string, record: Rec): Rec {
   return sorted;
 }
 
+/** 行と一緒に返る関連のうち、ほかの欄が引き直さずに使うものを渡す。 */
+function receiveRelated(table: string, result: RecordResponse) {
+  const ids = result.related?.location_character_ids;
+  if (table === "episode" && Array.isArray(ids)) receiveLocationCharacterIds(result.record.location_id, result.record.start, ids as number[]);
+}
+
 /** 記録のページから戻る一覧。話は同じ作品で、スキルは同じ人物で絞った一覧に戻す。 */
 function listHref(table: string, record: Rec): string {
   if (table === "episode" && record.story_id != null) return `/tables/${table}?story_id=${record.story_id}`;
@@ -69,14 +75,17 @@ export default function RecordPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const [neighbors, setNeighbors] = useState<EpisodeNeighbors | null>(null);
   const [organizing, setOrganizing] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
+    // 選択欄の選択肢を行と同じときに読み始め、行と一緒に `/api/batch` の一回で受ける
+    const meta = tableMeta(table);
+    if (meta) prefetchOptions(referencedTables(meta));
     try {
       const result = await getRecord(table, id);
       const record = sortChildListsByStart(table, result.record);
+      receiveRelated(table, result);
       setLoaded({ ...result, record });
       setValue(record);
     } catch (e) {
@@ -88,19 +97,8 @@ export default function RecordPage() {
     void load();
   }, [load]);
 
-  // 時刻・作品を直して保存したら並びが変わるので、保存した値(loaded)ごとに引き直す
-  const savedStart = loaded?.record.start;
-  const savedStoryId = loaded?.record.story_id;
-  useEffect(() => {
-    if (table !== "episode" || savedStoryId === undefined) return;
-    let cancelled = false;
-    getEpisodeNeighbors(id)
-      .then((result) => !cancelled && setNeighbors(result))
-      .catch(() => !cancelled && setNeighbors(null));
-    return () => {
-      cancelled = true;
-    };
-  }, [table, id, savedStart, savedStoryId]);
+  // 前後の話は行と一緒に返る(保存の返事にも、直した時刻・作品での並びが入る)
+  const neighbors = (loaded?.related?.neighbors as EpisodeNeighbors | undefined) ?? null;
 
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
@@ -114,6 +112,7 @@ export default function RecordPage() {
     try {
       const result = await updateRecord(table, id, changes);
       const record = sortChildListsByStart(table, result.record);
+      receiveRelated(table, result);
       setLoaded({ ...result, record });
       setValue(record);
       invalidateOptions(table);

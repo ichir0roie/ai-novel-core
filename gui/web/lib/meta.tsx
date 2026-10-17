@@ -12,6 +12,12 @@ export function tableMeta(name: string): TableMeta | undefined {
   return TABLES.find((table) => table.name === name);
 }
 
+/** 表の欄と子の一覧が参照する表(選択欄が選択肢を読む先) */
+export function referencedTables(meta: TableMeta): string[] {
+  const columns = [...meta.columns, ...meta.child_lists.flatMap((child) => child.columns)];
+  return [...new Set(columns.flatMap((column) => (column.references ? [column.references] : [])))];
+}
+
 // タブのタイトルを「ページの種類 - レコードの名前」に合わせる(record が無ければ種類だけ)。
 // Next の metadata(layout.tsx の静的 <title>)がハイドレート後に遅れて自分の値で <title> を
 // 上書きしてくることがあるため、一度書き換えたあとも MutationObserver で見張り、書き戻す

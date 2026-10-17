@@ -12,7 +12,9 @@ from pydantic import BaseModel, Field, SerializeAsAny, model_serializer
 from sqlalchemy import Column, ColumnElement, func, or_, select
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
+from data_access_logic.character.location_characters import location_character_ids
 from data_access_logic.entrypoint import UnknownFieldError, loading, record_of
+from data_access_logic.episode.reading import EpisodeNeighbors, neighbor_episodes
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.record import EventRecord
 from data_access_logic.label import clipped, label_of
@@ -22,7 +24,7 @@ from data_access_logic.story.record import StoryRecord
 from db.child_lists import child_model
 from db.schema import Base, Character, Episode, Event, Story
 from gui.api.models import Option, RecordList, RecordResponse
-from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of
+from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of, writer_of
 
 # エピソード画面の「関連」に出す出来事・話の件数の上限(時期だけで絞ると際限なく広がりうるため)
 _CONTEXT_LIMIT = 100
@@ -73,7 +75,12 @@ class StoryRelated(Related):
 
 
 class EpisodeRelated(Related):
-    context: EpisodeContext
+    # 時期の無い話は、重なる出来事・作品を出しようがないので None
+    context: EpisodeContext | None
+    # 話の画面が、行を読んでから別に引き直さずに済むよう一緒に返す(Lambda への往復を一回にする)
+    neighbors: EpisodeNeighbors
+    # 話の場所か、その上位の場所に、話の開始の時刻にいる人物(登場人物の候補を絞る)。場所・時刻が無ければ None
+    location_character_ids: list[int] | None
 
 
 def _preview(spec: TableSpec, row: Base) -> str:
@@ -223,9 +230,12 @@ def related_of(s: Session, record: Material) -> Related:
             EpisodeLink(table=Episode.__tablename__, id=episode.id, label=label_of(Episode, episode),
                         synced=episode.synced, letters=episode.letters)
             for episode in episodes])
-    # 時期の無い話は、重なる出来事・作品を出しようがない
-    if isinstance(record, EpisodeRecord) and record.start is not None:
-        return EpisodeRelated(context=_episode_context(s, record))
+    if isinstance(record, EpisodeRecord):
+        return EpisodeRelated(
+            context=_episode_context(s, record) if record.start is not None else None,
+            neighbors=neighbor_episodes(s, record.id),
+            location_character_ids=location_character_ids(s, record.location_id, record.start)
+            if record.location_id is not None and record.start is not None else None)
     return Related()
 
 
@@ -241,8 +251,10 @@ def get_record(s: Session, spec: TableSpec, record_id: int) -> RecordResponse:
 
 
 def create_record(s: Session, spec: TableSpec, data: dict[str, Any]) -> Material:
-    return spec.creator(spec.create_form.model_validate(data)).execute(s)
+    writer = writer_of(spec.name)
+    return writer.creator(writer.create_form.model_validate(data)).execute(s)
 
 
 def update_record(s: Session, spec: TableSpec, record_id: int, data: dict[str, Any]) -> Material:
-    return spec.updater(spec.update_form(id=record_id, **data)).execute(s)
+    writer = writer_of(spec.name)
+    return writer.updater(writer.update_form(id=record_id, **data)).execute(s)
