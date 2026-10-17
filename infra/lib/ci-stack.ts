@@ -54,6 +54,12 @@ export class NovelCiStack extends Stack {
     }));
 
     grantInvokeViaFunctionUrl(deployRole, functionArn(api.functionName));
+    // 土台のイメージ(public.ecr.aws)を認証して引く。匿名の取得は転送量に上限(月 500 GB)があり、ランナーの共用の IP で
+    // 使い切られていると 429(Data limit exceeded)で建てられない。どちらの操作も資源を絞れない
+    deployRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["ecr-public:GetAuthorizationToken", "sts:GetServiceBearerToken"],
+      resources: ["*"],
+    }));
 
     new CfnOutput(this, "RepositoryUri", { value: repository.repositoryUri });
     new CfnOutput(this, "DeployRoleArn", { value: deployRole.roleArn });
