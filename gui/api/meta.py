@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`db/schema.py` の列の定義と、入口の引数のモデル(`TableSpec.create_form` など)の欄から、フォームを組み立てるための情報を作る。
+"""`db/schema.py` の列の定義と、入口の引数のモデル(`TableWriter.create_form` など)の欄から、フォームを組み立てるための情報を作る。
 列の定義・欄の検証はここでは持たない。API は使わない。`gui/api/dump_static.py` が画面の `gui/web/lib/tables.json` に書き出す。"""
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from db.child_lists import child_columns, child_model
 from db.schema import TIMESTAMP_COLUMNS, PolygonType, StampType
 from gui.api.fields import choices_of, field_meta
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
-from gui.api.tables import TABLES, TableSpec
+from gui.api.tables import TABLES, TableSpec, writer_of
 
 # CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
@@ -75,7 +75,8 @@ _SHOWN_IN_CHILD_LISTS = {"character": ("start", "end")}
 def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
     """入口が列の外で受け取る欄(出来事の当事者など)。足す入口にしか無い欄は足すときだけ渡せる。"""
     skipped = {"id", *spec.model.__table__.columns.keys(), *spec.model.CHILD_LISTS, *_SHOWN_IN_CHILD_LISTS.get(spec.name, ())}
-    create_fields, update_fields = spec.create_form.model_fields, spec.update_form.model_fields
+    writer = writer_of(spec.name)
+    create_fields, update_fields = writer.create_form.model_fields, writer.update_form.model_fields
     extras = [field_meta(key, field, create_only=key not in update_fields)
               for key, field in create_fields.items() if key not in skipped]
     extras += [field_meta(key, field) for key, field in update_fields.items()
@@ -85,7 +86,8 @@ def _extra_columns(spec: TableSpec) -> list[ColumnMeta]:
 
 def _row_model(spec: TableSpec, name: str) -> type[BaseModel]:
     """子の一覧の行のモデル(`list[CharacterParameterRow]` の中身)。"""
-    fields = spec.create_form.model_fields if name in spec.create_form.model_fields else spec.update_form.model_fields
+    writer = writer_of(spec.name)
+    fields = writer.create_form.model_fields if name in writer.create_form.model_fields else writer.update_form.model_fields
     for member in (fields[name].annotation, *typing.get_args(fields[name].annotation)):
         for argument in typing.get_args(member):
             if isinstance(argument, type) and issubclass(argument, BaseModel):
@@ -108,7 +110,7 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     for column in model.__table__.columns:
         if column.key in hidden_columns or column.key in TIMESTAMP_COLUMNS:
             continue
-        meta = column_meta(column, spec.create_form.model_fields.get(column.key), section=column.key in sections,
+        meta = column_meta(column, writer_of(spec.name).create_form.model_fields.get(column.key), section=column.key in sections,
                            readonly=column.key in readonly_columns,
                            markdown=column.key not in plain_text_columns, side=column.key in side_columns)
         (long if meta.section else plain).append(meta)

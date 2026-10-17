@@ -12,6 +12,21 @@ const cache = new Map<string, Promise<Option[]>>();
 // 取り置きを捨てたとき、いま出ている選択欄にも読み直させる
 const listeners = new Set<(table: string | null) => void>();
 
+function loadOptions(table: string): Promise<Option[]> {
+  if (!cache.has(table)) {
+    const loading = getOptions(table).then((r) => r.items);
+    loading.catch(() => cache.delete(table));
+    cache.set(table, loading);
+  }
+  return cache.get(table)!;
+}
+
+/** まだ取り置きの無い選択肢を読み始める。画面が行と同じときに呼べば、`/api/batch` の一回にまとまる
+ * (行を待ってから選択欄が読むと、Lambda への往復が二回になる) */
+export function prefetchOptions(tables: Iterable<string>) {
+  for (const table of tables) void loadOptions(table).catch(() => undefined);
+}
+
 /** 参照先のテーブルの選択肢。テーブルごとに一度だけ読み、取り置きを捨てられたら読み直す。 */
 export function useOptions(table: string | null | undefined): Option[] {
   const [options, setOptions] = useState<Option[]>([]);
@@ -27,9 +42,8 @@ export function useOptions(table: string | null | undefined): Option[] {
   }, [table]);
   useEffect(() => {
     if (!table) return;
-    if (!cache.has(table)) cache.set(table, getOptions(table).then((r) => r.items));
     let alive = true;
-    cache.get(table)!.then((items) => alive && setOptions(items)).catch(() => cache.delete(table));
+    loadOptions(table).then((items) => alive && setOptions(items)).catch(() => undefined);
     return () => {
       alive = false;
     };
