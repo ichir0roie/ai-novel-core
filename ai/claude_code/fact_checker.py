@@ -13,6 +13,7 @@ import os
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 
+from ai.claude_code.ai_client import load_env
 from ai.instructions.sensitive import FACT_CHECK_BIO_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.material import Material
@@ -95,6 +96,7 @@ MODELS = {"oracle": Oracle, "meme": Meme}
 
 
 def tools() -> tuple[str, ...]:
+    load_env()
     dlab = os.environ.get("DEM_CLAUDE_AI_DLAB_TOOLS", DEFAULT_DLAB_TOOLS)
     return WEB_TOOLS + tuple(tool.strip() for tool in dlab.split(",") if tool.strip())
 

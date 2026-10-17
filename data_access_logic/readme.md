@@ -487,8 +487,9 @@ Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_c
 - `fact_check/` — oracle・ミームを AI に Dラボのナレッジとネット検索で検めさせ、妥当性と補足を書く(`ai/claude_code/fact_checker.py`)
 - `map/` — 星ごとの地図の元データ・svg・距離と方角(入口は `location/list_neighbors.py`)
 
-GUI の API(`gui/api/interface.py`)は、領域のディレクトリ直下のファイルを歩いて、そのファイルで定義した入口のクラスを
-「領域.ファイル.クラス」の id で並べる。
+入口は「領域.ファイル.クラス」の id で、GUI の API と web のセッションが呼ぶ固定の一覧(`gui/api/interface.py` の
+`DB_ENTRANCES` / `CLAUDE_ENTRANCES`)に書く。入口を足したら id を一覧に足し、`.venv/bin/python -m gui.api.dump_static` で画面の入口の一覧を書き出し直す
+(足し忘れは `tests/api/test_static.py` が落とす)。
 
 - **「作る」と「確定する」を別ファイルに分ける。** 「作る」側(`create_random_*`)は
   db に一切触れず、確定する側の引数のモデルに読み込める形の下書きを返すだけ。db を触るのは「確定する」側だけ

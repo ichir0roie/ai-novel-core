@@ -29,8 +29,7 @@ def call(entrance_id: str, args: dict[str, Any]) -> Any:
         from web_session.transport import run_entrance
         return run_entrance(entrance_id, args)
     from gui.api import interface
-    entrance = interface.db_entrance_of(entrance_id)
-    return interface.call(entrance, interface.prepare(entrance, args))
+    return interface.call(interface.db_entrance_class(entrance_id), args)
 
 
 def _waited(check, interval: float, timeout: float) -> Any:

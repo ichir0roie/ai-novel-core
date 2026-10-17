@@ -4,6 +4,7 @@ import { T } from "./text";
 import type { components } from "./openapi";
 
 export type TableMeta = components["schemas"]["TableMeta"];
+export type TablesResponse = components["schemas"]["TablesResponse"];
 export type ColumnMeta = components["schemas"]["ColumnMeta"];
 export type ChildListMeta = components["schemas"]["ChildListMeta"];
 export type RecordList = components["schemas"]["RecordList"];
@@ -80,7 +81,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
 }
 
-export const getTables = () => api<components["schemas"]["TablesResponse"]>("/api/tables");
+export const getTableCounts = () => api<components["schemas"]["TableCounts"]>("/api/table_counts");
 
 export const listRecords = (table: string, params: URLSearchParams) =>
   api<RecordList>(`/api/tables/${table}/records?${params.toString()}`);
@@ -119,8 +120,6 @@ export function labelOf(labels: Labels | undefined, column: string, id: unknown)
 export type EntranceMeta = components["schemas"]["EntranceMeta"];
 export type EntranceList = components["schemas"]["EntranceList"];
 export type RunResult = components["schemas"]["RunResult"];
-
-export const getEntrances = () => api<EntranceList>("/api/interface");
 
 export const runEntrance = (id: string, args: Rec) =>
   api<RunResult>(`/api/interface/${id}`, { method: "POST", body: JSON.stringify({ args }) });

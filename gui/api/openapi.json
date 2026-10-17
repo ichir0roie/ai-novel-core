@@ -45,17 +45,18 @@
         }
       }
     },
-    "/api/tables": {
+    "/api/table_counts": {
       "get": {
-        "summary": "Tables",
-        "operationId": "tables_api_tables_get",
+        "summary": "Table Counts",
+        "description": "表ごとの行の数。トップページが出す(表の列などの情報は、画面が `gui/web/lib/tables.json` に持つ)",
+        "operationId": "table_counts_api_table_counts_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TablesResponse"
+                  "$ref": "#/components/schemas/TableCounts"
                 }
               }
             }
@@ -415,28 +416,10 @@
         }
       }
     },
-    "/api/interface": {
-      "get": {
-        "summary": "List Entrances",
-        "description": "db だけの入口の一覧。claude を叩く入口は出さない(Claude のセッションが自分で呼ぶ)",
-        "operationId": "list_entrances_api_interface_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntranceList"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/interface/{entrance_id}": {
       "post": {
         "summary": "Run Entrance",
+        "description": "db だけの入口を呼ぶ(入口の一覧は、画面が `gui/web/lib/entrances.json` に持つ)",
         "operationId": "run_entrance_api_interface__entrance_id__post",
         "parameters": [
           {
@@ -1029,250 +1012,6 @@
           "locations"
         ],
         "title": "CharacterLocationsResponse"
-      },
-      "ChildListMeta": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "table": {
-            "type": "string",
-            "title": "Table"
-          },
-          "columns": {
-            "items": {
-              "$ref": "#/components/schemas/ColumnMeta"
-            },
-            "type": "array",
-            "title": "Columns"
-          },
-          "comment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comment"
-          },
-          "display": {
-            "type": "string",
-            "enum": [
-              "table",
-              "periodic",
-              "flow"
-            ],
-            "title": "Display",
-            "default": "table"
-          },
-          "knowers": {
-            "type": "boolean",
-            "title": "Knowers",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "table",
-          "columns"
-        ],
-        "title": "ChildListMeta"
-      },
-      "ColumnMeta": {
-        "properties": {
-          "key": {
-            "type": "string",
-            "title": "Key"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "integer",
-              "number",
-              "boolean",
-              "string",
-              "stamp",
-              "json",
-              "id_list"
-            ],
-            "title": "Type"
-          },
-          "nullable": {
-            "type": "boolean",
-            "title": "Nullable"
-          },
-          "required": {
-            "type": "boolean",
-            "title": "Required"
-          },
-          "section": {
-            "type": "boolean",
-            "title": "Section",
-            "default": false
-          },
-          "markdown": {
-            "type": "boolean",
-            "title": "Markdown",
-            "default": true
-          },
-          "side": {
-            "type": "boolean",
-            "title": "Side",
-            "default": false
-          },
-          "choices": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Choices"
-          },
-          "default": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default"
-          },
-          "references": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "References"
-          },
-          "readonly": {
-            "type": "boolean",
-            "title": "Readonly",
-            "default": false
-          },
-          "create_only": {
-            "type": "boolean",
-            "title": "Create Only",
-            "default": false
-          },
-          "comment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comment"
-          }
-        },
-        "type": "object",
-        "required": [
-          "key",
-          "type",
-          "nullable",
-          "required"
-        ],
-        "title": "ColumnMeta"
-      },
-      "EntranceList": {
-        "properties": {
-          "entrances": {
-            "items": {
-              "$ref": "#/components/schemas/EntranceMeta"
-            },
-            "type": "array",
-            "title": "Entrances"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entrances"
-        ],
-        "title": "EntranceList"
-      },
-      "EntranceMeta": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "area": {
-            "type": "string",
-            "title": "Area"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "doc": {
-            "type": "string",
-            "title": "Doc"
-          },
-          "params": {
-            "items": {
-              "$ref": "#/components/schemas/EntranceParam"
-            },
-            "type": "array",
-            "title": "Params"
-          },
-          "writes": {
-            "type": "boolean",
-            "title": "Writes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "area",
-          "name",
-          "doc",
-          "params",
-          "writes"
-        ],
-        "title": "EntranceMeta"
-      },
-      "EntranceParam": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "required": {
-            "type": "boolean",
-            "title": "Required"
-          },
-          "default": {
-            "title": "Default"
-          },
-          "annotation": {
-            "type": "string",
-            "title": "Annotation",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "required"
-        ],
-        "title": "EntranceParam"
       },
       "EpisodeCharacterLink": {
         "properties": {
@@ -2455,81 +2194,21 @@
         ],
         "title": "StoryRoute"
       },
-      "TableMeta": {
+      "TableCounts": {
         "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "label_column": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label Column"
-          },
-          "columns": {
-            "items": {
-              "$ref": "#/components/schemas/ColumnMeta"
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
             },
-            "type": "array",
-            "title": "Columns"
-          },
-          "child_lists": {
-            "items": {
-              "$ref": "#/components/schemas/ChildListMeta"
-            },
-            "type": "array",
-            "title": "Child Lists"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          },
-          "sort": {
-            "type": "string",
-            "title": "Sort",
-            "default": "id"
-          },
-          "order": {
-            "type": "string",
-            "enum": [
-              "asc",
-              "desc"
-            ],
-            "title": "Order",
-            "default": "desc"
+            "type": "object",
+            "title": "Counts"
           }
         },
         "type": "object",
         "required": [
-          "name",
-          "label_column",
-          "columns",
-          "child_lists",
-          "count"
+          "counts"
         ],
-        "title": "TableMeta"
-      },
-      "TablesResponse": {
-        "properties": {
-          "tables": {
-            "items": {
-              "$ref": "#/components/schemas/TableMeta"
-            },
-            "type": "array",
-            "title": "Tables"
-          }
-        },
-        "type": "object",
-        "required": [
-          "tables"
-        ],
-        "title": "TablesResponse"
+        "title": "TableCounts"
       },
       "TimelineResponse": {
         "properties": {
@@ -2610,6 +2289,329 @@
           "character_id"
         ],
         "title": "Witness"
+      },
+      "ChildListMeta": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMeta"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comment"
+          },
+          "display": {
+            "default": "table",
+            "enum": [
+              "table",
+              "periodic",
+              "flow"
+            ],
+            "title": "Display",
+            "type": "string"
+          },
+          "knowers": {
+            "default": false,
+            "title": "Knowers",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "table",
+          "columns"
+        ],
+        "title": "ChildListMeta",
+        "type": "object"
+      },
+      "ColumnMeta": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "integer",
+              "number",
+              "boolean",
+              "string",
+              "stamp",
+              "json",
+              "id_list"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "section": {
+            "default": false,
+            "title": "Section",
+            "type": "boolean"
+          },
+          "markdown": {
+            "default": true,
+            "title": "Markdown",
+            "type": "boolean"
+          },
+          "side": {
+            "default": false,
+            "title": "Side",
+            "type": "boolean"
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Choices"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Default"
+          },
+          "references": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "References"
+          },
+          "readonly": {
+            "default": false,
+            "title": "Readonly",
+            "type": "boolean"
+          },
+          "create_only": {
+            "default": false,
+            "title": "Create Only",
+            "type": "boolean"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "key",
+          "type",
+          "nullable",
+          "required"
+        ],
+        "title": "ColumnMeta",
+        "type": "object"
+      },
+      "EntranceList": {
+        "description": "画面が持つ入口の一覧(`gui/web/lib/entrances.json`。`gui/api/dump_static.py` が書き出す)。API からは返さない",
+        "properties": {
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/EntranceMeta"
+            },
+            "title": "Entrances",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entrances"
+        ],
+        "title": "EntranceList",
+        "type": "object"
+      },
+      "EntranceMeta": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "doc": {
+            "title": "Doc",
+            "type": "string"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/EntranceParam"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "writes": {
+            "title": "Writes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "area",
+          "name",
+          "doc",
+          "params",
+          "writes"
+        ],
+        "title": "EntranceMeta",
+        "type": "object"
+      },
+      "EntranceParam": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "default": {
+            "default": null,
+            "title": "Default"
+          },
+          "annotation": {
+            "default": "",
+            "title": "Annotation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "required"
+        ],
+        "title": "EntranceParam",
+        "type": "object"
+      },
+      "TableMeta": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "label_column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Column"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnMeta"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "child_lists": {
+            "items": {
+              "$ref": "#/components/schemas/ChildListMeta"
+            },
+            "title": "Child Lists",
+            "type": "array"
+          },
+          "sort": {
+            "default": "id",
+            "title": "Sort",
+            "type": "string"
+          },
+          "order": {
+            "default": "desc",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Order",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label_column",
+          "columns",
+          "child_lists"
+        ],
+        "title": "TableMeta",
+        "type": "object"
+      },
+      "TablesResponse": {
+        "description": "画面が持つ表の情報(`gui/web/lib/tables.json`。`gui/api/dump_static.py` が書き出す)。API からは返さない",
+        "properties": {
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/TableMeta"
+            },
+            "title": "Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tables"
+        ],
+        "title": "TablesResponse",
+        "type": "object"
       }
     }
   }

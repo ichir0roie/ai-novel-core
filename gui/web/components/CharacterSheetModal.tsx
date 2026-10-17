@@ -8,7 +8,7 @@ import { Spec } from "@/components/Hint";
 import Modal from "@/components/Modal";
 import { runEntrance, type ColumnMeta, type RunResult } from "@/lib/api";
 import { columnHint } from "@/lib/hint";
-import { useTable } from "@/lib/meta";
+import { tableMeta } from "@/lib/meta";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -63,7 +63,7 @@ type Props = {
 /** 人物の基本の列・その時点のパラメータ・来歴を、大きなモーダルで見る(閲覧専用)。並びは人物詳細(RecordForm)と同じで、
  * 左に欄とパラメータ、右に本文とその下の来歴を置き、左右それぞれがスクロールする(モーダル全体はスクロールしない)。 */
 export default function CharacterSheetModal({ characterId, time, onClose }: Props) {
-  const meta = useTable("character");
+  const meta = tableMeta("character");
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const at = typeof time === "string" && time.trim() !== "" ? time : null;

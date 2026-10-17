@@ -33,7 +33,7 @@
 | db だけの入口(claude を叩かない) | `curl -sS -H "$h" -H 'content-type: application/json' -d '{"args":{...}}' "$api/api/interface/<入口の id>"`(結果は `.result`) |
 | claude を叩く入口 | `web_session/flows.py` の `run` で、入口の id と引数(手元と同じ)を渡して python で回す。下の例(結果は包まれずにそのまま返る) |
 
-- どちらで呼ぶかは、`curl -sS -H "$h" "$api/api/interface" | jq -r '.entrances[].id'` の一覧で見る。一覧にあるのが db だけの入口で、無いもの(`ReadEpisodeCasting`・`ReadEpisodeBrief`・`CommitEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
+- どちらで呼ぶかは、`gui/api/interface.py` の固定の一覧で見る。`DB_ENTRANCES` にあるのが db だけの入口で、`CLAUDE_ENTRANCES` にあるもの(`ReadEpisodeCasting`・`ReadEpisodeBrief`・`CommitEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
 - claude を叩く入口を curl で呼ぶと、`{"detail":"… は claude コマンドを叩くので API からは呼べない …"}` が返る。打ち直さずに `flows.run` に替える
 
 ## 表の API(`/api/tables`)
@@ -47,7 +47,7 @@
 | 話のセッションの行(読む・消す) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>`(`--from <行の id>` でその行から後だけ) |
 | 話の概要(`summary_text`) | 入口 `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[…]}` の `.result[].summary_text`(表の API の行には入らない) |
 
-- 列名は推測しない。`curl -sS -H "$h" "$api/api/tables" | jq -c '.tables[] | {name, columns: [.columns[].key]}'` で表ごとの列を見る。取り違えやすいもの:
+- 列名は推測しない。`jq -c '.tables[] | {name, columns: [.columns[].key]}' gui/web/lib/tables.json` で表ごとの列を見る(API には聞かない。画面が持つ表の情報)。取り違えやすいもの:
 
 | 表 | 正しい列 | 取り違えた名前 |
 | --- | --- | --- |

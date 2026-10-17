@@ -39,7 +39,7 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
   入口 `episode_comment.save_draft.SaveDraft` が本文を保存して、前に保存した本文からの差分を `episode_comment_diff` に足す。
   裏で起きた語り部と人物役(スキル `episode-comment`。Start ↗ で「ep<話id> com」のセッションを開く)が差分を読んで返した反応(`episode_comment_reaction`)を、
   1 秒ごとに `ReadReactionsSince` で引いて左に届いた順に並べる。反応の引用を押すと、本文のその箇所を選ぶ。Close で書き終えた合図を足し、役を止める
-- `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface`)から呼ぶ。
+- `data_access_logic/` の入口を画面(`/interface`)と API(`/api/interface/{id}`)から呼ぶ。
   `claude` コマンドを叩く入口は出さず、呼んでも 403 にする(AI は Claude のセッションが回す。`.docs/claude-tasks.md`)
 - 参照の選択欄(場所の木の選択を含む)と話の登場人物の並びには、選んだ行のページへのリンク(`RecordLink`)を添える
 
@@ -48,8 +48,8 @@ db(RDS)をブラウザから見て直すための道具。API(`gui/api`、FastAP
 列の定義(`db/schema.py`)、値の型(`Stamp`)、確定・修正のときの検証(実在確認・別名の制約・
 子の行の扱い)はすべて python 側にある。Next.js から db を直接開くと、その全部を
 TypeScript にもう一度書くことになり、正が二つになる。そのため API は FastAPI で python 側に置き、
-書き込みは `data_access_logic/` の入口(`execute(s)`)を通す。画面は列の情報を
-`GET /api/tables` から受け取って組み立てるので、列を足しても画面のコードは変えなくてよい。
+書き込みは `data_access_logic/` の入口(`execute(s)`)を通す。画面は列の情報を、python 側から書き出した
+`gui/web/lib/tables.json` から組み立てる(API に毎回は聞かない)。列を足したら書き出し直すだけで、画面のコードは変えなくてよい。
 型は FastAPI の OpenAPI(`gui/api/openapi.json`)から `gui/web/lib/openapi.d.ts` を生成して合わせる。
 画面に出す文言(ボタン・見出し・状態表示など、英語)は `gui/web/lib/text.ts` の `T` に集め、ページ・コンポーネントには直書きしない。
 テーブル・列・子リストは日本語の見出しを持たず、物理名(テーブル名・列名)のまま出す。db の値(場所の category など)と物理名は文言ではないので、`T` には置かない。
@@ -99,13 +99,12 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 
 | メソッド | パス | 中身 |
 | --- | --- | --- |
-| GET | `/api/tables` | 扱うテーブルと列の情報(型・必須・選択肢・参照先・子の行) |
+| GET | `/api/table_counts` | テーブルごとの行の数(トップページ)。列の情報は API でなく `gui/web/lib/tables.json` |
 | GET | `/api/tables/{table}/records?q=&limit=&offset=&sort=&order=&<列>=<値>` | 一覧。`q` は名前・本文の部分一致、列名の query は等値(`null` で空)。`sort` は並べる列(空の行は後ろ)、`order` は `asc`/`desc`。省くとテーブルの既定(`TableMeta.sort`/`order`。話は開始の降順、ほかは id の降順) |
 | GET | `/api/tables/{table}/records/{id}` | 一件。参照先の名前(`labels`)と表示用の関連(`related`)付き |
 | POST | `/api/tables/{table}/records` | 追加。確定の入口(`CommitIdea` など)の `execute` を通す |
 | PATCH | `/api/tables/{table}/records/{id}` | 修正。渡した欄だけ直す(`UpdateIdea` などの `execute`) |
 | GET | `/api/tables/{table}/options?q=` | 参照先を選ぶための id と名前 |
-| GET | `/api/interface` | claude を叩かない入口の一覧(領域・引数・db に書くか) |
 | POST | `/api/interface/{id}` | `{"args": {...}}`。`id` は `location.list_locations.ListLocations` のような「領域.ファイル.クラス」。`claude` を叩く入口は 403 |
 | GET | `/api/ping` | 起きているかだけ(`NOVEL_API_KEYS` があっても合言葉なしで通す) |
 | GET | `/api/maps` | 星ごとの地図の元データ(星・経緯度を持つ場所・輪郭を持つ場所・色分け)。画面 `/maps` が描く |
@@ -120,19 +119,21 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 話を足す画面は、作品が決まるとその作品で開始(`start`)より前の一番後ろの話(`/api/previous_episode`。開始が空なら作品の最後の話)から場所・視点・登場人物を空の欄に写す。開始を変えると、写した値のうち手で直していない欄を写し直す。
 人物の選択肢(`/api/tables/character/options`)はメインキャラクターを先に並べる。
 
-型を変えたら OpenAPI と TS の型を作り直す。
+表・入口・API の型を変えたら、画面が持つもの(OpenAPI・表の情報 `gui/web/lib/tables.json`・入口の一覧 `gui/web/lib/entrances.json`)を
+書き出し直し、TS の型を作り直す。書き出し忘れは `tests/api/test_static.py` が落とす。
 
 ```
-.venv/bin/python -m gui.api.dump_openapi
+.venv/bin/python -m gui.api.dump_static
 (cd gui/web && npm run types)
 ```
 
 ## 入口と claude コマンド
 
 `POST /api/interface/{id}` は、入口を組み立てて `run()` を呼ぶ。
-`args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに一度だけ読み込んでから渡す(`interface.prepare`。読み込めなければ 400)。
-どの入口が `claude -p` を回すかは `gui/api/interface.py` が決める(確定のあとに AI を回す `result()` を上書きしている入口、
-AI を引数に取る入口)。それらは API の一覧に出さず、呼んでも 403 にする。
+`args` の dict は、入口の引数の型注釈が pydantic のモデルなら、そのモデルに一度だけ読み込んでから渡す(`interface.call`。読み込めなければ 400)。
+入口は `gui/api/interface.py` の固定の一覧に id で書き、呼ばれた入口のモジュールだけを import する(起動のときに全部を読まない)。
+`claude -p` を回す入口(確定のあとに AI を回す `result()` を上書きしている入口、AI を引数に取る入口)は `CLAUDE_ENTRANCES` に書く。
+それらは画面の一覧(`/interface`)に出さず、API から呼んでも 403 にする。
 Claude のセッションが、手元は `show()`(`.claude/docs/db.md`)、web は `web_session/flows.py` の `run`(`.claude/docs/web-db.md`)で呼ぶ。
 
 ## 型と lint

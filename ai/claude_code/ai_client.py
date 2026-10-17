@@ -7,14 +7,21 @@ import os
 import shutil
 import subprocess
 import tempfile
+from functools import cache
 from pathlib import Path
 
-from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+@cache
+def load_env() -> None:
+    """`.env` の `DEM_CLAUDE_AI_*` を環境変数に読む。claude を叩く前に一度だけ。import のときには読まない
+    (API の Lambda は claude を叩かず、dotenv の import がコールドスタートを延ばすため)"""
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 
 class ClaudeAIError(RuntimeError):
@@ -101,6 +108,7 @@ def generate[Output: BaseModel](
     effort: str = EFFORT,
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。"""
+    load_env()
     args = _build_args(system, output.model_json_schema(), tools, model, effort)
     try:
         reply = _reply(prompt, args, timeout)

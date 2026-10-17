@@ -5,6 +5,7 @@ import enum
 import hashlib
 import os
 from datetime import datetime
+from urllib.parse import quote
 
 from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, DateTime, FetchedValue, Integer, String, DECIMAL, JSON, TypeDecorator,
@@ -1095,16 +1096,23 @@ def make_url_engine(url: str, iam_auth: bool = False):
 
 def _use_iam_auth_token(engine) -> None:
     # RDS の IAM データベース認証のトークンは 15 分で切れるので、接続を張るたびに作る。
-    # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む
-    import boto3
+    # 署名は手元で作るので、NAT の無い VPC の中の Lambda からでも外へ出ずに済む。
+    # トークンは rds-db の SigV4 の署名付き URL(boto3 の generate_db_auth_token と同じもの)。boto3 の client を作ると
+    # rds のサービスの定義まで読み込み、Lambda のコールドスタートが延びるので、botocore の署名だけで作る
+    import botocore.session
+    from botocore.auth import SigV4QueryAuth
+    from botocore.awsrequest import AWSRequest
 
-    rds = boto3.client("rds")
+    aws = botocore.session.get_session()
+    region = aws.get_config_variable("region")
     signed_for: dict[tuple[str, int], tuple[str, int]] = {}
 
     def rds_endpoint(host: str, port: int) -> tuple[str, int]:
         if host not in _LOOPBACK_HOSTS:
             return host, port
         if (host, port) not in signed_for:
+            import boto3
+
             values = boto3.client("ssm").get_parameters(Names=list(_RDS_ENDPOINT_PARAMETERS))["Parameters"]
             found = {value["Name"]: value["Value"] for value in values}
             endpoint, rds_port = (found[name] for name in _RDS_ENDPOINT_PARAMETERS)
@@ -1114,8 +1122,9 @@ def _use_iam_auth_token(engine) -> None:
     @event.listens_for(engine, "do_connect")
     def _set_token(dialect, conn_rec, cargs, cparams):
         host, port = rds_endpoint(cparams["host"], int(cparams.get("port", 5432)))
-        cparams["password"] = rds.generate_db_auth_token(
-            DBHostname=host, Port=port, DBUsername=cparams["user"], Region=rds.meta.region_name)
+        request = AWSRequest(method="GET", url=f"https://{host}:{port}/?Action=connect&DBUser={quote(cparams['user'])}")
+        SigV4QueryAuth(aws.get_credentials().get_frozen_credentials(), "rds-db", region, expires=900).add_auth(request)
+        cparams["password"] = str(request.url).removeprefix("https://")
 
 
 def _no_database(*args, **kwargs):

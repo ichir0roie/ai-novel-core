@@ -2,6 +2,10 @@
 """データ編集 GUI の API。リポジトリのルートから次で起動する(`DEM_DATABASE_URL` などは他の python と同じ)。
 
     .venv/bin/python -m uvicorn gui.api.app:app --port 8765 --reload
+
+口ごとに要るモジュールは、その口の関数の中で import する。Lambda のコールドスタートで、ほかの口のためのモジュールまで
+読み込ませないため(web のセッションが呼ぶ入口・段は、表の口や地図のモジュールを要らない)。先頭に置くのは、
+どの口でも要るものと、FastAPI が口を定義するときに要る返り値の型だけ。
 """
 from __future__ import annotations
 
@@ -12,35 +16,23 @@ import os
 from collections.abc import Iterator
 from typing import Any
 
-import httpx
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import OperationalError, StatementError
 from sqlalchemy.orm import Session
 
-from data_access_logic import step
-from data_access_logic.character.latest_locations import latest_location_ids
-from data_access_logic.character.location_characters import location_character_ids
-from data_access_logic.character.relation_graph import relation_graph
 from data_access_logic.entrypoint import UnknownRecordError
-from data_access_logic.episode import reading as episode_reading
+from data_access_logic.episode.reading import EpisodeNeighbors
 from data_access_logic.episode.record import EpisodeRecord
-from data_access_logic.episode_session.read_session_since import ReadSessionSince
 from data_access_logic.episode_session.record import SessionSince
 from data_access_logic.logs import configure_logging
-from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
-from data_access_logic.map.collect import planet_maps
-from data_access_logic.map.geometry import BEARINGS
-from data_access_logic.map.render_svg import COLORS, render_svg
-from data_access_logic.map.story_route import StoryRoute, story_route
+from data_access_logic.map.story_route import StoryRoute
 from db.schema import engine, get_env_session
-from db.stamp import Stamp
-from gui.api import interface, meta, records, timeline
+from gui.api import interface
 from gui.api.models import (
-    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Created, EntranceList, EntranceMeta, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
-    RunRequest, RunResult, TablesResponse, TimelineResponse,
+    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Created, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
+    RunRequest, RunResult, TableCounts, TimelineResponse,
 )
-from gui.api.tables import spec_of
 
 logger = logging.getLogger(__name__)
 configure_logging()
@@ -133,9 +125,14 @@ def health() -> Health:
     return Health(dialect=engine.dialect.name)
 
 
-@app.get("/api/tables", response_model=TablesResponse)
-def tables(s: Session = Depends(session_dep)) -> TablesResponse:
-    return TablesResponse(tables=meta.all_tables(s))
+@app.get("/api/table_counts", response_model=TableCounts)
+def table_counts(s: Session = Depends(session_dep)) -> TableCounts:
+    """表ごとの行の数。トップページが出す(表の列などの情報は、画面が `gui/web/lib/tables.json` に持つ)"""
+    from sqlalchemy import func, select
+
+    from gui.api.tables import TABLES
+
+    return TableCounts(counts={spec.name: s.scalar(select(func.count()).select_from(spec.model)) or 0 for spec in TABLES})
 
 
 @app.get("/api/tables/{table}/records", response_model=RecordList)
@@ -143,6 +140,9 @@ def list_records(table: str, request: Request, q: str | None = None,
                  limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0),
                  sort: str | None = None, order: str | None = Query(None, pattern="^(asc|desc)$"),
                  s: Session = Depends(session_dep)) -> RecordList:
+    from gui.api import records
+    from gui.api.tables import spec_of
+
     spec = spec_of(table)
     reserved = {"q", "limit", "offset", "sort", "order"}
     filters = {key: value for key, value in request.query_params.items() if key not in reserved}
@@ -154,11 +154,17 @@ def list_records(table: str, request: Request, q: str | None = None,
 def list_options(table: str, q: str | None = None, limit: int = Query(200, ge=1, le=2000),
                  ids: list[int] | None = Query(None),
                  s: Session = Depends(session_dep)) -> OptionList:
+    from gui.api import records
+    from gui.api.tables import spec_of
+
     return OptionList(items=records.options(s, spec_of(table), q=q, limit=limit, ids=ids))
 
 
 @app.post("/api/tables/{table}/records", response_model=RecordResponse, status_code=201)
 def create_record(table: str, data: dict[str, Any], s: Session = Depends(session_dep)) -> RecordResponse:
+    from gui.api import records
+    from gui.api.tables import spec_of
+
     spec = spec_of(table)
     with s.begin():
         record = records.create_record(s, spec, data)
@@ -167,35 +173,36 @@ def create_record(table: str, data: dict[str, Any], s: Session = Depends(session
 
 @app.get("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
 def get_record(table: str, record_id: int, s: Session = Depends(session_dep)) -> RecordResponse:
+    from gui.api import records
+    from gui.api.tables import spec_of
+
     return records.get_record(s, spec_of(table), record_id)
 
 
 @app.patch("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
 def update_record(table: str, record_id: int, data: dict[str, Any],
                   s: Session = Depends(session_dep)) -> RecordResponse:
+    from gui.api import records
+    from gui.api.tables import spec_of
+
     spec = spec_of(table)
     with s.begin():
         record = records.update_record(s, spec, record_id, data)
     return records.response_of(s, spec, record)
 
 
-@app.get("/api/interface", response_model=EntranceList)
-def list_entrances() -> EntranceList:
-    """db だけの入口の一覧。claude を叩く入口は出さない(Claude のセッションが自分で呼ぶ)"""
-    return EntranceList(entrances=[EntranceMeta.model_validate(entrance) for entrance in interface.ENTRANCES.values()
-                                   if not entrance.claude])
-
-
 @app.post("/api/interface/{entrance_id}", response_model=RunResult)
 def run_entrance(entrance_id: str, request: RunRequest) -> RunResult:
-    entrance = interface.db_entrance_of(entrance_id)
-    return RunResult(entrance=entrance.id, result=interface.call(entrance, interface.prepare(entrance, request.args)))
+    """db だけの入口を呼ぶ(入口の一覧は、画面が `gui/web/lib/entrances.json` に持つ)"""
+    return RunResult(entrance=entrance_id, result=interface.call(interface.db_entrance_class(entrance_id), request.args))
 
 
 @app.post("/api/steps/{step_id}")
 def run_step(step_id: str, body: Any = Body(None)) -> Any:
     """db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、
     流れと AI を自分で持ったまま db に触る所だけを頼む"""
+    from data_access_logic import step
+
     return step.run_json(step_id, body)
 
 
@@ -203,6 +210,8 @@ def run_step(step_id: str, body: Any = Body(None)) -> Any:
 async def batch(body: BatchRequest, request: Request) -> BatchResponse:
     """同じ時に出た GET をまとめて回す。Lambda は一つの実行環境で一つの要求しか受けないので、画面が並べて呼ぶと
     その数だけ実行環境が起き、それぞれがコールドスタートを待つ"""
+    import httpx
+
     for path in body.paths:
         if not path.startswith("/api/") or path.startswith("/api/batch"):
             raise ValueError(f"まとめて回せないパス: {path}")
@@ -222,6 +231,10 @@ async def batch(body: BatchRequest, request: Request) -> BatchResponse:
 @app.get("/api/maps", response_model=MapsResponse)
 def maps(s: Session = Depends(session_dep)) -> MapsResponse:
     """星ごとの地図の元データ。画面(`/maps`)が場所の座標・領域から描く"""
+    from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
+    from data_access_logic.map.collect import planet_maps
+    from data_access_logic.map.geometry import BEARINGS
+
     return MapsResponse(planets=planet_maps(s), categories=list(CATEGORIES),
                         category_colors=dict(CATEGORY_COLORS), shape_opacity=dict(SHAPE_OPACITY),
                         bearings=list(BEARINGS))
@@ -229,6 +242,9 @@ def maps(s: Session = Depends(session_dep)) -> MapsResponse:
 
 @app.get("/api/maps/{planet_id}.svg")
 def map_svg(planet_id: int, s: Session = Depends(session_dep)) -> Response:
+    from data_access_logic.map.collect import planet_maps
+    from data_access_logic.map.render_svg import render_svg
+
     for planet_map in planet_maps(s):
         if planet_map.planet.id == planet_id:
             return Response(render_svg(planet_map.planet, planet_map.points, planet_map.shapes), media_type="image/svg+xml")
@@ -238,12 +254,17 @@ def map_svg(planet_id: int, s: Session = Depends(session_dep)) -> Response:
 @app.get("/api/story_route", response_model=StoryRoute)
 def get_story_route(story_id: int, s: Session = Depends(session_dep)) -> StoryRoute:
     """作品の話を順に並べ、それぞれを地図に置く位置。地図(`/maps?story=`)が場所の移り変わりを描く"""
+    from data_access_logic.map.story_route import story_route
+
     return story_route(s, story_id)
 
 
 @app.get("/api/relations", response_model=RelationsResponse)
 def relations(s: Session = Depends(session_dep)) -> RelationsResponse:
     """人物相関図の元データ。画面(`/relations`)が描く"""
+    from data_access_logic.character.relation_graph import relation_graph
+    from data_access_logic.map.render_svg import COLORS
+
     graph = relation_graph(s)
     return RelationsResponse(characters=graph.characters, relations=graph.relations, colors=list(COLORS))
 
@@ -251,12 +272,17 @@ def relations(s: Session = Depends(session_dep)) -> RelationsResponse:
 @app.get("/api/character_locations", response_model=CharacterLocationsResponse)
 def character_locations(s: Session = Depends(session_dep)) -> CharacterLocationsResponse:
     """人物ごとの居場所。人物一覧のツリー表示(`/tables/character?view=tree`)が場所ごとに束ねるのに使う"""
+    from data_access_logic.character.latest_locations import latest_location_ids
+
     return CharacterLocationsResponse(locations=latest_location_ids(s))
 
 
 @app.get("/api/location_characters", response_model=LocationCharactersResponse)
 def location_characters(location_id: int, time: str, s: Session = Depends(session_dep)) -> LocationCharactersResponse:
     """`time` に `location_id` の場所か、その上位の場所にいる人物。話の登場人物の候補を、フォームの場所・時刻で絞るのに使う"""
+    from data_access_logic.character.location_characters import location_character_ids
+    from db.stamp import Stamp
+
     at = Stamp.parse(time)
     if at is None:
         raise ValueError("時刻が空")
@@ -266,6 +292,8 @@ def location_characters(location_id: int, time: str, s: Session = Depends(sessio
 @app.get("/api/timeline", response_model=TimelineResponse)
 def get_timeline(story_id: int | None = None, s: Session = Depends(session_dep)) -> TimelineResponse:
     """全期間の話。画面(`/timeline`)が時刻の軸に並べる"""
+    from gui.api import timeline
+
     return timeline.timeline(s, story_id=story_id)
 
 
@@ -274,18 +302,24 @@ def previous_episode(story_id: int, before: str | None = None,
                      s: Session = Depends(session_dep)) -> EpisodeRecord | None:
     """作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。
     話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う"""
-    return episode_reading.previous_episode(s, story_id, before)
+    from data_access_logic.episode.reading import previous_episode
+
+    return previous_episode(s, story_id, before)
 
 
-@app.get("/api/episode_neighbors", response_model=episode_reading.EpisodeNeighbors)
-def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> episode_reading.EpisodeNeighbors:
+@app.get("/api/episode_neighbors", response_model=EpisodeNeighbors)
+def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> EpisodeNeighbors:
     """同じ作品の時刻の順で前後の話。話の画面のタイトルの横の移動ボタンが使う"""
-    return episode_reading.neighbor_episodes(s, episode_id)
+    from data_access_logic.episode.reading import neighbor_episodes
+
+    return neighbor_episodes(s, episode_id)
 
 
 @app.get("/api/episode_session", response_model=SessionSince)
 def episode_session(episode_id: int, after_id: int | None = None, s: Session = Depends(session_dep)) -> SessionSince:
     """話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す"""
+    from data_access_logic.episode_session.read_session_since import ReadSessionSince
+
     return ReadSessionSince(episode_id, after_id).execute(s)
 
 

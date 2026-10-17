@@ -21,15 +21,14 @@ def test_health(client):
     assert health["dialect"] == "postgresql"
 
 
-def test_tables(client, world):
-    response = client.get("/api/tables")
+def test_table_counts(client, world):
+    response = client.get("/api/table_counts")
 
     assert response.status_code == 200
-    body = response.json()
-    tables = {table["name"]: table for table in body["tables"]}
-    assert set(tables) == {"story", "episode", "character", "character_relation", "character_skill", "event", "location", "idea",
+    counts = response.json()["counts"]
+    assert set(counts) == {"story", "episode", "character", "character_relation", "character_skill", "event", "location", "idea",
                            "meme", "oracle", "style_preference"}
-    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
+    assert counts["story"] >= 1
 
 
 def test_list_records(client, world):
@@ -114,18 +113,10 @@ def test_update_record(client, world):
     assert record["character_ids"] == world.character_ids
 
 
-def test_list_entrances(client):
-    response = client.get("/api/interface")
+def test_run_unknown_entrance(client):
+    response = client.post("/api/interface/story.no_such.NoSuch", json={"args": {}})
 
-    assert response.status_code == 200
-    entrances = {entrance["id"]: entrance for entrance in response.json()["entrances"]}
-    start_story = entrances["story.start_story.StartStory"]
-    assert start_story["writes"] is False
-    assert [param["name"] for param in start_story["params"]] == [
-        "story_id", "time", "episodes", "count", "reach", "levels", "skip_sync"]
-    assert entrances["episode.delete_episode.DeleteEpisode"]["writes"] is True
-    # claude を叩く入口は出さない
-    assert "event.commit_event.CommitEvent" not in entrances
+    assert response.status_code == 404
 
 
 def test_run_entrance(client, world):
@@ -205,7 +196,7 @@ def test_batch(client, world):
 
 
 def test_batch_rejects_other_paths(client):
-    for path in ["/api/batch", "https://example.com/api/tables", "/docs"]:
+    for path in ["/api/batch", "https://example.com/api/table_counts", "/docs"]:
         response = client.post("/api/batch", json={"paths": [path]})
 
         assert response.status_code == 400, path

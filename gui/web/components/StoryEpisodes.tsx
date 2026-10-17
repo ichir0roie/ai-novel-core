@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import ListTable, { nextSort, Pager, type SortOrder } from "@/components/ListTable";
 import { listRecords, type RecordList } from "@/lib/api";
-import { useTable } from "@/lib/meta";
+import { tableMeta } from "@/lib/meta";
 
 const PAGE = 50;
 
 /** 作品の画面の右に置く、その作品の話の一覧。並び・ページ送りは一覧の画面と同じで、行は別タブで開く。 */
 export default function StoryEpisodes({ storyId }: { storyId: number | string }) {
-  const meta = useTable("episode");
+  const meta = tableMeta("episode");
   const [sorting, setSorting] = useState<{ sort: string; order: SortOrder } | null>(null);
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<RecordList | null>(null);

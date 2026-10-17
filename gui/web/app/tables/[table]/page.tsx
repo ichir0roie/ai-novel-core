@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { deleteMemes, getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
-import { PageTitle, useTable } from "@/lib/meta";
+import { PageTitle, tableMeta } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
 import CharacterTree from "@/components/CharacterTree";
@@ -24,7 +24,7 @@ export default function TablePage() {
   const { table } = useParams<{ table: string }>();
   const router = useRouter();
   const search = useSearchParams();
-  const meta = useTable(table);
+  const meta = tableMeta(table);
   const [data, setData] = useState<RecordList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState(search.get("q") ?? "");

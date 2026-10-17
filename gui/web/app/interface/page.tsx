@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getEntrances, runEntrance, type EntranceList, type EntranceMeta, type Rec } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { runEntrance, type EntranceList, type EntranceMeta, type Rec } from "@/lib/api";
+import entrancesJson from "@/lib/entrances.json";
 import { PageTitle } from "@/lib/meta";
 import { T } from "@/lib/text";
+
+// 入口の一覧は API に聞かず、書き出した JSON(`gui/api/dump_static.py`)を画面に持つ
+const ENTRANCES: EntranceMeta[] = (entrancesJson as unknown as EntranceList).entrances;
 
 /** 引数の欄。JSON として読めればその値、読めなければ文字列のまま渡す。 */
 function parseArg(text: string): unknown {
@@ -82,31 +86,24 @@ function Runner({ entrance }: { entrance: EntranceMeta }) {
 }
 
 export default function InterfacePage() {
-  const [catalog, setCatalog] = useState<EntranceList | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getEntrances().then(setCatalog).catch((e) => setError(e.message));
-  }, []);
 
   const groups = useMemo(() => {
     const q = filter.trim();
     const map = new Map<string, EntranceMeta[]>();
-    for (const entrance of catalog?.entrances ?? []) {
+    for (const entrance of ENTRANCES) {
       if (q && !entrance.id.includes(q) && !entrance.doc.includes(q)) continue;
       map.set(entrance.area, [...(map.get(entrance.area) ?? []), entrance]);
     }
     return map;
-  }, [catalog, filter]);
-  const current = catalog?.entrances.find((entrance) => entrance.id === selected) ?? null;
+  }, [filter]);
+  const current = ENTRANCES.find((entrance) => entrance.id === selected) ?? null;
 
   return (
     <>
       <PageTitle kind={T.endpoints.title} />
       <h1>{T.endpoints.title}</h1>
-      {error && <div className="status error">{error}</div>}
       <div className="toolbar">
         <input type="search" placeholder={T.endpoints.searchPlaceholder} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
