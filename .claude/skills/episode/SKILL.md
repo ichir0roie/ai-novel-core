@@ -23,6 +23,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
 | 本文の材料を読む(登場人物・場所を結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
+| 登場人物の話し方を直前の五話のセリフから調整する(頼まれたときだけ) | `episode.refresh_voices.RefreshVoices` | `{'episode_id': …}` |
 | 話に出た新しい語を足す | `episode_session.add_ideas.AddIdeas` | `{'episode_id': …, 'ideas': [{'keyword': …, 'description': …, 'kind': …}]}`(場所・時刻は話から取る。種別は分類のあるものから選ぶ。返るのは足した語 `added` と足さなかった語 `kept` の名前だけ) |
 | 設定を引く | `idea.resolve_ideas.ResolveIdeas` | `{'ideas': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
 | 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'appearance': <見た目>, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': '<年/月/日>', 'description': <来歴の節目>}]}}` |
@@ -72,7 +73,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 6. **手番を回す**(下の「手番を回す(セミオート)」): このセッションの Claude が語り部を務め、人物役に場面を手番で最後まで演じさせる。終えても閉じずにまとめを報告して待ち、ユーザが認めたら閉じて 7 へ進む。指摘があれば、人物それぞれに意見を求め、その意見を尊重して、その手番から回し直す。本文の材料は、認められるまで読まない
 7. **本文の材料を読む**: `ReadEpisodeBrief(episode_id)`。長いので、出力をスクラッチパッドのファイルへ書き出して Read する。中身:
    - 書き方(文体の決まりと、この世界の `style_preference`)・作品
-   - 登場人物の話し方: 材料を読むとき、同じ作品(親の作品の章・外伝を含む)の直前の五話のセリフで、登場人物の口調・一人称・二人称などが自動で調整されて書き戻され、材料の登場人物にはその調整後の値が入る
+   - 登場人物の話し方: 材料の登場人物には、話の時刻の口調・一人称・二人称などがそのまま入る(自動では調整しない。ユーザに頼まれたときだけ、`RefreshVoices` で直前の五話のセリフから調整してから読む)
    - 文体の見本: 同じ作品(親の作品の章・外伝を含む)の直前の話の本文を、新しい話から字数の上限まで。直前の話だけで上限を超えるときは、その頭だけ
    - 前の話の概要(話id つき): この話より前の同じ作品(親の作品の章・外伝を含む)のすべての話と、登場人物が関わったすべての話(作品を問わない。重ならない)。話の中身はここから読む
    - この話・結んだ登場人物(直近の出来事・関わった話つき)・名前だけ出る人物・登場人物の関係・設定・場所の直近の出来事・後に決まっている出来事

@@ -107,8 +107,10 @@ def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCa
     return EpisodeCastingSerialized.model_validate(call(episode_steps.episode_casting, RowId(id=episode_id)))
 
 
-def refresh_voices(ai: AIClient, episode_id: int) -> None:
-    """同じ作品の直前の五話のセリフから、登場人物の話し方を調整して書き戻す。AI が答えなくても材料は読む。"""
+def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.VoiceDraft]:
+    """`RefreshVoices` に当たる。同じ作品の直前の五話のセリフから、登場人物の話し方を調整して書き戻す。
+    書いた人物の調整案を返す。"""
+    adjusted = []
     for source in call(episode_steps.voice_sources, RowId(id=episode_id)):
         drafts = voices.voice_draft(ai, source)
         if drafts is None:
@@ -116,18 +118,19 @@ def refresh_voices(ai: AIClient, episode_id: int) -> None:
             continue
         # 元に入れなかった人物(根拠の見本が無い人物)を AI が返しても書かない
         asked = {character.id for character in source.characters}
-        written = call(episode_steps.write_voices, voices.VoiceForm(
-            episode_id=episode_id, voices=[draft for draft in drafts.voices if draft.character_id in asked]))
+        proposed = [draft for draft in drafts.voices if draft.character_id in asked]
+        written = call(episode_steps.write_voices, voices.VoiceForm(episode_id=episode_id, voices=proposed))
         if written:
             logger.info(f"話 id={episode_id} の直前の話から、人物 id={written} の話し方を調整した")
+        adjusted += [draft for draft in proposed if draft.character_id in written]
+    return adjusted
 
 
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
-    """`ReadEpisodeBrief` に当たる。直前の五話のセリフで登場人物の話し方を調整してから材料を読む。
+    """`ReadEpisodeBrief` に当たる。
     設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。"""
     targets = call(episode_steps.brief_targets, RowId(id=episode_id))
     refresh(ai, targets)
-    refresh_voices(ai, episode_id)
     keywords = [keyword for text in targets.word_sources for keyword in keywords_of(text, ai, targets.start)]
     return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, episode_steps.BriefForm(
         episode_id=episode_id, keywords=keywords)))
