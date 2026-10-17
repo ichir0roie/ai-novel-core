@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CommandPalette, { type Destination } from "@/components/CommandPalette";
 import { HIDDEN_TABLES } from "@/lib/hidden";
-import { useMeta } from "@/lib/meta";
+import { TABLES } from "@/lib/meta";
 import { T } from "@/lib/text";
 
 /** 画面の隅に小さな丸いメニューボタンを常に浮かべ(デスクトップは左上、スマホは親指の届く右下)、クリックしたときだけ
@@ -13,7 +13,6 @@ import { T } from "@/lib/text";
  * Ctrl+K(Mac は ⌘K)では、行き先の名前を打ち込んで飛ぶ検索付きのメニューを開く。 */
 export default function Nav() {
   const pathname = usePathname();
-  const { tables } = useMeta();
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const ref = useRef<HTMLElement>(null);
@@ -52,7 +51,7 @@ export default function Nav() {
   }, [open]);
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
-  const visibleTables = tables.filter((table) => !HIDDEN_TABLES.has(table.name));
+  const visibleTables = TABLES.filter((table) => !HIDDEN_TABLES.has(table.name));
   const destinations: Destination[] = [
     { href: "/", label: T.appName },
     ...visibleTables.map((table) => ({ href: `/tables/${table.name}`, label: table.name })),

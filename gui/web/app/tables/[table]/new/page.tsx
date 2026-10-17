@@ -4,14 +4,14 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
-import { createRecord, type Rec } from "@/lib/api";
+import { createRecord, type Rec, type TableMeta } from "@/lib/api";
 import { useCopyFromPreviousEpisode } from "@/lib/previousEpisode";
-import { PageTitle, useMeta, useTable } from "@/lib/meta";
+import { PageTitle, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 /** クエリの中で、その列の型に読める値だけを初期値に取り込む(例: `?parent_idea_id=66` で子を足す)。 */
-function initialValue(meta: NonNullable<ReturnType<typeof useTable>>, searchParams: URLSearchParams): Rec {
+function initialValue(meta: TableMeta, searchParams: URLSearchParams): Rec {
   const record = emptyRecord(meta);
   for (const column of meta.columns) {
     const raw = searchParams.get(column.key);
@@ -32,8 +32,7 @@ export default function NewRecordPage() {
   const openPage = useOpenPage();
   const { table } = useParams<{ table: string }>();
   const searchParams = useSearchParams();
-  const meta = useTable(table);
-  const { reload } = useMeta();
+  const meta = tableMeta(table);
   const [value, setValue] = useState<Rec | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export default function NewRecordPage() {
       }
       const created = await createRecord(table, data);
       invalidateOptions(table);
-      void reload();
       openPage(`/tables/${table}/${created.record.id}`);
       setBusy(false);
     } catch (e) {

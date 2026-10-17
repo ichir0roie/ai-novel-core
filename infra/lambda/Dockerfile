@@ -17,6 +17,21 @@ RUN arch=$([ "$TARGETARCH" = arm64 ] && echo aarch64 || echo x86_64) \
        --target /deps -r requirements.txt \
     && rm -rf /deps/bin
 
+# 標準ライブラリ(公式のイメージは pyc を消してある)と自前のコードの pyc をここで作る。Lambda はファイルに書けないので、
+# 無いとコールドスタートのたびにソースからコンパイルする。標準ライブラリの .so はアーキごとに違うので、写すのは pyc だけにする。
+# 建てる先の段と同じタグでも中身がずれうるので、ファイルの時刻でなくソースのハッシュで照らす(checked-hash)
+FROM --platform=$BUILDPLATFORM public.ecr.aws/docker/library/python:3.14-slim AS pyc
+WORKDIR /var/task
+COPY ai ai
+COPY data_access_logic data_access_logic
+COPY db db
+COPY randomizer randomizer
+COPY gui/__init__.py gui/__init__.py
+COPY gui/api gui/api
+RUN python -m compileall -q -j 0 --invalidation-mode checked-hash /usr/local/lib/python3.14 /var/task \
+    && mkdir /stdlib-pyc \
+    && cd /usr/local/lib/python3.14 && find . -name '*.pyc' -print0 | tar -c --null -T - | tar -x -C /stdlib-pyc
+
 FROM public.ecr.aws/docker/library/python:3.14-slim
 
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
@@ -32,12 +47,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /var/task
 
 COPY --from=deps /deps /usr/local/lib/python3.14/site-packages
-
-COPY ai ai
-COPY data_access_logic data_access_logic
-COPY db db
-COPY randomizer randomizer
-COPY gui/__init__.py gui/__init__.py
-COPY gui/api gui/api
+COPY --from=pyc /stdlib-pyc /usr/local/lib/python3.14
+COPY --from=pyc /var/task /var/task
 
 CMD ["python", "-m", "uvicorn", "gui.api.app:app", "--host", "0.0.0.0", "--port", "8080"]

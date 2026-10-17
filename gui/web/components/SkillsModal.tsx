@@ -12,7 +12,7 @@ import {
   type Rec,
 } from "@/lib/api";
 import { childListHint, columnHint } from "@/lib/hint";
-import { useTable } from "@/lib/meta";
+import { tableMeta } from "@/lib/meta";
 import { T } from "@/lib/text";
 import ChildListEditor from "./ChildListEditor";
 import { AutoGrowTextarea } from "./FieldInput";
@@ -37,7 +37,7 @@ type Props = { characterId: number; characterName: string; onClose: () => void }
 
 /** 人物のスキルを並べ、その場で直す・足す・消す。直す・足すは保存でまとめて送り、消すはその場で消す。 */
 export default function SkillsModal({ characterId, characterName, onClose }: Props) {
-  const meta = useTable("character_skill");
+  const meta = tableMeta("character_skill");
   const histories = meta?.child_lists.find((child) => child.name === "histories");
   const nameColumn = meta?.columns.find((column) => column.key === "name");
   const textColumn = meta?.columns.find((column) => column.key === "text");

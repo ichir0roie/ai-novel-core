@@ -39,8 +39,7 @@ from pathlib import Path
 from data_access_logic.logs import configure_logging
 from gui.api import interface
 configure_logging()
-e = interface.entrance_of('<入口の id>')
-print(json.dumps(interface.call(e, interface.prepare(e, {<引数>})), ensure_ascii=False, indent=2))
+print(json.dumps(interface.call(interface.entrance_class('<入口の id>'), {<引数>}), ensure_ascii=False, indent=2))
 "
 ```
 

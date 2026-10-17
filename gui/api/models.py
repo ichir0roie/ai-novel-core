@@ -59,14 +59,20 @@ class TableMeta(BaseModel):
     label_column: str | None
     columns: list[ColumnMeta]
     child_lists: list[ChildListMeta]
-    count: int
     # 一覧の既定の並び
     sort: str = "id"
     order: Literal["asc", "desc"] = "desc"
 
 
 class TablesResponse(BaseModel):
+    """画面が持つ表の情報(`gui/web/lib/tables.json`。`gui/api/dump_static.py` が書き出す)。API からは返さない"""
+
     tables: list[TableMeta]
+
+
+class TableCounts(BaseModel):
+    # 表の名前ごとの行の数
+    counts: dict[str, int]
 
 
 class RecordList(BaseModel):
@@ -157,6 +163,8 @@ class EntranceMeta(BaseModel):
 
 
 class EntranceList(BaseModel):
+    """画面が持つ入口の一覧(`gui/web/lib/entrances.json`。`gui/api/dump_static.py` が書き出す)。API からは返さない"""
+
     entrances: list[EntranceMeta]
 
 

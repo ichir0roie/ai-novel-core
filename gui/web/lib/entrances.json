@@ -1,0 +1,1566 @@
+{
+  "entrances": [
+    {
+      "id": "character.commit_character.CommitCharacter",
+      "area": "character",
+      "name": "CommitCharacter",
+      "doc": "",
+      "params": [
+        {
+          "name": "character",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.commit_character_location.CommitCharacterLocation",
+      "area": "character",
+      "name": "CommitCharacterLocation",
+      "doc": "`commit_character` は出自の一件しか書けないので、出自を後から付ける・移った先を足すときに使う。",
+      "params": [
+        {
+          "name": "character_location",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterLocationCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.commit_character_relation.CommitCharacterRelation",
+      "area": "character",
+      "name": "CommitCharacterRelation",
+      "doc": "",
+      "params": [
+        {
+          "name": "relation",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterRelationCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.commit_character_skill.CommitCharacterSkill",
+      "area": "character",
+      "name": "CommitCharacterSkill",
+      "doc": "人物にスキルを足す。本文は作者だけが読むので、確定のあとに AI を回さない。",
+      "params": [
+        {
+          "name": "skill",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterSkillCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.create_random_character.CreateRandomCharacter",
+      "area": "character",
+      "name": "CreateRandomCharacter",
+      "doc": "db に触れない下書き。返した形のまま、確定する入口の引数に渡せる。",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "character.delete_character.DeleteCharacter",
+      "area": "character",
+      "name": "DeleteCharacter",
+      "doc": "人物を消す。期間ごとの値・説明の変化・出自と居場所・相関・スキル・話に名前だけ出る行・",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_character_relation.DeleteCharacterRelation",
+      "area": "character",
+      "name": "DeleteCharacterRelation",
+      "doc": "人物どうしの関係を消す。関係の来歴の行も消える。",
+      "params": [
+        {
+          "name": "character_relation_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_character_skill.DeleteCharacterSkill",
+      "area": "character",
+      "name": "DeleteCharacterSkill",
+      "doc": "人物のスキルを消す。来歴の行と、その行を知る相手の行も消える。",
+      "params": [
+        {
+          "name": "character_skill_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.list_character_relations.ListCharacterRelations",
+      "area": "character",
+      "name": "ListCharacterRelations",
+      "doc": "",
+      "params": [
+        {
+          "name": "character_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.list_characters.ListCharacters",
+      "area": "character",
+      "name": "ListCharacters",
+      "doc": "",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "character.move_characters.MoveCharacters",
+      "area": "character",
+      "name": "MoveCharacters",
+      "doc": "人物ごとの移動先(`CharacterMove` のリスト)で居場所を書き換える。`time` に続いている居場所の行を `time` で閉じ、",
+      "params": [
+        {
+          "name": "moves",
+          "required": true,
+          "default": null,
+          "annotation": "list[CharacterMove]"
+        },
+        {
+          "name": "time",
+          "required": true,
+          "default": null,
+          "annotation": "Stamp | str"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.read_appearance.ReadAppearance",
+      "area": "character",
+      "name": "ReadAppearance",
+      "doc": "初対面の相手から見て分かること(種別・歳・性別・背丈・体格・装い・外見)を読む。名前は入れない。",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": true,
+          "default": null,
+          "annotation": "Stamp | str"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.read_character.ReadCharacter",
+      "area": "character",
+      "name": "ReadCharacter",
+      "doc": "",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "count",
+          "required": false,
+          "default": 5,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.read_knowable_rows.ReadKnowableRows",
+      "area": "character",
+      "name": "ReadKnowableRows",
+      "doc": "人物の来歴とスキルの来歴か、アイデアの履歴か、場所の来歴の行を、id と知る相手つきで読む。GUI の知識整理で、行を選んで知る相手を付け外しするのに使う。",
+      "params": [
+        {
+          "name": "character_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "idea_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "location_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.read_knowledge.ReadKnowledge",
+      "area": "character",
+      "name": "ReadKnowledge",
+      "doc": "人物役が、話のセッションでいる時刻に知ることのできるデータを読む。本文・来歴は、その人物が知る相手に入ったものだけ。",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "episode_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.read_known_ideas.ReadKnownIdeas",
+      "area": "character",
+      "name": "ReadKnownIdeas",
+      "doc": "人物役が、手番の要求に出た語を、自分の知っているアイデアから引く。語ごとに、本質の名前か知っている呼び名の当たる",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "words",
+          "required": true,
+          "default": null,
+          "annotation": "list[str]"
+        },
+        {
+          "name": "episode_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.read_known_rows.ReadKnownRows",
+      "area": "character",
+      "name": "ReadKnownRows",
+      "doc": "人物が知る相手に人物として入っている、人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴の行を読む(GUI の知識整理の木の印)。",
+      "params": [
+        {
+          "name": "knower_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.read_surroundings.ReadSurroundings",
+      "area": "character",
+      "name": "ReadSurroundings",
+      "doc": "",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": true,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "reach",
+          "required": false,
+          "default": 60,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.update_character.UpdateCharacter",
+      "area": "character",
+      "name": "UpdateCharacter",
+      "doc": "",
+      "params": [
+        {
+          "name": "character",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_character_location.UpdateCharacterLocation",
+      "area": "character",
+      "name": "UpdateCharacterLocation",
+      "doc": "移った日に前の居場所の `end` を下ろすのに使う。",
+      "params": [
+        {
+          "name": "character_location",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterLocationUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_character_relation.UpdateCharacterRelation",
+      "area": "character",
+      "name": "UpdateCharacterRelation",
+      "doc": "",
+      "params": [
+        {
+          "name": "relation",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterRelationUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_character_skill.UpdateCharacterSkill",
+      "area": "character",
+      "name": "UpdateCharacterSkill",
+      "doc": "",
+      "params": [
+        {
+          "name": "skill",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterSkillUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_knowledge.UpdateKnowledge",
+      "area": "character",
+      "name": "UpdateKnowledge",
+      "doc": "人物を、人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴の行の知る相手に、まとめて入れる・外す(GUI の知識整理)。",
+      "params": [
+        {
+          "name": "knowledge",
+          "required": true,
+          "default": null,
+          "annotation": "KnowledgeForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.cast_episode.CastEpisode",
+      "area": "episode",
+      "name": "CastEpisode",
+      "doc": "本文を書く前に、Claude がプロットから決めた登場人物・場所・視点を話に結ぶ。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "character_ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        },
+        {
+          "name": "location_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "viewpoint_character_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.delete_episode.DeleteEpisode",
+      "area": "episode",
+      "name": "DeleteEpisode",
+      "doc": "",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.list_unsynced_episodes.ListUnsyncedEpisodes",
+      "area": "episode",
+      "name": "ListUnsyncedEpisodes",
+      "doc": "",
+      "params": [
+        {
+          "name": "story_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode.move_episodes.MoveEpisodes",
+      "area": "episode",
+      "name": "MoveEpisodes",
+      "doc": "",
+      "params": [
+        {
+          "name": "episode_ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        },
+        {
+          "name": "story_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.read_episode_texts.ReadEpisodeTexts",
+      "area": "episode",
+      "name": "ReadEpisodeTexts",
+      "doc": "話を id で読む(作品・題・時刻・プロット・本文・概要)。時刻の順に返す。",
+      "params": [
+        {
+          "name": "episode_ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode.read_episodes.ReadEpisodes",
+      "area": "episode",
+      "name": "ReadEpisodes",
+      "doc": "",
+      "params": [
+        {
+          "name": "story_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "count",
+          "required": false,
+          "default": 10,
+          "annotation": "int"
+        },
+        {
+          "name": "before",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "text",
+          "required": false,
+          "default": true,
+          "annotation": "bool"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode.refresh_mentions.RefreshMentions",
+      "area": "episode",
+      "name": "RefreshMentions",
+      "doc": "話に名前だけ出る人物(`episode_character` の `mentioned` の行)を、今のプロット・本文から拾い直す。",
+      "params": [
+        {
+          "name": "episode_ids",
+          "required": false,
+          "default": null,
+          "annotation": "list[int] | None"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.set_episode_synced.SetEpisodeSynced",
+      "area": "episode",
+      "name": "SetEpisodeSynced",
+      "doc": "",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "synced",
+          "required": false,
+          "default": true,
+          "annotation": "bool"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.update_episodes.UpdateEpisodes",
+      "area": "episode",
+      "name": "UpdateEpisodes",
+      "doc": "話をまとめて直す。GUI のタイムラインの変更モードで溜めた時刻・作品の移しを、一つのトランザクションで書く。",
+      "params": [
+        {
+          "name": "episodes",
+          "required": true,
+          "default": null,
+          "annotation": "list[EpisodeUpdateForm]"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_comment.add_reaction.AddReaction",
+      "area": "episode_comment",
+      "name": "AddReaction",
+      "doc": "語り部・人物役が、本文の差分を読んだ反応(感想・同意・反対・修正案)を足す。",
+      "params": [
+        {
+          "name": "reaction",
+          "required": true,
+          "default": null,
+          "annotation": "ReactionForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_comment.close_comment.CloseComment",
+      "area": "episode_comment",
+      "name": "CloseComment",
+      "doc": "書き終えた合図の行を差分の表に足す。反応している語り部と人物役は、それを読んで止まる。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_comment.read_diffs_since.ReadDiffsSince",
+      "area": "episode_comment",
+      "name": "ReadDiffsSince",
+      "doc": "本文の差分のうち、`after_diff_id` より新しいものを古い順に読む(語り部・人物役が新しい差分を待つ)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "after_diff_id",
+          "required": false,
+          "default": 0,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_comment.read_latest_diff.ReadLatestDiff",
+      "area": "episode_comment",
+      "name": "ReadLatestDiff",
+      "doc": "話の一番新しい差分の id(無ければ 0)。反応を始めるとき、それより後の差分だけを待つのに使う。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_comment.read_reactions_since.ReadReactionsSince",
+      "area": "episode_comment",
+      "name": "ReadReactionsSince",
+      "doc": "反応のうち、`after_reaction_id` より新しいものを届いた順に読む(画面が見張って増分を足す)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "after_reaction_id",
+          "required": false,
+          "default": 0,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_comment.save_draft.SaveDraft",
+      "area": "episode_comment",
+      "name": "SaveDraft",
+      "doc": "ユーザが書いている本文を保存し、前に保存した本文から変わった箇所を差分の表に足す(語り部と人物役がそれを読んで反応する)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "main_text",
+          "required": true,
+          "default": null,
+          "annotation": "str"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.add_ideas.AddIdeas",
+      "area": "episode_session",
+      "name": "AddIdeas",
+      "doc": "話に出た新しい語を、話の場所・時刻でアイデアと照らし、当たらなかった語を候補のアイデアとして足す。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "ideas",
+          "required": true,
+          "default": null,
+          "annotation": "list[IdeaDraft]"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.add_turns.AddTurns",
+      "area": "episode_session",
+      "name": "AddTurns",
+      "doc": "語り部が、話のセッションに手番の要求の行を並べた順に足す。人物役は自分の行が来たら行動を入れる。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "turns",
+          "required": true,
+          "default": null,
+          "annotation": "list[TurnRequest]"
+        },
+        {
+          "name": "narration",
+          "required": false,
+          "default": null,
+          "annotation": "str | None"
+        },
+        {
+          "name": "witness_ids",
+          "required": false,
+          "default": null,
+          "annotation": "list[int] | None"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.answer_turn.AnswerTurn",
+      "area": "episode_session",
+      "name": "AnswerTurn",
+      "doc": "人物役が、自分の番の要求の行に一手(内心・行動・セリフ・狙い)を入れる。",
+      "params": [
+        {
+          "name": "record_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "answer",
+          "required": true,
+          "default": null,
+          "annotation": "TurnAnswer"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.clear_session.ClearSession",
+      "area": "episode_session",
+      "name": "ClearSession",
+      "doc": "話のセッションの行を、その話のぶんすべて消す。終了の行が残ると人物役がすぐ止まるので、手番を演じ直す前に消す。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "from_record_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.close_session.CloseSession",
+      "area": "episode_session",
+      "name": "CloseSession",
+      "doc": "話が終わったとき、セッションに出た人物と話の登場人物のすべてに終了の行を足す。人物役はそれを読んで止まる。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "request",
+          "required": false,
+          "default": "話はここで終わり。止まってよい。",
+          "annotation": "str"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode_session.read_knower_gaps.ReadKnowerGaps",
+      "area": "episode_session",
+      "name": "ReadKnowerGaps",
+      "doc": "話の登場人物の来歴のうち、話の時刻までに起きた行で、ほかの登場人物の名前が出るのに、その人物が話の時刻に知る相手に",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_session.read_played_turns.ReadPlayedTurns",
+      "area": "episode_session",
+      "name": "ReadPlayedTurns",
+      "doc": "人物役が、話のセッションで自分がもう動いた手番(見聞きしたこと・要求と自分の一手)を、手番の順に読む。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_session.read_session.ReadSession",
+      "area": "episode_session",
+      "name": "ReadSession",
+      "doc": "話のセッションの行を、手番の順(id の順)にすべて読む(人物の内心も入る。語り部と本文を書くときに読む)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_session.read_session_since.ReadSessionSince",
+      "area": "episode_session",
+      "name": "ReadSessionSince",
+      "doc": "話のセッションの行のうち、`after_record_id` より新しい id の行を手番の順に読む(GUI がセッションを見張って増分を引く)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "after_record_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_session.read_stage.ReadStage",
+      "area": "episode_session",
+      "name": "ReadStage",
+      "doc": "語り部が手番を回すときに読む材料。プロット・時刻・場所・登場人物の表層(名前・年齢・性別・外見)・登場人物のだれとだれが知り合いか。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode_session.read_turn.ReadTurn",
+      "area": "episode_session",
+      "name": "ReadTurn",
+      "doc": "人物役が、話のセッションでいま自分の番か(turn)、待つか(waiting)、話が終わったか(closed)を読む。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "event.create_random_event.CreateRandomEvent",
+      "area": "event",
+      "name": "CreateRandomEvent",
+      "doc": "db に触れない下書き。返した形のまま、確定する入口の引数に渡せる。",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "event.delete_event.DeleteEvent",
+      "area": "event",
+      "name": "DeleteEvent",
+      "doc": "出来事を消す。`with_children` なら子孫の出来事もいっしょに消し、そうでなければ子が残っているときは止める。",
+      "params": [
+        {
+          "name": "event_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "with_children",
+          "required": false,
+          "default": false,
+          "annotation": "bool"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "event.list_events.ListEvents",
+      "area": "event",
+      "name": "ListEvents",
+      "doc": "",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "event.read_events.ReadEvents",
+      "area": "event",
+      "name": "ReadEvents",
+      "doc": "場所・人物・出来事の id は別々の表の連番で重なるので、どの表の id かを引数の名前で渡す。",
+      "params": [
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "location_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "character_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "event_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "until",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "event.update_events.UpdateEvents",
+      "area": "event",
+      "name": "UpdateEvents",
+      "doc": "出来事をまとめて直す。GUI の出来事のタイムラインの変更モードで溜めた時刻・親の移しを、一つのトランザクションで書く。",
+      "params": [
+        {
+          "name": "events",
+          "required": true,
+          "default": null,
+          "annotation": "list[EventUpdateForm]"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "event_seed.update_event_seed.UpdateEventSeed",
+      "area": "event_seed",
+      "name": "UpdateEventSeed",
+      "doc": "",
+      "params": [
+        {
+          "name": "seed",
+          "required": true,
+          "default": null,
+          "annotation": "EventSeedUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.commit_idea.CommitIdea",
+      "area": "idea",
+      "name": "CommitIdea",
+      "doc": "アイデアを足す。本文は作者だけが読むので、確定のあとに AI(事実確認・ミームの抜き出し)を回さない。",
+      "params": [
+        {
+          "name": "idea",
+          "required": true,
+          "default": null,
+          "annotation": "IdeaCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.delete_idea.DeleteIdea",
+      "area": "idea",
+      "name": "DeleteIdea",
+      "doc": "",
+      "params": [
+        {
+          "name": "idea_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.merge_idea.MergeIdea",
+      "area": "idea",
+      "name": "MergeIdea",
+      "doc": "アイデア `source_id`(主に候補)を `target_id` へまとめる、claude が呼ぶ入口。",
+      "params": [
+        {
+          "name": "source_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "target_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.resolve_ideas.ResolveIdeas",
+      "area": "idea",
+      "name": "ResolveIdeas",
+      "doc": "洗い出した語をアイデアと照らす、claude が呼ぶ入口(中間段を claude が自分で回すとき)。",
+      "params": [
+        {
+          "name": "ideas",
+          "required": true,
+          "default": null,
+          "annotation": "list[IdeaDraft]"
+        },
+        {
+          "name": "location_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.search_ideas.SearchIdeas",
+      "area": "idea",
+      "name": "SearchIdeas",
+      "doc": "アイデアをあいまい検索する、claude が呼ぶ入口。",
+      "params": [
+        {
+          "name": "keywords",
+          "required": true,
+          "default": null,
+          "annotation": "list[IdeaDraft]"
+        },
+        {
+          "name": "location_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "idea.update_idea.UpdateIdea",
+      "area": "idea",
+      "name": "UpdateIdea",
+      "doc": "",
+      "params": [
+        {
+          "name": "idea",
+          "required": true,
+          "default": null,
+          "annotation": "IdeaUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "location.commit_location.CommitLocation",
+      "area": "location",
+      "name": "CommitLocation",
+      "doc": "",
+      "params": [
+        {
+          "name": "location",
+          "required": true,
+          "default": null,
+          "annotation": "LocationCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "location.create_random_location.CreateRandomLocation",
+      "area": "location",
+      "name": "CreateRandomLocation",
+      "doc": "db に触れない下書き。返した形のまま、確定する入口の引数に渡せる。",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "location.delete_location.DeleteLocation",
+      "area": "location",
+      "name": "DeleteLocation",
+      "doc": "",
+      "params": [
+        {
+          "name": "location_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "location.list_locations.ListLocations",
+      "area": "location",
+      "name": "ListLocations",
+      "doc": "",
+      "params": [
+        {
+          "name": "kind",
+          "required": false,
+          "default": null,
+          "annotation": "str | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "location.list_neighbors.ListNeighbors",
+      "area": "location",
+      "name": "ListNeighbors",
+      "doc": "",
+      "params": [
+        {
+          "name": "location_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "kind",
+          "required": false,
+          "default": null,
+          "annotation": "str | None"
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "location.update_location.UpdateLocation",
+      "area": "location",
+      "name": "UpdateLocation",
+      "doc": "",
+      "params": [
+        {
+          "name": "location",
+          "required": true,
+          "default": null,
+          "annotation": "LocationUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "meme.commit_meme.CommitMeme",
+      "area": "meme",
+      "name": "CommitMeme",
+      "doc": "ミームを手で足す入口。",
+      "params": [
+        {
+          "name": "meme",
+          "required": true,
+          "default": null,
+          "annotation": "MemeCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "meme.delete_meme.DeleteMeme",
+      "area": "meme",
+      "name": "DeleteMeme",
+      "doc": "ミームを消す。GUI の一覧で選んだものをまとめて消すので、id の配列で受ける。",
+      "params": [
+        {
+          "name": "meme_ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "meme.draw_memes.DrawMemes",
+      "area": "meme",
+      "name": "DrawMemes",
+      "doc": "",
+      "params": [
+        {
+          "name": "person",
+          "required": false,
+          "default": true,
+          "annotation": "bool"
+        },
+        {
+          "name": "seed",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "meme.update_meme.UpdateMeme",
+      "area": "meme",
+      "name": "UpdateMeme",
+      "doc": "",
+      "params": [
+        {
+          "name": "meme",
+          "required": true,
+          "default": null,
+          "annotation": "MemeUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "oracle.update_oracle.UpdateOracle",
+      "area": "oracle",
+      "name": "UpdateOracle",
+      "doc": "",
+      "params": [
+        {
+          "name": "oracle",
+          "required": true,
+          "default": null,
+          "annotation": "OracleUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "review.list_pending_reviews.ListPendingReviews",
+      "area": "review",
+      "name": "ListPendingReviews",
+      "doc": "ユーザの判断が要るものを一覧にする、claude が呼ぶ入口。db には書かない。",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "story.commit_story.CommitStory",
+      "area": "story",
+      "name": "CommitStory",
+      "doc": "",
+      "params": [
+        {
+          "name": "story",
+          "required": true,
+          "default": null,
+          "annotation": "StoryCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "story.delete_story.DeleteStory",
+      "area": "story",
+      "name": "DeleteStory",
+      "doc": "",
+      "params": [
+        {
+          "name": "story_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "story.list_stories.ListStories",
+      "area": "story",
+      "name": "ListStories",
+      "doc": "",
+      "params": [],
+      "writes": false
+    },
+    {
+      "id": "story.read_brief.ReadBrief",
+      "area": "story",
+      "name": "ReadBrief",
+      "doc": "",
+      "params": [
+        {
+          "name": "location_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": true,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "reach",
+          "required": false,
+          "default": 60,
+          "annotation": "int"
+        },
+        {
+          "name": "full",
+          "required": false,
+          "default": false,
+          "annotation": "bool"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "story.read_cast.ReadCast",
+      "area": "story",
+      "name": "ReadCast",
+      "doc": "",
+      "params": [
+        {
+          "name": "story_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "count",
+          "required": false,
+          "default": 5,
+          "annotation": "int"
+        },
+        {
+          "name": "levels",
+          "required": false,
+          "default": 1,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "story.start_story.StartStory",
+      "area": "story",
+      "name": "StartStory",
+      "doc": "",
+      "params": [
+        {
+          "name": "story_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        },
+        {
+          "name": "episodes",
+          "required": false,
+          "default": 10,
+          "annotation": "int"
+        },
+        {
+          "name": "count",
+          "required": false,
+          "default": 5,
+          "annotation": "int"
+        },
+        {
+          "name": "reach",
+          "required": false,
+          "default": 60,
+          "annotation": "int"
+        },
+        {
+          "name": "levels",
+          "required": false,
+          "default": 1,
+          "annotation": "int"
+        },
+        {
+          "name": "skip_sync",
+          "required": false,
+          "default": false,
+          "annotation": "bool"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "story.update_stories.UpdateStories",
+      "area": "story",
+      "name": "UpdateStories",
+      "doc": "作品をまとめて直す。GUI の作品ツリーの編集モードで溜めた並び・親の付け替えを、一つのトランザクションで書く。",
+      "params": [
+        {
+          "name": "stories",
+          "required": true,
+          "default": null,
+          "annotation": "list[StoryUpdateForm]"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "story.update_story.UpdateStory",
+      "area": "story",
+      "name": "UpdateStory",
+      "doc": "",
+      "params": [
+        {
+          "name": "story",
+          "required": true,
+          "default": null,
+          "annotation": "StoryUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "style_preference.commit_style_preference.CommitStylePreference",
+      "area": "style_preference",
+      "name": "CommitStylePreference",
+      "doc": "",
+      "params": [
+        {
+          "name": "style_preference",
+          "required": true,
+          "default": null,
+          "annotation": "StylePreferenceCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "style_preference.update_style_preference.UpdateStylePreference",
+      "area": "style_preference",
+      "name": "UpdateStylePreference",
+      "doc": "",
+      "params": [
+        {
+          "name": "style_preference",
+          "required": true,
+          "default": null,
+          "annotation": "StylePreferenceUpdateForm"
+        }
+      ],
+      "writes": true
+    }
+  ]
+}

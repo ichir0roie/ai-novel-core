@@ -38,15 +38,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/tables": {
+    "/api/table_counts": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Tables */
-        get: operations["tables_api_tables_get"];
+        /**
+         * Table Counts
+         * @description 表ごとの行の数。トップページが出す(表の列などの情報は、画面が `gui/web/lib/tables.json` に持つ)
+         */
+        get: operations["table_counts_api_table_counts_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -108,26 +111,6 @@ export interface paths {
         patch: operations["update_record_api_tables__table__records__record_id__patch"];
         trace?: never;
     };
-    "/api/interface": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Entrances
-         * @description db だけの入口の一覧。claude を叩く入口は出さない(Claude のセッションが自分で呼ぶ)
-         */
-        get: operations["list_entrances_api_interface_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/interface/{entrance_id}": {
         parameters: {
             query?: never;
@@ -137,7 +120,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run Entrance */
+        /**
+         * Run Entrance
+         * @description db だけの入口を呼ぶ(入口の一覧は、画面が `gui/web/lib/entrances.json` に持つ)
+         */
         post: operations["run_entrance_api_interface__entrance_id__post"];
         delete?: never;
         options?: never;
@@ -413,109 +399,6 @@ export interface components {
             locations: {
                 [key: string]: number;
             };
-        };
-        /** ChildListMeta */
-        ChildListMeta: {
-            /** Name */
-            name: string;
-            /** Table */
-            table: string;
-            /** Columns */
-            columns: components["schemas"]["ColumnMeta"][];
-            /** Comment */
-            comment?: string | null;
-            /**
-             * Display
-             * @default table
-             * @enum {string}
-             */
-            display: "table" | "periodic" | "flow";
-            /**
-             * Knowers
-             * @default false
-             */
-            knowers: boolean;
-        };
-        /** ColumnMeta */
-        ColumnMeta: {
-            /** Key */
-            key: string;
-            /**
-             * Type
-             * @enum {string}
-             */
-            type: "integer" | "number" | "boolean" | "string" | "stamp" | "json" | "id_list";
-            /** Nullable */
-            nullable: boolean;
-            /** Required */
-            required: boolean;
-            /**
-             * Section
-             * @default false
-             */
-            section: boolean;
-            /**
-             * Markdown
-             * @default true
-             */
-            markdown: boolean;
-            /**
-             * Side
-             * @default false
-             */
-            side: boolean;
-            /** Choices */
-            choices?: string[] | null;
-            /** Default */
-            default?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Readonly
-             * @default false
-             */
-            readonly: boolean;
-            /**
-             * Create Only
-             * @default false
-             */
-            create_only: boolean;
-            /** Comment */
-            comment?: string | null;
-        };
-        /** EntranceList */
-        EntranceList: {
-            /** Entrances */
-            entrances: components["schemas"]["EntranceMeta"][];
-        };
-        /** EntranceMeta */
-        EntranceMeta: {
-            /** Id */
-            id: string;
-            /** Area */
-            area: string;
-            /** Name */
-            name: string;
-            /** Doc */
-            doc: string;
-            /** Params */
-            params: components["schemas"]["EntranceParam"][];
-            /** Writes */
-            writes: boolean;
-        };
-        /** EntranceParam */
-        EntranceParam: {
-            /** Name */
-            name: string;
-            /** Required */
-            required: boolean;
-            /** Default */
-            default?: unknown;
-            /**
-             * Annotation
-             * @default
-             */
-            annotation: string;
         };
         /** EpisodeCharacterLink */
         EpisodeCharacterLink: {
@@ -856,34 +739,12 @@ export interface components {
             /** Stops */
             stops: components["schemas"]["RouteStop"][];
         };
-        /** TableMeta */
-        TableMeta: {
-            /** Name */
-            name: string;
-            /** Label Column */
-            label_column: string | null;
-            /** Columns */
-            columns: components["schemas"]["ColumnMeta"][];
-            /** Child Lists */
-            child_lists: components["schemas"]["ChildListMeta"][];
-            /** Count */
-            count: number;
-            /**
-             * Sort
-             * @default id
-             */
-            sort: string;
-            /**
-             * Order
-             * @default desc
-             * @enum {string}
-             */
-            order: "asc" | "desc";
-        };
-        /** TablesResponse */
-        TablesResponse: {
-            /** Tables */
-            tables: components["schemas"]["TableMeta"][];
+        /** TableCounts */
+        TableCounts: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
         };
         /** TimelineResponse */
         TimelineResponse: {
@@ -915,6 +776,160 @@ export interface components {
         Witness: {
             /** Character Id */
             character_id: number;
+        };
+        /** ChildListMeta */
+        ChildListMeta: {
+            /** Name */
+            name: string;
+            /** Table */
+            table: string;
+            /** Columns */
+            columns: components["schemas"]["ColumnMeta"][];
+            /**
+             * Comment
+             * @default null
+             */
+            comment: string | null;
+            /**
+             * Display
+             * @default table
+             * @enum {string}
+             */
+            display: "table" | "periodic" | "flow";
+            /**
+             * Knowers
+             * @default false
+             */
+            knowers: boolean;
+        };
+        /** ColumnMeta */
+        ColumnMeta: {
+            /** Key */
+            key: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "integer" | "number" | "boolean" | "string" | "stamp" | "json" | "id_list";
+            /** Nullable */
+            nullable: boolean;
+            /** Required */
+            required: boolean;
+            /**
+             * Section
+             * @default false
+             */
+            section: boolean;
+            /**
+             * Markdown
+             * @default true
+             */
+            markdown: boolean;
+            /**
+             * Side
+             * @default false
+             */
+            side: boolean;
+            /**
+             * Choices
+             * @default null
+             */
+            choices: string[] | null;
+            /**
+             * Default
+             * @default null
+             */
+            default: string | null;
+            /**
+             * References
+             * @default null
+             */
+            references: string | null;
+            /**
+             * Readonly
+             * @default false
+             */
+            readonly: boolean;
+            /**
+             * Create Only
+             * @default false
+             */
+            create_only: boolean;
+            /**
+             * Comment
+             * @default null
+             */
+            comment: string | null;
+        };
+        /**
+         * EntranceList
+         * @description 画面が持つ入口の一覧(`gui/web/lib/entrances.json`。`gui/api/dump_static.py` が書き出す)。API からは返さない
+         */
+        EntranceList: {
+            /** Entrances */
+            entrances: components["schemas"]["EntranceMeta"][];
+        };
+        /** EntranceMeta */
+        EntranceMeta: {
+            /** Id */
+            id: string;
+            /** Area */
+            area: string;
+            /** Name */
+            name: string;
+            /** Doc */
+            doc: string;
+            /** Params */
+            params: components["schemas"]["EntranceParam"][];
+            /** Writes */
+            writes: boolean;
+        };
+        /** EntranceParam */
+        EntranceParam: {
+            /** Name */
+            name: string;
+            /** Required */
+            required: boolean;
+            /**
+             * Default
+             * @default null
+             */
+            default: unknown;
+            /**
+             * Annotation
+             * @default
+             */
+            annotation: string;
+        };
+        /** TableMeta */
+        TableMeta: {
+            /** Name */
+            name: string;
+            /** Label Column */
+            label_column: string | null;
+            /** Columns */
+            columns: components["schemas"]["ColumnMeta"][];
+            /** Child Lists */
+            child_lists: components["schemas"]["ChildListMeta"][];
+            /**
+             * Sort
+             * @default id
+             */
+            sort: string;
+            /**
+             * Order
+             * @default desc
+             * @enum {string}
+             */
+            order: "asc" | "desc";
+        };
+        /**
+         * TablesResponse
+         * @description 画面が持つ表の情報(`gui/web/lib/tables.json`。`gui/api/dump_static.py` が書き出す)。API からは返さない
+         */
+        TablesResponse: {
+            /** Tables */
+            tables: components["schemas"]["TableMeta"][];
         };
     };
     responses: never;
@@ -967,7 +982,7 @@ export interface operations {
             };
         };
     };
-    tables_api_tables_get: {
+    table_counts_api_table_counts_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -982,7 +997,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TablesResponse"];
+                    "application/json": components["schemas"]["TableCounts"];
                 };
             };
         };
@@ -1162,26 +1177,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_entrances_api_interface_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EntranceList"];
                 };
             };
         };

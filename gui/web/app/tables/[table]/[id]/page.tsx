@@ -22,7 +22,7 @@ import {
   type RecordResponse,
 } from "@/lib/api";
 import { claudeSessionUrl } from "@/lib/claude";
-import { PageTitle, useTable } from "@/lib/meta";
+import { PageTitle, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/nav";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -63,7 +63,7 @@ function listHref(table: string, record: Rec): string {
 export default function RecordPage() {
   const openPage = useOpenPage();
   const { table, id } = useParams<{ table: string; id: string }>();
-  const meta = useTable(table);
+  const meta = tableMeta(table);
   const [loaded, setLoaded] = useState<RecordResponse | null>(null);
   const [value, setValue] = useState<Rec>({});
   const [busy, setBusy] = useState(false);

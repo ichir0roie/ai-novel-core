@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """`db/schema.py` の列の定義と、入口の引数のモデル(`TableSpec.create_form` など)の欄から、フォームを組み立てるための情報を作る。
-列の定義・欄の検証はここでは持たない。"""
+列の定義・欄の検証はここでは持たない。API は使わない。`gui/api/dump_static.py` が画面の `gui/web/lib/tables.json` に書き出す。"""
 from __future__ import annotations
 
 import typing
 
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
-from sqlalchemy import Boolean, Column, Integer, JSON, Numeric, func, select
+from sqlalchemy import Boolean, Column, Integer, JSON, Numeric
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.orm import Session
 
 from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
@@ -131,13 +130,11 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
     return result
 
 
-def table_meta(s: Session, spec: TableSpec) -> TableMeta:
-    count = s.scalar(select(func.count()).select_from(spec.model)) or 0
+def table_meta(spec: TableSpec) -> TableMeta:
     return TableMeta(name=spec.name, label_column=LABEL_COLUMNS[spec.model],
-                     columns=table_columns(spec), child_lists=child_lists(spec),
-                     count=count, sort=spec.sort, order=spec.order)
+                     columns=table_columns(spec), child_lists=child_lists(spec), sort=spec.sort, order=spec.order)
 
 
-def all_tables(s: Session) -> list[TableMeta]:
-    return [table_meta(s, spec) for spec in TABLES]
+def all_tables() -> list[TableMeta]:
+    return [table_meta(spec) for spec in TABLES]
 

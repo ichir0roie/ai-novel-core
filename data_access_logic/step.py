@@ -13,6 +13,7 @@ import importlib
 import inspect
 import typing
 from collections.abc import Callable
+from functools import cache
 from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
@@ -61,27 +62,31 @@ def step_of(id_: str) -> Callable[..., Any]:
     return step
 
 
-def form_type(step: Callable[..., Any]) -> Any | None:
-    """入力のモデルの型。入力を取らない段は None。"""
+# 型注釈の読み取りと TypeAdapter は重いので、段ごとに一度だけ作る
+
+@cache
+def form_adapter(step: Callable[..., Any]) -> TypeAdapter | None:
+    """入力のモデルを読む TypeAdapter。入力を取らない段は None。"""
     parameters = list(inspect.signature(step).parameters)
     if len(parameters) < 2:
         return None
-    return typing.get_type_hints(step)[parameters[1]]
+    return TypeAdapter(typing.get_type_hints(step)[parameters[1]])
 
 
-def output_type(step: Callable[..., Any]) -> Any:
-    return typing.get_type_hints(step)["return"]
+@cache
+def output_adapter(step: Callable[..., Any]) -> TypeAdapter:
+    return TypeAdapter(typing.get_type_hints(step)["return"])
 
 
 def run[Out](step: Callable[..., Out], form: Any = None) -> Out:
     """段を一つのトランザクションで回す(API と、手元の流れの `caller.call`)。"""
     with get_env_session() as s, s.begin():
-        return step(s) if form_type(step) is None else step(s, form)
+        return step(s) if form_adapter(step) is None else step(s, form)
 
 
 def run_json(id_: str, body: Any) -> Any:
     """API から。JSON の入力を型注釈のモデルに読み、結果を JSON にして返す。"""
     step = step_of(id_)
-    given = form_type(step)
-    form = None if given is None else TypeAdapter(given).validate_python(body)
-    return TypeAdapter(output_type(step)).dump_python(run(step, form), mode="json")
+    given = form_adapter(step)
+    form = None if given is None else given.validate_python(body)
+    return output_adapter(step).dump_python(run(step, form), mode="json")
