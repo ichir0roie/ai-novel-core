@@ -43,7 +43,6 @@ class CharacterParameterValues(Material):
     sex: str | None = None
     height: float | None = None
     build: str | None = None
-    outfit: str | None = None
     first_person: str | None = None
     second_person: str | None = None
     third_person: str | None = None
@@ -93,6 +92,8 @@ class CharacterHistoryMaterial(Material):
     """作者の目で読む来歴の行。"""
 
     start: Timestamp | None = None
+    # 人物の来歴の種別(装い・持ち物など)。スキルの来歴には無い
+    kind: str | None = None
     description: str
     # その時刻までに知った相手(`knowers.knowers_at`)
     knowers: list[KnowerMaterial]
@@ -118,7 +119,7 @@ class CharacterSecrets(Material):
 
 
 def _dated_histories_for_prompt(histories: list[CharacterHistoryMaterial]) -> list[dict[str, Any]]:
-    return [{"時期": start_for_prompt(history.start), "来歴": history.description,
+    return [{"時期": start_for_prompt(history.start), "種別": history.kind, "来歴": history.description,
              "知る相手": knowers_for_prompt(history.knowers)}
             for history in histories]
 
@@ -171,7 +172,6 @@ def _sheet(character: CharacterWholeBase, at: CharacterAt) -> dict[str, Any]:
         "口調": parameters.tone,
         "方言": parameters.dialect,
         "体格": parameters.build,
-        "装い": parameters.outfit,
         "外見": character.appearance,
         "人物像": character.text,
         "ミーム": character.meme,

@@ -8,7 +8,8 @@
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
-人物の来歴・場所の来歴はその時刻までに起きた行だけ。場所の説明(`text`)は作者の目で書くものなので渡さない。
+人物の来歴・場所の来歴はその時刻までに起きた行だけ。装い・持ち物・記憶・隠し事も種別を付けた人物の来歴の行なので、
+知る相手に当たる人物だけが知る。ただし装いは見た人にそのまま知れるので、その時刻の装いの行(`outfit_at`)は見た目に入れる。場所の説明(`text`)は作者の目で書くものなので渡さない。
 期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
@@ -25,6 +26,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic.character.cast import age_at, relations_at
+from data_access_logic.character.histories import outfit_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character import skills
@@ -70,6 +72,8 @@ class KnownName(Material):
 
 class KnownHistory(Material):
     start: Timestamp | None = None
+    # 人物の来歴の種別(装い・持ち物など)。スキル・場所の来歴には無い
+    kind: str | None = None
     description: str
 
 
@@ -100,13 +104,13 @@ def _ago(start: Stamp | None, year: int) -> str | None:
     return "今年" if start.year == year else f"{year - start.year}年前"
 
 
-def _history_line(start: Stamp | None, description: str, year: int) -> str:
-    """何年前かと本文を一文につなぐ(「10年前、〜」)。"""
-    return f"{_ago(start, year)}、{description}"
+def _history_line(start: Stamp | None, description: str, year: int, kind: str | None = None) -> str:
+    """何年前かと本文を一文につなぐ(「10年前、〜」)。種別があれば本文の頭に付ける(「今年、装い: 〜」)。"""
+    return f"{_ago(start, year)}、{description}" if kind is None else f"{_ago(start, year)}、{kind}: {description}"
 
 
 def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[str]:
-    return [_history_line(history.start, history.description, year) for history in histories]
+    return [_history_line(history.start, history.description, year, history.kind) for history in histories]
 
 
 def _skills_for_prompt(known: list[KnownSkill], year: int) -> list[dict[str, Any]]:
@@ -128,18 +132,21 @@ class AppearanceSerialized(Material):
     kind: str
     age: int | None = None
     parameters: CharacterParameterValues
+    # その時刻の装いの行
+    outfit: str | None = None
     appearance: str | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         parameters = self.parameters
         return {"種別": self.kind, "年齢": self.age, "性別": parameters.sex, "背丈": parameters.height,
-                "体格": parameters.build, "装い": parameters.outfit, "外見": self.appearance}
+                "体格": parameters.build, "装い": self.outfit, "外見": self.appearance}
 
 
 def appearance_of(character: Character, time: Stamp) -> AppearanceSerialized:
     return AppearanceSerialized(kind=character.kind, age=age_at(character, time),
-                                parameters=parameters_at(character, time), appearance=character.appearance)
+                                parameters=parameters_at(character, time), outfit=outfit_at(character, time),
+                                appearance=character.appearance)
 
 
 class KnownSelf(Material):

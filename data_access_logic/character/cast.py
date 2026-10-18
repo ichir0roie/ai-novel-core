@@ -70,7 +70,8 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
 
 
 def _history_material(s: Session, row: CharacterHistory | CharacterSkillHistory, time: Stamp) -> CharacterHistoryMaterial:
-    return CharacterHistoryMaterial(start=row.start, description=row.description, knowers=knowers_at(s, row.knowers, time))
+    return CharacterHistoryMaterial(start=row.start, kind=row.kind if isinstance(row, CharacterHistory) else None,
+                                    description=row.description, knowers=knowers_at(s, row.knowers, time))
 
 
 def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecrets:

@@ -25,7 +25,7 @@ from data_access_logic.character.generator_models import (
     CharacterNameMaterialSerialized, CharacterWriting, CompletionTarget, HistoryItemDraft, NearbyCharacter, NonPersonContentDraft,
     PersonContentDraft, PersonNameDraft, StoryElementsDraft, StoryElementsRequestSerialized,
 )
-from data_access_logic.character.histories import add_history, histories_at
+from data_access_logic.character.histories import OUTFIT_KIND, add_history, histories_at
 from data_access_logic.character.consistency import Reconciled, reconciled
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.naming import named
@@ -263,7 +263,6 @@ def _decided_parameters(content: PersonContentDraft, fixed: CharacterParameterFo
     """AI が決めた年齢以外の値に、作者が決めた値を重ねる(作者の値が勝つ)。"""
     parameters = CharacterParameterValues(
         sex=content.sex or None, height=round(content.height, 1), build=content.build or None,
-        outfit=content.outfit or None,
         first_person=content.first_person or None, second_person=content.second_person or None,
         third_person=content.third_person or None, tone=content.tone or None, dialect=content.dialect or None,
         **content.personality.model_dump())
@@ -330,6 +329,12 @@ def character_creation(
     if isinstance(draft, PersonNameDraft):
         parameters.family_name = parameters.family_name or draft.family_name or None
 
+    writing = _writing(fixed, material.memes, material.time, decided.age, name)
+    if isinstance(decided.content, PersonContentDraft) and decided.content.outfit:
+        # 装いは列で持たず、生んだ時刻から始まる種別の来歴の行で持つ
+        writing.histories.append(CharacterHistoryRow(
+            start=material.time, kind=OUTFIT_KIND, description=decided.content.outfit))
+
     location_label = (f"{material.born_location.name}(id={material.born_location.id})" if material.born_location else "不明")
     logger.info(f"{material.time} 生成: {name} 種別={decided.kind} 出自={location_label} 年齢={decided.age}\n"
                 f"    筋書きの要素: {material.element or '(無し)'}\n"
@@ -337,7 +342,7 @@ def character_creation(
     return CharacterCreation(
         name=name,
         kind=decided.kind,
-        writing=_writing(fixed, material.memes, material.time, decided.age, name),
+        writing=writing,
         main_character=bool(form and form.main_character),
         parameters=parameters,
         birth=Stamp(material.time.year - decided.age),

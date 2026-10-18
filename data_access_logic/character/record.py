@@ -17,7 +17,6 @@ class CharacterParameterRow(_ChildRow):
     sex: str | None = None
     height: float | None = None
     build: str | None = None
-    outfit: str | None = None
     first_person: str | None = None
     second_person: str | None = None
     third_person: str | None = None
@@ -46,6 +45,8 @@ class CharacterLocationRow(_ChildRow):
 class CharacterHistoryRow(_ChildRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
     start: Timestamp | None = None
+    # 装い・持ち物・記憶・隠し事など。空なら起きた出来事
+    kind: str | None = None
     description: str
     # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行は本人だけ、
     # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
@@ -151,6 +152,7 @@ class CharacterHistoryEntry(Material):
     id: int
     character_id: int
     start: Timestamp | None = None
+    kind: str | None = None
     description: str
     knowers: list[KnowerRow]
 
