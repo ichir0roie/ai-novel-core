@@ -716,6 +716,8 @@ export interface components {
             closing: boolean;
             /** Author */
             author: boolean;
+            /** Simultaneous */
+            simultaneous: boolean;
             /** Thought */
             thought?: string | null;
             /** Action */

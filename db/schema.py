@@ -987,6 +987,7 @@ class EpisodeCharacterSession(Base):
     見聞きする人物(`witnesses`)に、その人物の次の番で届く。同じ状況を人物の数だけ書き写さないため。
     作者の行(`author`)は人物の無い手番で、作者が本文に書いたこと(`action`)を語り部が読み、場面に起こして人物役へ回す。
     人物役には届かない。作者が書くまでは後の手番が待つので、作者・語り部・人物役の順に一巡する。
+    同時に動く手番(`simultaneous`)は、前の手番と組になって一度に番が開く。組の中の一手はお互いに、次の番で届く。
     """
 
     __tablename__ = "episode_character_session"
@@ -1005,6 +1006,10 @@ class EpisodeCharacterSession(Base):
     author: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, comment="作者の行。人物は空で、作者が書いたことを行動に持つ",
         sort_order=145)
+    simultaneous: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="前の手番と同時に動く手番。前の手番の一手を待たずに番が開き、同じ組の一手は次の番で届く",
+        sort_order=147)
     thought: Mapped[str | None] = mapped_column(String, comment="人物の内心(言葉にしない思い)", sort_order=150)
     action: Mapped[str | None] = mapped_column(
         String, comment="人物の行動(外から見える動き)。作者の行では、作者が本文に書いたこと(前の本文からの差分か発言)。"

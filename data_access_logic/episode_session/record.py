@@ -22,6 +22,8 @@ class SessionRecord(Material):
     request: str
     closing: bool
     author: bool
+    # 前の手番と同時に動く手番
+    simultaneous: bool
     thought: str | None = None
     action: str | None = None
     speech: str | None = None

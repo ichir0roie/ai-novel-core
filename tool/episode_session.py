@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """話のセッション(語り部と人物役の手番)を、手元でも web のセッションでも同じコマンドで扱う。
 
-手元は入口を直に回し、web のセッション(`CLAUDE_CODE_REMOTE=true`)は API の入口を呼ぶ。待つコマンドは、
-返すものが来るまで表を一定の間隔で見て、来たら結果の JSON を出して終わる(待つあいだ Claude は考えない)。
+手元は入口を直に回し、web のセッション(`CLAUDE_CODE_REMOTE=true`)は API の入口を呼ぶ。
+人物役は表を見張らない。語り部が番の行の id を人物役に送り、人物役はその行だけを読んで一手を入れる。
+人物役がはじめに読む材料(knowledge・played)は標準出力に出さずファイルに書き、そのパスを出す(Read で最後まで読む)。
 
-    人物役: knowledge / ideas / played / wait-turn / answer(--wait で、入れたあと次の番まで待つ)
-    語り部: knower-gaps / stage / appearance / add / add-ideas / wait-answers / read / close
+    人物役: knowledge / ideas / played / turn / answer
+    語り部: knower-gaps / stage / appearance / add / add-ideas / moves / read / close
     作者と代わる代わる書く語り部: text / append / replace / hand-over(--wait で、作者が書くまで待つ)/ wait-author / author
     演じ直す前: clear(--from で、その行から後だけ)
 
-    .venv/bin/python -m tool.episode_session wait-turn --episode 102 --character 1
+    .venv/bin/python -m tool.episode_session turn --episode 102 --character 1 --record 1290
 """
 from __future__ import annotations
 
@@ -23,6 +24,12 @@ from pathlib import Path
 from typing import Any
 
 from data_access_logic.logs import configure_logging
+
+
+# 長い Bash の結果は Claude Code が頭だけを見せてファイルに逃がし、人物役は逃がされた先を読み落としたまま演じた
+# (知り合いを知らない人として返した)。人物の材料は数万字になるので、いつもファイルに書いて Read で読ませる
+FILE_COMMANDS = ("knowledge", "played")
+OUT_DIR = Path(__file__).resolve().parent.parent / ".cache" / "episode_session"
 
 
 def call(entrance_id: str, args: dict[str, Any]) -> Any:
@@ -45,18 +52,20 @@ def _waited(check, interval: float, timeout: float) -> Any:
         time.sleep(interval)
 
 
-def wait_turn(episode_id: int, character_id: int, interval: float, timeout: float) -> dict[str, Any]:
-    def check():
-        state = call("episode_session.read_turn.ReadTurn", {"episode_id": episode_id, "character_id": character_id})
-        return state if state["status"] != "waiting" else None
-    return _waited(check, interval, timeout) or {"status": "timeout"}
+def read_turn(episode_id: int, character_id: int, record_id: int) -> dict[str, Any]:
+    """語り部に番を知らされた人物役が、その行(見聞きしたことと要求)を読む。待たない。
+    知らされた行がまだ番でない(前の手番が埋まっていない)か、別の行が番なら、そのことを返す。"""
+    state = call("episode_session.read_turn.ReadTurn", {"episode_id": episode_id, "character_id": character_id})
+    if state["status"] == "turn" and state["record"]["id"] != record_id:
+        return {"status": "other", "record_id": state["record"]["id"]}
+    return state
 
 
 def _row(record: dict[str, Any]) -> dict[str, Any]:
     """語り部の読む行。人物は名前だけにし(空なら語りか作者の行)、見聞きする人物は id だけにする。"""
     return {"id": record["id"], "character": record["character"] and record["character"]["name"], "time": record["time"],
             "witnesses": [witness["character_id"] for witness in record["witnesses"]], "request": record["request"],
-            "closing": record["closing"], "author": record["author"],
+            "closing": record["closing"], "author": record["author"], "simultaneous": record["simultaneous"],
             **{name: record[name] for name in ("thought", "action", "speech", "aim")}}
 
 
@@ -73,9 +82,11 @@ def wait_author(episode_id: int, interval: float, timeout: float) -> dict[str, A
     return _waited(check, interval, timeout) or {"status": "timeout"}
 
 
-def _text_arg(value: str) -> str:
-    """文を引数でそのまま受けるか、- なら標準入力から読む。"""
-    return sys.stdin.read() if value == "-" else value
+def _text_arg(args: argparse.Namespace) -> str:
+    """文を、--file のファイルか、--text の引数(- なら標準入力)から読む。"""
+    if args.file is not None:
+        return Path(args.file).read_text(encoding="utf-8")
+    return sys.stdin.read() if args.text == "-" else args.text
 
 
 def _answer(record: dict[str, Any]) -> dict[str, Any]:
@@ -84,15 +95,32 @@ def _answer(record: dict[str, Any]) -> dict[str, Any]:
             **{name: record[name] for name in ("thought", "action", "speech", "aim")}}
 
 
-def wait_answers(episode_id: int, after: int, interval: float, timeout: float) -> dict[str, Any]:
-    """手番がすべて埋まったら、`after` より後の手番の一手を返す。"""
-    def check():
-        records = call("episode_session.read_session.ReadSession", {"episode_id": episode_id})
-        turns = [record for record in records if record["character"] is not None and not record["closing"]]
-        if any(record["action"] is None for record in turns):
-            return None
-        return {"status": "answered", "answers": [_answer(record) for record in turns if record["id"] > after]}
-    return _waited(check, interval, timeout) or {"status": "timeout"}
+def moves(episode_id: int, after: int) -> dict[str, Any]:
+    """`after` より後の手番のうち、一手の入ったものと、まだ埋まっていない行の id。待たない。"""
+    records = call("episode_session.read_session.ReadSession", {"episode_id": episode_id})
+    turns = [record for record in records
+             if record["character"] is not None and not record["closing"] and record["id"] > after]
+    return {"answers": [_answer(record) for record in turns if record["action"] is not None],
+            "pending": [record["id"] for record in turns if record["action"] is None]}
+
+
+def _out_name(args: argparse.Namespace) -> str:
+    """書き出すファイルの名。人物役は何人も同時に動くので、コマンドと話・人物・行で分ける。"""
+    parts = [args.command] + [f"{key[0]}{getattr(args, key)}" for key in ("episode", "character", "record", "after")
+                              if getattr(args, key, None) is not None]
+    if getattr(args, "time", None):
+        parts.append("t" + "".join(char for char in args.time if char.isdigit()))
+    return "-".join(parts)
+
+
+def write_file(result: Any, name: str) -> dict[str, Any]:
+    """結果の JSON をファイルに書き、そのパスと大きさを返す。"""
+    text = json.dumps(result, ensure_ascii=False, indent=2)
+    path = OUT_DIR / f"{name}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return {"file": str(path), "chars": len(text), "lines": text.count("\n") + 1,
+            "note": "Read(allow_large)で最後の行まで読む"}
 
 
 def _turns_args(text: str) -> dict[str, Any]:
@@ -123,9 +151,10 @@ def main() -> None:
     played.add_argument("--episode", type=int, required=True)
     played.add_argument("--character", type=int, required=True)
 
-    wait = commands.add_parser("wait-turn", help="自分の番(turn)か話の終わり(closed)が来るまで待つ")
-    wait.add_argument("--episode", type=int, required=True)
-    wait.add_argument("--character", type=int, required=True)
+    turn = commands.add_parser("turn", help="語り部に知らされた番の行(見聞きしたことと要求)を読む。待たない")
+    turn.add_argument("--episode", type=int, required=True)
+    turn.add_argument("--character", type=int, required=True)
+    turn.add_argument("--record", type=int, required=True, help="語り部が送ってきた行の id")
 
     answer = commands.add_parser("answer", help="自分の番の行に一手を入れる")
     answer.add_argument("--record", type=int, required=True)
@@ -133,9 +162,6 @@ def main() -> None:
     answer.add_argument("--thought")
     answer.add_argument("--speech")
     answer.add_argument("--aim")
-    answer.add_argument("--wait", action="store_true", help="入れたあと、次の番か話の終わりまで待ち、wait-turn と同じ JSON を返す")
-    answer.add_argument("--episode", type=int, help="--wait のときの話")
-    answer.add_argument("--character", type=int, help="--wait のときの人物")
 
     appearance = commands.add_parser("appearance", help="初対面の相手から見て分かること(名前なし)を読む")
     appearance.add_argument("--character", type=int, required=True)
@@ -151,14 +177,13 @@ def main() -> None:
     add = commands.add_parser("add", help="手番の要求の行を足す(JSON: narration・witness_ids と、turns の配列: character_id・time・request・witness_ids)")
     add.add_argument("--episode", type=int, required=True)
     add.add_argument("--turns", required=True, help="JSON のファイル。- なら標準入力から読む")
-    add.add_argument("--wait", action="store_true", help="足したあと、手番がすべて埋まるまで待ち、足した行から後の一手を返す")
 
     add_ideas = commands.add_parser(
         "add-ideas", help="場面に出した新しい語をアイデアと照らし、当たらなければ候補として足す(JSON の配列: keyword・description・kind)")
     add_ideas.add_argument("--episode", type=int, required=True)
     add_ideas.add_argument("--ideas", required=True, help="JSON のファイル。- なら標準入力から読む")
 
-    answers = commands.add_parser("wait-answers", help="手番がすべて埋まるまで待ち、--after より後の一手を返す")
+    answers = commands.add_parser("moves", help="--after より後の手番の一手と、まだ埋まっていない行を読む。待たない")
     answers.add_argument("--episode", type=int, required=True)
     answers.add_argument("--after", type=int, default=0)
 
@@ -173,7 +198,9 @@ def main() -> None:
 
     append = commands.add_parser("append", help="人物役の一手を起こした文を本文の終わりに書き足す(作者の番には断られる)")
     append.add_argument("--episode", type=int, required=True)
-    append.add_argument("--text", required=True, help="書き足す文。- なら標準入力から読む")
+    appended = append.add_mutually_exclusive_group(required=True)
+    appended.add_argument("--file", help="書き足す文のファイル")
+    appended.add_argument("--text", help="書き足す文。- なら標準入力から読む")
 
     replace = commands.add_parser("replace", help="本文のうち old の箇所を new に置き換える(作者がプロットのように書いた所を起こし直す。作者の番には断られる)")
     replace.add_argument("--episode", type=int, required=True)
@@ -189,23 +216,21 @@ def main() -> None:
 
     author = commands.add_parser("author", help="作者がチャットで出した発言を作者の行に入れる(作者の番でなければ作者の行を挟む)")
     author.add_argument("--episode", type=int, required=True)
-    author.add_argument("--text", required=True, help="作者の発言。- なら標準入力から読む")
+    said = author.add_mutually_exclusive_group(required=True)
+    said.add_argument("--file", help="作者の発言のファイル")
+    said.add_argument("--text", help="作者の発言。- なら標準入力から読む")
 
     clear = commands.add_parser("clear", help="話のセッションの行をすべて消す(手番を演じ直す前に)")
     clear.add_argument("--episode", type=int, required=True)
     clear.add_argument("--from", dest="from_record", type=int, help="この行の id から後(この行を含む)だけを消す")
 
-    for waiting in (wait, answers, add, answer):
-        waiting.add_argument("--interval", type=float, default=0.3)
-        waiting.add_argument("--timeout", type=float, default=3000.0)
-    # 作者は人が書くので、人物役より間を空けて見る
+    # 作者の書くのを待つのは語り部だけ。Bash は前で 600 秒しか待たず、過ぎると裏へ回して待ちを拾えなくなるので、
+    # その前に timeout を返して待ち直させる
     for waiting in (hand_over, author_wait):
         waiting.add_argument("--interval", type=float, default=1.0)
-        waiting.add_argument("--timeout", type=float, default=3000.0)
+        waiting.add_argument("--timeout", type=float, default=540.0)
 
     args = parser.parse_args()
-    if args.command == "answer" and args.wait and (args.episode is None or args.character is None):
-        parser.error("answer --wait には --episode と --character が要る")
     configure_logging()
     # 待つあいだの呼び出しごとのログが、人物役・語り部の読む出力に積もって入力のトークンを食う
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -218,14 +243,12 @@ def main() -> None:
         case "played":
             result = call("episode_session.read_played_turns.ReadPlayedTurns",
                           {"episode_id": args.episode, "character_id": args.character})
-        case "wait-turn":
-            result = wait_turn(args.episode, args.character, args.interval, args.timeout)
+        case "turn":
+            result = read_turn(args.episode, args.character, args.record)
         case "answer":
             fields = {"thought": args.thought, "action": args.action, "speech": args.speech, "aim": args.aim}
-            result = call("episode_session.answer_turn.AnswerTurn", {
-                "record_id": args.record, "answer": {name: value for name, value in fields.items() if value is not None}})
-            if args.wait:
-                result = wait_turn(args.episode, args.character, args.interval, args.timeout)
+            result = _answer(call("episode_session.answer_turn.AnswerTurn", {
+                "record_id": args.record, "answer": {name: value for name, value in fields.items() if value is not None}}))
         case "appearance":
             result = call("character.read_appearance.ReadAppearance", {"character_id": args.character, "time": args.time})
         case "knower-gaps":
@@ -234,16 +257,13 @@ def main() -> None:
             result = call("episode_session.read_stage.ReadStage", {"episode_id": args.episode})
         case "add":
             text = sys.stdin.read() if args.turns == "-" else Path(args.turns).read_text(encoding="utf-8")
-            result = call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, **_turns_args(text)})
-            if args.wait and result:
-                result = wait_answers(args.episode, min(record["id"] for record in result) - 1, args.interval, args.timeout)
-            else:
-                result = [_row(record) for record in result]
+            result = [_row(record) for record in
+                      call("episode_session.add_turns.AddTurns", {"episode_id": args.episode, **_turns_args(text)})]
         case "add-ideas":
             text = sys.stdin.read() if args.ideas == "-" else Path(args.ideas).read_text(encoding="utf-8")
             result = call("episode_session.add_ideas.AddIdeas", {"episode_id": args.episode, "ideas": json.loads(text)})
-        case "wait-answers":
-            result = wait_answers(args.episode, args.after, args.interval, args.timeout)
+        case "moves":
+            result = moves(args.episode, args.after)
         case "read":
             result = [_row(record) for record in call("episode_session.read_session.ReadSession", {"episode_id": args.episode})]
         case "close":
@@ -252,7 +272,7 @@ def main() -> None:
             [episode] = call("episode.read_episode_texts.ReadEpisodeTexts", {"episode_ids": [args.episode]})
             result = {"title": episode["title"], "main_text": episode["main_text"]}
         case "append":
-            result = call("episode_session.append_text.AppendText", {"episode_id": args.episode, "text": _text_arg(args.text)})
+            result = call("episode_session.append_text.AppendText", {"episode_id": args.episode, "text": _text_arg(args)})
         case "replace":
             text = sys.stdin.read() if args.edit == "-" else Path(args.edit).read_text(encoding="utf-8")
             result = call("episode_session.replace_text.ReplaceText", {"episode_id": args.episode, **json.loads(text)})
@@ -264,12 +284,14 @@ def main() -> None:
             result = wait_author(args.episode, args.interval, args.timeout)
         case "author":
             result = _row(call("episode_session.add_author_line.AddAuthorLine",
-                               {"episode_id": args.episode, "text": _text_arg(args.text)}))
+                               {"episode_id": args.episode, "text": _text_arg(args)}))
         case "clear":
             result = call("episode_session.clear_session.ClearSession", {"episode_id": args.episode} | (
                 {} if args.from_record is None else {"from_record_id": args.from_record}))
         case _:
             parser.error(f"知らないコマンド: {args.command}")
+    if args.command in FILE_COMMANDS:
+        result = write_file(result, _out_name(args))
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

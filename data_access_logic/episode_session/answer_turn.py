@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode_session.form import TurnAnswer
 from data_access_logic.episode_session.record import SessionRecord
-from data_access_logic.episode_session.turns import current_turn
+from data_access_logic.episode_session.turns import current_turns
 from data_access_logic.query import common_query
 from db.schema import EpisodeCharacterSession
 
@@ -25,9 +25,9 @@ class AnswerTurn(CommitEntrypoint):
             raise ValueError(f"id={record.id} は終了の行。行動は入れない")
         if record.action is not None:
             raise ValueError(f"id={record.id} にはもう行動が入っている")
-        current = current_turn(s, record.episode_id)
-        if current is None or current.id != record.id:
-            raise ValueError(f"id={record.id} はまだ番が来ていない(いまの番は id={current.id if current else None})")
+        current = [row.id for row in current_turns(s, record.episode_id)]
+        if record.id not in current:
+            raise ValueError(f"id={record.id} はまだ番が来ていない(いまの番は id={current or None})")
         self.answer.write_to(record)
         self.finalize(s, record)
         return record_of(s, SessionRecord, record)
