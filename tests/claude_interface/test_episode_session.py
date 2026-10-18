@@ -707,6 +707,13 @@ def test_add_turns_checks_the_witnesses(shown, world):
     with pytest.raises(ValueError, match="見聞きする人物"):
         AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=taro, request="一手")]).run()
     assert shown(ReadSession(episode_id=world.episode_id)) == []
+    # 手番の無い語りは、時刻を渡さなければ断り、渡せばその時刻で入る
+    with pytest.raises(ValueError, match="語りの時刻"):
+        AddTurns(episode_id=world.episode_id, narration="半刻が過ぎた", witness_ids=[taro], turns=[]).run()
+    [alone_narration] = shown(AddTurns(episode_id=world.episode_id, narration="半刻が過ぎた", witness_ids=[taro],
+                                       time="1200/04/01 12:30", turns=[]))
+    assert alone_narration["time"] == "1200/04/01 12:30:00"
+    shown(ClearSession(episode_id=world.episode_id))
     # 誰にも見せない一手は、空を渡せば通る
     [alone] = shown(AddTurns(episode_id=world.episode_id, turns=[
         TurnRequest(character_id=taro, request="一人で考える", witness_ids=[])]))
