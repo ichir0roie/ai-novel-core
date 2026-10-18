@@ -2124,6 +2124,10 @@
             "type": "boolean",
             "title": "Author"
           },
+          "simultaneous": {
+            "type": "boolean",
+            "title": "Simultaneous"
+          },
           "thought": {
             "anyOf": [
               {
@@ -2176,7 +2180,8 @@
           "witnesses",
           "request",
           "closing",
-          "author"
+          "author",
+          "simultaneous"
         ],
         "title": "SessionRecord"
       },

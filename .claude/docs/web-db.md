@@ -71,8 +71,8 @@ print(json.dumps(run('<入口の id>', {<引数>}), ensure_ascii=False, indent=2
 ```
 
 - id と引数は、スキルや `data_access_logic/readme.md` の表のもの(手元と同じ)
-- 長い出力は `> <scratchpad>/<名>.json` へ書き出して Read する
-- 本文・プロットのような長い文字列は、スクラッチパッドのファイルに置き、引数の中で `Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')` と読む(`from pathlib import Path` を足す)
+- 結果は `> <scratchpad>/<名>.json` へ書き出し、Read で最後の行まで読む(`CLAUDE.md` の「ツールの使い分け」)。短いと分かっている結果(書き込みの返り・件数)と、`jq` で一部だけ抜くときは、出力のまま読んでよい。`curl` で読む一覧・行も同じ(`-o <scratchpad>/<名>.json` で書き出す)
+- 本文・プロットのような長い文字列は、Write でスクラッチパッドのファイルに置き、引数の中で `Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')` と読む(`from pathlib import Path` を足す)
 
 API に届かない(`ApiError`)・バージョンが食い違う・段が無いと返るとき:
 

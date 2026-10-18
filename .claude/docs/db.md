@@ -43,8 +43,8 @@ print(json.dumps(interface.call(interface.entrance_class('<入口の id>'), {<�
 "
 ```
 
-- 長い出力は `> <scratchpad>/<名>.json` へ書き出して Read する
-- 本文・プロットのような長い文字列は、スクラッチパッドのファイルに置き、引数の中で `Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')` と読む
+- 結果は `> <scratchpad>/<名>.json` へ書き出し、Read で最後の行まで読む(`CLAUDE.md` の「ツールの使い分け」)。短いと分かっている結果(書き込みの返り・件数)と、`jq` で一部だけ抜くときは、出力のまま読んでよい
+- 本文・プロットのような長い文字列は、Write でスクラッチパッドのファイルに置き、引数の中で `Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')` と読む
 
 ## 行を引く
 

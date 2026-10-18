@@ -2,7 +2,9 @@
 
 終了の行(`closing`)と語りの行(人物の無い行)は手番に数えない。人物の次の行が終了の行なら、その人物の話は終わり。
 作者の行(`author`)は人物の無い手番で、作者が書くまで後の手番を待たせる。人物役には届かない。
+同時に動く手番(`simultaneous`)は、すぐ前の手番と組になる。組の手番は、まだ動いていないものすべてに一度に番が開く。
 人物役は自分の番に、前の自分の番から後の、自分が見聞きする語りとほかの人物の一手を、要求といっしょに受け取る。
+同じ組のほかの人物の一手は、同時に動いたので受け取らない(次の自分の番で受け取る)。
 """
 from __future__ import annotations
 
@@ -23,11 +25,45 @@ def _pending() -> Select[EpisodeCharacterSession]:
             .execution_options(populate_existing=True))
 
 
+def _turn_rows(s: Session, episode_id: int) -> list[EpisodeCharacterSession]:
+    """手番の行(人物の手番と作者の行。語りと終了の行は除く)を id の順に。"""
+    return list(s.scalars(session_select(episode_id).where(
+        or_(EpisodeCharacterSession.character_id.is_not(None), EpisodeCharacterSession.author.is_(True)),
+        EpisodeCharacterSession.closing.is_(False))).all())
+
+
+def _group_of(turns: list[EpisodeCharacterSession], index: int) -> list[EpisodeCharacterSession]:
+    """`turns[index]` と同時に動く組(組でなければその行だけ)。"""
+    start = index
+    while start > 0 and turns[start].simultaneous:
+        start -= 1
+    end = index + 1
+    while end < len(turns) and turns[end].simultaneous:
+        end += 1
+    return turns[start:end]
+
+
+def current_turns(s: Session, episode_id: int) -> list[EpisodeCharacterSession]:
+    """いま番の開いている行。一番古いまだ動いていない行と、それと同じ組のまだ動いていない行。"""
+    turns = _turn_rows(s, episode_id)
+    first = next((index for index, row in enumerate(turns) if row.action is None), None)
+    if first is None:
+        return []
+    return [row for row in _group_of(turns, first) if row.action is None]
+
+
 def current_turn(s: Session, episode_id: int) -> EpisodeCharacterSession | None:
-    return s.scalars(_pending().where(EpisodeCharacterSession.episode_id == episode_id,
-                                      or_(EpisodeCharacterSession.character_id.is_not(None),
-                                          EpisodeCharacterSession.author.is_(True)),
-                                      EpisodeCharacterSession.closing.is_(False))).first()
+    current = current_turns(s, episode_id)
+    return current[0] if current else None
+
+
+def simultaneous_ids(s: Session, record: EpisodeCharacterSession) -> set[int]:
+    """`record` と同時に動く組のほかの行の id。"""
+    turns = _turn_rows(s, record.episode_id)
+    index = next((index for index, row in enumerate(turns) if row.id == record.id), None)
+    if index is None:
+        return set()
+    return {row.id for row in _group_of(turns, index)} - {record.id}
 
 
 def author_turn(s: Session, episode_id: int) -> EpisodeCharacterSession | None:
@@ -73,7 +109,8 @@ def seen_lines(s: Session, record: EpisodeCharacterSession) -> list[str]:
         or_(session.character_id.is_(None),
             and_(session.character_id != record.character_id, session.action.is_not(None))),
         session.witnesses.any(EpisodeCharacterSessionWitness.character_id == record.character_id))).all()
-    return [_seen_line(row) for row in rows]
+    together = simultaneous_ids(s, record)
+    return [_seen_line(row) for row in rows if row.id not in together]
 
 
 def turn_record(s: Session, record: EpisodeCharacterSession) -> TurnRecord:
@@ -88,8 +125,7 @@ def turn_of(s: Session, episode_id: int, character_id: int) -> TurnState:
         return TurnState(status="waiting")
     if own.closing:
         return TurnState(status="closed", record=turn_record(s, own))
-    current = current_turn(s, episode_id)
-    if current is not None and current.id == own.id:
+    if own.id in {row.id for row in current_turns(s, episode_id)}:
         return TurnState(status="turn", record=turn_record(s, own))
     return TurnState(status="waiting")
 
