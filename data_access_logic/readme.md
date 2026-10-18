@@ -73,7 +73,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「人物を足して」                     | `character.create_random_character.CreateRandomCharacter()` → `character.commit_character.CommitCharacter(character)`。外見は `appearance`、説明(人物の芯)は `text` に書く。持たせるミームは `meme.draw_memes.DrawMemes(person=True)` で引き、`meme` と `principle`(行動原理)の列に書く(下の「人物が持つミーム」)。来歴の節目は、起きた時刻から始まる `histories` の行に一件ずつ書く(下の「人物の来歴」。サブキャラクターは世界の書き進めた所より後を書かない) |
 | 「この場所にランダムな人物を何人か作って」「全国家に人物を生成」 | `character.generate_characters.GenerateCharacters(location_ids, time, count=(2, 4), person=True, seed=None)`。場所ごとに `count` の範囲の人数を、時の流れの中で生む人物と同じ自動生成(`data_access_logic/flows/character.py`。性格・ミーム・来歴・名づけまで AI が決める)で作り、`time` の時点で生まれた歳にする。一人ごとに commit する。場所の種別ごとの人数の上限(下の「世界の広がりと制約」)に達した場所には、上限までしか足さない。作品の無い場所が混ざっていれば作る前に止まる。`person=False` で人物以外の対象を作る |
 | 「出来事を足して」                   | `event.create_random_event.CreateRandomEvent()` → `event.commit_event.CommitEvent(event)` |
-| 「この下書きから人物を AI に作らせて」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None, plot_text=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・装い・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢(0〜90歳。渡さなければ 0〜40歳)にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、没年は `main_character` を立てて渡したときだけ持たせる。`character` の `text` と `histories` の各行の説明は、人物像・役どころの下書きとして核にする。`character` に `id` を渡せば(GUI の詳細画面)、その人物の芯(`text`)が空のときに限り、決まっている名前・属性・出自を核に芯と来歴だけを書いて埋める(来歴の節目は今の行に足す。他の欄は変えない) |
+| 「この下書きから人物を AI に作らせて」 | `character.generate_character.GenerateCharacter(character=CharacterForm(...), time=None, seed=None, plot_text=None)`。欄の値(全部空でもよい)を核に、時の流れの中で生む人物と同じ自動生成(`generate_character`)で全欄を組み立て直して足す。名前・説明は核として渡し、性別・体格・口調・性格・種別・生年・没年・`main_character` は決まった値にする。`time`(現在の時刻)を省けば世界の最新の出来事の時刻。`plot_text` に登場させる話のプロットを渡せば、生年が決まっていなければ、その時刻・場所でその話の役どころ(下書きの説明)を果たせる年齢(0〜90歳。渡さなければ 0〜40歳)にする。説明・来歴には現在の時刻より後のこと(後年の姿・死)を書かず、没年は `main_character` を立てて渡したときだけ持たせる。`character` の `text` と `histories` の各行の説明は、人物像・役どころの下書きとして核にする。`character` に `id` を渡せば(GUI の詳細画面)、その人物の芯(`text`)が空のときに限り、決まっている名前・属性・出自を核に芯と来歴だけを書いて埋める(来歴の節目は今の行に足す。他の欄は変えない) |
 | 「この下書きから出来事を AI に作らせて」 | `event.generate_event.GenerateEvent(event=EventForm(...), seed=None)`。名前・記録を場面の指定に、時刻・場所・当事者を決まった値として出来事を一件起こす(下の「出来事の生成」)。時刻を省けば世界の最新、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。`event` に `id` を渡せば(GUI の詳細画面)、その出来事の本文(`text`)が空のときに限り、名前・場所・当事者から記録の本文だけを書いて埋める(`data_access_logic/event/writer.py`。他の欄は変えない) |
 | 「この人物の出自・居場所を足して」   | `character.commit_character_location.CommitCharacterLocation(location)`              |
 | 「この人物たちを〇〇へ移して」「話のあとで居場所を変えて」 | `character.move_characters.MoveCharacters(moves=[CharacterMove(character_id=…, location_id=…)], time=…)`(`CharacterMove` は `character.record`)。人物ごとに、`time` に続いている居場所の行を `time` で閉じ、移動先の行を `time` から足す(没年があればそこまで)。人物・場所が無ければ止める。出来事の生成・話の確定のあとの移動も、この書き換え(`character/moves.py` の `update_locations`)を使う |
@@ -86,7 +86,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この場所の来歴を足して」「〇年にこの町で起きたことを記録して」 | `location.update_location.UpdateLocation(LocationUpdateForm(id=…, histories=[...]))`。出来事ごとの行の配列をまるごと渡す(今の行は表の API の `location` の行の `histories`)。下の「場所の芯と来歴」 |
 | 「この人物の〇歳からの名字・背丈・口調・性格を決めて」「結婚して名字が変わる」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, parameters=[...]))`。変わった時ごとの行の配列をまるごと渡す(下の「変わった時ごとのパラメータ」)。今の配列は `ReadCharacter` の `parameters` で読める |
 | 「この人物の来歴を足して」「この人物の説明の移り変わりを足して」「〇年からの立場を記録して」「時期の決まっていない構想を足して」 | `character.update_character.UpdateCharacter(CharacterUpdateForm(id=…, histories=[...]))`。出来事ごとの行の配列をまるごと渡す(今の配列は `ReadCharacter` の `histories` で読む。時刻を渡すとその時刻までの行だけになるので、書き足すときは時刻を渡さずに読む)。時期の決まっていない構想は `start` を空にした行に書く。下の「人物の芯と来歴」 |
-| 「人物を直して」                     | `character.update_character.UpdateCharacter(character)`。名字・体格・装い・口調・性格は `parameters` に、外見は `appearance`、芯は `text`、ミームは `meme`、行動原理は `principle`、筋書きは `plot` に、来歴は `histories` に入れる(渡さなければ触らない)。出自・居場所は `character.update_character_location.UpdateCharacterLocation(location)`、相関は `character.update_character_relation.UpdateCharacterRelation(relation)` |
+| 「人物を直して」                     | `character.update_character.UpdateCharacter(character)`。名字・体格・口調・性格は `parameters` に、外見は `appearance`、芯は `text`、ミームは `meme`、行動原理は `principle`、筋書きは `plot` に、来歴(装い・持ち物・記憶・隠し事は種別 `kind` を付けた行)は `histories` に入れる(渡さなければ触らない)。出自・居場所は `character.update_character_location.UpdateCharacterLocation(location)`、相関は `character.update_character_relation.UpdateCharacterRelation(relation)` |
 | 「場所を消して」                     | `location.delete_location.DeleteLocation(location_id)`                              |
 | 「出来事を直して」                   | `event.update_event.UpdateEvent(event)`。`id` 必須、渡した欄だけ直す。`character_ids` を渡すと当事者をまるごと置き換える。直したあと要約(`event_summary`)を作り直す |
 | 「出来事を消して」「出来事を作り直して」 | `event.delete_event.DeleteEvent(event_id, with_children=False)`。子の出来事が残っていれば止まる。`with_children=True` なら子孫の出来事もいっしょに消す。当事者・アイデアとの中間テーブルの行と要約も消す。出来事で人物の `histories` に積み足した行と、足したアイデアの候補は残るので、要らなければ `UpdateCharacter` / `DeleteIdea` で別に戻す |
@@ -111,9 +111,9 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この人物がその時に知っていることを読ませて」 | `character.read_knowledge.ReadKnowledge(character_id, episode_id=None, time=None)`。人物役が、話のセッションでいる時刻(その人物の一番新しい手番の行の `time`、無ければ話の時刻。話を渡さなければ `time`)に知ることのできるデータ。時刻・年は渡さず、来歴・履歴の行はその時刻から何年前かと本文をつないだ一文(「13年前、〜」「今年、〜」)で出す。本人の外見・芯・ミーム・行動原理・その時の名字や口調、その時刻に関係のある人物の外見と芯、本人と関係のある人物の来歴とスキル(名前と来歴)、その時刻に続いている関係(芯と、時刻までに起きた来歴)、知っているアイデア(住む場所に効くものと、知る相手に入ったもの)のうち、話のプロットに名前(本質の名前か知っている呼び名)が出るものの呼び名と受け止め方、知っている場所の来歴(場所の名前ごと。場所の説明は出さない)を返す。来歴・スキルの来歴は知る相手に当たるものだけ(知っている来歴の行の無いスキルは出さない)。来歴は時刻までに起きた行だけ。筋書き(`plot`)とスキルの本質は出さない(下の「来歴・履歴を知る相手」) |
 | 「〇〇を呼んで」「この人物と話したい」 | スキル `call-character`。人物の出た一番新しい話(本文のある話)の時点で、人物役(`character-chat`)が `ReadKnowledge` を読み、ユーザと直に話す。「17歳の〇〇を呼んで」なら、その歳の幅の一番新しい話の枠(本文が無くてもよい)、無ければ歳になった日の時刻(`time`)で読む。db には書かない |
 | 「この語を、この人物は知っている?」 | `character.read_known_ideas.ReadKnownIdeas(character_id, words, episode_id=None, time=None)`。人物役が手番の要求に出た語を引く。語ごとに、`ReadKnowledge` と同じ時刻・同じ範囲で知っているアイデアのうち、本質の名前か知っている呼び名が語と重なる(語が名前の一部か、二字以上の名前が語の一部)ものの呼び名と受け止め方を返す。知らなければ空 |
-| 「初対面の相手の見た目を読ませて」 | `character.read_appearance.ReadAppearance(character_id, time)`。会った相手から見て分かること(種別・歳・性別・背丈・体格・装い・外見)。名前は出さない。語り部が初対面の人物の状況の差分を書くときに使う |
+| 「初対面の相手の見た目を読ませて」 | `character.read_appearance.ReadAppearance(character_id, time)`。会った相手から見て分かること(種別・歳・性別・背丈・体格・装い(その時刻の装いの来歴の行)・外見)。名前は出さない。語り部が初対面の人物の状況の差分を書くときに使う |
 | 「話のセッションに手番を足して」「人物役の一手を待って」 | スキル `episode` の「手番を回す(セミオート)」と、スキル `interactive-episode`。表(`episode_character_session`)は `tool.episode_session` のコマンドで扱う。入口は `episode_session.add_turns.AddTurns(episode_id, turns, narration, witness_ids, simultaneous, time)`(語り部が要求の行を足す。語りの行の時刻は `time`、渡さなければ一つ目の手番の時刻(手番の無い語りは `time` が要る)。見聞きする人物を全体にも手番にも渡さない手番は断る(誰にも見せないなら `[]`)。`simultaneous` なら、足す手番を同時に動く組にし、一度に番を開く。組の中の一手はお互いに次の番で届く。`narration` を渡すと、何人もに見える・聞こえる状況を語りの行(人物の無い行。手番に数えない)として一つだけ前に足す。語りと手番の一手は、見聞きする人物(`witness_ids`。手番ごとにも書ける)の次の番に届く。一手は名前付きで届くので、見聞きする人物は動く人物と知り合い(`ReadStage` の「知り合い」)でないと断る)・`answer_turn.AnswerTurn(record_id, answer)`(人物役が番の行に一手を入れる)・`read_turn.ReadTurn(episode_id, character_id)`(人物役の番か: turn / waiting / closed。番の行は、前の自分の番から後に見聞きした語りとほかの人物の一手(`seen`。行動とセリフだけ)・要求・終了の印で、時刻は返さない)・`read_played_turns.ReadPlayedTurns(episode_id, character_id)`(人物役が自分のもう動いた手番の `seen`・要求と一手を読む。時刻は返さない。途中からやり直して起こし直されたとき)・`read_session.ReadSession(episode_id)`(すべての行)・`read_session_since.ReadSessionSince(episode_id, after_record_id)`(`after_record_id` より新しい id の行と、行の総数。GUI の `/episode_session` が 3 秒ごとに引く)・`read_knower_gaps.ReadKnowerGaps(episode_id)`(手番を回す前の確かめ。登場人物の来歴のうち、話の時刻までに起きた行で、ほかの登場人物の名前が出るのに、その人物が話の時刻に知る相手に入っていない行と、知らない人物)・`read_stage.ReadStage(episode_id)`(語り部が読む材料。プロット・時刻・場所・登場人物の表層(名前・年齢・性別・外見)・登場人物のだれとだれが知り合いか(関係の名前だけ)。人物の芯・来歴、関係の説明・来歴、設定、前の話・本文は入らない)・`add_ideas.AddIdeas(episode_id, ideas)`(語り部・話を書く Claude が、場面に出した新しい語(`IdeaDraft`)を話の場所・時刻でアイデアと照らし、当たらなければ候補として足す。種別は話の場所の世界にある分類から選ばせ、無ければ一覧を添えて断る。足した語 `added` と足さなかった語 `kept` の名前だけを返し、アイデアの本文は返さない)・`close_session.CloseSession(episode_id)`(出た人物に終了の行)・`clear_session.ClearSession(episode_id, from_record_id)`(その話の行をすべて消す。演じ直す前に。`from_record_id` を渡すと、その行から後だけを消す)。行動の入っていない一番古い行の人物が、いま動く番(その行が同時に動く組なら、組のまだ動いていない人物みな)。作者と語り部が本文を代わる代わる書くとき(スキル `interactive-episode`)は、作者の行(`author`。人物は空)も手番に数える: `hand_over.HandOver(episode_id, request)`(語り部が作者に番を渡す。行動の空いた作者の行を足す)・`save_text.SaveText(episode_id, main_text)`(作者が画面で書いた本文を保存し、作者の番なら前の本文からの差分を作者の行の行動に入れて番を返す。作者の行があって閉じていないセッションの語り部の番には保存させない)・`add_author_line.AddAuthorLine(episode_id, text)`(作者のチャットの発言・Continue。作者の番ならその行に入れ、語り部の番なら手番を待たせない作者の行を挟む)・`append_text.AppendText(episode_id, text)`(語り部が人物役の一手を起こした文を本文の終わりに書き足す。作者の番には断る)・`replace_text.ReplaceText(episode_id, old, new)`(語り部が本文のうち `old` の箇所を `new` に置き換える。作者がプロットのように書いた所を本文の文に起こし直す。`old` が本文にちょうど一度出なければ断り、作者の番にも断る。作者の行は足さない)。作者の行は人物役には届かない。閉じる(`CloseSession`)と、作者の番のまま残った作者の行も終わりの印にする |
-| 「この人物を本文用にそろえて」       | `character.read_character.ReadCharacter(character_id, time=None)`。体格・装い・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと生まれたときの値)。変わった時ごとの行は `parameters`。芯は `text`。来歴(`histories`)は `time` までに起きた行だけを古い順に出す(`time` を省くと、時期の決まっていない行も最後に含めてすべて) |
+| 「この人物を本文用にそろえて」       | `character.read_character.ReadCharacter(character_id, time=None)`。体格・口調・性格は `time` の時点の値を上の段に出す(`time` を省くと生まれたときの値)。変わった時ごとの行は `parameters`。芯は `text`。来歴(`histories`)は `time` までに起きた行だけを古い順に出す(`time` を省くと、時期の決まっていない行も最後に含めてすべて) |
 | 「作品を作る」「筋書きを足して」     | `story.commit_story.CommitStory(story)`。筋書きは作品の `text` に書く        |
 | 「この作品の子に章・外伝を作って」   | `story.commit_story.CommitStory(StoryCreateForm(name=…, parent_story_id=<親の作品id>, …))`。付け替えは `UpdateStory(StoryUpdateForm(id=…, parent_story_id=…))`(自分か子孫の子にはできない。`None` を渡せば親から外す)。子の作品の話を書くときは、親をたどった作品の筋書き(`親の作品`)を渡す。前の話の範囲は下の「出来事の生成・話の材料」の「前の話は」の段落 |
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
@@ -143,7 +143,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 筋書きのテーブルは無い。場所に掛かる筋書きは作品(`story`)の
 `text` に、人物に掛かる筋書きはその人物の `plot` に書く。
 
-**変わった時ごとのパラメータ**: 人物の名字(`family_name`)・体格(`sex` `height` `build`)・装い(`outfit`)・口調(`first_person` `second_person` `third_person` `tone` `dialect`)・
+**変わった時ごとのパラメータ**: 人物の名字(`family_name`)・体格(`sex` `height` `build`)・口調(`first_person` `second_person` `third_person` `tone` `dialect`)・
 性格(12 軸。無/低/並/高/必)は、`character_parameter` テーブルに、値の変わった時ごとの行で持つ。入口では人物の
 `parameters` に配列で並ぶ(id と character_id は出さない。行は配列の並びで決まり、並びを変えなければ id も変わらない)。
 
@@ -163,8 +163,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   読み出し(`ReadCharacter` など)も人物の `start` / `end` としてそのまま出る。死んでいない人物・対象では `end` を空にする
 - 出来事の生成(`GenerateEvent`)は、出来事の時刻の値を使う。人物の自動生成・`CreateRandomCharacter` は一行だけを作る
 - `CommitCharacter` / `UpdateCharacter` は `parameters` を受け取る。`UpdateCharacter` に渡すと配列をまるごと置き換える
-- 体格(`build`)は体つきだけを書き、身なり・持ち物・武器・傷・印は装い(`outfit`)に書く。持ち物は体つきよりずっと頻繁に変わるので、変わった時の行を足す
-- 体格・装いは、見た人にそのまま知れる今の見た目として渡る(初対面の相手の `ReadAppearance`、関係のある人物の知ることのできるデータ、語り部の材料 `stage`)。袋の中の物・服の下の印のように人に隠しているものは装いに書かず、来歴に知る相手を絞って書く。人前で見せたら、その時刻の装いの行を足す
+- 体格(`build`)は体つきだけを書く。身なり・持ち物・武器・傷・印はパラメータに持たず(変わるたびに行が増える)、来歴に種別を付けた行で書く(下の「人物の本文と来歴」)
+- 体格は、見た人にそのまま知れる今の見た目として渡る(初対面の相手の `ReadAppearance`、関係のある人物の知ることのできるデータ、語り部の材料 `stage`)
 - `name` は名字を含めない名だけを持つ。名字は `family_name` に分け、結婚・養子・家の取り立てなどで変わるなら、
   変わった時点からの行を足す。名字を持たない身分なら空。`CreateRandomCharacter` の下書きでは空なので、
   出自・身分・土地柄から決めて入れる(時の流れの中で生む人物は、名づけのときに AI が決める)
@@ -185,9 +185,15 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   {"start": "11585/04/01", "description": "村の鍛冶屋に徒弟として入る"},
   {"start": "11600/02/10", "description": "師の死後、鍛冶屋を継ぐ"},
   {"start": "11600/09/20", "description": "隣村の娘を妻に迎える"},
+  {"start": "11600/09/20", "kind": "装い", "description": "煤けた革の前掛けに、腰に槌"},
+  {"start": "11600/09/20", "kind": "隠し事", "description": "師の遺した刻印の型を、炉の下に隠している"},
   {"start": null, "description": "(時期未定)いずれ鍛冶屋を畳み、都へ出る"}
 ]
 ```
+
+- 種別(`kind`)は、出来事でない行に付ける文字列(装い・持ち物・記憶・隠し事など)。空なら起きた出来事。種別の行も出来事の行と同じく、`start` から先ずっと効き、知る相手だけが知る。変わったら、変わった時刻の行を足す(前の行は書き換えない)
+- 種別「装い」は、身なりと人目に見える持ち物・武器・傷・印。見た人にそのまま知れるので、その時刻までに始まった一番新しい装いの行(`histories.outfit_at`)は、知る相手に関わらず見た目として渡る(初対面の相手の `ReadAppearance`、関係のある人物の知ることのできるデータ、語り部の材料 `stage`)。前の値の言い回しを残して変わった所だけを書き換えた行を足す
+- 袋の中の物・服の下の印のように人に隠している物は、装いに書かず、種別「持ち物」「隠し事」などの行にして知る相手を絞る。人前で見せたら、その時刻の装いの行を足す
 
 - `start` は起きた時刻(`'11590/09/12'` のような文字列。年だけの `11590` はその年の 1 月 1 日)。行は終わり(`end`)を持たず、その時刻から先ずっと効く
 - `start` が空の行は、起きる時期がまだ決まっていない構想(主要人物の先の移り変わりなど)。作者が読むとき(時刻を渡さない
@@ -316,7 +322,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 古今表裏: 古=かつて持っていたが今は手放した / 今=いま持っている / 表=人前で掲げている / 裏=内に秘めている
 - 引き方: 分類ごとに 0〜2 件。人物は 信条・欲求・境遇、人物以外の対象は 信条・欲求・集団 から引く。
   理(世界の法則)は引かない(`data_access_logic/constants.py` の `MEME_*`)
-- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う。引いたミームを先に渡し、年齢・性格(12 軸)・背丈・体格・装いを、そのミームの古今表裏と出自・生い立ち・人物像から AI が総合的に決める(サイコロでは決めない。作者が下書きで決めた値はそのまま使う)。人物以外の対象の性格は、どの軸も「並」
+- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う。引いたミームを先に渡し、年齢・性格(12 軸)・背丈・体格・装いを、そのミームの古今表裏と出自・生い立ち・人物像から AI が総合的に決める(サイコロでは決めない。作者が下書きで決めた値はそのまま使う)。装いは、生んだ時刻から始まる種別「装い」の来歴の行で足す。人物以外の対象の性格は、どの軸も「並」
 
 ## 世界の広がりと制約
 

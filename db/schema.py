@@ -398,7 +398,7 @@ PERSONALITY_COLUMNS = (
 
 
 PERSON_PARAMETER_COLUMNS = (
-    "family_name", "sex", "height", "build", "outfit", "first_person", "second_person", "third_person", "tone", "dialect",
+    "family_name", "sex", "height", "build", "first_person", "second_person", "third_person", "tone", "dialect",
 )
 
 
@@ -497,8 +497,8 @@ class Character(EventSeededMixin, ContentBase):
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterHistory.start.desc().nulls_last()",
-        doc="来歴を、起きた出来事ごとに一行で持つ。話・出来事には、その時刻までに始まった行だけを渡す。"
-        "時刻が空の行は構想で、作者だけが読む。行は知る相手だけが知る"
+        doc="来歴を、起きた出来事ごとに一行で持つ。装い・持ち物・記憶・隠し事は種別を付けた行にする。"
+        "話・出来事には、その時刻までに始まった行だけを渡す。時刻が空の行は構想で、作者だけが読む。行は知る相手だけが知る"
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",
@@ -507,11 +507,12 @@ class Character(EventSeededMixin, ContentBase):
 
 
 class CharacterParameter(Base):
-    """人物の名字・体格・装い・口調・性格を、変わった時ごとに一行で持つ。
+    """人物の名字・体格・口調・性格を、変わった時ごとに一行で持つ。
 
     行は `start` から先ずっと効き、終わりを持たない(後に始まる行が上書きする)。空の列は「この行では決めない」。
     ある時刻の値は `data_access_logic/character/parameters.py` の `parameters_at` が、その時刻までに始まった行を
-    始まりの古い順に重ねて決める。名字・体格・装い・口調は人物だけが持ち、人物以外の対象は空のまま。
+    始まりの古い順に重ねて決める。名字・体格・口調は人物だけが持ち、人物以外の対象は空のまま。
+    装い・持ち物は値の変わるたびに行が増えるので、ここでは持たず、来歴(CharacterHistory)に種別を付けた行で持つ。
     """
 
     __tablename__ = "character_parameter"
@@ -529,11 +530,6 @@ class CharacterParameter(Base):
     sex: Mapped[str | None] = mapped_column(String,  comment="性別", sort_order=320)
     height: Mapped[float | None] = mapped_column(DECIMAL, comment="背丈 cm", sort_order=330)
     build: Mapped[str | None] = mapped_column(String,  comment="体格", sort_order=340)
-
-    # --- 装い -------------------------------------------------------------
-    # 見た人にそのまま知れるので、袋の中の物・隠している印のような秘密は書かず、来歴に知る相手を絞って書く
-    outfit: Mapped[str | None] = mapped_column(
-        String, comment="装い。身なりと、人目に見える持ち物・武器・傷・印", sort_order=345)
 
     # --- 口調 -------------------------------------------------------------
     first_person: Mapped[str | None] = mapped_column(String,  comment="一人称", sort_order=350)
@@ -659,6 +655,7 @@ class CharacterHistory(Base):
     """人物の来歴を、起きた出来事ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
     時が進むにつれて起きたこと・変わった立場・境遇などを、起きた時刻を `start` にした行として書き足す。行は終わりを持たない。
+    装い・持ち物・記憶・隠し事のように出来事でないものも、種別(`kind`)を付けた行で持つ(変わったら、変わった時刻の行を足す)。
     一つの行に時期の違う出来事をまとめない(同じ年でも、後の出来事が前の時刻の話に漏れ、知る相手も分けられなくなる)。
     ある時刻の話・出来事には、その時刻までに始まった行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
@@ -673,6 +670,8 @@ class CharacterHistory(Base):
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・出来事には渡さない)",
         sort_order=110)
+    kind: Mapped[str | None] = mapped_column(
+        String, comment="種別(装い・持ち物・記憶・隠し事など)。空なら起きた出来事", sort_order=120)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")

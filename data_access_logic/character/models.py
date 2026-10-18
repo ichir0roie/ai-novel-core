@@ -43,7 +43,6 @@ class CharacterParameterValues(Material):
     sex: str | None = None
     height: float | None = None
     build: str | None = None
-    outfit: str | None = None
     first_person: str | None = None
     second_person: str | None = None
     third_person: str | None = None
@@ -89,13 +88,20 @@ class CharacterAt(Material):
     histories: list[CharacterHistoryRow]
 
 
-class CharacterHistoryMaterial(Material):
-    """作者の目で読む来歴の行。"""
+class HistoryMaterial(Material):
+    """作者の目で読むスキルの来歴の行。"""
 
     start: Timestamp | None = None
     description: str
     # その時刻までに知った相手(`knowers.knowers_at`)
     knowers: list[KnowerMaterial]
+
+
+class CharacterHistoryMaterial(HistoryMaterial):
+    """作者の目で読む人物の来歴の行。"""
+
+    # 装い・持ち物・記憶・隠し事など。空なら起きた出来事
+    kind: str | None = None
 
 
 class CharacterSkillMaterial(Material):
@@ -105,7 +111,7 @@ class CharacterSkillMaterial(Material):
     # スキルの本質。作者だけが読む
     text: str
     # その時刻までに起きた来歴(`skills.rows_at`)。知る相手に関わらずすべて
-    histories: list[CharacterHistoryMaterial]
+    histories: list[HistoryMaterial]
 
 
 class CharacterSecrets(Material):
@@ -117,7 +123,7 @@ class CharacterSecrets(Material):
     skills: list[CharacterSkillMaterial]
 
 
-def _dated_histories_for_prompt(histories: list[CharacterHistoryMaterial]) -> list[dict[str, Any]]:
+def _dated_histories_for_prompt(histories: list[HistoryMaterial]) -> list[dict[str, Any]]:
     return [{"時期": start_for_prompt(history.start), "来歴": history.description,
              "知る相手": knowers_for_prompt(history.knowers)}
             for history in histories]
@@ -126,7 +132,8 @@ def _dated_histories_for_prompt(histories: list[CharacterHistoryMaterial]) -> li
 def secrets_for_prompt(secrets: CharacterSecrets) -> dict[str, Any]:
     """`_sheet` の来歴を、知る相手つきの行に置き換える。"""
     return {
-        "来歴(古い順)": _dated_histories_for_prompt(secrets.histories),
+        "来歴(古い順)": [{"種別": history.kind, **line}
+                       for history, line in zip(secrets.histories, _dated_histories_for_prompt(secrets.histories))],
         "スキル": [{"名前": skill.name, "本質": skill.text, "来歴(古い順)": _dated_histories_for_prompt(skill.histories)}
                  for skill in secrets.skills],
     }
@@ -171,7 +178,6 @@ def _sheet(character: CharacterWholeBase, at: CharacterAt) -> dict[str, Any]:
         "口調": parameters.tone,
         "方言": parameters.dialect,
         "体格": parameters.build,
-        "装い": parameters.outfit,
         "外見": character.appearance,
         "人物像": character.text,
         "ミーム": character.meme,

@@ -369,23 +369,45 @@ def test_add_ideas_picks_a_kind_of_the_world(shown, world):
         IdeaDraft(keyword="テスト泥鰻", description="水路の獣", kind="モンスター")]))["added"] == ["テスト泥鰻"]
 
 
-# 花子の装いは 1190 年から木剣、1210 年から大剣(体格も変わる)
-HANAKO_OUTFITS = [
+# 花子は 1210 年から体格が変わる
+HANAKO_PARAMETERS = [
     CharacterParameterRow(start="1170/01/01", sex="女", height=170.5, build="細身"),
-    CharacterParameterRow(start="1190/01/01", outfit="腰に木剣"),
-    CharacterParameterRow(start="1210/01/01", build="肩の厚い体", outfit="背に大剣")]
+    CharacterParameterRow(start="1210/01/01", build="肩の厚い体")]
+# 花子の装いは 1191 年から木剣、1210 年から大剣。袋の短刀は本人だけが知る
+# (1190 年には `world` の来歴の行があり、始まりの同じ行は今ある行を使い回して知る相手を引き継ぐので、年をずらす)
+HANAKO_OUTFITS = [
+    CharacterHistoryRow(start="1191/01/01", kind="装い", description="腰に木剣"),
+    CharacterHistoryRow(start="1195/01/01", kind="隠し事", description="袋に短刀"),
+    CharacterHistoryRow(start="1210/01/01", kind="装い", description="背に大剣")]
 
 
 def test_read_appearance(shown, world):
-    shown(UpdateCharacter(CharacterUpdateForm(id=world.character_ids[1], appearance="髪が赤い", parameters=HANAKO_OUTFITS)))
+    shown(UpdateCharacter(CharacterUpdateForm(
+        id=world.character_ids[1], appearance="髪が赤い", parameters=HANAKO_PARAMETERS, histories=HANAKO_OUTFITS)))
 
     result = shown(ReadAppearance(character_id=world.character_ids[1], time="1200/01/01"))
     later = shown(ReadAppearance(character_id=world.character_ids[1], time="1220/01/01"))
+    before = shown(ReadAppearance(character_id=world.character_ids[1], time="1180/01/01"))
 
-    # 体格・装いは、その時刻までに始まった一番新しい行の値
+    # 体格は、その時刻までに始まった一番新しい行の値。装いは、その時刻までに始まった一番新しい装いの来歴の行(隠し事は入らない)
     assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身", "装い": "腰に木剣",
                       "外見": "髪が赤い"}
     assert (later["体格"], later["装い"]) == ("肩の厚い体", "背に大剣")
+    assert before["装い"] is None
+
+
+def test_read_knowledge_tells_kind_of_histories(shown, world):
+    taro, hanako = world.character_ids
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=HANAKO_OUTFITS)))
+
+    result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=hanako))
+    others = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
+
+    # 種別の行は種別を頭に付けて渡し、隠し事は知る相手(本人)だけが知る
+    assert result["自分"]["来歴(古い順)"] == ["9年前、装い: 腰に木剣", "5年前、隠し事: 袋に短刀"]
+    known = next(character for character in others["知っている人物"] if character["名前"] == "テスト花子")
+    assert "5年前、隠し事: 袋に短刀" not in known["来歴(古い順)"]
+    assert known["装い"] == "腰に木剣"
 
 
 def test_read_knowledge_skips_unrelated_cast(shown, world):
@@ -419,8 +441,8 @@ def _secrets(shown, world) -> None:
 # 話の時刻より後に始まる来歴・履歴と、後で知る相手は出さない
 HANAKO_HISTORIES = [
     # 今ある行を書き換えた行なので、知る相手は今のまま(無い)
-    {"時期": "1190/01/01", "来歴": "花子が店を開く", "知る相手": []},
-    {"時期": "1195/01/01", "来歴": "花子の秘密",
+    {"時期": "1190/01/01", "種別": None, "来歴": "花子が店を開く", "知る相手": []},
+    {"時期": "1195/01/01", "種別": None, "来歴": "花子の秘密",
      "知る相手": [{"人物": "テスト花子", "場所": None, "知った時刻": "1170/01/01 00:00:00"}]}]
 IDEA_HISTORIES = [
     {"呼び名": "術の真名", "受け止め方": None, "効く場所": None, "始まり": None, "終わり": None,
@@ -434,7 +456,7 @@ RELATIONS = [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関�
 def test_read_stage(shown, world):
     _, hanako = world.character_ids
     _secrets(shown, world)
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, parameters=HANAKO_OUTFITS)))
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, parameters=HANAKO_PARAMETERS, histories=HANAKO_OUTFITS)))
 
     result = shown(ReadStage(episode_id=world.episode_id))
 
