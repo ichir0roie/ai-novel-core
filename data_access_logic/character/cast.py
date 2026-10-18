@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from data_access_logic import constants
 from data_access_logic.character.models import (
     CastCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine, CharacterSecrets,
-    CharacterSkillMaterial, MentionedSerialized, ParticipantSerialized,
+    CharacterSkillMaterial, HistoryMaterial, MentionedSerialized, ParticipantSerialized,
 )
 from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.parameters import parameters_at
@@ -69,9 +69,13 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
     ]
 
 
-def _history_material(s: Session, row: CharacterHistory | CharacterSkillHistory, time: Stamp) -> CharacterHistoryMaterial:
-    return CharacterHistoryMaterial(start=row.start, kind=row.kind if isinstance(row, CharacterHistory) else None,
-                                    description=row.description, knowers=knowers_at(s, row.knowers, time))
+def _history_material(s: Session, row: CharacterHistory, time: Stamp) -> CharacterHistoryMaterial:
+    return CharacterHistoryMaterial(start=row.start, kind=row.kind, description=row.description,
+                                    knowers=knowers_at(s, row.knowers, time))
+
+
+def _skill_history_material(s: Session, row: CharacterSkillHistory, time: Stamp) -> HistoryMaterial:
+    return HistoryMaterial(start=row.start, description=row.description, knowers=knowers_at(s, row.knowers, time))
 
 
 def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecrets:
@@ -79,7 +83,7 @@ def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecret
     return CharacterSecrets(
         histories=[_history_material(s, row, time) for row in rows_at(character, time)],
         skills=[CharacterSkillMaterial(name=skill.name, text=skill.text,
-                                       histories=[_history_material(s, row, time) for row in rows])
+                                       histories=[_skill_history_material(s, row, time) for row in rows])
                 for skill, rows in skill_rows if rows],
     )
 
