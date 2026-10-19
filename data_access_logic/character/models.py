@@ -84,7 +84,7 @@ class CharacterAt(Material):
 
     age: int | None = None
     parameters: CharacterParameterValues
-    # その時刻までに起きた来歴(`histories_at`)。先の時刻の行と、年の決まっていない行は入らない
+    # その時刻までに起きた来歴(`histories_at`)。先の時刻の行、終わった行と、年の決まっていない行は入らない
     histories: list[CharacterHistoryRow]
 
 
@@ -117,7 +117,7 @@ class CharacterSkillMaterial(Material):
 class CharacterSecrets(Material):
     """人物の来歴・スキルを、誰が知っているか。本文を書く Claude の材料に添える(`cast.secrets_at`)。"""
 
-    # その時刻までに起きた来歴(`histories.rows_at`)。知る相手に関わらずすべて
+    # その時刻までに起きて、まだ終わっていない来歴(`histories.rows_at`)。知る相手に関わらずすべて
     histories: list[CharacterHistoryMaterial]
     # その時刻までに来歴の行が始まったスキル(まだ持っていないスキルは入らない)
     skills: list[CharacterSkillMaterial]

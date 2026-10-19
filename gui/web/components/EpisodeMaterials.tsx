@@ -21,12 +21,15 @@ const OUTFIT_KIND = "装い";
 
 type Previous = { id: number; title: string; tail: string } | null;
 type CastMember = { id: number; sheet: Rec };
-type HistoryRow = { kind?: string | null; description?: string };
+type HistoryRow = { end?: string | null; kind?: string | null; description?: string };
 
-/** 話の時刻までに始まった装いの行のうち、一番新しいもの(来歴は古い順に並ぶ) */
-function outfitOf(member: Rec): string | null {
+/** 身に着けている物ごとの装いの行。話の時刻があれば、core がその時刻に効いている行だけに絞って返すので、そのまま並べる。
+ * 時刻が無いとすべての行が返るので、終わりの無い行(今も身に着けている物)だけにする */
+function outfitsOf(member: Rec, timed: boolean): string[] {
   const rows = (member.histories as HistoryRow[] | null) ?? [];
-  return rows.filter((row) => row.kind === OUTFIT_KIND).at(-1)?.description ?? null;
+  return rows
+    .filter((row) => row.kind === OUTFIT_KIND && (timed || row.end == null))
+    .map((row) => row.description ?? "");
 }
 
 type Props = {
@@ -123,7 +126,7 @@ export default function EpisodeMaterials({ episode }: Props) {
           ) : (
             cast.map(({ id, sheet: member }) => {
               const age = ageAt(member.start, start);
-              const outfit = outfitOf(member);
+              const outfits = outfitsOf(member, typeof start === "string" && start.trim() !== "");
               return (
                 <div key={id} className="writer-cast">
                   <div className="writer-cast-head">
@@ -142,10 +145,10 @@ export default function EpisodeMaterials({ episode }: Props) {
                         </div>
                       ) : null,
                     )}
-                    {outfit && (
+                    {outfits.length > 0 && (
                       <div>
                         <dt>{T.writer.fields.outfit}</dt>
-                        <dd>{outfit}</dd>
+                        <dd>{outfits.join("\n")}</dd>
                       </div>
                     )}
                   </dl>

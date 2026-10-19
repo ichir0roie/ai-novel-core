@@ -45,6 +45,8 @@ class CharacterLocationRow(_ChildRow):
 class CharacterHistoryRow(_ChildRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
     start: Timestamp | None = None
+    # 効き終わる時刻(外した装い・失った持ち物など)。この時刻からは話・出来事に渡さない。空なら終わりを限らない
+    end: Timestamp | None = None
     # 装い・持ち物・記憶・隠し事など。空なら起きた出来事
     kind: str | None = None
     description: str
