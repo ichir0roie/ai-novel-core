@@ -2176,6 +2176,24 @@
           "comment": null
         },
         {
+          "key": "scope",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": [
+            "全体",
+            "本文"
+          ],
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "効く範囲。全体/本文 のいずれか。全体は AI が書くすべての文に、本文は話の本文だけに効く"
+        },
+        {
           "key": "text",
           "type": "string",
           "nullable": false,

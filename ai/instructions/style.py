@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""話の本文の、固定の文体指示(`*_BASE`)と、本文の改行を整える `layout_novel_text`。
+"""固定の文体指示(`*_BASE`)と、本文の改行を整える `layout_novel_text`。
 
-世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、世界ごとに違う「好み」は、ここには定数で持たない。
-`style_instruction()` の `extra` として呼び出し側から渡す(入口は db の `style_preference` から読む)。
+AI が書くすべての文の書き方(`writing_style_instruction()`)と、それに話の本文だけの決まりを足した本文の書き方
+(`style_instruction()`)を組む。世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、
+世界ごとに違う「好み」は、ここには定数で持たず、呼び出し側から引数で渡す(入口は db の `style_preference` から読む)。
 """
 from __future__ import annotations
 
@@ -105,15 +106,17 @@ def layout_novel_text(text: str) -> str:
     return "\n\n\n".join(scenes)
 
 
-SHARED_STYLE_BASE = """\
+# AI が書くすべての文(プロット・来歴・アイデア・ミーム・本文など)に効く。`ai/claude_code/ai_client.generate` が毎回 system に足す
+WRITING_STYLE_BASE = """\
 語の選び方・文の運び方は、この世界の文章すべてで揃える。
-修飾を重ねない。
-地の文では、同じ語・同じ言い回しを近い距離で繰り返さない。セリフは、人が普段話すとおり同じ語を繰り返してよく、言い換えで飾らない。
-
-基本的な文体はライトノベルを参考にする。"""
+言葉は日常でそのまま通じるものを選び、硬い語・要約のための言い回し・慣用句・比喩で飾らない。
+修飾を重ねない。"""
 
 
 EPISODE_STYLE_BASE = f"""\
+地の文では、同じ語・同じ言い回しを近い距離で繰り返さない。セリフは、人が普段話すとおり同じ語を繰り返してよく、言い換えで飾らない。
+
+基本的な文体はライトノベルを参考にする。
 情景は視点人物が実際に見聞きした範囲で書く。
 セリフは人物ごとの口調の差が読み分けられる長さで切る。口調の差は語尾・呼び方・言葉の選び方で出し、癖を誇張しない。
 セリフは、その人物がその場で実際に口にする話し言葉にする。格言めいた言い回し・決め台詞で場面を締めない。
@@ -129,7 +132,16 @@ EPISODE_STYLE_BASE = f"""\
 書く筋(プロット。場面を手番で演じたなら、その手番の行)に無い大きな出来事は足さない。場面を厚くする描写・会話・動き・視点人物の心の声は足す。
 筋にある出来事は、渡された作品・登場人物(来歴・関係)・場所・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。"""
 
-def style_instruction(extra: str = "") -> str:
-    """話の本文の文体の指示。ここに定数で置くのは固定の文面だけで、世界ごとの好みは `extra`(db の `style_preference`)で渡す。"""
-    parts = (SHARED_STYLE_BASE, EPISODE_STYLE_BASE, extra)
+def _joined(*parts: str) -> str:
     return "\n".join(part.strip() for part in parts if part.strip())
+
+
+def writing_style_instruction(extra: str = "") -> str:
+    """AI が書くすべての文の書き方。世界ごとの好みのうち、効く範囲が全体の行を `extra` で渡す。"""
+    return _joined(WRITING_STYLE_BASE, extra)
+
+
+def style_instruction(writing_extra: str = "", episode_extra: str = "") -> str:
+    """話の本文の文体の指示。ここに定数で置くのは固定の文面だけで、世界ごとの好み(db の `style_preference`)は
+    効く範囲が全体の行を `writing_extra`、本文の行を `episode_extra` で渡す。"""
+    return _joined(writing_style_instruction(writing_extra), EPISODE_STYLE_BASE, episode_extra)

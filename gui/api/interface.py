@@ -92,6 +92,7 @@ DB_ENTRANCES = frozenset({
     "story.update_stories.UpdateStories",
     "story.update_story.UpdateStory",
     "style_preference.commit_style_preference.CommitStylePreference",
+    "style_preference.read_writing_style.ReadWritingStyle",
     "style_preference.update_style_preference.UpdateStylePreference",
 })
 
