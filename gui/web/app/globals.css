@@ -581,7 +581,7 @@ a.button-link:hover { border-color: var(--accent); }
 .timeline-center-input { display: inline-flex; align-items: center; gap: 0.4rem; }
 .timeline-center-input input[type="text"] { width: 12.5rem; }
 .timeline-filter { display: inline-flex; align-items: center; gap: 0.4rem; }
-.timeline-years { min-width: 4.5rem; text-align: center; color: var(--ink); }
+.timeline-zoom { min-width: 4.5rem; text-align: center; color: var(--ink); }
 .timeline { --timeline-axis: 64px; --timeline-head: 0px; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .timeline-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain; }
 .timeline-body { position: relative; display: flex; width: max-content; }
