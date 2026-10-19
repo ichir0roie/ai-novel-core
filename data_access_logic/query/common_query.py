@@ -340,6 +340,17 @@ def character_relations_at_select(
             .execution_options(populate_existing=True))
 
 
+def character_relations_among_select(character_ids: Collection[int], time: Stamp) -> Select[CharacterRelation]:
+    """`character_ids` の人物どうし(両側とも)の、`time` に続いている関係を、両側の人物と来歴ごと読む。"""
+    return (select(CharacterRelation)
+            .options(selectinload(CharacterRelation.character_1), selectinload(CharacterRelation.character_2))
+            .where(CharacterRelation.character_1_id.in_(character_ids),
+                   CharacterRelation.character_2_id.in_(character_ids),
+                   alive_at(CharacterRelation, time))
+            .order_by(CharacterRelation.id)
+            .execution_options(populate_existing=True))
+
+
 def character_skills_select(character_id: int) -> Select[CharacterSkill]:
     return (select(CharacterSkill)
             .where(CharacterSkill.character_id == character_id)

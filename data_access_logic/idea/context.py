@@ -1,6 +1,6 @@
 """下書き(一段目)と清書(二段目)のあいだに挟む中間段。
 
-下書きから語を洗い出してアイデアと照らし、当たったアイデアとその上位・下位を清書に渡す。
+下書きから語を洗い出してアイデアと照らし、当たったアイデアとその上位を清書に渡す(下位は付けない)。
 どのアイデアにも当たらなかった固有の語(`coined`)は、新しいアイデアとして足す(候補)。足した候補は、次からの検索・清書に出る。
 """
 
@@ -14,7 +14,7 @@ from data_access_logic.idea.alias import called
 from data_access_logic.idea.classification import find_or_create_classification
 from data_access_logic.idea.models import IdeaContextSerialized, IdeaMaterial, IdeaDraft, RelatedIdeaMaterial, unique_ideas
 from data_access_logic.idea.search import search, spellings
-from data_access_logic.query import common_query, dictionary_query
+from data_access_logic.query import common_query
 from db.schema import Character, Idea, IdeaHistory, Location
 from db.stamp import Stamp
 
@@ -56,7 +56,8 @@ def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None) -> Id
     return candidate
 
 
-def _related(s: Session, hits: list[IdeaMaterial], location_id: int | None, time: Stamp | None) -> list[IdeaMaterial]:
+def _related(s: Session, hits: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
+    """当たったアイデアと、その上位。下位は付けない(「魔物」のような分類に当たると、下位の種類がまるごと付いて膨らむ)。"""
     related = {idea.id: idea for idea in hits}
     for idea in hits:
         parent_id = idea.parent_idea_id
@@ -66,15 +67,7 @@ def _related(s: Session, hits: list[IdeaMaterial], location_id: int | None, time
                 break
             related[parent.id] = IdeaMaterial.model_validate(parent)
             parent_id = parent.parent_idea_id
-
-    if hits:
-        location_ids = common_query.idea_scope_ids(s, location_id) if location_id is not None else None
-        children = s.scalars(
-            dictionary_query.ideas_by_parent_select([idea.id for idea in hits], location_ids, time)
-        ).all()
-        for child in children:
-            related.setdefault(child.id, IdeaMaterial.model_validate(child))
-    return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]  # 足した上位・下位にも掛ける
+    return _dated(list(related.values()), time)[:constants.IDEA_CONTEXT_LIMIT]  # 足した上位にも掛ける
 
 
 def resolve_ideas(
@@ -97,7 +90,7 @@ def resolve_ideas(
             candidates.setdefault(candidate.id, candidate)
 
     hit_ideas = [hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]]
-    related = _related(s, _dated(hit_ideas, time), location_id, time)
+    related = _related(s, _dated(hit_ideas, time), time)
     histories = called(s, [idea.id for idea in related], location_id, time)
 
     return IdeaContextSerialized(

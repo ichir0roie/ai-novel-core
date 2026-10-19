@@ -14,6 +14,7 @@
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
+話を渡したときは、関係のある人物の外見・芯・来歴は、その話の登場人物・名前だけ出る人物の分だけを渡す(場にいない人物は関係の行の名前と間柄で足りる)。
 """
 from __future__ import annotations
 
@@ -321,11 +322,16 @@ def _of_word(word: str) -> Callable[[list[str]], bool]:
     return lambda names: any(overlaps(name) for name in names)
 
 
-def knowledge_of(s: Session, character_id: int, time: Stamp, plot_text: str) -> KnowledgeSerialized:
-    """アイデアは、`plot_text` に名前の出るものだけを入れる。"""
+def knowledge_of(
+    s: Session, character_id: int, time: Stamp, plot_text: str, scene_ids: set[int] | None,
+) -> KnowledgeSerialized:
+    """アイデアは、`plot_text` に名前の出るものだけを入れる。
+    知っている人物(外見・芯・来歴)は、関係のある人物のうち `scene_ids`(話の登場人物・名前だけ出る人物)にいる人物だけ。
+    ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
-    others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)]
+    others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)
+              if scene_ids is None or id_ in scene_ids]
     return KnowledgeSerialized(
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(character, time),

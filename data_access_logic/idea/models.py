@@ -201,7 +201,7 @@ class IdeaContextMaterial(Material):
     hits: list[IdeaMaterial]
     # どのアイデアにも当たらなかった造語から足したアイデア
     candidates: list[IdeaMaterial]
-    # 清書に渡す。hits(時期の決まったもの)とその上位・下位
+    # 清書に渡す。hits(時期の決まったもの)とその上位
     related: list[RelatedIdeaMaterial]
 
 

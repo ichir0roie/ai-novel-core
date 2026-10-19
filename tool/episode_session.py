@@ -7,7 +7,7 @@
 人物役がはじめに読む材料(knowledge・played)は標準出力に出さずファイルに書き、そのパスを出す(Read で最後まで読む)。
 
     人物役: knowledge / ideas / played / turn / answer
-    語り部: knower-gaps / stage(登場人物と知り合いの組を手番のファイルに写す)/ appearance / add / add-ideas / moves / read
+    語り部: knower-gaps / stage(登場人物と知り合いの組を手番のファイルに写す)/ appearance / add / wait / add-ideas / moves / read
     作者と代わる代わる書く語り部: text / append / replace
     演じ直す前・掛け合いを終えたとき: clear(--from で、その行から後だけ)
 
@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,7 @@ from data_access_logic.logs import configure_logging
 # (知り合いを知らない人として返した)。人物の材料は数万字になるので、いつもファイルに書いて Read で読ませる
 FILE_COMMANDS = ("knowledge", "played")
 OUT_DIR = Path(__file__).resolve().parent.parent / ".cache" / "episode_session"
+_WAIT_INTERVAL_SECONDS = 2
 
 
 def call(entrance_id: str, args: dict[str, Any]) -> Any:
@@ -73,6 +75,23 @@ def moves(store: SessionStore, after: int) -> dict[str, Any]:
     turns = [record for record in session.records if record.character_id is not None and record.id > after]
     return {"answers": [_answer(record, session.cast) for record in turns if record.action is not None],
             "pending": [record.id for record in turns if record.action is None]}
+
+
+def wait(store: SessionStore, record_ids: list[int], timeout_seconds: int) -> dict[str, Any]:
+    """`record_ids` の手番に一手が入るまで待つ。一手そのものは返さない(語り部は人物役の返り `終わった <id>: …` で読み、
+    同じ一手を二度読まない)。待ちきれなければ、まだ埋まっていない行の id を返す。"""
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        records = {record.id: record for record in store.load().records}
+        unknown = [record_id for record_id in record_ids if record_id not in records]
+        if unknown:
+            raise ValueError(f"手番のファイルに無い行: {unknown}")
+        pending = [record_id for record_id in record_ids if records[record_id].action is None]
+        if not pending:
+            return {"filled": record_ids}
+        if time.monotonic() >= deadline:
+            return {"filled": [record_id for record_id in record_ids if record_id not in pending], "pending": pending}
+        time.sleep(_WAIT_INTERVAL_SECONDS)
 
 
 def stage(store: SessionStore) -> Any:
@@ -168,6 +187,13 @@ def main() -> None:
     add_ideas.add_argument("--episode", type=int, required=True)
     add_ideas.add_argument("--ideas", required=True, help="JSON のファイル。- なら標準入力から読む")
 
+    waiting = commands.add_parser(
+        "wait", help="番を送った手番の行に一手が入るまで待つ。一手は出さない(人物役の返りで読む)")
+    waiting.add_argument("--episode", type=int, required=True)
+    waiting.add_argument("--record", type=int, action="append", required=True,
+                         help="待つ行の id。組の手番(simultaneous)なら --record を重ねる")
+    waiting.add_argument("--timeout", type=int, default=600, help="待つ秒数の上限")
+
     answers = commands.add_parser("moves", help="--after より後の手番の一手と、まだ埋まっていない行を読む。待たない")
     answers.add_argument("--episode", type=int, required=True)
     answers.add_argument("--after", type=int, default=0)
@@ -237,6 +263,8 @@ def run(args: argparse.Namespace) -> Any:
         case "add-ideas":
             text = sys.stdin.read() if args.ideas == "-" else Path(args.ideas).read_text(encoding="utf-8")
             return call("episode_session.add_ideas.AddIdeas", {"episode_id": args.episode, "ideas": json.loads(text)})
+        case "wait":
+            return wait(SessionStore(args.episode), args.record, args.timeout)
         case "moves":
             return moves(SessionStore(args.episode), args.after)
         case "read":

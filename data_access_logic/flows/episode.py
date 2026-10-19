@@ -17,16 +17,16 @@ from data_access_logic.episode import framer, plot_completer, voices
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeForm
 from data_access_logic.episode.models import (
-    EpisodeBriefSerialized, EpisodeCastingSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial,
+    EpisodeBriefSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial,
 )
-from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
+from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.episode_session.store import SessionStore
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.stamp import Stamp
 from data_access_logic.flows import character
 from data_access_logic.caller import call
-from data_access_logic.flows.summary import refresh, rewrite_episode_summaries
+from data_access_logic.flows.summary import refresh
 
 logger = logging.getLogger(__name__)
 
@@ -102,12 +102,6 @@ def complete_plot(
     return _record(saved.id)
 
 
-def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCastingSerialized:
-    """`ReadEpisodeCasting` に当たる。"""
-    refresh(ai, call(episode_steps.casting_targets, RowId(id=episode_id)))
-    return EpisodeCastingSerialized.model_validate(call(episode_steps.episode_casting, RowId(id=episode_id)))
-
-
 def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.VoiceDraft]:
     """`RefreshVoices` に当たる。同じ作品の直前の五話のセリフから、登場人物の話し方を調整して書き戻す。
     書いた人物の調整案を返す。"""
@@ -128,18 +122,12 @@ def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.Voi
 
 
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
-    """`ReadEpisodeBrief` に当たる。
+    """`ReadEpisodeBrief` に当たる。前の話の概要・出来事の要約は作り直さず、そのときのまま読む。
     設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。
     話のセッションの行は db に無く、流れを回すこの機械の手番のファイルにある。"""
     targets = call(episode_steps.brief_targets, RowId(id=episode_id))
-    refresh(ai, targets)
     session = SessionStore(episode_id).text()
     sources = [*targets.word_sources, *([session] if session.strip() else [])]
     keywords = [keyword for text in sources for keyword in keywords_of(text, ai, targets.start)]
     return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, episode_steps.BriefForm(
         episode_id=episode_id, keywords=keywords)))
-
-
-def rewrite_episode_summary(episode_ids: list[int], ai: AIClient = ai_client) -> list[EpisodeSummaryRecord]:
-    """`RewriteEpisodeSummary` に当たる。本文が変わっていなくても概要を作り直す。"""
-    return rewrite_episode_summaries(ai, episode_ids, stale_only=False)

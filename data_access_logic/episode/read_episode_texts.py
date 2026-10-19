@@ -9,10 +9,7 @@ from data_access_logic.episode.reading import EpisodeText
 
 
 class ReadEpisodeTexts(SessionEntrypoint):
-    """話を id で読む(作品・題・時刻・プロット・本文・概要)。時刻の順に返す。
-
-    `ReadEpisodeCasting` / `ReadEpisodeBrief` の「関わった話」「前の話の概要」の話idを渡して、本文まで読むのに使う。
-    """
+    """話を id で読む(作品・題・時刻・プロット・本文)。時刻の順に返す。"""
 
     def __init__(self, episode_ids: list[int]):
         self.episode_ids = episode_ids

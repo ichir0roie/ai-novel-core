@@ -1,11 +1,12 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from sqlalchemy import ColumnElement, Select
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
 from data_access_logic.character.models import (
-    CastCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine, CharacterSecrets,
+    CastCandidateSerialized, CastingCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine,
+    CharacterSecrets,
     CharacterSkillMaterial, HistoryMaterial, MentionedSerialized, ParticipantSerialized,
 )
 from data_access_logic.character.histories import histories_at, rows_at
@@ -16,7 +17,7 @@ from data_access_logic.history_start import by_start
 from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
 from data_access_logic.query.period import Period, alive_at
-from db.schema import Character, CharacterHistory, CharacterSkillHistory, Event
+from db.schema import Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, Event
 from db.stamp import Stamp
 
 
@@ -31,12 +32,22 @@ def relations_at(
     s: Session, characters: list[Character], time: Stamp,
     period: Callable[[Period, Stamp], ColumnElement[bool]] = alive_at,
 ) -> list[CharacterRelationLine]:
-    """`time` に続いている(`period` に当たる)関係を、`time` の年までに起きた来歴だけを付けて返す。
+    """`characters` のどれかが片側にいて、`time` に続いている(`period` に当たる)関係を、`time` の年までに起きた来歴だけを
+    付けて返す。
 
     関係の芯(`text`)は時期を限らないので、先のことは来歴の行に書けば、それより前の話・人物役には渡らない。
     """
-    rows = s.scalars(common_query.character_relations_at_select(
-        [character.id for character in characters], time, period)).all()
+    return _relation_lines(s.scalars(common_query.character_relations_at_select(
+        [character.id for character in characters], time, period)).all(), time)
+
+
+def relations_among(s: Session, characters: list[Character], time: Stamp) -> list[CharacterRelationLine]:
+    """`characters` の人物どうしの関係だけ(場にいない人物との関係は入れない)。来歴は `relations_at` と同じ。"""
+    return _relation_lines(s.scalars(common_query.character_relations_among_select(
+        [character.id for character in characters], time)).all(), time)
+
+
+def _relation_lines(rows: Sequence[CharacterRelation], time: Stamp) -> list[CharacterRelationLine]:
     return [
         CharacterRelationLine(
             character_1=row.character_1, character_2=row.character_2, relation=row.relation, text=row.text,
@@ -97,8 +108,13 @@ def mentioned_of(characters: list[Character], time: Stamp) -> list[MentionedSeri
 
 
 def candidate_at(character: Character, time: Stamp) -> CastCandidateSerialized:
+    """来歴は渡さないので読まない。"""
     return CastCandidateSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time),
-                                   histories=histories_at(character, time))
+                                   histories=[])
+
+
+def casting_candidate_at(character: Character, time: Stamp) -> CastingCandidateSerialized:
+    return CastingCandidateSerialized(character=character, age=age_at(character, time))
 
 
 def participants_at(s: Session, characters: list[Character], time: Stamp) -> list[ParticipantSerialized]:

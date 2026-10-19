@@ -9,9 +9,10 @@ from sqlalchemy import select
 from ai.claude_code import ai_client
 from data_access_logic import constants
 from data_access_logic.character.commit_character import CommitCharacter
+from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.character.form import (
-    CharacterCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm, KnowledgeChange, KnowledgeForm,
+    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm, KnowledgeChange, KnowledgeForm,
 )
 from data_access_logic.character.read_appearance import ReadAppearance
 from data_access_logic.character.read_knowable_rows import ReadKnowableRows
@@ -22,7 +23,9 @@ from data_access_logic.character.record import CharacterHistoryRow, CharacterPar
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
+from data_access_logic.episode.read_character_episodes import ReadCharacterEpisodes
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
+from data_access_logic.episode.read_episode_casting import ReadEpisodeCasting
 from data_access_logic.episode.refresh_voices import RefreshVoices
 from data_access_logic.episode.voices import VoiceDraft, VoiceDrafts
 from data_access_logic.episode_session import store
@@ -40,7 +43,7 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    Character, CharacterParameter, CharacterRelation, Episode, Idea, IdeaHistory, Stamp, get_env_session,
+    Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp, get_env_session,
 )
 from tool import episode_session
 
@@ -878,3 +881,106 @@ def test_narrator_rewrites_what_the_author_noted_like_a_plot(shown, world):
     assert _main_text(world) == "市で二人が出会った。\n「よう」\n太郎の声に、花子の肩が跳ねた。"
     with pytest.raises(ValueError, match="0 度"):
         ReplaceText(episode_id=world.episode_id, old="鐘が鳴った。", new="鐘").run()
+
+
+def test_wait_returns_without_the_moves():
+    session = _staged()
+    taro_turn, hanako_turn = _ids(session.add({
+        "witness_ids": [TARO, HANAKO], "simultaneous": True,
+        "turns": [{"character_id": TARO, "request": "一手"}, {"character_id": HANAKO, "request": "一手"}]}))
+
+    # 待ちきれなければ、まだ埋まっていない行を返す
+    assert episode_session.wait(session, [taro_turn, hanako_turn], 0) == {"filled": [], "pending": [taro_turn, hanako_turn]}
+    session.answer(taro_turn, {"action": "見上げる"})
+    session.answer(hanako_turn, {"action": "うなずく"})
+    # 一手は人物役の返りで読むので、埋まった行の id だけを返す
+    assert episode_session.wait(session, [taro_turn, hanako_turn], 0) == {"filled": [taro_turn, hanako_turn]}
+    with pytest.raises(ValueError, match="無い行"):
+        episode_session.wait(session, [hanako_turn + 1], 0)
+
+
+def _off_stage_acquaintance(shown, world) -> int:
+    """太郎・花子と関係はあるが、話に出ない人物。"""
+    taro, hanako = world.character_ids
+    other = shown(CommitCharacter(CharacterCreateForm(name="テスト次郎", text="次郎の芯", plot="次郎の先", start="1170/01/01")))
+    for character_id in (taro, hanako):
+        shown(CommitCharacterRelation(CharacterRelationCreateForm(
+            character_1_id=character_id, character_2_id=other["id"], relation="遠い親戚", start="1180/01/01")))
+    return other["id"]
+
+
+def test_read_knowledge_tells_only_the_people_in_the_scene(shown, world):
+    _off_stage_acquaintance(shown, world)
+
+    result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=world.character_ids[0]))
+
+    # 話に出ない人物は、関係の名前と間柄だけ。外見・芯・来歴は渡さない
+    assert [character["名前"] for character in result["知っている人物"]] == ["テスト花子"]
+    assert "テスト次郎" in [relation["誰へ"] for relation in result["関係"]]
+    # 話を渡さないときは、関係のある人物すべて
+    by_time = shown(ReadKnowledge(character_id=world.character_ids[0], time="1200/04/01"))
+    assert [character["名前"] for character in by_time["知っている人物"]] == ["テスト花子", "テスト次郎"]
+
+
+def test_read_episode_brief_relations_only_among_the_cast(shown, world, mock_ai):
+    _off_stage_acquaintance(shown, world)
+
+    relations = shown(ReadEpisodeBrief(episode_id=world.episode_id))["この話"]["登場人物の関係"]
+
+    assert [(relation["誰から"], relation["誰へ"]) for relation in relations] == [("テスト太郎", "テスト花子")]
+
+
+def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatch):
+    other = _off_stage_acquaintance(shown, world)
+    asked = []
+    monkeypatch.setattr(ai_client, "generate", lambda *args, **kwargs: asked.append(args))
+
+    result = shown(ReadEpisodeCasting(episode_id=world.episode_id))
+
+    # AI を呼ばず、関わった話は人物ごとの入口で読む。語り部には筋書きも来歴も渡さない
+    assert asked == []
+    taro_row = next(member for member in result["登場人物"] if member["人物id"] == world.character_ids[0])
+    assert not {"関わった話(古い順)", "筋書き", "来歴(古い順)"} & set(taro_row)
+    # 候補は結ぶかを決める名前と人物像だけ
+    candidate = next(member for member in result["登場人物の候補"] if member["人物id"] == other)
+    assert candidate == {"人物id": other, "名前": "テスト次郎", "種別": "人物", "年齢": 30, "人物像": "次郎の芯"}
+
+
+def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
+    taro, _ = world.character_ids
+    monkeypatch.setattr(constants, "EPISODE_RECENT_APPEARANCE_COUNT", 2)
+    with get_env_session() as s:
+        for month in ["01", "02", "03"]:
+            episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
+                              main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00", event_seeded=True)
+            s.add(episode)
+            s.flush()
+            s.add(EpisodeCharacter(episode_id=episode.id, character_id=taro))
+        s.commit()
+
+    result = shown(ReadCharacterEpisodes(episode_id=world.episode_id, character_id=taro))
+
+    # 直近の話から数えて、古い順。本文を返し、プロットは返さない
+    assert [(row["題"], row["本文"]) for row in result] == [("02月の話", "02月の本文。"), ("03月の話", "03月の本文。")]
+    assert "プロット" not in str(result)
+
+
+def test_read_episode_brief_without_lower_ideas_and_summaries(shown, world, mock_ai, monkeypatch):
+    asked = []
+
+    def generate(prompt, output, *args, **kwargs):
+        asked.append(output)
+        if output is IdeaDraftsByAI:
+            return output(ideas=[IdeaDraftByAI(keyword="テスト魔導", variants=["テスト術"], description="都の技術",
+                                               coined=False, kind="技術", start=None, end=None)])
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
+
+    # 当たった設定に下位(テスト魔導炉)は付けない
+    idea_ids = [idea["アイデアid"] for idea in result["この話"]["設定"]]
+    assert world.idea_id in idea_ids and world.child_idea_id not in idea_ids
+    # 前の話の概要は渡さない(語を挙げるのにだけ AI を呼ぶ)
+    assert set(asked) == {IdeaDraftsByAI}
+    assert "前の話の概要(古い順)" not in result

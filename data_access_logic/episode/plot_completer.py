@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION
 from ai.instructions.plot import PLOT_FORMAT_INSTRUCTION
 from ai.instructions.naming import PLACE_NAMING_INSTRUCTION
 from data_access_logic.ai_client import AIClient
@@ -36,13 +35,13 @@ logger = logging.getLogger(__name__)
 
 _PLOT_SYSTEM_PROMPT = f"""\
 あなたは日本語のライトノベルを書く作家だ。
-作品・前の話・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この話のプロットを書き直す。
+作品・書く話(時刻・場所・視点・登場人物・プロット)などを日本語の見出しを付けた JSON で渡すので、この話のプロットを書き直す。
 書き直したプロットは今のプロットとそっくり置き換わり、本文はそれだけを元に書く。今のプロットにある出来事・人物・場面・台詞・狙いは、一つも落とさずに書き直したプロットへ含める(節・箇条書きで書かれていても、場面の文に書き直して含める)。
 {PLOT_FORMAT_INSTRUCTION}
 今のプロットに無い出来事は足さない。
 「作者の注文」は、今のプロットに加えて作者が新しいプロットに望むこと(展開・焦点・雰囲気など)。null でなければ、今のプロットと合わせて取り入れる。注文が求める出来事は足してかまわない。
 場面に要るなら、登場人物にいない人物や、書く話の場所より細かい舞台(店・屋敷・部屋など)を出してかまわない。その人物・舞台には呼び名を付ける。
-{PAST_EPISODES_INSTRUCTION}
+これまでの筋・人物の立場・関係は、作品の筋書きと登場人物の来歴・関係から受け継ぐ。
 登場人物それぞれの直近の出来事は、この話の前に済んだこと。なぞり直さず、その後の人物として書く。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かない。
 {EVENT_AGE_INSTRUCTION}

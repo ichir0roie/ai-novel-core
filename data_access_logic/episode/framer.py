@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION
 from ai.instructions.plot import PLOT_FORMAT_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_of, mentioned_of, relations_at
@@ -21,7 +20,7 @@ from data_access_logic.episode.models import (
     EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeFrameMaterialSerialized, FrameEpisode, StoryMaterial,
 )
 from data_access_logic.episode.mentions import cast_characters, mentioned_in, save_mentions
-from data_access_logic.episode.summary import latest_past_episode, past_episodes
+from data_access_logic.episode.past import latest_past_episode
 from data_access_logic.event.summary import events_of
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
@@ -32,14 +31,13 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = f"""\
 あなたは日本語のライトノベルの構成を考える作家だ。
-作品・前の話・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・プロット・時刻)を決める。
+作品・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・プロット・時刻)を決める。
 {PLOT_FORMAT_INSTRUCTION}
 作者の指定の題・プロットは核にして、足りないところを補って書き直す(プロットにある出来事・人物・狙いは落とさない)。
 作者の指定の時刻・視点・場所は、null でなければ決まっているので変えず、それに沿う場面にする(視点・場所自体はここでは決めない)。
 時刻が決まっていなければ、「年/月/日」の形で、直前の話より後から選ぶ。決まっていれば start は null にする。
-前の話は概要で古い順に渡す。その続きとして自然に立つ話にし、直前の話をなぞり直さない。
+これまでの筋・人物の立場・関係は、作品の筋書きと登場人物の来歴・関係から読む。その続きとして自然に立つ話にし、済んだことをなぞり直さない。
 「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしない。
-{PAST_EPISODES_INSTRUCTION}
 {EVENT_AGE_INSTRUCTION}
 {MENTIONED_INSTRUCTION}"""
 
@@ -71,7 +69,6 @@ def frame_material(s: Session, episode_id: int) -> EpisodeFrameMaterialSerialize
     return EpisodeFrameMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=FrameEpisode.model_validate(episode),
-        past_episodes=past_episodes(s, episode, characters),
         locations=common_query.location_path(s, episode.location_id) if episode.location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned_in(episode), time),

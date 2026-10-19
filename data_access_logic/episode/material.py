@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""話の材料を組む共通の読み込みと、プロットを書き直す材料(`writing_targets` → 要約を揃える → `episode_material`)。
+"""話の材料を組む共通の読み込みと、プロットを書き直す材料(`writing_targets` → 出来事の要約を揃える → `episode_material`)。
 
-話の行の読み込み(`load_episode`)・要約を揃える対象(`summary_targets_of`)は、
+話の行の読み込み(`load_episode`)・出来事の要約を揃える対象(`summary_targets_of`)は、
 枠(`framer`)・プロット補完(`plot_completer`)・本文の材料(`brief`)が共に使う。
 """
 from __future__ import annotations
@@ -17,7 +17,6 @@ from data_access_logic.episode.models import (
     EpisodeMaterialSerialized, StoryMaterial, TargetEpisode,
 )
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
-from data_access_logic.episode.summary import past_episode_ids, past_episodes
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
@@ -78,14 +77,13 @@ def later_events_select(location_id: int | None, characters: list[Character], st
 
 
 def summary_targets_of(s: Session, episode: Episode, start: Stamp, with_location_events: bool = True) -> SummaryTargets:
-    """材料が要約で渡す話・出来事(前の話・登場人物の直近の出来事・場所の直近の出来事・後に決まっている出来事)。"""
+    """材料が要約で渡す出来事(登場人物の直近の出来事・場所の直近の出来事・後に決まっている出来事)。"""
     location_id = episode.location_id
     characters = cast_characters(episode)
     location_events = (s.scalars(location_events_select(location_id, start)).all()
                        if with_location_events and location_id is not None else [])
     later_events = s.scalars(later_events_select(location_id, characters, start)).all()
     return SummaryTargets(
-        episode_ids=past_episode_ids(s, episode, characters),
         event_ids=[*cast_event_ids(s, characters, start),
                    *(event.id for event in location_events), *(event.id for event in later_events)],
     )
@@ -109,7 +107,6 @@ def episode_material(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> 
     return EpisodeMaterialSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, characters),
         locations=location_path_at(s, location_id, main_episode.start) if location_id is not None else [],
         cast=cast_of(s, characters, main_episode.start),
         mentioned=mentioned_of(mentioned_in(episode), main_episode.start),

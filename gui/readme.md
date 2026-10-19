@@ -105,7 +105,7 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/character_locations?time=` | 人物ごとの居場所(一番新しく始まった行)。`time` を渡せば、その時刻に効いている行だけから選び、その時刻に居場所の無い人物・没年を過ぎた人物は出さない。人物一覧のツリーが引く |
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
-話(`episode`)はプロット(`plot_text`)と本文(`main_text`)を一緒に扱う。本文の概要(`summary_text`)は画面に出さない。出来事は `character_ids`(当事者)、
+話(`episode`)はプロット(`plot_text`)と本文(`main_text`)を一緒に扱う。出来事は `character_ids`(当事者)、
 人物は足すときだけ `location_id`(出自)を受け取る。
 話を足す画面は、作品が決まるとその作品で開始(`start`)より前の一番後ろの話(`/api/previous_episode`。開始が空なら作品の最後の話)から場所・視点・登場人物を空の欄に写す。開始を変えると、写した値のうち手で直していない欄を写し直す。
 人物の選択肢(`/api/tables/character/options`)はメインキャラクターを先に並べる。

@@ -43,7 +43,6 @@ class EpisodeText(Material):
     start: Timestamp | None = None
     plot_text: str
     main_text: str
-    summary_text: str | None = None
 
 
 def episode_texts(s: Session, episode_ids: list[int]) -> list[EpisodeText]:

@@ -80,12 +80,6 @@ def ideas_by_keywords_select(keywords: Collection[str], location_ids: Collection
             .order_by(Idea.id))
 
 
-def ideas_by_parent_select(parent_ids: Collection[int], location_ids: Collection[int] | None = None,
-                           time: Stamp | None = None) -> Select:
-    return (select(Idea).where(Idea.parent_idea_id.in_(list(parent_ids)), idea_in_scope(location_ids, time))
-            .order_by(Idea.id))
-
-
 def later_ideas_select(location_ids: Collection[int], time: Stamp) -> Select:
     """`time` より後に始まる、`location_ids` の場所で効くアイデア。"""
     return (select(Idea)
