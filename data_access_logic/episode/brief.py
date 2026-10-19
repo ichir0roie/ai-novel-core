@@ -3,7 +3,7 @@
 
 本文の材料(登場人物の直近の出来事・関係、場所の出来事)は話に結んだ登場人物・場所から引くので、
 先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む
-(スキル `episode` / `revise-episode`)。設定は話に結ばず、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。
+(スキル `episode` / `revise-episode`)。設定は話に結ばず、プロット・話のセッションの行(手番のファイル)・今の本文から AI が挙げた語で引く。
 本文は Claude が `CommitEpisode` で確定する。
 どちらの材料も db だけの段(`casting_targets` / `brief_targets` → 要約を揃える(本文の材料は、語も挙げる) →
 `episode_casting` / `episode_brief`)に分けてある。
@@ -30,7 +30,6 @@ from data_access_logic.episode.material import (
 )
 from data_access_logic.episode.summary import appearances, past_episodes, style_samples
 from data_access_logic.event.summary import events_of
-from data_access_logic.episode_session.turns import session_select
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.idea.whole import whole_ideas
@@ -91,22 +90,17 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
 
 
 class BriefTargets(SummaryTargets):
-    # 設定と照らす語を AI に挙げさせる元(`keywords_of`)。プロット・話のセッションの行・今の本文の、空でないもの
+    # 設定と照らす語を AI に挙げさせる元(`keywords_of`)。プロット・今の本文の、空でないもの。
+    # 話のセッションの行は db に無いので、流れ(`flows/episode.py`)が手番のファイルから足す
     word_sources: list[str]
     start: Stamp
-
-
-def _word_sources(s: Session, episode: Episode) -> list[str]:
-    rows = s.scalars(session_select(episode.id)).all()
-    session = "\n".join(text for row in rows
-                        for text in (row.request, row.thought, row.action, row.speech, row.aim) if text)
-    return [text for text in (episode.plot_text, session, episode.main_text) if text.strip()]
 
 
 def brief_targets(s: Session, episode_id: int) -> BriefTargets:
     episode = _episode(s, episode_id)
     targets = summary_targets_of(s, episode, episode.start)
-    return BriefTargets(**targets.model_dump(), word_sources=_word_sources(s, episode), start=episode.start)
+    return BriefTargets(**targets.model_dump(), start=episode.start,
+                        word_sources=[text for text in (episode.plot_text, episode.main_text) if text.strip()])
 
 
 def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeBriefSerialized:

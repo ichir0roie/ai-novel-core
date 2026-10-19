@@ -20,11 +20,12 @@ tools: Bash, Read
 | 自分がもう動いた手番(見聞きしたこと・要求と自分の一手)を読む | `.venv/bin/python -m tool.episode_session played --episode <episode> --character <character>` |
 | `seen` か要求に出た語を、自分の知っているアイデアから引く | `.venv/bin/python -m tool.episode_session ideas --episode <episode> --character <character> --word '<語>'`(語がいくつもあれば `--word` を重ねる) |
 | 語り部に知らされた番の行(見聞きしたことと要求)を読む | `.venv/bin/python -m tool.episode_session turn --episode <episode> --character <character> --record <行の id>` |
-| 番の行に一手を入れる | `.venv/bin/python -m tool.episode_session answer --record <行の id> --thought '<内心>' --action '<行動>' --speech '<セリフ>' --aim '<狙い>'` |
+| 番の行に一手を入れる | `.venv/bin/python -m tool.episode_session answer --episode <episode> --record <行の id> --thought '<内心>' --action '<行動>' --speech '<セリフ>' --aim '<狙い>'` |
 
 - コマンドは一つずつ打つ(`;` や `&&` で続けない)
 - `knowledge` と `played` は結果をファイルに書き、`{"file": …}` だけを返す。そのファイルを Read に `allow_large: true` を付けて読み、最後の行まで読み終えてから先へ進む。Read が途中で止まった(PARTIAL)なら、示された `offset` から続きを読む。Bash(`cat`・`sed`・`head`・`tail`)では読まない(長い出力は頭しか見えない)。ほかのコマンドは結果をそのまま出す
-- 待つコマンドは無い。どのコマンドもすぐ返る。db への接続エラーで落ちたら、一度だけ打ち直す。また落ちたら、エラーの一行を語り部に返して止まる
+- 待つコマンドは無い。どのコマンドもすぐ返る。手番の行(`played`・`turn`・`answer`)は手元のファイルにあり、db を読むのは `knowledge`・`ideas` だけ
+- db への接続エラーで落ちたら、一度だけ打ち直す。また落ちたら、エラーの一行を語り部に返して止まる。`error:` で始まる一行の断り(番がまだ来ていない・もう一手が入っているなど)は打ち直さず、その一行を語り部に返して止まる
 - コマンドのほかに文を書かない(考えたことを書き出さず、すぐ `answer` を打つ)。書いた分だけ一手が遅れる
 
 ## 流れ
@@ -40,7 +41,7 @@ tools: Bash, Read
    - `seen` か要求に、自分がもうした・言った・思ったと書かれていることは、作者が決めた自分の一手として受け入れ、その続きから動く(言い直さない・打ち消さない)
    - `seen` か要求に、年が変わるほど時間が進んだと書かれていたら、`knowledge` を読み直す(いまの手番の時刻で読める)
    - `seen` か要求に、「知っているアイデア」に無い固有の語(獣・道具・制度・呼び名・店など)が出たら、一手を決める前に `ideas` でその語を引く。返った「知っているアイデア」が空なら、その人物はその語を知らない(`seen` と要求に書かれた、見える・聞こえる範囲だけで動く)。一度引いた語は引き直さない
-5. その人物として一手を決め、`answer --record <id>` で入れる。入れたら、入れた行動とセリフを添えて `終わった <id>: <行動>「<セリフ>」`(セリフが無ければ `「」` を省く)とだけ返して止まる。内心・狙いは添えない。次の番は、また語り部から来る(4 へ)
+5. その人物として一手を決め、`answer --episode <episode> --record <id>` で入れる。入れたら、入れた行動とセリフを添えて `終わった <id>: <行動>「<セリフ>」`(セリフが無ければ `「」` を省く)とだけ返して止まる。内心・狙いは添えない。次の番は、また語り部から来る(4 へ)
 6. 語り部から「話を終える」が来たら、何も打たずに「終わった」とだけ返す
 
 ## 意見を返す

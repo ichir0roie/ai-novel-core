@@ -239,11 +239,6 @@ export default function RecordPage() {
                   <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
                     {T.record.save}
                   </button>
-                  {table === "episode" && (
-                    <Link className="button-link" href={`/episode_session?episode=${id}`} title={T.record.openSessionHint}>
-                      {T.record.openSession}
-                    </Link>
-                  )}
                   {table === "character" && (
                     // 自分の芯・来歴の知る相手も直すので、画面の編集中の値と食い違わないよう保存してから開く
                     <button onClick={() => setOrganizing(true)} disabled={busy || dirty} title={dirty ? T.knowledge.openDisabled : undefined}>

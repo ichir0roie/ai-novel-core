@@ -70,7 +70,9 @@ class StageSerialized(Stage):
                       "性別": member.parameters.sex, "体格": member.parameters.build,
                       "装い": member.outfit, "外見": member.character.appearance}
                      for member in self.cast],
-            "知り合い": [{"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation}
+            # 人物 id の組は、一手を届ける相手が知り合いかを手番のファイルで確かめるのに写す(`episode_session/store.py`)
+            "知り合い": [{"人物id": [relation.character_1.id, relation.character_2.id], "誰から": relation.character_1.name,
+                      "誰へ": relation.character_2.name, "関係": relation.relation}
                      for relation in self.relations],
         }
 
@@ -97,12 +99,6 @@ def _cast_relations(s: Session, episode: Episode, time: Stamp) -> list[Character
     cast_ids = {character.id for character in characters}
     return [line for line in relations_at(s, characters, time, dated_alive_at)
             if line.character_1.id in cast_ids and line.character_2.id in cast_ids]
-
-
-def acquaintances(s: Session, episode_id: int) -> set[frozenset[int]]:
-    """話の時刻に知り合いの、登場人物の二人の組(向きを問わない)。語り部の材料の「知り合い」と同じ。"""
-    episode, time = _staged_episode(s, episode_id)
-    return {frozenset((line.character_1.id, line.character_2.id)) for line in _cast_relations(s, episode, time)}
 
 
 def stage_of(s: Session, episode_id: int) -> StageSerialized:

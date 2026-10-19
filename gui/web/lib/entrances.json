@@ -593,27 +593,6 @@
       "writes": true
     },
     {
-      "id": "episode_session.add_author_line.AddAuthorLine",
-      "area": "episode_session",
-      "name": "AddAuthorLine",
-      "doc": "作者の発言(チャットで出した場面・指示、画面の Continue)を話のセッションに入れる。作者の番ならその行に入れて番を語り部へ返し、",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "text",
-          "required": true,
-          "default": null,
-          "annotation": "str"
-        }
-      ],
-      "writes": true
-    },
-    {
       "id": "episode_session.add_ideas.AddIdeas",
       "area": "episode_session",
       "name": "AddIdeas",
@@ -630,72 +609,6 @@
           "required": true,
           "default": null,
           "annotation": "list[IdeaDraft]"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_session.add_turns.AddTurns",
-      "area": "episode_session",
-      "name": "AddTurns",
-      "doc": "語り部が、話のセッションに手番の要求の行を並べた順に足す。人物役は自分の行が来たら行動を入れる。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "turns",
-          "required": true,
-          "default": null,
-          "annotation": "list[TurnRequest]"
-        },
-        {
-          "name": "narration",
-          "required": false,
-          "default": null,
-          "annotation": "str | None"
-        },
-        {
-          "name": "witness_ids",
-          "required": false,
-          "default": null,
-          "annotation": "list[int] | None"
-        },
-        {
-          "name": "simultaneous",
-          "required": false,
-          "default": false,
-          "annotation": "bool"
-        },
-        {
-          "name": "time",
-          "required": false,
-          "default": null,
-          "annotation": "Stamp | str | None"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_session.answer_turn.AnswerTurn",
-      "area": "episode_session",
-      "name": "AnswerTurn",
-      "doc": "人物役が、自分の番の要求の行に一手(内心・行動・セリフ・狙い)を入れる。",
-      "params": [
-        {
-          "name": "record_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "answer",
-          "required": true,
-          "default": null,
-          "annotation": "TurnAnswer"
         }
       ],
       "writes": true
@@ -722,48 +635,6 @@
       "writes": true
     },
     {
-      "id": "episode_session.clear_session.ClearSession",
-      "area": "episode_session",
-      "name": "ClearSession",
-      "doc": "話のセッションの行を、その話のぶんすべて消す。前の行が残ると、人物役に前の場面が届くので、手番を演じ直す前に消す。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "from_record_id",
-          "required": false,
-          "default": null,
-          "annotation": "int | None"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_session.hand_over.HandOver",
-      "area": "episode_session",
-      "name": "HandOver",
-      "doc": "語り部が一巡を終え、作者に番を渡す(行動の空いた作者の行を足す)。作者が書く(`SaveText`・`AddAuthorLine`)まで、",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "request",
-          "required": false,
-          "default": "作者の番",
-          "annotation": "str"
-        }
-      ],
-      "writes": true
-    },
-    {
       "id": "episode_session.read_knower_gaps.ReadKnowerGaps",
       "area": "episode_session",
       "name": "ReadKnowerGaps",
@@ -779,63 +650,6 @@
       "writes": false
     },
     {
-      "id": "episode_session.read_played_turns.ReadPlayedTurns",
-      "area": "episode_session",
-      "name": "ReadPlayedTurns",
-      "doc": "人物役が、話のセッションで自分がもう動いた手番(見聞きしたこと・要求と自分の一手)を、手番の順に読む。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "character_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        }
-      ],
-      "writes": false
-    },
-    {
-      "id": "episode_session.read_session.ReadSession",
-      "area": "episode_session",
-      "name": "ReadSession",
-      "doc": "話のセッションの行を、手番の順(id の順)にすべて読む(人物の内心も入る。語り部と本文を書くときに読む)。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        }
-      ],
-      "writes": false
-    },
-    {
-      "id": "episode_session.read_session_since.ReadSessionSince",
-      "area": "episode_session",
-      "name": "ReadSessionSince",
-      "doc": "話のセッションの行のうち、`after_record_id` より新しい id の行を手番の順に読む(GUI がセッションを見張って増分を引く)。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "after_record_id",
-          "required": false,
-          "default": null,
-          "annotation": "int | None"
-        }
-      ],
-      "writes": false
-    },
-    {
       "id": "episode_session.read_stage.ReadStage",
       "area": "episode_session",
       "name": "ReadStage",
@@ -843,27 +657,6 @@
       "params": [
         {
           "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        }
-      ],
-      "writes": false
-    },
-    {
-      "id": "episode_session.read_turn.ReadTurn",
-      "area": "episode_session",
-      "name": "ReadTurn",
-      "doc": "人物役が、話のセッションでいま自分の番か(turn)、待つか(waiting)を読む。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "character_id",
           "required": true,
           "default": null,
           "annotation": "int"
@@ -891,27 +684,6 @@
         },
         {
           "name": "new",
-          "required": true,
-          "default": null,
-          "annotation": "str"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_session.save_text.SaveText",
-      "area": "episode_session",
-      "name": "SaveText",
-      "doc": "作者が画面で書いた本文を保存する。作者の番なら、前に保存した本文からの差分を作者の行に入れ、番を語り部へ返す。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "main_text",
           "required": true,
           "default": null,
           "annotation": "str"
