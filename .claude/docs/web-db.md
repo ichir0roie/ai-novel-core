@@ -38,7 +38,7 @@
 
 ## 表の API(`/api/tables`)
 
-- 表の API で読めるのは `story`・`episode`・`character`・`character_relation`・`event`・`location`・`idea`・`meme`・`oracle`・`style_preference` だけ。ほかの表(`episode_character`・`character_location`・`episode_character_session` など)は `{"detail":"GUI で扱わないテーブル: …"}` が返る。消す口(DELETE)も無い。代わりに次を使う:
+- 表の API で読めるのは `story`・`episode`・`character`・`character_relation`・`event`・`location`・`idea`・`meme`・`oracle`・`style_preference` だけ。ほかの表(`episode_character`・`character_location`・`episode_character_session` など)は `{"detail":"GUI で扱わないテーブル: …"}` が返る。表の API に消す口(DELETE)は無い。行を消すのは、`data_access_logic/readme.md` の「〜を消して」の行にある消す入口(`episode.delete_episode.DeleteEpisode` など。db だけの入口)を、上の表のとおり `/api/interface/<入口の id>` で呼ぶ。読むものは、代わりに次を使う:
 
 | 読みたいもの | 読み方 |
 | --- | --- |
