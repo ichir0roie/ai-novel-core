@@ -115,9 +115,10 @@ export function fromDayNumber(n: number): StampParts {
   return { ...fromOrdinal(ordinal), hour: Math.floor(seconds / 3600), minute: Math.floor(seconds / 60) % 60, second: seconds % 60 };
 }
 
-/** `days` 日後(負なら前)。時・分・秒はそのまま。空なら空のまま。 */
+/** `days` 日後(負なら前)。整数なら時・分・秒はそのままで、端数があればその分だけ時刻も進める。空なら空のまま。 */
 export function shiftDays(value: unknown, days: number): string | null {
   const p = parseStamp(value);
   if (!p) return null;
+  if (!Number.isInteger(days)) return formatStamp(fromDayNumber(dayNumber(p) + days));
   return formatStamp({ ...p, ...fromOrdinal(ordinalOf(p.year, p.month, p.day) + days) });
 }

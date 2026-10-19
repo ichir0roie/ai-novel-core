@@ -40,25 +40,30 @@ import {
 import { T } from "@/lib/text";
 import {
   axisTicksOf,
-  DAYS_PER_YEAR,
   dayOf,
-  daySpan,
+  DEFAULT_VIEW,
+  dragSteps,
   DRAG_THRESHOLD,
   FULL_STAMP,
   GAP_PX,
   ITEM_GAP,
   ITEM_HEIGHT,
   labelWidth,
+  roundHours,
   savedView,
   scaleOf,
   SCROLL_SETTLE_MS,
+  snapDay,
+  spanDays,
+  timeSpan,
+  zoomed,
   type Gap,
   type Scale,
   type View,
 } from "@/lib/timelineAxis";
 import { useTreeOpen } from "@/lib/treeOpen";
 
-// 縮尺(画面の高さの年数)と、話の無い区間を詰めるかを覚えておく localStorage のキー
+// 縮尺(画面の高さに見せる期間)と、話の無い区間を詰めるかを覚えておく localStorage のキー
 const VIEW_STORAGE_KEY = "timeline-view";
 // 作品の列の中の筋(札を並べる縦長の帯)の幅の上限(px)。筋は列の一番長い名前に合わせ、これを超える名前は筋の幅で切れる(全部の名前はかざすと出る)
 const LANE_WIDTH = 180;
@@ -72,13 +77,12 @@ const MARKER_PX = 8;
 const FILTER_KEYS = ["story_id"] as const;
 const FILTER_STORAGE_KEY = "timeline-filter";
 
-// 軸は日の単位。start・end は日の境目に丸めた通算日で、at は丸める前の時刻(同じ日の中の並び順に使う)
+// start・end は時刻の端数を含む通算日
 type Item = {
   key: string;
   id: number;
   label: string;
   record: Rec;
-  at: number;
   start: number;
   end: number | null;
 };
@@ -125,7 +129,7 @@ type Drag = {
 type Change = { base: Item; days: number; story: number | null };
 
 const byTime = (a: Item, b: Item) =>
-  a.start - b.start || a.at - b.at || a.id - b.id;
+  a.start - b.start || a.id - b.id;
 
 /**
  * 重ならないよう、上から順に空いている一番左の筋へ置く。同じ日の札は同じ位置なので、時刻の順に横へ並ぶ。
@@ -168,7 +172,7 @@ function changedItem({ base, days, story }: Change): Item {
   return {
     ...base,
     record,
-    ...daySpan(dayOf(record.start)!, dayOf(record.end)),
+    ...timeSpan(dayOf(record.start)!, dayOf(record.end)),
   };
 }
 
@@ -191,7 +195,7 @@ function itemsOf(data: TimelineResponse): Item[] {
       id: record.id as number,
       label: T.nameId(record.label, record.id),
       record,
-      ...daySpan(start, dayOf(record.end)),
+      ...timeSpan(start, dayOf(record.end)),
     });
   }
   return items;
@@ -279,7 +283,8 @@ function storyGroups(
       at = stories.get(at)?.parent ?? null
     ) {
       seen.add(at);
-      if (item.at < (firstAt.get(at) ?? Infinity)) firstAt.set(at, item.at);
+      if (item.start < (firstAt.get(at) ?? Infinity))
+        firstAt.set(at, item.start);
     }
   }
   const firstOf = (id: number) => firstAt.get(id) ?? Infinity;
@@ -446,9 +451,11 @@ export default function TimelinePage() {
   const { isOpen, setOpen } = useTreeOpen("timeline");
   const { tip, show, hide } = useTooltip();
   // 縮尺と詰め方は URL に載せず、このブラウザに覚えておく。サーバで描いた初めの画面と合わせるため、読むのは描いたあと
-  const [view, setView] = useState<View>({ years: 1, squeeze: false });
+  const [view, setView] = useState<View>(DEFAULT_VIEW);
   useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
-  const span = view.years * DAYS_PER_YEAR;
+  const span = spanDays(view);
+  const zoomIn = zoomed(view, -1);
+  const zoomOut = zoomed(view, 1);
 
   const changeView = (changes: Partial<View>) => {
     const next = { ...view, ...changes };
@@ -723,9 +730,13 @@ export default function TimelinePage() {
     [scale, items, view.squeeze, screen, box.viewport],
   );
 
-  /** 縦に dy px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
-  const daysAt = (item: Item, dy: number) =>
-    pxPerDay > 0 ? Math.round(fromY(toY(item.start) + dy) - item.start) : 0;
+  /** 縦に dy px 動かしたら何日ずれるか({@link dragSteps} の刻みに丸める)。詰めた帯の上では一気に日が進む */
+  const daysAt = (item: Item, dy: number) => {
+    const steps = dragSteps(view);
+    return pxPerDay > 0
+      ? Math.round((fromY(toY(item.start) + dy) - item.start) * steps) / steps
+      : 0;
+  };
 
   const dragDays = (item: Item) =>
     drag?.item.key === item.key && Math.abs(drag.dy) > DRAG_THRESHOLD
@@ -743,7 +754,7 @@ export default function TimelinePage() {
     const target = story ?? previous?.story ?? null;
     const change = {
       base,
-      days: (previous?.days ?? 0) + days,
+      days: roundHours((previous?.days ?? 0) + days),
       story: target === base.record.story_id ? null : target,
     };
     if (change.days === 0 && change.story === null) next.delete(item.id);
@@ -916,8 +927,9 @@ export default function TimelinePage() {
   /** 空いた所を押したら、その日・その列の作品で話を足す(時刻・タイトル・プロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (pxPerDay === 0) return;
-    const snapped = Math.floor(
+    const snapped = snapDay(
       fromY(e.clientY - e.currentTarget.getBoundingClientRect().top),
+      pxPerDay,
     );
     const initial: Rec = { start: formatStamp(fromDayNumber(snapped)) };
     const story = row.storyId ?? storyId;
@@ -1123,17 +1135,17 @@ export default function TimelinePage() {
           {T.timeline.scale}
           <button
             type="button"
-            onClick={() => changeView({ years: view.years - 1 })}
-            disabled={view.years <= 1}
-            title={T.timeline.fewerYears}
+            onClick={() => zoomIn && changeView(zoomIn)}
+            disabled={!zoomIn}
+            title={T.timeline.zoomIn}
           >
             −
           </button>
-          <span className="timeline-years">{T.timeline.years(view.years)}</span>
+          <span className="timeline-zoom">{T.timeline.zoom(view)}</span>
           <button
             type="button"
-            onClick={() => changeView({ years: view.years + 1 })}
-            title={T.timeline.moreYears}
+            onClick={() => zoomOut && changeView(zoomOut)}
+            title={T.timeline.zoomOut}
           >
             +
           </button>

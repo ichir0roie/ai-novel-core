@@ -392,9 +392,10 @@ export const T = {
     centeredOn: (at: string) => `Timeline around ${at}`,
     center: "Center",
     scale: "Scale",
-    years: (n: number) => `${n} year${n === 1 ? "" : "s"}`,
-    fewerYears: "Show one year less down the screen (zoom in)",
-    moreYears: "Show one year more down the screen (zoom out)",
+    zoom: ({ unit, count }: { unit: string; count: number }) =>
+      `${count} ${unit}${count === 1 ? "" : "s"}`,
+    zoomIn: "Show a shorter period down the screen (zoom in)",
+    zoomOut: "Show a longer period down the screen (zoom out)",
     squeeze: "Squeeze empty stretches",
     earlier: "▲ Earlier",
     later: "Later ▼",

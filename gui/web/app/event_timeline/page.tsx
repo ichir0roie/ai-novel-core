@@ -38,23 +38,28 @@ import {
 import { T } from "@/lib/text";
 import {
   axisTicksOf,
-  DAYS_PER_YEAR,
   dayOf,
-  daySpan,
+  DEFAULT_VIEW,
+  dragSteps,
   DRAG_THRESHOLD,
   FULL_STAMP,
   GAP_PX,
   ITEM_GAP,
   ITEM_HEIGHT,
+  roundHours,
   savedView,
   scaleOf,
   SCROLL_SETTLE_MS,
+  snapDay,
+  spanDays,
+  timeSpan,
+  zoomed,
   type Gap,
   type Scale,
   type View,
 } from "@/lib/timelineAxis";
 
-// 縮尺(画面の高さの年数)と、出来事の無い区間を詰めるかを覚えておく localStorage のキー
+// 縮尺(画面の高さに見せる期間)と、出来事の無い区間を詰めるかを覚えておく localStorage のキー
 const VIEW_STORAGE_KEY = "event-timeline-view";
 // 層(列)の幅(px)。札はこの幅から左右の余白を引いた幅で、余白に親子を結ぶ線を通す
 const LAYER_WIDTH = 190;
@@ -71,7 +76,6 @@ type Item = {
   label: string;
   record: Rec;
   parent: number | null;
-  at: number;
   start: number;
   end: number | null;
 };
@@ -101,7 +105,7 @@ type EventForm = { name: string; text: string };
 const TIME_KEYS = ["time", "start", "end"] as const;
 
 const byTime = (a: Item, b: Item) =>
-  a.start - b.start || a.at - b.at || a.id - b.id;
+  a.start - b.start || a.id - b.id;
 
 function itemOf(record: Rec): Item | null {
   // 開始の無い出来事は、出来事の時刻(`time`)の一点に置く
@@ -116,7 +120,7 @@ function itemOf(record: Rec): Item | null {
       typeof record.parent_event_id === "number"
         ? record.parent_event_id
         : null,
-    ...daySpan(start, dayOf(record.end)),
+    ...timeSpan(start, dayOf(record.end)),
   };
 }
 
@@ -313,9 +317,11 @@ export default function EventTimelinePage() {
     scale: null,
   });
   const { tip, show, hide } = useTooltip();
-  const [view, setView] = useState<View>({ years: 1, squeeze: false });
+  const [view, setView] = useState<View>(DEFAULT_VIEW);
   useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
-  const span = view.years * DAYS_PER_YEAR;
+  const span = spanDays(view);
+  const zoomIn = zoomed(view, -1);
+  const zoomOut = zoomed(view, 1);
 
   const changeView = (next: Partial<View>) => {
     const merged = { ...view, ...next };
@@ -552,9 +558,13 @@ export default function EventTimelinePage() {
   const labelOfEvent = (id: number | null) =>
     id === null ? T.eventTimeline.root : (byId.get(id)?.label ?? T.nameId(undefined, id));
 
-  /** 縦に dy px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
-  const daysAt = (item: Item, dy: number) =>
-    pxPerDay > 0 ? Math.round(fromY(toY(item.start) + dy) - item.start) : 0;
+  /** 縦に dy px 動かしたら何日ずれるか({@link dragSteps} の刻みに丸める)。詰めた帯の上では一気に日が進む */
+  const daysAt = (item: Item, dy: number) => {
+    const steps = dragSteps(view);
+    return pxPerDay > 0
+      ? Math.round((fromY(toY(item.start) + dy) - item.start) * steps) / steps
+      : 0;
+  };
 
   /** ドラッグ中に、掴んだ札と一緒に動いて見える日数(掴んだ札と、その子孫) */
   const dragging = drag?.item;
@@ -582,7 +592,7 @@ export default function EventTimelinePage() {
     const target = parent !== undefined ? parent : previous?.parent;
     const change: Change = {
       base,
-      days: (previous?.days ?? 0) + days,
+      days: roundHours((previous?.days ?? 0) + days),
       ...(target !== undefined && target !== base.parent ? { parent: target } : {}),
     };
     if (change.days === 0 && change.parent === undefined) next.delete(item.id);
@@ -751,7 +761,7 @@ export default function EventTimelinePage() {
       .filter((item) => item.layer < layer && item.y <= y && y <= item.y + item.height)
       .reduce<Placed | null>((nearest, item) => (nearest && nearest.layer >= item.layer ? nearest : item), null);
     setAdding({
-      start: formatStamp(fromDayNumber(Math.floor(fromY(y)))),
+      start: formatStamp(fromDayNumber(snapDay(fromY(y), pxPerDay))),
       parent: parent && { id: parent.id, label: parent.label },
     });
   };
@@ -847,17 +857,17 @@ export default function EventTimelinePage() {
           {T.timeline.scale}
           <button
             type="button"
-            onClick={() => changeView({ years: view.years - 1 })}
-            disabled={view.years <= 1}
-            title={T.timeline.fewerYears}
+            onClick={() => zoomIn && changeView(zoomIn)}
+            disabled={!zoomIn}
+            title={T.timeline.zoomIn}
           >
             −
           </button>
-          <span className="timeline-years">{T.timeline.years(view.years)}</span>
+          <span className="timeline-zoom">{T.timeline.zoom(view)}</span>
           <button
             type="button"
-            onClick={() => changeView({ years: view.years + 1 })}
-            title={T.timeline.moreYears}
+            onClick={() => zoomOut && changeView(zoomOut)}
+            title={T.timeline.zoomOut}
           >
             +
           </button>
