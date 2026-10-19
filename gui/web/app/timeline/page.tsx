@@ -42,12 +42,14 @@ import {
   axisTicksOf,
   dayOf,
   DEFAULT_VIEW,
+  dragSteps,
   DRAG_THRESHOLD,
   FULL_STAMP,
   GAP_PX,
   ITEM_GAP,
   ITEM_HEIGHT,
   labelWidth,
+  roundHours,
   savedView,
   scaleOf,
   SCROLL_SETTLE_MS,
@@ -728,9 +730,13 @@ export default function TimelinePage() {
     [scale, items, view.squeeze, screen, box.viewport],
   );
 
-  /** 縦に dy px 動かしたら何日ずれるか。詰めた帯の上では一気に日が進む */
-  const daysAt = (item: Item, dy: number) =>
-    pxPerDay > 0 ? Math.round(fromY(toY(item.start) + dy) - item.start) : 0;
+  /** 縦に dy px 動かしたら何日ずれるか({@link dragSteps} の刻みに丸める)。詰めた帯の上では一気に日が進む */
+  const daysAt = (item: Item, dy: number) => {
+    const steps = dragSteps(view);
+    return pxPerDay > 0
+      ? Math.round((fromY(toY(item.start) + dy) - item.start) * steps) / steps
+      : 0;
+  };
 
   const dragDays = (item: Item) =>
     drag?.item.key === item.key && Math.abs(drag.dy) > DRAG_THRESHOLD
@@ -748,7 +754,7 @@ export default function TimelinePage() {
     const target = story ?? previous?.story ?? null;
     const change = {
       base,
-      days: (previous?.days ?? 0) + days,
+      days: roundHours((previous?.days ?? 0) + days),
       story: target === base.record.story_id ? null : target,
     };
     if (change.days === 0 && change.story === null) next.delete(item.id);

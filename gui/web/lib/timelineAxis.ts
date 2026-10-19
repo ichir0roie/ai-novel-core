@@ -120,6 +120,16 @@ function levelsOf(pxPerDay: number) {
   return { yearStep, months, dayStep, hourStep, finest };
 }
 
+/** 縦のドラッグで時刻を送る刻みの、1 日あたりの数。1 日の縮尺では 1 時間、ほかの縮尺では 1 日 */
+export function dragSteps({ unit }: Zoom): number {
+  return unit === "day" ? 24 : 1;
+}
+
+/** 日数を 1 時間の刻みに丸める。時間の刻みの移しを足し合わせたときの浮動小数の誤差を消す */
+export function roundHours(days: number): number {
+  return Math.round(days * 24) / 24;
+}
+
 /** 押した所の時刻を目盛りの細かさに丸める。時の目盛りを置く縮尺では時に、それより粗ければ日に丸める */
 export function snapDay(day: number, pxPerDay: number): number {
   return levelsOf(pxPerDay).hourStep
