@@ -725,7 +725,7 @@
       "id": "episode_session.clear_session.ClearSession",
       "area": "episode_session",
       "name": "ClearSession",
-      "doc": "話のセッションの行を、その話のぶんすべて消す。終了の行が残ると人物役がすぐ止まるので、手番を演じ直す前に消す。",
+      "doc": "話のセッションの行を、その話のぶんすべて消す。前の行が残ると、人物役に前の場面が届くので、手番を演じ直す前に消す。",
       "params": [
         {
           "name": "episode_id",
@@ -738,27 +738,6 @@
           "required": false,
           "default": null,
           "annotation": "int | None"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode_session.close_session.CloseSession",
-      "area": "episode_session",
-      "name": "CloseSession",
-      "doc": "話が終わったとき、セッションに出た人物と話の登場人物のすべてに終了の行を足す。人物役はそれを読んで止まる。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "request",
-          "required": false,
-          "default": "話はここで終わり。止まってよい。",
-          "annotation": "str"
         }
       ],
       "writes": true
@@ -875,7 +854,7 @@
       "id": "episode_session.read_turn.ReadTurn",
       "area": "episode_session",
       "name": "ReadTurn",
-      "doc": "人物役が、話のセッションでいま自分の番か(turn)、待つか(waiting)、話が終わったか(closed)を読む。",
+      "doc": "人物役が、話のセッションでいま自分の番か(turn)、待つか(waiting)を読む。",
       "params": [
         {
           "name": "episode_id",

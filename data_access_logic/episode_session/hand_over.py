@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode_session.record import SessionRecord
 from data_access_logic.episode_session.turns import author_turn
-from db.schema import Episode, EpisodeCharacterSession
+from db.schema import Episode, EpisodeCharacterSession, SessionKind
 
 
 class HandOver(CommitEntrypoint):
@@ -23,7 +23,7 @@ class HandOver(CommitEntrypoint):
         waiting = author_turn(s, self.episode_id)
         if waiting is not None:
             raise ValueError(f"もう作者の番(id={waiting.id})")
-        record = EpisodeCharacterSession(episode_id=self.episode_id, author=True, request=self.request)
+        record = EpisodeCharacterSession(episode_id=self.episode_id, kind=SessionKind.AUTHOR, request=self.request)
         s.add(record)
         self.finalize(s, record)
         return record_of(s, SessionRecord, record)

@@ -19,8 +19,8 @@ const COLUMNS = ["request", "thought", "action", "speech", "aim"] as const;
 const insertable = (column: (typeof COLUMNS)[number], value: string) =>
   column === "speech" && !/^[「『]/.test(value) ? `「${value}」` : value;
 
-/** 一手を待つ手番の行。語りの行(人物も作者も無い行)は手番でない */
-const isPending = (row: SessionRecord) => (row.character != null || row.author) && row.action == null && !row.closing;
+/** 一手を待つ手番の行。語りの行は手番でない */
+const isPending = (row: SessionRecord) => row.kind !== "語り" && row.action == null;
 
 /** 作者の書いた差分の行を、足した行・消した行で色分けする */
 const diffLineClass = (line: string) =>
@@ -133,10 +133,9 @@ export default function EpisodeSessionPage() {
   // 見聞きする人物は id だけで返るので、手番の行に出た名前を当てる
   const names = new Map((rows ?? []).flatMap((row) => (row.character ? [[row.character.id, row.character.name]] : [])));
   // 作者の行があれば、作者と語り部が本文を代わる代わる書いている(スキル interactive-episode)
-  const authorMode = rows?.some((row) => row.author) ?? false;
-  const closed = rows?.some((row) => row.closing) ?? false;
-  const authorTurn = pending?.author ?? false;
-  const running = authorMode && !closed;
+  // 語り部が書き終えたときに行を消す(`ClearSession`)まで続く
+  const running = rows?.some((row) => row.kind === "作者") ?? false;
+  const authorTurn = pending?.kind === "作者";
   const showWriter = writing || running;
   // 語り部が本文を書き足している間に差し込むと、読み直す本文と食い違うので、代わる代わる書く間は出さない
   const inserting = writing && !running;
@@ -155,10 +154,6 @@ export default function EpisodeSessionPage() {
   const handBack = () =>
     act(() => runEntrance("episode_session.add_author_line.AddAuthorLine", { episode_id: episodeId, text: T.session.continueText }));
 
-  const close = () => {
-    if (window.confirm(T.session.confirmClose)) void act(() => runEntrance("episode_session.close_session.CloseSession", { episode_id: episodeId }));
-  };
-
   return (
     <div className={`page-fill${showWriter ? " session-split" : ""}`}>
       <PageTitle kind={T.session.title} record={label} />
@@ -174,11 +169,6 @@ export default function EpisodeSessionPage() {
         {running && authorTurn && (
           <button onClick={() => void handBack()} title={T.session.continueHint}>
             {T.session.continue}
-          </button>
-        )}
-        {running && (
-          <button onClick={close} title={T.session.closeHint}>
-            {T.session.close}
           </button>
         )}
         {!running && (
@@ -214,16 +204,13 @@ export default function EpisodeSessionPage() {
                 </tr>
               </thead>
               {rows.map((row) => {
-                const state = row.author
-                  ? row.closing
-                    ? "closing author"
-                    : row.id === current
+                const state =
+                  row.kind === "作者"
+                    ? row.id === current
                       ? "waiting author"
                       : "author"
-                  : row.character == null
-                    ? "narration"
-                    : row.closing
-                      ? "closing"
+                    : row.kind === "語り"
+                      ? "narration"
                       : row.action != null
                         ? "played"
                         : row.id === current
@@ -240,7 +227,7 @@ export default function EpisodeSessionPage() {
                             <NameId name={row.character.name} id={row.character.id} />
                           </Link>
                         ) : (
-                          <span className="session-narrator">{row.author ? T.session.author : T.session.narration}</span>
+                          <span className="session-narrator">{row.kind === "作者" ? T.session.author : T.session.narration}</span>
                         )}
                         {row.time && <span className="meta">{row.time}</span>}
                         {row.witnesses.length > 0 && (
@@ -250,19 +237,13 @@ export default function EpisodeSessionPage() {
                         )}
                         {state !== "played" && state !== "narration" && state !== "author" && (
                           <span className="session-state">
-                            {row.closing
-                              ? T.session.closing
-                              : row.author
-                                ? T.session.authorWaiting
-                                : state === "waiting"
-                                  ? T.session.waiting
-                                  : T.session.queued}
+                            {row.kind === "作者" ? T.session.authorWaiting : state === "waiting" ? T.session.waiting : T.session.queued}
                           </span>
                         )}
                       </td>
                     </tr>
                     {/* 作者の行は、語り部の一言と作者の書いたこと(差分)を一つの欄へ書く */}
-                    {row.author && (row.request || row.action) && (
+                    {row.kind === "作者" && (row.request || row.action) && (
                       <tr>
                         <td colSpan={COLUMNS.length}>
                           {row.request && <div className="meta">{row.request}</div>}
@@ -279,9 +260,9 @@ export default function EpisodeSessionPage() {
                       </tr>
                     )}
                     {/* 語りの行は場面だけなので、列を分けずに一つの欄へ書く */}
-                    {!row.closing && !row.author && (
+                    {row.kind !== "作者" && (
                       <tr>
-                        {row.character ? (
+                        {row.kind === "人物" ? (
                           COLUMNS.map((column) => {
                             const cell = row[column];
                             // 視点の決まった話では、視点人物でない人物の内心は地の文に書けない
@@ -319,7 +300,7 @@ export default function EpisodeSessionPage() {
           <EpisodeWriter
             ref={writer}
             episodeId={episodeId}
-            save={authorMode ? saveText : undefined}
+            save={running ? saveText : undefined}
             locked={running ? !authorTurn : undefined}
           />
         )}

@@ -1,7 +1,7 @@
-"""話のセッションの手番。行動の入っていない一番古い要求の行の人物が、いま動く番。
+"""話のセッションの手番。行動の入っていない一番古い手番の行(人物の行か作者の行)が、いま動く番。
 
-終了の行(`closing`)と語りの行(人物の無い行)は手番に数えない。人物の次の行が終了の行なら、その人物の話は終わり。
-作者の行(`author`)は人物の無い手番で、作者が書くまで後の手番を待たせる。人物役には届かない。
+語りの行は手番に数えない。
+作者の行は人物の無い手番で、作者が書くまで後の手番を待たせる。人物役には届かない。
 同時に動く手番(`simultaneous`)は、すぐ前の手番と組になる。組の手番は、まだ動いていないものすべてに一度に番が開く。
 人物役は自分の番に、前の自分の番から後の、自分が見聞きする語りとほかの人物の一手を、要求といっしょに受け取る。
 同じ組のほかの人物の一手は、同時に動いたので受け取らない(次の自分の番で受け取る)。
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.episode_session.record import SessionRecord, TurnRecord, TurnState
 from data_access_logic.query import common_query
-from db.schema import Episode, EpisodeCharacterSession, EpisodeCharacterSessionWitness
+from db.schema import Episode, EpisodeCharacterSession, EpisodeCharacterSessionWitness, SessionKind
 from db.stamp import Stamp
 
 
@@ -26,10 +26,9 @@ def _pending() -> Select[EpisodeCharacterSession]:
 
 
 def _turn_rows(s: Session, episode_id: int) -> list[EpisodeCharacterSession]:
-    """手番の行(人物の手番と作者の行。語りと終了の行は除く)を id の順に。"""
+    """手番の行(人物の行と作者の行。語りの行は除く)を id の順に。"""
     return list(s.scalars(session_select(episode_id).where(
-        or_(EpisodeCharacterSession.character_id.is_not(None), EpisodeCharacterSession.author.is_(True)),
-        EpisodeCharacterSession.closing.is_(False))).all())
+        EpisodeCharacterSession.kind != SessionKind.NARRATION)).all())
 
 
 def _group_of(turns: list[EpisodeCharacterSession], index: int) -> list[EpisodeCharacterSession]:
@@ -69,22 +68,21 @@ def simultaneous_ids(s: Session, record: EpisodeCharacterSession) -> set[int]:
 def author_turn(s: Session, episode_id: int) -> EpisodeCharacterSession | None:
     """いまが作者の番なら、その作者の行。"""
     current = current_turn(s, episode_id)
-    return current if current is not None and current.author else None
+    return current if current is not None and current.kind == SessionKind.AUTHOR else None
 
 
 def author_session_running(s: Session, episode_id: int) -> bool:
-    """作者の行があり、まだ閉じていないセッション(作者と語り部が本文を代わる代わる書いている)か。"""
+    """作者の行のあるセッション(作者と語り部が本文を代わる代わる書いている)か。終えるときは行を消す(`ClearSession`)。"""
     session = EpisodeCharacterSession
-    rows = s.scalars(select(session.closing).where(
-        session.episode_id == episode_id, or_(session.author.is_(True), session.closing.is_(True)))).all()
-    return bool(rows) and not any(rows)
+    return s.scalar(select(session.id).where(
+        session.episode_id == episode_id, session.kind == SessionKind.AUTHOR).limit(1)) is not None
 
 
 def write_author_line(s: Session, episode_id: int, text: str) -> EpisodeCharacterSession:
     """作者が書いたことを入れる。作者の番ならその行に、そうでなければ(語り部の番に口を挟んだ)作者の行を新しく足す。"""
     record = author_turn(s, episode_id)
     if record is None:
-        record = EpisodeCharacterSession(episode_id=episode_id, author=True, request="")
+        record = EpisodeCharacterSession(episode_id=episode_id, kind=SessionKind.AUTHOR, request="")
         s.add(record)
     record.action = text
     return record
@@ -101,21 +99,19 @@ def seen_lines(s: Session, record: EpisodeCharacterSession) -> list[str]:
     手番は id の順に回るので、前の番より手前の行は、前の番で受け取っている。"""
     session = EpisodeCharacterSession
     previous = s.scalar(select(func.max(session.id)).where(
-        session.episode_id == record.episode_id, session.character_id == record.character_id,
-        session.closing.is_(False), session.id < record.id))
+        session.episode_id == record.episode_id, session.character_id == record.character_id, session.id < record.id))
     rows = s.scalars(session_select(record.episode_id).where(
         session.id > (previous or 0), session.id < record.id,
-        session.author.is_(False),
-        or_(session.character_id.is_(None),
-            and_(session.character_id != record.character_id, session.action.is_not(None))),
+        or_(session.kind == SessionKind.NARRATION,
+            and_(session.kind == SessionKind.CHARACTER, session.character_id != record.character_id,
+                 session.action.is_not(None))),
         session.witnesses.any(EpisodeCharacterSessionWitness.character_id == record.character_id))).all()
     together = simultaneous_ids(s, record)
     return [_seen_line(row) for row in rows if row.id not in together]
 
 
 def turn_record(s: Session, record: EpisodeCharacterSession) -> TurnRecord:
-    return TurnRecord(id=record.id, seen=[] if record.closing else seen_lines(s, record), request=record.request,
-                      closing=record.closing)
+    return TurnRecord(id=record.id, seen=seen_lines(s, record), request=record.request)
 
 
 def turn_of(s: Session, episode_id: int, character_id: int) -> TurnState:
@@ -123,8 +119,6 @@ def turn_of(s: Session, episode_id: int, character_id: int) -> TurnState:
                                      EpisodeCharacterSession.character_id == character_id)).first()
     if own is None:
         return TurnState(status="waiting")
-    if own.closing:
-        return TurnState(status="closed", record=turn_record(s, own))
     if own.id in {row.id for row in current_turns(s, episode_id)}:
         return TurnState(status="turn", record=turn_record(s, own))
     return TurnState(status="waiting")

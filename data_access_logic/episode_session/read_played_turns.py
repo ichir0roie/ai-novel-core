@@ -20,7 +20,6 @@ class ReadPlayedTurns(SessionEntrypoint):
     def execute(self, s: Session) -> list[PlayedTurn]:
         rows = s.scalars(session_select(self.episode_id).where(
             EpisodeCharacterSession.character_id == self.character_id,
-            EpisodeCharacterSession.closing.is_(False),
             EpisodeCharacterSession.action.is_not(None))).all()
         return [PlayedTurn(id=row.id, seen=seen_lines(s, row), request=row.request, thought=row.thought, action=row.action,
                            speech=row.speech, aim=row.aim)

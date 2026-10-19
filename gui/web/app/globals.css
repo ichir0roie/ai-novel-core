@@ -733,7 +733,7 @@ summary .knowledge-item { display: inline-block; }
 .session-row > tr:last-child > td { border-bottom: 1px solid var(--line); }
 .session-row > tr:first-child > td { padding-top: 0.5rem; }
 .session-row.waiting > tr > td { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
-.session-row.queued, .session-row.closing { color: var(--muted); }
+.session-row.queued { color: var(--muted); }
 .session-row.narration > tr > td { background: var(--chip); }
 .session-narrator { font-weight: 600; color: var(--muted); }
 .session-row.fresh > tr > td { animation: session-fresh 2s ease-out; }

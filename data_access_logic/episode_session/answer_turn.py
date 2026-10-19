@@ -8,7 +8,7 @@ from data_access_logic.episode_session.form import TurnAnswer
 from data_access_logic.episode_session.record import SessionRecord
 from data_access_logic.episode_session.turns import current_turns
 from data_access_logic.query import common_query
-from db.schema import EpisodeCharacterSession
+from db.schema import EpisodeCharacterSession, SessionKind
 
 
 class AnswerTurn(CommitEntrypoint):
@@ -21,8 +21,8 @@ class AnswerTurn(CommitEntrypoint):
 
     def execute(self, s: Session) -> SessionRecord:
         record = common_query.get_row(s, EpisodeCharacterSession, self.record_id)
-        if record.closing:
-            raise ValueError(f"id={record.id} は終了の行。行動は入れない")
+        if record.kind != SessionKind.CHARACTER:
+            raise ValueError(f"id={record.id} は人物の行でない")
         if record.action is not None:
             raise ValueError(f"id={record.id} にはもう行動が入っている")
         current = [row.id for row in current_turns(s, record.episode_id)]

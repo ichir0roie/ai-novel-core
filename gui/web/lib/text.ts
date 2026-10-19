@@ -119,7 +119,6 @@ export const T = {
     aim: "Aim",
     waiting: "Waiting for the character…",
     queued: "Queued",
-    closing: "Closed",
     write: "Write",
     closeWrite: "Close writing",
     writeHint: "Write this episode's main text yourself beside the turns",
@@ -134,9 +133,6 @@ export const T = {
     continueHint: "Hand the turn back to the narrator without writing",
     // 作者の行に入り、語り部(Claude)が読むので日本語で書く
     continueText: "(書き足さずに、続きを語り部に任せる)",
-    close: "Close",
-    closeHint: "Tell the narrator and characters that you are done, so they stop",
-    confirmClose: "Stop the narrator and characters? Unsaved text is not sent.",
   },
 
   writer: {
