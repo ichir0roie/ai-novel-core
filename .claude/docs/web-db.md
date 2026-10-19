@@ -38,13 +38,13 @@
 
 ## 表の API(`/api/tables`)
 
-- 表の API で読めるのは `story`・`episode`・`character`・`character_relation`・`event`・`location`・`idea`・`meme`・`oracle`・`style_preference` だけ。ほかの表(`episode_character`・`character_location`・`episode_character_session` など)は `{"detail":"GUI で扱わないテーブル: …"}` が返る。表の API に消す口(DELETE)は無い。行を消すのは、`data_access_logic/readme.md` の「〜を消して」の行にある消す入口(`episode.delete_episode.DeleteEpisode` など。db だけの入口)を、上の表のとおり `/api/interface/<入口の id>` で呼ぶ。読むものは、代わりに次を使う:
+- 表の API で読めるのは `story`・`episode`・`character`・`character_relation`・`event`・`location`・`idea`・`meme`・`oracle`・`style_preference` だけ。ほかの表(`episode_character`・`character_location` など)は `{"detail":"GUI で扱わないテーブル: …"}` が返る。表の API に消す口(DELETE)は無い。行を消すのは、`data_access_logic/readme.md` の「〜を消して」の行にある消す入口(`episode.delete_episode.DeleteEpisode` など。db だけの入口)を、上の表のとおり `/api/interface/<入口の id>` で呼ぶ。読むものは、代わりに次を使う:
 
 | 読みたいもの | 読み方 |
 | --- | --- |
 | 話の登場人物・名前だけ出る人物 | `episode` の行の `character_ids` / `mentioned_character_ids` |
 | 人物の居場所 | 入口 `character.read_character.ReadCharacter` の `locations` |
-| 話のセッションの行(読む・消す) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>`(`--from <行の id>` でその行から後だけ) |
+| 話のセッションの行(読む・消す。db でなく手元の手番のファイルにある) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>`(`--from <行の id>` でその行から後だけ) |
 | 話の概要(`summary_text`) | 入口 `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[…]}` の `.result[].summary_text`(表の API の行には入らない) |
 
 - 列名は推測しない。`jq -c '.tables[] | {name, columns: [.columns[].key]}' gui/web/lib/tables.json` で表ごとの列を見る(API には聞かない。画面が持つ表の情報)。取り違えやすいもの:

@@ -20,6 +20,7 @@ from data_access_logic.episode.models import (
     EpisodeBriefSerialized, EpisodeCastingSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
+from data_access_logic.episode_session.store import SessionStore
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.stamp import Stamp
@@ -128,10 +129,13 @@ def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.Voi
 
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
     """`ReadEpisodeBrief` に当たる。
-    設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。"""
+    設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。
+    話のセッションの行は db に無く、流れを回すこの機械の手番のファイルにある。"""
     targets = call(episode_steps.brief_targets, RowId(id=episode_id))
     refresh(ai, targets)
-    keywords = [keyword for text in targets.word_sources for keyword in keywords_of(text, ai, targets.start)]
+    session = SessionStore(episode_id).text()
+    sources = [*targets.word_sources, *([session] if session.strip() else [])]
+    keywords = [keyword for text in sources for keyword in keywords_of(text, ai, targets.start)]
     return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, episode_steps.BriefForm(
         episode_id=episode_id, keywords=keywords)))
 

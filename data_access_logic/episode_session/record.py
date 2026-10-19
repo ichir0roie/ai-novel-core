@@ -1,80 +1,10 @@
-from typing import Literal
-
-from sqlalchemy.orm import joinedload, selectinload
-
 from data_access_logic.material import Material, Named, Timestamp
-from db.schema import EpisodeCharacterSession, SessionKind
-
-
-class Witness(Material):
-    character_id: int
-
-
-class SessionRecord(Material):
-    LOAD_OPTIONS = (joinedload(EpisodeCharacterSession.character), selectinload(EpisodeCharacterSession.witnesses))
-
-    id: int
-    episode_id: int
-    kind: SessionKind
-    # 人物の行だけが持つ
-    character: Named | None = None
-    witnesses: list[Witness]
-    time: Timestamp | None = None
-    request: str
-    # 前の手番と同時に動く手番
-    simultaneous: bool
-    thought: str | None = None
-    action: str | None = None
-    speech: str | None = None
-    aim: str | None = None
 
 
 class TextSaved(Material):
     episode_id: int
     # 保存した本文の字数
     letters: int
-    # 作者の番に保存したとき、前の本文からの差分を入れた作者の行。差分が無いか、作者の番でなければ空
-    record: SessionRecord | None = None
-
-
-class SessionSince(Material):
-    records: list[SessionRecord]
-    # その話の行の総数。見る側が持つ行と食い違えば、途中の行が消えた(`ClearSession`)ので全部を引き直す
-    count: int
-
-
-class TurnRecord(Material):
-    """人物役が読む自分の番の行。時刻は渡さない(`character/knowledge.py`)。"""
-
-    id: int
-    # 前の自分の番から後に、見聞きした語りとほかの人物の一手(`turns.seen_lines`)
-    seen: list[str] = []
-    request: str
-
-
-class PlayedTurn(Material):
-    """人物役が読み直す、自分がもう動いた手番の行。時刻は渡さない(`character/knowledge.py`)。"""
-
-    id: int
-    seen: list[str] = []
-    request: str
-    thought: str | None = None
-    action: str
-    speech: str | None = None
-    aim: str | None = None
-
-
-class TurnState(Material):
-    # turn: いまこの人物が動く番 / waiting: ほかの人物の番か、まだ要求が無い
-    status: Literal["turn", "waiting"]
-    # turn のときの、この人物の行
-    record: TurnRecord | None = None
-
-
-class SessionCleared(Material):
-    episode_id: int
-    # 消した行の数
-    deleted: int
 
 
 class SessionIdeas(Material):

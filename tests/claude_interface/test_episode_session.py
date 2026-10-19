@@ -4,7 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from ai.claude_code import ai_client
 from data_access_logic import constants
@@ -22,26 +22,16 @@ from data_access_logic.character.record import CharacterHistoryRow, CharacterPar
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
-from data_access_logic.episode.delete_episode import DeleteEpisode
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode.refresh_voices import RefreshVoices
 from data_access_logic.episode.voices import VoiceDraft, VoiceDrafts
-from data_access_logic.episode_session.add_author_line import AddAuthorLine
+from data_access_logic.episode_session import store
 from data_access_logic.episode_session.add_ideas import AddIdeas
-from data_access_logic.episode_session.add_turns import AddTurns
-from data_access_logic.episode_session.answer_turn import AnswerTurn
 from data_access_logic.episode_session.append_text import AppendText
-from data_access_logic.episode_session.clear_session import ClearSession
-from data_access_logic.episode_session.form import TurnAnswer, TurnRequest
-from data_access_logic.episode_session.hand_over import HandOver
 from data_access_logic.episode_session.read_knower_gaps import ReadKnowerGaps
-from data_access_logic.episode_session.read_played_turns import ReadPlayedTurns
-from data_access_logic.episode_session.read_session import ReadSession
-from data_access_logic.episode_session.read_session_since import ReadSessionSince
 from data_access_logic.episode_session.read_stage import ReadStage
 from data_access_logic.episode_session.replace_text import ReplaceText
-from data_access_logic.episode_session.read_turn import ReadTurn
-from data_access_logic.episode_session.save_text import SaveText
+from data_access_logic.episode_session.store import SessionStore
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.commit_idea import CommitIdea
 from data_access_logic.idea.form import IdeaCreateForm, IdeaUpdateForm
@@ -50,9 +40,15 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp, get_env_session,
+    Character, CharacterParameter, CharacterRelation, Episode, Idea, IdeaHistory, Stamp, get_env_session,
 )
 from tool import episode_session
+
+
+@pytest.fixture(autouse=True)
+def session_root(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """手番のファイルを、テストごとの空の場所に置く(手元の `.cache` に書かない)。"""
+    monkeypatch.setattr(store, "ROOT", tmp_path / "episode_session")
 
 
 def _histories(person: dict) -> list[str]:
@@ -167,18 +163,24 @@ def test_read_knowledge_tells_years_ago_instead_of_years(shown, world):
     assert relation["来歴(古い順)"] == ["5年前、市で再会する"]
 
 
-def test_read_knowledge_at_the_latest_turn(shown, world):
+def test_read_knowledge_at_the_latest_turn(shown, world, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=taro, histories=[
         CharacterHistoryRow(start=1190, description="市に越してくる", knowers=[KnowerRow(knower_id=taro)]),
         CharacterHistoryRow(start=1203, description="店を畳む", knowers=[KnowerRow(knower_id=taro)])])))
-    shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, time="1203/05/01", request="三年が過ぎた"),
-        TurnRequest(character_id=hanako, request="太郎が来た")]))
+    session = SessionStore(world.episode_id)
+    episode_session.stage(session)
+    session.add({"witness_ids": [], "turns": [{"character_id": taro, "time": "1203/05/01", "request": "三年が過ぎた"},
+                                              {"character_id": hanako, "request": "太郎が来た"}]})
 
-    result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
-
+    # 人物役には時刻を渡さないので、手番のファイルにあるその人物の一番新しい手番の時刻で読む
+    moment = episode_session._knowing(world.episode_id, taro, None)
+    assert moment == {"episode_id": world.episode_id, "time": "1203/05/01"}
+    result = shown(ReadKnowledge(character_id=taro, **moment))
     assert result["自分"]["来歴(古い順)"] == ["13年前、市に越してくる", "今年、店を畳む"]
+    # 時刻の入った手番の無い人物は、話の時刻で読む
+    assert episode_session._knowing(world.episode_id, hanako, None) == {"episode_id": world.episode_id}
 
 
 def test_read_knowledge_at_a_time_without_episode(shown, world):
@@ -412,8 +414,7 @@ def test_read_knowledge_tells_kind_of_histories(shown, world):
 
 
 def test_read_knowledge_skips_unrelated_cast(shown, world):
-    stranger = shown(CommitCharacter(CharacterCreateForm(name="初対面の人", text="説明")))
-    shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[TurnRequest(character_id=stranger["id"], request="市に着いた")]))
+    shown(CommitCharacter(CharacterCreateForm(name="初対面の人", text="説明")))
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=world.character_ids[0]))
 
@@ -468,7 +469,8 @@ def test_read_stage(shown, world):
     hanako_row = next(member for member in result["登場人物"] if member["人物id"] == hanako)
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
                           "体格": "細身", "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
-    assert result["知り合い"] == [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
+    taro, _ = world.character_ids
+    assert result["知り合い"] == [{"人物id": [taro, hanako], "誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
     assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い"}
 
 
@@ -492,10 +494,13 @@ def test_read_knower_gaps(shown, world):
 
 
 def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
     taro, hanako = world.character_ids
     _secrets(shown, world)
-    [turn] = shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[TurnRequest(character_id=taro, request="日が暮れた")]))
-    shown(AnswerTurn(record_id=turn["id"], answer=TurnAnswer(action="テスト術で灯をともす")))
+    session = SessionStore(world.episode_id)
+    episode_session.stage(session)
+    [turn] = session.add({"witness_ids": [], "turns": [{"character_id": taro, "request": "日が暮れた"}]})
+    session.answer(turn.id, {"action": "テスト術で灯をともす"})
     sources = []
 
     def generate(prompt, output, *args, **kwargs):
@@ -623,221 +628,224 @@ def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, moc
     assert member["口調"] == "作者が決めた口調"
 
 
-def test_session_turns(shown, world):
-    taro, hanako = world.character_ids
-    added = shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, time="1200/04/01 12:00:00", request="市で花子を見かけた"),
-        TurnRequest(character_id=hanako, request="太郎が手を振った")]))
-    taro_turn, hanako_turn = (record["id"] for record in added)
-
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "waiting"
-    # 人物役には番の行の時刻を渡さない
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["record"] == {
-        "id": taro_turn, "seen": [], "request": "市で花子を見かけた"}
-    with pytest.raises(ValueError, match="まだ番が来ていない"):
-        AnswerTurn(record_id=hanako_turn, answer=TurnAnswer(action="手を振り返す")).run()
-
-    shown(AnswerTurn(record_id=taro_turn, answer=TurnAnswer(thought="久しぶりだ", action="手を振る", speech="よう")))
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "turn"
-    shown(AnswerTurn(record_id=hanako_turn, answer=TurnAnswer(action="手を振り返す")))
-    with pytest.raises(ValueError, match="もう行動が入っている"):
-        AnswerTurn(record_id=hanako_turn, answer=TurnAnswer(action="もう一度")).run()
-
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["status"] == "waiting"
-    records = shown(ReadSession(episode_id=world.episode_id))
-    assert [(record["character"]["name"], record["kind"]) for record in records] == [
-        ("テスト太郎", "人物"), ("テスト花子", "人物")]
-    assert (records[0]["speech"], records[0]["time"]) == ("よう", "1200/04/01 12:00:00")
-
-    shown(DeleteEpisode(episode_id=world.episode_id))
-    assert shown(ReadSession(episode_id=world.episode_id)) == []
+TARO, HANAKO, STRANGER = 1, 2, 3
 
 
-def test_narration_and_moves_reach_the_witnesses_once(shown, world):
-    taro, hanako = world.character_ids
-    narration, taro_turn = (record["id"] for record in shown(AddTurns(
-        episode_id=world.episode_id, narration="市に鐘が鳴った", witness_ids=[taro, hanako],
-        turns=[TurnRequest(character_id=taro, time="1200/04/01 12:00:00", request="鐘を聞いての一手")])))
-
-    # 語りの行は手番に数えず、見聞きする人物の番に届く
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["record"] == {
-        "id": taro_turn, "seen": ["市に鐘が鳴った"], "request": "鐘を聞いての一手"}
-    shown(AnswerTurn(record_id=taro_turn, answer=TurnAnswer(thought="花子だ", action="手を振る", speech="よう", aim="気づかせる")))
-    [hanako_turn] = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, turns=[
-        TurnRequest(character_id=hanako, request="返事")], witness_ids=[taro])))
-    # ほかの人物の一手は行動とセリフだけが名前付きで届き、内心・狙いは届かない
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["record"]["seen"] == [
-        "市に鐘が鳴った", "テスト太郎: 手を振る「よう」"]
-    shown(AnswerTurn(record_id=hanako_turn, answer=TurnAnswer(action="笑う")))
-    [taro_next] = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, request="次の一手")])))
-    # 前の番で受け取った語りと、自分の一手は届け直さない
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["record"]["seen"] == ["テスト花子: 笑う"]
-
-    assert [played["seen"] for played in shown(ReadPlayedTurns(episode_id=world.episode_id, character_id=taro))] == [
-        ["市に鐘が鳴った"]]
-    records = shown(ReadSession(episode_id=world.episode_id))
-    assert [(record["id"], record["kind"], record["character"]) for record in records][0] == (narration, "語り", None)
-    with pytest.raises(ValueError, match="人物の行でない"):
-        AnswerTurn(record_id=narration, answer=TurnAnswer(action="鳴らす")).run()
-    assert [record["character_id"] for record in records[0]["witnesses"]] == [taro, hanako]
-    assert records[0]["time"] == "1200/04/01 12:00:00"
-    assert shown(ClearSession(episode_id=world.episode_id, from_record_id=taro_next))["deleted"] == 1
-    assert shown(ClearSession(episode_id=world.episode_id))["deleted"] == 3
+def _staged() -> SessionStore:
+    """太郎と花子が知り合いで、二人と初対面の人がいる話の手番のファイル。"""
+    session = SessionStore(1)
+    session.set_stage({TARO: "テスト太郎", HANAKO: "テスト花子", STRANGER: "見知らぬ人"}, [(HANAKO, TARO)])
+    return session
 
 
-def test_add_turns_checks_the_witnesses(shown, world):
-    taro, hanako = world.character_ids
-    stranger = shown(CommitCharacter(CharacterCreateForm(name="見知らぬ人", text="説明")))["id"]
-    outsider = shown(CommitCharacter(CharacterCreateForm(name="話にいない人", text="説明")))["id"]
-    with get_env_session() as s:
-        s.add(EpisodeCharacter(episode_id=world.episode_id, character_id=stranger))
-        s.commit()
-
-    with pytest.raises(ValueError, match="知り合いでない"):
-        AddTurns(episode_id=world.episode_id, witness_ids=[hanako, stranger],
-                 turns=[TurnRequest(character_id=taro, request="一手")]).run()
-    with pytest.raises(ValueError, match="登場人物でない"):
-        AddTurns(episode_id=world.episode_id, witness_ids=[outsider],
-                 turns=[TurnRequest(character_id=taro, request="一手")]).run()
-    with pytest.raises(ValueError, match="witness_ids"):
-        AddTurns(episode_id=world.episode_id, narration="鐘が鳴った", turns=[]).run()
-    with pytest.raises(ValueError, match="turns か narration"):
-        AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[]).run()
-    # 見聞きする人物を渡し忘れた手番は、一手が誰にも届かないまま進むので断る
-    with pytest.raises(ValueError, match="見聞きする人物"):
-        AddTurns(episode_id=world.episode_id, turns=[TurnRequest(character_id=taro, request="一手")]).run()
-    assert shown(ReadSession(episode_id=world.episode_id)) == []
-    # 手番の無い語りは、時刻を渡さなければ断り、渡せばその時刻で入る
-    with pytest.raises(ValueError, match="語りの時刻"):
-        AddTurns(episode_id=world.episode_id, narration="半刻が過ぎた", witness_ids=[taro], turns=[]).run()
-    [alone_narration] = shown(AddTurns(episode_id=world.episode_id, narration="半刻が過ぎた", witness_ids=[taro],
-                                       time="1200/04/01 12:30", turns=[]))
-    assert alone_narration["time"] == "1200/04/01 12:30:00"
-    shown(ClearSession(episode_id=world.episode_id))
-    # 誰にも見せない一手は、空を渡せば通る
-    [alone] = shown(AddTurns(episode_id=world.episode_id, turns=[
-        TurnRequest(character_id=taro, request="一人で考える", witness_ids=[])]))
-    assert alone["witnesses"] == []
-    shown(ClearSession(episode_id=world.episode_id))
-
-    # 語りは知り合いでなくても届く。手番ごとの見聞きする人物は、語りの人物に代わる
-    added = shown(AddTurns(episode_id=world.episode_id, narration="鐘が鳴った", witness_ids=[taro, hanako, stranger],
-                           turns=[TurnRequest(character_id=taro, request="一手", witness_ids=[hanako])]))
-    assert [[witness["character_id"] for witness in record["witnesses"]] for record in added] == [
-        [taro, hanako, stranger], [hanako]]
-    shown(DeleteCharacter(character_id=outsider))
-    with get_env_session() as s:
-        s.execute(delete(EpisodeCharacter).where(EpisodeCharacter.character_id == stranger))
-        s.commit()
-    shown(DeleteCharacter(character_id=stranger))
-    [narration, _] = shown(ReadSession(episode_id=world.episode_id))
-    assert [witness["character_id"] for witness in narration["witnesses"]] == [taro, hanako]
+def _ids(records: list[store.Record]) -> list[int]:
+    return [record.id for record in records]
 
 
-def test_moves_returns_the_moves_without_the_requests(shown, world, monkeypatch: pytest.MonkeyPatch):
+def test_stage_copies_the_cast_and_the_acquaintances(shown, world, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
     taro, hanako = world.character_ids
-    narration, taro_turn, hanako_turn = (record["id"] for record in shown(AddTurns(
-        episode_id=world.episode_id, narration="市に鐘が鳴った", witness_ids=[taro, hanako],
-        turns=[TurnRequest(character_id=taro, request="一手"), TurnRequest(character_id=hanako, request="一手")])))
+    session = SessionStore(world.episode_id)
+    # 登場人物を写すまでは、手番を足せない
+    with pytest.raises(ValueError, match="stage"):
+        session.add({"witness_ids": [], "turns": [{"character_id": taro, "request": "一手"}]})
+
+    episode_session.stage(session)
+
+    state = session.load()
+    assert state.cast == {taro: "テスト太郎", hanako: "テスト花子"}
+    assert state.acquaintances == [sorted([taro, hanako])]
+
+
+def test_session_turns():
+    session = _staged()
+    taro_turn, hanako_turn = _ids(session.add({"witness_ids": [], "turns": [
+        {"character_id": TARO, "time": "1200/04/01 12:00", "request": "市で花子を見かけた"},
+        {"character_id": HANAKO, "request": "太郎が手を振った"}]}))
+
+    assert session.turn(HANAKO)["status"] == "waiting"
+    # 人物役には番の行の時刻を渡さない
+    assert session.turn(TARO)["record"] == {"id": taro_turn, "seen": [], "request": "市で花子を見かけた"}
+    with pytest.raises(ValueError, match="まだ番が来ていない"):
+        session.answer(hanako_turn, {"action": "手を振り返す"})
+
+    session.answer(taro_turn, {"thought": "久しぶりだ", "action": "手を振る", "speech": "よう"})
+    assert session.turn(HANAKO)["status"] == "turn"
+    with pytest.raises(ValueError, match="action が空"):
+        session.answer(hanako_turn, {"speech": "おう"})
+    session.answer(hanako_turn, {"action": "手を振り返す"})
+    with pytest.raises(ValueError, match="もう行動が入っている"):
+        session.answer(hanako_turn, {"action": "もう一度"})
+
+    assert session.turn(TARO)["status"] == "waiting"
+    records = session.load().records
+    assert [(record.character_id, record.kind) for record in records] == [(TARO, "人物"), (HANAKO, "人物")]
+    assert (records[0].speech, records[0].time) == ("よう", "1200/04/01 12:00")
+    assert session.actor_time(TARO) == "1200/04/01 12:00"
+    assert session.actor_time(HANAKO) is None
+
+
+def test_answers_are_written_one_file_per_record():
+    session = _staged()
+    [turn] = session.add({"witness_ids": [], "turns": [{"character_id": TARO, "request": "一手"}]})
+    session.answer(turn.id, {"action": "見上げる", "aim": "空を見る"})
+
+    # 行のファイルは語り部だけが書き、一手は行ごとのファイルに入る(同時に動く人物役が書き合わない)
+    rows = json.loads((session.dir / "session.json").read_text(encoding="utf-8"))["records"]
+    assert rows[0]["action"] is None
+    assert json.loads((session.dir / "answers" / f"{turn.id}.json").read_text(encoding="utf-8")) == {
+        "thought": None, "action": "見上げる", "speech": None, "aim": "空を見る"}
+    assert session.load().records[0].action == "見上げる"
+
+
+def test_narration_and_moves_reach_the_witnesses_once():
+    session = _staged()
+    narration, taro_turn = _ids(session.add({"narration": "市に鐘が鳴った", "witness_ids": [TARO, HANAKO], "turns": [
+        {"character_id": TARO, "time": "1200/04/01 12:00", "request": "鐘を聞いての一手"}]}))
+
+    # 語りの行は手番に数えず、見聞きする人物の番に届く
+    assert session.turn(TARO)["record"] == {"id": taro_turn, "seen": ["市に鐘が鳴った"], "request": "鐘を聞いての一手"}
+    session.answer(taro_turn, {"thought": "花子だ", "action": "手を振る", "speech": "よう", "aim": "気づかせる"})
+    [hanako_turn] = _ids(session.add({"witness_ids": [TARO], "turns": [{"character_id": HANAKO, "request": "返事"}]}))
+    # ほかの人物の一手は行動とセリフだけが名前付きで届き、内心・狙いは届かない
+    assert session.turn(HANAKO)["record"]["seen"] == ["市に鐘が鳴った", "テスト太郎: 手を振る「よう」"]
+    session.answer(hanako_turn, {"action": "笑う"})
+    [taro_next] = _ids(session.add({"witness_ids": [], "turns": [{"character_id": TARO, "request": "次の一手"}]}))
+    # 前の番で受け取った語りと、自分の一手は届け直さない
+    assert session.turn(TARO)["record"]["seen"] == ["テスト花子: 笑う"]
+
+    assert [played["seen"] for played in session.played(TARO)] == [["市に鐘が鳴った"]]
+    first = session.load().records[0]
+    assert (first.id, first.kind, first.character_id, first.witnesses, first.time) == (
+        narration, "語り", None, [TARO, HANAKO], "1200/04/01 12:00")
+    with pytest.raises(ValueError, match="人物の行でない"):
+        session.answer(narration, {"action": "鳴らす"})
+    assert session.clear(taro_next) == 1
+    assert session.clear() == 3
+
+
+def test_add_checks_the_witnesses():
+    session = _staged()
+    turn = {"character_id": TARO, "request": "一手"}
+
+    with pytest.raises(ValueError, match="知り合いでない"):
+        session.add({"witness_ids": [HANAKO, STRANGER], "turns": [turn]})
+    with pytest.raises(ValueError, match="登場人物でない"):
+        session.add({"witness_ids": [99], "turns": [turn]})
+    with pytest.raises(ValueError, match="登場人物でない"):
+        session.add({"witness_ids": [], "turns": [{"character_id": 99, "request": "一手"}]})
+    with pytest.raises(ValueError, match="witness_ids"):
+        session.add({"narration": "鐘が鳴った", "turns": []})
+    with pytest.raises(ValueError, match="turns か narration"):
+        session.add({"witness_ids": [], "turns": []})
+    # 見聞きする人物を渡し忘れた手番は、一手が誰にも届かないまま進むので断る
+    with pytest.raises(ValueError, match="見聞きする人物"):
+        session.add([turn])
+    # 欄の名を書き違えると、黙って空のまま進むので断る
+    with pytest.raises(ValueError, match="知らない欄"):
+        session.add({"witnesses": [HANAKO], "turns": [turn]})
+    assert session.load().records == []
+    # 手番の無い語りは、時刻を渡さなければ断り、渡せばその時刻で入る
+    with pytest.raises(ValueError, match="語りの時刻"):
+        session.add({"narration": "半刻が過ぎた", "witness_ids": [TARO], "turns": []})
+    [alone_narration] = session.add({"narration": "半刻が過ぎた", "witness_ids": [TARO], "time": "1200/04/01 12:30",
+                                     "turns": []})
+    assert alone_narration.time == "1200/04/01 12:30"
+    # 誰にも見せない一手は、空を渡せば通る
+    [alone] = session.add([{"character_id": TARO, "request": "一人で考える", "witness_ids": []}])
+    assert alone.witnesses == []
+
+    # 語りは知り合いでなくても届く。手番ごとの見聞きする人物は、語りの人物に代わる
+    added = session.add({"narration": "鐘が鳴った", "witness_ids": [TARO, HANAKO, STRANGER],
+                         "turns": [{"character_id": TARO, "request": "一手", "witness_ids": [HANAKO]}]})
+    assert [record.witnesses for record in added] == [[TARO, HANAKO, STRANGER], [HANAKO]]
+
+
+def test_moves_returns_the_moves_without_the_requests():
+    session = _staged()
+    narration, taro_turn, hanako_turn = _ids(session.add({
+        "narration": "市に鐘が鳴った", "witness_ids": [TARO, HANAKO],
+        "turns": [{"character_id": TARO, "request": "一手"}, {"character_id": HANAKO, "request": "一手"}]}))
 
     # 待たずに、埋まっていない行を返す
-    assert episode_session.moves(world.episode_id, narration - 1) == {"answers": [], "pending": [taro_turn, hanako_turn]}
-    shown(AnswerTurn(record_id=taro_turn, answer=TurnAnswer(thought="鐘だ", action="見上げる")))
-    assert episode_session.moves(world.episode_id, narration - 1) == {
+    assert episode_session.moves(session, narration - 1) == {"answers": [], "pending": [taro_turn, hanako_turn]}
+    session.answer(taro_turn, {"thought": "鐘だ", "action": "見上げる"})
+    assert episode_session.moves(session, narration - 1) == {
         "answers": [{"id": taro_turn, "character": "テスト太郎", "thought": "鐘だ", "action": "見上げる", "speech": None,
                      "aim": None}],
         "pending": [hanako_turn]}
-    assert episode_session.moves(world.episode_id, taro_turn)["answers"] == []
-    assert episode_session._turns_args('[{"character_id": 1, "request": "一手"}]') == {
-        "turns": [{"character_id": 1, "request": "一手"}]}
-    assert episode_session._turns_args('{"narration": "鐘", "witness_ids": [1], "turns": []}') == {
-        "narration": "鐘", "witness_ids": [1], "turns": []}
+    assert episode_session.moves(session, taro_turn)["answers"] == []
+    # 語り部の読む行は、人物を名前にする
+    rows = [episode_session._row(record, session.load().cast) for record in session.load().records]
+    assert [(row["kind"], row["character"], row["witnesses"]) for row in rows] == [
+        ("語り", None, [TARO, HANAKO]), ("人物", "テスト太郎", [HANAKO]), ("人物", "テスト花子", [TARO])]
 
 
-def test_clear_session_lets_the_actors_play_again(shown, world):
-    taro, hanako = world.character_ids
-    shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[TurnRequest(character_id=taro, request="市に着いた")]))
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "waiting"
+def test_clear_lets_the_actors_play_again():
+    session = _staged()
+    session.add({"witness_ids": [], "turns": [{"character_id": TARO, "request": "市に着いた"}]})
+    assert session.turn(HANAKO)["status"] == "waiting"
 
-    assert shown(ClearSession(episode_id=world.episode_id)) == {"episode_id": world.episode_id, "deleted": 1}
-    assert shown(ReadSession(episode_id=world.episode_id)) == []
+    assert session.clear() == 1
+    assert session.load().records == []
+    # 登場人物と知り合いの組は残るので、stage を読み直さずに足せる
+    [turn] = session.add({"witness_ids": [], "turns": [{"character_id": HANAKO, "request": "市に着いた"}]})
     # 前の埋まっていない手番が消えたので、新しい手番が回る
-    shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[TurnRequest(character_id=hanako, request="市に着いた")]))
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["status"] == "turn"
-    with pytest.raises(ValueError, match="episode_id"):
-        ClearSession(episode_id=10**9).run()
+    assert session.turn(HANAKO)["status"] == "turn"
+    # 消した行の id は使い直さない(止めた人物役が、古い行の id に一手を入れないように)
+    assert turn.id == 2
 
 
-def test_clear_session_from_a_record_replays_from_there(shown, world):
-    taro, hanako = world.character_ids
-    first, second, third = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, request="市に着いた"),
-        TurnRequest(character_id=hanako, request="太郎が来た"),
-        TurnRequest(character_id=taro, request="花子が笑った")])))
-    shown(AnswerTurn(record_id=first, answer=TurnAnswer(thought="混んでいる", action="辺りを見回す", speech="さて")))
-    shown(AnswerTurn(record_id=second, answer=TurnAnswer(action="笑う")))
+def test_clear_from_a_record_replays_from_there():
+    session = _staged()
+    first, second, third = _ids(session.add({"witness_ids": [], "turns": [
+        {"character_id": TARO, "request": "市に着いた"}, {"character_id": HANAKO, "request": "太郎が来た"},
+        {"character_id": TARO, "request": "花子が笑った"}]}))
+    session.answer(first, {"thought": "混んでいる", "action": "辺りを見回す", "speech": "さて"})
+    session.answer(second, {"action": "笑う"})
 
-    assert shown(ClearSession(episode_id=world.episode_id, from_record_id=second)) == {
-        "episode_id": world.episode_id, "deleted": 2}
-    assert [record["id"] for record in shown(ReadSession(episode_id=world.episode_id))] == [first]
+    assert session.clear(second) == 2
+    assert _ids(session.load().records) == [first]
+    assert not (session.dir / "answers" / f"{second}.json").exists()
     # 起こし直した人物役は、残った自分の手番だけを読む(時刻とほかの人物の行は入らない)
-    assert shown(ReadPlayedTurns(episode_id=world.episode_id, character_id=taro)) == [{
+    assert session.played(TARO) == [{
         "id": first, "seen": [], "request": "市に着いた", "thought": "混んでいる", "action": "辺りを見回す", "speech": "さて",
         "aim": None}]
-    assert shown(ReadPlayedTurns(episode_id=world.episode_id, character_id=hanako)) == []
-    with pytest.raises(ValueError):
-        ClearSession(episode_id=world.episode_id, from_record_id=third).run()
+    assert session.played(HANAKO) == []
+    with pytest.raises(ValueError, match="セッションの行でない"):
+        session.clear(third)
 
 
-def test_read_session_since_returns_the_newer_rows(shown, world):
-    taro, hanako = world.character_ids
-    first, second = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, request="市に着いた"),
-        TurnRequest(character_id=hanako, request="太郎が来た")])))
+def test_read_turn_reads_the_record_the_narrator_sent():
+    session = _staged()
+    taro_turn, hanako_turn, taro_next = _ids(session.add({"witness_ids": [], "turns": [
+        {"character_id": TARO, "request": "市に着いた"}, {"character_id": HANAKO, "request": "太郎が来た"},
+        {"character_id": TARO, "request": "花子が笑った"}]}))
 
-    assert [record["id"] for record in shown(ReadSessionSince(episode_id=world.episode_id))["records"]] == [first, second]
-    assert shown(ReadSessionSince(episode_id=world.episode_id, after_record_id=second)) == {"records": [], "count": 2}
-    # 一手が入った行も、その手前から引き直せば読める
-    shown(AnswerTurn(record_id=first, answer=TurnAnswer(action="辺りを見回す")))
-    since = shown(ReadSessionSince(episode_id=world.episode_id, after_record_id=first - 1))
-    assert [(record["id"], record["action"]) for record in since["records"]] == [(first, "辺りを見回す"), (second, None)]
-
-
-def test_read_turn_reads_the_record_the_narrator_sent(shown, world, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
-    taro, hanako = world.character_ids
-    taro_turn, hanako_turn, taro_next = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, request="市に着いた"), TurnRequest(character_id=hanako, request="太郎が来た"),
-        TurnRequest(character_id=taro, request="花子が笑った")])))
-
-    assert episode_session.read_turn(world.episode_id, taro, taro_turn)["record"]["request"] == "市に着いた"
+    assert episode_session.read_turn(session, TARO, taro_turn)["record"]["request"] == "市に着いた"
     # 前の手番が埋まる前に知らされたら、待たずにまだだと返す
-    assert episode_session.read_turn(world.episode_id, hanako, hanako_turn)["status"] == "waiting"
+    assert episode_session.read_turn(session, HANAKO, hanako_turn)["status"] == "waiting"
     # 知らされた行より前に、自分の埋まっていない番があれば、その行を返す
-    assert episode_session.read_turn(world.episode_id, taro, taro_next) == {"status": "other", "record_id": taro_turn}
+    assert episode_session.read_turn(session, TARO, taro_next) == {"status": "other", "record_id": taro_turn}
 
 
-def test_simultaneous_turns_open_together(shown, world):
-    taro, hanako = world.character_ids
-    taro_turn, hanako_turn = (record["id"] for record in shown(AddTurns(
-        episode_id=world.episode_id, witness_ids=[taro, hanako], simultaneous=True, turns=[
-            TurnRequest(character_id=taro, request="梁を押さえる"), TurnRequest(character_id=hanako, request="男を引き出す")])))
-    [taro_next] = (record["id"] for record in shown(AddTurns(
-        episode_id=world.episode_id, witness_ids=[hanako], turns=[TurnRequest(character_id=taro, request="次の一手")])))
+def test_simultaneous_turns_open_together():
+    session = _staged()
+    taro_turn, hanako_turn = _ids(session.add({"witness_ids": [TARO, HANAKO], "simultaneous": True, "turns": [
+        {"character_id": TARO, "request": "梁を押さえる"}, {"character_id": HANAKO, "request": "男を引き出す"}]}))
+    [taro_next] = _ids(session.add({"witness_ids": [HANAKO], "turns": [{"character_id": TARO, "request": "次の一手"}]}))
 
     # 組の手番は、前の人物の一手を待たずに一度に番が開く。組でない次の手番は、組が埋まるまで待つ
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["record"]["id"] == hanako_turn
-    shown(AnswerTurn(record_id=hanako_turn, answer=TurnAnswer(action="男の脇を抱える")))
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["record"]["id"] == taro_turn
+    assert session.turn(HANAKO)["record"]["id"] == hanako_turn
+    session.answer(hanako_turn, {"action": "男の脇を抱える"})
+    assert session.turn(TARO)["record"]["id"] == taro_turn
     # 同じ組のほかの人物の一手は、同時に動いたので届かない
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["record"]["seen"] == []
-    shown(AnswerTurn(record_id=taro_turn, answer=TurnAnswer(action="灯りで梁を押さえる")))
+    assert session.turn(TARO)["record"]["seen"] == []
+    session.answer(taro_turn, {"action": "灯りで梁を押さえる"})
     # 組の一手は、次の自分の番で届く
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["record"] == {
-        "id": taro_next, "seen": ["テスト花子: 男の脇を抱える"], "request": "次の一手"}
-    assert [record["simultaneous"] for record in shown(ReadSession(episode_id=world.episode_id))] == [False, True, False]
+    assert session.turn(TARO)["record"] == {"id": taro_next, "seen": ["テスト花子: 男の脇を抱える"], "request": "次の一手"}
+    assert [record.simultaneous for record in session.load().records] == [False, True, False]
+    assert session.text() == "梁を押さえる\n灯りで梁を押さえる\n男を引き出す\n男の脇を抱える\n次の一手"
 
 
 def test_write_file_keeps_the_whole_result(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -854,78 +862,19 @@ def _main_text(world) -> str:
         return s.get_one(Episode, world.episode_id).main_text
 
 
-def test_author_narrator_and_characters_take_turns(shown, world):
-    taro, hanako = world.character_ids
-    # 作者の行の無いセッションでは、いつでも保存でき、差分を行に入れない
-    assert shown(SaveText(episode_id=world.episode_id, main_text="市で二人が出会った。"))["record"] is None
-
-    waiting = shown(HandOver(episode_id=world.episode_id, request="書き始めて"))
-    assert (waiting["kind"], waiting["character"], waiting["action"]) == ("作者", None, None)
-    with pytest.raises(ValueError, match="もう作者の番"):
-        HandOver(episode_id=world.episode_id).run()
-    # 作者の番には、語り部は本文に書き足せず、人物役の手番も待つ
-    with pytest.raises(ValueError, match="作者の番"):
-        AppendText(episode_id=world.episode_id, text="鐘が鳴った。").run()
-    [taro_turn] = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=taro, request="花子に声をかけられての一手")])))
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=taro))["status"] == "waiting"
-
-    saved = shown(SaveText(episode_id=world.episode_id, main_text="市で二人が出会った。\n「太郎さん」と花子が呼んだ。"))
-    assert saved["record"]["id"] == waiting["id"]
-    assert "+「太郎さん」と花子が呼んだ。" in saved["record"]["action"]
-    # 作者が書くと番が語り部へ戻り、作者の行は人物役に届かない
-    turn = shown(ReadTurn(episode_id=world.episode_id, character_id=taro))
-    assert turn["status"] == "turn" and turn["record"]["seen"] == []
-    shown(AnswerTurn(record_id=taro_turn, answer=TurnAnswer(action="振り向く", speech="よう")))
-    with pytest.raises(ValueError, match="語り部の番"):
-        SaveText(episode_id=world.episode_id, main_text="作者の手元の古い本文").run()
+def test_narrator_appends_to_the_main_text(shown, world):
     shown(AppendText(episode_id=world.episode_id, text="太郎は振り向いた。\n「よう」"))
-    assert _main_text(world).endswith("太郎は振り向いた。\n「よう」")
-    assert _main_text(world).startswith("市で二人が出会った。")
 
-    # 語り部の番に作者がチャットで口を挟むと、手番を待たせない作者の行を挟む
-    interjected = shown(AddAuthorLine(episode_id=world.episode_id, text="花子は少し怒っている"))
-    assert (interjected["kind"], interjected["action"], interjected["request"]) == ("作者", "花子は少し怒っている", "")
-    [hanako_turn] = (record["id"] for record in shown(AddTurns(episode_id=world.episode_id, witness_ids=[], turns=[
-        TurnRequest(character_id=hanako, request="太郎の返事を受けての一手")])))
-    assert shown(ReadTurn(episode_id=world.episode_id, character_id=hanako))["record"]["id"] == hanako_turn
-
-    shown(AnswerTurn(record_id=hanako_turn, answer=TurnAnswer(action="睨む")))
-    shown(HandOver(episode_id=world.episode_id))
-    # 作者が書かずに続けを頼むと、その言葉で番を返す
-    assert shown(AddAuthorLine(episode_id=world.episode_id, text="続けて"))["action"] == "続けて"
-    shown(AppendText(episode_id=world.episode_id, text="\n花子は太郎を睨んだ。"))
-    assert [record["kind"] for record in shown(ReadSession(episode_id=world.episode_id))] == [
-        "作者", "人物", "作者", "人物", "作者"]
+    assert _main_text(world) == "市で二人が出会った。\n太郎は振り向いた。\n「よう」"
+    with pytest.raises(ValueError, match="text が空"):
+        AppendText(episode_id=world.episode_id, text=" ").run()
 
 
 def test_narrator_rewrites_what_the_author_noted_like_a_plot(shown, world):
-    shown(HandOver(episode_id=world.episode_id))
-    shown(SaveText(episode_id=world.episode_id, main_text="市で二人が出会った。\n太郎が花子に声をかける。\n花子は驚く。"))
-    records = len(shown(ReadSession(episode_id=world.episode_id)))
-    # 語り部の番に、作者の箇条を本文の文に起こし直す。作者の行は足さない
+    shown(AppendText(episode_id=world.episode_id, text="太郎が花子に声をかける。\n花子は驚く。"))
+    # 作者の箇条を本文の文に起こし直す
     shown(ReplaceText(episode_id=world.episode_id, old="太郎が花子に声をかける。\n花子は驚く。",
                       new="「よう」\n太郎の声に、花子の肩が跳ねた。"))
     assert _main_text(world) == "市で二人が出会った。\n「よう」\n太郎の声に、花子の肩が跳ねた。"
-    assert len(shown(ReadSession(episode_id=world.episode_id))) == records
     with pytest.raises(ValueError, match="0 度"):
         ReplaceText(episode_id=world.episode_id, old="鐘が鳴った。", new="鐘").run()
-    shown(HandOver(episode_id=world.episode_id))
-    with pytest.raises(ValueError, match="作者の番"):
-        ReplaceText(episode_id=world.episode_id, old="「よう」", new="「おう」").run()
-
-
-def test_narrator_waits_for_the_author_until_the_session_is_cleared(shown, world, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
-    waiting = shown(HandOver(episode_id=world.episode_id))["id"]
-    assert episode_session.wait_author(world.episode_id, interval=0.01, timeout=0.02) == {"status": "timeout"}
-    shown(SaveText(episode_id=world.episode_id, main_text="市で二人が出会った。\n鐘が鳴った。"))
-    assert episode_session.wait_author(world.episode_id, interval=0.01, timeout=0.02) == {
-        "status": "written", "record": {"id": waiting, "action": "@@ -1 +1,2 @@\n 市で二人が出会った。\n+鐘が鳴った。"}}
-
-    # 語り部の番のまま終えても、行を消せば作者の行の無いセッションに戻り、いつでも保存できる
-    with pytest.raises(ValueError, match="語り部の番"):
-        SaveText(episode_id=world.episode_id, main_text="書き直した本文。").run()
-    shown(ClearSession(episode_id=world.episode_id))
-    shown(SaveText(episode_id=world.episode_id, main_text="書き直した本文。"))
-    assert _main_text(world) == "書き直した本文。"

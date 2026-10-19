@@ -36,8 +36,8 @@ from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
-    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, IdeaHistory, IdeaHistoryKnower, KnowerMixin,
-    LocationHistory, LocationHistoryKnower,
+    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, Episode, IdeaHistory, IdeaHistoryKnower,
+    KnowerMixin, LocationHistory, LocationHistoryKnower,
 )
 from db.stamp import Stamp
 
@@ -49,6 +49,19 @@ class Viewer:
     character_id: int
     time: Stamp
     location_ids: frozenset[int]
+
+
+def knowing_time(s: Session, episode_id: int | None, time: Stamp | str | None) -> Stamp:
+    """人物が知ることを読む時刻。渡された時刻、無ければ話の時刻。"""
+    stamp = Stamp.parse(time)
+    if stamp is not None:
+        return stamp
+    if episode_id is None:
+        raise ValueError("話か時刻のどちらかが要る")
+    start = common_query.get_row(s, Episode, episode_id).start
+    if start is None:
+        raise ValueError(f"話 id={episode_id} に時刻が無い")
+    return start
 
 
 def viewer_of(s: Session, character: Character, time: Stamp) -> Viewer:

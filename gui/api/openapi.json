@@ -915,62 +915,6 @@
           }
         }
       }
-    },
-    "/api/episode_session": {
-      "get": {
-        "summary": "Episode Session",
-        "description": "話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す",
-        "operationId": "episode_session_api_episode_session_get",
-        "parameters": [
-          {
-            "name": "episode_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Episode Id"
-            }
-          },
-          {
-            "name": "after_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "After Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSince"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -1520,31 +1464,6 @@
         ],
         "title": "MapsResponse"
       },
-      "Named": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "title": "Named",
-        "description": "行を id と名前だけで指す。"
-      },
       "Option": {
         "properties": {
           "id": {
@@ -2074,141 +1993,6 @@
         ],
         "title": "RunResult"
       },
-      "SessionKind": {
-        "type": "string",
-        "enum": [
-          "人物",
-          "語り",
-          "作者"
-        ],
-        "title": "SessionKind"
-      },
-      "SessionRecord": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "episode_id": {
-            "type": "integer",
-            "title": "Episode Id"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/SessionKind"
-          },
-          "character": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Named"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "witnesses": {
-            "items": {
-              "$ref": "#/components/schemas/Witness"
-            },
-            "type": "array",
-            "title": "Witnesses"
-          },
-          "time": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Time"
-          },
-          "request": {
-            "type": "string",
-            "title": "Request"
-          },
-          "simultaneous": {
-            "type": "boolean",
-            "title": "Simultaneous"
-          },
-          "thought": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Thought"
-          },
-          "action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Action"
-          },
-          "speech": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Speech"
-          },
-          "aim": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Aim"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "episode_id",
-          "kind",
-          "witnesses",
-          "request",
-          "simultaneous"
-        ],
-        "title": "SessionRecord"
-      },
-      "SessionSince": {
-        "properties": {
-          "records": {
-            "items": {
-              "$ref": "#/components/schemas/SessionRecord"
-            },
-            "type": "array",
-            "title": "Records"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "records",
-          "count"
-        ],
-        "title": "SessionSince"
-      },
       "StoryRoute": {
         "properties": {
           "story_id": {
@@ -2317,19 +2101,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "Witness": {
-        "properties": {
-          "character_id": {
-            "type": "integer",
-            "title": "Character Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "character_id"
-        ],
-        "title": "Witness"
       },
       "ChildListMeta": {
         "properties": {

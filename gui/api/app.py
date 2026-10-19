@@ -24,7 +24,6 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.episode.reading import EpisodeNeighbors
 from data_access_logic.episode.record import EpisodeRecord
-from data_access_logic.episode_session.record import SessionSince
 from data_access_logic.logs import configure_logging
 from data_access_logic.map.story_route import StoryRoute
 from db.schema import engine, get_env_session
@@ -315,14 +314,6 @@ def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> Epi
     from data_access_logic.episode.reading import neighbor_episodes
 
     return neighbor_episodes(s, episode_id)
-
-
-@app.get("/api/episode_session", response_model=SessionSince)
-def episode_session(episode_id: int, after_id: int | None = None, s: Session = Depends(session_dep)) -> SessionSince:
-    """話のセッションの行のうち `after_id` より新しい行と、行の総数。画面(`/episode_session`)が 3 秒ごとに引いて増分を足す"""
-    from data_access_logic.episode_session.read_session_since import ReadSessionSince
-
-    return ReadSessionSince(episode_id, after_id).execute(s)
 
 
 _ = Created  # OpenAPI に出す型として残す
