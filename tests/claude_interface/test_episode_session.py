@@ -373,10 +373,11 @@ def test_add_ideas_picks_a_kind_of_the_world(shown, world):
 HANAKO_PARAMETERS = [
     CharacterParameterRow(start="1170/01/01", sex="女", height=170.5, build="細身"),
     CharacterParameterRow(start="1210/01/01", build="肩の厚い体")]
-# 花子の装いは 1191 年から木剣、1210 年から大剣。袋の短刀は本人だけが知る
+# 花子の装いは 1191 年から 1210 年まで木剣、1192 年から外套、1210 年から大剣。袋の短刀は本人だけが知る
 # (1190 年には `world` の来歴の行があり、始まりの同じ行は今ある行を使い回して知る相手を引き継ぐので、年をずらす)
 HANAKO_OUTFITS = [
-    CharacterHistoryRow(start="1191/01/01", kind="装い", description="腰に木剣"),
+    CharacterHistoryRow(start="1191/01/01", end="1210/01/01", kind="装い", description="腰に木剣"),
+    CharacterHistoryRow(start="1192/01/01", kind="装い", description="灰色の外套"),
     CharacterHistoryRow(start="1195/01/01", kind="隠し事", description="袋に短刀"),
     CharacterHistoryRow(start="1210/01/01", kind="装い", description="背に大剣")]
 
@@ -389,11 +390,12 @@ def test_read_appearance(shown, world):
     later = shown(ReadAppearance(character_id=world.character_ids[1], time="1220/01/01"))
     before = shown(ReadAppearance(character_id=world.character_ids[1], time="1180/01/01"))
 
-    # 体格は、その時刻までに始まった一番新しい行の値。装いは、その時刻までに始まった一番新しい装いの来歴の行(隠し事は入らない)
-    assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身", "装い": "腰に木剣",
-                      "外見": "髪が赤い"}
-    assert (later["体格"], later["装い"]) == ("肩の厚い体", "背に大剣")
-    assert before["装い"] is None
+    # 体格は、その時刻までに始まった一番新しい行の値。装いは、その時刻に効いている装いの来歴の行すべて(隠し事は入らない)
+    assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身",
+                      "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
+    # 終わり(`end`)の時刻からは、その装いの行は効かない
+    assert (later["体格"], later["装い"]) == ("肩の厚い体", ["灰色の外套", "背に大剣"])
+    assert before["装い"] == []
 
 
 def test_read_knowledge_tells_kind_of_histories(shown, world):
@@ -404,10 +406,10 @@ def test_read_knowledge_tells_kind_of_histories(shown, world):
     others = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
     # 種別の行は種別を頭に付けて渡し、隠し事は知る相手(本人)だけが知る
-    assert result["自分"]["来歴(古い順)"] == ["9年前、装い: 腰に木剣", "5年前、隠し事: 袋に短刀"]
+    assert result["自分"]["来歴(古い順)"] == ["9年前、装い: 腰に木剣", "8年前、装い: 灰色の外套", "5年前、隠し事: 袋に短刀"]
     known = next(character for character in others["知っている人物"] if character["名前"] == "テスト花子")
     assert "5年前、隠し事: 袋に短刀" not in known["来歴(古い順)"]
-    assert known["装い"] == "腰に木剣"
+    assert known["装い"] == ["腰に木剣", "灰色の外套"]
 
 
 def test_read_knowledge_skips_unrelated_cast(shown, world):
@@ -466,7 +468,7 @@ def test_read_stage(shown, world):
     # 語り部には人物の表層と知り合いの組だけを渡し、芯・来歴・関係の説明・設定は渡さない
     hanako_row = next(member for member in result["登場人物"] if member["人物id"] == hanako)
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
-                          "体格": "細身", "装い": "腰に木剣", "外見": "髪が赤い"}
+                          "体格": "細身", "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
     assert result["知り合い"] == [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
     assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い"}
 
