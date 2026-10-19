@@ -64,8 +64,3 @@ class CommittedEpisode(EpisodeRecord):
     moves: list[CharacterMove] = []
     # 本文を確定したあと、本文で会った・知り合いだと分かった登場人物どうしに足した関係。足していなければ空
     relations: list[CharacterRelationRecord] = []
-
-
-class EpisodeSummaryRecord(Material):
-    id: int
-    summary_text: str

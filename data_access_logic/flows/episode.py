@@ -19,14 +19,14 @@ from data_access_logic.episode.form import EpisodeForm
 from data_access_logic.episode.models import (
     EpisodeBriefSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial,
 )
-from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
+from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.episode_session.store import SessionStore
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.stamp import Stamp
 from data_access_logic.flows import character
 from data_access_logic.caller import call
-from data_access_logic.flows.summary import refresh, rewrite_episode_summaries
+from data_access_logic.flows.summary import refresh
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +131,3 @@ def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBrie
     keywords = [keyword for text in sources for keyword in keywords_of(text, ai, targets.start)]
     return EpisodeBriefSerialized.model_validate(call(episode_steps.episode_brief, episode_steps.BriefForm(
         episode_id=episode_id, keywords=keywords)))
-
-
-def rewrite_episode_summary(episode_ids: list[int], ai: AIClient = ai_client) -> list[EpisodeSummaryRecord]:
-    """`RewriteEpisodeSummary` に当たる。本文が変わっていなくても概要を作り直す。"""
-    return rewrite_episode_summaries(ai, episode_ids, stale_only=False)

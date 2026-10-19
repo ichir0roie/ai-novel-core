@@ -530,25 +530,10 @@
       "writes": false
     },
     {
-      "id": "episode.read_episode_summaries.ReadEpisodeSummaries",
-      "area": "episode",
-      "name": "ReadEpisodeSummaries",
-      "doc": "話を id で、概要だけ読む(作品・題・時刻・概要。本文・プロットは返さない)。時刻の順に返す。",
-      "params": [
-        {
-          "name": "episode_ids",
-          "required": true,
-          "default": null,
-          "annotation": "list[int]"
-        }
-      ],
-      "writes": false
-    },
-    {
       "id": "episode.read_episode_texts.ReadEpisodeTexts",
       "area": "episode",
       "name": "ReadEpisodeTexts",
-      "doc": "話を id で読む(作品・題・時刻・プロット・本文・概要)。時刻の順に返す。",
+      "doc": "話を id で読む(作品・題・時刻・プロット・本文)。時刻の順に返す。",
       "params": [
         {
           "name": "episode_ids",

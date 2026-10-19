@@ -26,7 +26,6 @@ from data_access_logic.character.update_knowledge import UpdateKnowledge
 from data_access_logic.episode.read_character_episodes import ReadCharacterEpisodes
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode.read_episode_casting import ReadEpisodeCasting
-from data_access_logic.episode.read_episode_summaries import ReadEpisodeSummaries
 from data_access_logic.episode.refresh_voices import RefreshVoices
 from data_access_logic.episode.voices import VoiceDraft, VoiceDrafts
 from data_access_logic.episode_session import store
@@ -938,22 +937,22 @@ def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatc
 
     result = shown(ReadEpisodeCasting(episode_id=world.episode_id))
 
-    # 概要を作り直さず(AI を呼ばない)、関わった話は人物ごとの入口で読む
+    # AI を呼ばず、関わった話は人物ごとの入口で読む。語り部には筋書きも来歴も渡さない
     assert asked == []
     taro_row = next(member for member in result["登場人物"] if member["人物id"] == world.character_ids[0])
-    assert "関わった話(古い順)" not in taro_row and "筋書き" not in taro_row
+    assert not {"関わった話(古い順)", "筋書き", "来歴(古い順)"} & set(taro_row)
     # 候補は結ぶかを決める名前と人物像だけ
     candidate = next(member for member in result["登場人物の候補"] if member["人物id"] == other)
     assert candidate == {"人物id": other, "名前": "テスト次郎", "種別": "人物", "年齢": 30, "人物像": "次郎の芯"}
 
 
-def test_read_character_episodes_only_recent_summaries(shown, world, monkeypatch):
+def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
     taro, _ = world.character_ids
     monkeypatch.setattr(constants, "EPISODE_RECENT_APPEARANCE_COUNT", 2)
     with get_env_session() as s:
-        for month, summary in [("01", None), ("02", "二話目の概要"), ("03", "三話目の概要")]:
-            episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text="前", main_text="前の話の本文。",
-                              summary_text=summary, start=f"1200/{month}/01 12:00:00", event_seeded=True)
+        for month in ["01", "02", "03"]:
+            episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
+                              main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00", event_seeded=True)
             s.add(episode)
             s.flush()
             s.add(EpisodeCharacter(episode_id=episode.id, character_id=taro))
@@ -961,16 +960,12 @@ def test_read_character_episodes_only_recent_summaries(shown, world, monkeypatch
 
     result = shown(ReadCharacterEpisodes(episode_id=world.episode_id, character_id=taro))
 
-    # 直近の話から数えて、古い順。本文は返さない
-    assert [(row["題"], row["概要"]) for row in result] == [("02月の話", "二話目の概要"), ("03月の話", "三話目の概要")]
-    assert "本文" not in str(result) and "前の話の本文" not in str(result)
+    # 直近の話から数えて、古い順。本文を返し、プロットは返さない
+    assert [(row["題"], row["本文"]) for row in result] == [("02月の話", "02月の本文。"), ("03月の話", "03月の本文。")]
+    assert "プロット" not in str(result)
 
 
-def test_read_episode_brief_without_lower_ideas_and_refreshing(shown, world, mock_ai, monkeypatch):
-    with get_env_session() as s:
-        s.add(Episode(story_id=world.story_id, title="概要の無い前の話", plot_text="前", main_text="前の話の本文。",
-                      start="1200/03/01 12:00:00", event_seeded=True))
-        s.commit()
+def test_read_episode_brief_without_lower_ideas_and_summaries(shown, world, mock_ai, monkeypatch):
     asked = []
 
     def generate(prompt, output, *args, **kwargs):
@@ -986,13 +981,6 @@ def test_read_episode_brief_without_lower_ideas_and_refreshing(shown, world, moc
     # 当たった設定に下位(テスト魔導炉)は付けない
     idea_ids = [idea["アイデアid"] for idea in result["この話"]["設定"]]
     assert world.idea_id in idea_ids and world.child_idea_id not in idea_ids
-    # 前の話の概要は作り直さない(語を挙げるのにだけ AI を呼ぶ)
+    # 前の話の概要は渡さない(語を挙げるのにだけ AI を呼ぶ)
     assert set(asked) == {IdeaDraftsByAI}
-    assert "概要の無い前の話" not in [past["題"] for past in result["前の話の概要(古い順)"]]
-
-
-def test_read_episode_summaries_without_texts(shown, world):
-    [row] = shown(ReadEpisodeSummaries(episode_ids=[world.episode_id]))
-
-    assert row["title"] == "テスト第一話"
-    assert "main_text" not in row and "plot_text" not in row
+    assert "前の話の概要(古い順)" not in result

@@ -3,11 +3,10 @@ from data_access_logic.episode.commit_episode import CommitEpisode
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
 from data_access_logic.episode.read_episodes import ReadEpisodes
 from data_access_logic.episode.revise_episode import ReviseEpisode
-from data_access_logic.episode.rewrite_episode_summary import RewriteEpisodeSummary
 from data_access_logic.episode.set_episode_synced import SetEpisodeSynced
 from data_access_logic.episode.relations import EpisodeRelationsDraft, RelationDraft
 from data_access_logic.flows.commit import commit_episode, revise_episode
-from db.schema import CharacterRelation, Episode, get_env_session, summary_source_hash
+from db.schema import CharacterRelation, Episode, get_env_session
 from tool.test.mock_ai_client import MockAIClient
 
 
@@ -40,12 +39,8 @@ def test_commit_episode(shown, world, mock_ai):
     assert result["location_id"] == world.location_id
     assert (result["event_seeded"], result["synced"]) == (True, True)
     assert result["character_ids"] == world.character_ids
-    # 確定のあとに要約・ミームを AI に作らせる。要約は話の行に持つ
+    # 確定のあとにミームなどを AI に作らせる
     assert mock_ai.calls
-    with get_env_session() as s:
-        episode = s.get_one(Episode, result["id"])
-        assert episode.summary_text
-        assert episode.summary_source_hash == summary_source_hash(episode.main_text.strip())
 
 
 def test_read_episodes(shown, world):
@@ -60,17 +55,6 @@ def test_set_episode_synced(shown, world):
 
     assert result["id"] == world.episode_id
     assert result["synced"] is False
-
-
-def test_rewrite_episode_summary(shown, world, mock_ai):
-    result = shown(RewriteEpisodeSummary(episode_ids=[world.episode_id]))
-
-    assert [row["id"] for row in result] == [world.episode_id]
-    assert result[0]["summary_text"]
-    with get_env_session() as s:
-        episode = s.get_one(Episode, world.episode_id)
-        assert episode.summary_text == result[0]["summary_text"]
-        assert episode.summary_source_hash == summary_source_hash(episode.main_text.strip())
 
 
 def test_commit_episode_relates_the_cast(world):
@@ -106,9 +90,6 @@ def test_revise_episode(shown, world, mock_ai):
     # 推敲は同期フラグを保ち、渡さなかったプロット・題は空で上書きしない
     assert result["synced"] is True
     assert result["plot_text"] and result["title"]
-    with get_env_session() as s:
-        episode = s.get_one(Episode, world.episode_id)
-        assert episode.summary_source_hash == summary_source_hash(episode.main_text.strip())
 
 
 def test_revise_episode_leaves_relations(world):

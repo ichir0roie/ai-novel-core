@@ -10,8 +10,8 @@ from data_access_logic.episode.models import CharacterEpisodesSerialized
 
 class ReadCharacterEpisodes(SessionEntrypoint):
     """人物(`character_id`)が、話(`episode_id`)より前に関わった話(作品を問わない)のうち、直近の数話
-    (`constants.EPISODE_RECENT_APPEARANCE_COUNT`)を、概要だけで読む(本文は返さない)。古い順。
-    概要は作り直さず、そのときのまま返す(まだ無ければ null)。登場人物を決める前に、人物ごとに呼ぶ。
+    (`constants.EPISODE_RECENT_APPEARANCE_COUNT`)を本文つきで読む(プロットは返さない)。古い順。
+    語り部が登場人物のこれまでを掴むのに、人物ごとに呼ぶ。
     """
 
     def __init__(self, episode_id: int, character_id: int):

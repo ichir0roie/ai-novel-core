@@ -13,7 +13,7 @@ GUI の追加・修正は `execute(s)` で確定だけし、AI の段を回さ�
 
 - `meme_seeded=false`(ミームを抜き出していない。oracle・出来事・話)
 - `meme.anti_meme_id` が空(アンチミームを作っていない。手で足したミーム)
-- 本文と食い違った `summary_source_hash` / `event_summary.source_hash`(要約が古い)
+- 本文と食い違った `event_summary.source_hash`(出来事の要約が古い)
 
 これは `RefreshGeneratedContent` がまとめて拾う。頼まれたら Claude のセッションが回す(スキル `run-ai-tasks`)。
 
@@ -30,7 +30,7 @@ GUI の追加・修正は `execute(s)` で確定だけし、AI の段を回さ�
 - 入力も出力も pydantic のモデルで受け渡す。段の出力は `*Serialized` でない土台のマテリアルで宣言し、列のまま JSON にして運ぶ。
   web の側で `*Serialized` に読み直してから AI に渡す
 - 「AI の結果は得たらすぐ書く」は保つ。AI の結果を得るたびに書き戻す段を一つ呼ぶので、途中で落ちてもそれまでの結果は残る
-- 材料に要約で渡す話・出来事は、材料を読む前に要約を本文に揃える(`*_targets` で対象を引き、`data_access_logic/flows/summary.py` が揃える)。
+- 材料に要約で渡す出来事は、材料を読む前に要約を本文に揃える(`*_targets` で対象を引き、`data_access_logic/flows/summary.py` が揃える)。
   材料を読む段は要約を作り直さない
 
 ## 回す

@@ -45,7 +45,7 @@
 | 話の登場人物・名前だけ出る人物 | `episode` の行の `character_ids` / `mentioned_character_ids` |
 | 人物の居場所 | 入口 `character.read_character.ReadCharacter` の `locations` |
 | 話のセッションの行(読む・消す。db でなく手元の手番のファイルにある) | `.venv/bin/python -m tool.episode_session read --episode <id>` / `clear --episode <id>`(`--from <行の id>` でその行から後だけ) |
-| 話の概要(`summary_text`) | 入口 `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[…]}` の `.result[].summary_text`(表の API の行には入らない) |
+| 話の本文・プロット | 入口 `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[…]}` の `.result[].main_text` / `plot_text`(表の API の一覧の行には入らない) |
 
 - 列名は推測しない。`jq -c '.tables[] | {name, columns: [.columns[].key]}' gui/web/lib/tables.json` で表ごとの列を見る(API には聞かない。画面が持つ表の情報)。取り違えやすいもの:
 
@@ -54,7 +54,7 @@
 | `story` | `name`・`parent_story_id` | `title`・`parent_id` |
 | `idea` | `parent_idea_id` | `parent_id` |
 | `character_relation` | `character_1_id`・`character_2_id` | `from_character_id`・`to_character_id`・`character_id` |
-| `episode` | (概要は表の API に無い。上の表) | `summary`・`summary_text` |
+| `episode` | `plot_text`・`main_text` | `plot`・`text` |
 
 - 一覧(`/records?…`)の項目には本文の列(`text`、`episode` は `plot_text`・`main_text`、`character` は `appearance`・`meme`・`principle`・`plot` も)が入らず、代わりに `label` と本文の頭の `preview` が入る。話に本文があるかは `letters`(字数)で見る。本文そのものは一件(`/records/<id>` の `.record.main_text`)か `ReadEpisodeTexts` で読む
 

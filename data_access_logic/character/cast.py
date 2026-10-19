@@ -108,8 +108,9 @@ def mentioned_of(characters: list[Character], time: Stamp) -> list[MentionedSeri
 
 
 def candidate_at(character: Character, time: Stamp) -> CastCandidateSerialized:
+    """来歴は渡さないので読まない。"""
     return CastCandidateSerialized(character=character, age=age_at(character, time), parameters=parameters_at(character, time),
-                                   histories=histories_at(character, time))
+                                   histories=[])
 
 
 def casting_candidate_at(character: Character, time: Stamp) -> CastingCandidateSerialized:

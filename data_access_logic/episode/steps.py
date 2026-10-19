@@ -11,15 +11,14 @@ from data_access_logic.episode import brief, framer, material, moves, plot_compl
 from data_access_logic.episode.moves import EpisodeMovesMaterial
 from data_access_logic.episode.relations import EpisodeRelationsMaterial, RelationsForm
 from data_access_logic.character.record import CharacterRelationRecord
-from data_access_logic.episode import summary as episode_summary
 from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, EpisodeReviseForm, has_cast, save_frame, set_characters
 from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.models import (
     EpisodeBrief, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
-    EpisodeMaterial, EpisodeSummarySource,
+    EpisodeMaterial,
 )
-from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
+from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.episode.voices import VoiceForm, VoiceSource
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.location.models import LocationMaterial
@@ -36,19 +35,6 @@ class SavedFrame(BaseModel):
     needs_frame: bool
     # 登場人物(名前だけ出る人物でない行)がいるか
     has_cast: bool
-
-
-class SummarySourcesForm(BaseModel):
-    # 省けばすべての話
-    episode_ids: list[int] | None = None
-    # false なら、概要が本文と揃っていても作り直す
-    stale_only: bool = True
-
-
-class SummaryForm(BaseModel):
-    episode_id: int
-    source_hash: str
-    summary_text: str
 
 
 class MaterialForm(BaseModel):
@@ -100,17 +86,6 @@ def save_episode_frame(s: Session, form: EpisodeForm) -> SavedFrame:
     record = save_frame(s, form)
     return SavedFrame(id=record.id, needs_frame=not record.plot_text.strip() or record.start is None,
                       has_cast=has_cast(s, record.id))
-
-
-@db_step
-def summary_sources(s: Session, form: SummarySourcesForm) -> list[EpisodeSummarySource]:
-    return episode_summary.summary_sources(s, form.episode_ids, form.stale_only)
-
-
-@db_step
-def write_summary(s: Session, form: SummaryForm) -> EpisodeSummaryRecord:
-    return EpisodeSummaryRecord.model_validate(
-        episode_summary.write_summary(s, form.episode_id, form.source_hash, form.summary_text))
 
 
 @db_step

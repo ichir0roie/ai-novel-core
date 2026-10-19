@@ -954,10 +954,6 @@ class Episode(EventSeededMixin, MemeSeededMixin, ContentBase):
         String, nullable=False, default="", server_default="",
         comment="プロット。作者が入れる、AI 生成前の話の中身",
         sort_order=10010)
-    summary_text: Mapped[str | None] = mapped_column(
-        String, comment="本文の概要。AI が本文から作る。まだ作っていなければ空", sort_order=10020)
-    summary_source_hash: Mapped[str | None] = mapped_column(
-        String, comment="概要を作った本文の sha256。本文と食い違ったら概要を作り直す", sort_order=10030)
 
     @validates("main_text")
     def _letters_follow_text(self, _key, value):

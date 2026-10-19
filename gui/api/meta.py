@@ -100,15 +100,13 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     sections = set(model.TEXT_COLUMNS)
     # 字数は本文から自動で数えるので、フォームでは直に書けない
     readonly_columns = {"letters"} if spec.name == "episode" else set()
-    # 本文の概要は AI に前の話を渡すためのものなので、画面には出さない
-    hidden_columns = {"summary_text", "summary_source_hash"} if spec.name == "episode" else set()
     # AI 生成前のプロットは、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
     side_columns = {"plot_text"} if spec.name == "episode" else set()
     # 話の本文は小説の地の文なので、マークダウンとして解釈せずただのテキストとして扱う
     plain_text_columns = {"main_text"} if spec.name == "episode" else set()
     plain, long = [], []
     for column in model.__table__.columns:
-        if column.key in hidden_columns or column.key in TIMESTAMP_COLUMNS:
+        if column.key in TIMESTAMP_COLUMNS:
             continue
         meta = column_meta(column, writer_of(spec.name).create_form.model_fields.get(column.key), section=column.key in sections,
                            readonly=column.key in readonly_columns,

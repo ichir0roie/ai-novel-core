@@ -9,13 +9,12 @@ from pydantic import BaseModel
 from data_access_logic.flows import meme
 from data_access_logic.flows.fact_check import check_and_extract
 from data_access_logic.flows.fact_check import extract_memes as extract_and_check_memes
-from data_access_logic.flows.summary import rewrite_episode_summaries, rewrite_event_summaries
+from data_access_logic.flows.summary import rewrite_event_summaries
 
 
 class RefreshedAll(BaseModel):
     memes_added: int
     events_summarized: int
-    episodes_summarized: int
 
 
 class ExtractedMemes(BaseModel):
@@ -27,7 +26,6 @@ def refresh_generated_content(ai: AIClient = ai_client) -> RefreshedAll:
     return RefreshedAll(
         memes_added=meme.refresh(ai),
         events_summarized=rewrite_event_summaries(ai, None),
-        episodes_summarized=len(rewrite_episode_summaries(ai, None)),
     )
 
 

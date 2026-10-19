@@ -26,19 +26,14 @@ class EpisodeBase(Material):
     title: str
 
 
-class PastEpisode(EpisodeBase):
-    id: int
-    start: Stamp | None = None
-    summary_text: str
-    # 章・外伝をまたいで、人物が関わった話も渡すので、どの作品の話かを添える
-    story: Named | None = None
-
-
 class AppearedEpisode(EpisodeBase):
     id: int
     start: Stamp | None = None
-    summary_text: str | None = None
     story: Named
+
+
+class AppearedEpisodeText(AppearedEpisode):
+    main_text: str
 
 
 class CharacterEpisode(Material):
@@ -47,6 +42,12 @@ class CharacterEpisode(Material):
     character_id: int
     mentioned: bool
     episode: AppearedEpisode
+
+
+class CharacterEpisodeText(CharacterEpisode):
+    """人物が関わった話を、本文つきで。"""
+
+    episode: AppearedEpisodeText
 
 
 class RecentEpisode(Material):
@@ -88,14 +89,6 @@ class FrameEpisode(UnwrittenEpisode):
     viewpoint_character: CharacterMaterial | None = None
 
 
-def _past_episodes(past_episodes: list[PastEpisode]) -> list[dict[str, Any]]:
-    return [
-        {"作品": past.story.name if past.story else None, "題": past.title,
-         "時刻": str(past.start) if past.start else None, "概要": past.summary_text}
-        for past in past_episodes
-    ]
-
-
 def _appearance(link: CharacterEpisode) -> dict[str, Any]:
     return {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
             "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
@@ -106,15 +99,14 @@ def _appearances(appearances: list[CharacterEpisode], character_id: int) -> list
 
 
 class CharacterEpisodesSerialized(Material):
-    """人物が関わった話を、概要だけで(本文は入れない)。このセッションの Claude が読む形に整形する。"""
+    """人物が関わった話を本文つきで。このセッションの Claude が読む形に整形する。"""
 
     # 古い順
-    appearances: list[CharacterEpisode]
+    appearances: list[CharacterEpisodeText]
 
-    # 概要は作り直さず、そのときのまま読む(まだ無ければ null)
     @model_serializer
     def _for_claude(self) -> list[dict[str, Any]]:
-        return [{**_appearance(link), "概要": link.episode.summary_text} for link in self.appearances]
+        return [{**_appearance(link), "本文": link.episode.main_text} for link in self.appearances]
 
 
 def _location(locations: list[LocationMaterial]) -> str | None:
@@ -137,8 +129,6 @@ def _story(story: StoryMaterial) -> dict[str, Any]:
 class EpisodeMaterial(Material):
     story: StoryMaterial
     main_episode: TargetEpisode
-    # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
-    past_episodes: list[PastEpisode]
     # 話の場所とその親。広い順。来歴は話の時刻の年まで
     locations: list[LocationLine]
     cast: list[CastMaterial]
@@ -166,7 +156,6 @@ class EpisodeMaterialSerialized(EpisodeMaterial):
         episode = self.main_episode
         return {
             "作品": _story(self.story),
-            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
             "書く話": {
                 "時刻": str(episode.start),
                 "場所": _location(self.locations),
@@ -243,8 +232,6 @@ class BriefEpisode(EpisodeBase):
 class EpisodeBrief(Material):
     story: StoryMaterial
     main_episode: BriefEpisode
-    # この話より前の、同じ作品(親・兄弟の章・外伝を含む)の話と登場人物が関わった話(直前の話も含む)。古い順
-    past_episodes: list[PastEpisode]
     # 文体の見本にする、同じ作品の直前の話の本文。字数の上限まで。古い順
     style_samples: list[str]
     # 話の場所とその親。広い順。来歴は話の時刻の年まで
@@ -288,8 +275,6 @@ class EpisodeBriefSerialized(EpisodeBrief):
         return {
             "書き方": self.guide,
             "作品": _story(self.story),
-            "前の話の概要(古い順)": [{"話id": past.id, **entry}
-                                     for past, entry in zip(self.past_episodes, _past_episodes(self.past_episodes))],
             "文体の見本(古い順)": self.style_samples,
             "この話": {
                 "話id": episode.id,
@@ -369,8 +354,6 @@ class EpisodeCastingSerialized(EpisodeCasting):
 class EpisodeFrameMaterial(Material):
     story: StoryMaterial
     main_episode: FrameEpisode
-    # 古い順
-    past_episodes: list[PastEpisode]
     # 話の場所とその親。広い順
     locations: list[LocationMaterial]
     cast: list[CastMaterial]
@@ -394,7 +377,6 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
         return {
             "作品": _story(self.story),
             "場所": _location(self.locations),
-            "前の話の概要(古い順)": _past_episodes(self.past_episodes),
             "登場人物": [member.model_dump() for member in self.cast],
             "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
             "登場人物の関係": relations_for_prompt(self.relations),
@@ -409,26 +391,6 @@ class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
                 "場所": episode.location.name if episode.location else None,
             },
         }
-
-
-class EpisodeSource(Material):
-    title: str
-    main_text: str
-
-
-class EpisodeSummarySource(EpisodeSource):
-    """概要を作る話。書き戻すときに、概要にした本文のハッシュを添える。"""
-
-    id: int
-    source_hash: str
-
-
-class EpisodeSourceSerialized(EpisodeSource):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        return {"題": self.title, "本文": self.main_text}
 
 
 def _not_empty(value: str) -> str:
@@ -504,16 +466,4 @@ class EpisodeFrameDraft(BaseModel):
     @field_validator("plot_text")
     @classmethod
     def _plot_text(cls, value: str) -> str:
-        return _not_empty(value)
-
-
-class EpisodeSummaryDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    summary_text: str = Field(description="概要")
-
-    @field_validator("summary_text")
-    @classmethod
-    def _filled(cls, value: str) -> str:
         return _not_empty(value)

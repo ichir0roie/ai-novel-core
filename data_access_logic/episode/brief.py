@@ -5,8 +5,8 @@
 先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む
 (スキル `episode` / `revise-episode`)。設定は話に結ばず、プロット・話のセッションの行(手番のファイル)・今の本文から AI が挙げた語で引く。
 本文は Claude が `CommitEpisode` で確定する。
-登場人物を決める材料(`episode_casting`)と人物ごとの関わった話(`character_episodes`)は db だけで読み、概要は作り直さない。
-本文の材料も概要・要約を作り直さず、db だけの段(`brief_targets` → AI が語を挙げる → `episode_brief`)に分けてあり、
+登場人物を決める材料(`episode_casting`)と人物ごとの関わった話の本文(`character_episodes`)は db だけで読む。
+本文の材料は出来事の要約を作り直さず、db だけの段(`brief_targets` → AI が語を挙げる → `episode_brief`)に分けてあり、
 流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import PAST_EPISODES_INSTRUCTION, STYLE_SAMPLE_INSTRUCTION
+from ai.instructions.past_episodes import STYLE_SAMPLE_INSTRUCTION
 from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic.character.cast import (
     candidate_at, cast_of, casting_candidate_at, mentioned_of, relations_among, secrets_at,
@@ -31,7 +31,7 @@ from data_access_logic.episode.models import (
 from data_access_logic.episode.material import (
     known_locations, later_events_select, load_episode, location_events_select,
 )
-from data_access_logic.episode.summary import appearances, past_episodes, recent_appearances, style_samples
+from data_access_logic.episode.past import appearances, recent_appearances, style_samples
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
@@ -58,7 +58,6 @@ def _guide(s: Session) -> str:
         MENTIONED_INSTRUCTION,
         IDEA_CONTEXT_INSTRUCTION,
         BIO_ABSTRACTION_INSTRUCTION,
-        PAST_EPISODES_INSTRUCTION,
         STYLE_SAMPLE_INSTRUCTION,
         style.style_instruction(read_style_extras(s)),
     ])
@@ -86,7 +85,7 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
 
 
 def character_episodes(s: Session, episode_id: int, character_id: int) -> CharacterEpisodesSerialized:
-    """人物がこの話より前に関わった、直近の話を概要だけで。概要は作り直さず、そのときのまま読む。"""
+    """人物がこの話より前に関わった、直近の話を本文つきで。"""
     episode = common_query.get_row(s, Episode, episode_id)
     common_query.get_row(s, Character, character_id)
     return CharacterEpisodesSerialized(appearances=recent_appearances(s, episode, character_id))
@@ -106,7 +105,7 @@ def brief_targets(s: Session, episode_id: int) -> BriefTargets:
 
 
 def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeBriefSerialized:
-    """概要・要約は作り直さず、そのまま読む。`keywords` の語をアイデアと照らし、当たったものとその上位を設定に渡す。
+    """出来事の要約は作り直さず、そのまま読む。`keywords` の語をアイデアと照らし、当たったものとその上位を設定に渡す。
     当たらなかった造語は候補として足し、設定に入れる(`resolve_ideas`)。"""
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)
@@ -119,7 +118,6 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        past_episodes=past_episodes(s, episode, characters),
         style_samples=style_samples(s, episode),
         locations=location_path_at(s, location_id, time) if location_id is not None else [],
         cast=cast_of(s, characters, time),

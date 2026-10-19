@@ -26,7 +26,7 @@ from data_access_logic.oracle.record import MemeSourceCommitted
 from data_access_logic.step import RowId
 from data_access_logic.flows import event_seed, fact_check, meme
 from data_access_logic.caller import call
-from data_access_logic.flows.summary import rewrite_episode_summaries, rewrite_event_summaries
+from data_access_logic.flows.summary import rewrite_event_summaries
 
 
 def _move_cast(ai: AIClient, episode_id: int) -> list[CharacterMove]:
@@ -58,7 +58,6 @@ def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> Comm
     (移動先が空なら何もしない)。本文で会った・知り合いだと分かった登場人物どうしの関係も足し、レスポンスの `relations` に返す。"""
     record = call(episode_steps.commit_episode, episode)
     meme.refresh(ai)
-    rewrite_episode_summaries(ai, [record.id])
     moved = _move_cast(ai, record.id) if episode.main_text is not None else []
     related = _relate_cast(ai, record.id) if episode.main_text is not None else []
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
@@ -69,7 +68,6 @@ def revise_episode(episode: EpisodeReviseForm, ai: AIClient = ai_client) -> Epis
     今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので。"""
     record = call(episode_steps.revise_episode, episode)
     meme.refresh(ai)
-    rewrite_episode_summaries(ai, [record.id])
     return record
 
 

@@ -18,7 +18,7 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
-from data_access_logic.episode.summary import recent_episodes
+from data_access_logic.episode.past import recent_episodes
 from data_access_logic.material import Material
 from db.schema import Character, CharacterParameter
 from db.stamp import Stamp

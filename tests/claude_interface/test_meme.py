@@ -77,10 +77,9 @@ def test_extract_memes(shown, mock_ai):
 def test_refresh_generated_content(shown, world, mock_ai):
     result = shown(RefreshGeneratedContent())
 
-    assert set(result) == {"memes_added", "events_summarized", "episodes_summarized"}
-    # fixture で足した出来事・話は要約が無いので、ここで作る
+    assert set(result) == {"memes_added", "events_summarized"}
+    # fixture で足した出来事は要約が無いので、ここで作る
     assert result["events_summarized"] >= 2
-    assert result["episodes_summarized"] >= 1
     assert mock_ai.calls
 
 

@@ -223,8 +223,9 @@ class CastCandidateSerialized(CastCandidate):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        # 登場人物を決める語り部は、話の時刻より先の筋(筋書き)を読まない
-        sheet = {key: value for key, value in _sheet(self.character, self).items() if key != "筋書き"}
+        # 語り部は、話の時刻より先の筋(筋書き)も、来歴も読まない。人物のこれまでは、関わった話の本文から読む
+        sheet = {key: value for key, value in _sheet(self.character, self).items()
+                 if key not in ("筋書き", "来歴(古い順)")}
         return {"人物id": self.character.id, **sheet}
 
 
