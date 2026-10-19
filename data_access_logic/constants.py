@@ -89,7 +89,7 @@ EPISODE_CHARACTER_EVENT_LIMIT = 3
 EPISODE_PLACE_EVENT_LIMIT = 3
 
 # data_access_logic/idea
-# 清書に渡すアイデアの上限(直接当たったものと、その上位・下位を合わせて)。
+# 清書に渡すアイデアの上限(直接当たったものと、その上位を合わせて)。
 IDEA_CONTEXT_LIMIT = 100
 # 清書に渡すアイデア一件の本文の字数の上限。
 IDEA_CONTEXT_LETTERS = 400

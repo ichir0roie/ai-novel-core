@@ -122,11 +122,10 @@ def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.Voi
 
 
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
-    """`ReadEpisodeBrief` に当たる。
+    """`ReadEpisodeBrief` に当たる。前の話の概要・出来事の要約は作り直さず、そのときのまま読む。
     設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。
     話のセッションの行は db に無く、流れを回すこの機械の手番のファイルにある。"""
     targets = call(episode_steps.brief_targets, RowId(id=episode_id))
-    refresh(ai, targets)
     session = SessionStore(episode_id).text()
     sources = [*targets.word_sources, *([session] if session.strip() else [])]
     keywords = [keyword for text in sources for keyword in keywords_of(text, ai, targets.start)]

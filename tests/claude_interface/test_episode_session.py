@@ -966,6 +966,31 @@ def test_read_character_episodes_only_recent_summaries(shown, world, monkeypatch
     assert "本文" not in str(result) and "前の話の本文" not in str(result)
 
 
+def test_read_episode_brief_without_lower_ideas_and_refreshing(shown, world, mock_ai, monkeypatch):
+    with get_env_session() as s:
+        s.add(Episode(story_id=world.story_id, title="概要の無い前の話", plot_text="前", main_text="前の話の本文。",
+                      start="1200/03/01 12:00:00", event_seeded=True))
+        s.commit()
+    asked = []
+
+    def generate(prompt, output, *args, **kwargs):
+        asked.append(output)
+        if output is IdeaDraftsByAI:
+            return output(ideas=[IdeaDraftByAI(keyword="テスト魔導", variants=["テスト術"], description="都の技術",
+                                               coined=False, kind="技術", start=None, end=None)])
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
+
+    # 当たった設定に下位(テスト魔導炉)は付けない
+    idea_ids = [idea["アイデアid"] for idea in result["この話"]["設定"]]
+    assert world.idea_id in idea_ids and world.child_idea_id not in idea_ids
+    # 前の話の概要は作り直さない(語を挙げるのにだけ AI を呼ぶ)
+    assert set(asked) == {IdeaDraftsByAI}
+    assert "概要の無い前の話" not in [past["題"] for past in result["前の話の概要(古い順)"]]
+
+
 def test_read_episode_summaries_without_texts(shown, world):
     [row] = shown(ReadEpisodeSummaries(episode_ids=[world.episode_id]))
 

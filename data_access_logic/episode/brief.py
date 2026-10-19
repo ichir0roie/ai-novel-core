@@ -6,7 +6,7 @@
 (スキル `episode` / `revise-episode`)。設定は話に結ばず、プロット・話のセッションの行(手番のファイル)・今の本文から AI が挙げた語で引く。
 本文は Claude が `CommitEpisode` で確定する。
 登場人物を決める材料(`episode_casting`)と人物ごとの関わった話(`character_episodes`)は db だけで読み、概要は作り直さない。
-本文の材料は db だけの段(`brief_targets` → 要約を揃え、語を挙げる → `episode_brief`)に分けてあり、
+本文の材料も概要・要約を作り直さず、db だけの段(`brief_targets` → AI が語を挙げる → `episode_brief`)に分けてあり、
 流れ(`data_access_logic/flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ from data_access_logic.episode.models import (
     StoryMaterial,
 )
 from data_access_logic.episode.material import (
-    known_locations, later_events_select, load_episode, location_events_select, summary_targets_of,
+    known_locations, later_events_select, load_episode, location_events_select,
 )
 from data_access_logic.episode.summary import appearances, past_episodes, recent_appearances, style_samples
 from data_access_logic.event.summary import events_of
@@ -39,7 +39,7 @@ from data_access_logic.idea.whole import whole_ideas
 from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
 from data_access_logic.style_preference.extras import read_style_extras
-from data_access_logic.summary_targets import SummaryTargets
+from data_access_logic.material import Material
 from db.schema import Character, Episode
 from db.stamp import Stamp
 
@@ -92,7 +92,7 @@ def character_episodes(s: Session, episode_id: int, character_id: int) -> Charac
     return CharacterEpisodesSerialized(appearances=recent_appearances(s, episode, character_id))
 
 
-class BriefTargets(SummaryTargets):
+class BriefTargets(Material):
     # 設定と照らす語を AI に挙げさせる元(`keywords_of`)。プロット・今の本文の、空でないもの。
     # 話のセッションの行は db に無いので、流れ(`flows/episode.py`)が手番のファイルから足す
     word_sources: list[str]
@@ -101,13 +101,12 @@ class BriefTargets(SummaryTargets):
 
 def brief_targets(s: Session, episode_id: int) -> BriefTargets:
     episode = _episode(s, episode_id)
-    targets = summary_targets_of(s, episode, episode.start)
-    return BriefTargets(**targets.model_dump(), start=episode.start,
+    return BriefTargets(start=episode.start,
                         word_sources=[text for text in (episode.plot_text, episode.main_text) if text.strip()])
 
 
 def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeBriefSerialized:
-    """要約は揃えてある前提でそのまま読む。`keywords` の語をアイデアと照らし、当たったものとその上位・下位を設定に渡す。
+    """概要・要約は作り直さず、そのまま読む。`keywords` の語をアイデアと照らし、当たったものとその上位を設定に渡す。
     当たらなかった造語は候補として足し、設定に入れる(`resolve_ideas`)。"""
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)

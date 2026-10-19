@@ -258,7 +258,7 @@ class EpisodeBrief(Material):
     relations: list[CharacterRelationLine]
     # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
     appearances: list[CharacterEpisode]
-    # プロット・話のセッションの行・今の本文から挙げた語に当たったアイデアとその上位・下位、足した候補。
+    # プロット・話のセッションの行・今の本文から挙げた語に当たったアイデアとその上位、足した候補。
     # 呼び名は話の時刻・場所に効く履歴から。履歴の行は話の時刻までに始まったものをすべて添える
     ideas: list[WholeIdeaMaterial]
     # 古い順
