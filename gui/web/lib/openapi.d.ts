@@ -699,12 +699,18 @@ export interface components {
             /** Result */
             result?: unknown;
         };
+        /**
+         * SessionKind
+         * @enum {string}
+         */
+        SessionKind: "人物" | "語り" | "作者";
         /** SessionRecord */
         SessionRecord: {
             /** Id */
             id: number;
             /** Episode Id */
             episode_id: number;
+            kind: components["schemas"]["SessionKind"];
             character?: components["schemas"]["Named"] | null;
             /** Witnesses */
             witnesses: components["schemas"]["Witness"][];
@@ -712,10 +718,6 @@ export interface components {
             time?: string | null;
             /** Request */
             request: string;
-            /** Closing */
-            closing: boolean;
-            /** Author */
-            author: boolean;
             /** Simultaneous */
             simultaneous: boolean;
             /** Thought */

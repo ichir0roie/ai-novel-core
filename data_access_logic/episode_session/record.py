@@ -3,7 +3,7 @@ from typing import Literal
 from sqlalchemy.orm import joinedload, selectinload
 
 from data_access_logic.material import Material, Named, Timestamp
-from db.schema import EpisodeCharacterSession
+from db.schema import EpisodeCharacterSession, SessionKind
 
 
 class Witness(Material):
@@ -15,13 +15,12 @@ class SessionRecord(Material):
 
     id: int
     episode_id: int
-    # 空なら語りの行
+    kind: SessionKind
+    # 人物の行だけが持つ
     character: Named | None = None
     witnesses: list[Witness]
     time: Timestamp | None = None
     request: str
-    closing: bool
-    author: bool
     # 前の手番と同時に動く手番
     simultaneous: bool
     thought: str | None = None
@@ -51,7 +50,6 @@ class TurnRecord(Material):
     # 前の自分の番から後に、見聞きした語りとほかの人物の一手(`turns.seen_lines`)
     seen: list[str] = []
     request: str
-    closing: bool
 
 
 class PlayedTurn(Material):
@@ -67,9 +65,9 @@ class PlayedTurn(Material):
 
 
 class TurnState(Material):
-    # turn: いまこの人物が動く番 / waiting: ほかの人物の番か、まだ要求が無い / closed: 話が終わった
-    status: Literal["turn", "waiting", "closed"]
-    # turn と closed のときの、この人物の行
+    # turn: いまこの人物が動く番 / waiting: ほかの人物の番か、まだ要求が無い
+    status: Literal["turn", "waiting"]
+    # turn のときの、この人物の行
     record: TurnRecord | None = None
 
 

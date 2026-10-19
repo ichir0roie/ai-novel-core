@@ -9,7 +9,7 @@ from data_access_logic.episode_session.turns import turn_of
 
 
 class ReadTurn(SessionEntrypoint):
-    """人物役が、話のセッションでいま自分の番か(turn)、待つか(waiting)、話が終わったか(closed)を読む。"""
+    """人物役が、話のセッションでいま自分の番か(turn)、待つか(waiting)を読む。"""
 
     def __init__(self, episode_id: int, character_id: int):
         self.episode_id = episode_id

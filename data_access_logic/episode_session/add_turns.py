@@ -8,7 +8,9 @@ from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode_session.form import TurnRequest
 from data_access_logic.episode_session.record import SessionRecord
 from data_access_logic.episode_session.stage import acquaintances
-from db.schema import Character, Episode, EpisodeCharacter, EpisodeCharacterSession, EpisodeCharacterSessionWitness
+from db.schema import (
+    Character, Episode, EpisodeCharacter, EpisodeCharacterSession, EpisodeCharacterSessionWitness, SessionKind,
+)
 from db.stamp import Stamp
 
 
@@ -58,7 +60,7 @@ class AddTurns(CommitEntrypoint):
         rows = []
         if self.narration is not None:
             rows.append(EpisodeCharacterSession(
-                episode_id=self.episode_id, time=self.time or (self.turns[0].time if self.turns else None),
+                episode_id=self.episode_id, kind=SessionKind.NARRATION, time=self.time or (self.turns[0].time if self.turns else None),
                 request=self.narration,
                 witnesses=[EpisodeCharacterSessionWitness(character_id=id_) for id_ in dict.fromkeys(self.witness_ids)]))
         known = acquaintances(s, self.episode_id) if any(self._witnesses_of(turn) for turn in self.turns) else set()
@@ -72,7 +74,7 @@ class AddTurns(CommitEntrypoint):
                         "その人物の一手は、見て分かる言葉で語り(narration)か要求に書く")
             # 組の頭(一つ目)は前の手番と組にならない
             row = EpisodeCharacterSession(
-                episode_id=self.episode_id, simultaneous=self.simultaneous and index > 0,
+                episode_id=self.episode_id, kind=SessionKind.CHARACTER, simultaneous=self.simultaneous and index > 0,
                 witnesses=[EpisodeCharacterSessionWitness(character_id=id_) for id_ in witnesses])
             turn.write_to(row)
             rows.append(row)

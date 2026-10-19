@@ -2074,6 +2074,15 @@
         ],
         "title": "RunResult"
       },
+      "SessionKind": {
+        "type": "string",
+        "enum": [
+          "人物",
+          "語り",
+          "作者"
+        ],
+        "title": "SessionKind"
+      },
       "SessionRecord": {
         "properties": {
           "id": {
@@ -2083,6 +2092,9 @@
           "episode_id": {
             "type": "integer",
             "title": "Episode Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
           },
           "character": {
             "anyOf": [
@@ -2115,14 +2127,6 @@
           "request": {
             "type": "string",
             "title": "Request"
-          },
-          "closing": {
-            "type": "boolean",
-            "title": "Closing"
-          },
-          "author": {
-            "type": "boolean",
-            "title": "Author"
           },
           "simultaneous": {
             "type": "boolean",
@@ -2177,10 +2181,9 @@
         "required": [
           "id",
           "episode_id",
+          "kind",
           "witnesses",
           "request",
-          "closing",
-          "author",
           "simultaneous"
         ],
         "title": "SessionRecord"

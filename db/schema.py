@@ -980,34 +980,44 @@ class EpisodeCharacter(Base):
     character: Mapped["Character"] = relationship(lazy="noload")
 
 
+class SessionKind(enum.StrEnum):
+    CHARACTER = "人物"
+    NARRATION = "語り"
+    AUTHOR = "作者"
+
+
+SESSION_KINDS = tuple(kind.value for kind in SessionKind)
+
+
 class EpisodeCharacterSession(Base):
     """話の本文を書く前か書きながら、語り部と人物役が場面を手番で進めた記録。語り部と人物役はこの表だけでやり取りする。
 
-    語り部が手番の人物に要求の行を足し、人物役がその行に行動を書き込む。手番は話の中で id の順に回り、
-    行動の書かれていない一番古い行の人物が、いま動く番(`data_access_logic/episode_session/`)。
-    人物の無い行は語りの行(その場の何人もに見える・聞こえる状況)で、手番に数えない。語りの行と人物の一手は、
-    見聞きする人物(`witnesses`)に、その人物の次の番で届く。同じ状況を人物の数だけ書き写さないため。
-    作者の行(`author`)は人物の無い手番で、作者が本文に書いたこと(`action`)を語り部が読み、場面に起こして人物役へ回す。
-    人物役には届かない。作者が書くまでは後の手番が待つので、作者・語り部・人物役の順に一巡する。
+    行は種別(`kind`)で三つに分かれる。
+    - 人物の行: 語り部が手番の人物に要求の行を足し、人物役がその行に一手(内心・行動・セリフ・狙い)を書き込む。手番は話の中で
+      id の順に回り、行動の書かれていない一番古い手番の行が、いま動く番(`data_access_logic/episode_session/`)
+    - 語りの行: その場の何人もに見える・聞こえる状況(`request`)。手番に数えない。語りの行と人物の一手は、
+      見聞きする人物(`witnesses`)に、その人物の次の番で届く。同じ状況を人物の数だけ書き写さないため
+    - 作者の行: 人物の無い手番で、作者が本文に書いたこと(`action`)を語り部が読み、場面に起こして人物役へ回す。
+      人物役には届かない。作者が書くまでは後の手番が待つので、作者・語り部・人物役の順に一巡する
     同時に動く手番(`simultaneous`)は、前の手番と組になって一度に番が開く。組の中の一手はお互いに、次の番で届く。
     """
 
     __tablename__ = "episode_character_session"
+    __table_args__ = (CheckConstraint(
+        f"(character_id IS NOT NULL) = (kind = '{SessionKind.CHARACTER.value}')",
+        name="ck_episode_character_session_character_kind"),)
 
     episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, nullable=False, sort_order=100)
+    kind: Mapped[str] = mapped_column(
+        String, nullable=False, comment=f"行の種別。{'/'.join(SESSION_KINDS)} のいずれか", sort_order=105)
     character_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("character.id"), index=True, comment="この手番で動く人物。空なら語りの行", sort_order=110)
+        Integer, ForeignKey("character.id"), index=True, comment="この手番で動く人物。人物の行だけが持つ", sort_order=110)
     time: Mapped[Stamp | None] = mapped_column(StampType, comment="この手番の作中の時刻", sort_order=120)
     request: Mapped[str] = mapped_column(
         String, nullable=False,
         comment="語り部の要求。その人物にだけ見える・聞こえるようになったことと、この手番で求めること。語りの行では、"
                 "見聞きする人物に届く状況。作者の行では、語り部が作者に番を渡すときの一言",
         sort_order=130)
-    closing: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, comment="話が終わった合図。人物役はこの行を読んだら止まる", sort_order=140)
-    author: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, comment="作者の行。人物は空で、作者が書いたことを行動に持つ",
-        sort_order=145)
     simultaneous: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
         comment="前の手番と同時に動く手番。前の手番の一手を待たずに番が開き、同じ組の一手は次の番で届く",

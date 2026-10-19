@@ -58,7 +58,6 @@ DB_ENTRANCES = frozenset({
     "episode_session.answer_turn.AnswerTurn",
     "episode_session.append_text.AppendText",
     "episode_session.clear_session.ClearSession",
-    "episode_session.close_session.CloseSession",
     "episode_session.hand_over.HandOver",
     "episode_session.read_knower_gaps.ReadKnowerGaps",
     "episode_session.read_played_turns.ReadPlayedTurns",
