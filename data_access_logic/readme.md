@@ -137,6 +137,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文を時刻の順に返す |
 | 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
 | 「この話の登場人物・場所を結んで」 | `episode.cast_episode.CastEpisode(episode_id, character_ids, location_id=None, viewpoint_character_id=None)`。登場人物(`episode_character`)をまるごと置き換え、名前だけ出る人物を拾い直す。場所・視点は渡したときだけ書く。同期フラグは変えない |
+| 「プロット・来歴・アイデアを書く前に書き方を読ませて」 | `style_preference.read_writing_style.ReadWritingStyle()`。AI が書くすべての文の書き方(固定の文面と、`style_preference` のうち効く範囲が全体の行)を `text` で返す。db だけで読む |
 | 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の行)・作品・文体の見本(同じ作品・章・外伝の直前の話の本文を、新しい話から字数の上限まで。言葉の選び方・言い回しを揃えさせる)・この話(題・時刻・同期・場所・視点・登場人物・名前だけ出る人物・関係(登場人物どうしのものだけ)・設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から引くので、先に `CastEpisode` で結んでから読む。設定は話に結ばず、プロット・話のセッションの行・今の本文から AI が元ごとに挙げた語(`keywords_of`)をアイデアと照らし(`resolve_ideas`)、当たったものとその上位(下位は付けない)と、足した候補を渡す(呼び名はアイデアの履歴 `idea_history` のうち話の時刻・場所に効くもの)。時刻が空なら止まる。登場人物の話し方は調整しない(頼まれたときに `RefreshVoices`)。出来事の要約は作り直さず、そのまま読む(本文は書かない) |
 
 筋書きのテーブルは無い。場所に掛かる筋書きは作品(`story`)の
@@ -432,14 +433,18 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 ## 出来事の生成・話の材料
 
 世界の舞台設定や、既存の話から抽出した文体の癖のような「ユーザーの好み」は `core` には定数で持たず
-(`ai/instructions/style.py` の `style_instruction()` を見る)、db の `style_preference` 表に持つ。効くのは話の本文だけで、
-材料(`ReadEpisodeBrief` の「書き方」)に、すべての行を id の順に足す(`style_preference/extras.py`)。
-行が無ければ空で、`core` だけの汎用の文体になる。
+(`ai/instructions/style.py` を見る)、db の `style_preference` 表に持つ。行ごとに効く範囲(`scope`)を持ち、id の順に足す
+(`style_preference/extras.py`)。行が無ければ空で、`core` だけの汎用の文体になる。
+
+- 全体: AI が書くすべての文(プロット・来歴・関係・アイデア・ミーム・出来事・本文など)に効く。AI に書かせるときは
+  `ai/claude_code/ai_client.generate` が毎回 system に足し(固定の `WRITING_STYLE_BASE` と合わせて)、このセッションの Claude が
+  本文でない文を書くときは `ReadWritingStyle` で読む
+- 本文: 話の本文だけに効く。材料(`ReadEpisodeBrief` の「書き方」)に、全体の行のあとに足す
 
 出来事の生成(`GenerateEvent`)は、下書きの名前・記録を場面の指定(「市場の喧嘩」「怪談」など)に、時刻・場所・当事者を決まった値として、
 候補をサイコロ → 記録(`data_access_logic/event/progress.py`)の順で一件起こす。
 本文は小説ではなく、当事者の行動・言動を起きた順に整理した10行程度の要約(`ai/instructions/event_writing.py` の `EVENT_RECORD_INSTRUCTION`)。
-世界ごとの文体の好み(`style_preference`)は使わない。
+世界ごとの文体の好み(`style_preference`)は、効く範囲が全体の行だけが効く(AI を呼ぶたびに足される)。
 当事者を省けば、その時刻にその場所にいて(`character_location`)、別の出来事の最中でない、生きているサブキャラクターから選ぶ。
 場所を名指しするので、場所の `active_random_generation` は見ない。作品の本文(筋書き)は渡さない。
 記録の段は、住まい・拠点が変わった人物ごとの移動先(`character_moves`。人物 id と場所 id の組 `CharacterMove` のリスト)も返す。空なら居場所は変えず、あれば居合わせた人物と移動先の候補に当たる組だけで、今の居場所の行を出来事の時刻で閉じ、移動先の行をその時刻から足す(`character/moves.py` の `update_locations`)。移した組は `GenerateEvent` のレスポンスの `moves` に返る。移動先の候補は、出来事の場所から `constants.REACH_LEVELS` 段上までの配下で、その時刻にある場所。

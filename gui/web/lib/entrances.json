@@ -1350,6 +1350,14 @@
       "writes": true
     },
     {
+      "id": "style_preference.read_writing_style.ReadWritingStyle",
+      "area": "style_preference",
+      "name": "ReadWritingStyle",
+      "doc": "このセッションの Claude がプロット・来歴・アイデア・関係など、話の本文でない文を書く前に読む書き方。",
+      "params": [],
+      "writes": false
+    },
+    {
       "id": "style_preference.update_style_preference.UpdateStylePreference",
       "area": "style_preference",
       "name": "UpdateStylePreference",

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from ai.instructions import style
 from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
 from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
 from ai.instructions.mentioned import MENTIONED_INSTRUCTION
@@ -38,7 +37,7 @@ from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.idea.whole import whole_ideas
 from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
-from data_access_logic.style_preference.extras import read_style_extras
+from data_access_logic.style_preference.extras import episode_style
 from data_access_logic.material import Material
 from db.schema import Character, Episode
 from db.stamp import Stamp
@@ -59,7 +58,7 @@ def _guide(s: Session) -> str:
         IDEA_CONTEXT_INSTRUCTION,
         BIO_ABSTRACTION_INSTRUCTION,
         STYLE_SAMPLE_INSTRUCTION,
-        style.style_instruction(read_style_extras(s)),
+        episode_style(s),
     ])
 
 

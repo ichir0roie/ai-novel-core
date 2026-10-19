@@ -329,11 +329,25 @@ class Oracle(MemeSeededMixin, TextBase):
     title: Mapped[str | None] = mapped_column(String, comment="題。覚え書きを呼ぶ名前", sort_order=200)
 
 
+class StyleScope(enum.StrEnum):
+    # AI が書くすべての文(プロット・来歴・アイデア・ミームなど)と、話の本文
+    ALL = "全体"
+    EPISODE = "本文"
+
+
+STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
+
+
 class StylePreference(TextBase):
-    """世界ごとの、話の本文の文体の好み(舞台設定・既存の話から抽出した文体の癖)。
-    `ai/instructions/style.py` の固定の文面に、すべての行を id の順に足して、本文を書く材料の「書き方」に入れる。"""
+    """世界ごとの文体の好み(舞台設定・既存の話から抽出した文体の癖)。
+    `ai/instructions/style.py` の固定の文面に、効く範囲(`scope`)の合う行を id の順に足す。"""
 
     __tablename__ = "style_preference"
+
+    scope: Mapped[str] = mapped_column(
+        String, nullable=False, default=StyleScope.EPISODE.value, server_default=StyleScope.EPISODE.value,
+        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれか。全体は AI が書くすべての文に、本文は話の本文だけに効く",
+        sort_order=200)
 
 
 CHARACTER_KIND_PERSON = "人物"

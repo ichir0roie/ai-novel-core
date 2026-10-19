@@ -12,6 +12,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
+from data_access_logic.caller import call
+from data_access_logic.style_preference import steps as style_steps
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,6 +101,10 @@ def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
     return reply
 
 
+def styled_system(system: str | None, writing_style: str) -> str:
+    return "\n\n".join(part for part in (system, f"書く文の書き方:\n{writing_style}") if part)
+
+
 def generate[Output: BaseModel](
     prompt: str,
     output: type[Output],
@@ -109,6 +116,8 @@ def generate[Output: BaseModel](
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。"""
     load_env()
+    # プロット・来歴・アイデア・ミームなど、AI が書くどの文にも同じ書き方を効かせる。世界ごとの好みを含むので、そのつど db の段で読む
+    system = styled_system(system, call(style_steps.writing_style))
     args = _build_args(system, output.model_json_schema(), tools, model, effort)
     try:
         reply = _reply(prompt, args, timeout)
