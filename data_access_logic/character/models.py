@@ -223,7 +223,25 @@ class CastCandidateSerialized(CastCandidate):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        return {"人物id": self.character.id, **_sheet(self.character, self)}
+        # 登場人物を決める語り部は、話の時刻より先の筋(筋書き)を読まない
+        sheet = {key: value for key, value in _sheet(self.character, self).items() if key != "筋書き"}
+        return {"人物id": self.character.id, **sheet}
+
+
+class CastingCandidate(Material):
+    """登場人物の候補(結ぶかどうかを決めるだけの人物)。"""
+
+    character: CharacterMaterial
+    age: int | None = None
+
+
+class CastingCandidateSerialized(CastingCandidate):
+    """このセッションの Claude が読む形に整形する。結ぶかを決めるのに要る名前と人物像だけを渡す。"""
+
+    @model_serializer
+    def _for_claude(self) -> dict[str, Any]:
+        return {"人物id": self.character.id, "名前": self.character.name, "種別": self.character.kind,
+                "年齢": self.age, "人物像": self.character.text}
 
 
 class ParticipantSerialized(ParticipantMaterial):

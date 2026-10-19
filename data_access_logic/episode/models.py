@@ -3,8 +3,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from data_access_logic.character.models import (
-    CastCandidate, CastCandidateSerialized, CastMaterial, CastSerialized, CharacterMaterial, CharacterRelationLine,
-    CharacterSecrets, MentionedMaterial, MentionedSerialized, relations_for_prompt, secrets_for_prompt,
+    CastCandidate, CastCandidateSerialized, CastingCandidate, CastingCandidateSerialized, CastMaterial, CastSerialized,
+    CharacterMaterial, CharacterRelationLine, CharacterSecrets, MentionedMaterial, MentionedSerialized, relations_for_prompt, secrets_for_prompt,
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.history_start import start_for_prompt
@@ -105,10 +105,16 @@ def _appearances(appearances: list[CharacterEpisode], character_id: int) -> list
     return [_appearance(link) for link in appearances if link.character_id == character_id]
 
 
-def _summarized_appearances(appearances: list[CharacterEpisode], character_id: int) -> list[dict[str, Any]]:
-    """概要は作り直さず、そのときのまま読む(まだ無ければ null)。"""
-    return [{**_appearance(link), "概要": link.episode.summary_text}
-            for link in appearances if link.character_id == character_id]
+class CharacterEpisodesSerialized(Material):
+    """人物が関わった話を、概要だけで(本文は入れない)。このセッションの Claude が読む形に整形する。"""
+
+    # 古い順
+    appearances: list[CharacterEpisode]
+
+    # 概要は作り直さず、そのときのまま読む(まだ無ければ null)
+    @model_serializer
+    def _for_claude(self) -> list[dict[str, Any]]:
+        return [{**_appearance(link), "概要": link.episode.summary_text} for link in self.appearances]
 
 
 def _location(locations: list[LocationMaterial]) -> str | None:
@@ -248,7 +254,7 @@ class EpisodeBrief(Material):
     mentioned: list[MentionedMaterial]
     # 登場人物・名前だけ出る人物の芯・来歴を誰が知っているか。人物 id ごと
     secrets: dict[int, CharacterSecrets]
-    # 登場人物のどれかが片側にいる関係
+    # 登場人物どうしの関係(場にいない人物との関係は入れない)
     relations: list[CharacterRelationLine]
     # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
     appearances: list[CharacterEpisode]
@@ -329,17 +335,15 @@ class EpisodeCasting(Material):
     # 登場人物でなく、プロット・本文に名前が出るだけの人物
     mentioned: list[CastCandidate]
     # 登場人物・名前だけ出る人物のどちらでもない、登場人物と関係のある人物・話の場所にいる人物
-    candidates: list[CastCandidate]
-    # 登場人物・名前だけ出る人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
-    appearances: list[CharacterEpisode]
+    candidates: list[CastingCandidate]
 
 
 class EpisodeCastingSerialized(EpisodeCasting):
-    """このセッションの Claude が読む形に整形する。"""
+    """このセッションの Claude が読む形に整形する。人物が関わった話は、人物ごとに `character_episodes` で読む。"""
 
     cast: list[CastCandidateSerialized]
     mentioned: list[CastCandidateSerialized]
-    candidates: list[CastCandidateSerialized]
+    candidates: list[CastingCandidateSerialized]
 
     # 読んだ Claude が登場人物・場所・視点を id で結ぶので、AI へ渡す形と違って id を残す
     @model_serializer
@@ -355,12 +359,8 @@ class EpisodeCastingSerialized(EpisodeCasting):
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
                 "プロット": episode.plot_text,
             },
-            "登場人物": [{**member.model_dump(),
-                      "関わった話(古い順)": _summarized_appearances(self.appearances, member.character.id)}
-                     for member in self.cast],
-            "名前だけ出る人物": [{**member.model_dump(),
-                          "関わった話(古い順)": _summarized_appearances(self.appearances, member.character.id)}
-                         for member in self.mentioned],
+            "登場人物": [member.model_dump() for member in self.cast],
+            "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
             "登場人物の候補": [member.model_dump() for member in self.candidates],
             "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
         }

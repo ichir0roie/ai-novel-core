@@ -13,13 +13,22 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 ## 入口
 
 入口は id と引数で呼ぶ。呼び方・行の引き方は、手元は `.claude/docs/db.md`、web のセッションは `.claude/docs/web-db.md`(自分の場所の方だけ読む)。
-`ReadEpisodeCasting`・`ReadEpisodeBrief`・`CommitEpisode` は AI を回すので数分かかることがある(web では `run_in_background`)。
+`ReadEpisodeBrief`・`CommitEpisode` は AI を回すので数分かかることがある(web では `run_in_background`)。`ReadEpisodeCasting`・`ReadCharacterEpisodes`・`ReadEpisodeSummaries` は db だけの入口で、概要を作り直さずにすぐ返る。
 入口と `tool.episode_session`(`stage`・`knower-gaps`・`read` など)の結果は、スクラッチパッドのファイルに書き出して Read で最後の行まで読む(`CLAUDE.md` の「ツールの使い分け」)。人物・話の材料は数万字になり、Bash の出力のままでは頭しか見えない。要る所だけを `jq` で抜くときは、書き出したファイルに当てる。
+
+### 読む量を絞る
+
+- 入口が返すもののうち、手順が読むと決めた所だけを読む。書き出したファイルを丸ごと Read せず、要る見出し・要る期間を `jq` で抜いてから読む
+- 人物の来歴(`来歴(古い順)`)は、手順 2 で読む直近の話のうち一番古い話の時刻より後の行と、種別の付いた行(装い・持ち物・記憶・隠し事)だけを読む。それより前のことは、要るときだけ読み足す
+- 人物の `筋書き`(作者の先の予定)は読まない。語り部が話の時刻より先を知ると、語り・要求に先回りが混ざる
+- 本文が要るとき以外は `ReadEpisodeTexts` を使わない。概要だけなら `ReadEpisodeSummaries`
 
 | すること | 入口の id | 引数 |
 | --- | --- | --- |
 | 話の枠を足す・プロットを入れる・本文を確定する | `episode.commit_episode.CommitEpisode` | `{'episode': {…}}`。新しい枠は `{'story_id': …, 'start': '<年/月/日>', 'character_ids': […], 'plot_text': …}`、既存の話は `'id': …` と変える欄だけ(渡した欄だけが直る) |
 | 登場人物・場所を決める材料を読む | `episode.read_episode_casting.ReadEpisodeCasting` | `{'episode_id': …}` |
+| 人物が関わった直近の話を、概要だけで読む(人物ごとに呼ぶ) | `episode.read_character_episodes.ReadCharacterEpisodes` | `{'episode_id': …, 'character_id': …}` |
+| 話を id で、概要だけ読む | `episode.read_episode_summaries.ReadEpisodeSummaries` | `{'episode_ids': […]}` |
 | 話を id で読む(本文まで) | `episode.read_episode_texts.ReadEpisodeTexts` | `{'episode_ids': […]}` |
 | 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
@@ -40,7 +49,9 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 見出しは推測せず、ここか `jq 'keys'` で確かめてから引く(無い見出しは黙って null になる。`jq` の書き方は `.claude/docs/setup.md` の「jq」)。web のセッションで `flows.run` から返るものは `.result` に包まれない。
 
-- `ReadEpisodeCasting`: `この話`(`話id`・`題`・`時刻`・`場所(広い順)`・`視点`・`プロット`)・`登場人物`・`名前だけ出る人物`・`登場人物の候補`・`この場所の中の既知の場所`。人物には `人物id`・`名前`・`人物像` などと `関わった話(古い順)` が付く(`登場人物の候補` には付かない)
+- `ReadEpisodeCasting`: `この話`(`話id`・`題`・`時刻`・`場所(広い順)`・`視点`・`プロット`)・`登場人物`・`名前だけ出る人物`・`登場人物の候補`・`この場所の中の既知の場所`。`登場人物`・`名前だけ出る人物` には `人物id`・`名前`・`人物像`・`来歴(古い順)` などが付く(`筋書き` は付かない)。`登場人物の候補` は `人物id`・`名前`・`種別`・`年齢`・`人物像` だけ。関わった話は付かない
+- `ReadCharacterEpisodes`: その人物の直近の話の配列(古い順)。`話id`・`作品`・`題`・`時刻`・`出方`(`登場`・`名前だけ`)・`概要`(無ければ null)。本文は付かない
+- `ReadEpisodeSummaries`: 列名の英語(`id`・`title`・`start`・`story`・`summary_text`)の配列。本文・プロットは付かない
 - `ReadEpisodeBrief`: `書き方`・`作品`・`前の話の概要(古い順)`・`文体の見本(古い順)`・`この話`・`この場所の直近の出来事(古い順)`・`この時点より後に既に決まっている出来事`
   - `文体の見本(古い順)` は本文の文字列の配列(`.["文体の見本(古い順)"][-1]` が直前の話。鍵は無い)
   - `この話` の中は `話id`・`題`・`時刻`・`終わり`・`同期`・`場所(広い順)`・`視点`・`登場人物`・`名前だけ出る人物`・`登場人物の関係`・`設定`・`プロット`・`今の本文`
@@ -57,10 +68,10 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
    - 新しい話: 作品の話の並びを引き、同じ時刻の話が無いか確かめてから、`CommitEpisode` で枠を足す(`story_id`・`start`・頼まれた人物の `character_ids`。プロットは空か頼まれた一言でよい)
    - 作品・人物・場所は名前で頼まれても、引いた id を使う
 2. **人物の関わった話を読む**
-   - `ReadEpisodeCasting(episode_id)` で id 付きで読む: 今の登場人物・名前だけ出る人物それぞれの「関わった話(古い順)」(作品を問わず、この話より前に登場したか名前が出た話。すべてに概要が付く)と、登場人物の候補・場所とその中の既知の場所
-   - 関わった話の概要が無いか古ければ、読む前に AI が作り直す(数分かかることがある。作れなかった話は null)
-   - 読むのは、登場人物・名前だけ出る人物ごとに「関わった話(古い順)」の末尾の 5 話(この話の直近の 5 話)だけ。皆の分を合わせて重なりを除き、`start` の順に概要を読んで、人物がこのところ何をしたかを掴む。それより前のことは、人物の来歴(`来歴(古い順)`)と、本文の材料(手順 7)の前の話の概要から読む
-   - 概要で足りない所と概要が null の話は、`ReadEpisodeTexts(episode_ids)` で本文を読む。人物が初めて出る話(「出方」が「登場」の話)が直近の 5 話より前にあっても、要るときだけ読む
+   - `ReadEpisodeCasting(episode_id)` で id 付きで読む: 今の登場人物・名前だけ出る人物と、登場人物の候補・場所とその中の既知の場所
+   - 登場人物・名前だけ出る人物ごとに `ReadCharacterEpisodes(episode_id, character_id)` を呼び、その人物の直近の 5 話を概要だけで読む(作品を問わず、この話より前に登場したか名前が出た話)。皆の分を合わせて重なりを除き(`話id` で)、`時刻` の順に概要を読んで、人物がこのところ何をしたかを掴む。概要は作り直さないので、無ければ null のまま返る
+   - それより前のことは、人物の来歴(`来歴(古い順)`。上の「読む量を絞る」の範囲)と、本文の材料(手順 7)の前の話の概要から読む
+   - 概要で足りない所と概要が null の話だけ、`ReadEpisodeTexts(episode_ids)` で本文を読む。人物が初めて出る話(「出方」が「登場」の話)が直近の 5 話より前にあっても、要るときだけ読む
    - 人物の設定と本文が食い違えば本文を正とし、ユーザに報告する(人物の設定を直すかはユーザが決める)
    - 本文に出てくるのに db にいない人物(上役・家族など)を使うときは、同じ名前で作る
    - 関わった話が本文と比べて少なすぎる(名前が出ているのに挙がらない)ときは、`RefreshMentions()` で名前だけ出る人物を拾い直してから読み直す
@@ -140,7 +151,8 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 材料を読み、登場人物と知り合いの組を手番のファイルに写す | `.venv/bin/python -m tool.episode_session stage --episode <episode>` |
 | 初対面の相手の見た目を読む | `.venv/bin/python -m tool.episode_session appearance --character <相手の人物 id> --time '<時刻>'` |
 | 手番の要求を足し、人物役に番を送る | 下の「手番の要求を足す」 |
-| 足した手番の一手を読む | `.venv/bin/python -m tool.episode_session moves --episode <episode> --after <行の id>`(`--after` より後の一手と、まだ埋まっていない行の id) |
+| 番を送った行に一手が入るまで待つ(一手は出さない) | `.venv/bin/python -m tool.episode_session wait --episode <episode> --record <行の id>`(組の手番は `--record` を重ねる。`{"filled": […]}` が返る。待ちきれなければ `pending` も返る) |
+| 足した手番の一手を読む(内心・狙いまで要るときだけ) | `.venv/bin/python -m tool.episode_session moves --episode <episode> --after <行の id>`(`--after` より後の一手と、まだ埋まっていない行の id) |
 | 場面に出した新しい語をアイデアに足す | 下の「新しい語を足す」 |
 | セッションの行をすべて読む | `.venv/bin/python -m tool.episode_session read --episode <episode>` |
 | ある行から後を消す(やり直す) | `.venv/bin/python -m tool.episode_session clear --episode <episode> --from <行の id>` |
@@ -170,6 +182,8 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 語りと要求の JSON を Write でスクラッチパッドのファイル(`<scratchpad>/turns-<episode>.json` など。毎回上書きしてよい)に書き、そのパスを渡して足す。足した行(語りの行と手番の行。`id`・`character` など)が返り、待たずに終わる。
 
+- Write と `add` を同じ返答の中で並べない。Write が通ったのを確かめてから `add` を打つ(Write が断られたまま `add` を打つと、前の手番のファイルがもう一度足される)。前の行が二重に入ったら、`clear --from <二重に入った最初の行の id>` で消してから足し直す
+
 ```json
 {"narration": "<その場の何人もに見える・聞こえるようになったこと>",
  "witness_ids": [1, 21, 22],
@@ -187,7 +201,8 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 - 人物役に届くのは、前の自分の番から後に足された語りと、ほかの人物の一手(行動・セリフ)。前の番で届いたもの・自分の一手は届け直さない
 - 語りは誰にも同じ言葉で届くので、三人称で書く(「お前は」と書かない)。一人にだけ見える・聞こえることは、その人物の `request` に書く
 - 足したら、手番の行ごとに、その人物役へ SendMessage で `番: 行 <id>` とだけ送る。手番は足した順(行の id の順)にしか埋まらないので、一人に送り、`終わった` が返ってから次の人物に送る(先に送ると、人物役は「番でない」と返して止まる。そのときは前の手番が埋まってから送り直す)
-- 人物役は `終わった <id>: <行動>「<セリフ>」` と、一手を添えて返す。次を組むのはこれで足りる。内心・狙いまで要るとき(視点人物の胸の内で次の語りを決めるなど)と、返りの形が崩れていたときだけ、`moves --episode <episode> --after <足した最初の行の id - 1>` で読む(`pending` が空でなければ、埋まっていない行の人物役に送り直す)
+- 番を送ったら、`wait --episode <episode> --record <行の id>` で一手が入るまで待つ。`wait` は一手を出さない
+- 人物役は `終わった <id>: <行動>「<セリフ>」` と、一手を添えて返す。次を組むのはこれで足りる。同じ一手を `moves` で読み直さない(同じ中身が会話に二度積もる)。内心・狙いまで要るとき(視点人物の胸の内で次の語りを決めるなど)と、返りの形が崩れていたときだけ、`moves --episode <episode> --after <足した最初の行の id - 1>` で読む(`pending` が空でなければ、埋まっていない行の人物役に送り直す)
 - 人物役がエラー(db への接続など)を返したら、同じ `番: 行 <id>` を一度送り直す。転送が 1 時間ごとに張り直されるので、そのあいだに当たったときは送り直しで済む
 - 前の人物の一手を受けて結果を語る要求は、その一手を読んでから足す。結果を待たない手番は、一度にまとめて足してよい(番は一人ずつ送る)
 - 何人かが受け持ちの違う動きを同時にするとき(火事で一人が梁を押さえ、二人が下敷きの人を引き出し、一人が窓の順を告げる)は、`"simultaneous": true` を付けて足し、番を全員に一度に送る(SendMessage を一つの返答の中で並べる)。全員の `終わった` を受けてから次を組む

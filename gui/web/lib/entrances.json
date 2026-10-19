@@ -494,6 +494,57 @@
       "writes": true
     },
     {
+      "id": "episode.read_character_episodes.ReadCharacterEpisodes",
+      "area": "episode",
+      "name": "ReadCharacterEpisodes",
+      "doc": "人物(`character_id`)が、話(`episode_id`)より前に関わった話(作品を問わない)のうち、直近の数話",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode.read_episode_casting.ReadEpisodeCasting",
+      "area": "episode",
+      "name": "ReadEpisodeCasting",
+      "doc": "話(`episode_id`)の本文の材料を読む前に、このセッションの Claude がプロットから登場人物・場所を決めるための材料を読む。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "episode.read_episode_summaries.ReadEpisodeSummaries",
+      "area": "episode",
+      "name": "ReadEpisodeSummaries",
+      "doc": "話を id で、概要だけ読む(作品・題・時刻・概要。本文・プロットは返さない)。時刻の順に返す。",
+      "params": [
+        {
+          "name": "episode_ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        }
+      ],
+      "writes": false
+    },
+    {
       "id": "episode.read_episode_texts.ReadEpisodeTexts",
       "area": "episode",
       "name": "ReadEpisodeTexts",

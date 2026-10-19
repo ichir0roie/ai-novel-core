@@ -1,6 +1,6 @@
 
 from sqlalchemy import Select, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, defer, joinedload
 
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
@@ -135,6 +135,21 @@ def past_episodes(s: Session, episode: Episode, characters: list[Character]) -> 
         _summarized_select(episode, characters).options(joinedload(Episode.story))
         .execution_options(populate_existing=True)).all()
     return [PastEpisode.model_validate(row) for row in reversed(rows) if row.summary_text is not None]
+
+
+def recent_appearances(s: Session, episode: Episode, character_id: int) -> list[CharacterEpisode]:
+    """人物がこの話より前に関わった話(作品を問わない)のうち、新しい `constants.EPISODE_RECENT_APPEARANCE_COUNT` 話。古い順。
+    概要だけを渡すので、本文は読まない。"""
+    links = s.scalars(
+        _before(select(EpisodeCharacter).join(EpisodeCharacter.episode), episode)
+        .where(EpisodeCharacter.character_id == character_id)
+        .options(joinedload(EpisodeCharacter.episode).options(
+            defer(Episode.main_text), defer(Episode.plot_text), joinedload(Episode.story)))
+        .order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
+        .limit(constants.EPISODE_RECENT_APPEARANCE_COUNT)
+        .execution_options(populate_existing=True)
+    ).all()
+    return [CharacterEpisode.model_validate(link) for link in reversed(links)]
 
 
 def appearances(s: Session, episode: Episode, characters: list[Character]) -> list[CharacterEpisode]:

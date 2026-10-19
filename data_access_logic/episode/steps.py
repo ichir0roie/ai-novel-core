@@ -16,7 +16,7 @@ from data_access_logic.character.models import MentionedMaterial
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeForm, EpisodeReviseForm, has_cast, save_frame, set_characters
 from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.models import (
-    EpisodeBrief, EpisodeCasting, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
+    EpisodeBrief, EpisodeFrameDraft, EpisodeFrameMaterial, EpisodeLocationCandidateDraft,
     EpisodeMaterial, EpisodeSummarySource,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
@@ -136,16 +136,6 @@ def frame_material(s: Session, form: RowId) -> EpisodeFrameMaterial:
 @db_step
 def save_frame_draft(s: Session, form: FrameForm) -> None:
     framer.save_frame_draft(s, form.episode_id, form.draft, form.start)
-
-
-@db_step
-def casting_targets(s: Session, form: RowId) -> SummaryTargets:
-    return brief.casting_targets(s, form.id)
-
-
-@db_step
-def episode_casting(s: Session, form: RowId) -> EpisodeCasting:
-    return brief.episode_casting(s, form.id)
 
 
 @db_step

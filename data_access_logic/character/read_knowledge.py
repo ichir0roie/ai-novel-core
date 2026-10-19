@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.knowledge import KnowledgeSerialized, knowing_time, knowledge_of
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.query import common_query
-from db.schema import Episode
+from db.schema import Episode, EpisodeCharacter
 from db.stamp import Stamp
 
 
 class ReadKnowledge(SessionEntrypoint):
     """人物役が、話のセッションでいる時刻に知ることのできるデータを読む。本文・来歴は、その人物が知る相手に入ったものだけ。
     アイデアは、知っているもののうち、話のプロットに名前が出るものだけ(ほかは `ReadKnownIdeas` で語から引く)。
+    知っている人物(外見・芯・来歴)は、関係のある人物のうち、話の登場人物・名前だけ出る人物だけ。
     時刻は `time`、渡さなければ話の時刻。人物役には時刻を渡さないので、`tool.episode_session` が手番のファイルにある
     その人物の一番新しい手番の時刻を渡す。
-    話を渡さず `time` だけを渡せば、その時刻で読む(スキル `call-character` で歳を言って呼ぶとき)。プロットが無いので、アイデアは入らない。"""
+    話を渡さず `time` だけを渡せば、その時刻で読む(スキル `call-character` で歳を言って呼ぶとき)。プロットが無いので、アイデアは入らない。
+    知っている人物は、関係のある人物すべて。"""
 
     def __init__(self, character_id: int, episode_id: int | None = None, time: Stamp | str | None = None):
         self.character_id = character_id
@@ -24,6 +27,9 @@ class ReadKnowledge(SessionEntrypoint):
 
     def execute(self, s: Session) -> KnowledgeSerialized:
         plot_text = ""
+        scene_ids = None
         if self.episode_id is not None:
             plot_text = common_query.get_row(s, Episode, self.episode_id).plot_text or ""
-        return knowledge_of(s, self.character_id, knowing_time(s, self.episode_id, self.time), plot_text)
+            scene_ids = set(s.scalars(
+                select(EpisodeCharacter.character_id).where(EpisodeCharacter.episode_id == self.episode_id)).all())
+        return knowledge_of(s, self.character_id, knowing_time(s, self.episode_id, self.time), plot_text, scene_ids)

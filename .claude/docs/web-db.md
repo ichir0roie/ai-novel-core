@@ -21,7 +21,7 @@
 - `curl` は `.venv` の用意を待たずに打てる
 - コマンドの頭に `api="${NOVEL_API_URL%/}"; h="x-novel-api-key: $NOVEL_API_KEY"` を置く(末尾の `/` を落とさないと 308 が返り、`jq` が `Invalid numeric literal` で落ちる)
 - curl の応答の JSON は、一覧が `.items`、一件が `.record`、入口の呼び出しが `.result` に入る。`flows.run` の返りは `.result` に包まれず、入口の結果がそのまま返る
-- 入口の返す見出しは入口ごとに違う(`ReadEpisodeCasting` / `ReadEpisodeBrief` は日本語、`ReadEpisodeTexts` は列名の英語)。決めつけて整形せず、先に `jq 'keys'` で見出しを見て確かめる(話の入口の見出しはスキル `episode` の「入口の返す形」)
+- 入口の返す見出しは入口ごとに違う(`ReadEpisodeCasting` / `ReadCharacterEpisodes` / `ReadEpisodeBrief` は日本語、`ReadEpisodeTexts` / `ReadEpisodeSummaries` は列名の英語)。決めつけて整形せず、先に `jq 'keys'` で見出しを見て確かめる(話の入口の見出しはスキル `episode` の「入口の返す形」)
 - `jq` の書き方は `.claude/docs/setup.md` の「jq」(日本語の見出しの引用・無い鍵が黙って null になること)
 - 状態コードを見たいときは、本文を `-o <ファイル>` に書き出し、`-w '%{http_code}'` を本文と分ける(混ぜると JSON が読めない)
 
@@ -33,7 +33,7 @@
 | db だけの入口(claude を叩かない) | `curl -sS -H "$h" -H 'content-type: application/json' -d '{"args":{...}}' "$api/api/interface/<入口の id>"`(結果は `.result`) |
 | claude を叩く入口 | `web_session/flows.py` の `run` で、入口の id と引数(手元と同じ)を渡して python で回す。下の例(結果は包まれずにそのまま返る) |
 
-- どちらで呼ぶかは、`gui/api/interface.py` の固定の一覧で見る。`DB_ENTRANCES` にあるのが db だけの入口で、`CLAUDE_ENTRANCES` にあるもの(`ReadEpisodeCasting`・`ReadEpisodeBrief`・`CommitEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
+- どちらで呼ぶかは、`gui/api/interface.py` の固定の一覧で見る。`DB_ENTRANCES` にあるのが db だけの入口で、`CLAUDE_ENTRANCES` にあるもの(`ReadEpisodeBrief`・`CommitEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
 - claude を叩く入口を curl で呼ぶと、`{"detail":"… は claude コマンドを叩くので API からは呼べない …"}` が返る。打ち直さずに `flows.run` に替える
 
 ## 表の API(`/api/tables`)

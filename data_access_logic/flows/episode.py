@@ -17,7 +17,7 @@ from data_access_logic.episode import framer, plot_completer, voices
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeForm
 from data_access_logic.episode.models import (
-    EpisodeBriefSerialized, EpisodeCastingSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial,
+    EpisodeBriefSerialized, EpisodeCharacterCandidateDraft, EpisodeMaterial,
 )
 from data_access_logic.episode.record import EpisodeRecord, EpisodeSummaryRecord
 from data_access_logic.episode_session.store import SessionStore
@@ -100,12 +100,6 @@ def complete_plot(
             episode_id=saved.id, candidate=casting.location, parent_id=location_id))
     logger.info(f"{material.story.name} 話 id={saved.id} のプロットを補完した")
     return _record(saved.id)
-
-
-def read_episode_casting(episode_id: int, ai: AIClient = ai_client) -> EpisodeCastingSerialized:
-    """`ReadEpisodeCasting` に当たる。"""
-    refresh(ai, call(episode_steps.casting_targets, RowId(id=episode_id)))
-    return EpisodeCastingSerialized.model_validate(call(episode_steps.episode_casting, RowId(id=episode_id)))
 
 
 def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.VoiceDraft]:
