@@ -25,10 +25,10 @@ def _dated(ideas: list[IdeaMaterial], time: Stamp | None) -> list[IdeaMaterial]:
     # その時刻にもうあるのかが分からないアイデアを渡すと、後の時代の設定が前の時代に紛れ込む
     if time is None:
         return ideas
-    return [idea for idea in ideas if idea.start is not None]
+    return [idea for idea in ideas if idea.started_at(time)]
 
 
-def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None) -> Idea | None:
+def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None, time: Stamp | None) -> Idea | None:
     # 場所・時刻の外にあって検索に当たらなかった同じ名前のアイデアは、二重に足さずそれを結ぶ
     existing = s.scalar(select(Idea).where(Idea.name.in_(spellings(idea_draft.keyword))).order_by(Idea.id))
     if existing is not None:
@@ -39,16 +39,16 @@ def _candidate(s: Session, idea_draft: IdeaDraft, location_id: int | None) -> Id
         return None
 
     classification = find_or_create_classification(s, idea_draft.kind, location_id)
-    # 候補は、話の場所の属する世界線で効く。作中の人物が知るものかは分からないので、知る相手の無い行で場所だけを持つ
+    # 候補は、話の場所の属する世界線で効く。作中の人物が知るものかは分からないので、知る相手の無い行で場所と期間だけを持つ。
+    # 期間は語の時期、言えなければ語の出た文の時刻から(始まりを空けると、時期未定として次から引けなくなる)
     world = common_query.location_path(s, location_id)[0] if location_id is not None else None
     candidate = Idea(
         name=idea_draft.keyword,
         kind=idea_draft.kind,
         text=idea_draft.description,
-        start=idea_draft.start,
-        end=idea_draft.end,
         parent_idea_id=classification.id if classification is not None else None,
-        histories=[IdeaHistory(location_id=world.id, name=idea_draft.keyword)] if world is not None else [],
+        histories=[IdeaHistory(location_id=None if world is None else world.id, name=idea_draft.keyword,
+                               start=idea_draft.start or time, end=idea_draft.end)],
     )
     s.add(candidate)
     s.flush()
@@ -75,7 +75,7 @@ def resolve_ideas(
 ) -> IdeaContextSerialized:
     """洗い出した語をアイデアと照らし、当たらなかった固有の語を候補として足す。
 
-    足す候補の効く期間は語の `start` / `end`(時期のはっきりしない語は None のまま)。
+    足す候補の効く期間は、履歴の行の語の `start` / `end`(時期のはっきりしない語は `time` から)。
     """
     idea_drafts = unique_ideas(keywords)
     hits = search(s, idea_drafts, location_id, time)
@@ -85,7 +85,7 @@ def resolve_ideas(
     for idea_draft in idea_drafts:
         if idea_draft.keyword in matched or not idea_draft.coined:
             continue
-        candidate = _candidate(s, idea_draft, location_id)
+        candidate = _candidate(s, idea_draft, location_id, time)
         if candidate is not None:
             candidates.setdefault(candidate.id, candidate)
 

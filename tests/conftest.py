@@ -122,7 +122,7 @@ def world() -> Iterator[World]:
         s.add(episode)
         s.flush()
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
-        idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術", start="1100/01/01",
+        idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術",
                     histories=[IdeaHistory(location_id=location.id, start="1150/01/01", name="テスト術",
                                                   detail="都での呼び名")])
         s.add(idea)

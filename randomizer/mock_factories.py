@@ -9,7 +9,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from db.schema import (
     CHARACTER_KIND_PERSON,
     Base, Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterSkill, CharacterSkillHistory,
-    Episode, Event, EventCharacter, Idea, Location, Story,
+    Episode, Event, EventCharacter, Idea, IdeaHistory, Location, Story,
 )
 from db.stamp import Stamp
 from randomizer.random_character_generator import _personality
@@ -240,9 +240,10 @@ class IdeaFactory(_ModelFactory):
     name = factory.Sequence(lambda n: f"アイデア{n}")
     kind = factory.Faker("random_element", elements=_IDEA_KINDS)
     text = _text()
-    start = _optional_stamp()
-    end = _end_after_start()
     parent_idea_id = _pool(Idea, p_none=0.3)
+    # 効く時期は履歴の行で持つ(始まりの空いた行は時期未定として、時刻のある引き方から外れる)
+    histories = factory.LazyAttribute(lambda o: [
+        IdeaHistory(name=o.name, start=None if randgen.random() < 0.3 else _random_stamp())])
 
 
 class StoryFactory(_ModelFactory):

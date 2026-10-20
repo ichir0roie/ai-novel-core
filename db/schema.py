@@ -776,12 +776,7 @@ class Idea(TextBase):
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
 
-    # 効く場所は本体に持たず、履歴の行の場所で持つ(`dictionary_query.idea_in_scope`)
-    start: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="効き始める時刻。出来事の時刻と比べる。空なら始まりを限らない", sort_order=230)
-    end: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=240)
-
+    # 効く場所・時期は本体に持たず、履歴の行の場所・期間で持つ(`dictionary_query.idea_in_scope`)
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 

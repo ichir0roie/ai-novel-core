@@ -1773,36 +1773,6 @@
           "comment": "種別(技術・制度・概念など)"
         },
         {
-          "key": "start",
-          "type": "stamp",
-          "nullable": true,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "効き始める時刻。出来事の時刻と比べる。空なら始まりを限らない"
-        },
-        {
-          "key": "end",
-          "type": "stamp",
-          "nullable": true,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない"
-        },
-        {
           "key": "parent_idea_id",
           "type": "integer",
           "nullable": true,

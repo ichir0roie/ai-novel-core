@@ -9,13 +9,30 @@ from data_access_logic.material import Material, Named
 from db.stamp import Stamp, StampError
 
 
+class IdeaPeriodMaterial(Material):
+    """履歴の行の効く期間。アイデアの効く時期は、本体ではなく履歴の行で持つ。"""
+
+    start: Stamp | None = None
+    end: Stamp | None = None
+
+
 class IdeaMaterial(Material):
     id: int
     name: str
     kind: str
     text: str | None = None
-    start: Stamp | None = None
     parent_idea_id: int | None = None
+    histories: list[IdeaPeriodMaterial] = []
+
+    def started_at(self, time: Stamp) -> bool:
+        """始まりの決まった履歴の行が `time` に掛かるか(`dictionary_query.idea_in_scope` と同じ決め方。場所は問わない)。"""
+        return any(row.start is not None and row.start <= time and (row.end is None or row.end > time)
+                   for row in self.histories)
+
+    @property
+    def first_start(self) -> Stamp | None:
+        """履歴の行のうち、一番早い始まり。始まりの空いた行は数えない。"""
+        return min((row.start for row in self.histories if row.start is not None), default=None)
 
 
 class IdeaHistoryMaterial(Material):
