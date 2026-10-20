@@ -75,7 +75,6 @@ class CharacterHead(Material):
     name: str | None = None
     kind: str
     main_character: bool
-    event_seeded: bool
     # 誕生は列を持たず、parameters の一番早く始まる行の start(`Character.start`)
     start: Timestamp | None = None
     # 没年

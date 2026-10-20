@@ -406,8 +406,6 @@ export interface components {
             story_id: number;
             /** Title */
             title: string;
-            /** Synced */
-            synced: boolean;
             /** Start */
             start?: string | null;
             /** End */
@@ -420,8 +418,6 @@ export interface components {
             letters: number;
             /** Plot Text */
             plot_text: string;
-            /** Event Seeded */
-            event_seeded: boolean;
             /** Main Text */
             main_text: string;
             /** Character Ids */

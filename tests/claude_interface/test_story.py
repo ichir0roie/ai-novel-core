@@ -43,10 +43,8 @@ def test_read_cast(shown, world):
 
 
 def test_start_story(shown, world):
-    result = shown(StartStory(story_id=world.story_id, time="1200/04/02", episodes=5, count=3, reach=30, levels=2,
-                              skip_sync=True))
+    result = shown(StartStory(story_id=world.story_id, time="1200/04/02", episodes=5, count=3, reach=30, levels=2))
 
-    assert result["stopped"] is False
     assert result["time"] == "1200/04/02 23:59:59"
     assert [episode["id"] for episode in result["episodes"]] == [world.episode_id]
     assert result["cast"] is not None

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy import Select, or_, select
 
-from db.schema import Base, ContentBase, Episode
+from db.schema import Base, ContentBase
 
 TODO_MARK = "TODO"
 
@@ -18,9 +18,3 @@ def todo_select(model: type[ContentBase]) -> Select:
     return (select(model)
             .where(or_(*(getattr(model, name).contains(TODO_MARK) for name in model.TEXT_COLUMNS)))
             .order_by(model.id))
-
-
-def written_unsynced_episodes_select() -> Select:
-    return (select(Episode)
-            .where(Episode.synced.is_(False), Episode.main_text != "")
-            .order_by(Episode.story_id, Episode.start.asc().nulls_last(), Episode.id))

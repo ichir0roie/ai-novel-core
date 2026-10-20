@@ -223,7 +223,6 @@ class BriefEpisode(EpisodeBase):
     id: int
     start: Stamp
     end: Stamp | None = None
-    synced: bool
     plot_text: str
     main_text: str
     viewpoint_character: CharacterMaterial | None = None
@@ -281,7 +280,6 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "題": episode.title,
                 "時刻": str(episode.start),
                 "終わり": str(episode.end) if episode.end else None,
-                "同期": episode.synced,
                 "場所(広い順)": [{**_place(location), **line}
                                for location, line in zip(self.locations, _location_lines(self.locations))],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。元の側の `meme_seeded` で抜き出し済みかだけを持つ。
+"""ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。抜き出すのは、流れが渡した行(書いたその場の行)だけ。
 ミームどうしで持つのは、反転した対(アンチミーム、`anti_meme_id`)だけ。抜き出すときに対で作り、対の無いミームには後から作る。
 
-db だけの段(`pending_sources` / `meme_texts` / `save_memes` / `unpaired_sources` / `save_anti_memes` /
+db だけの段(`sources_of` / `meme_texts` / `save_memes` / `unpaired_sources` / `save_anti_memes` /
 `unclassified_sources` / `save_categories` / `meme_pool`)と、
 AI だけの段(`extraction_draft` → `without_duplicates`、`anti_draft`、`classify_draft`)に分けてある。
 流れ(`data_access_logic/flows/meme.py`)がつなぐ。
@@ -23,8 +23,9 @@ from data_access_logic.meme.models import (
     AntiMeme, AntisDraft, ClassifyDraft, DedupeDraft, DedupeRequestSerialized,
     DrawnMeme, MemeCategory, MemeDraft, MemesDraft, MemeText, NumberedMemesSerialized, PooledMeme,
 )
-from data_access_logic.query import meme_query
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, batches, row_of, source_of, strip_fact_check
+from data_access_logic.source_text import (
+    SourceBatchSerialized, SourceRow, SourceText, batches, row_of, source_of, strip_fact_check,
+)
 from db.schema import MEME_CATEGORIES, Episode, Event, Meme, Oracle
 
 logger = logging.getLogger(__name__)
@@ -84,16 +85,22 @@ _CLASSIFY_SYSTEM_PROMPT = f"""\
 人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれに次の分類から一つを振る。
 {_CATEGORY_GUIDE}"""
 
-def pending_sources(s: Session) -> list[SourceText]:
-    """まだミームを抜き出していない元。oracle の本文には検証結果(`# 検証結果` の節)も含む。
+def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
+    """渡した行の本文。元の列が空の行は外す。oracle の本文には検証結果(`# 検証結果` の節)も含む。
     アイデアの本文と人物の筋書きからは抜き出さず、話の本文から抜き出す。"""
     sources: list[SourceText] = []
-    for oracle in s.scalars(meme_query.unseeded_select(Oracle, Oracle.text)).all():
-        sources.append(source_of(oracle, "覚え書き", oracle.text))
-    for event in s.scalars(meme_query.unseeded_select(Event, Event.text)).all():
-        sources.append(source_of(event, "出来事", event.text))
-    for episode in s.scalars(meme_query.unseeded_select(Episode, Episode.main_text)).all():
-        sources.append(source_of(episode, "話の本文", episode.main_text))
+    for row in rows:
+        record = row_of(s, row.table, row.id)
+        if isinstance(record, Oracle):
+            source = source_of(record, "覚え書き", record.text)
+        elif isinstance(record, Event):
+            source = source_of(record, "出来事", record.text)
+        elif isinstance(record, Episode):
+            source = source_of(record, "話の本文", record.main_text)
+        else:
+            raise ValueError(f"ミームを抜き出す元は oracle / event / episode のいずれか: {row.table!r}")
+        if source.text.strip():
+            sources.append(source)
     return sources
 
 
@@ -149,15 +156,13 @@ def _pair(s: Session, meme: Meme, anti_text: str) -> Meme:
     return anti
 
 
-def save_memes(s: Session, memes: list[MemeDraft], sources: list[SourceText]) -> int:
-    """ミームとアンチミームを対で足し、元に抜き出し済みの印を付ける。足した件数(アンチミームを含む)を返す。"""
+def save_memes(s: Session, memes: list[MemeDraft]) -> int:
+    """ミームとアンチミームを対で足す。足した件数(アンチミームを含む)を返す。"""
     for candidate in memes:
         meme = Meme(text=candidate.text, category=candidate.known_category)
         s.add(meme)
         s.flush()
         _pair(s, meme, candidate.anti_text)
-    for source in sources:
-        row_of(s, source.table, source.id).meme_seeded = True
     s.flush()
     return len(memes) * 2
 

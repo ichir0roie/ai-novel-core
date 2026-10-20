@@ -52,7 +52,6 @@ class EpisodeLink(BaseModel):
     table: str
     id: int
     label: str
-    synced: bool
     letters: int
 
 
@@ -228,7 +227,7 @@ def related_of(s: Session, record: Material) -> Related:
         episodes = s.scalars(common_query.story_episodes_select(record.id)).all()
         return StoryRelated(episodes=[
             EpisodeLink(table=Episode.__tablename__, id=episode.id, label=label_of(Episode, episode),
-                        synced=episode.synced, letters=episode.letters)
+                        letters=episode.letters)
             for episode in episodes])
     if isinstance(record, EpisodeRecord):
         return EpisodeRelated(

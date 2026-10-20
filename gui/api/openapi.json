@@ -1044,10 +1044,6 @@
             "type": "string",
             "title": "Title"
           },
-          "synced": {
-            "type": "boolean",
-            "title": "Synced"
-          },
           "start": {
             "anyOf": [
               {
@@ -1100,10 +1096,6 @@
             "type": "string",
             "title": "Plot Text"
           },
-          "event_seeded": {
-            "type": "boolean",
-            "title": "Event Seeded"
-          },
           "main_text": {
             "type": "string",
             "title": "Main Text"
@@ -1131,10 +1123,8 @@
           "id",
           "story_id",
           "title",
-          "synced",
           "letters",
           "plot_text",
-          "event_seeded",
           "main_text",
           "character_ids",
           "mentioned_character_ids"

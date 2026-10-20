@@ -20,7 +20,7 @@ description: 作品(story)全体を統括するモード。呼ばれたら作品
 | --- | --- | --- |
 | 作品の筋書き | `story.update_story.UpdateStory` `{'story': {'id': …, 'text': …}}`。子の章・外伝を足すのは `story.commit_story.CommitStory` | 作品をまたぐ大筋・まだ話の枠にしない構想はここに書く |
 | 話の枠を足す・題・時刻・プロット・場所・視点を直す | 下の「話の行を書く」 | `main_text` を渡さない |
-| 話の時刻・作品をまとめて直す | `episode.update_episodes.UpdateEpisodes` | `synced` は今の値を渡す |
+| 話の時刻・作品をまとめて直す | `episode.update_episodes.UpdateEpisodes` | |
 | 話の登場人物・場所・視点 | `episode.cast_episode.CastEpisode` | 登場人物はまるごと置き換わる |
 | 人物 | `CommitCharacter` / `UpdateCharacter`(芯 `text`・来歴 `histories`・筋書き `plot`・ミーム・行動原理・パラメータ)・`MoveCharacters` | 来歴・パラメータの配列はまるごと置き換わるので、今の行を時刻を渡さない `ReadCharacter` で読んでから足す |
 | 関係 | `ListCharacterRelations` → `CommitCharacterRelation` / `UpdateCharacterRelation` | 下の 3 の「関係」 |
@@ -34,10 +34,10 @@ description: 作品(story)全体を統括するモード。呼ばれたら作品
 
 ### 話の行を書く
 
-話の枠・プロットは何度も入れ直すので、`CommitEpisode` の AI の段(ミームの抜き出し・要約)を回さず、GUI で足した・直したときと同じく確定の db の段だけで書く(名前だけ出る人物の拾い直しはこの段で走る。後回しの AI はスキル `run-ai-tasks` で回る)。プロットのような長い文字列はスクラッチパッドのファイルに置いて読む。
+話の枠・プロットは何度も入れ直すので、`CommitEpisode` の AI の段(ミームの抜き出し・要約)を回さず、GUI で足した・直したときと同じく確定の db の段だけで書く(名前だけ出る人物の拾い直しはこの段で走る。後回しの AI はスキル `run-ai-tasks` で回る。出来事の種は、本文を確定するときにその話から抜き出される)。プロットのような長い文字列はスクラッチパッドのファイルに置いて読む。
 
-- 欄: 新しい枠は `story_id`・`start`(`<年/月/日>`)・`plot_text`・あれば `title`。既存の話は変える欄と `synced`(今の値をそのまま。渡さないと false になる)。**`main_text` は渡さない**
-- web のセッション: 足すのは `curl -sS -X POST -H "$h" -H 'content-type: application/json' --data-binary @<scratchpad>/<名>.json "$api/api/tables/episode/records"`、直すのは `-X PATCH` で `.../records/<話id>`(本文の JSON は `jq -n --rawfile p <プロットのファイル> --argjson s <synced> '{plot_text: $p, synced: $s}'` のように組む)
+- 欄: 新しい枠は `story_id`・`start`(`<年/月/日>`)・`plot_text`・あれば `title`。既存の話は変える欄だけ。**`main_text` は渡さない**
+- web のセッション: 足すのは `curl -sS -X POST -H "$h" -H 'content-type: application/json' --data-binary @<scratchpad>/<名>.json "$api/api/tables/episode/records"`、直すのは `-X PATCH` で `.../records/<話id>`(本文の JSON は `jq -n --rawfile p <プロットのファイル> '{plot_text: $p}'` のように組む)
 - 手元:
 
 ```
@@ -47,7 +47,7 @@ from db.schema import get_env_session
 from gui.api import records, tables
 with get_env_session() as s, s.begin():
     records.update_record(s, tables.spec_of('episode'), <話id>,
-                          {'plot_text': Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8'), 'synced': <synced>})
+                          {'plot_text': Path('<scratchpad>/<名>.txt').read_text(encoding='utf-8')})
 "
 ```
 
@@ -66,7 +66,7 @@ with get_env_session() as s, s.begin():
 呼ばれたら、まず作品全体を読み込み、整理した図を作る。この段では行を直さない。
 
 1. **作品を読む**: 対象の作品の名前・筋書き(`text`)すべてと、子の章・外伝(`ListStories` の `parent_story_id`)を読む。作品の id が無ければ、どの作品かを尋ねる
-2. **話の並びを読む**: `ReadEpisodes` `{'story_id': …, 'count': 500, 'text': False}`(子の作品のぶんも)で、話ごとの id・題・時刻・字数・`synced` を読む。登場人物・名前だけ出る人物は、web は表の API の `episode` の行(`$api/api/tables/episode/records?story_id=<作品id>&limit=500`)の `character_ids`・`mentioned_character_ids`、手元は `episode_character`(`mentioned` で分かれる)を引く。プロットと概要は `ReadEpisodeTexts` `{'episode_ids': […]}` の `plot_text`・`summary_text` で読む(本文も返るので、出力はスクラッチパッドへ書き出し、本文は読まずに概要で掴む。概要が null の話だけ本文を読む)
+2. **話の並びを読む**: `ReadEpisodes` `{'story_id': …, 'count': 500, 'text': False}`(子の作品のぶんも)で、話ごとの id・題・時刻・字数を読む。登場人物・名前だけ出る人物は、web は表の API の `episode` の行(`$api/api/tables/episode/records?story_id=<作品id>&limit=500`)の `character_ids`・`mentioned_character_ids`、手元は `episode_character`(`mentioned` で分かれる)を引く。プロットと概要は `ReadEpisodeTexts` `{'episode_ids': […]}` の `plot_text`・`summary_text` で読む(本文も返るので、出力はスクラッチパッドへ書き出し、本文は読まずに概要で掴む。概要が null の話だけ本文を読む)
 3. **人物を読む**: 話の登場人物・名前だけ出る人物を合わせた人物と、`ReadCast` `{'story_id': …}` の顔ぶれを、時刻を渡さない `ReadCharacter` で一人ずつ読む(芯・来歴・筋書き・居場所)
 4. **関係を読む**: 3 の人物ごとに `ListCharacterRelations` `{'character_id': …}` で関係(芯・来歴・始まりと終わり)を読む
 5. **場所を読む**: 話の場所と、その親をたどった場所(大陸・国・町)を、表の API の `location` の行(`$api/api/tables/location/records/<id>`。手元は `Location`)で読む(説明 `text`・環境・来歴 `histories`)

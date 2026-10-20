@@ -106,7 +106,6 @@ def save_frame_draft(s: Session, episode_id: int, draft: EpisodeFrameDraft, star
     record.title = draft.title
     record.plot_text = draft.plot_text
     record.start = start
-    record.synced = False
     s.flush()
     save_mentions(s, episode_id)
     logger.info(f"{start}「{record.title}」 id={record.id} の枠を決めた")

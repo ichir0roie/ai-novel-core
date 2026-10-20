@@ -7,14 +7,12 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.event_seed import extractor
 from data_access_logic.event_seed.models import SeedMerge, SeedPiles
-from data_access_logic.source_text import SourceText
+from data_access_logic.source_text import SourceRows, SourceText
 from data_access_logic.step import RowIds, db_step
 
 
 class SeedsForm(BaseModel):
     seeds: list[str]
-    # 抜き出し済みの印を付ける元
-    sources: list[SourceText]
 
 
 class MergesForm(BaseModel):
@@ -22,13 +20,13 @@ class MergesForm(BaseModel):
 
 
 @db_step
-def pending_sources(s: Session) -> list[SourceText]:
-    return extractor.pending_sources(s)
+def sources(s: Session, form: SourceRows) -> list[SourceText]:
+    return extractor.sources_of(s, form.rows)
 
 
 @db_step
 def save_seeds(s: Session, form: SeedsForm) -> int:
-    return extractor.save_seeds(s, form.seeds, form.sources)
+    return extractor.save_seeds(s, form.seeds)
 
 
 @db_step

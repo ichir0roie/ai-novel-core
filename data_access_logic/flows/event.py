@@ -18,6 +18,7 @@ from data_access_logic.event.form import EventForm
 from data_access_logic.event.record import GeneratedEvent
 from data_access_logic.event_seed import steps as seed_steps
 from data_access_logic.event_seed.extractor import draw_from
+from data_access_logic.source_text import SourceRow
 from data_access_logic.step import RowId
 from data_access_logic.flows import event_seed
 from data_access_logic.caller import call
@@ -60,5 +61,5 @@ def generate_event(event: EventForm | None = None, seed: int | None = None, ai: 
     レスポンスの `moves` は、この出来事で居場所を移した人物の移動先。"""
     form = event or EventForm()
     record = _write_text(ai, form.id) if form.id is not None else _progress(ai, random.Random(seed), form)
-    event_seed.refresh_and_consolidate(ai)
+    event_seed.refresh_and_consolidate(ai, [SourceRow(table="event", id=record.id)])
     return record

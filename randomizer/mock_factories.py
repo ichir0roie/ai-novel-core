@@ -261,7 +261,6 @@ class EpisodeFactory(_ModelFactory):
     title = factory.Faker("sentence", nb_words=4, locale=_LOCALE)
     plot_text = factory.Faker("text", max_nb_chars=200, locale=_LOCALE)
     main_text = _text()
-    synced = factory.Faker("pybool")
     start = _optional_stamp()
     end = _end_after_start()
     viewpoint_character_id = _pool(Character, "CharacterFactory", p_none=0.3)

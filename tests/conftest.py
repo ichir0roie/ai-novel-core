@@ -95,7 +95,7 @@ def world() -> Iterator[World]:
         s.add(story)
         characters = [
             Character(name=name, text=f"{name}の説明", kind="人物",
-                      main_character=main, event_seeded=True,
+                      main_character=main,
                       end="1260/01/01", parameters=[_parameter("1170/01/01", sex)],
                       histories=[CharacterHistory(start=1190, description=f"{name}の来歴"),
                                  CharacterHistory(description=f"{name}の年未定の構想")])
@@ -110,17 +110,15 @@ def world() -> Iterator[World]:
         s.add(relation)
         event = Event(name="テスト市", text="市が立った", hidden=False,
                       time="1200/04/01 12:00:00", location_id=location.id, start="1200/04/01", end="1200/04/02",
-                      event_seeded=True, meme_seeded=True,
                       event_characters=[EventCharacter(character_id=character.id) for character in characters])
         s.add(event)
         s.flush()
         child_event = Event(name="テスト取引", text="取引がまとまった",
-                            time="1200/04/01 15:00:00", location_id=location.id, parent_event_id=event.id,
-                            event_seeded=True, meme_seeded=True)
+                            time="1200/04/01 15:00:00", location_id=location.id, parent_event_id=event.id)
         s.add(child_event)
         episode = Episode(story_id=story.id, title="テスト第一話", plot_text="市で出会う", main_text="市で二人が出会った。",
-                          synced=True, start="1200/04/01 12:00:00", end="1200/04/01 18:00:00",
-                          viewpoint_character_id=characters[0].id, location_id=location.id, event_seeded=True)
+                          start="1200/04/01 12:00:00", end="1200/04/01 18:00:00",
+                          viewpoint_character_id=characters[0].id, location_id=location.id)
         s.add(episode)
         s.flush()
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
@@ -132,7 +130,7 @@ def world() -> Iterator[World]:
         child_idea = Idea(name="テスト魔導炉", kind="技術", text="テスト魔導の炉", parent_idea_id=idea.id,
                           histories=[IdeaHistory(location_id=location.id, name="テスト魔導炉")])
         meme = Meme(text="テストの信条", category=MemeCategory.BELIEF)
-        oracle = Oracle(title="テストの覚え書き", text="テスト用の覚え書き", meme_seeded=True)
+        oracle = Oracle(title="テストの覚え書き", text="テスト用の覚え書き")
         event_seed = EventSeed(text="テストの種", consolidated=False)
         s.add_all([child_idea, meme, oracle, event_seed])
         s.commit()

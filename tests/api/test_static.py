@@ -33,7 +33,7 @@ def test_entrances():
     start_story = entrances["story.start_story.StartStory"]
     assert start_story["writes"] is False
     assert [param["name"] for param in start_story["params"]] == [
-        "story_id", "time", "episodes", "count", "reach", "levels", "skip_sync"]
+        "story_id", "time", "episodes", "count", "reach", "levels"]
     assert entrances["episode.delete_episode.DeleteEpisode"]["writes"] is True
     # claude を叩く入口は出さない
     assert "event.commit_event.CommitEvent" not in entrances

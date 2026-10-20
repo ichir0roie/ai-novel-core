@@ -13,17 +13,9 @@ from data_access_logic.story import reading as story_reading
 from db.schema import Story
 from db.stamp import Stamp
 
-_STOPPED_MESSAGE = ("未同期の話が残っている。その話の中身を世界(人物の来歴・関係など)へ反映してから、"
-                    "SetEpisodeSynced で同期フラグを立てて書き始める")
-
 
 class StoryStart(BaseModel):
-    """未同期の話が残っていれば `stopped` を立て、材料(`time` から下)は読まない。"""
-
     story: story_reading.StoryDigest
-    unsynced: list[episode_reading.UnsyncedEpisode]
-    stopped: bool
-    message: str | None = None
     time: Timestamp | None = None
     episodes: list[SerializeAsAny[EpisodeHead]] = []
     # 作品に場所の決まった話が無ければ読まない
@@ -33,24 +25,18 @@ class StoryStart(BaseModel):
 
 class StartStory(SessionEntrypoint):
     def __init__(self, story_id: int, time: Stamp | str | None = None, episodes: int = 10, count: int = 5,
-                 reach: int = 60, levels: int = 1, skip_sync: bool = False):
+                 reach: int = 60, levels: int = 1):
         self.story_id = story_id
         self.time = time
         self.episodes = episodes
         self.count = count
         self.reach = reach
         self.levels = levels
-        self.skip_sync = skip_sync
 
     def execute(self, s: Session) -> StoryStart:
         story = common_query.get_row(s, Story, self.story_id)
-        unsynced = episode_reading.unsynced_episodes(s, self.story_id)
-        if unsynced and not self.skip_sync:
-            return StoryStart(story=story_reading.story_digest(s, story), unsynced=unsynced, stopped=True,
-                              message=_STOPPED_MESSAGE)
-
         _, until = common_query.resolve_time(s, self.time, story)
-        start = StoryStart(story=story_reading.story_digest(s, story), unsynced=unsynced, stopped=False, time=until,
+        start = StoryStart(story=story_reading.story_digest(s, story), time=until,
                            episodes=episode_reading.episodes(s, self.story_id, count=self.episodes))
         location_id = common_query.story_location_id(s, story.id, until)
         if location_id is not None:

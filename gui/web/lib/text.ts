@@ -132,7 +132,6 @@ export const T = {
     storyTimeline: { title: "Timeline", sub: "This story's episodes, centered on its period" },
     episodeList: "Episode list",
     episodeSummary: (episodes: number, letters: number) => `${episodes} episodes / ${letters.toLocaleString()} chars`,
-    unsynced: (n: number) => ` / ${n} unsynced`,
   },
 
   episodeContext: {

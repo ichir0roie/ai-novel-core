@@ -171,16 +171,9 @@ def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
         s.add(record)
     else:
         record = common_query.get_row(s, Episode, form.id)
-    written_text = record.main_text
     form.write_changes_to(record)
-    # 手で直した話は、世界観へ戻し直すまで同期していない扱いにする(GUI で同期フラグを渡されたらそれに従う)
-    if form.synced is None:
-        record.synced = False
     if form.main_text is not None:
         record.main_text = layout_novel_text(form.main_text)
-        # 本文が変わったら、次の抽出でミームを抜き出し直す(GUI で抜き出し済みフラグを渡されたらそれに従う)
-        if form.meme_seeded is None and record.main_text != written_text:
-            record.meme_seeded = False
     CommitEntrypoint.finalize(s, record)
     # 渡されなければ既存の登場人物はそのまま
     if form.character_ids is not None:
@@ -191,9 +184,7 @@ def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
 
 @db_step
 def revise_episode(s: Session, form: EpisodeReviseForm) -> EpisodeRecord:
-    # 推敲は筋を変えないので、世界観へ戻したかどうか(同期フラグ)をそのまま保つ
-    synced = common_query.get_row(s, Episode, form.id).synced
-    commit = EpisodeCommitForm(id=form.id, main_text=form.main_text, synced=synced)
+    commit = EpisodeCommitForm(id=form.id, main_text=form.main_text)
     # 渡した欄だけが書かれるので、プロット・題は渡されたときだけ欄に入れる(None を入れると空で上書きする)
     if form.plot_text is not None:
         commit.plot_text = form.plot_text

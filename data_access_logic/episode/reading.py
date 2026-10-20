@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from pydantic import Field, computed_field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -17,16 +16,6 @@ class EpisodeTitle(Material):
     id: int
     start: Timestamp | None = None
     title: str
-
-
-class UnsyncedEpisode(EpisodeTitle):
-    story_id: int
-    story: Named | None = Field(default=None, exclude=True)
-
-    @computed_field
-    @property
-    def story_name(self) -> str | None:
-        return None if self.story is None else self.story.name
 
 
 class EpisodeNeighbors(Material):
@@ -75,8 +64,3 @@ def neighbor_episodes(s: Session, episode_id: int) -> EpisodeNeighbors:
     index = rows.index(episode)
     return EpisodeNeighbors(previous=rows[index - 1] if index > 0 else None,
                             next=rows[index + 1] if index + 1 < len(rows) else None)
-
-
-def unsynced_episodes(s: Session, story_id: int | None = None) -> list[UnsyncedEpisode]:
-    rows = s.scalars(common_query.unsynced_episodes_select(story_id)).all()
-    return [UnsyncedEpisode.model_validate(episode) for episode in rows]

@@ -21,12 +21,11 @@ from db.stamp import Stamp
 
 
 class StoryDigest(Material):
-    """作品の列に、話の数・最後の話・未同期の話を同じ段に並べて出す。"""
+    """作品の列に、話の数・最後の話を同じ段に並べて出す。"""
 
     story: StoryRecord
     episode_count: int
     last_episode: EpisodeTitle | None = None
-    unsynced: list[EpisodeTitle]
 
     @model_serializer(mode="wrap")
     def _flat(self, handler: Any) -> dict:
@@ -69,7 +68,6 @@ def story_digest(s: Session, story: Story) -> StoryDigest:
         story=StoryRecord.model_validate(story),
         episode_count=len(episodes),
         last_episode=EpisodeTitle.model_validate(episodes[-1]) if episodes else None,
-        unsynced=[EpisodeTitle.model_validate(episode) for episode in episodes if not episode.synced],
     )
 
 

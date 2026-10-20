@@ -18,10 +18,18 @@ def strip_fact_check(text: str | None) -> str:
     return _FACT_CHECK_SECTION.sub("", text or "").rstrip()
 
 
-class SourceText(Material):
-    # 抜き出したら印を付ける元の行(API で運べるよう、行そのものではなく表と id で指す)
+class SourceRow(Material):
+    """抜き出す元の行(API で運べるよう、行そのものではなく表と id で指す)。"""
+
     table: str
     id: int
+
+
+class SourceRows(Material):
+    rows: list[SourceRow]
+
+
+class SourceText(SourceRow):
     # 何の本文か(アイデア・出来事など)
     label: str
     text: str
