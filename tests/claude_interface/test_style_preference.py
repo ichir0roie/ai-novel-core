@@ -47,7 +47,7 @@ def test_writing_style_has_only_rows_for_all_texts(shown):
     assert text.startswith(WRITING_STYLE_BASE)
     assert everywhere in text
     assert episode_only not in text
-    assert EPISODE_STYLE_BASE.splitlines()[0] not in text
+    assert EPISODE_STYLE_BASE not in text
 
 
 def test_episode_style_adds_episode_rows_after_rows_for_all_texts(shown):
@@ -57,7 +57,7 @@ def test_episode_style_adds_episode_rows_after_rows_for_all_texts(shown):
         text = episode_style(s)
 
     assert text.startswith(WRITING_STYLE_BASE)
-    assert text.index(everywhere) < text.index(EPISODE_STYLE_BASE.splitlines()[0]) < text.index(episode_only)
+    assert text.index(everywhere) < text.index(EPISODE_STYLE_BASE) < text.index(episode_only)
 
 
 class _Answer(BaseModel):
