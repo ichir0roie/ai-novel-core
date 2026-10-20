@@ -134,21 +134,6 @@
           "comment": "サブタイトル。本文の見出しから読む"
         },
         {
-          "key": "synced",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "同期フラグ。この話の出来事・行動が台帳へ戻してあるか。自動生成時はオン、手で書いたときはオフ。オフの話があるあいだは、次の話の材料を読み出せない"
-        },
-        {
           "key": "start",
           "type": "stamp",
           "nullable": true,
@@ -222,36 +207,6 @@
           "readonly": true,
           "create_only": false,
           "comment": "字数。本文から数える"
-        },
-        {
-          "key": "event_seeded",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "出来事の種を抜き出し済みか。false に戻すと、次の毎日のルーチンで抜き出し直す"
-        },
-        {
-          "key": "meme_seeded",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "ミームを抜き出し済みか。false に戻すと、次の抽出で抜き出し直す"
         },
         {
           "key": "character_ids",
@@ -381,21 +336,6 @@
           "readonly": false,
           "create_only": false,
           "comment": "没年(この時からはいない)。空なら死んでいない"
-        },
-        {
-          "key": "event_seeded",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "出来事の種を抜き出し済みか。false に戻すと、次の毎日のルーチンで抜き出し直す"
         },
         {
           "key": "location_id",
@@ -1415,36 +1355,6 @@
           "comment": null
         },
         {
-          "key": "event_seeded",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "出来事の種を抜き出し済みか。false に戻すと、次の毎日のルーチンで抜き出し直す"
-        },
-        {
-          "key": "meme_seeded",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "ミームを抜き出し済みか。false に戻すと、次の抽出で抜き出し直す"
-        },
-        {
           "key": "character_ids",
           "type": "id_list",
           "nullable": true,
@@ -1863,36 +1773,6 @@
           "comment": "種別(技術・制度・概念など)"
         },
         {
-          "key": "start",
-          "type": "stamp",
-          "nullable": true,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "効き始める時刻。出来事の時刻と比べる。空なら始まりを限らない"
-        },
-        {
-          "key": "end",
-          "type": "stamp",
-          "nullable": true,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない"
-        },
-        {
           "key": "parent_idea_id",
           "type": "integer",
           "nullable": true,
@@ -2120,21 +2000,6 @@
           "readonly": false,
           "create_only": false,
           "comment": "題。覚え書きを呼ぶ名前"
-        },
-        {
-          "key": "meme_seeded",
-          "type": "boolean",
-          "nullable": false,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "ミームを抜き出し済みか。false に戻すと、次の抽出で抜き出し直す"
         },
         {
           "key": "text",

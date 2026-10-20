@@ -535,8 +535,7 @@ def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
         for title, start, text in [("一番古い話", "1200/02/01 12:00:00", "一番古い話の本文。"),
                                    ("その前の話", "1200/02/15 12:00:00", "その前の話の本文。"),
                                    ("前の話", "1200/03/01 12:00:00", "前の話。\n続き。")]:
-            s.add(Episode(story_id=world.story_id, title=title, plot_text=title, main_text=text, start=start,
-                          event_seeded=True))
+            s.add(Episode(story_id=world.story_id, title=title, plot_text=title, main_text=text, start=start))
         s.commit()
 
     def samples(letters):
@@ -553,7 +552,7 @@ def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
 def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkeypatch):
     with get_env_session() as s:
         s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                      start="1200/03/01 12:00:00", event_seeded=True))
+                      start="1200/03/01 12:00:00"))
         s.commit()
     asked = []
 
@@ -571,7 +570,7 @@ def test_refresh_voices(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
     with get_env_session() as s:
         s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                      start="1200/03/01 12:00:00", event_seeded=True))
+                      start="1200/03/01 12:00:00"))
         s.commit()
     prompts = []
 
@@ -607,7 +606,7 @@ def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, moc
     taro, hanako = world.character_ids
     with get_env_session() as s:
         s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                      start="1200/03/01 12:00:00", event_seeded=True))
+                      start="1200/03/01 12:00:00"))
         # 見本の話より後に、作者が太郎の口調を変えた
         s.add(CharacterParameter(character_id=taro, start=Stamp.parse("1200/03/15 12:00:00"), tone="作者が決めた口調"))
         s.commit()
@@ -952,7 +951,7 @@ def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
     with get_env_session() as s:
         for month in ["01", "02", "03"]:
             episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
-                              main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00", event_seeded=True)
+                              main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00")
             s.add(episode)
             s.flush()
             s.add(EpisodeCharacter(episode_id=episode.id, character_id=taro))

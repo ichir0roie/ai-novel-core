@@ -6,7 +6,7 @@ import EpisodeContext from "@/components/EpisodeContext";
 import SkillsModal from "@/components/SkillsModal";
 import { T } from "@/lib/text";
 
-type EpisodeLink = { table: string; id: number; label: string; synced: boolean; letters: number };
+type EpisodeLink = { table: string; id: number; label: string; letters: number };
 
 /** label は見出しに出す名前(スキルのモーダルの題に使う) */
 type Owner = { table: string; id: number | string; label?: string };
@@ -54,7 +54,6 @@ export default function Related({
           {episodes && owner?.table === "story" && (
             <span className="jumps-note">
               {T.related.episodeSummary(episodes.length, episodes.reduce((sum, p) => sum + p.letters, 0))}
-              {episodes.some((p) => !p.synced) ? T.related.unsynced(episodes.filter((p) => !p.synced).length) : ""}
             </span>
           )}
         </div>

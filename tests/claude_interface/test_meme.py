@@ -16,12 +16,11 @@ from data_access_logic.oracle.commit_oracle import CommitOracle
 from data_access_logic.oracle.form import OracleCreateForm, OracleUpdateForm
 from data_access_logic.oracle.update_oracle import UpdateOracle
 from data_access_logic.review.list_pending_reviews import ListPendingReviews
-from data_access_logic.episode.commit_episode import CommitEpisode
-from data_access_logic.episode.form import EpisodeCommitForm
-from data_access_logic.meme.extractor import pending_sources, save_anti_memes, save_memes, unpaired_sources
+from data_access_logic.meme.extractor import save_anti_memes, save_memes, sources_of, unpaired_sources
 from data_access_logic.flows import meme as meme_flow
 from data_access_logic.meme.models import AntiDraft, AntiMeme, AntisDraft, MemeDraft
-from db.schema import Episode, Meme, MemeCategory, get_env_session
+from data_access_logic.source_text import SourceRow
+from db.schema import Meme, MemeCategory, get_env_session
 from tool.test.mock_ai_client import MockAIClient
 
 
@@ -67,11 +66,12 @@ def test_draw_memes(shown, world):
     assert result == shown(DrawMemes(person=True, seed=4))
 
 
-def test_extract_memes(shown, mock_ai):
-    result = shown(ExtractMemes(fact_check=True))
+def test_extract_memes(shown, world, mock_ai):
+    result = shown(ExtractMemes(rows=[SourceRow(table="episode", id=world.episode_id)], fact_check=True))
 
     assert isinstance(result["memes_added"], int)
-    assert mock_ai.calls
+    # 渡した話の本文を AI に渡す
+    assert any("市で二人が出会った。" in call["prompt"] for call in mock_ai.calls)
 
 
 def test_refresh_generated_content(shown, world, mock_ai):
@@ -92,7 +92,7 @@ def test_update_meme(shown, world):
 
 def test_commit_oracle(shown, mock_ai):
     result = shown(CommitOracle(
-        OracleCreateForm(text="書く前に結末を決める", title="結末の覚え書き", meme_seeded=False), fact_check=True))
+        OracleCreateForm(text="書く前に結末を決める", title="結末の覚え書き"), fact_check=True))
 
     record = result["record"]
     assert record["title"] == "結末の覚え書き"
@@ -103,9 +103,9 @@ def test_commit_oracle(shown, mock_ai):
 
 def test_update_oracle(shown, world):
     result = shown(UpdateOracle(OracleUpdateForm(
-        id=world.oracle_id, text="直した覚え書き", title="直した題", meme_seeded=False)))
+        id=world.oracle_id, text="直した覚え書き", title="直した題")))
 
-    assert result == {"id": world.oracle_id, "title": "直した題", "meme_seeded": False, "text": "直した覚え書き"}
+    assert result == {"id": world.oracle_id, "title": "直した題", "text": "直した覚え書き"}
 
 
 def test_list_pending_reviews(shown, world):
@@ -117,27 +117,23 @@ def test_list_pending_reviews(shown, world):
     assert f"todo:meme:{world.meme_id}" in [item["key"] for item in result]
 
 
-def test_meme_sources_are_episodes_not_ideas_or_characters(world):
+def test_meme_sources_are_the_passed_rows(world):
     with get_env_session() as s:
-        sources = {(source.table, source.id) for source in pending_sources(s)}
+        sources = sources_of(s, [SourceRow(table="episode", id=world.episode_id),
+                                 SourceRow(table="oracle", id=world.oracle_id)])
 
-    assert ("episode", world.episode_id) in sources
-    assert not {table for table, _ in sources} & {"idea", "character"}
+    assert [(source.table, source.id, source.label) for source in sources] == [
+        ("episode", world.episode_id, "話の本文"), ("oracle", world.oracle_id, "覚え書き")]
 
 
-def test_commit_episode_resets_meme_seeded(world):
-    with get_env_session() as s, s.begin():
-        s.get_one(Episode, world.episode_id).meme_seeded = True
-    with get_env_session() as s, s.begin():
-        CommitEpisode(EpisodeCommitForm(id=world.episode_id, main_text="市で二人が別れた。")).execute(s)
-
-    with get_env_session() as s:
-        assert s.get_one(Episode, world.episode_id).meme_seeded is False
+def test_meme_sources_refuse_ideas_and_characters(world):
+    with get_env_session() as s, pytest.raises(ValueError):
+        sources_of(s, [SourceRow(table="character", id=world.character_ids[0])])
 
 
 def test_extracted_memes_are_saved_with_their_anti_memes(world):
     with get_env_session() as s, s.begin():
-        added = save_memes(s, [MemeDraft(text="約束は命より重い", anti_text="命は約束より重い", category="信条")], [])
+        added = save_memes(s, [MemeDraft(text="約束は命より重い", anti_text="命は約束より重い", category="信条")])
         meme = s.scalars(select(Meme).where(Meme.text == "約束は命より重い").order_by(Meme.id.desc())).first()
         assert meme is not None and meme.anti_meme_id is not None
         anti = s.get_one(Meme, meme.anti_meme_id)
@@ -157,7 +153,7 @@ class _AntiWritingAI(MockAIClient):
 
 
 def test_extract_memes_pairs_unpaired_memes(world):
-    meme_flow.refresh(_AntiWritingAI(seed=0))
+    meme_flow.refresh(_AntiWritingAI(seed=0), [])
 
     with get_env_session() as s:
         meme = s.get_one(Meme, world.meme_id)

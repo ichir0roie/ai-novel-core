@@ -310,15 +310,6 @@ def episodes_select(story_id: int, count: int = 10, before: Stamp | str | None =
     return query.order_by(Episode.start.desc().nulls_first(), Episode.id.desc()).limit(count)
 
 
-def unsynced_episodes_select(story_id: int | None = None) -> Select:
-    query = (select(Episode)
-             .options(selectinload(Episode.story))
-             .where(Episode.synced.is_(False)))
-    if story_id is not None:
-        query = query.where(Episode.story_id == story_id)
-    return query.order_by(Episode.story_id, *episode_order())
-
-
 # ---------------------------------------------------------------- 断面
 
 def ideas_select(location_ids: Collection[int] | None, time: Stamp | None = None) -> Select:

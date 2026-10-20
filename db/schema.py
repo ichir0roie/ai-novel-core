@@ -209,21 +209,7 @@ class LocationHistory(Base):
         return self.start is not None and self.start <= time
 
 
-class EventSeededMixin:
-    event_seeded: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
-        comment="出来事の種を抜き出し済みか。false に戻すと、次の毎日のルーチンで抜き出し直す",
-        sort_order=9000)
-
-
-class MemeSeededMixin:
-    meme_seeded: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
-        comment="ミームを抜き出し済みか。false に戻すと、次の抽出で抜き出し直す",
-        sort_order=9010)
-
-
-class Event(EventSeededMixin, MemeSeededMixin, TextBase):
+class Event(TextBase):
 
     __tablename__ = "event"
 
@@ -305,8 +291,8 @@ MEME_CATEGORIES = tuple(category.value for category in MemeCategory)
 
 
 class Meme(TextBase):
-    """ミームは移り変わり・伝染していくものなので、どの元から抜き出したか、どの人物が持つかは持たない
-    (元の側の `meme_seeded` で、抜き出し済みかだけを管理する)。ミームどうしで持つのは、反転した対(アンチミーム)だけ。
+    """ミームは移り変わり・伝染していくものなので、どの元から抜き出したか、どの人物が持つかは持たない。
+    ミームどうしで持つのは、反転した対(アンチミーム)だけ。
     """
 
     __tablename__ = "meme"
@@ -321,7 +307,7 @@ class Meme(TextBase):
         sort_order=210)
 
 
-class Oracle(MemeSeededMixin, TextBase):
+class Oracle(TextBase):
     """著者自身の創作・AI についての覚え書き。物語のデータではない。"""
 
     __tablename__ = "oracle"
@@ -436,7 +422,7 @@ def _knower_args(table: str, subject: str) -> tuple:
             CheckConstraint("(knower_id IS NULL) <> (location_id IS NULL)", name=f"ck_{table}_one_knower"))
 
 
-class Character(EventSeededMixin, ContentBase):
+class Character(ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
@@ -790,12 +776,7 @@ class Idea(TextBase):
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
 
-    # 効く場所は本体に持たず、履歴の行の場所で持つ(`dictionary_query.idea_in_scope`)
-    start: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="効き始める時刻。出来事の時刻と比べる。空なら始まりを限らない", sort_order=230)
-    end: Mapped[Stamp | None] = mapped_column(
-        StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=240)
-
+    # 効く場所・時期は本体に持たず、履歴の行の場所・期間で持つ(`dictionary_query.idea_in_scope`)
     parent_idea_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("idea.id"), comment="上位のアイデア", sort_order=250)
 
@@ -922,7 +903,7 @@ class Story(TextBase):
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
 
-class Episode(EventSeededMixin, MemeSeededMixin, ContentBase):
+class Episode(ContentBase):
     """話。プロット・時刻・視点・場所と本文、本文の概要までを一行に持つ。"""
 
     __tablename__ = "episode"
@@ -939,12 +920,6 @@ class Episode(EventSeededMixin, MemeSeededMixin, ContentBase):
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
-    synced: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False,
-        comment="同期フラグ。この話の出来事・行動が台帳へ戻してあるか。"
-                "自動生成時はオン、手で書いたときはオフ。"
-                "オフの話があるあいだは、次の話の材料を読み出せない",
-        sort_order=240)
 
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="話が立つ時刻。作品の中の話はこの順に並ぶ(空の話は後ろに id 順)", sort_order=250)

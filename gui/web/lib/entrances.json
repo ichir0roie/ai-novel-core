@@ -458,21 +458,6 @@
       "writes": true
     },
     {
-      "id": "episode.list_unsynced_episodes.ListUnsyncedEpisodes",
-      "area": "episode",
-      "name": "ListUnsyncedEpisodes",
-      "doc": "",
-      "params": [
-        {
-          "name": "story_id",
-          "required": false,
-          "default": null,
-          "annotation": "int | None"
-        }
-      ],
-      "writes": false
-    },
-    {
       "id": "episode.move_episodes.MoveEpisodes",
       "area": "episode",
       "name": "MoveEpisodes",
@@ -588,27 +573,6 @@
           "required": false,
           "default": null,
           "annotation": "list[int] | None"
-        }
-      ],
-      "writes": true
-    },
-    {
-      "id": "episode.set_episode_synced.SetEpisodeSynced",
-      "area": "episode",
-      "name": "SetEpisodeSynced",
-      "doc": "",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "synced",
-          "required": false,
-          "default": true,
-          "annotation": "bool"
         }
       ],
       "writes": true
@@ -1294,12 +1258,6 @@
           "required": false,
           "default": 1,
           "annotation": "int"
-        },
-        {
-          "name": "skip_sync",
-          "required": false,
-          "default": false,
-          "annotation": "bool"
         }
       ],
       "writes": false

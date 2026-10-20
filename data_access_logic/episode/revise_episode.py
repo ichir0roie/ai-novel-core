@@ -11,7 +11,7 @@ from data_access_logic.flows import commit
 
 
 class ReviseEpisode(CommitEntrypoint):
-    """本文のある話の本文だけを直す(推敲)。同期フラグを保ち、登場人物の居場所・関係は本文から動かさない。"""
+    """本文のある話の本文だけを直す(推敲)。登場人物の居場所・関係は本文から動かさない。"""
 
     def __init__(self, episode: EpisodeReviseForm):
         self.episode = episode

@@ -17,8 +17,6 @@ class EventColumns(Material):
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
-    event_seeded: bool
-    meme_seeded: bool
 
 
 class EventCharacterLink(Material):

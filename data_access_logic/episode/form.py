@@ -38,11 +38,6 @@ class EpisodeCommitForm(Form):
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
     location_id: int | None = None
-    event_seeded: bool | None = None
-    # 渡さなければ、本文が変わったときに抜き出し直す扱いにする
-    meme_seeded: bool | None = None
-    # 渡さなければ、手で直した話として同期していない扱いにする
-    synced: bool | None = None
     # 渡すと登場人物(`episode_character`)をまるごと置き換える
     character_ids: Annotated[list[int] | None, References("character")] = Field(
         default=None, description="登場人物の id")
@@ -55,7 +50,7 @@ class EpisodeCommitForm(Form):
 
 
 class EpisodeReviseForm(Form):
-    """本文のある話の本文を直す(推敲)。同期フラグ・時刻・登場人物・場所は変えない。"""
+    """本文のある話の本文を直す(推敲)。時刻・登場人物・場所は変えない。"""
 
     id: int
     # 改行を整えてから入れる(`layout_novel_text`)

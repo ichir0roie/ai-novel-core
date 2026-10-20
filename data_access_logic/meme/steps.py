@@ -7,14 +7,12 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.meme import extractor
 from data_access_logic.meme.models import AntiMeme, MemeCategory, MemeDraft
-from data_access_logic.source_text import SourceText
+from data_access_logic.source_text import SourceRows, SourceText
 from data_access_logic.step import db_step
 
 
 class MemesForm(BaseModel):
     memes: list[MemeDraft]
-    # 抜き出し済みの印を付ける元
-    sources: list[SourceText]
 
 
 class CategoriesForm(BaseModel):
@@ -26,8 +24,8 @@ class AntiMemesForm(BaseModel):
 
 
 @db_step
-def pending_sources(s: Session) -> list[SourceText]:
-    return extractor.pending_sources(s)
+def sources(s: Session, form: SourceRows) -> list[SourceText]:
+    return extractor.sources_of(s, form.rows)
 
 
 @db_step
@@ -37,7 +35,7 @@ def meme_texts(s: Session) -> list[str]:
 
 @db_step
 def save_memes(s: Session, form: MemesForm) -> int:
-    return extractor.save_memes(s, form.memes, form.sources)
+    return extractor.save_memes(s, form.memes)
 
 
 @db_step

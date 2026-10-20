@@ -15,7 +15,7 @@ class CastEpisode(CommitEntrypoint):
     """本文を書く前に、Claude がプロットから決めた登場人物・場所・視点を話に結ぶ。
 
     登場人物(`episode_character`)は `character_ids` でまるごと置き換え、名前だけ出る人物はプロット・本文から拾い直す。
-    `location_id` / `viewpoint_character_id` は渡したときだけ書く。同期フラグ(`synced`)は変えない。
+    `location_id` / `viewpoint_character_id` は渡したときだけ書く。
     """
 
 

@@ -20,7 +20,6 @@ class MoveEpisodes(CommitEntrypoint):
         common_query.get_row(s, Story, self.story_id)
         for episode_id in self.episode_ids:
             common_query.get_row(s, Episode, episode_id)
-        # 本文も枠も変わらないので、同期フラグと要約はそのまま残す
         s.execute(update(Episode).where(Episode.id.in_(self.episode_ids)).values(story_id=self.story_id))
         rows = s.scalars(select(Episode).where(Episode.id.in_(self.episode_ids))
                          .order_by(*common_query.episode_order())

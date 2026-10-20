@@ -72,7 +72,7 @@ class ConsistencyRequestSerialized(ConsistencyRequest):
                 "所属する地域": f"{location.parent.name}({location.parent.kind})" if location.parent else None,
             } if location else None,
             "この時刻より後に始まる設定(まだ無い)": [
-                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.start.year if idea.start else None}
+                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.first_start.year if idea.first_start else None}
                 for idea in self.later_ideas],
             "関係する設定": self.ideas.model_dump(),
             "既にいる人物・対象": [

@@ -12,14 +12,12 @@ class EpisodeHead(Material):
     id: int
     story_id: int
     title: str
-    synced: bool
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
     location_id: int | None = None
     letters: int
     plot_text: str
-    event_seeded: bool
 
 
 class EpisodeRow(EpisodeHead):

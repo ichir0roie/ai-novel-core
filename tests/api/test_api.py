@@ -34,7 +34,7 @@ def test_table_counts(client, world):
 def test_list_records(client, world):
     response = client.get("/api/tables/episode/records", params={
         "q": "テスト第一話", "limit": 10, "offset": 0, "sort": "start", "order": "desc",
-        "story_id": world.story_id, "synced": "true", "location_id": world.location_id})
+        "story_id": world.story_id, "location_id": world.location_id})
 
     assert response.status_code == 200
     body = response.json()
@@ -61,7 +61,7 @@ def test_list_options(client, world):
 def test_create_record(client, world):
     response = client.post("/api/tables/character/records", json={
         "name": "API の人", "text": "API から足した人物", "kind": "人物", "main_character": True,
-        "event_seeded": True, "location_id": world.location_id, "start": "1181/02/03",
+        "location_id": world.location_id, "start": "1181/02/03",
         "end": "1255/06/07",
         "parameters": [{"start": "1181/02/03", "family_name": "東雲", "sex": "女", "height": 162.5,
                         "build": "中背", "first_person": "わたくし", "second_person": "貴方", "third_person": "彼の方",
@@ -100,8 +100,7 @@ def test_update_record(client, world):
     response = client.patch(f"/api/tables/event/records/{world.child_event_id}", json={
         "name": "API で直した取引", "time": "1200/04/01 16:30:00", "text": "API で直した", "hidden": True,
         "parent_event_id": world.event_id, "location_id": world.neighbor_id,
-        "start": "1200/04/01 16:30:00", "end": "1200/04/01 18:00:00", "event_seeded": False, "meme_seeded": False,
-        "character_ids": world.character_ids})
+        "start": "1200/04/01 16:30:00", "end": "1200/04/01 18:00:00", "character_ids": world.character_ids})
 
     assert response.status_code == 200
     record = response.json()["record"]
@@ -109,7 +108,6 @@ def test_update_record(client, world):
     assert (record["time"], record["end"]) == ("1200/04/01 16:30:00", "1200/04/01 18:00:00")
     assert (record["hidden"], record["parent_event_id"], record["location_id"]) == (True, world.event_id,
                                                                                     world.neighbor_id)
-    assert (record["event_seeded"], record["meme_seeded"]) == (False, False)
     assert record["character_ids"] == world.character_ids
 
 
@@ -122,13 +120,13 @@ def test_run_unknown_entrance(client):
 def test_run_entrance(client, world):
     response = client.post("/api/interface/story.start_story.StartStory", json={
         "args": {"story_id": world.story_id, "time": "1200/04/02", "episodes": 5, "count": 3, "reach": 30,
-                 "levels": 2, "skip_sync": True}})
+                 "levels": 2}})
 
     assert response.status_code == 200
     body = response.json()
     assert body["entrance"] == "story.start_story.StartStory"
     result = body["result"]
-    assert (result["stopped"], result["time"]) == (False, "1200/04/02 23:59:59")
+    assert result["time"] == "1200/04/02 23:59:59"
     assert [episode["id"] for episode in result["episodes"]] == [world.episode_id]
     assert result["cast"] is not None
     assert result["brief"] is not None

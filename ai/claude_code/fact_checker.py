@@ -141,9 +141,6 @@ def save_fact_checks(s: Session, notes: list[FactCheckNote]) -> int:
     for note in notes:
         record = row_of(s, note.table, note.id)
         record.text = _append_fact_check(record.text, note.fact_check)
-        # 検証結果もミームの元になるので、抜き出し直させる
-        if not isinstance(record, Meme):
-            record.meme_seeded = False
     s.flush()
     return len(notes)
 

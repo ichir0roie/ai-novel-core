@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """出来事の種は、元の本文から時代・場所・固有名詞を抜いたもの。出来事の生成(`GenerateEvent`)で候補を立てる手がかりに引く。
 
-db だけの段(`pending_sources` / `save_seeds` / `seed_piles` / `apply_merges` / `settle_seeds` / `seed_pool`)と、
+抜き出すのは、流れが渡した行(書いたその場の行)だけ。
+db だけの段(`sources_of` / `save_seeds` / `seed_piles` / `apply_merges` / `settle_seeds` / `seed_pool`)と、
 AI だけの段(`extraction_draft`、`merges_draft`)に分けてある。流れ(`data_access_logic/flows/event_seed.py`)がつなぐ。
 """
 from __future__ import annotations
@@ -17,8 +18,7 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.event_seed.models import (
     ConsolidateDraft, ConsolidateRequestSerialized, SeedMerge, SeedPiles, SeedsDraft, StoredSeed,
 )
-from data_access_logic.query import event_seed_query
-from data_access_logic.source_text import SourceBatchSerialized, SourceText, row_of, source_of
+from data_access_logic.source_text import SourceBatchSerialized, SourceRow, SourceText, row_of, source_of
 from db.schema import Character, Episode, Event, EventSeed
 
 logger = logging.getLogger(__name__)
@@ -39,15 +39,21 @@ _CONSOLIDATE_SYSTEM_PROMPT = """\
 - まとめた種は一〜二文。まとめる種の要素を落とさず、人名・地名・年代は入れない。
 - まとめる組が無ければ merges は空のリストにする。"""
 
-def pending_sources(s: Session) -> list[SourceText]:
-    """まだ種を抜き出していない元。話はプロット(`plot_text`)を、無ければ本文を使う。人物は筋書き(`plot`)だけを使う。"""
+def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
+    """渡した行の本文。元の列が空の行は外す。話はプロット(`plot_text`)を、無ければ本文を使う。人物は筋書き(`plot`)だけを使う。"""
     sources: list[SourceText] = []
-    for episode in s.scalars(event_seed_query.unseeded_select(Episode, Episode.plot_text, Episode.main_text)).all():
-        sources.append(source_of(episode, "話の骨組み", episode.plot_text.strip() or episode.main_text))
-    for character in s.scalars(event_seed_query.unseeded_select(Character, Character.plot)).all():
-        sources.append(source_of(character, "人物の筋書き", character.plot or ""))
-    for event in s.scalars(event_seed_query.unseeded_select(Event, Event.text)).all():
-        sources.append(source_of(event, "出来事", event.text))
+    for row in rows:
+        record = row_of(s, row.table, row.id)
+        if isinstance(record, Episode):
+            source = source_of(record, "話の骨組み", record.plot_text.strip() or record.main_text)
+        elif isinstance(record, Character):
+            source = source_of(record, "人物の筋書き", record.plot or "")
+        elif isinstance(record, Event):
+            source = source_of(record, "出来事", record.text)
+        else:
+            raise ValueError(f"種を抜き出す元は episode / character / event のいずれか: {row.table!r}")
+        if source.text.strip():
+            sources.append(source)
     return sources
 
 
@@ -58,11 +64,9 @@ def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None
         SeedsDraft, system=_SYSTEM_PROMPT)
 
 
-def save_seeds(s: Session, seeds: list[str], sources: list[SourceText]) -> int:
-    """種を足し、元に抜き出し済みの印を付ける。足した件数を返す。"""
+def save_seeds(s: Session, seeds: list[str]) -> int:
+    """種を足す。足した件数を返す。"""
     s.add_all(EventSeed(text=seed) for seed in seeds)
-    for source in sources:
-        row_of(s, source.table, source.id).event_seeded = True
     s.flush()
     return len(seeds)
 

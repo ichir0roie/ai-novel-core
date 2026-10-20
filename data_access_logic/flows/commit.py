@@ -2,7 +2,7 @@
 """行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `ReviseEpisode` / `CommitOracle` の `run()`)。
 
 確定は db の段一つで済ませる(GUI の API が呼ぶ `execute(s)` と同じ)。そのあとの AI の段(ミームの抜き出し・要約・種・事実確認)は、
-AI が答えなくても確定は残る。
+AI が答えなくても確定は残る。ミーム・種を抜き出すのは、その場で書いた行からだけ。
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from data_access_logic.event.record import EventRecord
 from data_access_logic.oracle import steps as oracle_steps
 from data_access_logic.oracle.form import OracleCreateForm
 from data_access_logic.oracle.record import MemeSourceCommitted
+from data_access_logic.source_text import SourceRow
 from data_access_logic.step import RowId
 from data_access_logic.flows import event_seed, fact_check, meme
 from data_access_logic.caller import call
@@ -54,35 +55,41 @@ def _relate_cast(ai: AIClient, episode_id: int) -> list[CharacterRelationRecord]
 
 
 def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> CommittedEpisode:
-    """本文を渡したときは、本文の中で住まい・拠点が変わった登場人物の居場所も移し、その移動先をレスポンスの `moves` に返す
-    (移動先が空なら何もしない)。本文で会った・知り合いだと分かった登場人物どうしの関係も足し、レスポンスの `relations` に返す。"""
+    """本文を渡したときは、その本文からミームと出来事の種を抜き出す。本文の中で住まい・拠点が変わった登場人物の居場所も移し、
+    その移動先をレスポンスの `moves` に返す(移動先が空なら何もしない)。本文で会った・知り合いだと分かった登場人物どうしの関係も足し、
+    レスポンスの `relations` に返す。"""
     record = call(episode_steps.commit_episode, episode)
-    meme.refresh(ai)
-    moved = _move_cast(ai, record.id) if episode.main_text is not None else []
-    related = _relate_cast(ai, record.id) if episode.main_text is not None else []
+    written = [SourceRow(table="episode", id=record.id)] if episode.main_text is not None else []
+    meme.refresh(ai, written)
+    if written:
+        event_seed.refresh_and_consolidate(ai, written)
+    moved = _move_cast(ai, record.id) if written else []
+    related = _relate_cast(ai, record.id) if written else []
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
 
 
 def revise_episode(episode: EpisodeReviseForm, ai: AIClient = ai_client) -> EpisodeRecord:
     """`commit_episode` と違い、登場人物の居場所・関係を本文から動かさない。昔の話を推敲すると、
-    今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので。"""
+    今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので。
+    推敲は筋を変えないので、種は抜き出し直さず、ミームだけを直した本文から抜き出す。"""
     record = call(episode_steps.revise_episode, episode)
-    meme.refresh(ai)
+    meme.refresh(ai, [SourceRow(table="episode", id=record.id)])
     return record
 
 
 def commit_event(event: EventCreateForm, ai: AIClient = ai_client) -> EventRecord:
     record = call(event_steps.commit_event, event)
-    meme.refresh(ai)
+    written = [SourceRow(table="event", id=record.id)]
+    meme.refresh(ai, written)
     rewrite_event_summaries(ai, [record.id])
-    # 足した出来事自身の本文も種の元になる
-    event_seed.refresh_and_consolidate(ai)
+    event_seed.refresh_and_consolidate(ai, written)
     return record
 
 
 def update_event(event: EventUpdateForm, ai: AIClient = ai_client) -> EventRecord:
+    """本文を渡したときだけ、直した本文からミームを抜き出す。"""
     record = call(event_steps.update_event, event)
-    meme.refresh(ai)
+    meme.refresh(ai, [SourceRow(table="event", id=record.id)] if event.text is not None else [])
     rewrite_event_summaries(ai, [record.id])
     return record
 
@@ -91,7 +98,7 @@ def _meme_source_follow_up(ai: AIClient, table: str, record_id: int, text: str, 
     """確定したもの自身を検め、検証結果を足した本文からミームを抜き出し、足したミームも検める。足したミームの件数を返す。"""
     if fact_check_enabled and text.strip():
         fact_check.check(ai, table, ids=[record_id])
-    return fact_check.extract_memes(ai, fact_check_enabled)
+    return fact_check.extract_memes(ai, [SourceRow(table=table, id=record_id)], fact_check_enabled)
 
 
 def commit_oracle(oracle: OracleCreateForm, fact_check: bool = True, ai: AIClient = ai_client) -> MemeSourceCommitted:
