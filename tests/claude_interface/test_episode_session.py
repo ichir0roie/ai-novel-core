@@ -481,6 +481,9 @@ def test_read_knower_gaps(shown, world):
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=taro, histories=[
         CharacterHistoryRow(start=1190, description="テスト花子と市で会う", knowers=[KnowerRow(knower_id=taro)]),
+        # 同じ出来事のうち、テスト花子が知るはずの所だけを分けた行
+        CharacterHistoryRow(start=1190, description="市で会って名乗り合う",
+                            knowers=[KnowerRow(knower_id=taro), KnowerRow(knower_id=hanako, start="1190/01/01")]),
         CharacterHistoryRow(start=1191, description="テスト花子と組む",
                             knowers=[KnowerRow(knower_id=taro), KnowerRow(knower_id=hanako, start="1191/01/01")]),
         # 話の時刻より後に知る行と、話の時刻より後に起きた行
@@ -491,9 +494,14 @@ def test_read_knower_gaps(shown, world):
 
     gaps = shown(ReadKnowerGaps(episode_id=world.episode_id))
 
+    hanako_named = {"id": hanako, "name": "テスト花子"}
     assert [(gap["character"]["id"], gap["description"], gap["unknowing"]) for gap in gaps] == [
-        (taro, "テスト花子と市で会う", [{"id": hanako, "name": "テスト花子"}]),
-        (taro, "テスト花子に打ち明ける", [{"id": hanako, "name": "テスト花子"}])]
+        (taro, "テスト花子と市で会う", [hanako_named]),
+        (taro, "テスト花子に打ち明ける", [hanako_named])]
+    # 同じ始まりで、抜けた人物がもう知っている行を添える
+    assert [(cover["description"], cover["knowing"]) for cover in gaps[0]["covered_by"]] == [
+        ("市で会って名乗り合う", [hanako_named])]
+    assert gaps[1]["covered_by"] == []
 
 
 def test_read_episode_brief(shown, world, mock_ai, monkeypatch):

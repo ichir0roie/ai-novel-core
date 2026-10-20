@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.episode.mentions import cast_characters
-from data_access_logic.episode_session.record import KnowerGap
+from data_access_logic.episode_session.record import KnowerCover, KnowerGap
 from data_access_logic.history_start import by_start
 from data_access_logic.material import Named
 from db.schema import CharacterHistory, Episode, EpisodeCharacter
@@ -21,7 +21,9 @@ def _knows(history: CharacterHistory, character_id: int, time: Stamp) -> bool:
 class ReadKnowerGaps(SessionEntrypoint):
     """話の登場人物の来歴のうち、話の時刻までに起きた行で、ほかの登場人物の名前が出るのに、その人物が話の時刻に知る相手に
     入っていない行を挙げる。人物役は知る相手の行しか読まないので、居合わせたはずの出来事を知らずに演じてしまう。
-    名前が出ても居合わせたとは限らず、場所を知る相手にした行は見ないので、足すかは読んで決める(手番を回す前の確かめ)。"""
+    名前が出ても居合わせたとは限らず、場所を知る相手にした行は見ないので、足すかは読んで決める(手番を回す前の確かめ)。
+    同じ出来事の知るはずの所だけを、知る相手を分けた別の行にしてあることがあるので、同じ人物・同じ始まりで、
+    その人物がもう知っている行を添える(足すと同じ中身の行が重なる)。"""
 
     def __init__(self, episode_id: int):
         self.episode_id = episode_id
@@ -44,5 +46,18 @@ class ReadKnowerGaps(SessionEntrypoint):
                              and not _knows(history, other.id, time)]
                 if unknowing:
                     gaps.append(KnowerGap(history_id=history.id, character=character, start=history.start,
-                                          description=history.description, unknowing=unknowing))
+                                          description=history.description, unknowing=unknowing,
+                                          covered_by=_covers(character.histories, history, unknowing, time)))
         return gaps
+
+
+def _covers(histories: list[CharacterHistory], gap: CharacterHistory, unknowing: list[Named],
+            time: Stamp) -> list[KnowerCover]:
+    covers = []
+    for row in sorted(histories, key=by_start):
+        if row.id == gap.id or row.start != gap.start:
+            continue
+        knowing = [named for named in unknowing if _knows(row, named.id, time)]
+        if knowing:
+            covers.append(KnowerCover(history_id=row.id, description=row.description, knowing=knowing))
+    return covers
