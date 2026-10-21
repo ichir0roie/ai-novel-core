@@ -22,6 +22,7 @@ from data_access_logic.character.generator_models import (
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
 from data_access_logic.material import Material
+from db.schema import StyleScope
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,8 @@ def reconciled(
         text=text, principle=content.principle, history=history)
     output = PersonConsistencyDraft if isinstance(content, PersonContentDraft) else ConsistencyDraft
     draft = ai.generate(
-        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output, system=_SYSTEM_PROMPT)
+        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output, system=_SYSTEM_PROMPT,
+        style_scope=StyleScope.CHARACTER)
     if draft is None or not draft.issues or not draft.text.strip():
         return Reconciled(text=text, principle=content.principle, history=history)
     logger.info("世界・設定との食い違いを直した:\n" + "".join(f"    {issue}\n" for issue in draft.issues))

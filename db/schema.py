@@ -316,24 +316,38 @@ class Oracle(TextBase):
 
 
 class StyleScope(enum.StrEnum):
-    # AI が書くすべての文(プロット・来歴・アイデア・ミームなど)と、話の本文
+    # 全体は AI が書くすべての文、ストーリーは作品(と子孫の作品)のすべての文に効く。
+    # 残りは使う所ごとの範囲で、使う所は 全体 → ストーリー → その範囲 の順に足す
     ALL = "全体"
+    STORY = "ストーリー"
     EPISODE = "本文"
+    PLOT = "プロット"
+    CHARACTER = "人物"
+    EVENT = "出来事"
+    IDEA = "アイデア"
+    MEME = "ミーム"
+    RELATION = "関係"
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 
 
 class StylePreference(TextBase):
-    """世界ごとの文体の好み(舞台設定・既存の話から抽出した文体の癖)。
-    `ai/instructions/style.py` の固定の文面に、効く範囲(`scope`)の合う行を id の順に足す。"""
+    """AI に書かせる文の書き方の指示(文体・作風・注意書き)。
+    使う所の範囲に合う行(全体 → ストーリー → その範囲の順、同じ範囲では id の順)を、書くたびに db から読んで足す。
+    システムの初期値の行は `db/style_defaults.py`。"""
 
     __tablename__ = "style_preference"
 
     scope: Mapped[str] = mapped_column(
         String, nullable=False, default=StyleScope.EPISODE.value, server_default=StyleScope.EPISODE.value,
-        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれか。全体は AI が書くすべての文に、本文は話の本文だけに効く",
+        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品"
+                "(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く",
         sort_order=200)
+    story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id", ondelete="CASCADE"), nullable=True, index=True,
+        comment="効く作品。範囲がストーリーの行だけに入れ、その作品と子孫(章・外伝)の作品に効く。ほかの範囲では空",
+        sort_order=210)
 
 
 CHARACTER_KIND_PERSON = "人物"
@@ -976,9 +990,12 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def seed_master_rows(engine) -> None:
+    from db.style_defaults import DEFAULT_STYLE_PREFERENCES
+
     with Session(engine) as s:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
                   for name, id_ in _PERSONALITY_LEVEL_IDS.items())
+        s.add_all(StylePreference(scope=scope, text=text) for scope, text in DEFAULT_STYLE_PREFERENCES)
         s.commit()
 
 

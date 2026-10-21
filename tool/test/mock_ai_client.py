@@ -9,6 +9,8 @@ import re
 
 from pydantic import BaseModel, ValidationError
 
+from db.schema import StyleScope
+
 # 材料は日本語の見出しの JSON(`"人物id": 1`)で渡る
 _CHARACTER_ID_IN_PROMPT = re.compile(r"\"人物id\": (\d+)")
 
@@ -24,9 +26,11 @@ class MockAIClient:
     def generate[Output: BaseModel](
         self, prompt: str, output: type[Output], system: str | None = None, timeout: float | None = None,
         tools: tuple[str, ...] = (), model: str = "", effort: str = "",
+        style_scope: StyleScope = StyleScope.ALL, story_id: int | None = None,
     ) -> Output | None:
         schema = output.model_json_schema()
-        self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools})
+        self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools,
+                           "style_scope": style_scope, "story_id": story_id})
         try:
             return output.model_validate(self._fill(schema, prompt, key=None, defs=schema.get("$defs", {})))
         except ValidationError:

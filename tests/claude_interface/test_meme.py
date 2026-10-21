@@ -20,7 +20,7 @@ from data_access_logic.meme.extractor import save_anti_memes, save_memes, source
 from data_access_logic.flows import meme as meme_flow
 from data_access_logic.meme.models import AntiDraft, AntiMeme, AntisDraft, MemeDraft
 from data_access_logic.source_text import SourceRow
-from db.schema import Meme, MemeCategory, get_env_session
+from db.schema import Meme, MemeCategory, StyleScope, get_env_session
 from tool.test.mock_ai_client import MockAIClient
 
 
@@ -145,11 +145,12 @@ def test_extracted_memes_are_saved_with_their_anti_memes(world):
 class _AntiWritingAI(MockAIClient):
     """モックは配列を空で返すので、アンチミームだけは渡したミームの番号ごとに書く。"""
 
-    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort=""):
+    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="",
+                 style_scope=StyleScope.ALL, story_id=None):
         if output is AntisDraft:
             memes = json.loads(prompt[:prompt.rindex("]") + 1])
             return AntisDraft(antis=[AntiDraft(number=item["番号"], anti_text=f"{item['ミーム']}の反転") for item in memes])
-        return super().generate(prompt, output, system, timeout, tools, model, effort)
+        return super().generate(prompt, output, system, timeout, tools, model, effort, style_scope, story_id)
 
 
 def test_extract_memes_pairs_unpaired_memes(world):

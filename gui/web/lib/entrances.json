@@ -1312,7 +1312,14 @@
       "area": "style_preference",
       "name": "ReadWritingStyle",
       "doc": "このセッションの Claude がプロット・来歴・アイデア・関係など、話の本文でない文を書く前に読む書き方。",
-      "params": [],
+      "params": [
+        {
+          "name": "writing_style",
+          "required": false,
+          "default": null,
+          "annotation": "WritingStyleForm | None"
+        }
+      ],
       "writes": false
     },
     {

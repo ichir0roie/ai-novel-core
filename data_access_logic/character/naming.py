@@ -26,6 +26,7 @@ from ai.instructions.naming import CHARACTER_NAMING_INSTRUCTION, IDEA_NAMING_INS
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator_models import CharacterNameMaterialSerialized, NameDraft, PersonNameDraft
+from db.schema import StyleScope
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ def drawn_meanings(ai: AIClient, rng: random.Random, material: CharacterNameMate
     """AI に意味の語を挙げさせ、名の意味を `NAME_MEANING_PICK_RANGE` 個・名字の意味を一つ選ぶ。挙がらなければ None。
     名の意味はミームから取った語を優先し、それが無いときだけ性格・人物説明から取った語を使う。"""
     meanings = ai.generate("\n".join([material.model_dump_json(indent=2), "この人物の名と名字の元にする意味を挙げる。"]),
-                           NameMeanings, system=_MEANING_SYSTEM_PROMPT)
+                           NameMeanings, system=_MEANING_SYSTEM_PROMPT, style_scope=StyleScope.CHARACTER)
     if meanings is None:
         return None
     given = _words(meanings.from_memes) or _words(meanings.from_character)
@@ -169,7 +170,8 @@ def named(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSeria
                       f"名字の意味: {(meanings.family if meanings else None) or 'null'}"] if person else []),
                    "この一件の名前の候補を出す。"]),
         PersonNameCandidates if person else NameCandidates,
-        system=_PERSON_SYSTEM_PROMPT if person else _NON_PERSON_SYSTEM_PROMPT)
+        system=_PERSON_SYSTEM_PROMPT if person else _NON_PERSON_SYSTEM_PROMPT,
+        style_scope=StyleScope.CHARACTER)
     if drafts is None or not drafts.candidates:
         return None
     unique = list({draft.name: draft for draft in drafts.candidates}.values())

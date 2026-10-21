@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""固定の文体指示(`*_BASE`)と、本文の改行を整える `layout_novel_text`。
+"""本文の改行を整える `layout_novel_text` と、その読み方に結びついた約束(`EPISODE_LAYOUT_INSTRUCTION`)。
 
-AI が書くすべての文の書き方(`writing_style_instruction()`)と、それに話の本文だけの決まりを足した本文の書き方
-(`style_instruction()`)を組む。世界の舞台設定や、既存の話(`Episode`)の本文から抽出した文体の癖のような、
-世界ごとに違う「好み」は、ここには定数で持たず、呼び出し側から引数で渡す(入口は db の `style_preference` から読む)。
+書き方の文(文体・作風・注意書き)はここに定数で持たず、db の `style_preference` から読む
+(`data_access_logic/style_preference/extras.py`。初期値は `db/style_defaults.py`)。
 """
 from __future__ import annotations
 
@@ -106,53 +105,13 @@ def layout_novel_text(text: str) -> str:
     return "\n\n\n".join(scenes)
 
 
-# AI が書くすべての文(プロット・来歴・アイデア・ミーム・本文など)に効く。`ai/claude_code/ai_client.generate` が毎回 system に足す
-# 語の好み(日常の言葉・慣用句・漢字の使い方など)は世界ごとに違うので、ここに置かず db の `style_preference` に持つ
-WRITING_STYLE_BASE = """\
-語の選び方・文の運び方は、この世界の文章すべてで揃える。
-修飾を重ねない。
-渡す材料の来歴・人物像・場所の説明は、要約のための書き言葉で書かれている。その言い回しを写さず、書く文に合った言葉に直す。"""
-
-
-# 話の本文だけに効く。行の組み方と場面の切れ目は `layout_novel_text` の読み方に合わせてある
-EPISODE_STYLE_BASE = f"""\
-文体:
-基本的な文体はライトノベルを参考にする。
-地の文では、同じ語・同じ言い回しを近い距離で繰り返さない。
-
-筋と場面:
-書く筋(プロット。場面を手番で演じたなら、その手番の行)に無い大きな出来事は足さない。場面を厚くする描写・会話・動き・視点人物の心の声は足す。
-筋にある出来事は、渡された作品・登場人物(来歴・関係)・場所・設定を踏まえ、具体的な描写・会話・人物の動きまで書き起こす。
-場面の数と長さは中身に合わせる。場所・時間・書く対象が変わるところにだけ、「{SCENE_BREAK}」だけの行を置く。
-移動・待ち時間・繰り返しの作業のように筋が動かないところは、一〜二文で飛ばす。
-
-情景:
-情景は視点人物が実際に見聞きした範囲で書く。目に留まった物を一か所に一つか二つだけ書き、見えるものを並べ立てない。
-
-セリフ:
-セリフは、その人物がその場で実際に口にする話し言葉にする。人が普段話すとおり同じ語を繰り返してよく、言い換えで飾らない。
-口調の差は語尾・呼び方・言葉の選び方で出し、人物ごとに読み分けられる長さで切る。癖を誇張しない。
-格言めいた言い回し・決め台詞で場面を締めない。
-
-締め:
-出来事の中身が終わっていないときは、謎・伏線・この先への期待を、出来事か動作で残して切る。意味ありげなセリフで匂わせない。
-中身が終わったときは、余韻を残して締める。締めは気の利いた一言にせず、動作か目に留まった物で終える。
+# 話の本文の、場面の切れ目と行の組み方。`layout_novel_text` の読み方と結びついていて、db で変えると整形が壊れるので、
+# コードに置く。書き方の文(文体・作風・注意書き)は db の `style_preference` に持つ(初期値は `db/style_defaults.py`)
+EPISODE_LAYOUT_INSTRUCTION = f"""\
+場面の切れ目:
+場所・時間・書く対象が変わるところにだけ、「{SCENE_BREAK}」だけの行を置く。
 
 行の組み方:
 セリフは、中に文がいくつあっても「」ごと一行にする(長い行は清書のときに折り返される)。
 一人の人物の言動が続くあいだは、セリフと地の文を、空行を挟まず改行だけで続ける。
 空行は、話し手や流れが変わるところにだけ一つ置き、ほかでは空けない。"""
-
-def _joined(*parts: str) -> str:
-    return "\n".join(part.strip() for part in parts if part.strip())
-
-
-def writing_style_instruction(extra: str = "") -> str:
-    """AI が書くすべての文の書き方。世界ごとの好みのうち、効く範囲が全体の行を `extra` で渡す。"""
-    return _joined(WRITING_STYLE_BASE, extra)
-
-
-def style_instruction(writing_extra: str = "", episode_extra: str = "") -> str:
-    """話の本文の文体の指示。ここに定数で置くのは固定の文面だけで、世界ごとの好み(db の `style_preference`)は
-    効く範囲が全体の行を `writing_extra`、本文の行を `episode_extra` で渡す。"""
-    return _joined(writing_style_instruction(writing_extra), EPISODE_STYLE_BASE, episode_extra)

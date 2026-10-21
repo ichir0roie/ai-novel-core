@@ -5,7 +5,7 @@ from data_access_logic.ai_client import AIClient
 from data_access_logic.event.models import (
     EventSerialized, EventSource, EventSourceSerialized, EventSummaryDraft, EventSummarySource,
 )
-from db.schema import Event, EventSummary, summary_source_hash
+from db.schema import Event, EventSummary, StyleScope, summary_source_hash
 
 _SYSTEM_PROMPT = """\
 あなたは日本語の小説の編集者だ。
@@ -20,7 +20,7 @@ def summary_draft(ai: AIClient, event: EventSource) -> EventSummaryDraft | None:
         EventSourceSerialized.model_validate(event).model_dump_json(indent=2),
         "この出来事を要約する。",
     ])
-    return ai.generate(prompt, EventSummaryDraft, system=_SYSTEM_PROMPT)
+    return ai.generate(prompt, EventSummaryDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.EVENT)
 
 
 def stale_sources(s: Session, event_ids: list[int] | None) -> list[EventSummarySource]:

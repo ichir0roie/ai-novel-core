@@ -24,7 +24,7 @@ from data_access_logic.episode.past import latest_past_episode
 from data_access_logic.event.summary import events_of
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
-from db.schema import Episode
+from db.schema import Episode, StyleScope
 from db.stamp import Stamp, StampError
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,8 @@ def frame_draft(ai: AIClient, material: EpisodeFrameMaterial) -> EpisodeFrameDra
         EpisodeFrameMaterialSerialized.model_validate(material).model_dump_json(indent=2),
         "この作品の次の一話の枠を決める。",
     ])
-    draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM_PROMPT)
+    draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.PLOT,
+                        story_id=material.story.id)
     if draft is None:
         raise ValueError("枠が得られなかった")
     return draft

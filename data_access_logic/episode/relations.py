@@ -22,6 +22,7 @@ from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
+from db.schema import StyleScope
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class KnownRelation(Material):
 
 class EpisodeRelationsMaterial(Material):
     episode_id: int
+    story_id: int
     time: Stamp
     main_text: str
     cast: list[RelationMember]
@@ -106,7 +108,8 @@ def relations_material(s: Session, episode_id: int) -> EpisodeRelationsMaterial 
         for row in s.scalars(common_query.character_relations_at_select(cast_ids, episode.start)).all()
         if row.character_1_id in cast_ids and row.character_2_id in cast_ids
     ]
-    return EpisodeRelationsMaterial(episode_id=episode.id, time=episode.start, main_text=episode.main_text,
+    return EpisodeRelationsMaterial(episode_id=episode.id, story_id=episode.story_id, time=episode.start,
+                                    main_text=episode.main_text,
                                     cast=[RelationMember.model_validate(character) for character in characters],
                                     relations=relations)
 
@@ -116,7 +119,7 @@ def relations_draft(ai: AIClient, material: EpisodeRelationsMaterial) -> list[Re
     draft = ai.generate(
         "\n".join([EpisodeRelationsMaterialSerialized.model_validate(material).model_dump_json(indent=2),
                    "この話で会った・知り合いだと分かった登場人物の組の関係を挙げる。"]),
-        EpisodeRelationsDraft, system=_SYSTEM_PROMPT)
+        EpisodeRelationsDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.RELATION, story_id=material.story_id)
     if draft is None:
         logger.warning(f"話 id={material.episode_id} の関係が得られなかったので、関係は足さない")
         return []

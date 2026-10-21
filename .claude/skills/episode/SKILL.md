@@ -39,7 +39,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 | 人物の来歴を読む | `character.read_character.ReadCharacter` | `{'character_id': …}`(時刻を渡さず、すべての行を読む) |
 | 人物の来歴に足す | `character.update_character.UpdateCharacter` | `{'character': {'id': …, 'histories': [<今の行すべて>, …]}}`(配列はまるごと置き換わる) |
 | 場所を足す | `location.commit_location.CommitLocation` | `{'location': {'name': …, 'kind': …, 'text': …, 'parent_id': …}}` |
-| 本文でない文(プロット・来歴・関係・アイデアの説明)の書き方を読む | `style_preference.read_writing_style.ReadWritingStyle` | `{}`(db だけ。`text` に返る) |
+| 本文でない文(プロット・来歴・関係・アイデアの説明)の書き方を読む | `style_preference.read_writing_style.ReadWritingStyle` | `{'writing_style': {'scope': '<書く文の範囲>', 'story_id': <作品 id>}}`(db だけ。`text` に返る。範囲はプロット・人物・出来事・アイデア・関係。全体 → ストーリー → その範囲の行を足す) |
 | 作品の話の並び(`start` 順) | `episode.read_episodes.ReadEpisodes` | `{'story_id': …, 'count': 500, 'text': False}` |
 
 `UpdateCharacter` の `histories`・`parameters` は配列がまるごと置き換わる(並びを変えると行の id が変わる)。時刻を渡さない `ReadCharacter(character_id)` で今の行をすべて読み(`start` が空の行も残す)、すでにある行は書き換えずに、新しい行を末尾に足して渡す。今の行の知る相手は、`knowers` を渡さなければそのまま残る。
@@ -60,7 +60,7 @@ description: 話のプロット(`plot_text`)・時刻・登場人物・前の話
 
 - **プロットを書く前に、出す人物が関わった話の本文を読む**。人物の芯(`text`)だけを見て書かない(これまでの出来事は話の本文にある)
 - **本文の材料を読む前に、登場人物・場所を話に結ぶ**(材料は結んだ登場人物・場所から引く。結んだ人物は生没年を問わず出し、来歴は話の時刻に効くものだけが出る)。設定(アイデア)は話に結ばず、材料を読むときに、プロット・話のセッションの行・今の本文に出た語で引かれる
-- **本文でない文も同じ書き方で書く**: プロット・語りと要求・来歴・関係・アイデアの説明は、始めに `ReadWritingStyle` で読んだ書き方(語の選び方・慣用句。世界の好みのうち効く範囲が全体の行を含む)で書く。本文は材料の「書き方」(それに本文だけの決まりを足したもの)で書く
+- **本文でない文も同じ書き方で書く**: プロット・語りと要求・来歴・関係・アイデアの説明は、始めに `ReadWritingStyle` で読んだ書き方(語の選び方・慣用句・注意書き。書く文の範囲と作品を渡して、全体 → ストーリー → その範囲の行を足したもの。プロットは `scope` がプロット、来歴は人物、関係は関係、アイデアの説明はアイデア)で書く。本文は材料の「書き方」(それに本文だけの決まりを足したもの)で書く
 
 1. **話の行を用意する**
    - 本文の無い枠(id を頼まれた): その行を使う。時刻(`start`)が空なら、前後の話から決めて先に入れる

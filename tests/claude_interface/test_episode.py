@@ -5,7 +5,7 @@ from data_access_logic.episode.read_episodes import ReadEpisodes
 from data_access_logic.episode.revise_episode import ReviseEpisode
 from data_access_logic.episode.relations import EpisodeRelationsDraft, RelationDraft
 from data_access_logic.flows.commit import commit_episode, revise_episode
-from db.schema import CharacterRelation, Episode, get_env_session
+from db.schema import CharacterRelation, Episode, StyleScope, get_env_session
 from tool.test.mock_ai_client import MockAIClient
 
 
@@ -16,11 +16,12 @@ class _RelatingAI(MockAIClient):
         super().__init__(seed=0)
         self.relations = relations
 
-    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort=""):
+    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="",
+                 style_scope=StyleScope.ALL, story_id=None):
         if output is EpisodeRelationsDraft:
             self.calls.append({"prompt": prompt, "system": system})
             return EpisodeRelationsDraft(relations=self.relations)
-        return super().generate(prompt, output, system, timeout, tools, model, effort)
+        return super().generate(prompt, output, system, timeout, tools, model, effort, style_scope, story_id)
 
 
 def test_commit_episode(shown, world, mock_ai):
