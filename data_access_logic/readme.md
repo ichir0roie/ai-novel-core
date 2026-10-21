@@ -247,7 +247,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - `SearchIdeas` の名前・本文検索、`data_access_logic/idea/search.py`、`data_access_logic/idea/context.py`(中間段)、清書に渡す「関係する設定」
   (`IdeaContextSerialized`)は、いずれもアイデアの `histories` を見て、当てはまる場所・時代の
   履歴があればその `name` で呼び、`detail` を「作中での受け止め方」として添える。当てはまる履歴が無ければ本質の `name` をそのまま使う
-- ある場所・時代の履歴(呼び名)がある行は、清書のプロンプト(`style_preference` の本文・プロットの行の「材料の扱い」)で
+- ある場所・時代の履歴(呼び名)がある行は、清書のプロンプト(`ai/instructions/materials.py` の `IDEA_NOTE`)で
   「その場所・時代の人物はこの名前を認識しているもの」として扱われ、本文ではその名で呼ぶ
 - `MergeIdea` は `source_id` の `histories` を `target_id` へ付け替えてから `source_id` を消す。
   `DeleteIdea` は下位のアイデアが残っていなければそのまま消し、`histories` も一緒に消える
@@ -436,7 +436,8 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 
 ## 出来事の生成・話の材料
 
-文体・作風・書き方の注意書き・行の組み方と、仕事ごとの AI への指示は、`core` には定数でも初期値でも持たず、db にだけ持つ。
+文体・作風・書き方の注意書き・行の組み方は、`core` には定数でも初期値でも持たず、db にだけ持つ。
+仕事ごとの AI への指示と材料の読み方はシステムの挙動なので、コードに持つ(AI を呼ぶモジュールの定数と `ai/instructions/materials.py`)。
 `init_db` で作った db には行が無く、行の無い範囲は何も足さずに動く。
 
 - `style_preference`: 範囲(`scope`)ごとに一行。全体と、使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係)

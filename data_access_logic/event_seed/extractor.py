@@ -23,6 +23,20 @@ from db.schema import Character, Episode, Event, EventSeed, StyleScope
 
 logger = logging.getLogger(__name__)
 
+_EXTRACT_SYSTEM = """\
+話の骨組み・人物の筋書き・起きた出来事を番号つきで渡すので、それぞれから、ほかの時代・ほかの場所・ほかの人物にも起こせる「出来事の種」を抜き出す。
+- 人名・地名・組織名・その作品だけの用語と、年代を抜く。人物は「古参の番兵」「商家の娘」のような立場で書く。
+- 一つの種は一〜二文。誰が、何をきっかけに、何をして、どんな揺れや変化が起きるかを書く。
+- 作者の前書き・使用環境・書き方の約束・構成表など、出来事にならない文からは抜き出さない。
+- 一つの元から 0〜3 件。同じ元の中で似た種は一つにまとめる。"""
+
+_MERGE_SYSTEM = """\
+出来事の種を「新しい種」と「棚卸し済みの種」に分けて番号つきで渡すので、同じ出来事を言い換えただけの種の組を見つけ、一つにまとめる。
+- 立場・きっかけ・展開・結末がほぼ同じものだけをまとめる。題材が近いだけで展開の違うものはまとめない。
+- 組には新しい種を一つ以上含める。棚卸し済みの種どうしは、既に見比べてあるのでまとめない。
+- まとめた種は一〜二文。まとめる種の要素を落とさず、人名・地名・年代は入れない。
+- まとめる組が無ければ merges は空のリストにする。"""
+
 
 def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
     """渡した行の本文。元の列が空の行は外す。話はプロット(`plot_text`)を、無ければ本文を使う。人物は筋書き(`plot`)だけを使う。"""
@@ -46,7 +60,7 @@ def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれの元から出来事の種を抜き出す。"]),
-        SeedsDraft, instruction=StyleScope.EVENT_SEEDS)
+        SeedsDraft, system=_EXTRACT_SYSTEM, style_scope=StyleScope.EVENT)
 
 
 def save_seeds(s: Session, seeds: list[str]) -> int:
@@ -73,7 +87,7 @@ def merges_draft(ai: AIClient, fresh: list[StoredSeed], settled: list[StoredSeed
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "同じ出来事を言い換えただけの種の組をまとめる。"]),
-        ConsolidateDraft, instruction=StyleScope.EVENT_SEED_MERGE)
+        ConsolidateDraft, system=_MERGE_SYSTEM, style_scope=StyleScope.EVENT)
     if decided is None:
         return None
     merges = []

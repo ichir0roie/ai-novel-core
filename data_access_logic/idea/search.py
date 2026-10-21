@@ -17,6 +17,14 @@ _NAME_SCORE = 3
 _VARIANT_NAME_SCORE = 2
 _TEXT_SCORE = 1
 
+_SYSTEM = """\
+渡す文から、世界の設定資料(用語集)と照らし合わせるべき語を抜き出し、それぞれに検索用の言い換えを付ける。
+- 抜き出すのは、その世界に固有の、または世界の設定に関わる語: 技術・道具・現象・病や体質・制度・身分・種族・組織の種類・信仰・歴史上の出来事・作中の呼び名など。
+- 人名と、固有の場所の名前は抜き出さない。誰にでも通じる日常の語(剣・雨・食事・鍛冶師・交易路など)も、設定上の意味を帯びていなければ抜き出さない。
+- 文に語として出ていなくても、文が描いている設定上の事柄(症状の描写なら、その原因になっている体質や病など)があれば、その事柄を指す語を keyword にしてよい。
+- variants には、設定資料の側で使われていそうな語を入れる(「虫を宿す治療」なら「寄生」「治療」、「石の病」なら「遺伝」「疾患」のように)。
+- start は、文の時刻に初めて現れた事柄ならその時刻、「十年前から」ならそこから数えた年。"""
+
 
 def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[IdeaDraft]:
     """`text` から、アイデアと照らす語とその言い換えを AI に挙げさせる。答えなければ空。
@@ -28,7 +36,7 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
     when = f"この文の時刻: {time}\n\n" if time is not None else ""
     decided = ai.generate(
         f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げる。",
-        IdeaDraftsByAI, instruction=StyleScope.IDEA_TERMS)
+        IdeaDraftsByAI, system=_SYSTEM, style_scope=StyleScope.IDEA)
     if decided is None:
         return []
     return unique_ideas(list(decided.ideas))

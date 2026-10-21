@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""名前の仮置き。名づけの基準は db の指示の行(全体の行の「名づけ」と、人物の名づけの仕事の行など)に持つ。"""
+"""名前の仮置き。名づけの語の響き・表記は db の文体の行(全体の「名づけ」、人物の名の形)に、候補の出し方は名づけの仕事の指示(`data_access_logic/character/naming.py`)に持つ。"""
 from __future__ import annotations
 
 import re

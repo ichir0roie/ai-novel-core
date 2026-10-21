@@ -12,9 +12,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
+from ai.instructions.materials import COMMON_NOTES
 from data_access_logic.caller import call
 from data_access_logic.style_preference import steps as style_steps
-from data_access_logic.style_preference.form import InstructionForm, WritingStyleForm
+from data_access_logic.style_preference.form import WritingStyleForm
 from db.schema import StyleScope
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
 
 
 def styled_system(system: str | None, writing_style: str) -> str:
-    return "\n\n".join(part for part in (system, f"書く文の書き方:\n{writing_style}") if part)
+    return "\n\n".join(part for part in (system, COMMON_NOTES, f"書く文の書き方:\n{writing_style}") if part)
 
 
 def generate[Output: BaseModel](
@@ -118,19 +119,13 @@ def generate[Output: BaseModel](
     style_scope: StyleScope = StyleScope.ALL,
     story_id: int | None = None,
     episode_id: int | None = None,
-    instruction: StyleScope | None = None,
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。
+    `system` は仕事ごとの指示(コードの定数)。そのあとに、どの生成にも効く決まりと、書く文の書き方を足す。
     `style_scope` は書く文の範囲(プロット・人物など)、`story_id`・`episode_id` は書く文の作品・話。
-    全体の行 → 作品の指示 → その範囲の行 → 話の指示 を足す。
-    `instruction` は仕事ごとの指示の範囲(「ミーム:抜き出し」など)で、db から読んで system の頭に置く。
-    書き方の範囲は、その上の範囲(ミーム)になる。"""
+    書き方は 全体の行 → 作品の指示 → その範囲の行 → 話の指示 を足す。"""
     load_env()
     # プロット・来歴・アイデア・ミームなど、AI が書くどの文にも書き方を効かせる。世界・作品ごとの指示を含むので、そのつど db の段で読む
-    if instruction is not None:
-        task = call(style_steps.instruction, InstructionForm(scope=instruction))
-        system = "\n".join(part for part in (task, system) if part)
-        style_scope = instruction.wide
     system = styled_system(system, call(style_steps.writing_style, WritingStyleForm(
         scope=style_scope, story_id=story_id, episode_id=episode_id)))
     args = _build_args(system, output.model_json_schema(), tools, model, effort)

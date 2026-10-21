@@ -11,6 +11,7 @@ import logging
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from ai.instructions.materials import EVENT_PARTICIPANT_NOTE
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
@@ -23,6 +24,12 @@ from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Event, EventCharacter, StyleScope
 
 logger = logging.getLogger(__name__)
+
+_SYSTEM = f"""\
+ある出来事の名前・時刻・場所・当事者などを渡すので、この出来事の記録の本文を書く。
+出来事の名前は、ジャンルや場面を一言で決めたもの。その中身に沿った出来事にする。
+
+{EVENT_PARTICIPANT_NOTE}"""
 
 
 def _event(s: Session, event_id: int) -> Event:
@@ -70,7 +77,7 @@ def text_draft(ai: AIClient, material: EventTextMaterial) -> EventTextDraft | No
         EventTextMaterialSerialized.model_validate(material).model_dump_json(indent=2),
         "この出来事の記録の本文を書く。",
     ])
-    return ai.generate(prompt, EventTextDraft, instruction=StyleScope.EVENT_TEXT)
+    return ai.generate(prompt, EventTextDraft, system=_SYSTEM, style_scope=StyleScope.EVENT)
 
 
 def save_event_text(s: Session, event_id: int, draft: EventTextDraft | None) -> Event:

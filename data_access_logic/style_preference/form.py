@@ -24,9 +24,3 @@ class WritingStyleForm(Form):
     scope: StyleScope = StyleScope.ALL
     story_id: int | None = None
     episode_id: int | None = None
-
-
-class InstructionForm(Form):
-    """仕事ごとの指示を読む所。"""
-
-    scope: StyleScope

@@ -25,6 +25,13 @@ from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 
+_SYSTEM = """\
+話の本文と、登場人物の今の居場所、移動先の候補を渡すので、
+この話の中で住まい・拠点が変わった登場人物(旅立ち・移住・避難・帰還・奉公に出るなど)ごとに、移動先を移動先の候補から選ぶ。
+- 一時の外出や、話の舞台へ出かけてきただけの人物は入れない。本文の終わりの時点で、住まい・拠点が前と変わった人物だけを入れる。
+- 移動先は移動先の候補の場所idからだけ選ぶ。候補に当てはまる場所が無ければ、その人物は入れない。
+- 誰も変わっていなければ character_moves は空のリストにする。"""
+
 
 class MovingCharacter(Material):
     id: int
@@ -86,7 +93,7 @@ def moves_draft(ai: AIClient, material: EpisodeMovesMaterial) -> list[CharacterM
     draft = ai.generate(
         "\n".join([EpisodeMovesMaterialSerialized.model_validate(material).model_dump_json(indent=2),
                    "この話で住まい・拠点が変わった登場人物の移動先を挙げる。"]),
-        EpisodeMovesDraft, instruction=StyleScope.CHARACTER_MOVES)
+        EpisodeMovesDraft, system=_SYSTEM, style_scope=StyleScope.CHARACTER)
     if draft is None:
         logger.warning(f"話 id={material.episode_id} の移動先が得られなかったので、居場所は変えない")
         return []

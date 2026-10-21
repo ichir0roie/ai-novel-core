@@ -327,47 +327,15 @@ class StyleScope(enum.StrEnum):
     IDEA = "アイデア"
     MEME = "ミーム"
     RELATION = "関係"
-    # 仕事ごとの指示(AI の system に渡す)。「<上の範囲>:<仕事>」の形で、上の範囲の書き方と一緒に渡す。
-    # 仕事に共通する文は上の範囲の行に書く
-    FACT_CHECK = "全体:検証"
-    PLOT_FRAME = "プロット:枠"
-    PLOT_REWRITE = "プロット:書き直し"
-    PLOT_CASTING = "プロット:人物と舞台"
-    CHARACTER_CONTENT = "人物:生成"
-    THING_CONTENT = "人物:対象の生成"
-    CHARACTER_ELEMENTS = "人物:筋書きの要素"
-    CHARACTER_CONSISTENCY = "人物:整合"
-    NAME_MEANING = "人物:名の意味"
-    CHARACTER_NAMING = "人物:名づけ"
-    THING_NAMING = "人物:対象の名づけ"
-    CHARACTER_VOICES = "人物:話し方"
-    CHARACTER_MOVES = "人物:居場所の移動"
-    EVENT_CANDIDATES = "出来事:候補"
-    EVENT_RECORD = "出来事:記録"
-    EVENT_TEXT = "出来事:本文の後埋め"
-    EVENT_SUMMARY = "出来事:要約"
-    EVENT_SEEDS = "出来事:種の抜き出し"
-    EVENT_SEED_MERGE = "出来事:種のまとめ"
-    IDEA_TERMS = "アイデア:語の抜き出し"
-    MEME_EXTRACT = "ミーム:抜き出し"
-    MEME_DEDUPE = "ミーム:重複"
-    MEME_ANTI = "ミーム:アンチ"
-    MEME_CLASSIFY = "ミーム:分類"
-    EPISODE_RELATIONS = "関係:話の関係"
-
-    @property
-    def wide(self) -> "StyleScope":
-        """仕事ごとの指示なら、その上の範囲。上の範囲そのものなら自分。"""
-        head, _, task = self.value.partition(":")
-        return StyleScope(head) if task else self
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 
 
 class StylePreference(TextBase):
-    """AI に書かせる文の指示(文体・作風・注意書き)。範囲ごとに一行。
+    """AI に書かせる文の文体の指示。範囲ごとに一行。
     使う所は、全体の行 → 作品の指示 → その範囲の行 → 話の指示 の順に、書くたびに db から読んで足す。
+    仕事ごとの指示・材料の読み方のような、システムの挙動に関わる文はコードに持ち、ここには置かない。
     初期値はコードに持たない。行の無い範囲は何も足さない。"""
 
     __tablename__ = "style_preference"
@@ -375,7 +343,7 @@ class StylePreference(TextBase):
     scope: Mapped[str] = mapped_column(
         String, nullable=False, unique=True,
         comment="効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)は"
-                "その所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示で、上の範囲の行と重ねて渡す",
+                "その所だけに効く",
         sort_order=200)
 
 

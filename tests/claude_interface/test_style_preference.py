@@ -15,7 +15,8 @@ from data_access_logic.story.commit_story import CommitStory
 from data_access_logic.story.form import StoryCreateForm, StoryUpdateForm
 from data_access_logic.story.update_story import UpdateStory
 from data_access_logic.style_preference.commit_style_preference import CommitStylePreference
-from data_access_logic.style_preference.extras import episode_style, instruction_text
+from ai.instructions.materials import COMMON_NOTES
+from data_access_logic.style_preference.extras import episode_style
 from data_access_logic.style_preference.form import StylePreferenceCreateForm, StylePreferenceUpdateForm, WritingStyleForm
 from data_access_logic.style_preference.read_writing_style import ReadWritingStyle
 from data_access_logic.style_preference.update_style_preference import UpdateStylePreference
@@ -60,6 +61,7 @@ def test_commit_style_preference_appends_to_the_row_of_its_scope(shown):
 
 
 def test_update_style_preference_refuses_scope_that_has_a_row(shown):
+    _row(shown, "全体の好み", StyleScope.ALL)
     episode_row = shown(CommitStylePreference(StylePreferenceCreateForm(text=_text("本文の好み"))))
 
     with pytest.raises(ValueError):
@@ -130,30 +132,7 @@ def test_generate_adds_writing_style_of_scope_and_story_to_system(shown, world):
     args = replied.call_args.args[1]
     system = args[args.index("--system-prompt") + 1]
     assert answer == _Answer(answer="はい")
-    assert system.startswith("生成ごとの指示\n\n書く文の書き方:\n")
+    assert system.startswith(f"生成ごとの指示\n\n{COMMON_NOTES}\n\n書く文の書き方:\n")
     assert system.index(everywhere) < system.index(in_story) < system.index(plot_only)
     assert episode_only not in system
     assert json.loads(args[args.index("--json-schema") + 1]) == _Answer.model_json_schema()
-
-
-def test_instruction_text_reads_the_row_of_the_task(shown):
-    task = _row(shown, "仕事の指示", StyleScope.MEME_DEDUPE)
-
-    with get_env_session() as s:
-        assert task in instruction_text(s, StyleScope.MEME_DEDUPE)
-        assert task not in instruction_text(s, StyleScope.MEME_ANTI)
-    for scope in StyleScope:
-        assert scope.wide.value == scope.value.partition(":")[0]
-
-
-def test_generate_puts_instruction_before_the_writing_style_of_its_wide_scope(shown):
-    task = _row(shown, "仕事の指示", StyleScope.MEME_DEDUPE)
-    meme_style = _row(shown, "ミームの好み", StyleScope.MEME)
-    reply = ai_client._Reply(subtype="success", structured_output={"answer": "はい"})
-
-    with mock.patch.object(ai_client, "_reply", return_value=reply) as replied:
-        _generate("問い", _Answer, instruction=StyleScope.MEME_DEDUPE)
-
-    args = replied.call_args.args[1]
-    system = args[args.index("--system-prompt") + 1]
-    assert system.index(task) < system.index("書く文の書き方:") < system.index(meme_style)

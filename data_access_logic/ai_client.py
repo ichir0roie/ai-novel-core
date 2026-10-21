@@ -21,5 +21,4 @@ class AIClient(Protocol):
         style_scope: StyleScope = ...,
         story_id: int | None = ...,
         episode_id: int | None = ...,
-        instruction: StyleScope | None = ...,
     ) -> Output | None: ...

@@ -19,7 +19,7 @@ from data_access_logic.material import Material
 from data_access_logic.source_text import (
     FACT_CHECK_HEADING, SourceBatchSerialized, SourceText, row_of, source_of, strip_fact_check,
 )
-from db.schema import Meme, Oracle, Session, StyleScope
+from db.schema import Meme, Oracle, Session
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,24 @@ DEFAULT_DLAB_TOOLS = "mcp__d-lab"
 TIMEOUT = 900.0
 # 一度の呼び出しで検めさせる本文の字数の上限。一件でこれを超えるものは一件だけで渡す。
 BATCH_LETTERS = 3000
+
+_SYSTEM = """\
+あなたは創作の設定を検める、科学・歴史・思想に詳しい校閲者だ。
+著者の創作・AI についての覚え書き(oracle)か、人物の行動原理の芯になる考え方(ミーム)を番号つきで渡すので、それぞれをDラボのナレッジとネット検索で調べ、内容の妥当性を検め、書き手の役に立つ補足を書く。
+- Dラボのナレッジ検索(search_dlab_knowledge。見当たらなければ ToolSearch で「dlab」を探す)が使えるなら、必ず先にそれで調べる。心理学・行動科学・脳科学・健康・人間関係・社会・AI に関わる内容は特に、Dラボの知見を軸にする。Dラボで足りない部分と、物理・天文・歴史などの事実はネット検索で補う。
+- 架空の世界の設定なので、架空であること自体は誤りとしない。現実の科学・技術・歴史・社会・思想に照らして、ありえる点・無理のある点、設定の中での食い違いを挙げる。
+- 補足には、現実で近いもの(実在の現象・技術・制度・歴史上の出来事・思想や心理学の知見)と、設定を厚くするのに使える事実を書く。
+- ミームは、現実にその考え方を持った人・集団・思想の系譜や、心理学・社会学での裏付けを挙げる。
+- 覚え書き(oracle)は、書かれた創作論・AI の使い方・物の見方が、現実の研究や実践に照らして妥当かを検め、裏付けや反論を挙げる。
+- 検めた結果は、あとで人物の行動原理(ミーム)を抜き出す元にもなる。現実の人・集団がどう考え、どう動いたかを具体的に書く。
+- 検索で確かめた事実だけを書き、分からないことは分からないと書く。
+- 各 fact_check は次の三つの小見出しを持つ markdown にする。見出しは必ず `##` を使い、`#` 一つの見出しは使わない(本文の末尾に `# 検証結果` の節として足すため)。
+  ## 妥当性
+  ## 補足
+  ## 出典
+  出典は `- [題](URL)` の箇条書きにする。Dラボの動画・記事は題の頭に「Dラボ: 」を付ける。
+- 全体で 400〜800 字を目安にする。
+- 検証でも、生物・医療・兵器に関わる設定の「現実で近いもの」は分野や仕組みの大枠の名前で挙げ、社会・歴史・人の反応の側を厚く書く。"""
 
 
 def _append_fact_check(text: str | None, fact_check: str) -> str:
@@ -105,7 +123,7 @@ def check_draft(ai: AIClient, batch: list[SourceText]) -> list[FactCheckNote] | 
     decided = ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれをDラボのナレッジとネット検索で検め、妥当性と補足を書く。"]),
-        FactChecksDraft, instruction=StyleScope.FACT_CHECK, timeout=TIMEOUT, tools=tools())
+        FactChecksDraft, system=_SYSTEM, timeout=TIMEOUT, tools=tools())
     if decided is None:
         return None
     return [FactCheckNote(table=batch[result.number - 1].table, id=batch[result.number - 1].id,
