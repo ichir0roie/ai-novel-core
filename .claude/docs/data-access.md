@@ -55,7 +55,7 @@
 - 指示・書き方の文を `ai/instructions/` の定数や、コードの system の文字列に足さない。db に足す(GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`)
 - 足す順は 全体の行 → 作品の指示(祖先から) → その範囲の行 → 話の指示(`data_access_logic/readme.md` の「出来事の生成・話の材料」)
 - 何の範囲に置くか迷ったら、広い方に置かない。全部の文に効かせたい決まりだけを全体に、作品の作風は作品の指示に、本文だけ・プロットだけの決まりはその範囲に置く
-- 初期値の行は `db/style_defaults.py`。`init_db`(`seed_master_rows`)とマイグレーションで入れる。初期値を直すときは、行を直すマイグレーションも書く
+- 指示の文は db にだけ持つ。コードに初期値を置かず、`init_db` やマイグレーションで行を足さない(`init_db` で作った db には行が無く、行が無ければ空のまま動く)。文面を直すときは、db の行を入口で直す
 - 生成の system に、文の書き方(語の選び方・慣用句など)を個別に書き足さない。どの生成にも `generate` が同じ書き方を足す。AI を呼ぶ所は `generate(style_scope=…, story_id=…, episode_id=…)` で、書く文の範囲と作品・話を渡す(分かる所だけ)
 - db から読むのは `data_access_logic/style_preference/extras.py`。行が無ければ空のまま動く
 - このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の「書き方」に、本文の範囲の書き方(全体 → 作品の指示 → 本文 → 話の指示)が入る(`data_access_logic/episode/brief.py`)。本文でない文(プロット・来歴・関係・アイデア・場所の説明など)を書くときは `ReadWritingStyle` で、書く文の範囲と作品を渡して読む

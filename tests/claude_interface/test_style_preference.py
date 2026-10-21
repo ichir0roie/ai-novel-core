@@ -20,7 +20,6 @@ from data_access_logic.style_preference.form import StylePreferenceCreateForm, S
 from data_access_logic.style_preference.read_writing_style import ReadWritingStyle
 from data_access_logic.style_preference.update_style_preference import UpdateStylePreference
 from db.schema import StylePreference, StyleScope, get_env_session
-from db.style_defaults import DEFAULT_INSTRUCTIONS, DEFAULT_STYLE_PREFERENCES
 
 # conftest がテストごとに `generate` をモックへ差し替えるので、差し替える前の本物を持っておく
 _generate = ai_client.generate
@@ -100,13 +99,6 @@ def test_writing_style_without_story_has_neither_story_nor_narrow_texts(shown, w
     assert plot_only not in text
 
 
-def test_writing_style_has_default_rows_for_all_texts(shown):
-    text = shown(ReadWritingStyle())["text"]
-
-    for scope, default in DEFAULT_STYLE_PREFERENCES:
-        assert (default.strip() in text) == (scope == StyleScope.ALL.value)
-
-
 def test_episode_style_adds_episode_rows(shown, world):
     everywhere = _row(shown, "全体の好み", StyleScope.ALL)
     in_story = _story_instruction(shown, world.story_id, "作品の指示")
@@ -119,8 +111,6 @@ def test_episode_style_adds_episode_rows(shown, world):
     assert text.index(everywhere) < text.index(in_story) < text.index(episode_only)
     assert plot_only not in text
     assert "◇" not in text
-    for scope, default in DEFAULT_STYLE_PREFERENCES:
-        assert (default.strip() in text) == (scope in (StyleScope.ALL.value, StyleScope.EPISODE.value))
 
 
 class _Answer(BaseModel):
@@ -147,13 +137,17 @@ def test_generate_adds_writing_style_of_scope_and_story_to_system(shown, world):
 
 
 def test_instruction_text_reads_the_row_of_the_task(shown):
+    task = _row(shown, "仕事の指示", StyleScope.MEME_DEDUPE)
+
     with get_env_session() as s:
-        for scope, default in DEFAULT_INSTRUCTIONS:
-            assert instruction_text(s, StyleScope(scope)) == default
-            assert StyleScope(scope).wide.value == scope.partition(":")[0]
+        assert task in instruction_text(s, StyleScope.MEME_DEDUPE)
+        assert task not in instruction_text(s, StyleScope.MEME_ANTI)
+    for scope in StyleScope:
+        assert scope.wide.value == scope.value.partition(":")[0]
 
 
 def test_generate_puts_instruction_before_the_writing_style_of_its_wide_scope(shown):
+    task = _row(shown, "仕事の指示", StyleScope.MEME_DEDUPE)
     meme_style = _row(shown, "ミームの好み", StyleScope.MEME)
     reply = ai_client._Reply(subtype="success", structured_output={"answer": "はい"})
 
@@ -162,5 +156,4 @@ def test_generate_puts_instruction_before_the_writing_style_of_its_wide_scope(sh
 
     args = replied.call_args.args[1]
     system = args[args.index("--system-prompt") + 1]
-    assert system.startswith("あなたは物語の編集者だ。")
-    assert system.index("書く文の書き方:") < system.index(meme_style)
+    assert system.index(task) < system.index("書く文の書き方:") < system.index(meme_style)

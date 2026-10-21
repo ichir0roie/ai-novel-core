@@ -2,7 +2,7 @@
 """本文の改行を整える `layout_novel_text`。
 
 書き方の文(文体・作風・注意書き・行の組み方)はここに定数で持たず、db の `style_preference` から読む
-(`data_access_logic/style_preference/extras.py`。初期値は `db/style_defaults.py`)。
+(`data_access_logic/style_preference/extras.py`)。
 """
 from __future__ import annotations
 

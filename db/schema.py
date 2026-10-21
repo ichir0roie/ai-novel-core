@@ -368,7 +368,7 @@ STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 class StylePreference(TextBase):
     """AI に書かせる文の指示(文体・作風・注意書き)。範囲ごとに一行。
     使う所は、全体の行 → 作品の指示 → その範囲の行 → 話の指示 の順に、書くたびに db から読んで足す。
-    システムの初期値の行は `db/style_defaults.py`。"""
+    初期値はコードに持たない。行の無い範囲は何も足さない。"""
 
     __tablename__ = "style_preference"
 
@@ -1028,13 +1028,9 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def seed_master_rows(engine) -> None:
-    from db.style_defaults import DEFAULT_INSTRUCTIONS, DEFAULT_STYLE_PREFERENCES
-
     with Session(engine) as s:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
                   for name, id_ in _PERSONALITY_LEVEL_IDS.items())
-        s.add_all(StylePreference(scope=scope, text=text)
-                  for scope, text in (*DEFAULT_STYLE_PREFERENCES, *DEFAULT_INSTRUCTIONS))
         s.commit()
 
 
