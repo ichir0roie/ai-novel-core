@@ -405,7 +405,7 @@ class EpisodePlotDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    plot_text: str = Field(description="この話の新しいプロット。今のプロットとそっくり置き換わる")
+    plot_text: str = Field(description="この話の新しいプロット")
 
     @field_validator("plot_text")
     @classmethod
@@ -430,7 +430,7 @@ class EpisodeLocationCandidateDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(description="名前")
-    kind: str = Field(description="種別。店・屋敷・広場など")
+    kind: str = Field(description="種別")
     text: str = Field(description="説明")
     environment: str = Field(description="環境")
 

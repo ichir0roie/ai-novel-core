@@ -131,8 +131,7 @@ class IdeaDraftByAI(IdeaDraft):
 
     keyword: str = Field(description="語")
     variants: list[str] = Field(description=(
-        "keyword の表記揺れ・同義語・上位語・作中の人が使いそうな呼び方を 2〜6 個。"
-        "部分一致で検索するので、keyword を組み立てている 2〜3 字の核の語を必ず含める。1 字の語は使わない"))
+        "keyword の表記揺れ・同義語・上位語。2〜6 個。keyword を組み立てている 2〜3 字の核の語を必ず含める。1 字の語は使わない"))
     description: str = Field(description="この文の中でその語が何を指しているかの一文")
     coined: bool = Field(description="その語がこの世界・作品に固有の語(作中の呼び名・造語・固有の技術や制度の名)なら true、一般の語なら false")
     kind: str = Field(description="その語の種別。「技術」「制度」「概念」「呼称」「現象」「施設」「時代」などの短い語で一つ")

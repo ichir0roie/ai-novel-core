@@ -12,7 +12,7 @@ import logging
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from ai.instructions.materials import IDEA_NOTE, MENTIONED_NOTE
+from ai.instructions.materials import IDEA_NOTE, LATER_EVENTS_NOTE, MENTIONED_NOTE, TIME_NOTE
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import mentioned_of
 from data_access_logic.character.form import CharacterForm
@@ -31,38 +31,33 @@ logger = logging.getLogger(__name__)
 
 _REWRITE_SYSTEM = f"""\
 作品・書く話(時刻・場所・視点・登場人物・プロット)などを渡すので、この話のプロットを書き直す。
-書き直したプロットは今のプロットとそっくり置き換わり、本文はそれだけを元に書く。今のプロットにある出来事・人物・場面・台詞・狙いは、一つも落とさずに書き直したプロットへ含める(節・箇条書きで書かれていても、場面の文に書き直して含める)。
-プロットは、下の「書く文の書き方」にあるプロットの形で書く。
-今のプロットに無い出来事は足さない。
-「作者の注文」は、今のプロットに加えて作者が新しいプロットに望むこと(展開・焦点・雰囲気など)。null でなければ、今のプロットと合わせて取り入れる。注文が求める出来事は足してかまわない。
-場面に要るなら、登場人物にいない人物や、書く話の場所より細かい舞台(店・屋敷・部屋など)を出してかまわない。その人物・舞台には呼び名を付ける。
-これまでの筋・人物の立場・関係は、作品の筋書きと登場人物の来歴・関係から受け継ぐ。
-登場人物それぞれの直近の出来事は、この話の前に済んだこと。なぞり直さず、その後の人物として書く。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りして書かない。
+書き直したプロットは今のプロットと置き換わる。今のプロットにある出来事・人物・場面・台詞・狙いは、一つも落とさずに含め、無い出来事は足さない。
+「作者の注文」が null でなければ、今のプロットと合わせて取り入れる。注文が求める出来事は足してよい。
+登場人物にいない人物や、書く話の場所より細かい舞台を出すときは、呼び名を付ける。
+作品の筋書きと、登場人物の来歴・関係・直近の出来事が、この話の前までの筋。
+
+{LATER_EVENTS_NOTE}
 
 {MENTIONED_NOTE}
 
-{IDEA_NOTE}"""
+{IDEA_NOTE}
+
+{TIME_NOTE}"""
 
 _CASTING_SYSTEM = f"""\
-話の材料と、その話の新しいプロットを渡すので、新しいプロットに出てくるのに材料に無い人物・舞台を挙げる。材料の「書く話」のプロットは、新しいプロット。
-characters には、新しいプロットで台詞や行動のある人物のうち、登場人物にいない人物を挙げる。群衆や、名前の要らない通りすがりは挙げない。
-「新しいプロットに名前の出る既知の人物」は、もういる人物なので挙げない。
-人物の説明は、材料の作品・場所・時刻に馴染むように書く。
-location には、新しいプロットの主な舞台が書く話の場所より細かい場所で、「この場所の中の既知の場所」にも無いときだけ、その舞台を書く。
-location の名前は、書き方の名づけの基準で名づける。
+話の材料と、その話の新しいプロット(材料の「書く話」のプロット)を渡すので、新しいプロットに出てくるのに材料に無い人物・舞台を挙げる。
+characters は、新しいプロットで台詞や行動のある人物のうち、「登場人物」にも「新しいプロットに名前の出る既知の人物」にもいない人物。群衆や、名前の要らない通りすがりは挙げない。
 
-{MENTIONED_NOTE}
+{IDEA_NOTE}
 
-{IDEA_NOTE}"""
+{TIME_NOTE}"""
 
 
 def plot_draft(ai: AIClient, material: EpisodeMaterial, order: str | None, model: str, effort: str) -> str:
     request = EpisodePlotRequestSerialized(material=material, order=order)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "この話のプロットを書き直す。"]),
-        EpisodePlotDraft, system=_REWRITE_SYSTEM, style_scope=StyleScope.PLOT,
-        model=model, effort=effort, story_id=material.story.id)
+        EpisodePlotDraft, system=_REWRITE_SYSTEM, style_scope=StyleScope.PLOT, model=model, effort=effort)
     if draft is None:
         raise ValueError("書き直したプロットが得られなかった")
     return draft.plot_text
@@ -89,8 +84,7 @@ def casting_draft(
         material=material, plot_text=plot_text, known_locations=known, known_characters=known_people)
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げる。"]),
-        EpisodeCastingDraft, system=_CASTING_SYSTEM, style_scope=StyleScope.PLOT,
-        model=model, effort=effort, story_id=material.story.id)
+        EpisodeCastingDraft, system=_CASTING_SYSTEM, style_scope=StyleScope.PLOT, model=model, effort=effort)
     if draft is None:
         logger.warning("人物・舞台の候補が得られなかったので、プロットの書き直しだけにする")
     return draft

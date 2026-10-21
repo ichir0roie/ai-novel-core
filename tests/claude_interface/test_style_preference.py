@@ -15,7 +15,7 @@ from data_access_logic.story.commit_story import CommitStory
 from data_access_logic.story.form import StoryCreateForm, StoryUpdateForm
 from data_access_logic.story.update_story import UpdateStory
 from data_access_logic.style_preference.commit_style_preference import CommitStylePreference
-from ai.instructions.materials import COMMON_NOTES
+from ai.instructions.materials import SAFETY_NOTE
 from data_access_logic.style_preference.extras import episode_style
 from data_access_logic.style_preference.form import StylePreferenceCreateForm, StylePreferenceUpdateForm, WritingStyleForm
 from data_access_logic.style_preference.read_writing_style import ReadWritingStyle
@@ -68,7 +68,7 @@ def test_update_style_preference_refuses_scope_that_has_a_row(shown):
         shown(UpdateStylePreference(StylePreferenceUpdateForm(id=episode_row["id"], scope=StyleScope.ALL)))
 
 
-def test_writing_style_adds_all_then_stories_then_scope_then_episode(shown, world):
+def test_episode_scope_adds_all_then_stories_then_scope_then_episode(shown, world):
     parent_story = world.story_id
     child_story = _story(shown, "子の作品", parent_story)
     other_story = _story(shown, "別の作品")
@@ -82,11 +82,26 @@ def test_writing_style_adds_all_then_stories_then_scope_then_episode(shown, worl
     shown(CommitEpisode(EpisodeCommitForm(id=world.episode_id, instruction=in_episode)))
 
     text = shown(ReadWritingStyle(WritingStyleForm(
-        scope=StyleScope.PLOT, story_id=child_story, episode_id=world.episode_id)))["text"]
+        scope=StyleScope.EPISODE, story_id=child_story, episode_id=world.episode_id)))["text"]
 
-    assert text.index(everywhere) < text.index(in_parent) < text.index(in_child) < text.index(plot_only) < text.index(in_episode)
-    assert episode_only not in text
+    assert text.index(everywhere) < text.index(in_parent) < text.index(in_child) < text.index(episode_only) < text.index(in_episode)
+    assert plot_only not in text
     assert in_other not in text
+
+
+def test_other_scopes_have_neither_story_nor_episode_instructions(shown, world):
+    everywhere = _row(shown, "全体の好み", StyleScope.ALL)
+    plot_only = _row(shown, "プロットの好み", StyleScope.PLOT)
+    in_story = _story_instruction(shown, world.story_id, "作品の指示")
+    in_episode = _text("話の指示")
+    shown(CommitEpisode(EpisodeCommitForm(id=world.episode_id, instruction=in_episode)))
+
+    text = shown(ReadWritingStyle(WritingStyleForm(
+        scope=StyleScope.PLOT, story_id=world.story_id, episode_id=world.episode_id)))["text"]
+
+    assert text.index(everywhere) < text.index(plot_only)
+    assert in_story not in text
+    assert in_episode not in text
 
 
 def test_writing_style_without_story_has_neither_story_nor_narrow_texts(shown, world):
@@ -119,7 +134,7 @@ class _Answer(BaseModel):
     answer: str
 
 
-def test_generate_adds_writing_style_of_scope_and_story_to_system(shown, world):
+def test_generate_adds_writing_style_of_scope_to_system(shown, world):
     everywhere = _row(shown, "全体の好み", StyleScope.ALL)
     in_story = _story_instruction(shown, world.story_id, "作品の指示")
     plot_only = _row(shown, "プロットの好み", StyleScope.PLOT)
@@ -127,12 +142,13 @@ def test_generate_adds_writing_style_of_scope_and_story_to_system(shown, world):
     reply = ai_client._Reply(subtype="success", structured_output={"answer": "はい"})
 
     with mock.patch.object(ai_client, "_reply", return_value=reply) as replied:
-        answer = _generate("問い", _Answer, system="生成ごとの指示", style_scope=StyleScope.PLOT, story_id=world.story_id)
+        answer = _generate("問い", _Answer, system="生成ごとの指示", style_scope=StyleScope.PLOT)
 
     args = replied.call_args.args[1]
     system = args[args.index("--system-prompt") + 1]
     assert answer == _Answer(answer="はい")
-    assert system.startswith(f"生成ごとの指示\n\n{COMMON_NOTES}\n\n書く文の書き方:\n")
-    assert system.index(everywhere) < system.index(in_story) < system.index(plot_only)
+    assert system.startswith(f"生成ごとの指示\n\n{SAFETY_NOTE}\n\n書く文の書き方:\n")
+    assert system.index(everywhere) < system.index(plot_only)
+    assert in_story not in system
     assert episode_only not in system
     assert json.loads(args[args.index("--json-schema") + 1]) == _Answer.model_json_schema()

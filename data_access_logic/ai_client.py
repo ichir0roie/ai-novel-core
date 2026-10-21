@@ -18,7 +18,5 @@ class AIClient(Protocol):
         tools: tuple[str, ...] = (),
         model: str = ...,
         effort: str = ...,
-        style_scope: StyleScope = ...,
-        story_id: int | None = ...,
-        episode_id: int | None = ...,
+        style_scope: StyleScope | None = ...,
     ) -> Output | None: ...

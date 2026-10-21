@@ -193,7 +193,7 @@ class StoryElementsDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    elements: list[str] = Field(description="筋書きの中で人物が生きうる、互いに重ならない具体的な立場・職業・関わり方")
+    elements: list[str] = Field(description="人物が就きうる立場・職業・関わり方")
 
     @field_validator("elements")
     @classmethod
@@ -231,41 +231,30 @@ class PersonalityDraft(BaseModel):
 
 
 _PERSON_AGE_DESCRIPTION = (
-    "現在の時刻での年齢。「決まっている」の年齢が null でなければその値。"
-    f"「登場する話のプロット」があれば、この時刻・この場所でその話の役どころ(作者の指定)を果たせる歳({_SCENE_AGE_RANGE[0]}〜{_SCENE_AGE_RANGE[1]})にする。"
-    f"無ければ人物説明と矛盾しない値({_AGE_RANGE[0]}〜{_AGE_RANGE[1]})をあなた自身で決める。例えば老成した説明なら年長めに、幼さの残る説明なら年少めに")
+    f"現在の時刻での年齢。「登場する話のプロット」があれば{_SCENE_AGE_RANGE[0]}〜{_SCENE_AGE_RANGE[1]}、"
+    f"無ければ{_AGE_RANGE[0]}〜{_AGE_RANGE[1]}")
 _HISTORY_DESCRIPTION = (
-    "来歴。生まれてから年齢の歳(現在の時刻)までの節目を歳の順に、幼ければ0〜2件、大人なら3〜5件。"
-    "人物説明の立場・仕事・住まいには、いつそうなったかの節目を必ず含める。現在より後の節目・死は含めない")
+    "来歴。生まれてから現在の時刻までの節目を歳の順に、幼ければ0〜2件、大人なら3〜5件。"
+    "人物説明の立場・仕事・住まいには、いつそうなったかの節目を含める")
 
 
 class PersonContentDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    text: str = Field(description=(
-        "現在の時刻での、具体的な生活・仕事・関係が伝わる2〜3文の人物説明。目立った能力・特技があれば含める。"
-        "「優しい」「謎めいた」のような、誰にでも当てはまる抽象的な形容だけで済ませず、"
-        "この人物固有の具体的な癖・関わり・生い立ちを最低一つ含める。口調・話し方は tone・dialect に書き、ここには書かない"))
+    text: str = Field(description="現在の時刻での人物説明。2〜3文。口調・話し方は tone・dialect に書き、ここには書かない")
     age: int = Field(ge=0, description=_PERSON_AGE_DESCRIPTION)
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
-    personality: PersonalityDraft = Field(description=(
-        "性格の各軸(無/低/並/高/必)。行動原理(ミーム)の古今表裏と、出自・生い立ち・年齢・人物説明から総合的に決める"))
-    sex: str = Field(description="性別。「男」「女」に限らず、この人物に合う性のあり方を自由に決めてよい")
-    height: float = Field(gt=0, description="背丈(cm)。年齢・性別・体格・出自に合う値")
-    build: str = Field(description="体格。肉付き・立ち姿など、生活・仕事と行動原理(ミーム)に合う体つきを1文で")
-    outfit: str = Field(description=(
-        "装い。ふだんの身なりと、人目に見える持ち物(武器・道具)・傷・印を1文で。"
-        "人に隠している物・印は書かない"))
-    first_person: str = Field(description="一人称。年齢・性別・性格・出自・話し相手との間柄に合わせる")
+    personality: PersonalityDraft = Field(description="性格の各軸(無/低/並/高/必)")
+    sex: str = Field(description="性別。「男」「女」に限らない")
+    height: float = Field(gt=0, description="背丈(cm)")
+    build: str = Field(description="体格。1文")
+    outfit: str = Field(description="装い。ふだんの身なりと、人目に見える持ち物・傷・印を1文で。人に隠している物・印は書かない")
+    first_person: str = Field(description="一人称")
     second_person: str = Field(description="二人称。この人物が相手を呼ぶときの言葉")
     third_person: str = Field(description="三人称。この人物が他者に付ける呼び方(敬称)")
-    tone: str = Field(description="口調。文体・話し方の癖が伝わるように1文で")
-    dialect: str = Field(description=(
-        "方言。出身地・参考地域・参考文化・生業・生い立ち・年齢・性格・口調から、この人物がどんな言葉で話すかを1〜2文で。"
-        "土地の言葉で話すなら、どの地方風の方言か(現実の方言を手本にしてよい)と、特徴的な語尾・言い回しを一つ以上。"
-        "標準語で話すなら、その人物らしい癖(語尾・口ぐせ・言い淀み・訛りの名残など)を一つ以上。"
-        "誰にでも当てはまる「普通の話し方」で済ませない"))
+    tone: str = Field(description="口調。1文")
+    dialect: str = Field(description="方言。1〜2文")
     history: list[HistoryItemDraft] = Field(description=_HISTORY_DESCRIPTION)
 
     @field_validator("age", mode="before")
@@ -293,10 +282,8 @@ class NonPersonContentDraft(BaseModel):
 
     # 候補の外の種別が返ったときは、呼び出し側がサイコロで決め直す
     kind: str = Field(description="種別", json_schema_extra={"enum": list(constants.NON_PERSON_KINDS)})
-    text: str = Field(description=(
-        "現在の時刻での、この対象が何であって、何を決められて、誰に対して力を持つのかが伝わる2〜3文の説明。"
-        "「由緒ある」「謎めいた」のような、どの対象にも当てはまる形容だけで済ませない"))
-    age: int = Field(ge=0, description="成り立ってからの年数。「決まっている」の年齢が null でなければその値")
+    text: str = Field(description="現在の時刻での、この対象の説明。2〜3文")
+    age: int = Field(ge=0, description="成り立ってからの年数")
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
 
     @field_validator("age", mode="before")

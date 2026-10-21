@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
+from ai.instructions.materials import TIME_NOTE
 from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator_models import (
@@ -39,7 +40,8 @@ _SYSTEM = f"""\
 - 既にいる人物・対象: その説明・来歴と食い違う関係・出来事(相手の来歴に無い親子・師弟、相手と同じ唯一の地位など)があれば食い違い。食い違わない形に直す
 食い違いの無いところは、言い回しも長さも変えない。人物像・性格・生い立ちの核は保つ。
 説明の中でこの一件を指す「{NAME_PLACEHOLDER}」はそのまま残す。
-食い違いが無ければ、issues を空にし、渡したものをそのまま返す。"""
+
+{TIME_NOTE}"""
 
 
 class ConsistencyRequest(Material):

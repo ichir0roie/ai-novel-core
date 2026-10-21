@@ -13,11 +13,7 @@ from db.stamp import Stamp
 
 # 出力の型の欄の説明(JSON Schema)に入るので、db の指示の行でなくここに置く
 _SHORTEST_DAYS, _LONGEST_DAYS = constants.EVENT_DURATION_RANGE_DAYS
-EVENT_DURATION_INSTRUCTION = (
-    "この出来事の影響が続く日数の整数。関わった人物・対象は、この日数のあいだ進行中として次の出来事の対象から外れる。"
-    f"立ち話や単発の判断なら{_SHORTEST_DAYS}、旅・対立の膠着・準備のように長く尾を引くものなら30〜{_LONGEST_DAYS}程度など、"
-    f"内容に見合う値を{_SHORTEST_DAYS}〜{_LONGEST_DAYS}の範囲で決める。"
-)
+EVENT_DURATION_INSTRUCTION = f"この出来事の影響が続く日数の整数。{_SHORTEST_DAYS}〜{_LONGEST_DAYS}"
 
 
 class LocationSituationMaterial(Material):
