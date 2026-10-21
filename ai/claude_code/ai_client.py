@@ -119,17 +119,16 @@ def generate[Output: BaseModel](
     story_id: int | None = None,
     episode_id: int | None = None,
     instruction: StyleScope | None = None,
-    values: dict[str, str] | None = None,
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。
     `style_scope` は書く文の範囲(プロット・人物など)、`story_id`・`episode_id` は書く文の作品・話。
     全体の行 → 作品の指示 → その範囲の行 → 話の指示 を足す。
-    `instruction` は仕事ごとの指示の範囲(「ミーム:抜き出し」など)で、db から読んで `values` で {{…}} を埋め、system の頭に置く。
+    `instruction` は仕事ごとの指示の範囲(「ミーム:抜き出し」など)で、db から読んで system の頭に置く。
     書き方の範囲は、その上の範囲(ミーム)になる。"""
     load_env()
     # プロット・来歴・アイデア・ミームなど、AI が書くどの文にも書き方を効かせる。世界・作品ごとの指示を含むので、そのつど db の段で読む
     if instruction is not None:
-        task = call(style_steps.instruction, InstructionForm(scope=instruction, values=values or {}))
+        task = call(style_steps.instruction, InstructionForm(scope=instruction))
         system = "\n".join(part for part in (task, system) if part)
         style_scope = instruction.wide
     system = styled_system(system, call(style_steps.writing_style, WritingStyleForm(

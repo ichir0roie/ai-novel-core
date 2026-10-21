@@ -32,9 +32,9 @@ from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.idea.whole import whole_ideas
 from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
-from data_access_logic.style_preference.extras import episode_style, instruction_text
+from data_access_logic.style_preference.extras import episode_style
 from data_access_logic.material import Material
-from db.schema import Character, Episode, StyleScope
+from db.schema import Character, Episode
 from db.stamp import Stamp
 
 
@@ -47,7 +47,7 @@ def _episode(s: Session, episode_id: int) -> Episode:
 
 
 def _guide(s: Session, story_id: int, episode_id: int) -> str:
-    return "\n".join([instruction_text(s, StyleScope.EPISODE_MATERIAL), episode_style(s, story_id, episode_id)])
+    return episode_style(s, story_id, episode_id)
 
 
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:

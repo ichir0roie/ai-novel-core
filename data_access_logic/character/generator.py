@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
+from ai.instructions.naming import fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
@@ -146,11 +146,12 @@ def _content(
     draft_model: type[PersonContentDraft] | type[NonPersonContentDraft] = (
         PersonContentDraft if material.person else NonPersonContentDraft)
     decided = ai.generate(
-        "\n".join([material.model_dump_json(indent=2), request]),
+        "\n".join([material.model_dump_json(indent=2),
+                   f"古今表裏の凡例: {position_legend()}",
+                   *([f"性格の段階: {'/'.join(PERSONALITY_LEVELS)}"] if material.person else []),
+                   request]),
         draft_model,
-        instruction=StyleScope.CHARACTER_CONTENT if material.person else StyleScope.THING_CONTENT,
-        values={"名前の仮置き": NAME_PLACEHOLDER, "古今表裏": position_legend(),
-                "性格の段階": "/".join(PERSONALITY_LEVELS), "対象の呼び方": "人物" if material.person else "対象"})
+        instruction=StyleScope.CHARACTER_CONTENT if material.person else StyleScope.THING_CONTENT)
     if decided is None:
         logger.warning("中身が得られなかった")
     return decided

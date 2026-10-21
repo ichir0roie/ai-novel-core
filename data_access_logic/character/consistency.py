@@ -13,7 +13,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
-from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator_models import (
     BirthLocationMaterial, CharacterBirthMaterial, HistoryItemDraft, NearbyCharacter, NonPersonContentDraft,
@@ -109,8 +108,7 @@ def reconciled(
         text=text, principle=content.principle, history=history)
     output = PersonConsistencyDraft if isinstance(content, PersonContentDraft) else ConsistencyDraft
     draft = ai.generate(
-        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output, instruction=StyleScope.CHARACTER_CONSISTENCY,
-        values={"名前の仮置き": NAME_PLACEHOLDER})
+        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output, instruction=StyleScope.CHARACTER_CONSISTENCY)
     if draft is None or not draft.issues or not draft.text.strip():
         return Reconciled(text=text, principle=content.principle, history=history)
     logger.info("世界・設定との食い違いを直した:\n" + "".join(f"    {issue}\n" for issue in draft.issues))

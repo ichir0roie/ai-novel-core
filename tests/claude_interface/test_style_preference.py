@@ -120,7 +120,7 @@ def test_episode_style_adds_episode_rows(shown, world):
     assert plot_only not in text
     assert "◇" not in text
     for scope, default in DEFAULT_STYLE_PREFERENCES:
-        assert default.strip() in text
+        assert (default.strip() in text) == (scope in (StyleScope.ALL.value, StyleScope.EPISODE.value))
 
 
 class _Answer(BaseModel):
@@ -146,24 +146,11 @@ def test_generate_adds_writing_style_of_scope_and_story_to_system(shown, world):
     assert json.loads(args[args.index("--json-schema") + 1]) == _Answer.model_json_schema()
 
 
-def test_instruction_text_fills_parts_and_values(shown):
+def test_instruction_text_reads_the_row_of_the_task(shown):
     with get_env_session() as s:
-        text = instruction_text(s, StyleScope.MEME_CLASSIFY, {"分類の一覧": "  - 信条: 一人の行動の型"})
-        anti = instruction_text(s, StyleScope.MEME_ANTI)
-
-    assert "  - 信条: 一人の行動の型" in text
-    assert "{{" not in text
-    # 部品の行(共通:…)は、呼んだ所にその行の文が入る
-    assert "アンチミームは、ミームを反転した考え方。" in anti
-    assert "生物・医療・兵器" in anti
-
-
-def test_every_default_instruction_is_filled_without_unknown_parts(shown):
-    values = {name: "値" for name in ("分類の一覧", "古今表裏", "対象の呼び方", "性格の段階", "名前の仮置き", "候補の数",
-                                       "意味の数", "候補の件数")}
-    with get_env_session() as s:
-        for scope, _ in DEFAULT_INSTRUCTIONS:
-            assert "{{" not in instruction_text(s, StyleScope(scope), values), scope
+        for scope, default in DEFAULT_INSTRUCTIONS:
+            assert instruction_text(s, StyleScope(scope)) == default
+            assert StyleScope(scope).wide.value == scope.partition(":")[0]
 
 
 def test_generate_puts_instruction_before_the_writing_style_of_its_wide_scope(shown):

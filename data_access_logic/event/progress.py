@@ -12,7 +12,7 @@ import random
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
-from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
+from ai.instructions.naming import fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
@@ -68,8 +68,7 @@ def rolled_candidate(
         CandidateRequestSerialized(situation=situation, seeds=seeds).model_dump_json(indent=2),
         f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げる。",
     ])
-    decided = ai.generate(prompt, CandidatesDraft, instruction=StyleScope.EVENT_CANDIDATES,
-                           values={"候補の件数": str(constants.CANDIDATE_COUNT)})
+    decided = ai.generate(prompt, CandidatesDraft, instruction=StyleScope.EVENT_CANDIDATES)
     if decided is None or not decided.candidates:
         return None
     candidates = decided.candidates
@@ -86,8 +85,7 @@ def record_draft(
         .model_dump_json(indent=2),
         "この候補を、この場所にこの時点で起きた出来事として記録する。",
     ])
-    draft = ai.generate(prompt, EventRecordDraft, instruction=StyleScope.EVENT_RECORD,
-                        values={"名前の仮置き": NAME_PLACEHOLDER})
+    draft = ai.generate(prompt, EventRecordDraft, instruction=StyleScope.EVENT_RECORD)
     if draft is None:
         logger.warning(f"{situation.location.name}: 記録が得られなかった")
     return draft

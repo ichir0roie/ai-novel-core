@@ -16,4 +16,4 @@ def writing_style(s: Session, form: WritingStyleForm) -> str:
 
 @db_step
 def instruction(s: Session, form: InstructionForm) -> str:
-    return extras.instruction_text(s, form.scope, form.values)
+    return extras.instruction_text(s, form.scope)

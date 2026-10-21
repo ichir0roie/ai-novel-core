@@ -74,9 +74,9 @@ class DrawnMeanings(BaseModel):
 def drawn_meanings(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSerialized) -> DrawnMeanings | None:
     """AI に意味の語を挙げさせ、名の意味を `NAME_MEANING_PICK_RANGE` 個・名字の意味を一つ選ぶ。挙がらなければ None。
     名の意味はミームから取った語を優先し、それが無いときだけ性格・人物説明から取った語を使う。"""
-    meanings = ai.generate("\n".join([material.model_dump_json(indent=2), "この人物の名と名字の元にする意味を挙げる。"]),
-                           NameMeanings, instruction=StyleScope.NAME_MEANING,
-                           values={"意味の数": str(constants.NAME_MEANING_COUNT)})
+    meanings = ai.generate("\n".join([material.model_dump_json(indent=2),
+                                      f"この人物の名と名字の元にする意味を挙げる。名の意味の数: {constants.NAME_MEANING_COUNT}"]),
+                           NameMeanings, instruction=StyleScope.NAME_MEANING)
     if meanings is None:
         return None
     given = _words(meanings.from_memes) or _words(meanings.from_character)
@@ -130,10 +130,9 @@ def named(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSeria
         "\n".join([material.model_dump_json(indent=2),
                    *([f"名の意味: {'、'.join(meanings.given) if meanings else 'null'}",
                       f"名字の意味: {(meanings.family if meanings else None) or 'null'}"] if person else []),
-                   "この一件の名前の候補を出す。"]),
+                   f"この一件の名前の候補を出す。候補の数: {constants.NAME_CANDIDATE_COUNT}"]),
         PersonNameCandidates if person else NameCandidates,
-        instruction=StyleScope.CHARACTER_NAMING if person else StyleScope.THING_NAMING,
-        values={"候補の数": str(constants.NAME_CANDIDATE_COUNT)})
+        instruction=StyleScope.CHARACTER_NAMING if person else StyleScope.THING_NAMING)
     if drafts is None or not drafts.candidates:
         return None
     unique = list({draft.name: draft for draft in drafts.candidates}.values())

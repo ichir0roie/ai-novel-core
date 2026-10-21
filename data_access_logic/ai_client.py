@@ -22,5 +22,4 @@ class AIClient(Protocol):
         story_id: int | None = ...,
         episode_id: int | None = ...,
         instruction: StyleScope | None = ...,
-        values: dict[str, str] | None = ...,
     ) -> Output | None: ...

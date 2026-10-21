@@ -53,13 +53,30 @@ def _move_rows() -> None:
         bind.execute(sa.text("UPDATE style_preference SET text = :text WHERE id = :id"), {"id": keep.id, "text": _joined(texts)})
         for row in rest:
             bind.execute(sa.text("DELETE FROM style_preference WHERE id = :id"), {"id": row.id})
-    if '本文' not in by_scope:
-        bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES ('本文', :text)"), {"text": _LAYOUT})
-    # コードにあった仕事ごとの指示とその部品を行にする。その範囲の行が既にあれば足さない
-    from db.style_defaults import DEFAULT_INSTRUCTIONS
+    _add_moved_instructions(bind, set(by_scope))
 
+
+# コードから範囲の行へ移した段落の書き出し。既にある全体・本文の行には、これらの段落だけを末尾に足す
+_MOVED_HEADS = ("生物・医療・兵器", "人物の年齢は", "名づけ:", "「名前だけ出る人物」", "渡す設定(アイデア)", "「文体の見本」")
+
+
+def _add_moved_instructions(bind, scopes: set[str]) -> None:
+    """コードにあった AI への指示を行にする。範囲の行が無ければ初期値を足し、あれば移した段落だけを足す。
+    仕事ごとの指示の行は、無ければ足す。"""
+    from db.style_defaults import DEFAULT_INSTRUCTIONS, DEFAULT_STYLE_PREFERENCES
+
+    for scope, text in DEFAULT_STYLE_PREFERENCES:
+        if scope not in scopes:
+            bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES (:scope, :text)"),
+                         {"scope": scope, "text": text})
+            continue
+        current = bind.execute(sa.text("SELECT text FROM style_preference WHERE scope = :scope"), {"scope": scope}).scalar()
+        moved = [part for part in text.split("\n\n") if part.startswith(_MOVED_HEADS) and part not in current]
+        if moved:
+            bind.execute(sa.text("UPDATE style_preference SET text = :text WHERE scope = :scope"),
+                         {"scope": scope, "text": _joined([current, *moved])})
     for scope, text in DEFAULT_INSTRUCTIONS:
-        if scope not in by_scope:
+        if scope not in scopes:
             bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES (:scope, :text)"),
                          {"scope": scope, "text": text})
 
@@ -71,7 +88,7 @@ def upgrade() -> None:
     op.add_column('story', sa.Column('instruction', sa.String(), server_default='', nullable=False, comment='この作品と子孫(章・外伝)の作品で AI が書くすべての文に足す指示。空なら何も足さない'))
     op.alter_column('style_preference', 'scope',
                existing_type=sa.VARCHAR(),
-               comment='効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)はその所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示、「共通:…」はほかの指示から {{…}} で呼ぶ部品',
+               comment='効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)はその所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示で、上の範囲の行と重ねて渡す',
                existing_comment='効く範囲。全体/ストーリー/本文/プロット/人物/出来事/アイデア/ミーム/関係 のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く',
                existing_nullable=False,
                existing_server_default=sa.text("'本文'::character varying"))
@@ -93,7 +110,7 @@ def downgrade() -> None:
     op.alter_column('style_preference', 'scope',
                existing_type=sa.VARCHAR(),
                comment='効く範囲。全体/ストーリー/本文/プロット/人物/出来事/アイデア/ミーム/関係 のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く',
-               existing_comment='効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)はその所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示、「共通:…」はほかの指示から {{…}} で呼ぶ部品',
+               existing_comment='効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)はその所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示で、上の範囲の行と重ねて渡す',
                existing_nullable=False,
                existing_server_default=sa.text("'本文'::character varying"))
     op.drop_column('story', 'instruction')

@@ -67,9 +67,9 @@ def meme_texts(s: Session) -> list[str]:
 def extraction_draft(ai: AIClient, batch: list[SourceText]) -> MemesDraft | None:
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
+                   f"分類:\n{_CATEGORY_GUIDE}",
                    "それぞれの元からミームを抜き出す。"]),
-        MemesDraft, instruction=StyleScope.MEME_EXTRACT,
-        values={"分類の一覧": _CATEGORY_GUIDE})
+        MemesDraft, instruction=StyleScope.MEME_EXTRACT)
 
 
 def _normalized(text: str) -> str:
@@ -163,9 +163,9 @@ def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] 
     request = NumberedMemesSerialized(memes=[MemeText(text=source.text) for source in batch])
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
+                   f"分類:\n{_CATEGORY_GUIDE}",
                    "それぞれのミームに分類を振る。"]),
-        ClassifyDraft, instruction=StyleScope.MEME_CLASSIFY,
-        values={"分類の一覧": _CATEGORY_GUIDE})
+        ClassifyDraft, instruction=StyleScope.MEME_CLASSIFY)
     if decided is None:
         return None
     return [MemeCategory(id=batch[item.number - 1].id, category=item.category)

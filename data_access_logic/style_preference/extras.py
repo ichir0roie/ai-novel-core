@@ -2,8 +2,6 @@
 """AI に書かせる文の指示(db の `style_preference` と、作品・話の `instruction`)を、使う所の範囲に合わせて読む。"""
 from __future__ import annotations
 
-import re
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,28 +27,9 @@ def style_text(s: Session, scope: StyleScope, story_id: int | None = None, episo
     return "\n\n".join(part.strip() for part in parts if part.strip())
 
 
-_TOKEN = re.compile(r"\{\{([^{}]+)\}\}")
-# 部品が部品を呼ぶ深さの上限。互いに呼び合う行で止まらなくなるのを防ぐ
-_DEPTH = 5
-
-
-def instruction_text(s: Session, scope: StyleScope, values: dict[str, str] | None = None) -> str:
-    """仕事ごとの指示の行を読み、{{…}} を埋める。範囲の名前なら、その行の文(同じように埋めたもの)に、
-    `values` にある名前ならその値に置き換える。どちらでもない {{…}} はそのまま残す。"""
-    values = values or {}
-    rows = dict(s.execute(select(StylePreference.scope, StylePreference.text)).tuples().all())
-
-    def fill(text: str, depth: int) -> str:
-        def replace(match: re.Match[str]) -> str:
-            name = match.group(1).strip()
-            if name in values:
-                return values[name]
-            if name in rows and depth < _DEPTH:
-                return fill(rows[name], depth + 1)
-            return match.group(0)
-        return _TOKEN.sub(replace, text)
-
-    return fill(rows.get(scope.value, ""), 0)
+def instruction_text(s: Session, scope: StyleScope) -> str:
+    """仕事ごとの指示の行。行が無ければ空。"""
+    return _scope_text(s, scope)
 
 
 def writing_style(s: Session, scope: StyleScope = StyleScope.ALL, story_id: int | None = None,

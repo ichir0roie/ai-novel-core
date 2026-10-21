@@ -328,9 +328,8 @@ class StyleScope(enum.StrEnum):
     MEME = "ミーム"
     RELATION = "関係"
     # 仕事ごとの指示(AI の system に渡す)。「<上の範囲>:<仕事>」の形で、上の範囲の書き方と一緒に渡す。
-    # 「共通:」はほかの指示から {{共通:…}} で呼ぶ部品で、それだけでは使わない
+    # 仕事に共通する文は上の範囲の行に書く
     FACT_CHECK = "全体:検証"
-    EPISODE_MATERIAL = "本文:材料の読み方"
     PLOT_FRAME = "プロット:枠"
     PLOT_REWRITE = "プロット:書き直し"
     PLOT_CASTING = "プロット:人物と舞台"
@@ -355,26 +354,12 @@ class StyleScope(enum.StrEnum):
     MEME_ANTI = "ミーム:アンチ"
     MEME_CLASSIFY = "ミーム:分類"
     EPISODE_RELATIONS = "関係:話の関係"
-    SHARED_AGE = "共通:年齢"
-    SHARED_MENTIONED = "共通:名前だけ出る人物"
-    SHARED_IDEA_CONTEXT = "共通:設定の扱い"
-    SHARED_BIO = "共通:生物医療兵器"
-    SHARED_TERM_NAMING = "共通:語の名づけ"
-    SHARED_PLACE_NAMING = "共通:場所の名づけ"
-    SHARED_CHARACTER_NAMING = "共通:人物の名づけ"
-    SHARED_NAME_CANDIDATES = "共通:名前の候補"
-    SHARED_EVENT_SITUATION = "共通:場所の状況"
-    SHARED_EVENT_RECORD = "共通:出来事の記録"
-    SHARED_BIRTH = "共通:生まれる一件"
-    SHARED_MEME_PRINCIPLE = "共通:ミームの整理"
-    SHARED_PLACEHOLDER = "共通:名前の仮置き"
-    SHARED_ANTI = "共通:アンチミームの書き方"
 
     @property
     def wide(self) -> "StyleScope":
         """仕事ごとの指示なら、その上の範囲。上の範囲そのものなら自分。"""
         head, _, task = self.value.partition(":")
-        return StyleScope(head) if task and head != "共通" else self
+        return StyleScope(head) if task else self
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
@@ -390,7 +375,7 @@ class StylePreference(TextBase):
     scope: Mapped[str] = mapped_column(
         String, nullable=False, unique=True,
         comment="効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)は"
-                "その所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示、「共通:…」はほかの指示から {{…}} で呼ぶ部品",
+                "その所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示で、上の範囲の行と重ねて渡す",
         sort_order=200)
 
 

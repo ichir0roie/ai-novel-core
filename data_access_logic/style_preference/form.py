@@ -27,7 +27,6 @@ class WritingStyleForm(Form):
 
 
 class InstructionForm(Form):
-    """仕事ごとの指示を読む所。`values` は {{…}} に埋めるコードの値。"""
+    """仕事ごとの指示を読む所。"""
 
     scope: StyleScope
-    values: dict[str, str] = {}
