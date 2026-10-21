@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from ai.instructions.materials import COMMON_NOTES
+from ai.instructions.materials import SAFETY_NOTE
 from data_access_logic.caller import call
 from data_access_logic.style_preference import steps as style_steps
 from data_access_logic.style_preference.form import WritingStyleForm
@@ -105,7 +105,7 @@ def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
 
 
 def styled_system(system: str | None, writing_style: str) -> str:
-    return "\n\n".join(part for part in (system, COMMON_NOTES, f"書く文の書き方:\n{writing_style}") if part)
+    return "\n\n".join(part for part in (system, SAFETY_NOTE, writing_style and f"書く文の書き方:\n{writing_style}") if part)
 
 
 def generate[Output: BaseModel](
@@ -116,18 +116,16 @@ def generate[Output: BaseModel](
     tools: tuple[str, ...] = (),
     model: str = MODEL,
     effort: str = EFFORT,
-    style_scope: StyleScope = StyleScope.ALL,
-    story_id: int | None = None,
-    episode_id: int | None = None,
+    style_scope: StyleScope | None = StyleScope.ALL,
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。
-    `system` は仕事ごとの指示(コードの定数)。そのあとに、どの生成にも効く決まりと、書く文の書き方を足す。
-    `style_scope` は書く文の範囲(プロット・人物など)、`story_id`・`episode_id` は書く文の作品・話。
-    書き方は 全体の行 → 作品の指示 → その範囲の行 → 話の指示 を足す。"""
+    `system` は仕事ごとの指示(コードの定数)。そのあとに、どの生成にも効く禁止事項と、書く文の書き方(全体の行 → その範囲の行)を足す。
+    `style_scope` は書く文の範囲(プロット・人物など)で、文を書かない仕事(id・番号だけを返す)は None にして書き方を足さない。
+    作品・話の指示は本文だけに効き、本文は AI の生成では書かないので、ここでは足さない。"""
     load_env()
-    # プロット・来歴・アイデア・ミームなど、AI が書くどの文にも書き方を効かせる。世界・作品ごとの指示を含むので、そのつど db の段で読む
-    system = styled_system(system, call(style_steps.writing_style, WritingStyleForm(
-        scope=style_scope, story_id=story_id, episode_id=episode_id)))
+    # 世界ごとの書き方なので、そのつど db の段で読む
+    writing_style = "" if style_scope is None else call(style_steps.writing_style, WritingStyleForm(scope=style_scope))
+    system = styled_system(system, writing_style)
     args = _build_args(system, output.model_json_schema(), tools, model, effort)
     try:
         reply = _reply(prompt, args, timeout)

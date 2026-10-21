@@ -136,7 +136,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文を時刻の順に返す |
 | 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
 | 「この話の登場人物・場所を結んで」 | `episode.cast_episode.CastEpisode(episode_id, character_ids, location_id=None, viewpoint_character_id=None)`。登場人物(`episode_character`)をまるごと置き換え、名前だけ出る人物を拾い直す。場所・視点は渡したときだけ書く |
-| 「プロット・来歴・アイデアを書く前に書き方を読ませて」 | `style_preference.read_writing_style.ReadWritingStyle(WritingStyleForm(scope=…, story_id=…, episode_id=…))`。書く文に合う範囲(`scope`。プロット・人物・来歴・出来事・アイデア・関係など。省けば全体)と書く話の作品・話を渡し、全体の行 → 作品の指示 → その範囲の行 → 話の指示をこの順に足した書き方を `text` で返す。db だけで読む |
+| 「プロット・来歴・アイデアを書く前に書き方を読ませて」 | `style_preference.read_writing_style.ReadWritingStyle(WritingStyleForm(scope=…))`。書く文に合う範囲(`scope`。プロット・人物・来歴・出来事・アイデア・関係など。省けば全体)を渡し、全体の行 → その範囲の行をこの順に足した書き方を `text` で返す。db だけで読む |
 | 「この話を書く材料を読ませて」 | `episode.read_episode_brief.ReadEpisodeBrief(episode_id)`。書き方(文体の決まりと `style_preference` の行)・作品・文体の見本(同じ作品・章・外伝の直前の話の本文を、新しい話から字数の上限まで。言葉の選び方・言い回しを揃えさせる)・この話(題・時刻・場所・視点・登場人物・名前だけ出る人物・関係(登場人物どうしのものだけ)・設定・プロット・今の本文)・場所の直近の出来事・後に決まっている出来事を、日本語の見出しと id 付きで返す。登場人物の直近の出来事・関係と場所の出来事は話に結んだ登場人物・場所から引くので、先に `CastEpisode` で結んでから読む。設定は話に結ばず、プロット・話のセッションの行・今の本文から AI が元ごとに挙げた語(`keywords_of`)をアイデアと照らし(`resolve_ideas`)、当たったものとその上位(下位は付けない)と、足した候補を渡す(呼び名はアイデアの履歴 `idea_history` のうち話の時刻・場所に効くもの)。時刻が空なら止まる。登場人物の話し方は調整しない(頼まれたときに `RefreshVoices`)。出来事の要約は作り直さず、そのまま読む(本文は書かない) |
 
 筋書きのテーブルは無い。場所に掛かる筋書きは作品(`story`)の
@@ -247,8 +247,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - `SearchIdeas` の名前・本文検索、`data_access_logic/idea/search.py`、`data_access_logic/idea/context.py`(中間段)、清書に渡す「関係する設定」
   (`IdeaContextSerialized`)は、いずれもアイデアの `histories` を見て、当てはまる場所・時代の
   履歴があればその `name` で呼び、`detail` を「作中での受け止め方」として添える。当てはまる履歴が無ければ本質の `name` をそのまま使う
-- ある場所・時代の履歴(呼び名)がある行は、清書のプロンプト(`ai/instructions/materials.py` の `IDEA_NOTE`)で
-  「その場所・時代の人物はこの名前を認識しているもの」として扱われ、本文ではその名で呼ぶ
+- ある場所・時代の履歴(呼び名)がある行は、AI の生成の指示(`ai/instructions/materials.py` の `IDEA_NOTE`)と本文の材料の読み方(`EPISODE_BRIEF_NOTES`)で
+  「その場所・時代の人物はこの名前を認識しているもの」として扱われ、書く文ではその名で呼ぶ
 - `MergeIdea` は `source_id` の `histories` を `target_id` へ付け替えてから `source_id` を消す。
   `DeleteIdea` は下位のアイデアが残っていなければそのまま消し、`histories` も一緒に消える
 
@@ -441,10 +441,10 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 `init_db` で作った db には行が無く、行の無い範囲は何も足さずに動く。
 
 - `style_preference`: 範囲(`scope`)ごとに一行。全体と、使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係)
-- `story.instruction`: その作品と子孫(章・外伝)の作品で書くすべての文に足す指示。空なら足さない
-- `episode.instruction`: その話を書くとき(本文の材料・`episode_id` を渡した書き方)に足す指示。空なら足さない
+- `story.instruction`: その作品と子孫(章・外伝)の作品の本文に足す決まり。空なら足さない
+- `episode.instruction`: その話の本文に足す決まり。空なら足さない
 
-書く文の範囲(使う所)に合わせて、全体の行 → 作品の指示(祖先の作品から順に) → その範囲の行 → 話の指示 の順に足す。
+書く文の範囲(使う所)に合わせて、全体の行 → その範囲の行 の順に足す。本文だけは、全体の行 → 作品の指示(祖先の作品から順に) → 本文の行 → 話の指示 の順に足す。
 
 | 使う所の範囲 | 使う所 |
 | --- | --- |
@@ -452,14 +452,15 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 | 本文 | 話の本文(`ReadEpisodeBrief` の「書き方」) |
 | プロット | 話の枠・プロットの生成(`episode/framer.py`・`plot_completer.py`) |
 | 人物 | 人物の生成・名付け・整合の確認・話し方の調整 |
-| 来歴 | 人物の来歴を書く所 |
-| 出来事 | 出来事の記録・要約・種の抜き出し |
-| アイデア | アイデアの検索 |
-| ミーム | ミームの抜き出し・アンチミーム・分類 |
+| 来歴 | 人物の来歴を書く所(このセッションの Claude が `ReadWritingStyle` で読む) |
+| 出来事 | 出来事の記録・要約・種の抜き出しとまとめ |
+| アイデア | アイデアの説明を書く所(`ReadWritingStyle` で読む) |
+| ミーム | ミームの抜き出し・アンチミーム |
 | 関係 | 話で足す関係 |
 
-- 作品の指示は、作品が分かる所(`story_id` を渡す所)だけで足す。話の指示は `episode_id` を渡す所(本文の材料など)だけで足す
-- AI に書かせるときは `ai/claude_code/ai_client.generate(style_scope=…, story_id=…, episode_id=…)` が毎回 system に足す。このセッションの Claude が
+- 作品の指示・話の指示は、本文の範囲(本文の材料)だけで足す
+- 文を書かない生成(ミームの重複・分類、居場所の移動、設定の語の抽出)は書き方を足さない(`style_scope=None`)
+- AI に書かせるときは `ai/claude_code/ai_client.generate(style_scope=…)` が毎回 system に足す。このセッションの Claude が
   本文でない文を書くときは `ReadWritingStyle` で読む。db から読むのは `style_preference/extras.py`
 
 出来事の生成(`GenerateEvent`)は、下書きの名前・記録を場面の指定(「市場の喧嘩」「怪談」など)に、時刻・場所・当事者を決まった値として、

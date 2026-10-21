@@ -12,7 +12,7 @@ import random
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
-from ai.instructions.materials import EVENT_PARTICIPANT_NOTE
+from ai.instructions.materials import EVENT_PARTICIPANT_NOTE, LATER_EVENTS_NOTE, TIME_NOTE
 from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
@@ -24,6 +24,7 @@ from data_access_logic.event.progress_models import (
     LocationSituationSerialized, RecordRequestSerialized,
 )
 from data_access_logic.event.summary import events_of
+from data_access_logic.event.writer import EVENT_TEXT_FORMAT
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.location.reading import location_at
 from data_access_logic.query import common_query
@@ -37,41 +38,31 @@ logger = logging.getLogger(__name__)
 _PARTICIPANT_LIMIT = 20
 
 _SITUATION_NOTE = f"""\
+場面の指定を渡したときは、候補も記録も、この指定に沿った出来事にする。
+
 {EVENT_PARTICIPANT_NOTE}
-場面の指定を渡したときは、候補も記録も、すべてこの指定に沿った出来事にする。"""
+
+{LATER_EVENTS_NOTE}
+
+{TIME_NOTE}"""
 
 _CANDIDATES_SYSTEM = f"""\
-場所の状況を渡すので、居合わせる人物・対象それぞれの人物像・性格・関係・立場から、
-それぞれがいま取りそうな行動が同じ場で重なった結果として、この時点で起こりうる出来事の候補を、渡す件数だけ挙げる。
-日常の小さな、感情がぶつかる、偶発的な(事故・天候・病・思いがけない出会い)、居場所が変わる(旅立ち・帰還・避難)、
-笑いや祝い、取り決めや対立が動くなど、種類の違うものを混ぜる。
-各候補は当事者の人物像・性格と矛盾しない範囲で立てる。
-出来事の種(この世界のほかの場面の筋から、時代・場所・固有名詞を抜いたもの)を渡したときは、候補は、この種のどれかをこの場所・この時点・この当事者に合わせて具体化したものか、直前・直近の出来事から連想したものにする。
-この場所の直近の出来事の一覧(名前)と、人物・対象ごとに渡す直近の出来事(その者自身が場所を問わず関わった直近の出来事)を見て検討する。
-同じ形容表現を繰り返し出来事の軸に据えない。
+場所の状況を渡すので、居合わせる人物・対象それぞれがいま取りそうな行動が重なった結果として、この時点で起こりうる出来事の候補を、渡す件数だけ挙げる。
+候補どうしは種類を散らす。
+出来事の種(ほかの場面の筋から時代・場所・固有名詞を抜いたもの)を渡したときは、候補は、種のどれかをこの場所・時点・当事者に合わせたものか、直近の出来事から続くものにする。
 
 {_SITUATION_NOTE}"""
 
 _RECORD_SYSTEM = f"""\
-場所の状況、移動先の候補、サイコロで選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こす。
-候補の名前は event_name にそのまま使うか、整えてもよい。
-character_ids には、関わった人物・対象の人物idを、居合わせる人物・対象の中からだけ選んで入れる(複数可)。
-character_moves は、この出来事で住まい・拠点が変わった人物ごとの移動先(旅立ち・移住・避難・帰還など)。場所idは移動先の候補からだけ選ぶ。一時の外出は入れない。誰も変わっていなければ空にする。
-この出来事が場所自身の改廃(消滅・新設)に及ぶときだけ、location_abolished / location_founded を埋める。
-何も変わっていなければ location_abolished は false、location_founded は null のままにする。
-location_founded の固有名詞は、書き方の名づけの基準で名づける。
+場所の状況、移動先の候補、選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こす。
+event_name は候補の名前をそのまま使うか、整える。
+event_text は、候補の筋から外れずに書く。id ではなく名前で書く。
+character_ids は、関わった人物・対象の人物idを、居合わせる人物・対象の中からだけ選ぶ。
+character_moves は、この出来事で住まい・拠点が変わった人物ごとの移動先。場所idは移動先の候補からだけ選ぶ。一時の外出は入れない。
+location_abolished / location_founded は、この出来事が場所自身の消滅・新設に及ぶときだけ埋める。ほかは false / null。
+character_updates の text は、この出来事で新しく分かった、その人物の性格・信念(人物以外なら性質・方針)を一文で書く。この時刻の来歴に一文として足される。新しく分かったことの無い人物は含めない。その人物を指すときは名前を書かず「{NAME_PLACEHOLDER}」と書く。
 
-event_text(出来事の本文):
-選ばれた出来事の候補(名前と概要)を、当事者それぞれの人物像・性格・関係を土台にして記録に起こす。
-候補の筋から外れない。本文では id ではなく名前で書く。
-
-character_updates の text:
-text は、この出来事を通して見えた、その人物の性格・信念・人となり(パーソナリティ。人物以外の対象なら性質・方針・立場)についてだけ短く一言で書く。
-状況の要約や、その場の立場・置かれている状態は書かない。
-この出来事でそれについて新しく分かったことが無ければ、この人物自体を character_updates に含めない。
-既存の人物像と来歴で既に言われていることは、言い換えて書き足さない。硬い語・大げさな語で飾らず、普段の言葉で書く。
-書いた内容は、この出来事の時刻の来歴に一文として積み足されるので、それだけで意味が通る一文にする。
-この人物自身を指すときは名前を書かず、必ず「{NAME_PLACEHOLDER}」とだけ書く。
+{EVENT_TEXT_FORMAT}
 
 {_SITUATION_NOTE}"""
 

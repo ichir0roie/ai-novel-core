@@ -10,7 +10,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from ai.instructions.materials import MENTIONED_NOTE
+from ai.instructions.materials import LATER_EVENTS_NOTE, MENTIONED_NOTE, TIME_NOTE
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_of, mentioned_of, relations_at
 from data_access_logic.episode.material import later_events_select, load_episode, summary_targets_of
@@ -29,14 +29,16 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM = f"""\
 作品・登場人物・作者の指定を渡すので、この作品の次の一話の枠(題・プロット・時刻)を決める。
-プロットは、下の「書く文の書き方」にあるプロットの形で書く。
-作者の指定の題・プロットは核にして、足りないところを補って書き直す(プロットにある出来事・人物・狙いは落とさない)。
-作者の指定の時刻・視点・場所は、null でなければ決まっているので変えず、それに沿う場面にする(視点・場所自体はここでは決めない)。
-時刻が決まっていなければ、「年/月/日」の形で、直前の話より後から選ぶ。決まっていれば start は null にする。
-これまでの筋・人物の立場・関係は、作品の筋書きと登場人物の来歴・関係から読む。その続きとして自然に立つ話にし、済んだことをなぞり直さない。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしない。
+作者の指定の題・プロットは核にし、プロットにある出来事・人物・狙いは落とさない。
+作者の指定の時刻・視点・場所は、null でなければ変えずに沿う。視点・場所自体はここでは決めない。
+時刻が決まっていなければ、直前の話より後から選ぶ。
+作品の筋書きと、登場人物の来歴・関係が、この話の前までの筋。済んだことをなぞり直さない。
 
-{MENTIONED_NOTE}"""
+{LATER_EVENTS_NOTE}
+
+{MENTIONED_NOTE}
+
+{TIME_NOTE}"""
 
 
 def _time(s: Session, episode: Episode) -> Stamp:
@@ -79,8 +81,7 @@ def frame_draft(ai: AIClient, material: EpisodeFrameMaterial) -> EpisodeFrameDra
         EpisodeFrameMaterialSerialized.model_validate(material).model_dump_json(indent=2),
         "この作品の次の一話の枠を決める。",
     ])
-    draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM, style_scope=StyleScope.PLOT,
-                        story_id=material.story.id)
+    draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM, style_scope=StyleScope.PLOT)
     if draft is None:
         raise ValueError("枠が得られなかった")
     return draft

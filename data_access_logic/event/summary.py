@@ -9,9 +9,7 @@ from db.schema import Event, EventSummary, StyleScope, summary_source_hash
 
 _SYSTEM = """\
 ある出来事を渡すので、次の出来事を考える人へ渡す要約を作る。
-誰が、誰に対して、何をして、どうなったかを起きた順に書き、終わっていないこと(残った問題・約束・謎)があれば最後に書く。
-本文の文や言い回しを写さず、セリフも引かない。
-三〜五文にまとめる。"""
+誰が、誰に対して、何をして、どうなったかを起きた順に書き、終わっていないこと(残った問題・約束・謎)があれば最後に書く。三〜五文。"""
 
 
 def summary_draft(ai: AIClient, event: EventSource) -> EventSummaryDraft | None:

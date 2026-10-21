@@ -33,9 +33,7 @@ _SYSTEM = """\
 - 関係には向きがある(誰から見た誰か)。二人のあいだの関係は、向きごとに一つずつ挙げる(A から B と、B から A)。
 - すでにある関係と同じ向きの組は挙げない。
 - 同じ場にいただけで、言葉もやり取りも無い組は挙げない。
-- relation は短い名前(「翼を直した灯具技師」など)、text は時期を限らない間柄、history はこの話で二人のあいだに起きたことを書く。
-- 人物は登場人物の人物idからだけ選ぶ。
-- 誰も挙げるものが無ければ relations は空のリストにする。"""
+- 人物は登場人物の人物idからだけ選ぶ。"""
 
 
 class RelationMember(Material):
@@ -51,7 +49,6 @@ class KnownRelation(Material):
 
 class EpisodeRelationsMaterial(Material):
     episode_id: int
-    story_id: int
     time: Stamp
     main_text: str
     cast: list[RelationMember]
@@ -107,7 +104,7 @@ def relations_material(s: Session, episode_id: int) -> EpisodeRelationsMaterial 
         for row in s.scalars(common_query.character_relations_at_select(cast_ids, episode.start)).all()
         if row.character_1_id in cast_ids and row.character_2_id in cast_ids
     ]
-    return EpisodeRelationsMaterial(episode_id=episode.id, story_id=episode.story_id, time=episode.start,
+    return EpisodeRelationsMaterial(episode_id=episode.id, time=episode.start,
                                     main_text=episode.main_text,
                                     cast=[RelationMember.model_validate(character) for character in characters],
                                     relations=relations)
@@ -118,7 +115,7 @@ def relations_draft(ai: AIClient, material: EpisodeRelationsMaterial) -> list[Re
     draft = ai.generate(
         "\n".join([EpisodeRelationsMaterialSerialized.model_validate(material).model_dump_json(indent=2),
                    "この話で会った・知り合いだと分かった登場人物の組の関係を挙げる。"]),
-        EpisodeRelationsDraft, system=_SYSTEM, style_scope=StyleScope.RELATION, story_id=material.story_id)
+        EpisodeRelationsDraft, system=_SYSTEM, style_scope=StyleScope.RELATION)
     if draft is None:
         logger.warning(f"話 id={material.episode_id} の関係が得られなかったので、関係は足さない")
         return []
