@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.style_preference.form import StylePreferenceCreateForm
 from data_access_logic.style_preference.record import StylePreferenceRecord
-from db.schema import StylePreference
+from db.schema import StylePreference, Story
 
 
 class CommitStylePreference(CommitEntrypoint):
@@ -15,6 +15,7 @@ class CommitStylePreference(CommitEntrypoint):
         self.style_preference = style_preference
 
     def execute(self, s: Session) -> StylePreferenceRecord:
+        self.check_exists(s, Story, self.style_preference.story_id, "story_id")
         record = StylePreference()
         self.style_preference.write_to(record)
         s.add(record)

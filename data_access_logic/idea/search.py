@@ -11,7 +11,7 @@ from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.idea.models import IdeaHit, IdeaDraft, IdeaDraftsByAI, normalized, unique_ideas
 from data_access_logic.query import common_query, dictionary_query
-from db.schema import Idea
+from db.schema import Idea, StyleScope
 from db.stamp import Stamp
 
 _SYSTEM_PROMPT = f"""\
@@ -39,7 +39,7 @@ def keywords_of(text: str, ai: AIClient, time: Stamp | None = None) -> list[Idea
     when = f"この文の時刻: {time}\n\n" if time is not None else ""
     decided = ai.generate(
         f"{when}{text}\n\nこの文から、設定資料と照らし合わせる語を挙げる。",
-        IdeaDraftsByAI, system=_SYSTEM_PROMPT)
+        IdeaDraftsByAI, system=_SYSTEM_PROMPT, style_scope=StyleScope.IDEA)
     if decided is None:
         return []
     return unique_ideas(list(decided.ideas))

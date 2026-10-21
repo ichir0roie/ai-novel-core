@@ -20,7 +20,7 @@ from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.episode.past import recent_episodes
 from data_access_logic.material import Material
-from db.schema import Character, CharacterParameter
+from db.schema import Character, CharacterParameter, StyleScope
 from db.stamp import Stamp
 
 VOICE_FIELDS = ("first_person", "second_person", "third_person", "tone", "dialect")
@@ -50,6 +50,7 @@ class VoiceCharacter(Material):
 
 class VoiceSource(Material):
     episode_id: int
+    story_id: int
     # 同じ作品の直前の五話のうち、ここの人物の話し方の根拠にできる話。古い順
     samples: list[str]
     # 話の登場人物の、話の時刻の話し方
@@ -99,7 +100,8 @@ def voice_draft(ai: AIClient, source: VoiceSource) -> VoiceDrafts | None:
         VoiceSourceSerialized.model_validate(source).model_dump_json(indent=2),
         "直前の話のセリフから、登場人物の話し方を調整する。",
     ])
-    return ai.generate(prompt, VoiceDrafts, system=_SYSTEM_PROMPT)
+    return ai.generate(prompt, VoiceDrafts, system=_SYSTEM_PROMPT, style_scope=StyleScope.CHARACTER,
+                       story_id=source.story_id)
 
 
 def voice_sources(s: Session, episode_id: int) -> list[VoiceSource]:
@@ -120,8 +122,8 @@ def voice_sources(s: Session, episode_id: int) -> list[VoiceSource]:
         values = parameters_at(character, start)
         groups.setdefault(chosen, []).append(VoiceCharacter(
             id=character.id, name=character.name, **{name: getattr(values, name) for name in VOICE_FIELDS}))
-    return [VoiceSource(episode_id=episode_id, samples=[samples[index].main_text for index in chosen],
-                        characters=characters)
+    return [VoiceSource(episode_id=episode_id, story_id=episode.story_id,
+                        samples=[samples[index].main_text for index in chosen], characters=characters)
             for chosen, characters in groups.items()]
 
 

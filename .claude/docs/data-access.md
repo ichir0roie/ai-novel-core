@@ -48,13 +48,13 @@
 
 ## 世界ごとの好み(AI へ渡す文面)
 
-世界(ユーザー)ごとに違う「好み」(世界の舞台設定・既存の話から抽出した文体の癖など)は、`core`(このリポジトリ)に定数として持たない。
+文体・作風・書き方の注意書きは、作風に依存するので、`core`(このリポジトリ)に定数として持たず、db の `style_preference` 表に持つ。
 
-- `core` の `ai/instructions/` の定数には、システム固有の値(どの世界でも成り立つ既定値。ラノベとしての基本文体など)だけを置く
-- ユーザーが追加する値は db の `style_preference` 表に持つ。行ごとの効く範囲(`scope`)が「全体」なら AI が書くすべての文(`ai/claude_code/ai_client.generate` が毎回 system に足す)、「本文」なら話の本文(`ReadEpisodeBrief` の「書き方」)だけに効き、id の順に足す
-- 生成の system に、文の書き方(語の選び方・慣用句など)を個別に書き足さない。どの生成にも `generate` が同じ書き方を足す
-- 足す・直すのは、GUI の「文体の好み」の一覧か、入口 `style_preference.commit_style_preference.CommitStylePreference` / `update_style_preference.UpdateStylePreference`
-- 好みの値は、AI へ渡す文面を組む末端の生成関数(`ai/instructions/style.py` の `writing_style_instruction()` / `style_instruction()`)に引数で渡す
-- `core` は「引数を渡さなければ空でよい(システム固有の値だけで成り立つ)」設計にする
+- 書き方の文(文体・筋と場面・セリフ・注意書きなど)を、`ai/instructions/` の定数に足さない。行として db に足す(GUI の「文体の好み」の一覧か、入口 `style_preference.commit_style_preference.CommitStylePreference` / `update_style_preference.UpdateStylePreference`)
+- 行ごとの効く範囲(`scope`)は広さの段で並ぶ。全体 → ストーリー(`story_id` の作品と子孫の作品) → 使う所の範囲(本文・プロット・人物・出来事・アイデア・ミーム・関係)。使う所は、上の段をすべて足す。足し方と順は `data_access_logic/readme.md` の「出来事の生成・話の材料」の表
+- 何の範囲に置くか迷ったら、広い方に置かない。全部の文に効かせたい決まり(語の選び方・抽象的な言い方を避けるなど)だけを全体に、作品の作風はストーリーに、本文だけ・プロットだけの決まりはその範囲に置く
+- 初期値の行(誰がクローンしても始めから効く最低限の書き方)は `db/style_defaults.py`。`init_db`(`seed_master_rows`)とマイグレーションで入れる。初期値を足す・直すときは、行を足すマイグレーションも書く(同じ文面の行があれば足さない)
+- コードに残すのは、本文の整形(`layout_novel_text`)と結びついた約束(「◇」・行の組み方。`ai/instructions/style.py` の `EPISODE_LAYOUT_INSTRUCTION`)と、仕組み・安全に関わる文(`ai/instructions/` のほかの定数)だけ
+- 生成の system に、文の書き方(語の選び方・慣用句など)を個別に書き足さない。どの生成にも `generate` が同じ書き方を足す。AI を呼ぶ所は `generate(style_scope=…, story_id=…)` で、書く文の範囲と作品を渡す(作品が分かる所だけ)
 - db から読むのは `data_access_logic/style_preference/extras.py`。行が無ければ空のまま動く
-- このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の「書き方」に、システム固有の文体と `style_preference` の行を合わせた文面が入る(`data_access_logic/episode/brief.py`)。本文でない文(プロット・来歴・関係・アイデア・場所の説明など)を書くときは `ReadWritingStyle` で読む
+- このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の「書き方」に、本文の範囲の書き方(全体 → ストーリー → 本文)が入る(`data_access_logic/episode/brief.py`)。本文でない文(プロット・来歴・関係・アイデア・場所の説明など)を書くときは `ReadWritingStyle` で、書く文の範囲と作品を渡して読む

@@ -5,6 +5,8 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
+from db.schema import StyleScope
+
 
 class AIClient(Protocol):
     def generate[Output: BaseModel](
@@ -16,4 +18,6 @@ class AIClient(Protocol):
         tools: tuple[str, ...] = (),
         model: str = ...,
         effort: str = ...,
+        style_scope: StyleScope = ...,
+        story_id: int | None = ...,
     ) -> Output | None: ...

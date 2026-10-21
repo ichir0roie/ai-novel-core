@@ -160,7 +160,8 @@ class _NamingAI:
         self.from_character = from_character or ["櫂", "桟橋"]
         self.prompts: list[tuple[type, str]] = []
 
-    def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None):
+    def generate(self, prompt, output, system=None, timeout=None, model=None, effort=None, style_scope=None,
+                 story_id=None):
         self.prompts.append((output, prompt))
         if output is NameMeanings:
             return NameMeanings(from_memes=self.meanings, from_character=self.from_character, family=["塩田"])

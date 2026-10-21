@@ -39,7 +39,7 @@ from data_access_logic.query import common_query, dictionary_query, story_creati
 from data_access_logic.story.models import StoryPlotMaterial
 from db.child_lists import replaced_histories
 from db.schema import (
-    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, Location,
+    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, Location, StyleScope,
 )
 from db.stamp import Stamp
 
@@ -134,7 +134,8 @@ def story_elements(ai: AIClient, sources: BirthSources, time: Stamp) -> list[str
     if not sources.stories:
         return []
     request = StoryElementsRequestSerialized(time=time, stories=sources.stories, later_ideas=sources.later_ideas)
-    decided = ai.generate(request.model_dump_json(indent=2), StoryElementsDraft, system=_ELEMENT_SYSTEM_PROMPT)
+    decided = ai.generate(request.model_dump_json(indent=2), StoryElementsDraft, system=_ELEMENT_SYSTEM_PROMPT,
+                          style_scope=StyleScope.CHARACTER)
     return [] if decided is None else decided.elements
 
 
@@ -228,7 +229,8 @@ def _content(
     decided = ai.generate(
         "\n".join([material.model_dump_json(indent=2), request]),
         draft_model,
-        system=_PERSON_CONTENT_SYSTEM_PROMPT if material.person else _NON_PERSON_CONTENT_SYSTEM_PROMPT)
+        system=_PERSON_CONTENT_SYSTEM_PROMPT if material.person else _NON_PERSON_CONTENT_SYSTEM_PROMPT,
+        style_scope=StyleScope.CHARACTER)
     if decided is None:
         logger.warning("中身が得られなかった")
     return decided

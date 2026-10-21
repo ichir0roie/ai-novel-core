@@ -19,7 +19,7 @@ from data_access_logic.event_seed.models import (
     ConsolidateDraft, ConsolidateRequestSerialized, SeedMerge, SeedPiles, SeedsDraft, StoredSeed,
 )
 from data_access_logic.source_text import SourceBatchSerialized, SourceRow, SourceText, row_of, source_of
-from db.schema import Character, Episode, Event, EventSeed
+from db.schema import Character, Episode, Event, EventSeed, StyleScope
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれの元から出来事の種を抜き出す。"]),
-        SeedsDraft, system=_SYSTEM_PROMPT)
+        SeedsDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.EVENT)
 
 
 def save_seeds(s: Session, seeds: list[str]) -> int:
@@ -88,7 +88,7 @@ def merges_draft(ai: AIClient, fresh: list[StoredSeed], settled: list[StoredSeed
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "同じ出来事を言い換えただけの種の組をまとめる。"]),
-        ConsolidateDraft, system=_CONSOLIDATE_SYSTEM_PROMPT)
+        ConsolidateDraft, system=_CONSOLIDATE_SYSTEM_PROMPT, style_scope=StyleScope.EVENT)
     if decided is None:
         return None
     merges = []

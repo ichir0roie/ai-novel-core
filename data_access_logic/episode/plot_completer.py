@@ -28,7 +28,7 @@ from data_access_logic.episode.models import (
 from data_access_logic.episode.mentions import mentioned_in, save_mentions
 from data_access_logic.episode.material import load_episode
 from data_access_logic.location.models import LocationMaterial
-from db.schema import Character, Episode, EpisodeCharacter, Location
+from db.schema import Character, Episode, EpisodeCharacter, Location, StyleScope
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ def plot_draft(ai: AIClient, material: EpisodeMaterial, order: str | None, model
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "この話のプロットを書き直す。"]),
         EpisodePlotDraft, system=_PLOT_SYSTEM_PROMPT,
-        model=model, effort=effort)
+        model=model, effort=effort, style_scope=StyleScope.PLOT, story_id=material.story.id)
     if draft is None:
         raise ValueError("書き直したプロットが得られなかった")
     return draft.plot_text
@@ -92,7 +92,7 @@ def casting_draft(
     draft = ai.generate(
         "\n".join([request.model_dump_json(indent=2), "新しいプロットに出てくるのに材料に無い人物・舞台を挙げる。"]),
         EpisodeCastingDraft, system=_CASTING_SYSTEM_PROMPT,
-        model=model, effort=effort)
+        model=model, effort=effort, style_scope=StyleScope.PLOT, story_id=material.story.id)
     if draft is None:
         logger.warning("人物・舞台の候補が得られなかったので、プロットの書き直しだけにする")
     return draft

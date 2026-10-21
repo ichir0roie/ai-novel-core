@@ -17,6 +17,7 @@ from db.stamp import Stamp
 
 
 class StoryMaterial(Material):
+    id: int
     name: str
     text: str
     parent_story: "StoryMaterial | None" = None

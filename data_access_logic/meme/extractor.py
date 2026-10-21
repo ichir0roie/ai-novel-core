@@ -26,7 +26,7 @@ from data_access_logic.meme.models import (
 from data_access_logic.source_text import (
     SourceBatchSerialized, SourceRow, SourceText, batches, row_of, source_of, strip_fact_check,
 )
-from db.schema import MEME_CATEGORIES, Episode, Event, Meme, Oracle
+from db.schema import MEME_CATEGORIES, Episode, Event, Meme, Oracle, StyleScope
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def extraction_draft(ai: AIClient, batch: list[SourceText]) -> MemesDraft | None
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
                    "それぞれの元からミームを抜き出す。"]),
-        MemesDraft, system=_SYSTEM_PROMPT)
+        MemesDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
 
 
 def _normalized(text: str) -> str:
@@ -136,7 +136,7 @@ def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list
         decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
                        "新しいミームのうち、重複しているものの番号を挙げる。"]),
-            DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT)
+            DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
         if decided is None:
             return None
         duplicates = set(decided.duplicates)
@@ -178,7 +178,7 @@ def anti_draft(ai: AIClient, batch: list[SourceText]) -> list[AntiMeme] | None:
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "それぞれのミームのアンチミームを書く。"]),
-        AntisDraft, system=_ANTI_SYSTEM_PROMPT)
+        AntisDraft, system=_ANTI_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
     if decided is None:
         return None
     return [AntiMeme(id=batch[item.number - 1].id, text=item.anti_text)
@@ -208,7 +208,7 @@ def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] 
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "それぞれのミームに分類を振る。"]),
-        ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT)
+        ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
     if decided is None:
         return None
     return [MemeCategory(id=batch[item.number - 1].id, category=item.category)

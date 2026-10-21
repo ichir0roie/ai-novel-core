@@ -21,7 +21,7 @@ from data_access_logic.event.writer_models import (
 )
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
-from db.schema import Character, Event, EventCharacter
+from db.schema import Character, Event, EventCharacter, StyleScope
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def text_draft(ai: AIClient, material: EventTextMaterial) -> EventTextDraft | No
         EventTextMaterialSerialized.model_validate(material).model_dump_json(indent=2),
         "この出来事の記録の本文を書く。",
     ])
-    return ai.generate(prompt, EventTextDraft, system=_SYSTEM_PROMPT)
+    return ai.generate(prompt, EventTextDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.EVENT)
 
 
 def save_event_text(s: Session, event_id: int, draft: EventTextDraft | None) -> Event:

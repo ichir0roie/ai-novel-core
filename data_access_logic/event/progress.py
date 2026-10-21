@@ -31,7 +31,7 @@ from data_access_logic.location.models import LocationMaterial
 from data_access_logic.location.reading import location_at
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
-from db.schema import Character, Event, EventCharacter, Location
+from db.schema import Character, Event, EventCharacter, Location, StyleScope
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ def rolled_candidate(
         CandidateRequestSerialized(situation=situation, seeds=seeds).model_dump_json(indent=2),
         f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げる。",
     ])
-    decided = ai.generate(prompt, CandidatesDraft, system=_CANDIDATE_SYSTEM_PROMPT)
+    decided = ai.generate(prompt, CandidatesDraft, system=_CANDIDATE_SYSTEM_PROMPT, style_scope=StyleScope.EVENT)
     if decided is None or not decided.candidates:
         return None
     candidates = decided.candidates
@@ -129,7 +129,7 @@ def record_draft(
         .model_dump_json(indent=2),
         "この候補を、この場所にこの時点で起きた出来事として記録する。",
     ])
-    draft = ai.generate(prompt, EventRecordDraft, system=_RECORD_SYSTEM_PROMPT)
+    draft = ai.generate(prompt, EventRecordDraft, system=_RECORD_SYSTEM_PROMPT, style_scope=StyleScope.EVENT)
     if draft is None:
         logger.warning(f"{situation.location.name}: 記録が得られなかった")
     return draft
