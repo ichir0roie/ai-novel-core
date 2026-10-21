@@ -12,7 +12,8 @@ import random
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
-from ai.instructions.naming import fill_name_placeholder
+from ai.instructions.materials import EVENT_PARTICIPANT_NOTE
+from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import participants_at
@@ -34,6 +35,45 @@ logger = logging.getLogger(__name__)
 
 # 一度に居合わせる人物として渡す上限
 _PARTICIPANT_LIMIT = 20
+
+_SITUATION_NOTE = f"""\
+{EVENT_PARTICIPANT_NOTE}
+場面の指定を渡したときは、候補も記録も、すべてこの指定に沿った出来事にする。"""
+
+_CANDIDATES_SYSTEM = f"""\
+場所の状況を渡すので、居合わせる人物・対象それぞれの人物像・性格・関係・立場から、
+それぞれがいま取りそうな行動が同じ場で重なった結果として、この時点で起こりうる出来事の候補を、渡す件数だけ挙げる。
+日常の小さな、感情がぶつかる、偶発的な(事故・天候・病・思いがけない出会い)、居場所が変わる(旅立ち・帰還・避難)、
+笑いや祝い、取り決めや対立が動くなど、種類の違うものを混ぜる。
+各候補は当事者の人物像・性格と矛盾しない範囲で立てる。
+出来事の種(この世界のほかの場面の筋から、時代・場所・固有名詞を抜いたもの)を渡したときは、候補は、この種のどれかをこの場所・この時点・この当事者に合わせて具体化したものか、直前・直近の出来事から連想したものにする。
+この場所の直近の出来事の一覧(名前)と、人物・対象ごとに渡す直近の出来事(その者自身が場所を問わず関わった直近の出来事)を見て検討する。
+同じ形容表現を繰り返し出来事の軸に据えない。
+
+{_SITUATION_NOTE}"""
+
+_RECORD_SYSTEM = f"""\
+場所の状況、移動先の候補、サイコロで選ばれた出来事の候補を渡すので、その候補をこの場所にこの時点で起きた出来事として1件、記録に起こす。
+候補の名前は event_name にそのまま使うか、整えてもよい。
+character_ids には、関わった人物・対象の人物idを、居合わせる人物・対象の中からだけ選んで入れる(複数可)。
+character_moves は、この出来事で住まい・拠点が変わった人物ごとの移動先(旅立ち・移住・避難・帰還など)。場所idは移動先の候補からだけ選ぶ。一時の外出は入れない。誰も変わっていなければ空にする。
+この出来事が場所自身の改廃(消滅・新設)に及ぶときだけ、location_abolished / location_founded を埋める。
+何も変わっていなければ location_abolished は false、location_founded は null のままにする。
+location_founded の固有名詞は、書き方の名づけの基準で名づける。
+
+event_text(出来事の本文):
+選ばれた出来事の候補(名前と概要)を、当事者それぞれの人物像・性格・関係を土台にして記録に起こす。
+候補の筋から外れない。本文では id ではなく名前で書く。
+
+character_updates の text:
+text は、この出来事を通して見えた、その人物の性格・信念・人となり(パーソナリティ。人物以外の対象なら性質・方針・立場)についてだけ短く一言で書く。
+状況の要約や、その場の立場・置かれている状態は書かない。
+この出来事でそれについて新しく分かったことが無ければ、この人物自体を character_updates に含めない。
+既存の人物像と来歴で既に言われていることは、言い換えて書き足さない。硬い語・大げさな語で飾らず、普段の言葉で書く。
+書いた内容は、この出来事の時刻の来歴に一文として積み足されるので、それだけで意味が通る一文にする。
+この人物自身を指すときは名前を書かず、必ず「{NAME_PLACEHOLDER}」とだけ書く。
+
+{_SITUATION_NOTE}"""
 
 
 def _later_events_select(location_id: int, characters: list[Character], time: Stamp) -> Select[Event]:
@@ -68,7 +108,7 @@ def rolled_candidate(
         CandidateRequestSerialized(situation=situation, seeds=seeds).model_dump_json(indent=2),
         f"この場所にこの時点で起こりうる出来事の候補を{constants.CANDIDATE_COUNT}件挙げる。",
     ])
-    decided = ai.generate(prompt, CandidatesDraft, instruction=StyleScope.EVENT_CANDIDATES)
+    decided = ai.generate(prompt, CandidatesDraft, system=_CANDIDATES_SYSTEM, style_scope=StyleScope.EVENT)
     if decided is None or not decided.candidates:
         return None
     candidates = decided.candidates
@@ -85,7 +125,7 @@ def record_draft(
         .model_dump_json(indent=2),
         "この候補を、この場所にこの時点で起きた出来事として記録する。",
     ])
-    draft = ai.generate(prompt, EventRecordDraft, instruction=StyleScope.EVENT_RECORD)
+    draft = ai.generate(prompt, EventRecordDraft, system=_RECORD_SYSTEM, style_scope=StyleScope.EVENT)
     if draft is None:
         logger.warning(f"{situation.location.name}: 記録が得られなかった")
     return draft

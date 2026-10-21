@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
+from ai.instructions.materials import EPISODE_BRIEF_NOTES
 from data_access_logic.character.models import (
     CastCandidate, CastCandidateSerialized, CastingCandidate, CastingCandidateSerialized, CastMaterial, CastSerialized,
     CharacterMaterial, CharacterRelationLine, CharacterSecrets, MentionedMaterial, MentionedSerialized, relations_for_prompt, secrets_for_prompt,
@@ -251,7 +252,7 @@ class EpisodeBrief(Material):
     # 古い順
     location_events: list[EventMaterial]
     later_events: list[EventMaterial]
-    # 書き方の決まり(システム固有の文体と、世界ごとの好み `style_preference`)
+    # 書き方の決まり(世界ごとの文体 `style_preference` と作品・話の指示)
     guide: str
 
 
@@ -273,6 +274,7 @@ class EpisodeBriefSerialized(EpisodeBrief):
         episode = self.main_episode
         viewpoint = episode.viewpoint_character
         return {
+            "材料の読み方": EPISODE_BRIEF_NOTES,
             "書き方": self.guide,
             "作品": _story(self.story),
             "文体の見本(古い順)": self.style_samples,

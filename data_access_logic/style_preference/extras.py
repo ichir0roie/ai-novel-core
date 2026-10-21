@@ -27,11 +27,6 @@ def style_text(s: Session, scope: StyleScope, story_id: int | None = None, episo
     return "\n\n".join(part.strip() for part in parts if part.strip())
 
 
-def instruction_text(s: Session, scope: StyleScope) -> str:
-    """仕事ごとの指示の行。行が無ければ空。"""
-    return _scope_text(s, scope)
-
-
 def writing_style(s: Session, scope: StyleScope = StyleScope.ALL, story_id: int | None = None,
                   episode_id: int | None = None) -> str:
     """AI が文を書くときの書き方。"""

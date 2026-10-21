@@ -17,11 +17,11 @@ class _RelatingAI(MockAIClient):
         self.relations = relations
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="",
-                 style_scope=StyleScope.ALL, story_id=None, episode_id=None, instruction=None):
+                 style_scope=StyleScope.ALL, story_id=None, episode_id=None):
         if output is EpisodeRelationsDraft:
             self.calls.append({"prompt": prompt, "system": system})
             return EpisodeRelationsDraft(relations=self.relations)
-        return super().generate(prompt, output, system, timeout, tools, model, effort, style_scope, story_id, episode_id, instruction)
+        return super().generate(prompt, output, system, timeout, tools, model, effort, style_scope, story_id, episode_id)
 
 
 def test_commit_episode(shown, world, mock_ai):

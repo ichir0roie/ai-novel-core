@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ai.instructions.naming import fill_name_placeholder
+from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.form import CharacterForm
@@ -45,6 +45,40 @@ from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 
+_ELEMENTS_SYSTEM = """\
+渡す筋書きの本文から、その筋書きの中で人物が生きうる、互いに重ならない具体的な立場・職業・関わり方を抜き出す。
+筋書きが複数の立場を挙げている場合は、それぞれを一つずつの要素にして漏らさず拾う。
+筋書きに出てくる特定の人物(主人公やその家族・仲間など)が担う役どころそのものは抜き出さない。その人物の写しになってしまうため、同じ筋書きの世界で別の人物が就きうる立場として書く。
+筋書きは時の流れをまたいで書かれている。渡す現在の時刻にまだ始まっていない立場(筋書きの中で後の年に起きる出来事や、「この時刻より後に始まる設定(まだ無い)」を前提にする立場)は抜き出さない。"""
+
+# 人物・対象のどちらを作るときにも足す、材料の読み方と作り方の決まり
+_CREATION_NOTE = f"""\
+「決まっている」の値が null でなければ、その値をそのまま使う。
+「作者の指定」と「登場する話のプロット」の役どころは核にする。足りないところを補い、言い回しは変えてよい。
+「体現する要素」は、作者の指定もプロットも無いときだけ渡す。渡したときは、それをこの一件の生き方・成り立ちの核として必ず反映する。
+「既にいる人物・対象」とは、役割・関係・特徴が重ならないようにする(同じ立場・同じ能力・同じ関係性の作り直しをしない)。ただし作者の指定・プロットの役どころが求める立場はそのまま使う。
+筋書きや既にいる人物・対象の説明は、現在の時刻より後の姿で書かれていることがある。「この時刻より後に始まる設定(まだ無い)」を渡したときは、それはまだ世に無い。その設定に当たる立場・仕事・組織・技術・出来事を、来歴にも現在の姿にも出さず、既にいる人物の説明に出てきても、この時刻にはまだ無いものとして扱う。
+説明・来歴・行動原理には、現在の時刻までのことだけを書く。現在の時刻より後に起きること(後年の立場・仕事・住まい・人間関係・行く末・死)は書かず、「のちに」「やがて」のように先を示すこともしない。
+この一件は「出身」の場所で生まれ(成り立ち)、現在の時刻もそこ(かその中の場所)で暮らし・働いている(拠点を置いている)。説明・来歴の現在の住まい・仕事場・拠点は、出身の場所かその中に置く。筋書きや体現する要素が別の場所での役どころを示していても、出身の場所でその役を担う形に移すか、出身の場所から通う・関わる形にする。一時よそへ出た来歴はよいが、現在は出身の場所にいるようにする。
+「登場する話のプロット」を渡したときは、この一件はその話に、現在の時刻・出身の場所で、作者の指定の役どころとして登場する。年齢・立場・仕事・人間関係は、その話でその役を果たせるものにする(上役なら下の者を束ねられる歳と経歴、子どもの遊び仲間なら同じ年頃など)。来歴には、プロットの筋と食い違う出来事や、プロットでこれから起きる出来事を書かない。
+「行動原理(ミーム)」を渡したときは、それぞれに振られた古今表裏(渡す古今表裏の凡例のとおり)を変えずに、ミームどうしの関係を整理して principle に書く。何を経て古いものを手放したか、表と裏がどう食い違い、この一件の中でどう折り合っているかを、出来事や人との関わりとして書く。食い違うミームも、どちらかを捨てずに両方を生かす。ミームの文面をそのまま書き写さない。説明もこの整理と矛盾させない。
+説明の中でこの一件を指すときは、名前を書かず必ず「{NAME_PLACEHOLDER}」と書く(名前はあとで入れる)。名前を考案して書き込まない。"""
+
+_PERSON_SYSTEM = f"""\
+新しく生まれる人物1件について、人物説明・年齢・口調などを、自然な日本語で決める。
+出身地の説明・参考地域・参考文化・参考時代や、所属する地域、この場所・時刻に関連する筋書きに、この人物の生活・仕事・性格が自然に馴染むよう考慮する(参考地域・参考文化・参考時代は、固有名詞をそのまま持ち込むのではなく、地理・気候・生業・価値観の手がかりとして使う)。
+年齢・性格(各軸、渡す性格の段階の五段階)・背丈・体格は、渡した「行動原理(ミーム)」の古今表裏と、出自・生い立ち・人物像から総合的に決める。ミームを持つ人物として筋の通る段階・体つきにし、「無」「必」の軸はその極端さが生活・仕事・人との関わり方に具体的な癖として人物説明に表れるように書く。段階の語をそのまま書き写さない。「決まっている」の年齢・性格の軸・背丈・体格は変えない。
+性別・一人称・二人称・三人称・口調・方言が「決まっている」で null なら、人物像・年齢・出自・生い立ちに合わせてあなた自身で考えて決める(null でなければ、その値をそのまま返す)。
+誰にでも当てはまる無難なものに寄せず、この人物固有の言葉づかいにする。
+
+{_CREATION_NOTE}"""
+
+_THING_SYSTEM = f"""\
+ある場所と、そこに居る人物・既にある対象を渡すので、この場所を拠り所に生まれる人物以外の対象(国・組織・商会・氏族・集団など、まとまりとして動くもの。あるいは物)を1件だけ考える。
+出身地の説明・環境・人間関係のうち少なくとも一つを具体的に使う。
+
+{_CREATION_NOTE}"""
+
 
 def story_elements(ai: AIClient, sources: BirthSources, time: Stamp) -> list[str]:
     """筋書きから人物が生きうる立場を抜き出す。抜き出しと選択(`rng.choice`)を分けることで、複数の立場を持つ筋書きでも
@@ -54,7 +88,7 @@ def story_elements(ai: AIClient, sources: BirthSources, time: Stamp) -> list[str
         return []
     request = StoryElementsRequestSerialized(time=time, stories=sources.stories, later_ideas=sources.later_ideas)
     decided = ai.generate(request.model_dump_json(indent=2), StoryElementsDraft,
-                          instruction=StyleScope.CHARACTER_ELEMENTS)
+                          system=_ELEMENTS_SYSTEM, style_scope=StyleScope.CHARACTER)
     return [] if decided is None else decided.elements
 
 
@@ -151,7 +185,7 @@ def _content(
                    *([f"性格の段階: {'/'.join(PERSONALITY_LEVELS)}"] if material.person else []),
                    request]),
         draft_model,
-        instruction=StyleScope.CHARACTER_CONTENT if material.person else StyleScope.THING_CONTENT)
+        system=_PERSON_SYSTEM if material.person else _THING_SYSTEM, style_scope=StyleScope.CHARACTER)
     if decided is None:
         logger.warning("中身が得られなかった")
     return decided

@@ -27,6 +27,16 @@ from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 
+_SYSTEM = """\
+話の本文と、登場人物、登場人物どうしのすでにある関係を渡すので、
+この話の本文の中で、初めて会って言葉を交わした・名乗り合った、または前から知り合いだと分かった登場人物の組ごとに、関係を挙げる。
+- 関係には向きがある(誰から見た誰か)。二人のあいだの関係は、向きごとに一つずつ挙げる(A から B と、B から A)。
+- すでにある関係と同じ向きの組は挙げない。
+- 同じ場にいただけで、言葉もやり取りも無い組は挙げない。
+- relation は短い名前(「翼を直した灯具技師」など)、text は時期を限らない間柄、history はこの話で二人のあいだに起きたことを書く。
+- 人物は登場人物の人物idからだけ選ぶ。
+- 誰も挙げるものが無ければ relations は空のリストにする。"""
+
 
 class RelationMember(Material):
     id: int
@@ -108,7 +118,7 @@ def relations_draft(ai: AIClient, material: EpisodeRelationsMaterial) -> list[Re
     draft = ai.generate(
         "\n".join([EpisodeRelationsMaterialSerialized.model_validate(material).model_dump_json(indent=2),
                    "この話で会った・知り合いだと分かった登場人物の組の関係を挙げる。"]),
-        EpisodeRelationsDraft, instruction=StyleScope.EPISODE_RELATIONS, story_id=material.story_id)
+        EpisodeRelationsDraft, system=_SYSTEM, style_scope=StyleScope.RELATION, story_id=material.story_id)
     if draft is None:
         logger.warning(f"話 id={material.episode_id} の関係が得られなかったので、関係は足さない")
         return []

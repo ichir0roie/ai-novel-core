@@ -48,14 +48,19 @@
 
 ## 世界ごとの好み(AI へ渡す文面)
 
-文体・作風・書き方の注意書き・行の組み方は、作風に依存するので、`core`(このリポジトリ)に定数として持たず、db に持つ。
+AI へ渡す文面は、システムの挙動に関わる文はコードに、文体の文は db に分けて持つ。
 
-- 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係)ごとの指示は `style_preference` に範囲ごとに一行。作品ごとの指示は `story.instruction`、話ごとの指示は `episode.instruction`(空なら足さない)
-- AI に渡す指示(生成ごとの system)も db に持つ。仕事ごとに「<範囲>:<仕事>」の範囲の行(「ミーム:抜き出し」など。`db/schema.py` の `StyleScope`)にし、AI を呼ぶ所は `generate(instruction=StyleScope.…)` で渡す。使う所には 全体 → 作品の指示 → 範囲(ミーム) → 話の指示 の書き方が重なって付くので、仕事に共通する文は上の範囲の行に書く。分類の一覧・件数のようなコードの値は、指示の行に書かずに AI に渡す材料(プロンプト)に入れる
-- 指示・書き方の文を `ai/instructions/` の定数や、コードの system の文字列に足さない。db に足す(GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`)
+- コードに持つ: 仕事ごとの指示(何を渡し、何をさせるか)・材料の読み方(見出しの意味、null の扱い、時点の読み方)・出力の欄の決まり(id は候補からだけ選ぶ、無ければ空、仮置き `【名前】` など)・どの生成にも効く決まり
+  - 仕事ごとの指示は、AI を呼ぶモジュールの定数(`_SYSTEM` など)にし、`generate(system=…, style_scope=…)` で渡す
+  - いくつもの仕事で使う材料の読み方と、どの生成にも効く決まり(`COMMON_NOTES`。`generate` が足す)は `ai/instructions/materials.py`
+  - 分類の一覧・件数のようなコードの値は、AI に渡す材料(プロンプト)に入れる
+- db に持つ: 文体・作風・書き方の注意書き・行の組み方。作風に依存するので、`core`(このリポジトリ)に定数として持たない
+  - 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係。`db/schema.py` の `StyleScope`)ごとに `style_preference` に一行。作品ごとの指示は `story.instruction`、話ごとの指示は `episode.instruction`(空なら足さない)
+  - db の行に、材料の形・出力の欄・仕事の手順のような挙動の文を書かない
+  - 足すのは GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`
 - 足す順は 全体の行 → 作品の指示(祖先から) → その範囲の行 → 話の指示(`data_access_logic/readme.md` の「出来事の生成・話の材料」)
 - 何の範囲に置くか迷ったら、広い方に置かない。全部の文に効かせたい決まりだけを全体に、作品の作風は作品の指示に、本文だけ・プロットだけの決まりはその範囲に置く
-- 指示の文は db にだけ持つ。コードに初期値を置かず、`init_db` やマイグレーションで行を足さない(`init_db` で作った db には行が無く、行が無ければ空のまま動く)。文面を直すときは、db の行を入口で直す
-- 生成の system に、文の書き方(語の選び方・慣用句など)を個別に書き足さない。どの生成にも `generate` が同じ書き方を足す。AI を呼ぶ所は `generate(style_scope=…, story_id=…, episode_id=…)` で、書く文の範囲と作品・話を渡す(分かる所だけ)
+- 文体の文は db にだけ持つ。コードに初期値を置かず、`init_db` やマイグレーションで行を足さない(`init_db` で作った db には行が無く、行が無ければ空のまま動く)。文面を直すときは、db の行を入口で直す
+- 生成の system に、文の書き方(語の選び方・慣用句など)を個別に書き足さない。どの生成にも `generate` が同じ書き方を足す。AI を呼ぶ所は `generate(system=…, style_scope=…, story_id=…, episode_id=…)` で、仕事の指示と、書く文の範囲と作品・話を渡す(分かる所だけ)
 - db から読むのは `data_access_logic/style_preference/extras.py`。行が無ければ空のまま動く
-- このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の「書き方」に、本文の範囲の書き方(全体 → 作品の指示 → 本文 → 話の指示)が入る(`data_access_logic/episode/brief.py`)。本文でない文(プロット・来歴・関係・アイデア・場所の説明など)を書くときは `ReadWritingStyle` で、書く文の範囲と作品を渡して読む
+- このセッションの Claude が自分で本文を書く・直すとき(スキル `episode` / `revise-episode`)は、`ReadEpisodeBrief` の材料の「書き方」に、本文の範囲の書き方(全体 → 作品の指示 → 本文 → 話の指示)が、「材料の読み方」にコードの `EPISODE_BRIEF_NOTES` が入る(`data_access_logic/episode/brief.py`)。本文でない文(プロット・来歴・関係・アイデア・場所の説明など)を書くときは `ReadWritingStyle` で、書く文の範囲と作品を渡して読む

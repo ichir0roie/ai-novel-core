@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
+from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator_models import (
     BirthLocationMaterial, CharacterBirthMaterial, HistoryItemDraft, NearbyCharacter, NonPersonContentDraft,
@@ -25,6 +26,20 @@ from db.schema import StyleScope
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
+
+_SYSTEM = f"""\
+新しく生まれた人物・対象1件の説明・行動原理・来歴と、それを足す世界の材料を渡すので、世界と食い違うところを探し、食い違いだけを直す。
+検めること:
+- 居場所: この一件は「居場所」で生まれ(成り立ち)、現在の時刻もそこ(かその中の場所)で暮らし・働いている。現在の住まい・仕事場・拠点が別の場所になっていれば食い違い。
+  居場所でその役を担う形に移すか、居場所から通う・関わる形に直す。一時よそへ出た来歴はよいが、現在は居場所にいるようにする
+- 時刻: 現在の時刻より後のこと(後年の立場・行く末・死、「のちに」「やがて」)が書かれていれば食い違い。消す
+- まだ無い設定: 「この時刻より後に始まる設定(まだ無い)」に当たる立場・組織・技術・出来事が、現在や来歴に出ていれば食い違い。消すか、まだ無い形に直す
+- 関係する設定: 説明の語に当たった世界の設定(名前・種類・この場所・時代での呼び名と受け止め方)。呼び名・受け止め方と食い違う書き方があれば食い違い。
+  設定の呼び名で言い換えると具体的になる語も、その呼び名に直してよい(これも issues に1件として書く)
+- 既にいる人物・対象: その説明・来歴と食い違う関係・出来事(相手の来歴に無い親子・師弟、相手と同じ唯一の地位など)があれば食い違い。食い違わない形に直す
+食い違いの無いところは、言い回しも長さも変えない。人物像・性格・生い立ちの核は保つ。
+説明の中でこの一件を指す「{NAME_PLACEHOLDER}」はそのまま残す。
+食い違いが無ければ、issues を空にし、渡したものをそのまま返す。"""
 
 
 class ConsistencyRequest(Material):
@@ -108,7 +123,8 @@ def reconciled(
         text=text, principle=content.principle, history=history)
     output = PersonConsistencyDraft if isinstance(content, PersonContentDraft) else ConsistencyDraft
     draft = ai.generate(
-        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output, instruction=StyleScope.CHARACTER_CONSISTENCY)
+        "\n".join([request.model_dump_json(indent=2), "この一件を検める。"]), output,
+        system=_SYSTEM, style_scope=StyleScope.CHARACTER)
     if draft is None or not draft.issues or not draft.text.strip():
         return Reconciled(text=text, principle=content.principle, history=history)
     logger.info("世界・設定との食い違いを直した:\n" + "".join(f"    {issue}\n" for issue in draft.issues))

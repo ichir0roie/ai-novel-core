@@ -7,13 +7,19 @@ from data_access_logic.event.models import (
 )
 from db.schema import Event, EventSummary, StyleScope, summary_source_hash
 
+_SYSTEM = """\
+ある出来事を渡すので、次の出来事を考える人へ渡す要約を作る。
+誰が、誰に対して、何をして、どうなったかを起きた順に書き、終わっていないこと(残った問題・約束・謎)があれば最後に書く。
+本文の文や言い回しを写さず、セリフも引かない。
+三〜五文にまとめる。"""
+
 
 def summary_draft(ai: AIClient, event: EventSource) -> EventSummaryDraft | None:
     prompt = "\n".join([
         EventSourceSerialized.model_validate(event).model_dump_json(indent=2),
         "この出来事を要約する。",
     ])
-    return ai.generate(prompt, EventSummaryDraft, instruction=StyleScope.EVENT_SUMMARY)
+    return ai.generate(prompt, EventSummaryDraft, system=_SYSTEM, style_scope=StyleScope.EVENT)
 
 
 def stale_sources(s: Session, event_ids: list[int] | None) -> list[EventSummarySource]:
