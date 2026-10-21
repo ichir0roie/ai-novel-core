@@ -16,7 +16,7 @@ ai/claude_code/
 - 各呼び出しは `--tools ""`(道具なし。`tools=` を渡したときだけその道具を許す。事実確認は `WebSearch` / `WebFetch` / `ToolSearch` と Dラボの MCP)・`--no-session-persistence`・`--system-prompt`
   で、単発の「プロンプト → JSON」に絞る。カレントは一時ディレクトリにして、
   このリポジトリの `CLAUDE.md` や設定を読み込ませない
-- モデルと effort は `ai_client.py` の `MODEL`(`claude-sonnet-5-5`)・`EFFORT`(`low`)を既定にし、`--model` `--effort` に渡す
+- モデルと effort は `ai_client.py` の `MODEL`(`claude-opus-5-5`)・`EFFORT`(`low`)を既定にし、`--model` `--effort` に渡す
 - 認証は CLI に任せる(`claude login` 済みか `ANTHROPIC_API_KEY`)
 
 ## 環境変数(`.env` でよい)

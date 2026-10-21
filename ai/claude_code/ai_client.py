@@ -31,7 +31,7 @@ class ClaudeAIError(RuntimeError):
     pass
 
 
-MODEL = "claude-sonnet-5-5"
+MODEL = "claude-opus-5-5"
 EFFORT = "low"
 
 
