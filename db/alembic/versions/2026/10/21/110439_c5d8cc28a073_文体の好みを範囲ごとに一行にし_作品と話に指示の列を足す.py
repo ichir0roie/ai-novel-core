@@ -53,32 +53,7 @@ def _move_rows() -> None:
         bind.execute(sa.text("UPDATE style_preference SET text = :text WHERE id = :id"), {"id": keep.id, "text": _joined(texts)})
         for row in rest:
             bind.execute(sa.text("DELETE FROM style_preference WHERE id = :id"), {"id": row.id})
-    _add_moved_instructions(bind, set(by_scope))
-
-
-# コードから範囲の行へ移した段落の書き出し。既にある全体・本文の行には、これらの段落だけを末尾に足す
-_MOVED_HEADS = ("生物・医療・兵器", "人物の年齢は", "名づけ:", "「名前だけ出る人物」", "渡す設定(アイデア)", "「文体の見本」")
-
-
-def _add_moved_instructions(bind, scopes: set[str]) -> None:
-    """コードにあった AI への指示を行にする。範囲の行が無ければ初期値を足し、あれば移した段落だけを足す。
-    仕事ごとの指示の行は、無ければ足す。"""
-    from db.style_defaults import DEFAULT_INSTRUCTIONS, DEFAULT_STYLE_PREFERENCES
-
-    for scope, text in DEFAULT_STYLE_PREFERENCES:
-        if scope not in scopes:
-            bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES (:scope, :text)"),
-                         {"scope": scope, "text": text})
-            continue
-        current = bind.execute(sa.text("SELECT text FROM style_preference WHERE scope = :scope"), {"scope": scope}).scalar()
-        moved = [part for part in text.split("\n\n") if part.startswith(_MOVED_HEADS) and part not in current]
-        if moved:
-            bind.execute(sa.text("UPDATE style_preference SET text = :text WHERE scope = :scope"),
-                         {"scope": scope, "text": _joined([current, *moved])})
-    for scope, text in DEFAULT_INSTRUCTIONS:
-        if scope not in scopes:
-            bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES (:scope, :text)"),
-                         {"scope": scope, "text": text})
+    # コードにあった AI への指示を初期値の行として足していたが、初期値はコードに持たず db にだけ置くので足さない
 
 
 def upgrade() -> None:

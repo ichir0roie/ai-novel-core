@@ -31,16 +31,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_style_preference_story_id'), 'style_preference', ['story_id'], unique=False)
     op.create_foreign_key('style_preference_story_id_fkey', 'style_preference', 'story', ['story_id'], ['id'], ondelete='CASCADE')
     # ### end Alembic commands ###
-    # 固定の文面を db の行へ移したので、初期値の行を足す。同じ文面の行が既にあれば足さない
-    from db.style_defaults import DEFAULT_STYLE_PREFERENCES
-
-    style_preference = sa.table('style_preference', sa.column('scope', sa.String), sa.column('text', sa.String))
-    bind = op.get_bind()
-    for scope, text in DEFAULT_STYLE_PREFERENCES:
-        exists = bind.execute(sa.select(sa.literal(1)).select_from(style_preference)
-                              .where(style_preference.c.text == text).limit(1)).first()
-        if exists is None:
-            bind.execute(style_preference.insert().values(scope=scope, text=text))
+    # AI への指示の初期値はコードに持たず db にだけ置くので、ここで行は足さない(足していた初期値の定義は消した)
 
 
 def downgrade() -> None:
