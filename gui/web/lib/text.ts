@@ -98,6 +98,12 @@ export const T = {
     noNextEpisode: "No later episode in this story",
   },
 
+  instruction: {
+    open: (letters: number) => (letters > 0 ? `AI instruction (${letters} chars)` : "AI instruction (empty)"),
+    title: "AI instruction",
+    note: "Added to the writing style of the episode text only (not plots or other prose). Leave empty to add nothing.",
+  },
+
   styleEditor: {
     pick: "Pick a row on the left to edit",
     reload: "Reload",

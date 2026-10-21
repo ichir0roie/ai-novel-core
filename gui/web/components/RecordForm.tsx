@@ -56,6 +56,8 @@ type Props = {
   actions?: ReactNode;
   /** 渡すと右半分にこれを置き、本文(section の列)は左の欄の下に回す(作品の話の一覧など) */
   aside?: ReactNode;
+  /** フォームに並べない列(別の口で直す列) */
+  hidden?: string[];
 };
 
 /** 見出しとして出す名前の欄。クリックすると入力欄になり、Enter・Esc・フォーカスが外れると見出しに戻る。 */
@@ -86,9 +88,10 @@ function EditableTitle({ value, placeholder, onChange }: { value: string; placeh
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
  * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, aside }: Props) {
+export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, aside, hidden }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
-  const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only));
+  const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only)
+    && !hidden?.includes(column.key));
   // 名前の欄は見出しで直し、id は見出しの横に出すので、フォームには並べない
   const titleColumn = columns.find((c) => c.key === meta.label_column && c.type === "string" && !c.section && !c.readonly);
   // episode の登場人物(character_ids)は、通常のフォーム欄ではなく「time & place」の行のボタン

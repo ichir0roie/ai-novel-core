@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import InstructionModal from "@/components/InstructionModal";
 import KnowledgeModal from "@/components/KnowledgeModal";
 import RecordForm from "@/components/RecordForm";
 import { invalidateOptions, prefetchOptions } from "@/components/ReferenceSelect";
@@ -76,6 +77,9 @@ export default function RecordPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [organizing, setOrganizing] = useState(false);
+  const [instructing, setInstructing] = useState(false);
+  // 作品・話の AI への指示は、ふだんは欄に出さず、ボタンからモーダルで直す
+  const hasInstruction = table === "story" || table === "episode";
 
   const load = useCallback(async () => {
     setError(null);
@@ -103,9 +107,12 @@ export default function RecordPage() {
   const changes = loaded ? diff(loaded.record, value) : {};
   const dirty = Object.keys(changes).length > 0;
 
-  /** 保存できたら true。変更が無ければ何もせず true。only を渡すとその欄の変更だけを送り、ほかの欄の変更は画面に残す */
-  const save = async (thenBack: boolean, only?: string[]): Promise<boolean> => {
-    const sending = only ? Object.fromEntries(Object.entries(changes).filter(([key]) => only.includes(key))) : changes;
+  /** 保存できたら true。only を渡すとその欄の変更だけを送り、ほかの欄の変更は画面に残す */
+  const save = (thenBack: boolean, only?: string[]): Promise<boolean> =>
+    send(only ? Object.fromEntries(Object.entries(changes).filter(([key]) => only.includes(key))) : changes, thenBack);
+
+  /** sending の欄だけを送る。送らない欄の変更は画面に残す。送るものが無ければ何もせず true */
+  const send = async (sending: Rec, thenBack: boolean): Promise<boolean> => {
     if (Object.keys(sending).length === 0) return true;
     const kept = Object.fromEntries(Object.entries(changes).filter(([key]) => !(key in sending)));
     setBusy(true);
@@ -179,6 +186,7 @@ export default function RecordPage() {
             value={value}
             onChange={setValue}
             mode="edit"
+            hidden={hasInstruction ? ["instruction"] : undefined}
             titleNote={
               <>
                 <Link href={listHref(table, loaded.record)}>{meta.name}</Link> / {T.idMark(id)}
@@ -239,6 +247,11 @@ export default function RecordPage() {
                   <button className="primary" onClick={() => save(false)} disabled={busy || !dirty}>
                     {T.record.save}
                   </button>
+                  {hasInstruction && (
+                    <button onClick={() => setInstructing(true)} disabled={busy}>
+                      {T.instruction.open(((loaded.record.instruction as string | null) ?? "").length)}
+                    </button>
+                  )}
                   {table === "character" && (
                     // 自分の芯・来歴の知る相手も直すので、画面の編集中の値と食い違わないよう保存してから開く
                     <button onClick={() => setOrganizing(true)} disabled={busy || dirty} title={dirty ? T.knowledge.openDisabled : undefined}>
@@ -256,6 +269,14 @@ export default function RecordPage() {
               </div>
             }
           />
+          {instructing && (
+            <InstructionModal
+              value={(loaded.record.instruction as string | null) ?? ""}
+              error={error}
+              onClose={() => setInstructing(false)}
+              onSave={(text) => send({ instruction: text }, false)}
+            />
+          )}
           {organizing && (
             <KnowledgeModal
               characterId={Number(id)}
