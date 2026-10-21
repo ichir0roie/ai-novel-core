@@ -43,7 +43,8 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp, get_env_session,
+    PERSONALITY_LEVELS, Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp,
+    get_env_session,
 )
 from tool import episode_session
 
@@ -136,10 +137,12 @@ def test_read_knowledge(shown, world):
     me = result["自分"]
     assert (me["外見"], me["人物像"], me["ミーム"], me["行動原理"]) == ("背が高い", "太郎の芯", "- 今表: 太郎のミーム", "太郎の行動原理")
     assert "筋書き" not in me
+    # 性格は本人にだけ渡す
+    assert len(me["性格"]) == 12 and me["性格"]["誠実性"] in PERSONALITY_LEVELS
     assert _histories(me) == ["太郎の秘密"]
     hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
     assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
-    assert "ミーム" not in hanako_known
+    assert "ミーム" not in hanako_known and "性格" not in hanako_known
     assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密"]
     # アイデアの本文と本質の名前は渡さず、知っている履歴の行(呼び名と受け止め方)だけを渡す
     idea = next(idea for idea in result["知っているアイデア"]

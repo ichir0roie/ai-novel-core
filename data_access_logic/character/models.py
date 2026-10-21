@@ -62,6 +62,27 @@ class CharacterParameterValues(Material):
     imagination: PersonalityLevel = PersonalityLevel.NORMAL
 
 
+PERSONALITY_LABELS = {
+    "sincerity": "誠実性",
+    "curiosity": "好奇心",
+    "proactivity": "行動力",
+    "cooperativeness": "協調性",
+    "sociability": "社交性",
+    "emotional_expression": "感情表現",
+    "self_esteem": "自己肯定感",
+    "self_efficacy": "自己効力感",
+    "stress_resilience": "ストレス耐性",
+    "flexibility_of_values": "価値観の柔軟性",
+    "sensitivity": "感受性",
+    "imagination": "想像力",
+}
+
+
+def personality_for_prompt(parameters: CharacterParameterValues) -> dict[str, PersonalityLevel]:
+    # 各軸は 無/低/並/高/必 の五段階
+    return {label: getattr(parameters, name) for name, label in PERSONALITY_LABELS.items()}
+
+
 class RelationParty(Material):
     id: int
     name: str | None = None
@@ -250,25 +271,10 @@ class ParticipantSerialized(ParticipantMaterial):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        parameters = self.parameters
         return {
             "人物id": self.character.id,
             **_sheet(self.character, self),
-            # 各軸は 無/低/並/高/必 の五段階
-            "性格": {
-                "誠実性": parameters.sincerity,
-                "好奇心": parameters.curiosity,
-                "行動力": parameters.proactivity,
-                "協調性": parameters.cooperativeness,
-                "社交性": parameters.sociability,
-                "感情表現": parameters.emotional_expression,
-                "自己肯定感": parameters.self_esteem,
-                "自己効力感": parameters.self_efficacy,
-                "ストレス耐性": parameters.stress_resilience,
-                "価値観の柔軟性": parameters.flexibility_of_values,
-                "感受性": parameters.sensitivity,
-                "想像力": parameters.imagination,
-            },
+            "性格": personality_for_prompt(self.parameters),
             "関係": relations_for_prompt(self.relations),
             "直近の出来事(新しい順)": [event.name for event in self.recent_events],
         }
