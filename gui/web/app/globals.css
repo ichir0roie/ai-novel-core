@@ -715,3 +715,13 @@ summary .knowledge-item { display: inline-block; }
   .knowledge-since .hint { display: none; }
   .modal-actions:has(.knowledge-since) { flex-wrap: wrap; }
 }
+
+/* 書き方(style_preference)の一覧と編集を左右に並べる画面 */
+.style-editor { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 1rem; align-items: start; }
+.style-editor-list { max-height: calc(100vh - 8rem); overflow: auto; }
+.style-editor-list tr { cursor: pointer; }
+.style-editor-list tr.selected td { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.style-editor-list td.preview { max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.style-editor-body { display: flex; flex-direction: column; gap: 0.5rem; position: sticky; top: 1rem; }
+.style-editor-body textarea.section { min-height: calc(100vh - 14rem); }
+@media (max-width: 800px) { .style-editor { grid-template-columns: 1fr; } .style-editor-body { position: static; } }
