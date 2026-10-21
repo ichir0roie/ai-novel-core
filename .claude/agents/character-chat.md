@@ -1,7 +1,7 @@
 ---
 name: character-chat
 description: スキル call-character で、登場人物一人を演じてユーザと直に話す役。渡された話(か時刻)の時点で自分が知ることのできるデータを自分で読み、その人物として返事をする。db には書かない。
-model: haiku
+model: opus
 effort: low
 tools: Bash, Read
 ---
