@@ -317,6 +317,8 @@ a.button-link:hover { border-color: var(--accent); }
 .modal-body { padding: 1rem; overflow: auto; }
 .modal-actions { display: flex; gap: 0.6rem; align-items: center; padding: 0.7rem 1rem; border-top: 1px solid var(--line); flex-shrink: 0; }
 .modal-actions .spacer { flex: 1; }
+/* 作品・話の AI への指示のモーダル(InstructionModal)の入力欄 */
+.instruction-input { width: 100%; min-height: 50dvh; resize: vertical; box-sizing: border-box; font: inherit; }
 
 /* 保存中に画面全体を覆って操作を止める(モーダルより上) */
 .saving-overlay {
