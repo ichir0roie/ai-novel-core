@@ -51,7 +51,8 @@
 文体・作風・書き方の注意書き・行の組み方は、作風に依存するので、`core`(このリポジトリ)に定数として持たず、db に持つ。
 
 - 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係)ごとの指示は `style_preference` に範囲ごとに一行。作品ごとの指示は `story.instruction`、話ごとの指示は `episode.instruction`(空なら足さない)
-- 書き方の文を `ai/instructions/` の定数に足さない。db に足す(GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`)
+- AI に渡す指示(生成ごとの system)も db に持つ。仕事ごとに「<範囲>:<仕事>」の範囲の行(「ミーム:抜き出し」など。`db/schema.py` の `StyleScope`)にし、AI を呼ぶ所は `generate(instruction=StyleScope.…, values={…})` で渡す。読んだ行の `{{範囲の名前}}` はその行の文に、`{{名前}}` は `values` の値(分類の一覧・件数など、コードの値)に置き換わる(`style_preference/extras.py` の `instruction_text`)。ほかの指示から使い回す部品は「共通:…」の行にする。書き方の範囲は、仕事の範囲の上の範囲(ミーム)になる
+- 指示・書き方の文を `ai/instructions/` の定数や、コードの system の文字列に足さない。db に足す(GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`)
 - 足す順は 全体の行 → 作品の指示(祖先から) → その範囲の行 → 話の指示(`data_access_logic/readme.md` の「出来事の生成・話の材料」)
 - 何の範囲に置くか迷ったら、広い方に置かない。全部の文に効かせたい決まりだけを全体に、作品の作風は作品の指示に、本文だけ・プロットだけの決まりはその範囲に置く
 - 初期値の行は `db/style_defaults.py`。`init_db`(`seed_master_rows`)とマイグレーションで入れる。初期値を直すときは、行を直すマイグレーションも書く

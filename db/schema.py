@@ -327,6 +327,54 @@ class StyleScope(enum.StrEnum):
     IDEA = "アイデア"
     MEME = "ミーム"
     RELATION = "関係"
+    # 仕事ごとの指示(AI の system に渡す)。「<上の範囲>:<仕事>」の形で、上の範囲の書き方と一緒に渡す。
+    # 「共通:」はほかの指示から {{共通:…}} で呼ぶ部品で、それだけでは使わない
+    FACT_CHECK = "全体:検証"
+    EPISODE_MATERIAL = "本文:材料の読み方"
+    PLOT_FRAME = "プロット:枠"
+    PLOT_REWRITE = "プロット:書き直し"
+    PLOT_CASTING = "プロット:人物と舞台"
+    CHARACTER_CONTENT = "人物:生成"
+    THING_CONTENT = "人物:対象の生成"
+    CHARACTER_ELEMENTS = "人物:筋書きの要素"
+    CHARACTER_CONSISTENCY = "人物:整合"
+    NAME_MEANING = "人物:名の意味"
+    CHARACTER_NAMING = "人物:名づけ"
+    THING_NAMING = "人物:対象の名づけ"
+    CHARACTER_VOICES = "人物:話し方"
+    CHARACTER_MOVES = "人物:居場所の移動"
+    EVENT_CANDIDATES = "出来事:候補"
+    EVENT_RECORD = "出来事:記録"
+    EVENT_TEXT = "出来事:本文の後埋め"
+    EVENT_SUMMARY = "出来事:要約"
+    EVENT_SEEDS = "出来事:種の抜き出し"
+    EVENT_SEED_MERGE = "出来事:種のまとめ"
+    IDEA_TERMS = "アイデア:語の抜き出し"
+    MEME_EXTRACT = "ミーム:抜き出し"
+    MEME_DEDUPE = "ミーム:重複"
+    MEME_ANTI = "ミーム:アンチ"
+    MEME_CLASSIFY = "ミーム:分類"
+    EPISODE_RELATIONS = "関係:話の関係"
+    SHARED_AGE = "共通:年齢"
+    SHARED_MENTIONED = "共通:名前だけ出る人物"
+    SHARED_IDEA_CONTEXT = "共通:設定の扱い"
+    SHARED_BIO = "共通:生物医療兵器"
+    SHARED_TERM_NAMING = "共通:語の名づけ"
+    SHARED_PLACE_NAMING = "共通:場所の名づけ"
+    SHARED_CHARACTER_NAMING = "共通:人物の名づけ"
+    SHARED_NAME_CANDIDATES = "共通:名前の候補"
+    SHARED_EVENT_SITUATION = "共通:場所の状況"
+    SHARED_EVENT_RECORD = "共通:出来事の記録"
+    SHARED_BIRTH = "共通:生まれる一件"
+    SHARED_MEME_PRINCIPLE = "共通:ミームの整理"
+    SHARED_PLACEHOLDER = "共通:名前の仮置き"
+    SHARED_ANTI = "共通:アンチミームの書き方"
+
+    @property
+    def wide(self) -> "StyleScope":
+        """仕事ごとの指示なら、その上の範囲。上の範囲そのものなら自分。"""
+        head, _, task = self.value.partition(":")
+        return StyleScope(head) if task and head != "共通" else self
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
@@ -341,8 +389,8 @@ class StylePreference(TextBase):
 
     scope: Mapped[str] = mapped_column(
         String, nullable=False, unique=True,
-        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれかで、範囲ごとに一行。全体は AI が書くすべての文に、"
-                "ほかは使う所(本文・プロットなど)だけに効く",
+        comment="効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)は"
+                "その所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示、「共通:…」はほかの指示から {{…}} で呼ぶ部品",
         sort_order=200)
 
 
@@ -995,12 +1043,13 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def seed_master_rows(engine) -> None:
-    from db.style_defaults import DEFAULT_STYLE_PREFERENCES
+    from db.style_defaults import DEFAULT_INSTRUCTIONS, DEFAULT_STYLE_PREFERENCES
 
     with Session(engine) as s:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
                   for name, id_ in _PERSONALITY_LEVEL_IDS.items())
-        s.add_all(StylePreference(scope=scope, text=text) for scope, text in DEFAULT_STYLE_PREFERENCES)
+        s.add_all(StylePreference(scope=scope, text=text)
+                  for scope, text in (*DEFAULT_STYLE_PREFERENCES, *DEFAULT_INSTRUCTIONS))
         s.commit()
 
 

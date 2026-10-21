@@ -1,4 +1,4 @@
-"""文体の好みを範囲ごとに一行にし 作品と話に指示の列を足す
+"""文体の好みを範囲ごとに一行にし 作品と話に指示の列を足す。コードにあった AI への指示を行にする
 
 Revision ID: c5d8cc28a073
 Revises: aa08a7ac444d
@@ -55,6 +55,13 @@ def _move_rows() -> None:
             bind.execute(sa.text("DELETE FROM style_preference WHERE id = :id"), {"id": row.id})
     if '本文' not in by_scope:
         bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES ('本文', :text)"), {"text": _LAYOUT})
+    # コードにあった仕事ごとの指示とその部品を行にする。その範囲の行が既にあれば足さない
+    from db.style_defaults import DEFAULT_INSTRUCTIONS
+
+    for scope, text in DEFAULT_INSTRUCTIONS:
+        if scope not in by_scope:
+            bind.execute(sa.text("INSERT INTO style_preference (scope, text) VALUES (:scope, :text)"),
+                         {"scope": scope, "text": text})
 
 
 def upgrade() -> None:
@@ -64,7 +71,7 @@ def upgrade() -> None:
     op.add_column('story', sa.Column('instruction', sa.String(), server_default='', nullable=False, comment='この作品と子孫(章・外伝)の作品で AI が書くすべての文に足す指示。空なら何も足さない'))
     op.alter_column('style_preference', 'scope',
                existing_type=sa.VARCHAR(),
-               comment='効く範囲。全体/本文/プロット/人物/来歴/出来事/アイデア/ミーム/関係 のいずれかで、範囲ごとに一行。全体は AI が書くすべての文に、ほかは使う所(本文・プロットなど)だけに効く',
+               comment='効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)はその所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示、「共通:…」はほかの指示から {{…}} で呼ぶ部品',
                existing_comment='効く範囲。全体/ストーリー/本文/プロット/人物/出来事/アイデア/ミーム/関係 のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く',
                existing_nullable=False,
                existing_server_default=sa.text("'本文'::character varying"))
@@ -86,7 +93,7 @@ def downgrade() -> None:
     op.alter_column('style_preference', 'scope',
                existing_type=sa.VARCHAR(),
                comment='効く範囲。全体/ストーリー/本文/プロット/人物/出来事/アイデア/ミーム/関係 のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く',
-               existing_comment='効く範囲。全体/本文/プロット/人物/来歴/出来事/アイデア/ミーム/関係 のいずれかで、範囲ごとに一行。全体は AI が書くすべての文に、ほかは使う所(本文・プロットなど)だけに効く',
+               existing_comment='効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)はその所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示、「共通:…」はほかの指示から {{…}} で呼ぶ部品',
                existing_nullable=False,
                existing_server_default=sa.text("'本文'::character varying"))
     op.drop_column('story', 'instruction')

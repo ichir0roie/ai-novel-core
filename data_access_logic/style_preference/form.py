@@ -24,3 +24,10 @@ class WritingStyleForm(Form):
     scope: StyleScope = StyleScope.ALL
     story_id: int | None = None
     episode_id: int | None = None
+
+
+class InstructionForm(Form):
+    """仕事ごとの指示を読む所。`values` は {{…}} に埋めるコードの値。"""
+
+    scope: StyleScope
+    values: dict[str, str] = {}

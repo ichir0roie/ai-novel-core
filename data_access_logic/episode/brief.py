@@ -13,11 +13,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
-from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import STYLE_SAMPLE_INSTRUCTION
-from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic.character.cast import (
     candidate_at, cast_of, casting_candidate_at, mentioned_of, relations_among, secrets_at,
 )
@@ -37,9 +32,9 @@ from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.idea.whole import whole_ideas
 from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
-from data_access_logic.style_preference.extras import episode_style
+from data_access_logic.style_preference.extras import episode_style, instruction_text
 from data_access_logic.material import Material
-from db.schema import Character, Episode
+from db.schema import Character, Episode, StyleScope
 from db.stamp import Stamp
 
 
@@ -52,14 +47,7 @@ def _episode(s: Session, episode_id: int) -> Episode:
 
 
 def _guide(s: Session, story_id: int, episode_id: int) -> str:
-    return "\n".join([
-        EVENT_AGE_INSTRUCTION,
-        MENTIONED_INSTRUCTION,
-        IDEA_CONTEXT_INSTRUCTION,
-        BIO_ABSTRACTION_INSTRUCTION,
-        STYLE_SAMPLE_INSTRUCTION,
-        episode_style(s, story_id, episode_id),
-    ])
+    return "\n".join([instruction_text(s, StyleScope.EPISODE_MATERIAL), episode_style(s, story_id, episode_id)])
 
 
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:

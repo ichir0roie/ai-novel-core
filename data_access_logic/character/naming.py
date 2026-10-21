@@ -22,7 +22,6 @@ from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ai.instructions.naming import CHARACTER_NAMING_INSTRUCTION, IDEA_NAMING_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator_models import CharacterNameMaterialSerialized, NameDraft, PersonNameDraft
@@ -37,44 +36,6 @@ _LONG_VOWELS = {
     **dict.fromkeys("うくすつぬふむゆるぐずづぶぷゔぅゅ", "う"), **dict.fromkeys("えけせてねへめれげぜでべぺぇ", "い"),
     **dict.fromkeys("おこそとのほもよろをごぞどぼぽぉょ", "う"),
 }
-
-_CANDIDATE_INSTRUCTION = (
-    f"名前の候補を {constants.NAME_CANDIDATE_COUNT} 個出す。候補どうしは響きを散らし、"
-    "同じ名の言い換えや綴りの違いだけの候補を並べない。どれを選ばれてもこの人物に似合う名にする。"
-    "渡される「同じ場所にいる人物・対象の名」とは同じ名にしない。"
-    "ただし作者が付けたい名を渡したときは、それが似合うなら(同じ場所の名と重なっても)一つ目にその名を置き、合わなければ一つ目を近い響きにする。"
-)
-
-_MEANING_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観を構築する設定作家だ。
-内容が決まっている人物1件の、名と名字の元にする意味の語を挙げる。材料は日本語の見出しを付けた JSON で渡す。
-名の元にする意味は、ミーム・行動原理から、この人物の芯を象徴する語を {constants.NAME_MEANING_COUNT} 個挙げる。ミームが空なら挙げない。
-それとは別に、性格・人物説明から象徴する語を挙げる(ミームが空のときに使う)。仕事の道具・持ち場の語に寄せない。
-どちらも、信条や性格の語(勇敢・優しい)をそのまま挙げず、それを象徴する物・自然・情景・願いの語(灯・潮・鉄・若木・夜明け)に置き換える。
-親が子に託す願いとして通る語にし、互いに重ならないよう散らす。
-名字の元にする意味は、出身地・身分・家業・参考文化から、家の土地・生業・祖先にまつわる語を挙げる。「決まっている名字」が null でなければ空にする。"""
-
-_PERSON_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観を構築する設定作家だ。
-内容が決まっている人物1件に、名前と名字の候補を付ける。材料は日本語の見出しを付けた JSON で渡す。
-{CHARACTER_NAMING_INSTRUCTION}
-先に、名づけに使う言語を、居場所の参考地域・参考文化・参考時代だけから決める。方言・口調・一人称は日本語の読み物としての書き分けなので、言語を決める手がかりにしない。
-「名の意味」が null でなければ、その意味を元に名を作る。意味をその言語の語に訳し、その言語の名として通る形(名らしい語尾・縮め方・語の組み合わせ)に整えてカタカナで書く。
-参考地域が漢字を使う地域(日本・中国・朝鮮など)のときだけ、意味を表す漢字で名を作る。訳した語を普通名詞のまま名にせず、名として通る形に崩す。
-意味が二つなら、片方を選ぶか二つを組み合わせる。候補ごとに訳語・形を変えて響きを散らす。
-「名の意味」が null なら、人物説明・年齢・性別・性格から連想できる、この人物に似合う名にする。
-年齢からは生まれた頃の名づけの流行を、身分や家業からは名の格を考え、同じ場所の人物として馴染む名にする(固有名詞をそのまま持ち込まない)。
-名字は、生まれたときに名乗るものにする。「名字の意味」が null でなければ同じ手順でその意味から作り、null なら出身地・身分・家業・参考文化から決める。
-「決まっている名字」が null でなければ、どの候補の名字もその値にする。
-{_CANDIDATE_INSTRUCTION}"""
-
-_NON_PERSON_SYSTEM_PROMPT = f"""\
-あなたは架空の世界観を構築する設定作家だ。
-内容が決まっている人物以外の対象(国・組織・集団・物など)1件に、名前の候補を付ける。材料は日本語の見出しを付けた JSON で渡す。
-{IDEA_NAMING_INSTRUCTION}
-組織の名は場所名か役割名で呼べる形にする。
-居場所の参考地域・参考文化・参考時代を名の響きや漢字・カタカナの選び方の手がかりにして、同じ場所のものとして馴染む名にする(固有名詞をそのまま持ち込まない)。
-{_CANDIDATE_INSTRUCTION}"""
 
 
 class PersonNameCandidates(BaseModel):
@@ -114,7 +75,8 @@ def drawn_meanings(ai: AIClient, rng: random.Random, material: CharacterNameMate
     """AI に意味の語を挙げさせ、名の意味を `NAME_MEANING_PICK_RANGE` 個・名字の意味を一つ選ぶ。挙がらなければ None。
     名の意味はミームから取った語を優先し、それが無いときだけ性格・人物説明から取った語を使う。"""
     meanings = ai.generate("\n".join([material.model_dump_json(indent=2), "この人物の名と名字の元にする意味を挙げる。"]),
-                           NameMeanings, system=_MEANING_SYSTEM_PROMPT, style_scope=StyleScope.CHARACTER)
+                           NameMeanings, instruction=StyleScope.NAME_MEANING,
+                           values={"意味の数": str(constants.NAME_MEANING_COUNT)})
     if meanings is None:
         return None
     given = _words(meanings.from_memes) or _words(meanings.from_character)
@@ -170,8 +132,8 @@ def named(ai: AIClient, rng: random.Random, material: CharacterNameMaterialSeria
                       f"名字の意味: {(meanings.family if meanings else None) or 'null'}"] if person else []),
                    "この一件の名前の候補を出す。"]),
         PersonNameCandidates if person else NameCandidates,
-        system=_PERSON_SYSTEM_PROMPT if person else _NON_PERSON_SYSTEM_PROMPT,
-        style_scope=StyleScope.CHARACTER)
+        instruction=StyleScope.CHARACTER_NAMING if person else StyleScope.THING_NAMING,
+        values={"候補の数": str(constants.NAME_CANDIDATE_COUNT)})
     if drafts is None or not drafts.candidates:
         return None
     unique = list({draft.name: draft for draft in drafts.candidates}.values())

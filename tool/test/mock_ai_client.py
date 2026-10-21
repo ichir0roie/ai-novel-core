@@ -27,10 +27,12 @@ class MockAIClient:
         self, prompt: str, output: type[Output], system: str | None = None, timeout: float | None = None,
         tools: tuple[str, ...] = (), model: str = "", effort: str = "",
         style_scope: StyleScope = StyleScope.ALL, story_id: int | None = None, episode_id: int | None = None,
+        instruction: StyleScope | None = None, values: dict[str, str] | None = None,
     ) -> Output | None:
         schema = output.model_json_schema()
         self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools,
-                           "style_scope": style_scope, "story_id": story_id})
+                           "style_scope": style_scope, "story_id": story_id,
+                           "instruction": instruction, "values": values})
         try:
             return output.model_validate(self._fill(schema, prompt, key=None, defs=schema.get("$defs", {})))
         except ValidationError:
