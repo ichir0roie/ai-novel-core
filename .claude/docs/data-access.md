@@ -57,8 +57,9 @@ AI へ渡す文面は db の行(書き方・作風)を土台にし、コード�
   - いくつもの仕事で使う材料の読み方と、どの生成にも効く禁止事項は `ai/instructions/materials.py`。見出し一つにつき定数一つ。`generate` が足すのは禁止事項(`SAFETY_NOTE`)だけで、材料の読み方(`TIME_NOTE`・`LATER_EVENTS_NOTE` など)は、その見出しの材料を渡す仕事の指示にだけ入れる
   - 分類の一覧・件数のようなコードの値は、AI に渡す材料(プロンプト)に入れる
 - db に持つ: 文体・作風・書き方の注意書き・行の組み方。作風に依存するので、`core`(このリポジトリ)に定数として持たない
-  - 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係。`db/schema.py` の `StyleScope`)ごとに `style_preference` に一行。作品ごとの本文の決まりは `story.instruction`、話ごとの本文の決まりは `episode.instruction`(本文の範囲だけに足す。空なら足さない)
+  - 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係・人物役。`db/schema.py` の `StyleScope`)ごとに `style_preference` に一行。作品ごとの本文の決まりは `story.instruction`、話ごとの本文の決まりは `episode.instruction`(本文の範囲だけに足す。空なら足さない)
   - db の行に、材料の形・出力の欄・仕事の手順のような挙動の文を書かない
+  - スキル・エージェントの定義にも書き方を書かない。文を書く所ごとに、その範囲の行を読んで従う(スキルは `ReadWritingStyle`・`ReadEpisodeBrief` の「書き方」、人物役・対話役は `tool.episode_session style`)。材料・仕組みに関わる決まり(材料の言い回しを写さない、端役に名前を付けないなど)は挙動として残す
   - 足すのは GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`
 - 足す順は 全体の行 → その範囲の行。本文の範囲だけ 全体の行 → 作品の指示(祖先から) → 本文の行 → 話の指示(`data_access_logic/readme.md` の「出来事の生成・話の材料」)
 - 何の範囲に置くか迷ったら、広い方に置かない。全部の文に効かせたい決まりだけを全体に、作品ごとの本文の決まりは作品の指示に、本文だけ・プロットだけの決まりはその範囲に置く
