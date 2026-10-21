@@ -6,7 +6,7 @@
 人物役は表を見張らない。語り部が番の行の id を人物役に送り、人物役はその行だけを読んで一手を入れる。
 人物役がはじめに読む材料(knowledge・played)は標準出力に出さずファイルに書き、そのパスを出す(Read で最後まで読む)。
 
-    人物役: knowledge / ideas / played / turn / answer
+    人物役: knowledge / style / ideas / played / turn / answer
     語り部: knower-gaps / stage(登場人物と知り合いの組を手番のファイルに写す)/ appearance / add / wait / add-ideas / moves / read
     作者と代わる代わる書く語り部: text / append / replace
     演じ直す前・掛け合いを終えたとき: clear(--from で、その行から後だけ)
@@ -149,6 +149,8 @@ def main() -> None:
         moment.add_argument("--time", help="話を渡さないときの時刻(スキル call-character で歳を言って呼ぶとき)")
     ideas.add_argument("--word", action="append", required=True, help="引く語。いくつも渡すなら --word を重ねる")
 
+    commands.add_parser("style", help="人物役の書き方(db の全体の行と人物役の行)を読む。一手・返事はこの書き方で書く")
+
     played = commands.add_parser("played", help="自分がもう動いた手番(要求と自分の一手)を読む(起こし直されたときに)")
     played.add_argument("--episode", type=int, required=True)
     played.add_argument("--character", type=int, required=True)
@@ -236,6 +238,9 @@ def run(args: argparse.Namespace) -> Any:
         case "knowledge":
             return call("character.read_knowledge.ReadKnowledge",
                         {"character_id": args.character, **_knowing(args.episode, args.character, args.time)})
+        case "style":
+            # `db.schema` は import すると db を決めるので(web のセッションは db に繋がない)、範囲の値をそのまま渡す
+            return call("style_preference.read_writing_style.ReadWritingStyle", {"writing_style": {"scope": "人物役"}})
         case "ideas":
             return call("character.read_known_ideas.ReadKnownIdeas", {
                 "character_id": args.character, "words": args.word, **_knowing(args.episode, args.character, args.time)})
