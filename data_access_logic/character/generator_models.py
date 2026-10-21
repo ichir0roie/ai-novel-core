@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 from data_access_logic import constants
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.form import CharacterParameterForm
-from data_access_logic.character.models import CharacterBase, CharacterParameterValues
+from data_access_logic.character.models import PERSONALITY_LABELS, CharacterBase, CharacterParameterValues
 from data_access_logic.character.record import CharacterHistoryRow
 from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
@@ -73,22 +73,6 @@ def _born_location(born_location: BirthLocationMaterial | None) -> dict[str, Any
         "所属する地域": (f"{born_location.parent.name}({born_location.parent.kind})"
                          if born_location.parent else None),
     }
-
-
-PERSONALITY_LABELS = {
-    "sincerity": "誠実性",
-    "curiosity": "好奇心",
-    "proactivity": "行動力",
-    "cooperativeness": "協調性",
-    "sociability": "社交性",
-    "emotional_expression": "感情表現",
-    "self_esteem": "自己肯定感",
-    "self_efficacy": "自己効力感",
-    "stress_resilience": "ストレス耐性",
-    "flexibility_of_values": "価値観の柔軟性",
-    "sensitivity": "感受性",
-    "imagination": "想像力",
-}
 
 
 def _personality(parameters: CharacterParameterValues | CharacterParameterForm) -> dict[str, str] | None:

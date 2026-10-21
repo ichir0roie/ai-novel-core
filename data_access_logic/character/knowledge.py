@@ -13,7 +13,7 @@
 期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
-本人には外見・芯・ミーム・行動原理を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
+本人には外見・芯・ミーム・行動原理・性格を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
 話を渡したときは、関係のある人物の外見・芯・来歴は、その話の登場人物・名前だけ出る人物の分だけを渡す(場にいない人物は関係の行の名前と間柄で足りる)。
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.histories import outfit_at
-from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine
+from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, personality_for_prompt
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character import skills
 from data_access_logic.idea.models import normalized
@@ -207,7 +207,8 @@ class KnowledgeSerialized(Material):
                 "名前": me.name, **me.looks.model_dump(), "名字": parameters.family_name,
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
                 "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
-                "行動原理": me.principle, "来歴(古い順)": _histories_for_prompt(me.histories, year),
+                "行動原理": me.principle, "性格": personality_for_prompt(parameters),
+                "来歴(古い順)": _histories_for_prompt(me.histories, year),
                 "スキル": _skills_for_prompt(me.skills, year),
             },
             "関係": _relations_for_prompt(self.relations, year),
