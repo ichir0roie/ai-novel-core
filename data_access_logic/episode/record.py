@@ -18,6 +18,7 @@ class EpisodeHead(Material):
     location_id: int | None = None
     letters: int
     plot_text: str
+    instruction: str = ""
 
 
 class EpisodeRow(EpisodeHead):

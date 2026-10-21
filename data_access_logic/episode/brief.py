@@ -51,14 +51,14 @@ def _episode(s: Session, episode_id: int) -> Episode:
     return episode
 
 
-def _guide(s: Session, story_id: int) -> str:
+def _guide(s: Session, story_id: int, episode_id: int) -> str:
     return "\n".join([
         EVENT_AGE_INSTRUCTION,
         MENTIONED_INSTRUCTION,
         IDEA_CONTEXT_INSTRUCTION,
         BIO_ABSTRACTION_INSTRUCTION,
         STYLE_SAMPLE_INSTRUCTION,
-        episode_style(s, story_id),
+        episode_style(s, story_id, episode_id),
     ])
 
 
@@ -128,5 +128,5 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],
         later_events=events_of(s, later_events_select(location_id, characters, time)),
-        guide=_guide(s, episode.story_id),
+        guide=_guide(s, episode.story_id, episode.id),
     )

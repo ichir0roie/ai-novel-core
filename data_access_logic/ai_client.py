@@ -20,4 +20,5 @@ class AIClient(Protocol):
         effort: str = ...,
         style_scope: StyleScope = ...,
         story_id: int | None = ...,
+        episode_id: int | None = ...,
     ) -> Output | None: ...

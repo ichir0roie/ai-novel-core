@@ -12,8 +12,8 @@ from data_access_logic.style_preference.record import WritingStyleRecord
 class ReadWritingStyle(SessionEntrypoint):
     """このセッションの Claude がプロット・来歴・アイデア・関係など、話の本文でない文を書く前に読む書き方。
 
-    書く文に合う範囲(プロット・人物・出来事・アイデア・関係など)と、書く話の作品を渡す。全体 → ストーリー → その範囲の順の
-    行を、db から読んで足したもの。AI に書かせる文には、同じ書き方が毎回足される(`ai/claude_code/ai_client.generate`)。
+    書く文に合う範囲(プロット・人物・出来事・アイデア・関係など)と、書く話の作品・話を渡す。全体の行 → 作品の指示 →
+    その範囲の行 → 話の指示 の順に、db から読んで足したもの。AI に書かせる文には、同じ書き方が毎回足される(`ai/claude_code/ai_client.generate`)。
     話の本文の書き方は `ReadEpisodeBrief` の「書き方」に入る。
     """
 
@@ -21,4 +21,5 @@ class ReadWritingStyle(SessionEntrypoint):
         self.writing_style = writing_style or WritingStyleForm()
 
     def execute(self, s: Session) -> WritingStyleRecord:
-        return WritingStyleRecord(text=extras.writing_style(s, self.writing_style.scope, self.writing_style.story_id))
+        return WritingStyleRecord(text=extras.writing_style(
+            s, self.writing_style.scope, self.writing_style.story_id, self.writing_style.episode_id))

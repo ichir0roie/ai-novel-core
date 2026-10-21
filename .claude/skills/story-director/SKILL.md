@@ -29,8 +29,8 @@ description: 作品(story)全体を統括するモード。呼ばれたら作品
 | 設定(アイデア) | `SearchIdeas` → `CommitIdea` / `UpdateIdea`(呼び名は `histories`)。話に出た語は `AddIdeas` | 人名・場所の名前は足さない |
 | 出来事 | `CommitEvent` / `UpdateEvent` | AI を回す(要約・種)ので web では `run_in_background` |
 | 覚え書き | `CommitOracle` / `UpdateOracle` | 作者の考え方・世界の理のメモ。`CommitOracle` は AI を回す(検める・ミーム)ので web では `run_in_background` |
-| 書き方 | `style_preference.read_writing_style.ReadWritingStyle` `{'writing_style': {'scope': '<書く文の範囲>', 'story_id': <作品 id>}}`(db だけ。範囲はプロット・人物・出来事・アイデア・関係。省けば全体) | 行を書く前に読む(下の 3 の 2) |
-| 書き方の好み | `style_preference` の行(表の API)。`scope` は広い順に「全体」(すべての文)・「ストーリー」(`story_id` の作品と子孫の作品のすべての文)・使う所の範囲(本文・プロット・人物・出来事・アイデア・ミーム・関係)。使う所は上の段をすべて足す(`data_access_logic/readme.md`) | 文体の好みを言われたときだけ。作風・注意書きはコードに足さず行に足す |
+| 書き方 | `style_preference.read_writing_style.ReadWritingStyle` `{'writing_style': {'scope': '<書く文の範囲>', 'story_id': <作品 id>, 'episode_id': <話 id>}}`(db だけ。範囲はプロット・人物・来歴・出来事・アイデア・関係。省けば全体) | 行を書く前に読む(下の 3 の 2) |
+| 書き方の好み | `style_preference` の行(表の API。範囲ごとに一行。「全体」と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係))と、作品の `instruction`・話の `instruction`(`data_access_logic/readme.md`) | 文体の好みを言われたときだけ。作風・注意書きはコードに足さず行に足す |
 
 ### 話の行を書く
 

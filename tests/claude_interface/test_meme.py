@@ -146,11 +146,11 @@ class _AntiWritingAI(MockAIClient):
     """モックは配列を空で返すので、アンチミームだけは渡したミームの番号ごとに書く。"""
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="",
-                 style_scope=StyleScope.ALL, story_id=None):
+                 style_scope=StyleScope.ALL, story_id=None, episode_id=None):
         if output is AntisDraft:
             memes = json.loads(prompt[:prompt.rindex("]") + 1])
             return AntisDraft(antis=[AntiDraft(number=item["番号"], anti_text=f"{item['ミーム']}の反転") for item in memes])
-        return super().generate(prompt, output, system, timeout, tools, model, effort, style_scope, story_id)
+        return super().generate(prompt, output, system, timeout, tools, model, effort, style_scope, story_id, episode_id)
 
 
 def test_extract_memes_pairs_unpaired_memes(world):

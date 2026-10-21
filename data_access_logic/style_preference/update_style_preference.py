@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
-from data_access_logic.style_preference.form import StylePreferenceUpdateForm, check_scope_story
+from data_access_logic.style_preference.form import StylePreferenceUpdateForm
 from data_access_logic.style_preference.record import StylePreferenceRecord
-from db.schema import StylePreference, Story, StyleScope
+from db.schema import StylePreference
 
 
 class UpdateStylePreference(CommitEntrypoint):
@@ -17,8 +18,10 @@ class UpdateStylePreference(CommitEntrypoint):
 
     def execute(self, s: Session) -> StylePreferenceRecord:
         record = common_query.get_row(s, StylePreference, self.style_preference.id)
+        scope = self.style_preference.scope
+        if scope is not None and scope.value != record.scope and s.scalar(
+                select(StylePreference.id).where(StylePreference.scope == scope.value)) is not None:
+            raise ValueError(f"範囲が{scope.value}の行は既にある(範囲ごとに一行)")
         self.style_preference.write_changes_to(record)
-        check_scope_story(StyleScope(record.scope), record.story_id)
-        self.check_exists(s, Story, record.story_id, "story_id")
         self.finalize(s, record)
         return StylePreferenceRecord.model_validate(record)

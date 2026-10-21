@@ -316,13 +316,13 @@ class Oracle(TextBase):
 
 
 class StyleScope(enum.StrEnum):
-    # 全体は AI が書くすべての文、ストーリーは作品(と子孫の作品)のすべての文に効く。
-    # 残りは使う所ごとの範囲で、使う所は 全体 → ストーリー → その範囲 の順に足す
+    # 全体は AI が書くすべての文に効く。残りは使う所ごとの範囲で、使う所は
+    # 全体 → 作品の指示(story.instruction) → その範囲 → 話の指示(episode.instruction) の順に足す
     ALL = "全体"
-    STORY = "ストーリー"
     EPISODE = "本文"
     PLOT = "プロット"
     CHARACTER = "人物"
+    HISTORY = "来歴"
     EVENT = "出来事"
     IDEA = "アイデア"
     MEME = "ミーム"
@@ -333,21 +333,17 @@ STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 
 
 class StylePreference(TextBase):
-    """AI に書かせる文の書き方の指示(文体・作風・注意書き)。
-    使う所の範囲に合う行(全体 → ストーリー → その範囲の順、同じ範囲では id の順)を、書くたびに db から読んで足す。
+    """AI に書かせる文の指示(文体・作風・注意書き)。範囲ごとに一行。
+    使う所は、全体の行 → 作品の指示 → その範囲の行 → 話の指示 の順に、書くたびに db から読んで足す。
     システムの初期値の行は `db/style_defaults.py`。"""
 
     __tablename__ = "style_preference"
 
     scope: Mapped[str] = mapped_column(
-        String, nullable=False, default=StyleScope.EPISODE.value, server_default=StyleScope.EPISODE.value,
-        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品"
-                "(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く",
+        String, nullable=False, unique=True,
+        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれかで、範囲ごとに一行。全体は AI が書くすべての文に、"
+                "ほかは使う所(本文・プロットなど)だけに効く",
         sort_order=200)
-    story_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("story.id", ondelete="CASCADE"), nullable=True, index=True,
-        comment="効く作品。範囲がストーリーの行だけに入れ、その作品と子孫(章・外伝)の作品に効く。ほかの範囲では空",
-        sort_order=210)
 
 
 CHARACTER_KIND_PERSON = "人物"
@@ -902,6 +898,8 @@ class Story(TextBase):
 
     __tablename__ = "story"
 
+    TEXT_COLUMNS = ("text", "instruction")
+
     name: Mapped[str] = mapped_column(String, sort_order=200)
     display_order: Mapped[int | None] = mapped_column(
         Integer, comment="作品一覧で同じ親の作品の中の並び。小さいほど上。空の作品は後ろに、一番早い話の順",
@@ -911,6 +909,10 @@ class Story(TextBase):
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)
     # 章の話を書くとき、親の作品の筋書きまでたどって渡す。書き込みは常に parent_story_id を直に触る
     parent_story: Mapped["Story | None"] = relationship(remote_side="Story.id", viewonly=True)
+
+    instruction: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="",
+        comment="この作品と子孫(章・外伝)の作品で AI が書くすべての文に足す指示。空なら何も足さない", sort_order=10010)
 
     episodes: Mapped[list["Episode"]] = relationship(
         back_populates="story", lazy="noload",
@@ -922,7 +924,7 @@ class Episode(ContentBase):
 
     __tablename__ = "episode"
 
-    TEXT_COLUMNS = ("plot_text", "main_text")
+    TEXT_COLUMNS = ("plot_text", "main_text", "instruction")
 
     main_text: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
@@ -957,6 +959,9 @@ class Episode(ContentBase):
         String, nullable=False, default="", server_default="",
         comment="プロット。作者が入れる、AI 生成前の話の中身",
         sort_order=10010)
+    instruction: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="",
+        comment="この話の本文・プロットを書くときに足す指示。空なら何も足さない", sort_order=10020)
 
     @validates("main_text")
     def _letters_follow_text(self, _key, value):

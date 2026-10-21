@@ -418,6 +418,11 @@ export interface components {
             letters: number;
             /** Plot Text */
             plot_text: string;
+            /**
+             * Instruction
+             * @default
+             */
+            instruction: string;
             /** Main Text */
             main_text: string;
             /** Character Ids */

@@ -34,6 +34,8 @@ class EpisodeCommitForm(Form):
     plot_text: str | None = None
     # 改行を整えてから入れる(`layout_novel_text`)
     main_text: str | None = None
+    # この話の本文・プロットを書くときに足す指示
+    instruction: str | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None

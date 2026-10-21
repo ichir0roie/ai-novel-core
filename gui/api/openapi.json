@@ -1096,6 +1096,11 @@
             "type": "string",
             "title": "Plot Text"
           },
+          "instruction": {
+            "type": "string",
+            "title": "Instruction",
+            "default": ""
+          },
           "main_text": {
             "type": "string",
             "title": "Main Text"

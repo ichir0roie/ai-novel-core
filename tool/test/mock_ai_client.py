@@ -26,7 +26,7 @@ class MockAIClient:
     def generate[Output: BaseModel](
         self, prompt: str, output: type[Output], system: str | None = None, timeout: float | None = None,
         tools: tuple[str, ...] = (), model: str = "", effort: str = "",
-        style_scope: StyleScope = StyleScope.ALL, story_id: int | None = None,
+        style_scope: StyleScope = StyleScope.ALL, story_id: int | None = None, episode_id: int | None = None,
     ) -> Output | None:
         schema = output.model_json_schema()
         self.calls.append({"prompt": prompt, "system": system, "schema": schema, "tools": tools,

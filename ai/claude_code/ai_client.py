@@ -117,12 +117,14 @@ def generate[Output: BaseModel](
     effort: str = EFFORT,
     style_scope: StyleScope = StyleScope.ALL,
     story_id: int | None = None,
+    episode_id: int | None = None,
 ) -> Output | None:
     """応答が得られない・`output` の形に合わないときは None。
-    `style_scope` は書く文の範囲(プロット・人物など)、`story_id` は書く文の作品。全体 → ストーリー → その範囲の書き方を足す。"""
+    `style_scope` は書く文の範囲(プロット・人物など)、`story_id`・`episode_id` は書く文の作品・話。
+    全体の行 → 作品の指示 → その範囲の行 → 話の指示 を足す。"""
     load_env()
     # プロット・来歴・アイデア・ミームなど、AI が書くどの文にも書き方を効かせる。世界・作品ごとの指示を含むので、そのつど db の段で読む
-    system = styled_system(system, call(style_steps.writing_style, WritingStyleForm(scope=style_scope, story_id=story_id)))
+    system = styled_system(system, call(style_steps.writing_style, WritingStyleForm(scope=style_scope, story_id=story_id, episode_id=episode_id)))
     args = _build_args(system, output.model_json_schema(), tools, model, effort)
     try:
         reply = _reply(prompt, args, timeout)
