@@ -489,7 +489,7 @@ AI の結果を書き戻したとき、`CommitEpisode` / `CastEpisode` で確定
 登場人物ごとに、その時点の歳・人となり・口調・相関・直近の出来事(要約)を渡す。話の場所の
 直近の出来事と、その場所か登場人物に掛かる「この時点より後に既に決まっている出来事」も渡し、矛盾させない。
 プロット補完では、プロットから中間段でアイデアを引いて「関係する設定」として渡す。
-Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_client.py` の `MODEL` / `EFFORT`)。待ち時間の既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、それより長く待つ呼び出し(事実確認)だけが `timeout` を渡す。
+Claude のモデルの既定は `claude-sonnet-5-5` の `low`(`ai/claude_code/ai_client.py` の `MODEL` / `EFFORT`)。待ち時間の既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、それより長く待つ呼び出し(事実確認)だけが `timeout` を渡す。
 
 上の表の「作る」「確定する」入口を使えば、Claude も対話の中で人物・場所・出来事の
 内容を決めて確定してよい。

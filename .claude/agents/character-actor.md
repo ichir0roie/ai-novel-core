@@ -1,7 +1,7 @@
 ---
 name: character-actor
 description: スキル episode の本文を書く前に、登場人物一人を演じる役。自分が知ることのできるデータを自分で読み、語り部(話を書くセッションの Claude)から番の行の id を受け取るたびに、その行の要求に一手(内心・行動・セリフ・狙い)を書き込んで、終わったと返す。手番への指摘に、その人物として意見を返す役も務める。
-model: opus
+model: haiku
 effort: low
 tools: Bash, Read
 ---
