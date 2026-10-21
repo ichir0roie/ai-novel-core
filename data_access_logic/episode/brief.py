@@ -13,11 +13,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.idea_context import IDEA_CONTEXT_INSTRUCTION
-from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.past_episodes import STYLE_SAMPLE_INSTRUCTION
-from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic.character.cast import (
     candidate_at, cast_of, casting_candidate_at, mentioned_of, relations_among, secrets_at,
 )
@@ -51,15 +46,8 @@ def _episode(s: Session, episode_id: int) -> Episode:
     return episode
 
 
-def _guide(s: Session, story_id: int) -> str:
-    return "\n".join([
-        EVENT_AGE_INSTRUCTION,
-        MENTIONED_INSTRUCTION,
-        IDEA_CONTEXT_INSTRUCTION,
-        BIO_ABSTRACTION_INSTRUCTION,
-        STYLE_SAMPLE_INSTRUCTION,
-        episode_style(s, story_id),
-    ])
+def _guide(s: Session, story_id: int, episode_id: int) -> str:
+    return episode_style(s, story_id, episode_id)
 
 
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
@@ -128,5 +116,5 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],
         later_events=events_of(s, later_events_select(location_id, characters, time)),
-        guide=_guide(s, episode.story_id),
+        guide=_guide(s, episode.story_id, episode.id),
     )

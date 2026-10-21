@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""本文の改行を整える `layout_novel_text` と、その読み方に結びついた約束(`EPISODE_LAYOUT_INSTRUCTION`)。
+"""本文の改行を整える `layout_novel_text`。
 
-書き方の文(文体・作風・注意書き)はここに定数で持たず、db の `style_preference` から読む
+書き方の文(文体・作風・注意書き・行の組み方)はここに定数で持たず、db の `style_preference` から読む
 (`data_access_logic/style_preference/extras.py`。初期値は `db/style_defaults.py`)。
 """
 from __future__ import annotations
 
 import re
-
-# 生成のときに場面の切れ目へ置かせる行。`layout_novel_text` が空行二つに置き換える。
-SCENE_BREAK = "◇"
 
 # 一行がこの字数を超えるときは、文の切れ目か読点で折り返す。
 LINE_LETTERS = 50
@@ -88,13 +85,12 @@ def _split_sentences(line: str) -> list[str]:
     return sentences
 
 
-# 空行一つは話し手や流れの切れ目、空行二つ以上と「◇」の行は場面の切れ目として読む。
+# 空行一つは話し手や流れの切れ目、空行二つ以上は場面の切れ目として読む。
 # 読点も文の切れ目も無い長い文は、折り返さずに残す。半角の「?」「!」は全角にそろえる。
 def layout_novel_text(text: str) -> str:
     scenes = []
     text = re.sub(r"(?<=[?!]) +(?=\S)", "", text.replace("\r\n", "\n")).translate(_FULL_WIDTH_MARKS)
-    marked = re.sub(rf"^[ \t　]*{SCENE_BREAK}[ \t　]*$", "\n\n\n", text, flags=re.M)
-    for scene in re.split(r"\n[ \t　]*\n(?:[ \t　]*\n)+", marked.strip()):
+    for scene in re.split(r"\n[ \t　]*\n(?:[ \t　]*\n)+", text.strip()):
         if not scene.strip():
             continue
         beats = [beat for beat in re.split(r"\n[ \t　]*\n", scene.strip()) if beat.strip()]
@@ -104,14 +100,3 @@ def layout_novel_text(text: str) -> str:
             for beat in beats))
     return "\n\n\n".join(scenes)
 
-
-# 話の本文の、場面の切れ目と行の組み方。`layout_novel_text` の読み方と結びついていて、db で変えると整形が壊れるので、
-# コードに置く。書き方の文(文体・作風・注意書き)は db の `style_preference` に持つ(初期値は `db/style_defaults.py`)
-EPISODE_LAYOUT_INSTRUCTION = f"""\
-場面の切れ目:
-場所・時間・書く対象が変わるところにだけ、「{SCENE_BREAK}」だけの行を置く。
-
-行の組み方:
-セリフは、中に文がいくつあっても「」ごと一行にする(長い行は清書のときに折り返される)。
-一人の人物の言動が続くあいだは、セリフと地の文を、空行を挟まず改行だけで続ける。
-空行は、話し手や流れが変わるところにだけ一つ置き、ほかでは空けない。"""

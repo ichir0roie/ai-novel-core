@@ -10,9 +10,6 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from ai.instructions.event_writing import EVENT_AGE_INSTRUCTION
-from ai.instructions.mentioned import MENTIONED_INSTRUCTION
-from ai.instructions.plot import PLOT_FORMAT_INSTRUCTION
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.cast import cast_of, mentioned_of, relations_at
 from data_access_logic.episode.material import later_events_select, load_episode, summary_targets_of
@@ -28,18 +25,6 @@ from db.schema import Episode, StyleScope
 from db.stamp import Stamp, StampError
 
 logger = logging.getLogger(__name__)
-
-_SYSTEM_PROMPT = f"""\
-あなたは日本語のライトノベルの構成を考える作家だ。
-作品・登場人物・作者の指定を日本語の見出しを付けた JSON で渡すので、この作品の次の一話の枠(題・プロット・時刻)を決める。
-{PLOT_FORMAT_INSTRUCTION}
-作者の指定の題・プロットは核にして、足りないところを補って書き直す(プロットにある出来事・人物・狙いは落とさない)。
-作者の指定の時刻・視点・場所は、null でなければ決まっているので変えず、それに沿う場面にする(視点・場所自体はここでは決めない)。
-時刻が決まっていなければ、「年/月/日」の形で、直前の話より後から選ぶ。決まっていれば start は null にする。
-これまでの筋・人物の立場・関係は、作品の筋書きと登場人物の来歴・関係から読む。その続きとして自然に立つ話にし、済んだことをなぞり直さない。
-「この時点より後に既に決まっている出来事」は、それと矛盾させず、そこで起きることを先回りしない。
-{EVENT_AGE_INSTRUCTION}
-{MENTIONED_INSTRUCTION}"""
 
 
 def _time(s: Session, episode: Episode) -> Stamp:
@@ -82,7 +67,7 @@ def frame_draft(ai: AIClient, material: EpisodeFrameMaterial) -> EpisodeFrameDra
         EpisodeFrameMaterialSerialized.model_validate(material).model_dump_json(indent=2),
         "この作品の次の一話の枠を決める。",
     ])
-    draft = ai.generate(prompt, EpisodeFrameDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.PLOT,
+    draft = ai.generate(prompt, EpisodeFrameDraft, instruction=StyleScope.PLOT_FRAME,
                         story_id=material.story.id)
     if draft is None:
         raise ValueError("枠が得られなかった")

@@ -16,7 +16,6 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ai.instructions.sensitive import BIO_ABSTRACTION_INSTRUCTION
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.meme.models import (
@@ -40,50 +39,6 @@ CATEGORY_DESCRIPTIONS = {
 
 _CATEGORY_GUIDE = "\n".join(f"  - {name}: {CATEGORY_DESCRIPTIONS[name]}" for name in MEME_CATEGORIES)
 
-# 長い一文は、引いた人物の行動原理に条件や筋書きまで持ち込むので、芯だけに絞らせる
-_CONCISE_GUIDE = "一つのミームは一文で簡潔に書く(40字以内を目安)。何を大事にし、何をきっかけにどう動くかの芯だけを残し、条件・例・理由を重ねない。"
-
-_ANTI_GUIDE = """アンチミームは、ミームを反転した考え方。ミームが大事にするものを退け、避けるものを選ぶ。
-  - 「〜しない」と打ち消しただけの文にせず、それだけで一つの行動原理として立つように書く。
-  - ミームと同じ分類に収まるように書く(理なら、その法則が逆に働く世界の理として書く)。
-  - ミームと同じく一文で簡潔に書く(40字以内を目安)。"""
-
-_SYSTEM_PROMPT = f"""\
-あなたは物語の編集者だ。
-著者の創作についての覚え書き・その検証結果・起きた出来事・話の本文を、番号つきの JSON で渡すので、それぞれから、\
-人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出す。
-- 人名・地名・組織名・その作品だけの固有名詞を抜き、他の人物にも乗り移りうる普遍的な考え方として書く。
-- {_CONCISE_GUIDE}
-- 固有名詞を抜いても特定の人物の役どころ・筋書き上の境遇をなぞるだけのもの(その人物にしか当てはまらない立場や状況)は抜き出さない。引いた人物がその人物の写しになるため。
-- 作者の前書き・使用環境・書き方の約束など、考え方にならない文からは抜き出さない。
-- 出来事と話の本文からは、当事者がその出来事を経て選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの記録からは抜き出さない。
-- 本文中の「検証結果」の節は、覚え書きを現実の科学・歴史・思想・心理学に照らした調べ書き。\
-そこに出てくる現実の人・集団の考え方や、研究で裏付けられた行動の傾向を、人物の行動原理になりうる考え方として抜き出す。\
-出典の一覧や、妥当性の判定そのものからは抜き出さない。
-- 一つの元から 0〜3 件。同じ元の中で似たミームは一つにまとめる。
-- それぞれに、次の分類から一つを振る。
-{_CATEGORY_GUIDE}
-- それぞれに、反転したアンチミームを一つ添える。
-{_ANTI_GUIDE}
-{BIO_ABSTRACTION_INSTRUCTION}"""
-
-_DEDUPE_SYSTEM_PROMPT = """\
-あなたは物語の編集者だ。
-人物の行動原理になる「ミーム」を「新しいミーム」と「既にあるミーム」に分けて渡すので、新しいミームのうち、\
-既にあるミームか、それより前の番号の新しいミームと同じ考え方を言い換えただけのものを見つける。
-- 何を大事にし、何をきっかけに、どう動くかがほぼ同じものだけを重複とする。題材が近いだけで、大事にするものや動き方が違うものは重複にしない。
-- 重複が無ければ duplicates は空のリストにする。"""
-
-_ANTI_SYSTEM_PROMPT = f"""\
-あなたは物語の編集者だ。
-人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれを反転したアンチミームを一つずつ書く。
-{_ANTI_GUIDE}
-{BIO_ABSTRACTION_INSTRUCTION}"""
-
-_CLASSIFY_SYSTEM_PROMPT = f"""\
-あなたは物語の編集者だ。
-人物の行動原理になる「ミーム」を番号つきで渡すので、それぞれに次の分類から一つを振る。
-{_CATEGORY_GUIDE}"""
 
 def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
     """渡した行の本文。元の列が空の行は外す。oracle の本文には検証結果(`# 検証結果` の節)も含む。
@@ -112,8 +67,9 @@ def meme_texts(s: Session) -> list[str]:
 def extraction_draft(ai: AIClient, batch: list[SourceText]) -> MemesDraft | None:
     return ai.generate(
         "\n".join([SourceBatchSerialized(sources=batch).model_dump_json(indent=2),
+                   f"分類:\n{_CATEGORY_GUIDE}",
                    "それぞれの元からミームを抜き出す。"]),
-        MemesDraft, system=_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
+        MemesDraft, instruction=StyleScope.MEME_EXTRACT)
 
 
 def _normalized(text: str) -> str:
@@ -136,7 +92,7 @@ def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list
         decided = ai.generate(
             "\n".join([request.model_dump_json(indent=2),
                        "新しいミームのうち、重複しているものの番号を挙げる。"]),
-            DedupeDraft, system=_DEDUPE_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
+            DedupeDraft, instruction=StyleScope.MEME_DEDUPE)
         if decided is None:
             return None
         duplicates = set(decided.duplicates)
@@ -178,7 +134,7 @@ def anti_draft(ai: AIClient, batch: list[SourceText]) -> list[AntiMeme] | None:
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
                    "それぞれのミームのアンチミームを書く。"]),
-        AntisDraft, system=_ANTI_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
+        AntisDraft, instruction=StyleScope.MEME_ANTI)
     if decided is None:
         return None
     return [AntiMeme(id=batch[item.number - 1].id, text=item.anti_text)
@@ -207,8 +163,9 @@ def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] 
     request = NumberedMemesSerialized(memes=[MemeText(text=source.text) for source in batch])
     decided = ai.generate(
         "\n".join([request.model_dump_json(indent=2),
+                   f"分類:\n{_CATEGORY_GUIDE}",
                    "それぞれのミームに分類を振る。"]),
-        ClassifyDraft, system=_CLASSIFY_SYSTEM_PROMPT, style_scope=StyleScope.MEME)
+        ClassifyDraft, instruction=StyleScope.MEME_CLASSIFY)
     if decided is None:
         return None
     return [MemeCategory(id=batch[item.number - 1].id, category=item.category)

@@ -1296,7 +1296,7 @@
       "id": "style_preference.commit_style_preference.CommitStylePreference",
       "area": "style_preference",
       "name": "CommitStylePreference",
-      "doc": "",
+      "doc": "範囲の行が無ければ足し、あればその行の末尾に足す(範囲ごとに一行)。",
       "params": [
         {
           "name": "style_preference",

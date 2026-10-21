@@ -316,38 +316,67 @@ class Oracle(TextBase):
 
 
 class StyleScope(enum.StrEnum):
-    # 全体は AI が書くすべての文、ストーリーは作品(と子孫の作品)のすべての文に効く。
-    # 残りは使う所ごとの範囲で、使う所は 全体 → ストーリー → その範囲 の順に足す
+    # 全体は AI が書くすべての文に効く。残りは使う所ごとの範囲で、使う所は
+    # 全体 → 作品の指示(story.instruction) → その範囲 → 話の指示(episode.instruction) の順に足す
     ALL = "全体"
-    STORY = "ストーリー"
     EPISODE = "本文"
     PLOT = "プロット"
     CHARACTER = "人物"
+    HISTORY = "来歴"
     EVENT = "出来事"
     IDEA = "アイデア"
     MEME = "ミーム"
     RELATION = "関係"
+    # 仕事ごとの指示(AI の system に渡す)。「<上の範囲>:<仕事>」の形で、上の範囲の書き方と一緒に渡す。
+    # 仕事に共通する文は上の範囲の行に書く
+    FACT_CHECK = "全体:検証"
+    PLOT_FRAME = "プロット:枠"
+    PLOT_REWRITE = "プロット:書き直し"
+    PLOT_CASTING = "プロット:人物と舞台"
+    CHARACTER_CONTENT = "人物:生成"
+    THING_CONTENT = "人物:対象の生成"
+    CHARACTER_ELEMENTS = "人物:筋書きの要素"
+    CHARACTER_CONSISTENCY = "人物:整合"
+    NAME_MEANING = "人物:名の意味"
+    CHARACTER_NAMING = "人物:名づけ"
+    THING_NAMING = "人物:対象の名づけ"
+    CHARACTER_VOICES = "人物:話し方"
+    CHARACTER_MOVES = "人物:居場所の移動"
+    EVENT_CANDIDATES = "出来事:候補"
+    EVENT_RECORD = "出来事:記録"
+    EVENT_TEXT = "出来事:本文の後埋め"
+    EVENT_SUMMARY = "出来事:要約"
+    EVENT_SEEDS = "出来事:種の抜き出し"
+    EVENT_SEED_MERGE = "出来事:種のまとめ"
+    IDEA_TERMS = "アイデア:語の抜き出し"
+    MEME_EXTRACT = "ミーム:抜き出し"
+    MEME_DEDUPE = "ミーム:重複"
+    MEME_ANTI = "ミーム:アンチ"
+    MEME_CLASSIFY = "ミーム:分類"
+    EPISODE_RELATIONS = "関係:話の関係"
+
+    @property
+    def wide(self) -> "StyleScope":
+        """仕事ごとの指示なら、その上の範囲。上の範囲そのものなら自分。"""
+        head, _, task = self.value.partition(":")
+        return StyleScope(head) if task else self
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 
 
 class StylePreference(TextBase):
-    """AI に書かせる文の書き方の指示(文体・作風・注意書き)。
-    使う所の範囲に合う行(全体 → ストーリー → その範囲の順、同じ範囲では id の順)を、書くたびに db から読んで足す。
+    """AI に書かせる文の指示(文体・作風・注意書き)。範囲ごとに一行。
+    使う所は、全体の行 → 作品の指示 → その範囲の行 → 話の指示 の順に、書くたびに db から読んで足す。
     システムの初期値の行は `db/style_defaults.py`。"""
 
     __tablename__ = "style_preference"
 
     scope: Mapped[str] = mapped_column(
-        String, nullable=False, default=StyleScope.EPISODE.value, server_default=StyleScope.EPISODE.value,
-        comment=f"効く範囲。{'/'.join(STYLE_SCOPES)} のいずれか。全体は AI が書くすべての文に、ストーリーは story_id の作品"
-                "(と子孫の作品)のすべての文に、ほかは使う所(本文・プロットなど)だけに効く",
+        String, nullable=False, unique=True,
+        comment="効く範囲(`StyleScope`)。範囲ごとに一行。全体は AI が書くすべての文に、使う所の範囲(本文・プロットなど)は"
+                "その所だけに効く。「<範囲>:<仕事>」は仕事ごとの指示で、上の範囲の行と重ねて渡す",
         sort_order=200)
-    story_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("story.id", ondelete="CASCADE"), nullable=True, index=True,
-        comment="効く作品。範囲がストーリーの行だけに入れ、その作品と子孫(章・外伝)の作品に効く。ほかの範囲では空",
-        sort_order=210)
 
 
 CHARACTER_KIND_PERSON = "人物"
@@ -902,6 +931,8 @@ class Story(TextBase):
 
     __tablename__ = "story"
 
+    TEXT_COLUMNS = ("text", "instruction")
+
     name: Mapped[str] = mapped_column(String, sort_order=200)
     display_order: Mapped[int | None] = mapped_column(
         Integer, comment="作品一覧で同じ親の作品の中の並び。小さいほど上。空の作品は後ろに、一番早い話の順",
@@ -911,6 +942,10 @@ class Story(TextBase):
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)
     # 章の話を書くとき、親の作品の筋書きまでたどって渡す。書き込みは常に parent_story_id を直に触る
     parent_story: Mapped["Story | None"] = relationship(remote_side="Story.id", viewonly=True)
+
+    instruction: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="",
+        comment="この作品と子孫(章・外伝)の作品で AI が書くすべての文に足す指示。空なら何も足さない", sort_order=10010)
 
     episodes: Mapped[list["Episode"]] = relationship(
         back_populates="story", lazy="noload",
@@ -922,7 +957,7 @@ class Episode(ContentBase):
 
     __tablename__ = "episode"
 
-    TEXT_COLUMNS = ("plot_text", "main_text")
+    TEXT_COLUMNS = ("plot_text", "main_text", "instruction")
 
     main_text: Mapped[str] = mapped_column(
         String, nullable=False, default="", server_default="",
@@ -957,6 +992,9 @@ class Episode(ContentBase):
         String, nullable=False, default="", server_default="",
         comment="プロット。作者が入れる、AI 生成前の話の中身",
         sort_order=10010)
+    instruction: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="",
+        comment="この話の本文・プロットを書くときに足す指示。空なら何も足さない", sort_order=10020)
 
     @validates("main_text")
     def _letters_follow_text(self, _key, value):
@@ -990,12 +1028,13 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def seed_master_rows(engine) -> None:
-    from db.style_defaults import DEFAULT_STYLE_PREFERENCES
+    from db.style_defaults import DEFAULT_INSTRUCTIONS, DEFAULT_STYLE_PREFERENCES
 
     with Session(engine) as s:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
                   for name, id_ in _PERSONALITY_LEVEL_IDS.items())
-        s.add_all(StylePreference(scope=scope, text=text) for scope, text in DEFAULT_STYLE_PREFERENCES)
+        s.add_all(StylePreference(scope=scope, text=text)
+                  for scope, text in (*DEFAULT_STYLE_PREFERENCES, *DEFAULT_INSTRUCTIONS))
         s.commit()
 
 

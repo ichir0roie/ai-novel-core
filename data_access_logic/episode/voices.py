@@ -25,18 +25,6 @@ from db.stamp import Stamp
 
 VOICE_FIELDS = ("first_person", "second_person", "third_person", "tone", "dialect")
 
-_SYSTEM_PROMPT = """\
-あなたは日本語のライトノベルの担当編集者だ。
-直前の五話の本文と、登場人物それぞれの今の話し方を日本語の見出しを付けた JSON で渡す。
-本文のセリフ(と地の文での呼び方)を根拠に、人物ごとの話し方を全体として調整した値を返す。
-- 本文にセリフのある人物だけを返す。セリフの無い人物は返さない。
-- 今の値が本文のセリフと合っていれば同じ値のまま返し、合わない点は直す。本文に繰り返し表れている語尾・呼び方・話す長さの癖で、今の値に無いものだけを足す。今の値にあって本文に表れていない語尾・呼び方は、本文と食い違わない限り残す。
-- 口調は、足し書きを重ねず、全体を一つのまとまった説明に書き直す。語尾・文の長さ・言い淀みや間・相手や場面による変わり方のような、話し方の癖だけを書く。本文の出来事・筋は書かない。
-- 口調は 200 字ほどに収める。超えるなら、その場かぎりの振る舞いから削り、語尾・呼び方・話す長さを残す。
-- 本文のセリフを例として書き写さない。例は語尾・呼び方を示す短いもの(「〜だろ」「じいさん」)を三つまでにする。決め台詞・教訓めいた一言・格好をつけた言い回しは口調に入れない。
-- 一人称・二人称・三人称は、本文で実際に使われている呼び方にする。相手で変わるなら、今の値の書き方に合わせる。方言は、方言の種類か標準語で話すならその癖。
-- 憶測で足さない。本文に根拠のない特徴を作らない。"""
-
 
 class VoiceCharacter(Material):
     id: int
@@ -100,7 +88,7 @@ def voice_draft(ai: AIClient, source: VoiceSource) -> VoiceDrafts | None:
         VoiceSourceSerialized.model_validate(source).model_dump_json(indent=2),
         "直前の話のセリフから、登場人物の話し方を調整する。",
     ])
-    return ai.generate(prompt, VoiceDrafts, system=_SYSTEM_PROMPT, style_scope=StyleScope.CHARACTER,
+    return ai.generate(prompt, VoiceDrafts, instruction=StyleScope.CHARACTER_VOICES,
                        story_id=source.story_id)
 
 

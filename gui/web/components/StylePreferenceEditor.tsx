@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getRecord, labelOf, listRecords, updateRecord, type RecordList } from "@/lib/api";
+import { getRecord, listRecords, updateRecord, type RecordList } from "@/lib/api";
 import { T } from "@/lib/text";
 
 // 書き方の行は数十行なので、一覧は一度に全部引く
 const ALL = new URLSearchParams({ limit: "500", sort: "id", order: "asc" });
 
-/** 書き方(style_preference)の行を左の一覧から選び、右で本文を直す画面。 */
+/** 範囲ごとの指示(style_preference)の行を左の一覧から選び、右で本文を直す画面。 */
 export default function StylePreferenceEditor() {
   const [data, setData] = useState<RecordList | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -71,7 +71,6 @@ export default function StylePreferenceEditor() {
             <tr>
               <th>id</th>
               <th>scope</th>
-              <th>story_id</th>
               <th>{T.list.text}</th>
             </tr>
           </thead>
@@ -84,7 +83,6 @@ export default function StylePreferenceEditor() {
               >
                 <td>{String(item.id)}</td>
                 <td>{String(item.scope ?? "")}</td>
-                <td>{labelOf(data?.labels, "story_id", item.story_id)}</td>
                 <td className="preview">{String(item.preview ?? "")}</td>
               </tr>
             ))}
@@ -98,7 +96,6 @@ export default function StylePreferenceEditor() {
           <>
             <div className="hint">
               {T.idMark(selectedId)} {String(current?.scope ?? "")}
-              {current?.story_id != null && ` / ${labelOf(data?.labels, "story_id", current.story_id)}`}
             </div>
             <textarea className="section" value={text} onChange={(e) => setText(e.target.value)} />
           </>
