@@ -8,6 +8,7 @@ import { PageTitle, tableMeta } from "@/lib/meta";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
 import CharacterTree from "@/components/CharacterTree";
+import StylePreferenceEditor from "@/components/StylePreferenceEditor";
 import ListTable, { nextSort, Pager } from "@/components/ListTable";
 import NameId from "@/components/NameId";
 import { useOpenPage } from "@/lib/nav";
@@ -111,6 +112,17 @@ export default function TablePage() {
           </Link>
         </div>
         {table === "story" ? <StoryTree /> : table === "idea" ? <IdeaTree /> : <CharacterTree />}
+      </>
+    );
+  }
+
+  // 書き方は一覧と編集を一つの画面に並べる(`?view=list` で他と同じ表)
+  if (table === "style_preference" && search.get("view") !== "list") {
+    return (
+      <>
+        <PageTitle kind={table} record={null} />
+        <h1>{table}</h1>
+        <StylePreferenceEditor />
       </>
     );
   }

@@ -98,6 +98,13 @@ export const T = {
     noNextEpisode: "No later episode in this story",
   },
 
+  styleEditor: {
+    pick: "Pick a row on the left to edit",
+    reload: "Reload",
+    unsaved: "Unsaved changes",
+    discard: "Discard unsaved changes?",
+  },
+
   create: {
     title: (label: string) => `New ${label}`,
     cancel: "Cancel",
