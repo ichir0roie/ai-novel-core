@@ -4,7 +4,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validator, model_serializer, model_validator
 
 from data_access_logic import constants
-from data_access_logic.knowers import KnowerMaterial, knowers_for_prompt
+from data_access_logic.knowers import KnowerMaterial, secret_for_prompt
 from data_access_logic.material import Material, Named
 from db.stamp import Stamp, StampError
 
@@ -207,7 +207,7 @@ def whole_idea_for_prompt(whole: WholeIdeaMaterial) -> dict[str, Any]:
              "効く場所": None if history.location is None else history.location.name,
              "始まり": None if history.start is None else str(history.start),
              "終わり": None if history.end is None else str(history.end),
-             "知る相手": knowers_for_prompt(history.knowers)}
+             **({} if (secret := secret_for_prompt(history.knowers)) is None else {"秘密": secret})}
             for history in whole.histories],
     }
 

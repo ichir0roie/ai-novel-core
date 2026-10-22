@@ -96,8 +96,9 @@ def _appearance(link: CharacterEpisode) -> dict[str, Any]:
             "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
 
 
-def _appearances(appearances: list[CharacterEpisode], character_id: int) -> list[dict[str, Any]]:
-    return [_appearance(link) for link in appearances if link.character_id == character_id]
+def _without_plot(sheet: dict[str, Any]) -> dict[str, Any]:
+    # 筋書きは話の時刻より先の筋も含むので、本文を書く材料には渡さない(枠・プロットを作る AI の材料には残す)
+    return {key: value for key, value in sheet.items() if key != "筋書き"}
 
 
 class CharacterEpisodesSerialized(Material):
@@ -242,10 +243,6 @@ class EpisodeBrief(Material):
     mentioned: list[MentionedMaterial]
     # 登場人物・名前だけ出る人物の芯・来歴を誰が知っているか。人物 id ごと
     secrets: dict[int, CharacterSecrets]
-    # 登場人物どうしの関係(場にいない人物との関係は入れない)
-    relations: list[CharacterRelationLine]
-    # 登場人物それぞれが、この話より前に関わった話(作品を問わない)。古い順
-    appearances: list[CharacterEpisode]
     # プロット・話のセッションの行・今の本文から挙げた語に当たったアイデアとその上位、足した候補。
     # 呼び名は話の時刻・場所に効く履歴から。履歴の行は話の時刻までに始まったものをすべて添える
     ideas: list[WholeIdeaMaterial]
@@ -286,13 +283,11 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "場所(広い順)": [{**_place(location), **line}
                                for location, line in zip(self.locations, _location_lines(self.locations))],
                 "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
-                "登場人物": [{"人物id": member.character.id, **member.model_dump(),
-                          **secrets_for_prompt(self.secrets[member.character.id]),
-                          "関わった話(古い順)": _appearances(self.appearances, member.character.id)}
+                "登場人物": [{"人物id": member.character.id, **_without_plot(member.model_dump()),
+                          **secrets_for_prompt(self.secrets[member.character.id])}
                          for member in self.cast],
-                "名前だけ出る人物": [{"人物id": member.character.id, **member.model_dump(),
+                "名前だけ出る人物": [{"人物id": member.character.id, **_without_plot(member.model_dump()),
                               **secrets_for_prompt(self.secrets[member.character.id])} for member in self.mentioned],
-                "登場人物の関係": relations_for_prompt(self.relations),
                 "設定": [{"アイデアid": whole.idea.id, **whole_idea_for_prompt(whole)} for whole in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,

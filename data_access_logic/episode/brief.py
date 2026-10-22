@@ -14,7 +14,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from data_access_logic.character.cast import (
-    candidate_at, cast_of, casting_candidate_at, mentioned_of, relations_among, secrets_at,
+    candidate_at, cast_of, casting_candidate_at, mentioned_of, secrets_at,
 )
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
@@ -25,7 +25,7 @@ from data_access_logic.episode.models import (
 from data_access_logic.episode.material import (
     known_locations, later_events_select, load_episode, location_events_select,
 )
-from data_access_logic.episode.past import appearances, recent_appearances, style_samples
+from data_access_logic.episode.past import recent_appearances, style_samples
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
@@ -92,7 +92,8 @@ def brief_targets(s: Session, episode_id: int) -> BriefTargets:
 
 
 def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeBriefSerialized:
-    """出来事の要約は作り直さず、そのまま読む。`keywords` の語をアイデアと照らし、当たったものとその上位を設定に渡す。
+    """出来事の要約は作り直さず、そのまま読む。`keywords` の語をアイデアと照らし、名前・呼び名に当たったものとその上位を
+    設定に渡す(本文にだけ語の出るアイデアは、語の指す事柄と別物のことが多いので渡さない)。
     当たらなかった造語は候補として足し、設定に入れる(`resolve_ideas`)。"""
     episode = _episode(s, episode_id)
     main_episode = BriefEpisode.model_validate(episode)
@@ -100,7 +101,7 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
     location_id = episode.location_id
     characters = cast_characters(episode)
     mentioned = mentioned_in(episode)
-    context = resolve_ideas(s, keywords, location_id, time)
+    context = resolve_ideas(s, keywords, location_id, time, names_only=True)
     idea_ids = [*(related.idea.id for related in context.related), *(candidate.id for candidate in context.candidates)]
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
@@ -110,8 +111,6 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned, time),
         secrets={character.id: secrets_at(s, character, time) for character in [*characters, *mentioned]},
-        relations=relations_among(s, characters, time),
-        appearances=appearances(s, episode, characters),
         ideas=whole_ideas(s, idea_ids, location_id, time),
         location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
         if location_id is not None else [],

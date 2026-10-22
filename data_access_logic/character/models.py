@@ -6,7 +6,8 @@ from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.history_start import start_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
-from data_access_logic.knowers import KnowerMaterial, knowers_for_prompt
+from data_access_logic import constants
+from data_access_logic.knowers import KnowerMaterial, secret_for_prompt
 from data_access_logic.material import Material, Timestamp
 from db.schema import PersonalityLevel
 
@@ -145,16 +146,27 @@ class CharacterSecrets(Material):
 
 
 def _dated_histories_for_prompt(histories: list[HistoryMaterial]) -> list[dict[str, Any]]:
-    return [{"時期": start_for_prompt(history.start), "来歴": history.description,
-             "知る相手": knowers_for_prompt(history.knowers)}
-            for history in histories]
+    lines = []
+    for history in histories:
+        secret = secret_for_prompt(history.knowers)
+        lines.append({"時期": start_for_prompt(history.start), "来歴": history.description,
+                      **({} if secret is None else {"秘密": secret})})
+    return lines
+
+
+def _brief_histories(histories: list[CharacterHistoryMaterial]) -> list[CharacterHistoryMaterial]:
+    # 筋に効くのは直近の出来事と今の装い・持ち物なので、古い出来事は渡さない
+    events = [history for history in histories if history.kind is None]
+    recent = {id(history) for history in events[-constants.EPISODE_BRIEF_HISTORY_LIMIT:]}
+    return [history for history in histories if history.kind is not None or id(history) in recent]
 
 
 def secrets_for_prompt(secrets: CharacterSecrets) -> dict[str, Any]:
-    """`_sheet` の来歴を、知る相手つきの行に置き換える。"""
+    """`_sheet` の来歴を、直近の行と、秘密の行には誰だけが知るかを添えた形に置き換える。"""
+    histories = _brief_histories(secrets.histories)
     return {
         "来歴(古い順)": [{"種別": history.kind, **line}
-                       for history, line in zip(secrets.histories, _dated_histories_for_prompt(secrets.histories))],
+                       for history, line in zip(histories, _dated_histories_for_prompt(histories))],
         "スキル": [{"名前": skill.name, "本質": skill.text, "来歴(古い順)": _dated_histories_for_prompt(skill.histories)}
                  for skill in secrets.skills],
     }
