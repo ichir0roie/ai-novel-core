@@ -23,7 +23,7 @@ _YEAR_RANGE = (4000, 5000)
 # 決めるが、ここは db にそれらしい見た目のダミー行を積むだけの目的なので、少ない候補からのサイコロでよい。
 _SEX_CHOICES = ("男", "女", "不定")
 _BUILD_CHOICES = ("細身", "小柄", "がっしり", "長身", "ふくよか", "痩身")
-_HISTORY_KIND_CHOICES = ("装い", "持ち物", "記憶", "隠し事")
+_HISTORY_KIND_CHOICES = ("持ち物", "記憶", "隠し事")
 _TONE_CHOICES = ("丁寧", "ぶっきらぼう", "早口", "のんびり", "無口", "高圧的")
 _FIRST_PERSON_CHOICES = ("わたし", "俺", "僕", "あたし", "自分", "うち")
 _SECOND_PERSON_CHOICES = ("あなた", "君", "お前", "そちら", "あんた")
@@ -188,6 +188,8 @@ class CharacterSkillFactory(_ModelFactory):
 
     character_id = _pool(Character, "CharacterFactory")
     name = factory.Faker("random_element", elements=_SKILL_NAMES)
+    # 空なら技・術・技能
+    kind = factory.LazyFunction(lambda: None if randgen.random() < 0.7 else "装い")
     text = _text()
 
 

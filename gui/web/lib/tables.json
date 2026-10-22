@@ -971,7 +971,7 @@
               "references": null,
               "readonly": false,
               "create_only": false,
-              "comment": "種別(装い・持ち物・記憶・隠し事など)。空なら起きた出来事"
+              "comment": "種別(持ち物・記憶・隠し事など)。空なら起きた出来事"
             },
             {
               "key": "description",
@@ -1201,6 +1201,21 @@
           "comment": "スキルの名前"
         },
         {
+          "key": "kind",
+          "type": "string",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "種別。「装い」なら身に着けている物で、見た人に知れる。空なら技・術・技能"
+        },
+        {
           "key": "text",
           "type": "string",
           "nullable": false,
@@ -1237,6 +1252,21 @@
               "comment": "起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・人物役には渡さない)"
             },
             {
+              "key": "end",
+              "type": "stamp",
+              "nullable": true,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": null,
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない"
+            },
+            {
               "key": "description",
               "type": "string",
               "nullable": false,
@@ -1252,7 +1282,7 @@
               "comment": "来歴(身につけた・伸びた・衰えたなど、作中で起きたこと)"
             }
           ],
-          "comment": "身につけた・伸びた・衰えたなどを、出来事ごとに一行で持つ。話・人物役には、その時刻までに始まった行だけを渡し、その時刻までに始まった行の無いスキルは、まだ持っていないものとして渡さない。時刻が空の行は構想で、作者だけが読む。行は知る相手だけが知る",
+          "comment": "身につけた・伸びた・衰えたなどを、出来事ごとに一行で持つ。話・人物役には、その時刻までに始まり終わっていない行だけを渡し、そうした行の無いスキルは、持っていないものとして渡さない。時刻が空の行は構想で、作者だけが読む。行は知る相手だけが知る",
           "display": "flow",
           "knowers": true
         }

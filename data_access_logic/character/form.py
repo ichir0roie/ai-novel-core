@@ -142,6 +142,8 @@ class CharacterRelationUpdateForm(Form):
 class CharacterSkillCreateForm(Form):
     character_id: int
     name: str = Field(min_length=1)
+    # 「装い」なら身に着けている物(見た人に知れる)。空なら技・術・技能
+    kind: str | None = None
     # スキルの本質(何ができるか・仕組み・限界)。作者だけが読む
     text: str = ""
     # スキルの来歴(起きた年ごとの行)
@@ -152,6 +154,7 @@ class CharacterSkillUpdateForm(Form):
     id: int
     character_id: int | None = None
     name: str | None = Field(default=None, min_length=1)
+    kind: str | None = None
     text: str | None = None
     # 渡せば来歴の行をまるごと置き換える
     histories: list[CharacterSkillHistoryRow] | None = None

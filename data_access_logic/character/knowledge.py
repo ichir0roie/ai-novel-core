@@ -8,8 +8,9 @@
 アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
 知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
 出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
-人物の来歴・場所の来歴はその時刻までに起きた行だけ(人物の来歴は、終わり `end` を過ぎた行も外す)。装い・持ち物・記憶・隠し事も種別を付けた人物の来歴の行なので、
-知る相手に当たる人物だけが知る。ただし装いは見た人にそのまま知れるので、その時刻に効いている装いの行(`outfit_at`)は見た目に入れる。場所の説明(`text`)は作者の目で書くものなので渡さない。
+人物の来歴・場所の来歴はその時刻までに起きた行だけ(人物の来歴・スキルの来歴は、終わり `end` を過ぎた行も外す)。持ち物・記憶・隠し事も種別を付けた人物の来歴の行なので、
+知る相手に当たる人物だけが知る。装いは種別「装い」のスキルで持ち、見た人にそのまま知れるので、その時刻に効いている行(`skills.outfit_at`)を
+見た目に入れ、スキルの一覧には入れない。場所の説明(`text`)は作者の目で書くものなので渡さない。
 期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
 スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
 人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
@@ -27,7 +28,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from data_access_logic.character.cast import age_at, relations_at
-from data_access_logic.character.histories import outfit_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, personality_for_prompt
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character import skills
@@ -157,9 +157,9 @@ class AppearanceSerialized(Material):
                 "体格": parameters.build, "装い": self.outfit, "外見": self.appearance}
 
 
-def appearance_of(character: Character, time: Stamp) -> AppearanceSerialized:
+def appearance_of(s: Session, character: Character, time: Stamp) -> AppearanceSerialized:
     return AppearanceSerialized(kind=character.kind, age=age_at(character, time),
-                                parameters=parameters_at(character, time), outfit=outfit_at(character, time),
+                                parameters=parameters_at(character, time), outfit=skills.outfit_at(s, character, time),
                                 appearance=character.appearance)
 
 
@@ -256,7 +256,7 @@ def _related_ids(s: Session, character: Character, time: Stamp) -> list[int]:
 def _skills(s: Session, character: Character, viewer: Viewer) -> list[KnownSkill]:
     """来歴の行を一つも知らないスキルは、持っていることも知らないので入れない。"""
     known = [KnownSkill(name=skill.name, histories=known_histories(skill.histories, viewer))
-             for skill in skills.skills_of(s, character.id)]
+             for skill in skills.techniques_of(s, character.id)]
     return [skill for skill in known if skill.histories]
 
 
@@ -335,12 +335,12 @@ def knowledge_of(
               if scene_ids is None or id_ in scene_ids]
     return KnowledgeSerialized(
         time=time,
-        me=KnownSelf(name=character.name, looks=appearance_of(character, time),
+        me=KnownSelf(name=character.name, looks=appearance_of(s, character, time),
                      text=character.text, meme=character.meme, principle=character.principle,
                      histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer)),
         parameters=parameters_at(character, time),
         relations=relations_at(s, [character], time, dated_alive_at),
-        characters=[KnownCharacter(name=other.name, looks=appearance_of(other, time),
+        characters=[KnownCharacter(name=other.name, looks=appearance_of(s, other, time),
                                    text=other.text,
                                    histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
                     for other in others],

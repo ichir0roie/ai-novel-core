@@ -6,7 +6,7 @@ from data_access_logic import constants
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.form import CharacterParameterForm
 from data_access_logic.character.models import PERSONALITY_LABELS, CharacterBase, CharacterParameterValues
-from data_access_logic.character.record import CharacterHistoryRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterSkillHistoryRow
 from data_access_logic.idea.models import IdeaMaterial
 from data_access_logic.location.models import LocationMaterial, LocationTextMaterial
 from data_access_logic.material import Material
@@ -389,6 +389,8 @@ class CharacterCreation(Material):
     name: str
     kind: str
     writing: CharacterWriting
+    # 生んだ時刻からの装い(装いのスキルの来歴の行)。人物以外・装いの無い人物は空
+    outfit: CharacterSkillHistoryRow | None = None
     main_character: bool
     parameters: CharacterParameterValues
     birth: Stamp

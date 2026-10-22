@@ -1,7 +1,7 @@
 """語り部(話を書くセッションの Claude)が手番を回すときに読む材料。
 
 語り部の受け持ちはプロットと場所・時刻と人物の表層なので、話のプロット・時刻、場所、登場人物の外から見て分かること
-(名前・年齢・性別・体格・装い・外見)と、登場人物のだれとだれが知り合いか(関係の名前だけ)を渡す。装いは、話の時刻に効いている装いの来歴の行(身に着けている物ごと)。
+(名前・年齢・性別・体格・装い・外見)と、登場人物のだれとだれが知り合いか(関係の名前だけ)を渡す。装いは、話の時刻に効いている装いのスキルの来歴の行(身に着けている物ごと)。
 人物の芯・来歴(持ち物・記憶・隠し事の行も含む)、関係の説明・来歴、設定(アイデア)、前の話・本文は渡さない。人物の内側と、人物がこれまでに何をしたかは、
 人物役が自分の知ることのできるデータ(`character/knowledge.py`)から動いて出す。
 本文は手番を終えたあと、本体の Claude が本文の材料(`episode/brief.py`)を読んで書く。
@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from data_access_logic.character.cast import age_at, relations_at
-from data_access_logic.character.histories import outfit_at
+from data_access_logic.character.skills import outfit_at
 from data_access_logic.character.models import CharacterMaterial, CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.episode.mentions import cast_characters
@@ -109,7 +109,7 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         location=location_at(common_query.get_row(s, Location, location_id), time) if location_id is not None else None,
         cast=[StageMember(character=character, age=age_at(character, time), parameters=parameters_at(character, time),
-                          outfit=outfit_at(character, time))
+                          outfit=outfit_at(s, character, time))
               for character in cast_characters(episode)],
         relations=_cast_relations(s, episode, time),
     )

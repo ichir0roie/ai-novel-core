@@ -22,4 +22,4 @@ class ReadAppearance(SessionEntrypoint):
         time = Stamp.parse(self.time)
         if time is None:
             raise ValueError(f"時刻が読めない: {self.time!r}")
-        return appearance_of(common_query.get_row(s, Character, self.character_id), time)
+        return appearance_of(s, common_query.get_row(s, Character, self.character_id), time)

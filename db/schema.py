@@ -668,8 +668,8 @@ class CharacterHistory(Base):
     """人物の来歴を、起きた出来事ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
     時が進むにつれて起きたこと・変わった立場・境遇などを、起きた時刻を `start` にした行として書き足す。
-    装い・持ち物・記憶・隠し事のように出来事でないものも、種別(`kind`)を付けた行で持つ。装いは身に着けた物ごとに一行にし、
-    外した・失った時刻を `end` にする(その時刻に効いている装いの行をすべて重ねたものが見た目になる)。
+    持ち物・記憶・隠し事のように出来事でないものも、種別(`kind`)を付けた行で持ち、失った・忘れた時刻を `end` にする。
+    装いはここでなく、種別「装い」のスキル(CharacterSkill)で持つ。
     一つの行に時期の違う出来事をまとめない(同じ年でも、後の出来事が前の時刻の話に漏れ、知る相手も分けられなくなる)。
     ある時刻の話・出来事には、その時刻までに始まり、まだ終わっていない行だけを渡す(`data_access_logic/character/histories.py`)ので、
     先の時刻の行を書き足しても、それより前の話・出来事には効かない。
@@ -687,7 +687,7 @@ class CharacterHistory(Base):
     end: Mapped[Stamp | None] = mapped_column(
         StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=115)
     kind: Mapped[str | None] = mapped_column(
-        String, comment="種別(装い・持ち物・記憶・隠し事など)。空なら起きた出来事", sort_order=120)
+        String, comment="種別(持ち物・記憶・隠し事など)。空なら起きた出来事", sort_order=120)
     description: Mapped[str] = mapped_column(String, nullable=False, comment="来歴", sort_order=130)
 
     character: Mapped[Character] = relationship(back_populates="histories", lazy="noload")
@@ -714,11 +714,13 @@ class CharacterHistoryKnower(KnowerMixin, Base):
 
 
 class CharacterSkill(TextBase):
-    """人物の持つスキル(技・術・技能)を一行で持つ。
+    """人物の持つスキル(技・術・技能)と装い(身に着けている物)を一行で持つ。
 
     本文(`text`)はスキルの本質(何ができるか・仕組み・限界)で、アイデアの本文と同じく作者(語り部と、話を書くセッションの Claude)
     だけが読み、人物役にも AI の生成にも渡さない。身につけた・伸びた・衰えたなど、作中で起きたことは、人物の来歴と同じく
     起きた出来事ごとの行(CharacterSkillHistory)に積み、入口では `histories` の配列で出し入れする。人物が知るのはその行だけ。
+    種別(`kind`)が「装い」の行は、身に着けている物一つ(外套・剣など)で、来歴の行は、着けた・傷んだ・手放したなどの移り変わり。
+    装いは見た人にそのまま知れるので、その時刻に効いている来歴の行は、知る相手に関わらず見た目として渡す。
     """
 
     __tablename__ = "character_skill"
@@ -726,6 +728,8 @@ class CharacterSkill(TextBase):
     character_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("character.id"), index=True, nullable=False, comment="スキルを持つ人物", sort_order=100)
     name: Mapped[str] = mapped_column(String, nullable=False, comment="スキルの名前", sort_order=200)
+    kind: Mapped[str | None] = mapped_column(
+        String, comment="種別。「装い」なら身に着けている物で、見た人に知れる。空なら技・術・技能", sort_order=210)
     text: Mapped[str] = mapped_column(
         String, nullable=False, comment="スキルの本質(何ができるか・仕組み・限界)。作者だけが読み、人物役には渡さない",
         sort_order=10000)
@@ -737,16 +741,17 @@ class CharacterSkill(TextBase):
     histories: Mapped[list["CharacterSkillHistory"]] = relationship(
         back_populates="skill", lazy="selectin", cascade="all, delete-orphan",
         order_by="CharacterSkillHistory.start.desc().nulls_last()",
-        doc="身につけた・伸びた・衰えたなどを、出来事ごとに一行で持つ。話・人物役には、その時刻までに始まった行だけを渡し、"
-        "その時刻までに始まった行の無いスキルは、まだ持っていないものとして渡さない。時刻が空の行は構想で、作者だけが読む。"
+        doc="身につけた・伸びた・衰えたなどを、出来事ごとに一行で持つ。話・人物役には、その時刻までに始まり終わっていない行だけを渡し、"
+        "そうした行の無いスキルは、持っていないものとして渡さない。時刻が空の行は構想で、作者だけが読む。"
         "行は知る相手だけが知る")
 
 
 class CharacterSkillHistory(Base):
     """スキルの来歴を、起きた出来事ごとの一行で持つ子テーブル。スキルの本質は `CharacterSkill.text` に持つ。
 
-    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻までに始まった行だけを渡すので、
+    人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻までに始まり、まだ終わっていない行だけを渡すので、
     先の時刻の行を書き足しても、それより前には効かない。`start` が空の行は、起きる時期がまだ決まっていない構想で、作者が読むときだけ出す。
+    時とともに変わる(伸びた・衰えた・傷んだ)ときは、前の行を変わった時刻で終え(`end`)、変わった後の行を足す。
     行は、知る相手(`knowers`)に当たる人物だけが知る(本人も、知る相手に入っていなければ知らない)。
     """
 
@@ -757,6 +762,8 @@ class CharacterSkillHistory(Base):
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="起きた時刻(この来歴が効き始める時刻)。空なら時期が決まっていない(話・人物役には渡さない)",
         sort_order=110)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="効き終わる時刻(この時刻からは効かない)。空なら終わりを限らない", sort_order=115)
     description: Mapped[str] = mapped_column(
         String, nullable=False, comment="来歴(身につけた・伸びた・衰えたなど、作中で起きたこと)", sort_order=120)
 
@@ -767,7 +774,7 @@ class CharacterSkillHistory(Base):
         order_by="CharacterSkillHistoryKnower.id")
 
     def covers(self, time: Stamp) -> bool:
-        return self.start is not None and self.start <= time
+        return self.start is not None and self.start <= time and (self.end is None or time < self.end)
 
 
 class CharacterSkillHistoryKnower(KnowerMixin, Base):
