@@ -71,14 +71,15 @@ def _related(s: Session, hits: list[IdeaMaterial], time: Stamp | None) -> list[I
 
 
 def resolve_ideas(
-    s: Session, keywords: list[IdeaDraft], location_id: int | None, time: Stamp | None,
+    s: Session, keywords: list[IdeaDraft], location_id: int | None, time: Stamp | None, names_only: bool = False,
 ) -> IdeaContextSerialized:
     """洗い出した語をアイデアと照らし、当たらなかった固有の語を候補として足す。
+    `names_only` なら、名前・呼び名に当たったアイデアだけを当たりにする(`search`)。
 
     足す候補の効く期間は、履歴の行の語の `start` / `end`(時期のはっきりしない語は `time` から)。
     """
     idea_drafts = unique_ideas(keywords)
-    hits = search(s, idea_drafts, location_id, time)
+    hits = search(s, idea_drafts, location_id, time, names_only=names_only)
 
     matched = {keyword for hit in hits for keyword in hit.keywords}
     candidates: dict[int, Idea] = {}

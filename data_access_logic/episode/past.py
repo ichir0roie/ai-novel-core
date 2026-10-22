@@ -4,8 +4,8 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, defer, joinedload
 
 from data_access_logic import constants
-from data_access_logic.episode.models import CharacterEpisode, CharacterEpisodeText, RecentEpisode
-from db.schema import Character, Episode, EpisodeCharacter, Story
+from data_access_logic.episode.models import CharacterEpisodeText, RecentEpisode
+from db.schema import Episode, EpisodeCharacter, Story
 
 
 def _before[Q: Select](query: Q, episode: Episode) -> Q:
@@ -81,15 +81,3 @@ def recent_appearances(s: Session, episode: Episode, character_id: int) -> list[
     ).all()
     return [CharacterEpisodeText.model_validate(link) for link in reversed(links)]
 
-
-def appearances(s: Session, episode: Episode, characters: list[Character]) -> list[CharacterEpisode]:
-    """人物ごとの、この話より前に関わった話(作品を問わない)。古い順。本文・プロットは読まない。"""
-    links = s.scalars(
-        _before(select(EpisodeCharacter).join(EpisodeCharacter.episode), episode)
-        .where(EpisodeCharacter.character_id.in_([character.id for character in characters]))
-        .options(joinedload(EpisodeCharacter.episode).options(
-            defer(Episode.main_text), defer(Episode.plot_text), joinedload(Episode.story)))
-        .order_by(Episode.start.nulls_last(), Episode.id)
-        .execution_options(populate_existing=True)
-    ).all()
-    return [CharacterEpisode.model_validate(link) for link in links]

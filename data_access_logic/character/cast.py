@@ -41,12 +41,6 @@ def relations_at(
         [character.id for character in characters], time, period)).all(), time)
 
 
-def relations_among(s: Session, characters: list[Character], time: Stamp) -> list[CharacterRelationLine]:
-    """`characters` の人物どうしの関係だけ(場にいない人物との関係は入れない)。来歴は `relations_at` と同じ。"""
-    return _relation_lines(s.scalars(common_query.character_relations_among_select(
-        [character.id for character in characters], time)).all(), time)
-
-
 def _relation_lines(rows: Sequence[CharacterRelation], time: Stamp) -> list[CharacterRelationLine]:
     return [
         CharacterRelationLine(

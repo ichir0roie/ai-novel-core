@@ -428,7 +428,7 @@ def test_read_knowledge_skips_unrelated_cast(shown, world):
 
 
 def _secrets(shown, world) -> None:
-    """花子に知る相手の違う来歴を、関係に来歴を、アイデアに知る相手の違う履歴を足す(話の時刻は 1200 年)。"""
+    """花子に知る相手の違う来歴を、アイデアに知る相手の違う履歴を足す(話の時刻は 1200 年)。"""
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(
         id=hanako, appearance="髪が赤い",
@@ -437,28 +437,22 @@ def _secrets(shown, world) -> None:
             CharacterHistoryRow(start=1195, description="花子の秘密",
                                 knowers=[KnowerRow(knower_id=hanako), KnowerRow(knower_id=taro, start="1201/01/01")]),
             CharacterHistoryRow(start=1250, description="先のこと")])))
-    shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, histories=[
-        CharacterRelationHistoryRow(start=1195, description="市で再会する")])))
     shown(UpdateIdea(IdeaUpdateForm(id=world.idea_id, histories=[
         IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="テスト術", detail="都での呼び名"),
         IdeaHistoryRow(name="術の真名", knowers=[KnowerRow(knower_id=taro)]),
         IdeaHistoryRow(start="1300/01/01", name="先の呼び名")])))
 
 
-# 作者の目で読む材料には、来歴・履歴を知る相手に関わらずすべて渡し、話の時刻までに知った相手を添える。
-# 話の時刻より後に始まる来歴・履歴と、後で知る相手は出さない
+# 作者の目で読む材料には、来歴・履歴を知る相手に関わらずすべて渡し、知る相手が人物に限られた行には、
+# 話の時刻までに知った人物を「秘密」として添える。話の時刻より後に始まる来歴・履歴と、後で知る相手は出さない
 HANAKO_HISTORIES = [
     # 今ある行を書き換えた行なので、知る相手は今のまま(無い)
-    {"時期": "1190/01/01", "種別": None, "来歴": "花子が店を開く", "知る相手": []},
-    {"時期": "1195/01/01", "種別": None, "来歴": "花子の秘密",
-     "知る相手": [{"人物": "テスト花子", "場所": None, "知った時刻": "1170/01/01 00:00:00"}]}]
+    {"種別": None, "時期": "1190/01/01", "来歴": "花子が店を開く", "秘密": "作中の誰も知らない"},
+    {"種別": None, "時期": "1195/01/01", "来歴": "花子の秘密", "秘密": "テスト花子だけが知る"}]
 IDEA_HISTORIES = [
-    {"呼び名": "術の真名", "受け止め方": None, "効く場所": None, "始まり": None, "終わり": None,
-     "知る相手": [{"人物": "テスト太郎", "場所": None, "知った時刻": "1170/01/01 00:00:00"}]},
+    {"呼び名": "術の真名", "受け止め方": None, "効く場所": None, "始まり": None, "終わり": None, "秘密": "テスト太郎だけが知る"},
     {"呼び名": "テスト術", "受け止め方": "都での呼び名", "効く場所": "テスト都", "始まり": "1150/01/01 00:00:00", "終わり": None,
-     "知る相手": []}]
-RELATIONS = [{"誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ", "説明": "同じ通りで育った",
-              "来歴(古い順)": [{"時期": "1195/01/01", "来歴": "市で再会する"}]}]
+     "秘密": "作中の誰も知らない"}]
 
 
 def test_read_stage(shown, world):
@@ -531,7 +525,9 @@ def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
     episode = result["この話"]
     hanako_row = next(member for member in episode["登場人物"] if member["人物id"] == hanako)
     assert hanako_row["来歴(古い順)"] == HANAKO_HISTORIES
-    assert episode["登場人物の関係"] == RELATIONS
+    # 本文を書く材料には、話の時刻より先の筋(筋書き)・関わった話・関係を渡さない
+    assert "筋書き" not in hanako_row
+    assert not {"関わった話(古い順)", "登場人物の関係"} & set(episode)
     # 語はプロットと話のセッションの行から、元ごとに挙げる
     assert any("市で出会う" in prompt for prompt in sources)
     assert any("テスト術で灯をともす" in prompt for prompt in sources)
@@ -932,12 +928,37 @@ def test_read_knowledge_tells_only_the_people_in_the_scene(shown, world):
     assert [character["名前"] for character in by_time["知っている人物"]] == ["テスト花子", "テスト次郎"]
 
 
-def test_read_episode_brief_relations_only_among_the_cast(shown, world, mock_ai):
-    _off_stage_acquaintance(shown, world)
+def test_read_episode_brief_recent_histories(shown, world, mock_ai):
+    _, hanako = world.character_ids
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
+        CharacterHistoryRow(start=1180, kind="装い", description="灰色の外套"),
+        *(CharacterHistoryRow(start=1190 + year, description=f"出来事{year}") for year in range(7))])))
 
-    relations = shown(ReadEpisodeBrief(episode_id=world.episode_id))["この話"]["登場人物の関係"]
+    result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
-    assert [(relation["誰から"], relation["誰へ"]) for relation in relations] == [("テスト太郎", "テスト花子")]
+    hanako_row = next(member for member in result["この話"]["登場人物"] if member["人物id"] == hanako)
+    # 出来事の行は新しいほうから決まった数だけ、種別の付いた行は古くても効いていれば渡す
+    limit = constants.EPISODE_BRIEF_HISTORY_LIMIT
+    assert [row["来歴"] for row in hanako_row["来歴(古い順)"]] == [
+        "灰色の外套", *(f"出来事{year}" for year in range(7 - limit, 7))]
+
+
+def test_read_episode_brief_ideas_by_name_only(shown, world, mock_ai, monkeypatch):
+    other = shown(CommitIdea(IdeaCreateForm(name="都の灯台", kind="施設", text="テスト術で灯す台", histories=[
+        IdeaHistoryRow(location_id=world.location_id, start="1150/01/01", name="都の灯台")])))
+
+    def generate(prompt, output, *args, **kwargs):
+        if output is IdeaDraftsByAI:
+            return output(ideas=[IdeaDraftByAI(keyword="テスト術", variants=[], description="灯をともす術", coined=True,
+                                               kind="技術", start=None, end=None)])
+        return mock_ai.generate(prompt, output, *args, **kwargs)
+    monkeypatch.setattr(ai_client, "generate", generate)
+
+    ideas = {idea["アイデアid"] for idea in shown(ReadEpisodeBrief(episode_id=world.episode_id))["この話"]["設定"]}
+
+    # 語が説明の文にだけ出るアイデアは、語の指す事柄と別物のことが多いので渡さない
+    assert world.idea_id in ideas
+    assert other["id"] not in ideas
 
 
 def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatch):

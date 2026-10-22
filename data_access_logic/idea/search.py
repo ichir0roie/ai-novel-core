@@ -84,12 +84,12 @@ def _score(idea: Idea, keyword: list[str], variants: list[str]) -> int:
 
 def search(
     s: Session, keywords: list[IdeaDraft], location_id: int | None = None, time: Stamp | None = None,
-    limit: int | None = None,
+    limit: int | None = None, names_only: bool = False,
 ) -> list[IdeaHit]:
     """キーワードと言い換えで引いたアイデアを、当たり方の強い順に返す。
 
     名前にキーワードが入っていれば 3、言い換えが入っていれば 2、本文にだけ入っていれば 1 を、キーワードごとに足す。
-    `location_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。
+    `location_id` / `time` を渡すと、その場所・時刻で効くアイデアに絞る。`names_only` なら、本文にだけ当たったものは返さない。
     """
     location_ids = common_query.idea_scope_ids(s, location_id) if location_id is not None else None
     scores: dict[int, tuple[Idea, int, list[str]]] = {}
@@ -98,7 +98,7 @@ def search(
         for idea in s.scalars(dictionary_query.ideas_by_keywords_select(
                 keyword + variants, location_ids, time)).all():
             score = _score(idea, keyword, variants)
-            if not score:
+            if not score or (names_only and score == _TEXT_SCORE):
                 continue
             _, total, matched = scores.get(idea.id, (idea, 0, []))
             scores[idea.id] = (idea, total + score, [*matched, idea_draft.keyword])

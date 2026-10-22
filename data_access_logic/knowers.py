@@ -1,6 +1,6 @@
 """本文・来歴を知る相手の行(`db/schema.py` の `KnowerMixin`)。入口の引数とレスポンスの両方に使う。"""
 from collections.abc import Sequence
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import ConfigDict, model_validator
 from sqlalchemy.orm import Session
@@ -47,8 +47,10 @@ def knowers_at(s: Session, knowers: Sequence[KnowerMixin], time: Stamp) -> list[
             for knower in knowers if knower.start is None or knower.start <= time]
 
 
-def knowers_for_prompt(knowers: list[KnowerMaterial]) -> list[dict[str, Any]]:
-    return [{"人物": None if knower.knower is None else knower.knower.name,
-             "場所": None if knower.location is None else knower.location.name,
-             "知った時刻": None if knower.start is None else str(knower.start)}
-            for knower in knowers]
+def secret_for_prompt(knowers: list[KnowerMaterial]) -> str | None:
+    """本文を書く Claude には、誰がいつ知ったかの一覧でなく、知る相手が人物に限られた行(秘密)かだけを渡す。
+    場所が知る相手に入っていれば、そこに住む者に知れ渡っているので秘密ではない(None)。"""
+    if any(knower.location is not None for knower in knowers):
+        return None
+    names = list(dict.fromkeys(knower.knower.name for knower in knowers if knower.knower is not None and knower.knower.name))
+    return f"{'・'.join(names)}だけが知る" if names else "作中の誰も知らない"

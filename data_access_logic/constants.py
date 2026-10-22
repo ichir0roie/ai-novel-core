@@ -85,6 +85,9 @@ EPISODE_STYLE_SAMPLE_LETTERS = 12000
 EPISODE_RECENT_APPEARANCE_COUNT = 5
 # 登場人物一人ぶんに渡す、直近の出来事の件数。
 EPISODE_CHARACTER_EVENT_LIMIT = 3
+# 本文の材料に、登場人物一人ぶんの来歴の出来事の行(種別の無い行)を、新しいほうからいくつまで渡すか。
+# 装い・持ち物など種別の付いた行は、その時刻に効いているものをすべて渡す
+EPISODE_BRIEF_HISTORY_LIMIT = 5
 # 話の場所で起きた直近の出来事を、いくつまで渡すか。
 EPISODE_PLACE_EVENT_LIMIT = 3
 
