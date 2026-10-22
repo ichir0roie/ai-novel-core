@@ -45,9 +45,9 @@ class CharacterLocationRow(_ChildRow):
 class CharacterHistoryRow(_ChildRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
     start: Timestamp | None = None
-    # 効き終わる時刻(外した装い・失った持ち物など)。この時刻からは話・出来事に渡さない。空なら終わりを限らない
+    # 効き終わる時刻(失った持ち物・忘れた記憶など)。この時刻からは話・出来事に渡さない。空なら終わりを限らない
     end: Timestamp | None = None
-    # 装い・持ち物・記憶・隠し事など。空なら起きた出来事
+    # 持ち物・記憶・隠し事など。空なら起きた出来事。装いはスキル(種別「装い」)で持つ
     kind: str | None = None
     description: str
     # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行は本人だけ、
@@ -58,6 +58,8 @@ class CharacterHistoryRow(_ChildRow):
 class CharacterSkillHistoryRow(_ChildRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・人物役には渡さない)
     start: Timestamp | None = None
+    # 効き終わる時刻(衰えた・手放した・別の行に移り変わったなど)。この時刻からは話・人物役に渡さない。空なら終わりを限らない
+    end: Timestamp | None = None
     description: str
     # 知る相手。この相手だけが来歴を知る(本人も、入れなければ知らない)。渡さなければ、新しい行はスキルを持つ本人だけ、
     # 今ある行はそのまま(`db/child_lists.py` の `replaced_histories`)
@@ -119,6 +121,8 @@ class CharacterSkillRecord(Material):
     id: int
     character_id: int
     name: str
+    # 「装い」なら身に着けている物。空なら技・術・技能
+    kind: str | None = None
     # すべての来歴の行。話・人物役に渡すときは、その時刻までに起きた行だけに絞る(`skills.skills_at`)
     histories: list[CharacterSkillHistoryRow]
     # スキルの本質。作者だけが読む

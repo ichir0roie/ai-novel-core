@@ -98,11 +98,14 @@ def test_episode_brief_has_skills_with_knowers(shown, world):
         CharacterSkillHistoryRow(start=1250, description="先に覚えること")])))
     shown(CommitCharacterSkill(CharacterSkillCreateForm(character_id=hanako, name="テスト未来の技", histories=[
         CharacterSkillHistoryRow(start=1250, description="後で覚える")])))
+    shown(CommitCharacterSkill(CharacterSkillCreateForm(character_id=hanako, name="テスト失った技", histories=[
+        CharacterSkillHistoryRow(start=1180, end=1195, description="火を起こす")])))
 
     result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
     hanako_row = next(member for member in result["この話"]["登場人物"] if member["人物id"] == hanako)
-    # 作者には、知る相手に関わらず話の時刻までに始まった行を、本質と誰だけが知るかを添えて渡す。まだ持っていないスキルは渡さない
+    # 作者には、知る相手に関わらず話の時刻に効いている行を、本質と誰だけが知るかを添えて渡す。
+    # まだ持っていないスキルと、終わり(`end`)を過ぎて失ったスキルは渡さない
     assert hanako_row["スキル"] == [{"名前": "テスト治癒", "本質": "傷の治りを早める", "来歴(古い順)": [
         {"時期": "1190/01/01", "来歴": "傷をふさぐ", "秘密": "テスト太郎だけが知る"}]}]
 

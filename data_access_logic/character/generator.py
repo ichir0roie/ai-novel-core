@@ -26,13 +26,14 @@ from data_access_logic.character.generator_models import (
     CharacterNameMaterialSerialized, CharacterWriting, CompletionTarget, HistoryItemDraft, NearbyCharacter, NonPersonContentDraft,
     PersonContentDraft, PersonNameDraft, StoryElementsDraft, StoryElementsRequestSerialized,
 )
-from data_access_logic.character.histories import OUTFIT_KIND, add_history, histories_at
+from data_access_logic.character.histories import add_history, histories_at
+from data_access_logic.character.skills import OUTFIT_KIND
 from data_access_logic.character.consistency import Reconciled, reconciled
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.naming import named
 from data_access_logic.character.form import CharacterParameterForm
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at
-from data_access_logic.character.record import CharacterHistoryRow
+from data_access_logic.character.record import CharacterHistoryRow, CharacterSkillHistoryRow
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial
 from data_access_logic.meme.extractor import draw_from, meme_pool, position_legend
 from data_access_logic.meme.models import DrawnMeme
@@ -40,7 +41,8 @@ from data_access_logic.query import common_query, dictionary_query, story_creati
 from data_access_logic.story.models import StoryPlotMaterial
 from db.child_lists import replaced_histories
 from db.schema import (
-    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, Location, StyleScope,
+    CHARACTER_KIND_PERSON, PERSONALITY_LEVELS, Character, CharacterHistory, CharacterLocation, CharacterSkill,
+    CharacterSkillHistory, Location, StyleScope,
 )
 from db.stamp import Stamp
 
@@ -287,10 +289,9 @@ def character_creation(
         parameters.family_name = parameters.family_name or draft.family_name or None
 
     writing = _writing(fixed, material.memes, material.time, decided.age, name)
-    if isinstance(decided.content, PersonContentDraft) and decided.content.outfit:
-        # 装いは列で持たず、生んだ時刻から始まる種別の来歴の行で持つ
-        writing.histories.append(CharacterHistoryRow(
-            start=material.time, kind=OUTFIT_KIND, description=decided.content.outfit))
+    # 装いは列で持たず、生んだ時刻から始まる来歴の行を一つ持つ装いのスキルで持つ
+    outfit = (CharacterSkillHistoryRow(start=material.time, description=decided.content.outfit)
+              if isinstance(decided.content, PersonContentDraft) and decided.content.outfit else None)
 
     location_label = (f"{material.born_location.name}(id={material.born_location.id})" if material.born_location else "不明")
     logger.info(f"{material.time} 生成: {name} 種別={decided.kind} 出自={location_label} 年齢={decided.age}\n"
@@ -300,6 +301,7 @@ def character_creation(
         name=name,
         kind=decided.kind,
         writing=writing,
+        outfit=outfit,
         main_character=bool(form and form.main_character),
         parameters=parameters,
         birth=Stamp(material.time.year - decided.age),
@@ -324,6 +326,9 @@ def save_character(s: Session, creation: CharacterCreation) -> Character:
     record.histories = replaced_histories([], creation.writing.histories, CharacterHistory, owner=record)
     s.add(record)
     s.flush()
+    if creation.outfit is not None:
+        s.add(CharacterSkill(character_id=record.id, kind=OUTFIT_KIND, name=creation.outfit.description, text="",
+                             histories=replaced_histories([], [creation.outfit], CharacterSkillHistory, owner=record)))
     if creation.born_location_id is not None:
         s.add(CharacterLocation(character_id=record.id, location_id=creation.born_location_id,
                                 start=record.start, end=record.end))

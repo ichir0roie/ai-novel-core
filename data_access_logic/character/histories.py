@@ -6,9 +6,6 @@ from data_access_logic.history_start import by_start, start_for_prompt
 from db.schema import Character, CharacterHistory, CharacterHistoryKnower
 from db.stamp import Stamp
 
-# 装いの来歴の種別。装いは見た人にそのまま知れるので、この種別のその時刻に効く行は知る相手に関わらず見た目として渡す(`outfit_at`)
-OUTFIT_KIND = "装い"
-
 
 def rows_at(character: Character, time: Stamp | None) -> list[CharacterHistory]:
     """時刻までに始まり、まだ終わっていない行を、始まりの古い順に返す。時刻が空ならすべての行(作者が読むとき。時期未定の行は最後)。
@@ -21,11 +18,6 @@ def rows_at(character: Character, time: Stamp | None) -> list[CharacterHistory]:
 
 def histories_at(character: Character, time: Stamp | None) -> list[CharacterHistoryRow]:
     return [CharacterHistoryRow.model_validate(row) for row in rows_at(character, time)]
-
-
-def outfit_at(character: Character, time: Stamp) -> list[str]:
-    """時刻に効いている装いの行(身に着けている物ごとの一行)を、始まりの古い順に。"""
-    return [row.description for row in rows_at(character, time) if row.kind == OUTFIT_KIND]
 
 
 def _known_only_by(row: CharacterHistory, character: Character) -> bool:

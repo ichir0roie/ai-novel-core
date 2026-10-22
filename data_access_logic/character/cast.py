@@ -84,9 +84,10 @@ def _skill_history_material(s: Session, row: CharacterSkillHistory, time: Stamp)
 
 
 def secrets_at(s: Session, character: Character, time: Stamp) -> CharacterSecrets:
-    skill_rows = [(skill, skills.rows_at(skill, time)) for skill in skills.skills_of(s, character.id)]
+    skill_rows = [(skill, skills.rows_at(skill, time)) for skill in skills.techniques_of(s, character.id)]
     return CharacterSecrets(
         histories=[_history_material(s, row, time) for row in rows_at(character, time)],
+        outfit=skills.outfit_at(s, character, time),
         skills=[CharacterSkillMaterial(name=skill.name, text=skill.text,
                                        histories=[_skill_history_material(s, row, time) for row in rows])
                 for skill, rows in skill_rows if rows],

@@ -122,7 +122,7 @@ class HistoryMaterial(Material):
 class CharacterHistoryMaterial(HistoryMaterial):
     """作者の目で読む人物の来歴の行。"""
 
-    # 装い・持ち物・記憶・隠し事など。空なら起きた出来事
+    # 持ち物・記憶・隠し事など。空なら起きた出来事
     kind: str | None = None
 
 
@@ -141,7 +141,9 @@ class CharacterSecrets(Material):
 
     # その時刻までに起きて、まだ終わっていない来歴(`histories.rows_at`)。知る相手に関わらずすべて
     histories: list[CharacterHistoryMaterial]
-    # その時刻までに来歴の行が始まったスキル(まだ持っていないスキルは入らない)
+    # その時刻に身に着けている物(`skills.outfit_at`)。見た人に知れるので知る相手を添えない
+    outfit: list[str]
+    # その時刻に効いている来歴の行のあるスキル(持っていない・失ったスキルと、装いは入らない)
     skills: list[CharacterSkillMaterial]
 
 
@@ -155,18 +157,19 @@ def _dated_histories_for_prompt(histories: list[HistoryMaterial]) -> list[dict[s
 
 
 def _brief_histories(histories: list[CharacterHistoryMaterial]) -> list[CharacterHistoryMaterial]:
-    # 筋に効くのは直近の出来事と今の装い・持ち物なので、古い出来事は渡さない
+    # 筋に効くのは直近の出来事と今の持ち物などなので、古い出来事は渡さない
     events = [history for history in histories if history.kind is None]
     recent = {id(history) for history in events[-constants.EPISODE_BRIEF_HISTORY_LIMIT:]}
     return [history for history in histories if history.kind is not None or id(history) in recent]
 
 
 def secrets_for_prompt(secrets: CharacterSecrets) -> dict[str, Any]:
-    """`_sheet` の来歴を、直近の行と、秘密の行には誰だけが知るかを添えた形に置き換える。"""
+    """`_sheet` の来歴を、直近の行と、秘密の行には誰だけが知るかを添えた形に置き換え、装いとスキルを足す。"""
     histories = _brief_histories(secrets.histories)
     return {
         "来歴(古い順)": [{"種別": history.kind, **line}
                        for history, line in zip(histories, _dated_histories_for_prompt(histories))],
+        "装い": secrets.outfit,
         "スキル": [{"名前": skill.name, "本質": skill.text, "来歴(古い順)": _dated_histories_for_prompt(skill.histories)}
                  for skill in secrets.skills],
     }

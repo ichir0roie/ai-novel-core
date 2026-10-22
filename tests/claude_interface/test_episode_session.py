@@ -12,14 +12,18 @@ from data_access_logic.character.commit_character import CommitCharacter
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.character.form import (
-    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm, KnowledgeChange, KnowledgeForm,
+    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterSkillCreateForm, CharacterUpdateForm,
+    KnowledgeChange, KnowledgeForm,
 )
 from data_access_logic.character.read_appearance import ReadAppearance
 from data_access_logic.character.read_knowable_rows import ReadKnowableRows
 from data_access_logic.character.read_known_rows import ReadKnownRows
 from data_access_logic.character.read_knowledge import ReadKnowledge
 from data_access_logic.character.read_known_ideas import ReadKnownIdeas
-from data_access_logic.character.record import CharacterHistoryRow, CharacterParameterRow, CharacterRelationHistoryRow
+from data_access_logic.character.commit_character_skill import CommitCharacterSkill
+from data_access_logic.character.record import (
+    CharacterHistoryRow, CharacterParameterRow, CharacterRelationHistoryRow, CharacterSkillHistoryRow,
+)
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
@@ -380,40 +384,52 @@ def test_add_ideas_picks_a_kind_of_the_world(shown, world):
 HANAKO_PARAMETERS = [
     CharacterParameterRow(start="1170/01/01", sex="女", height=170.5, build="細身"),
     CharacterParameterRow(start="1210/01/01", build="肩の厚い体")]
-# 花子の装いは 1191 年から 1210 年まで木剣、1192 年から外套、1210 年から大剣。袋の短刀は本人だけが知る
+# 花子の装いは 1191 年から 1210 年まで木剣、1192 年から外套(1205 年に裾が焦げる)、1210 年から大剣
+HANAKO_OUTFITS = {
+    "木剣": [CharacterSkillHistoryRow(start="1191/01/01", end="1210/01/01", description="腰に木剣")],
+    "外套": [CharacterSkillHistoryRow(start="1192/01/01", end="1205/01/01", description="灰色の外套"),
+             CharacterSkillHistoryRow(start="1205/01/01", description="裾の焦げた灰色の外套")],
+    "大剣": [CharacterSkillHistoryRow(start="1210/01/01", description="背に大剣")]}
+# 袋の短刀は本人だけが知る
 # (1190 年には `world` の来歴の行があり、始まりの同じ行は今ある行を使い回して知る相手を引き継ぐので、年をずらす)
-HANAKO_OUTFITS = [
-    CharacterHistoryRow(start="1191/01/01", end="1210/01/01", kind="装い", description="腰に木剣"),
-    CharacterHistoryRow(start="1192/01/01", kind="装い", description="灰色の外套"),
-    CharacterHistoryRow(start="1195/01/01", kind="隠し事", description="袋に短刀"),
-    CharacterHistoryRow(start="1210/01/01", kind="装い", description="背に大剣")]
+HANAKO_SECRETS = [CharacterHistoryRow(start="1195/01/01", kind="隠し事", description="袋に短刀")]
+
+
+def _dress(shown, character_id: int) -> None:
+    for name, histories in HANAKO_OUTFITS.items():
+        shown(CommitCharacterSkill(CharacterSkillCreateForm(
+            character_id=character_id, name=name, kind="装い", histories=histories)))
 
 
 def test_read_appearance(shown, world):
     shown(UpdateCharacter(CharacterUpdateForm(
-        id=world.character_ids[1], appearance="髪が赤い", parameters=HANAKO_PARAMETERS, histories=HANAKO_OUTFITS)))
+        id=world.character_ids[1], appearance="髪が赤い", parameters=HANAKO_PARAMETERS)))
+    _dress(shown, world.character_ids[1])
 
     result = shown(ReadAppearance(character_id=world.character_ids[1], time="1200/01/01"))
     later = shown(ReadAppearance(character_id=world.character_ids[1], time="1220/01/01"))
     before = shown(ReadAppearance(character_id=world.character_ids[1], time="1180/01/01"))
 
-    # 体格は、その時刻までに始まった一番新しい行の値。装いは、その時刻に効いている装いの来歴の行すべて(隠し事は入らない)
+    # 体格は、その時刻までに始まった一番新しい行の値。装いは、身に着けている物ごとに、その時刻に効いている来歴の行の文
     assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身",
                       "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
-    # 終わり(`end`)の時刻からは、その装いの行は効かない
-    assert (later["体格"], later["装い"]) == ("肩の厚い体", ["灰色の外套", "背に大剣"])
+    # 終わり(`end`)の時刻からは、その来歴の行は効かない(物を手放した・移り変わった)
+    assert (later["体格"], later["装い"]) == ("肩の厚い体", ["裾の焦げた灰色の外套", "背に大剣"])
     assert before["装い"] == []
 
 
 def test_read_knowledge_tells_kind_of_histories(shown, world):
     taro, hanako = world.character_ids
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=HANAKO_OUTFITS)))
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=HANAKO_SECRETS)))
+    _dress(shown, hanako)
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=hanako))
     others = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
-    # 種別の行は種別を頭に付けて渡し、隠し事は知る相手(本人)だけが知る
-    assert result["自分"]["来歴(古い順)"] == ["9年前、装い: 腰に木剣", "8年前、装い: 灰色の外套", "5年前、隠し事: 袋に短刀"]
+    # 種別の行は種別を頭に付けて渡し、隠し事は知る相手(本人)だけが知る。装いは見た目にだけ入れ、スキルには入れない
+    assert result["自分"]["来歴(古い順)"] == ["5年前、隠し事: 袋に短刀"]
+    assert result["自分"]["装い"] == ["腰に木剣", "灰色の外套"]
+    assert result["自分"]["スキル"] == []
     known = next(character for character in others["知っている人物"] if character["名前"] == "テスト花子")
     assert "5年前、隠し事: 袋に短刀" not in known["来歴(古い順)"]
     assert known["装い"] == ["腰に木剣", "灰色の外套"]
@@ -458,7 +474,8 @@ IDEA_HISTORIES = [
 def test_read_stage(shown, world):
     _, hanako = world.character_ids
     _secrets(shown, world)
-    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, parameters=HANAKO_PARAMETERS, histories=HANAKO_OUTFITS)))
+    shown(UpdateCharacter(CharacterUpdateForm(id=hanako, parameters=HANAKO_PARAMETERS)))
+    _dress(shown, hanako)
 
     result = shown(ReadStage(episode_id=world.episode_id))
 
@@ -931,8 +948,9 @@ def test_read_knowledge_tells_only_the_people_in_the_scene(shown, world):
 def test_read_episode_brief_recent_histories(shown, world, mock_ai):
     _, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
-        CharacterHistoryRow(start=1180, kind="装い", description="灰色の外套"),
+        CharacterHistoryRow(start=1180, kind="持ち物", description="母の形見の指輪"),
         *(CharacterHistoryRow(start=1190 + year, description=f"出来事{year}") for year in range(7))])))
+    _dress(shown, hanako)
 
     result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
@@ -940,7 +958,10 @@ def test_read_episode_brief_recent_histories(shown, world, mock_ai):
     # 出来事の行は新しいほうから決まった数だけ、種別の付いた行は古くても効いていれば渡す
     limit = constants.EPISODE_BRIEF_HISTORY_LIMIT
     assert [row["来歴"] for row in hanako_row["来歴(古い順)"]] == [
-        "灰色の外套", *(f"出来事{year}" for year in range(7 - limit, 7))]
+        "母の形見の指輪", *(f"出来事{year}" for year in range(7 - limit, 7))]
+    # 装いは身に着けている物ごとの今の姿で渡し、スキルには入れない
+    assert hanako_row["装い"] == ["腰に木剣", "灰色の外套"]
+    assert hanako_row["スキル"] == []
 
 
 def test_read_episode_brief_ideas_by_name_only(shown, world, mock_ai, monkeypatch):
