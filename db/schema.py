@@ -329,6 +329,8 @@ class StyleScope(enum.StrEnum):
     RELATION = "関係"
     # 人物役・対話役のエージェントが一手・返事(内心・行動・セリフ)を書く書き方
     ACTING = "人物役"
+    # 語り部(話を書くセッションの Claude)が手番の語り・要求を書き、場面を運ぶときの書き方と運び方
+    NARRATOR = "語り部"
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
