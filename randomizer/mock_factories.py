@@ -184,7 +184,7 @@ class CharacterSkillFactory(_ModelFactory):
 
     character_id = _pool(Character, "CharacterFactory")
     name = factory.Faker("random_element", elements=_SKILL_NAMES)
-    kind =factory.LazyFunction(lambda: None if randgen.random() < 0.7 else "装い")
+    kind = factory.LazyFunction(lambda: None if randgen.random() < 0.7 else "装い")
     text = _text()
 
 

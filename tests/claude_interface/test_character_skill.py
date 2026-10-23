@@ -131,7 +131,7 @@ def test_update_knowledge_of_skill_histories(shown, world):
     assert forgotten not in [row["id"] for row in result["character_skill_histories"]]
     assert result == shown(ReadKnownRows(knower_id=taro))
     knowledge = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
-    assert _skill(_known_person(knowledge, "テスト花子"), "テスト隠形") =={"名前": "テスト隠形", "来歴(古い順)": ["15年前、気配を消す"]}
+    assert _skill(_known_person(knowledge, "テスト花子"), "テスト隠形") == {"名前": "テスト隠形", "来歴(古い順)": ["15年前、気配を消す"]}
 
 
 def test_delete_character_skill(shown, world):

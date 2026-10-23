@@ -106,9 +106,18 @@ def save_frame(s: Session, form: EpisodeForm) -> Episode:
     else:
         raise ValueError("story_id は必須")
 
-    for name in ("title", "plot_text", "start", "end", "viewpoint_character_id", "location_id"):
-        if (value := getattr(form, name)) is not None:
-            setattr(record, name, value)
+    if form.title is not None:
+        record.title = form.title
+    if form.plot_text is not None:
+        record.plot_text = form.plot_text
+    if form.start is not None:
+        record.start = form.start
+    if form.end is not None:
+        record.end = form.end
+    if form.viewpoint_character_id is not None:
+        record.viewpoint_character_id = form.viewpoint_character_id
+    if form.location_id is not None:
+        record.location_id = form.location_id
     s.flush()
     if form.character_ids is not None:
         set_characters(s, record.id, form.character_ids)

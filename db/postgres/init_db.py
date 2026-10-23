@@ -85,7 +85,7 @@ def database_exists(conn: Connection, name: str | None) -> bool:
     return bool(conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}))
 
 
-def _create_database(target: URL) -> None:
+def _create_database(target) -> None:
     name = target.database
     admin = admin_engine(target)
     with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
