@@ -8,6 +8,7 @@ class StoryCreateForm(Form):
     text: str = ""
     parent_story_id: int | None = None
     display_order: int | None = None
+    narou_novel_id: int | None = None
     instruction: str = ""
 
 
@@ -17,4 +18,5 @@ class StoryUpdateForm(Form):
     text: str | None = None
     parent_story_id: int | None = None
     display_order: int | None = None
+    narou_novel_id: int | None = None
     instruction: str | None = None

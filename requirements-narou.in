@@ -1,0 +1,6 @@
+# 小説家になろうへの投稿(tool/narou.py。手元だけ)で使うパッケージ。API(Lambda のイメージ)と web のセッションには
+# 入れないので、requirements.in と分けて持つ。requirements.txt を入れた .venv に足して入れる(`.claude/docs/narou.md`)
+#
+# requirements.txt と重なる依存は同じバージョンにそろえる。requirements.txt を作り直したら、こちらも作り直す
+-c requirements.txt
+playwright>=1.50

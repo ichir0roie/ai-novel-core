@@ -896,6 +896,10 @@ class Story(TextBase):
     display_order: Mapped[int | None] = mapped_column(
         Integer, comment="作品一覧で同じ親の作品の中の並び。小さいほど上。空の作品は後ろに、一番早い話の順",
         sort_order=210)
+    narou_novel_id: Mapped[int | None] = mapped_column(
+        Integer, comment="小説家になろうの小説管理の画面の URL に出る小説の番号(Nコードではない)。"
+                         "空の章・外伝の話は、番号のある一番近い親の作品の小説へ投稿する",
+        sort_order=230)
 
     parent_story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)
@@ -928,6 +932,9 @@ class Episode(ContentBase):
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
+    narou_novel_data_id: Mapped[int | None] = mapped_column(
+        Integer, comment="小説家になろうに投稿した部分の番号(部分の管理画面の URL の noveldataid)。空ならまだ投稿していない",
+        sort_order=230)
 
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="話が立つ時刻。作品の中の話はこの順に並ぶ(空の話は後ろに id 順)", sort_order=250)
