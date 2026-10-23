@@ -28,6 +28,8 @@ uvx --from 'uv>=0.9' uv pip install --python .venv/bin/python -r requirements.tx
 ```
 
 - 固定したバージョンの中で上げるだけなら、1 行目に `--upgrade-package <名前>`(全部なら `--upgrade`)を足す
+- uv は uvx 越しでも、ファイルの頭に素の `uv pip compile …` と書く。頭を上の手順のままにするため、1 行目は `UV_CUSTOM_COMPILE_COMMAND` に同じ一行(`uvx --from 'uv>=0.9' uv pip compile …`)を入れて回す
+- 手元だけで使う道具の依存は、API(Lambda のイメージ)と web のセッションに入らないよう `requirements-<道具>.in` / `.txt` に分ける(なろうへの投稿の `requirements-narou.txt`)。`-c requirements.txt` で重なる依存をそろえ、`requirements.txt` を作り直したら一緒に作り直す。入れ方はその道具の文書(`.claude/docs/narou.md`)
 
 ## db と環境変数
 

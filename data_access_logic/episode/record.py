@@ -34,6 +34,7 @@ class EpisodeRecord(EpisodeRow):
     LOAD_OPTIONS: ClassVar[tuple] = (selectinload(Episode.episode_characters),)
 
     episode_characters: list[EpisodeCharacterLink] = Field(exclude=True)
+    narou_novel_data_id: int | None = None
 
     @model_validator(mode="before")
     @classmethod

@@ -50,6 +50,21 @@
           "comment": "作品一覧で同じ親の作品の中の並び。小さいほど上。空の作品は後ろに、一番早い話の順"
         },
         {
+          "key": "narou_novel_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "小説家になろうの小説管理の画面の URL に出る小説の番号(Nコードではない)。空の章・外伝の話は、番号のある一番近い親の作品の小説へ投稿する"
+        },
+        {
           "key": "parent_story_id",
           "type": "integer",
           "nullable": true,
@@ -147,6 +162,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "サブタイトル。本文の見出しから読む"
+        },
+        {
+          "key": "narou_novel_data_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "小説家になろうに投稿した部分の番号(部分の管理画面の URL の noveldataid)。空ならまだ投稿していない"
         },
         {
           "key": "start",
