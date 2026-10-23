@@ -12,8 +12,7 @@ from data_access_logic.character import steps as character_steps
 from data_access_logic.character.moves import allowed_moves
 from data_access_logic.character.record import CharacterMove, CharacterRelationRecord
 from data_access_logic.episode import moves as episode_moves
-from data_access_logic.episode import relations as episode_relations
-from data_access_logic.episode.relations import RelationsForm, allowed_relations
+from data_access_logic.episode.relations import RelationsForm, allowed_relations, relations_draft
 from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
 from data_access_logic.episode.record import CommittedEpisode, EpisodeRecord
@@ -47,7 +46,7 @@ def _relate_cast(ai: AIClient, episode_id: int) -> list[CharacterRelationRecord]
     material = call(episode_steps.relations_material, RowId(id=episode_id))
     if material is None:
         return []
-    drafts = allowed_relations(episode_relations.relations_draft(ai, material),
+    drafts = allowed_relations(relations_draft(ai, material),
                                [member.id for member in material.cast], material.relations)
     if not drafts:
         return []
@@ -61,10 +60,12 @@ def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> Comm
     record = call(episode_steps.commit_episode, episode)
     written = [SourceRow(table="episode", id=record.id)] if episode.main_text is not None else []
     meme.refresh(ai, written)
+    moved: list[CharacterMove] = []
+    related: list[CharacterRelationRecord] = []
     if written:
         event_seed.refresh_and_consolidate(ai, written)
-    moved = _move_cast(ai, record.id) if written else []
-    related = _relate_cast(ai, record.id) if written else []
+        moved = _move_cast(ai, record.id)
+        related = _relate_cast(ai, record.id)
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
 
 

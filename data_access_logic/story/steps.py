@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""作品の db の段(`data_access_logic/step.py`)。流れ(`data_access_logic/flows/`)が、手元では自分のセッションで、web のセッションでは API 越しに呼ぶ。"""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session

@@ -54,8 +54,7 @@ def _command() -> str:
     return shutil.which(name) or name
 
 
-def _build_args(system: str | None, schema: dict, tools: tuple[str, ...] = (),
-                model: str = MODEL, effort: str = EFFORT) -> list[str]:
+def _build_args(system: str, schema: dict, tools: tuple[str, ...], model: str, effort: str) -> list[str]:
     # `--tools` は組み込みの道具だけを絞る。MCP の道具(`mcp__…`)は MCP サーバーから来るので、許可だけ渡す。
     builtin = [tool for tool in tools if not tool.startswith("mcp__")]
     args = [
@@ -70,22 +69,18 @@ def _build_args(system: str | None, schema: dict, tools: tuple[str, ...] = (),
     mcp_config = os.environ.get("DEM_CLAUDE_AI_MCP_CONFIG")
     if mcp_config and len(builtin) < len(tools):
         args += ["--mcp-config", mcp_config]
-    if system is not None:
-        args += ["--system-prompt", system]
-    args += ["--json-schema", json.dumps(schema, ensure_ascii=False)]
-    args += ["--model", model, "--effort", effort]
-    return args
+    return args + ["--system-prompt", system, "--json-schema", json.dumps(schema, ensure_ascii=False),
+                   "--model", model, "--effort", effort]
 
 
 def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
     # CLI の起動と思考のぶん、短い待ち時間では足りない。既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、
     # 道具で調べさせる呼び出しなど、それより長く待つものだけが `timeout` を渡す。
     timeout = max(timeout or 0.0, float(os.environ.get("DEM_CLAUDE_AI_TIMEOUT", 600)))
-    # プロジェクトの CLAUDE.md・設定を拾わせない(生成の指示は system だけにする)。
-    cwd = tempfile.gettempdir()
     try:
+        # cwd を一時ディレクトリにして、プロジェクトの CLAUDE.md・設定を拾わせない(生成の指示は system だけにする)
         completed = subprocess.run(
-            args, input=prompt, capture_output=True, cwd=cwd,
+            args, input=prompt, capture_output=True, cwd=tempfile.gettempdir(),
             encoding="utf-8", errors="replace", timeout=timeout)
     except OSError as error:
         raise ClaudeAIError(f"Claude Code({args[0]})を起動できない: {error}") from error
@@ -125,8 +120,7 @@ def generate[Output: BaseModel](
     load_env()
     # 世界ごとの書き方なので、そのつど db の段で読む
     writing_style = "" if style_scope is None else call(style_steps.writing_style, WritingStyleForm(scope=style_scope))
-    system = styled_system(system, writing_style)
-    args = _build_args(system, output.model_json_schema(), tools, model, effort)
+    args = _build_args(styled_system(system, writing_style), output.model_json_schema(), tools, model, effort)
     try:
         reply = _reply(prompt, args, timeout)
         if reply.structured_output is not None:

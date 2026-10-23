@@ -3,8 +3,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from data_access_logic import constants
-from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.form import CharacterParameterForm
+from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.models import PERSONALITY_LABELS, CharacterBase, CharacterParameterValues
 from data_access_logic.character.record import CharacterHistoryRow, CharacterSkillHistoryRow
 from data_access_logic.idea.models import IdeaMaterial
@@ -82,19 +82,35 @@ def _personality(parameters: CharacterParameterValues | CharacterParameterForm) 
     return axes or None
 
 
+def _parameters_for_prompt(parameters: CharacterParameterValues | CharacterParameterForm | None) -> dict[str, Any]:
+    return {
+        "性格": _personality(parameters) if parameters else None,
+        "性別": parameters.sex if parameters else None,
+        "背丈": parameters.height if parameters else None,
+        "体格": parameters.build if parameters else None,
+        "一人称": parameters.first_person if parameters else None,
+        "二人称": parameters.second_person if parameters else None,
+        "三人称": parameters.third_person if parameters else None,
+        "口調": parameters.tone if parameters else None,
+        "方言": parameters.dialect if parameters else None,
+    }
+
+
+def later_ideas_for_prompt(ideas: list[IdeaMaterial]) -> list[dict[str, Any]]:
+    return [{"名前": idea.name, "種類": idea.kind, "始まる年": idea.first_start.year if idea.first_start else None}
+            for idea in ideas]
+
+
 class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        parameters = self.parameters
         return {
             "現在の時刻": str(self.time),
             "出身": _born_location(self.born_location),
             "この場所・時刻に関連する筋書き": "\n\n".join(story.text for story in self.stories if story.text) or None,
-            "この時刻より後に始まる設定(まだ無い)": [
-                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.first_start.year if idea.first_start else None}
-                for idea in self.later_ideas],
+            "この時刻より後に始まる設定(まだ無い)": later_ideas_for_prompt(self.later_ideas),
             "体現する要素": self.element,
             "行動原理(ミーム)": [{"古今表裏": meme.position, "内容": meme.text} for meme in self.memes],
             "既にいる人物・対象": [
@@ -105,15 +121,7 @@ class CharacterBirthMaterialSerialized(CharacterBirthMaterial):
                 "名前": self.name,
                 "種別": self.kind,
                 "年齢": self.age,
-                "性格": _personality(parameters) if parameters else None,
-                "性別": parameters.sex if parameters else None,
-                "背丈": parameters.height if parameters else None,
-                "体格": parameters.build if parameters else None,
-                "一人称": parameters.first_person if parameters else None,
-                "二人称": parameters.second_person if parameters else None,
-                "三人称": parameters.third_person if parameters else None,
-                "口調": parameters.tone if parameters else None,
-                "方言": parameters.dialect if parameters else None,
+                **_parameters_for_prompt(self.parameters),
             },
             "作者の指定": {"名前": self.hint_name, "説明": self.hint_text},
             "登場する話のプロット": self.plot_text,
@@ -141,21 +149,12 @@ class CharacterNameMaterialSerialized(CharacterNameMaterial):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        parameters = self.parameters
         return {
             "種別": self.kind,
             "説明": self.text,
             "年齢": self.age,
-            "性格": _personality(parameters) if parameters else None,
-            "性別": parameters.sex if parameters else None,
-            "背丈": parameters.height if parameters else None,
-            "体格": parameters.build if parameters else None,
-            "一人称": parameters.first_person if parameters else None,
-            "二人称": parameters.second_person if parameters else None,
-            "三人称": parameters.third_person if parameters else None,
-            "口調": parameters.tone if parameters else None,
-            "方言": parameters.dialect if parameters else None,
-            "決まっている名字": parameters.family_name if parameters else None,
+            **_parameters_for_prompt(self.parameters),
+            "決まっている名字": self.parameters.family_name if self.parameters else None,
             "ミーム": self.memes,
             "行動原理": self.principle,
             "居場所": _born_location(self.born_location),
@@ -337,9 +336,7 @@ class StoryElementsRequestSerialized(StoryElementsRequest):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             "現在の時刻": str(self.time),
-            "この時刻より後に始まる設定(まだ無い)": [
-                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.first_start.year if idea.first_start else None}
-                for idea in self.later_ideas],
+            "この時刻より後に始まる設定(まだ無い)": later_ideas_for_prompt(self.later_ideas),
             "筋書き": "\n\n".join(story.text for story in self.stories if story.text),
         }
 

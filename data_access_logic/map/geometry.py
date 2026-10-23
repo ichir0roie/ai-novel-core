@@ -13,7 +13,7 @@ BEARINGS = ("北", "北北東", "北東", "東北東", "東", "東南東", "南�
 
 def planet_radius_km(area: float | None) -> float | None:
     """星の表面積(km²)から半径を出す。地球の 510,072,000 → 約 6,371 km。"""
-    if area in (None, "") or float(area) <= 0:
+    if area is None or float(area) <= 0:
         return None
     return math.sqrt(float(area) / (4 * math.pi))
 

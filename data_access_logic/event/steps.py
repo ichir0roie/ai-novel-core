@@ -120,12 +120,16 @@ def save_progress(s: Session, form: ProgressForm) -> EventRecord:
     return record_of(s, EventRecord, finish_generated(s, record.id, form.event))
 
 
-@db_step
-def commit_event(s: Session, form: EventCreateForm) -> EventRecord:
+def _check_references(s: Session, form: EventCreateForm | EventUpdateForm) -> None:
     CommitEntrypoint.check_exists(s, Event, form.parent_event_id, "parent_event_id")
     CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
-    for character_id in form.character_ids:
+    for character_id in form.character_ids or []:
         CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")
+
+
+@db_step
+def commit_event(s: Session, form: EventCreateForm) -> EventRecord:
+    _check_references(s, form)
     record = Event()
     form.write_to(record)
     record.event_characters = [EventCharacter(character_id=character_id) for character_id in form.character_ids]
@@ -137,11 +141,8 @@ def commit_event(s: Session, form: EventCreateForm) -> EventRecord:
 @db_step
 def update_event(s: Session, form: EventUpdateForm) -> EventRecord:
     record = reloaded(s, common_query.get_row(s, Event, form.id), selectinload(Event.event_characters))
-    CommitEntrypoint.check_exists(s, Event, form.parent_event_id, "parent_event_id")
     _check_parent(s, form.id, form.parent_event_id)
-    CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
-    for character_id in form.character_ids or []:
-        CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")
+    _check_references(s, form)
     form.write_changes_to(record)
     if form.character_ids is not None:
         record.event_characters = [EventCharacter(character_id=character_id) for character_id in form.character_ids]

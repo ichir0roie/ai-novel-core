@@ -13,10 +13,9 @@ def test_entrance_lists_match_code():
 
 def test_dumped_files_are_current():
     # ずれていたら `.venv/bin/python -m gui.api.dump_static` と `(cd gui/web && npm run types)` を回す
-    for path, value in ((dump_static.OPENAPI_PATH, dump_static.openapi()), (dump_static.TABLES_PATH, dump_static.tables()),
-                        (dump_static.ENTRANCES_PATH, dump_static.entrances())):
+    for path, text in dump_static.files().items():
         with open(path, encoding="utf-8") as f:
-            assert f.read() == dump_static.dumped(value), path
+            assert f.read() == text, path
 
 
 def test_tables():

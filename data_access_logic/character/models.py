@@ -2,11 +2,11 @@ from typing import Any
 
 from pydantic import model_serializer
 
+from data_access_logic import constants
 from data_access_logic.character.histories import histories_for_prompt
-from data_access_logic.history_start import start_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
 from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
-from data_access_logic import constants
+from data_access_logic.history_start import start_for_prompt
 from data_access_logic.knowers import KnowerMaterial, secret_for_prompt
 from data_access_logic.material import Material, Timestamp
 from db.schema import PersonalityLevel
@@ -29,11 +29,6 @@ class CharacterWholeBase(CharacterBase):
 
 
 class CharacterMaterial(CharacterWholeBase):
-    id: int
-
-
-class ParticipantCharacter(CharacterWholeBase):
-    # 出来事の記録で、関わった人物・移動した人物を AI に id で選ばせる
     id: int
 
 
@@ -80,7 +75,6 @@ PERSONALITY_LABELS = {
 
 
 def personality_for_prompt(parameters: CharacterParameterValues) -> dict[str, PersonalityLevel]:
-    # 各軸は 無/低/並/高/必 の五段階
     return {label: getattr(parameters, name) for name, label in PERSONALITY_LABELS.items()}
 
 
@@ -190,11 +184,11 @@ class MentionedMaterial(CharacterAt):
 class CastCandidate(CharacterAt):
     """話の登場人物の候補。AI に id で選ばせる。"""
 
-    character: ParticipantCharacter
+    character: CharacterMaterial
 
 
 class ParticipantMaterial(CharacterAt):
-    character: ParticipantCharacter
+    character: CharacterMaterial
     relations: list[CharacterRelationLine]
     # 新しい順
     recent_events: list[EventBase]

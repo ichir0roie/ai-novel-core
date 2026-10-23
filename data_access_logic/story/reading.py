@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from pydantic import model_serializer
@@ -72,8 +73,7 @@ def story_digest(s: Session, story: Story) -> StoryDigest:
 
 
 def stories(s: Session) -> list[StoryDigest]:
-    rows = s.scalars(common_query.stories_select()).all()
-    return [story_digest(s, story) for story in rows]
+    return [story_digest(s, story) for story in s.scalars(common_query.stories_select()).all()]
 
 
 def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: int = 60, full: bool = False) -> Brief:
@@ -83,7 +83,7 @@ def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: 
     since, until = common_query.span(when)
     location_ids = common_query.descendant_location_ids(s, location_id)
 
-    def visible(events: list[Event]) -> list[EventRow]:
+    def visible(events: Iterable[Event]) -> list[EventRow]:
         return [EventRow.model_validate(event) for event in events if full or not event.hidden]
 
     recent_query = (select(Event)
@@ -92,7 +92,6 @@ def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: 
                            Event.time <= until,
                            Event.time >= Stamp(max(1, since.year - reach)))
                     .order_by(Event.time.desc(), Event.id.desc()))
-    recent = list(s.scalars(recent_query).all())
 
     character_ids = residents(s, location_ids, until)
     ideas = s.scalars(
@@ -107,8 +106,8 @@ def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: 
         path=common_query.location_path(s, location_id),
         time=until,
         reach=reach,
-        open_events=visible(list(s.scalars(common_query.open_events_select(location_ids, until)).all())),
-        recent_events=visible(recent),
+        open_events=visible(s.scalars(common_query.open_events_select(location_ids, until))),
+        recent_events=visible(s.scalars(recent_query)),
         ideas=[_brief_idea(idea, histories.get(idea.id)) for idea in ideas],
         present_characters=[Named(id=id_, name=character_names[id_]) for id_ in character_ids],
     )

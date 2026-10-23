@@ -11,7 +11,8 @@ from typing import Any
 
 from data_access_logic.caller import calling
 from gui.api import interface
-from web_session.api import call, run_entrance
+from web_session.api import call
+from web_session.transport import run_entrance
 
 
 def run(entrance_id: str, args: dict[str, Any]) -> Any:

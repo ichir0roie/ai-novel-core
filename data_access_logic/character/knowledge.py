@@ -3,19 +3,18 @@
 人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
 来歴・履歴の行は、その時刻から何年前かと本文をつないだ一文(「10年前、〜」「今年、〜」)で渡す。
 
-人物の来歴・スキルの来歴・アイデアの履歴・場所の来歴は、知る相手(`KnowerMixin` の行)に当たるものだけを渡す。知る相手が人物ならその人物、
-場所ならその時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
-アイデアの本文は本質で作者だけが読むので渡さない。人物が知るのはアイデアの履歴(作中の呼び名と受け止め方)の行だけ。
-知っているアイデアをすべて渡すと多すぎるので、はじめに読むデータには、プロットに名前(本質の名前か知っている呼び名)が
-出るものだけを入れる。手番の要求に出た語は、人物役が語で引いて(`known_ideas_by_words`)、知っているものだけを読む。
-人物の来歴・場所の来歴はその時刻までに起きた行だけ(人物の来歴・スキルの来歴は、終わり `end` を過ぎた行も外す)。持ち物・記憶・隠し事も種別を付けた人物の来歴の行なので、
-知る相手に当たる人物だけが知る。装いは種別「装い」のスキルで持ち、見た人にそのまま知れるので、その時刻に効いている行(`skills.outfit_at`)を
-見た目に入れ、スキルの一覧には入れない。場所の説明(`text`)は作者の目で書くものなので渡さない。
-期間・知った時刻の始まりが空の行(アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
-スキルの本文は本質で作者だけが読むので渡さない。人物が知るのは、スキルの名前と、その時刻までに起きたスキルの来歴の行のうち知っているものだけ。
-人物の範囲は本人とその時刻に関係(`character_relation`)のある人物。関係の来歴もその時刻の年までに起きた行だけ。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
-本人には外見・芯・ミーム・行動原理・性格を、関係のある人物には外見と芯を渡す。plot はだれにも渡さない。
-話を渡したときは、関係のある人物の外見・芯・来歴は、その話の登場人物・名前だけ出る人物の分だけを渡す(場にいない人物は関係の行の名前と間柄で足りる)。
+- 人物の来歴(持ち物・記憶・隠し事も種別付きの行)・スキルの来歴・アイデアの履歴・場所の来歴は、知る相手(`KnowerMixin`)に
+  当たる行だけ。知る相手が場所なら、その時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
+- 行はその時刻までに起きたものだけ(人物・スキルの来歴は `end` を過ぎた行も外す)。期間・知った時刻の始まりが空の行
+  (アイデアの履歴・関係・知る相手)は、いつからか決まっていないので渡さない。
+- アイデア・スキルの本文と場所の説明(`text`)は作者だけが読むので渡さない。人物が知るのは、アイデアの履歴(作中の呼び名と
+  受け止め方)、スキルの名前と来歴の行だけ。
+- アイデアはすべて渡すと多すぎるので、はじめはプロットに名前(本質の名前か知っている呼び名)が出るものだけ。手番の要求に出た語は、
+  人物役が `known_ideas_by_words` で引く。
+- 装いは種別「装い」のスキルで持ち、見た人にそのまま知れるので、見た目(`skills.outfit_at`)に入れ、スキルの一覧には入れない。
+- 人物の範囲は本人と、その時刻に関係(`character_relation`)のある人物。本人には外見・芯・ミーム・行動原理・性格を、関係のある人物には
+  外見と芯を渡し、plot はだれにも渡さない。話を渡したときは、関係のある人物の外見・芯・来歴をその話の登場人物・名前だけ出る人物の分だけ
+  渡す(場にいない人物は関係の行の名前と間柄で足りる)。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 """
 from __future__ import annotations
 
@@ -27,12 +26,12 @@ from pydantic import model_serializer
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from data_access_logic.character import skills
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, personality_for_prompt
 from data_access_logic.character.parameters import parameters_at
-from data_access_logic.character import skills
-from data_access_logic.idea.models import normalized
 from data_access_logic.history_start import by_start
+from data_access_logic.idea.models import normalized
 from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
@@ -106,7 +105,6 @@ class KnownPlace(Material):
 def known_histories(
     rows: Sequence[CharacterHistory | CharacterSkillHistory | LocationHistory], viewer: Viewer,
 ) -> list[KnownHistory]:
-    """本人か関係のある人物の来歴・スキルの来歴を渡す。古い順。"""
     known = [row for row in rows if row.covers(viewer.time) and knows(row.knowers, viewer)]
     return [KnownHistory.model_validate(row) for row in sorted(known, key=by_start)]
 

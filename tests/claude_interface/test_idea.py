@@ -43,14 +43,14 @@ def test_commit_idea(shown, world, mock_ai):
     result = shown(CommitIdea(IdeaCreateForm(
         name="テスト飛空艇", kind="技術", text="空を渡る船", parent_idea_id=world.idea_id,
         histories=[IdeaHistoryRow(location_id=world.location_id, start="1195/01/01", end="1250/01/01",
-                                         name="空舟", detail="都の俗称")])))
+                                  name="空舟", detail="都の俗称")])))
 
     assert (result["name"], result["kind"], result["text"]) == ("テスト飛空艇", "技術", "空を渡る船")
     assert result["parent_idea_id"] == world.idea_id
     assert "start" not in result
     assert result["histories"] == [{"location_id": world.location_id, "start": "1195/01/01 00:00:00",
-                                       "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称",
-                                       "knowers": []}]
+                                    "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称",
+                                    "knowers": []}]
     # 本文は作者だけが読むので、確定のあとに AI を回さない
     assert not mock_ai.calls
 
@@ -71,9 +71,9 @@ def test_merge_idea(shown, world):
 def test_resolve_ideas(shown, world):
     result = shown(ResolveIdeas(
         ideas=[IdeaDraft(keyword="テスト魔導", variants=["テスト術"], description="都の技術", coined=True, kind="技術",
-                        start="1100"),
+                         start="1100"),
                IdeaDraft(keyword="テスト新語", variants=["テスト新語法"], description="まだ無い語", coined=True, kind="概念",
-                        start="1200", end="1300")],
+                         start="1200", end="1300")],
         location_id=world.location_id, time="1200/04/01"))
 
     assert world.idea_id in result["hits"]
@@ -111,7 +111,7 @@ def test_update_idea(shown, world):
     result = shown(UpdateIdea(IdeaUpdateForm(
         id=world.child_idea_id, name="テスト魔導機関", kind="機関", text="炉を改めた機関", parent_idea_id=world.idea_id,
         histories=[IdeaHistoryRow(location_id=world.neighbor_id, start="1160/01/01", end=None,
-                                         name="釜", detail="村での呼び名")])))
+                                  name="釜", detail="村での呼び名")])))
 
     assert (result["name"], result["kind"], result["text"]) == ("テスト魔導機関", "機関", "炉を改めた機関")
     assert result["parent_idea_id"] == world.idea_id

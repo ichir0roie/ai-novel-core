@@ -11,7 +11,6 @@ from db.schema import EventSeed
 
 
 class UpdateEventSeed(CommitEntrypoint):
-
     def __init__(self, seed: EventSeedUpdateForm):
         self.seed = seed
 

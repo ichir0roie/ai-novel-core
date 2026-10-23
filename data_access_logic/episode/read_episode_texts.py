@@ -4,8 +4,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
-from data_access_logic.episode import reading as episode_reading
-from data_access_logic.episode.reading import EpisodeText
+from data_access_logic.episode.reading import EpisodeText, episode_texts
 
 
 class ReadEpisodeTexts(SessionEntrypoint):
@@ -15,4 +14,4 @@ class ReadEpisodeTexts(SessionEntrypoint):
         self.episode_ids = episode_ids
 
     def execute(self, s: Session) -> list[EpisodeText]:
-        return episode_reading.episode_texts(s, self.episode_ids)
+        return episode_texts(s, self.episode_ids)

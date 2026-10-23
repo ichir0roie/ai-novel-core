@@ -10,7 +10,7 @@ from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.query import common_query
 from db.schema import Episode
 from gui.api.models import TimelineResponse
-from gui.api.records import reference_labels, summary_of
+from gui.api.records import summaries_of
 from gui.api.tables import spec_of
 
 
@@ -23,9 +23,7 @@ def timeline(s: Session, story_id: int | None) -> TimelineResponse:
     if story_id is not None:
         conditions.append(Episode.story_id.in_(common_query.descendant_story_ids(s, story_id)))
     episodes = s.scalars(loading(select(Episode).where(*conditions).order_by(Episode.start, Episode.id), EpisodeRecord)).all()
-
-    spec = spec_of("episode")
-    summaries = [summary_of(spec, row) for row in episodes]
+    summaries, labels = summaries_of(s, spec_of("episode"), episodes)
     return TimelineResponse(items=[{**summary.model_dump(mode="json"), "plot_text": row.plot_text}
                                    for summary, row in zip(summaries, episodes, strict=True)],
-                            labels=reference_labels(s, spec, [summary.record for summary in summaries]))
+                            labels=labels)

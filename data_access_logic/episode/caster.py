@@ -30,18 +30,13 @@ def _resident_ids(s: Session, location_id: int | None, time: Stamp) -> list[int]
     return list(s.scalars(common_query.resident_character_ids_select(location_ids, time)).all())
 
 
-def candidate_characters(
-    s: Session, episode: Episode, excluded_ids: set[int], location_id: int | None, time: Stamp,
-) -> list[Character]:
-    """登場人物と関係のある人物・話の場所(とその中)にいる人物。プロット・本文に名前が出る人物は、保存のたびに
-    名前だけ出る人物(`mentioned` の行)として拾い直してあり、候補とは別に出す。
+def candidate_characters(s: Session, episode: Episode, time: Stamp) -> list[Character]:
+    """登場人物と関係のある人物・話の場所(とその中)にいる人物。話に結んだ人物(名前だけ出る人物も)は、別に出すので除く。
 
     `episode` は `episode_characters` と `EpisodeCharacter.character` を読んだもの。"""
+    excluded_ids = {link.character_id for link in episode.episode_characters}
     cast_ids = {character.id for character in cast_characters(episode)}
-    candidate_ids = [
-        *_related_ids(s, cast_ids, time),
-        *_resident_ids(s, location_id, time),
-    ]
+    candidate_ids = [*_related_ids(s, cast_ids, time), *_resident_ids(s, episode.location_id, time)]
     return list(s.scalars(
         select(Character)
         .where(Character.id.in_([character_id for character_id in candidate_ids if character_id not in excluded_ids]))

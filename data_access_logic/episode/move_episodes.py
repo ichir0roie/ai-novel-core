@@ -11,7 +11,6 @@ from db.schema import Episode, Story
 
 
 class MoveEpisodes(CommitEntrypoint):
-
     def __init__(self, episode_ids: list[int], story_id: int):
         self.episode_ids = episode_ids
         self.story_id = story_id

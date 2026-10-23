@@ -17,7 +17,6 @@ class ReplaceText(CommitEntrypoint):
     `old` は本文にちょうど一度だけ出る文にする(どこを置き換えるかを取り違えないため)。
     """
 
-
     def __init__(self, episode_id: int, old: str, new: str):
         self.episode_id = episode_id
         self.old = old

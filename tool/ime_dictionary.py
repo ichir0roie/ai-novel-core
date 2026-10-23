@@ -69,9 +69,9 @@ def collect_terms() -> list[Term]:
             terms.append(Term(story.name, "固有名詞", "作品"))
     unique: dict[str, Term] = {}
     for term in terms:
-        word = term.word.strip()
-        if word and word not in unique:
-            unique[word] = Term(word, term.part_of_speech, term.source)
+        term.word = term.word.strip()
+        if term.word and term.word not in unique:
+            unique[term.word] = term
     return list(unique.values())
 
 
@@ -97,11 +97,7 @@ def write_rows(path: Path, rows: list[list[str]]) -> None:
 def build(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     known = read_readings(directory / READINGS_FILE)
-    terms = collect_terms()
-
-    readings: list[tuple[Term, str]] = []
-    for term in terms:
-        readings.append((term, known.get(term.word) or kana_reading(term.word) or ""))
+    readings = [(term, known.get(term.word) or kana_reading(term.word) or "") for term in collect_terms()]
     write_rows(directory / READINGS_FILE, [[term.word, reading, term.source] for term, reading in readings])
 
     entries = [(term, reading) for term, reading in readings if reading and reading != EXCLUDED]

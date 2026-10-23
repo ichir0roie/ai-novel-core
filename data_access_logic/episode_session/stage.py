@@ -11,13 +11,13 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import model_serializer
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session
 
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.skills import outfit_at
 from data_access_logic.character.models import CharacterMaterial, CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.history_start import start_for_prompt
 from data_access_logic.location.models import LocationLine, LocationMaterial
@@ -25,8 +25,7 @@ from data_access_logic.location.reading import location_at
 from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
-from db.schema import Episode, EpisodeCharacter, Location
-from db.stamp import Stamp
+from db.schema import Location
 
 
 class StageEpisode(Material):
@@ -77,39 +76,21 @@ class StageSerialized(Stage):
         }
 
 
-def _staged_episode(s: Session, episode_id: int) -> tuple[Episode, Stamp]:
-    episode = s.scalar(
-        select(Episode)
-        .where(Episode.id == episode_id)
-        .options(
-            joinedload(Episode.story),
-            selectinload(Episode.episode_characters).joinedload(EpisodeCharacter.character),
-        )
-        .execution_options(populate_existing=True)
-    )
-    if episode is None:
-        raise ValueError(f"話 id={episode_id} が見つからない")
-    if episode.start is None:
+def stage_of(s: Session, episode_id: int) -> StageSerialized:
+    episode = load_episode(s, episode_id)
+    time = episode.start
+    if time is None:
         raise ValueError(f"話 id={episode_id} の時刻(start)が空")
-    return episode, episode.start
-
-
-def _cast_relations(s: Session, episode: Episode, time: Stamp) -> list[CharacterRelationLine]:
+    location_id = episode.location_id
     characters = cast_characters(episode)
     cast_ids = {character.id for character in characters}
-    return [line for line in relations_at(s, characters, time, dated_alive_at)
-            if line.character_1.id in cast_ids and line.character_2.id in cast_ids]
-
-
-def stage_of(s: Session, episode_id: int) -> StageSerialized:
-    episode, time = _staged_episode(s, episode_id)
-    location_id = episode.location_id
     return StageSerialized(
         main_episode=episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         location=location_at(common_query.get_row(s, Location, location_id), time) if location_id is not None else None,
         cast=[StageMember(character=character, age=age_at(character, time), parameters=parameters_at(character, time),
                           outfit=outfit_at(s, character, time))
-              for character in cast_characters(episode)],
-        relations=_cast_relations(s, episode, time),
+              for character in characters],
+        relations=[line for line in relations_at(s, characters, time, dated_alive_at)
+                   if line.character_1.id in cast_ids and line.character_2.id in cast_ids],
     )

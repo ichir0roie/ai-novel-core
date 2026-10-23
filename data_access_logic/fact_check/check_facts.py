@@ -12,7 +12,7 @@ from __future__ import annotations
 from ai.claude_code import ai_client, fact_checker
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import Entrypoint
-from data_access_logic.flows import refresh
+from data_access_logic.flows.fact_check import check_and_extract
 
 __all__ = ["CheckFacts"]
 
@@ -27,4 +27,4 @@ class CheckFacts(Entrypoint):
         self.ai = ai
 
     def result(self) -> fact_checker.FactChecked:
-        return refresh.check_facts(self.table, self.ids, self.limit, self.ai)
+        return check_and_extract(self.ai, self.table, self.ids, self.limit)

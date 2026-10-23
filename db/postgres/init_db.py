@@ -14,8 +14,14 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
+
+from sqlalchemy import Connection, Engine, inspect, text
+from sqlalchemy.engine import URL, make_url
 
 logger = logging.getLogger(__name__)
+
+ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic" / "alembic.ini"
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -36,12 +42,10 @@ def main(argv: list[str] | None = None) -> None:
 
     from alembic import command
     from alembic.config import Config
-    from sqlalchemy import inspect, text
-    from sqlalchemy.engine import make_url
 
     from data_access_logic.logs import configure_logging
     from db.postgres.postgis import install_postgis
-    from db.schema import Base, engine, make_url_engine, seed_master_rows
+    from db.schema import Base, engine, seed_master_rows
 
     configure_logging()
     target = make_url(url)
@@ -49,7 +53,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(f"PostgreSQL の URL ではない: {target.render_as_string(hide_password=True)}")
 
     if args.create_database:
-        _create_database(make_url_engine, target)
+        _create_database(target)
 
     with engine.connect() as conn:
         existing = sorted(set(inspect(conn).get_table_names()) & set(Base.metadata.tables))
@@ -66,18 +70,26 @@ def main(argv: list[str] | None = None) -> None:
         conn.execute(text("SELECT setval(pg_get_serial_sequence('personality_level', 'id'), "
                           "(SELECT max(id) FROM personality_level))"))
 
-    alembic_ini = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "alembic", "alembic.ini")
-    command.stamp(Config(alembic_ini), "head")
+    command.stamp(Config(str(ALEMBIC_INI)), "head")
     logger.info(f"作った: {target.render_as_string(hide_password=True)}")
 
 
-def _create_database(make_url_engine, target) -> None:
-    from sqlalchemy import text
+def admin_engine(target: URL) -> Engine:
+    """`target` と同じサーバーの postgres db に繋ぐ engine(db を作る・消す・在るか確かめる)。"""
+    from db.schema import make_url_engine
 
+    return make_url_engine(target.set(database="postgres").render_as_string(hide_password=False))
+
+
+def database_exists(conn: Connection, name: str | None) -> bool:
+    return bool(conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}))
+
+
+def _create_database(target) -> None:
     name = target.database
-    admin = make_url_engine(target.set(database="postgres").render_as_string(hide_password=False))
+    admin = admin_engine(target)
     with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        if conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}):
+        if database_exists(conn, name):
             logger.info(f"db {name} は既にある")
         else:
             # 名前は bind できないので、識別子として引用して埋める

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""文体の好みの段(`data_access_logic/step.py`)。"""
 from __future__ import annotations
 
 from sqlalchemy.orm import Session

@@ -1,23 +1,22 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 from sqlalchemy import ColumnElement, Select
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
+from data_access_logic.character import skills
+from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.models import (
     CastCandidateSerialized, CastingCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine,
-    CharacterSecrets,
-    CharacterSkillMaterial, HistoryMaterial, MentionedSerialized, ParticipantSerialized,
+    CharacterSecrets, CharacterSkillMaterial, HistoryMaterial, MentionedSerialized, ParticipantSerialized,
 )
-from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.parameters import parameters_at
-from data_access_logic.character import skills
 from data_access_logic.event.summary import events_of
 from data_access_logic.history_start import by_start
 from data_access_logic.knowers import knowers_at
 from data_access_logic.query import common_query
 from data_access_logic.query.period import Period, alive_at
-from db.schema import Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, Event
+from db.schema import Character, CharacterHistory, CharacterSkillHistory, Event
 from db.stamp import Stamp
 
 
@@ -37,16 +36,12 @@ def relations_at(
 
     関係の芯(`text`)は時期を限らないので、先のことは来歴の行に書けば、それより前の話・人物役には渡らない。
     """
-    return _relation_lines(s.scalars(common_query.character_relations_at_select(
-        [character.id for character in characters], time, period)).all(), time)
-
-
-def _relation_lines(rows: Sequence[CharacterRelation], time: Stamp) -> list[CharacterRelationLine]:
+    rows = s.scalars(common_query.character_relations_at_select(
+        [character.id for character in characters], time, period)).all()
     return [
         CharacterRelationLine(
             character_1=row.character_1, character_2=row.character_2, relation=row.relation, text=row.text,
-            histories=sorted((history for history in row.histories if history.covers(time)),
-                             key=by_start))
+            histories=sorted((history for history in row.histories if history.covers(time)), key=by_start))
         for row in rows
     ]
 
@@ -126,4 +121,3 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
         )
         for character in characters
     ]
-

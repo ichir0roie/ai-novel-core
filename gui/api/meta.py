@@ -13,7 +13,7 @@ from sqlalchemy import inspect as sa_inspect
 from data_access_logic.label import LABEL_COLUMNS
 from db.child_lists import child_columns, child_model
 from db.schema import TIMESTAMP_COLUMNS, PolygonType, StampType
-from gui.api.fields import choices_of, field_meta
+from gui.api.fields import choices_of, field_meta, members
 from gui.api.models import ChildListMeta, ColumnMeta, TableMeta
 from gui.api.tables import TABLES, TableSpec, writer_of
 
@@ -88,7 +88,7 @@ def _row_model(spec: TableSpec, name: str) -> type[BaseModel]:
     """子の一覧の行のモデル(`list[CharacterParameterRow]` の中身)。"""
     writer = writer_of(spec.name)
     fields = writer.create_form.model_fields if name in writer.create_form.model_fields else writer.update_form.model_fields
-    for member in (fields[name].annotation, *typing.get_args(fields[name].annotation)):
+    for member in members(fields[name].annotation):
         for argument in typing.get_args(member):
             if isinstance(argument, type) and issubclass(argument, BaseModel):
                 return argument
@@ -104,11 +104,12 @@ def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     side_columns = {"plot_text"} if spec.name == "episode" else set()
     # 話の本文は小説の地の文なので、マークダウンとして解釈せずただのテキストとして扱う
     plain_text_columns = {"main_text"} if spec.name == "episode" else set()
+    create_fields = writer_of(spec.name).create_form.model_fields
     plain, long = [], []
     for column in model.__table__.columns:
         if column.key in TIMESTAMP_COLUMNS:
             continue
-        meta = column_meta(column, writer_of(spec.name).create_form.model_fields.get(column.key), section=column.key in sections,
+        meta = column_meta(column, create_fields.get(column.key), section=column.key in sections,
                            readonly=column.key in readonly_columns,
                            markdown=column.key not in plain_text_columns, side=column.key in side_columns)
         (long if meta.section else plain).append(meta)
@@ -130,11 +131,7 @@ def child_lists(spec: TableSpec) -> list[ChildListMeta]:
     return result
 
 
-def table_meta(spec: TableSpec) -> TableMeta:
-    return TableMeta(name=spec.name, label_column=LABEL_COLUMNS[spec.model],
-                     columns=table_columns(spec), child_lists=child_lists(spec), sort=spec.sort, order=spec.order)
-
-
 def all_tables() -> list[TableMeta]:
-    return [table_meta(spec) for spec in TABLES]
-
+    return [TableMeta(name=spec.name, label_column=LABEL_COLUMNS[spec.model], columns=table_columns(spec),
+                      child_lists=child_lists(spec), sort=spec.sort, order=spec.order)
+            for spec in TABLES]

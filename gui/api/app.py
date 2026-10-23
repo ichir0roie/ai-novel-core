@@ -29,8 +29,8 @@ from data_access_logic.map.story_route import StoryRoute
 from db.schema import engine, get_env_session
 from gui.api import interface
 from gui.api.models import (
-    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Created, Health, MapsResponse, OptionList, LocationCharactersResponse, RecordList, RecordResponse, RelationsResponse,
-    RunRequest, RunResult, TableCounts, TimelineResponse,
+    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Health, LocationCharactersResponse, MapsResponse,
+    OptionList, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult, TableCounts, TimelineResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,6 +314,3 @@ def episode_neighbors(episode_id: int, s: Session = Depends(session_dep)) -> Epi
     from data_access_logic.episode.reading import neighbor_episodes
 
     return neighbor_episodes(s, episode_id)
-
-
-_ = Created  # OpenAPI に出す型として残す

@@ -31,7 +31,6 @@ class IdeaMaterial(Material):
 
     @property
     def first_start(self) -> Stamp | None:
-        """履歴の行のうち、一番早い始まり。始まりの空いた行は数えない。"""
         return min((row.start for row in self.histories if row.start is not None), default=None)
 
 
@@ -49,13 +48,6 @@ def normalized(text: str | None) -> str:
 DEFAULT_KIND = "概念"
 # 一字の言い換えは、ほかの語の一部(「官」と「器官」など)に当たりすぎる。
 _MIN_VARIANT_LETTERS = 2
-
-
-def _stamp_or_none(value: Any) -> Stamp | None:
-    try:
-        return Stamp.parse(value)
-    except (StampError, TypeError):
-        return None
 
 
 class IdeaDraft(Material):
@@ -102,7 +94,10 @@ class IdeaDraft(Material):
     @field_validator("start", "end", mode="before")
     @classmethod
     def _stamp(cls, value: Any) -> Stamp | None:
-        return _stamp_or_none(value)
+        try:
+            return Stamp.parse(value)
+        except (StampError, TypeError):
+            return None
 
     @model_validator(mode="after")
     def _consistent(self) -> "IdeaDraft":
@@ -114,7 +109,6 @@ class IdeaDraft(Material):
 
 
 def unique_ideas(ideas: list[IdeaDraft]) -> list[IdeaDraft]:
-    """同じ keyword の語は、先に挙げたものだけを残す。"""
     found: dict[str, IdeaDraft] = {}
     for idea in ideas:
         found.setdefault(idea.keyword, idea)

@@ -11,11 +11,9 @@ from db.schema import Base, engine
 from randomizer import mock_factories
 
 
-def seed_mock_db(n=100, seed=None, recreate=False) -> dict[str, int]:
+def seed_mock_db(n: int, seed: int, recreate: bool = False) -> dict[str, int]:
     if recreate:
         copy_production_db()
-
-    seed = seed if seed is not None else random.randrange(10**9)
     reseed_random(seed)
 
     mock_factories.bind(engine)
@@ -24,17 +22,14 @@ def seed_mock_db(n=100, seed=None, recreate=False) -> dict[str, int]:
             factory_class.create_batch(n)
         mock_factories.commit()
     finally:
-        mock_factories._session.remove()
+        mock_factories.close()
 
     with engine.connect() as conn:
-        counts = {
-            table.name: conn.execute(select(func.count()).select_from(table)).scalar_one()
-            for table in Base.metadata.sorted_tables
-        }
-    return counts
+        return {table.name: conn.execute(select(func.count()).select_from(table)).scalar_one()
+                for table in Base.metadata.sorted_tables}
 
 
-def main():
+def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--n", type=int, default=100, help="各テーブルに足す件数")
     p.add_argument("--seed", type=int, help="乱数シード(省略時は自動生成して表示)")
@@ -43,8 +38,7 @@ def main():
 
     seed = args.seed if args.seed is not None else random.randrange(10**9)
     print(f"seed = {seed}")
-    counts = seed_mock_db(n=args.n, seed=seed, recreate=args.recreate)
-    for name, count in counts.items():
+    for name, count in seed_mock_db(args.n, seed, args.recreate).items():
         print(f"{name}\t{count}")
 
 

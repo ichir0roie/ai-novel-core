@@ -47,8 +47,7 @@ class CharacterSheet(Material):
 
 
 def residents(s: Session, location_ids: Collection[int], until: Stamp) -> list[int]:
-    character_ids = s.scalars(
-        common_query.resident_character_ids_select(location_ids, until)).all()
+    character_ids = s.scalars(common_query.resident_character_ids_select(location_ids, until)).all()
     return [id_ for id_ in character_ids if id_ is not None]
 
 
@@ -64,20 +63,18 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
     character = s.scalars(common_query.character_select(character_id)).first()
     if character is None:
         raise UnknownRecordError(f"id={character_id} の character が見つからない")
-    at = common_query.span(until)[1] if until is not None else Stamp(99999, 12, 31, 23, 59, 59)
+    time = common_query.span(until)[1] if until is not None else None
 
     return CharacterSheet(
         character=CharacterHead.model_validate(character),
-        # 時刻を渡さないときは、生まれたときの値だけを重ねる
-        parameters_at=parameters_at(character, None if until is None else at),
+        parameters_at=parameters_at(character, time),
         appearance=character.appearance if text else None,
         text=character.text if text else None,
         meme=character.meme if text else None,
         principle=character.principle if text else None,
         plot=character.plot if text else None,
-        histories=histories_at(character, None if until is None else at) if text else [],
-        location=_location_at(s, character_id, at),
+        histories=histories_at(character, time) if text else [],
+        location=_location_at(s, character_id, time if time is not None else Stamp(99999, 12, 31, 23, 59, 59)),
         recent_events=events_of(
-            s, common_query.events_of_character_select, character_id, until=None if until is None else at,
-            limit=count, text=text),
+            s, common_query.events_of_character_select, character_id, until=time, limit=count, text=text),
     )

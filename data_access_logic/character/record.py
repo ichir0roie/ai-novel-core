@@ -123,7 +123,7 @@ class CharacterSkillRecord(Material):
     name: str
     # 「装い」なら身に着けている物。空なら技・術・技能
     kind: str | None = None
-    # すべての来歴の行。話・人物役に渡すときは、その時刻までに起きた行だけに絞る(`skills.skills_at`)
+    # すべての来歴の行。話・人物役に渡すときは、その時刻までに起きた行だけに絞る(`skills.rows_at`)
     histories: list[CharacterSkillHistoryRow]
     # スキルの本質。作者だけが読む
     text: str
@@ -148,7 +148,6 @@ class CharacterMove(BaseModel):
 
     character_id: int = Field(description="住まい・拠点が変わった人物の人物id")
     location_id: int = Field(description="移動先の場所id")
-
 
 
 class CharacterHistoryEntry(Material):

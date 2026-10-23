@@ -143,7 +143,7 @@ def _has_model(annotation: Any) -> bool:
 
 @cache
 def _signature(cls: type[Entrypoint]) -> tuple[inspect.Signature, dict[str, TypeAdapter]]:
-    """引数の signature と、型が pydantic のモデルの引数を読み込む TypeAdapter。入口ごとに一度だけ作る。"""
+    """引数の signature と、型が pydantic のモデルの引数を読み込む TypeAdapter。"""
     hints = typing.get_type_hints(cls.__init__)
     return inspect.signature(cls), {name: TypeAdapter(hint) for name, hint in hints.items() if _has_model(hint)}
 

@@ -5,9 +5,8 @@ from __future__ import annotations
 GENERATION_CHARACTER_AGE_RANGE = (0, 40)
 # 話のプロットの役どころから生む人物(上役・老人など)は、時の流れの中で生む人物より年かさまで要る
 SCENE_CHARACTER_AGE_RANGE = (0, 90)
-# 中身を決めるときに説明ごと渡す「既にいる人物・対象」の上限。born_location とその祖先
-# (国・大陸まで)全体の居住者を対象にするため、世界が育つほど際限なく
-# 増える。上限が無いとプロンプトが肥大化し続ける(名付けで避ける名は、名前だけなので上限を置かない)。
+# 中身を決めるときに説明ごと渡す「既にいる人物・対象」の上限。born_location の祖先(国・大陸まで)の居住者が対象で、
+# 世界が育つほど増えてプロンプトが肥大化するため(名付けで避ける名は名前だけなので上限を置かない)。
 NEARBY_CHARACTER_LIMIT = 20
 # data_access_logic/character/naming
 # AI に出させる名前の候補の数。この中からサイコロで選ぶ
@@ -19,24 +18,19 @@ NAME_MEANING_PICK_RANGE = (1, 2)
 NON_PERSON_KINDS = ("国", "組織", "商会", "氏族", "集団", "物")
 
 # data_access_logic/character/generate_characters
-# 場所の種別(location.kind)ごとに、その場所にじかにいる(配下の場所は数えない)人物・対象の上限。
-# ランダムに人物を足す(GenerateCharacters)とき、上限に達した場所には足さない。話の役どころから作る人物は限らない。
-# 世界が作者の手を離れて広がっても、一つの場所に名のある人物が溢れて扱いきれなくならないようにする
+# 場所の種別(location.kind)ごとの、その場所にじかにいる(配下は数えない)人物・対象の上限。
+# ランダムに人物を足す(GenerateCharacters)ときだけ効き、話の役どころから作る人物は限らない。
 RESIDENT_LIMITS = {"都市": 40, "町": 30, "国": 30, "村": 20}
 # RESIDENT_LIMITS に無い種別(森・洞窟・湖・大陸など)の上限
 DEFAULT_RESIDENT_LIMIT = 10
 
 # data_access_logic/event/progress・data_access_logic/character/cast
-# 出来事を考えるとき、判断材料として渡す「直近の出来事」の件数(場所ごと・人物ごとの窓に使う)。
-# 増やすほど過去の語彙が持ち越され、自己増殖しやすくなる一方、
-# 少なすぎると同じ展開が場所・人物を変えて繰り返されているのを
-# 見分ける材料が足りなくなる(「同じ出来事を名前だけ変えて繰り返さない」
-# 2026-09 の観測)。どちらのリスクも残ったままの折衷値として置く。
+# 出来事を考えるときに渡す直近の出来事の件数(場所ごと・人物ごと)。多いと過去の語彙が持ち越されて自己増殖し、
+# 少ないと名前だけ変えた同じ展開の繰り返しを見分けられない。その折衷値。
 RECENT_EVENT_LIMIT = 5
 
 # data_access_logic/event/progress
-# 移動先の候補(`character/moves.py` の `move_destinations`)をどこまで拾うか。read_cast の既定
-# (levels=1、「隣の集落にいる者も枠に入れる」)と同じ考え方をそろえる。
+# 移動先の候補(`character/moves.py` の `move_destinations`)を何段上の場所の配下から拾うか。read_cast の既定(levels=1)にそろえる。
 REACH_LEVELS = 1
 MOVE_DESTINATION_LIMIT = 20
 # 出来事を起こす時点より後に既にある出来事を、いくつまで渡すか。

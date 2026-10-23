@@ -19,7 +19,8 @@ def _story_texts(s: Session, story_id: int | None) -> list[str]:
     return [stories.get(each, "") for each in story_path]
 
 
-def style_text(s: Session, scope: StyleScope, story_id: int | None = None, episode_id: int | None = None) -> str:
+def writing_style(s: Session, scope: StyleScope = StyleScope.ALL, story_id: int | None = None,
+                  episode_id: int | None = None) -> str:
     """使う所の範囲 `scope` に効く指示を、全体の行 → その範囲の行 の順につなぐ。空の指示は足さない。
     作品・話の指示は本文の決まりなので、本文の範囲だけに、全体の行 → 作品の指示(祖先の作品から順に) → 本文の行 → 話の指示 の順で足す。"""
     episode = scope == StyleScope.EPISODE
@@ -33,12 +34,5 @@ def style_text(s: Session, scope: StyleScope, story_id: int | None = None, episo
     return "\n\n".join(part.strip() for part in parts if part.strip())
 
 
-def writing_style(s: Session, scope: StyleScope = StyleScope.ALL, story_id: int | None = None,
-                  episode_id: int | None = None) -> str:
-    """AI が文を書くときの書き方。"""
-    return style_text(s, scope, story_id, episode_id)
-
-
 def episode_style(s: Session, story_id: int | None = None, episode_id: int | None = None) -> str:
-    """話の本文の書き方。"""
-    return style_text(s, StyleScope.EPISODE, story_id, episode_id)
+    return writing_style(s, StyleScope.EPISODE, story_id, episode_id)

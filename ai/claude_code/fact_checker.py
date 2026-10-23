@@ -47,7 +47,8 @@ _SYSTEM = """\
 
 def _append_fact_check(text: str | None, fact_check: str) -> str:
     base = strip_fact_check(text)
-    return f"{base}\n\n{FACT_CHECK_HEADING}\n{fact_check}" if base else f"{FACT_CHECK_HEADING}\n{fact_check}"
+    note = f"{FACT_CHECK_HEADING}\n{fact_check}"
+    return f"{base}\n\n{note}" if base else note
 
 
 class FactCheckDraft(BaseModel):
@@ -63,7 +64,6 @@ class FactCheckDraft(BaseModel):
 
 
 class FactChecksDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
     results: list[FactCheckDraft] = Field(description="番号ごとの検めた結果")
@@ -112,7 +112,7 @@ def check_sources(s: Session, table: str, ids: list[int] | None = None, limit: i
         query = query.where(~model.text.contains(FACT_CHECK_HEADING), model.text != "")
     if limit is not None:
         query = query.limit(limit)
-    return [_source(record) for record in s.scalars(query).all()]
+    return [_source(record) for record in s.scalars(query)]
 
 
 def check_draft(ai: AIClient, batch: list[SourceText]) -> list[FactCheckNote] | None:

@@ -19,7 +19,6 @@ from db.stamp import Stamp
 
 class GenerationTimeForm(BaseModel):
     location_id: int | None
-    # 省けば世界の最新の出来事の時刻
     time: str | None
 
 
@@ -36,7 +35,6 @@ class ResidentRoomsForm(BaseModel):
 
 class MovesForm(BaseModel):
     moves: list[CharacterMove]
-    # 移した時刻
     time: Stamp
 
 

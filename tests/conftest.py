@@ -7,13 +7,13 @@ from typing import Any
 import pytest
 
 from tool.test import ensure_test_db  # schema より先に読む(db をテスト用の db に固定)
-from tool.test.mock_ai_client import MockAIClient  # noqa: E402
-from db.schema import (  # noqa: E402
+from tool.test.mock_ai_client import MockAIClient
+from db.schema import (
     Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterRelation, Episode,
     EpisodeCharacter, Event, EventCharacter, EventSeed, Idea, IdeaHistory, Location, Meme, MemeCategory, Oracle,
     Story, engine, get_env_session,
 )
-from data_access_logic.entrypoint import Entrypoint  # noqa: E402
+from data_access_logic.entrypoint import Entrypoint
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -103,7 +103,7 @@ def world() -> Iterator[World]:
         s.add_all(characters)
         s.flush()
         character_locations = [CharacterLocation(character_id=character.id, location_id=location.id, start="1170/01/01")
-                            for character in characters]
+                               for character in characters]
         s.add_all(character_locations)
         relation = CharacterRelation(character_1_id=characters[0].id, character_2_id=characters[1].id,
                                      relation="幼なじみ", text="同じ通りで育った", start="1175/01/01")
@@ -124,7 +124,7 @@ def world() -> Iterator[World]:
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
         idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術",
                     histories=[IdeaHistory(location_id=location.id, start="1150/01/01", name="テスト術",
-                                                  detail="都での呼び名")])
+                                           detail="都での呼び名")])
         s.add(idea)
         s.flush()
         child_idea = Idea(name="テスト魔導炉", kind="技術", text="テスト魔導の炉", parent_idea_id=idea.id,

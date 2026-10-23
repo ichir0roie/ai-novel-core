@@ -64,7 +64,6 @@ def extraction_draft(ai: AIClient, batch: list[SourceText]) -> SeedsDraft | None
 
 
 def save_seeds(s: Session, seeds: list[str]) -> int:
-    """種を足す。足した件数を返す。"""
     s.add_all(EventSeed(text=seed) for seed in seeds)
     s.flush()
     return len(seeds)
@@ -124,5 +123,5 @@ def seed_pool(s: Session) -> list[str]:
     return list(s.scalars(select(EventSeed.text).order_by(EventSeed.id)).all())
 
 
-def draw_from(rng: random.Random, pool: list[str], count: int = constants.EVENT_SEED_DRAW_COUNT) -> list[str]:
-    return rng.sample(pool, min(count, len(pool)))
+def draw_from(rng: random.Random, pool: list[str]) -> list[str]:
+    return rng.sample(pool, min(constants.EVENT_SEED_DRAW_COUNT, len(pool)))

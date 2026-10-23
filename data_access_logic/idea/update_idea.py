@@ -12,7 +12,6 @@ from db.schema import Idea, IdeaHistory
 
 
 class UpdateIdea(CommitEntrypoint):
-
     def __init__(self, idea: IdeaUpdateForm):
         self.idea = idea
 

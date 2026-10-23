@@ -11,7 +11,6 @@ from db.schema import Idea
 
 
 class DeleteIdea(CommitEntrypoint):
-
     def __init__(self, idea_id: int):
         self.idea_id = idea_id
 

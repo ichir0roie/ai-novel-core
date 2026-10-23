@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""話の本文を、`claude -p` の生成関数に任せず、このセッションの Claude が自分で書く・直すための材料。
+"""このセッションの Claude が話の本文を自分で書く・直すための材料(スキル `episode` / `revise-episode`)。
 
-本文の材料(登場人物の直近の出来事・関係、場所の出来事)は話に結んだ登場人物・場所から引くので、
-先に `episode_casting` で登場人物・場所を決める材料を読み、Claude が `CastEpisode` で結んでから `episode_brief` を読む
-(スキル `episode` / `revise-episode`)。設定は話に結ばず、プロット・話のセッションの行(手番のファイル)・今の本文から AI が挙げた語で引く。
-本文は Claude が `CommitEpisode` で確定する。
-登場人物を決める材料(`episode_casting`)と人物ごとの関わった話の本文(`character_episodes`)は db だけで読む。
-本文の材料は出来事の要約を作り直さず、db だけの段(`brief_targets` → AI が語を挙げる → `episode_brief`)に分けてあり、
-流れ(`data_access_logic/flows/episode.py`)がつなぐ。
+本文の材料は話に結んだ登場人物・場所から引くので、先に `episode_casting` を読み、Claude が `CastEpisode` で結んでから
+`episode_brief` を読む。設定は話に結ばず、プロット・話のセッションの行・今の本文から AI が挙げた語で引く
+(`brief_targets` → AI が語を挙げる → `episode_brief` を流れ `flows/episode.py` がつなぐ)。
 """
 from __future__ import annotations
 
@@ -22,9 +18,7 @@ from data_access_logic.episode.models import (
     BriefEpisode, CastingEpisode, CharacterEpisodesSerialized, EpisodeBriefSerialized, EpisodeCastingSerialized,
     StoryMaterial,
 )
-from data_access_logic.episode.material import (
-    known_locations, later_events_select, load_episode, location_events_select,
-)
+from data_access_logic.episode.material import known_locations, later_events_select, load_episode, location_events
 from data_access_logic.episode.past import recent_appearances, style_samples
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
@@ -46,28 +40,19 @@ def _episode(s: Session, episode_id: int) -> Episode:
     return episode
 
 
-def _guide(s: Session, story_id: int, episode_id: int) -> str:
-    return episode_style(s, story_id, episode_id)
-
-
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
-    """本文の材料を読む前に、プロットから登場人物・場所を決める材料。人物が関わった話は入れない(人物ごとに
-    `character_episodes` で読む)。候補は名前と人物像だけにする。"""
+    """人物が関わった話は入れない(人物ごとに `character_episodes` で読む)。候補は名前と人物像だけにする。"""
     episode = _episode(s, episode_id)
     main_episode = CastingEpisode.model_validate(episode)
     time = main_episode.start
     location_id = episode.location_id
-    characters = cast_characters(episode)
-    mentioned = mentioned_in(episode)
-    candidates = candidate_characters(
-        s, episode, {character.id for character in [*characters, *mentioned]}, location_id, time)
     return EpisodeCastingSerialized(
         main_episode=main_episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
         child_locations=known_locations(s, location_id),
-        cast=[candidate_at(character, time) for character in characters],
-        mentioned=[candidate_at(character, time) for character in mentioned],
-        candidates=[casting_candidate_at(character, time) for character in candidates],
+        cast=[candidate_at(character, time) for character in cast_characters(episode)],
+        mentioned=[candidate_at(character, time) for character in mentioned_in(episode)],
+        candidates=[casting_candidate_at(character, time) for character in candidate_characters(s, episode, time)],
     )
 
 
@@ -112,8 +97,7 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
         mentioned=mentioned_of(mentioned, time),
         secrets={character.id: secrets_at(s, character, time) for character in [*characters, *mentioned]},
         ideas=whole_ideas(s, idea_ids, location_id, time),
-        location_events=list(reversed(events_of(s, location_events_select(location_id, time))))
-        if location_id is not None else [],
+        location_events=location_events(s, location_id, time),
         later_events=events_of(s, later_events_select(location_id, characters, time)),
-        guide=_guide(s, episode.story_id, episode.id),
+        guide=episode_style(s, episode.story_id, episode.id),
     )

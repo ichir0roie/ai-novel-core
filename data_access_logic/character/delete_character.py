@@ -27,7 +27,6 @@ class DeleteCharacter(CommitEntrypoint):
     出来事の当事者か、話の登場人物・視点になっている人物は止まる(先に出来事・話から外す)。
     """
 
-
     def __init__(self, character_id: int):
         self.character_id = character_id
 
