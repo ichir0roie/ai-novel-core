@@ -110,6 +110,11 @@ def _knowing(episode_id: int | None, character_id: int, time: str | None) -> dic
     return {"episode_id": episode_id} | ({} if actor_time is None else {"time": actor_time})
 
 
+def _read_json(path: str) -> Any:
+    """JSON をファイルか、- なら標準入力から読む。"""
+    return json.loads(sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8"))
+
+
 def _text_arg(args: argparse.Namespace) -> str:
     """文を、--file のファイルか、--text の引数(- なら標準入力)から読む。"""
     if args.file is not None:
@@ -261,13 +266,11 @@ def run(args: argparse.Namespace) -> Any:
             return stage(SessionStore(args.episode))
         case "add":
             store = SessionStore(args.episode)
-            text = sys.stdin.read() if args.turns == "-" else Path(args.turns).read_text(encoding="utf-8")
-            added = store.add(json.loads(text))
+            added = store.add(_read_json(args.turns))
             cast = store.load().cast
             return [_row(record, cast) for record in added]
         case "add-ideas":
-            text = sys.stdin.read() if args.ideas == "-" else Path(args.ideas).read_text(encoding="utf-8")
-            return call("episode_session.add_ideas.AddIdeas", {"episode_id": args.episode, "ideas": json.loads(text)})
+            return call("episode_session.add_ideas.AddIdeas", {"episode_id": args.episode, "ideas": _read_json(args.ideas)})
         case "wait":
             return wait(SessionStore(args.episode), args.record, args.timeout)
         case "moves":
@@ -281,8 +284,7 @@ def run(args: argparse.Namespace) -> Any:
         case "append":
             return call("episode_session.append_text.AppendText", {"episode_id": args.episode, "text": _text_arg(args)})
         case "replace":
-            text = sys.stdin.read() if args.edit == "-" else Path(args.edit).read_text(encoding="utf-8")
-            return call("episode_session.replace_text.ReplaceText", {"episode_id": args.episode, **json.loads(text)})
+            return call("episode_session.replace_text.ReplaceText", {"episode_id": args.episode, **_read_json(args.edit)})
         case "clear":
             return {"episode_id": args.episode, "deleted": SessionStore(args.episode).clear(args.from_record)}
     raise ValueError(f"知らないコマンド: {args.command}")

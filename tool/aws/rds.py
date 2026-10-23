@@ -19,8 +19,7 @@ EC2 Instance Connect Endpoint の転送は一本 1 時間で切れるので、�
 4. RDS が管理するマスターの秘密からパスワードを読み、`DEM_DATABASE_URL` と psql 用の `PG*` を渡してコマンドを流す
 5. 自分で起こした踏み台は、終わるときに止める(`--keep-bastion` で残す。`--serve` でも同じ)
 
-秘密は RDS が 7 日ごとに回すので、パスワードは毎回読み直す。EICE の転送は一本 1 時間で切れる。
-コマンドの終了コードをそのまま返す。
+秘密は RDS が 7 日ごとに回すので、パスワードは毎回読み直す。コマンドの終了コードをそのまま返す。
 """
 from __future__ import annotations
 
@@ -160,12 +159,10 @@ def open_tunnel(target: RdsTarget, port: int, key_dir: Path) -> subprocess.Popen
         proc = subprocess.Popen(ssh)
         deadline = time.monotonic() + 30
         while proc.poll() is None and time.monotonic() < deadline:
-            try:
-                socket.create_connection(("127.0.0.1", port), timeout=1).close()
+            if _port_in_use(port):
                 logger.info(f"転送を張った: 127.0.0.1:{port} → {target.db_endpoint}:{target.db_port}")
                 return proc
-            except OSError:
-                time.sleep(1)
+            time.sleep(1)
         proc.terminate()
         proc.wait()
         logger.info(f"転送を張れなかった({attempt} 回目)。10 秒後にやり直す")
