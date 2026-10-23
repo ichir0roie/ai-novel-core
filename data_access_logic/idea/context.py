@@ -90,12 +90,12 @@ def resolve_ideas(
         if candidate is not None:
             candidates.setdefault(candidate.id, candidate)
 
-    hit_ideas = [hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]]
-    related = _related(s, _dated(hit_ideas, time), time)
+    dated_hits = _dated([hit.idea for hit in hits[:constants.IDEA_CONTEXT_LIMIT]], time)
+    related = _related(s, dated_hits, time)
     histories = called(s, [idea.id for idea in related], location_id, time)
 
     return IdeaContextSerialized(
-        hits=_dated(hit_ideas, time),
+        hits=dated_hits,
         candidates=list(candidates.values()),
         related=[RelatedIdeaMaterial(idea=idea, history=histories.get(idea.id)) for idea in related],
     )

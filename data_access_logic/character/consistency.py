@@ -18,7 +18,7 @@ from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.generator_models import (
     BirthLocationMaterial, CharacterBirthMaterial, HistoryItemDraft, NearbyCharacter, NonPersonContentDraft,
-    PersonContentDraft,
+    PersonContentDraft, later_ideas_for_prompt,
 )
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaContextSerialized, IdeaMaterial
@@ -73,9 +73,7 @@ class ConsistencyRequestSerialized(ConsistencyRequest):
                 "説明": location.text,
                 "所属する地域": f"{location.parent.name}({location.parent.kind})" if location.parent else None,
             } if location else None,
-            "この時刻より後に始まる設定(まだ無い)": [
-                {"名前": idea.name, "種類": idea.kind, "始まる年": idea.first_start.year if idea.first_start else None}
-                for idea in self.later_ideas],
+            "この時刻より後に始まる設定(まだ無い)": later_ideas_for_prompt(self.later_ideas),
             "関係する設定": self.ideas.model_dump(),
             "既にいる人物・対象": [
                 {"名前": character.name, "種別": character.kind, "説明": character.text,

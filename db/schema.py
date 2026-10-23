@@ -79,10 +79,8 @@ class PolygonType(TypeDecorator):
 
 class Base(DeclarativeBase):
 
-    # SQLite は「INTEGER PRIMARY KEY」だけを rowid の別名として autoincrement する。
-    # Integer だと型名が INTEGER と一致せず insert のたびに id が NULL のまま失敗する。
-    # sort_order は列の並び順を明示するための番号。継承の段が一段深くなるごとに
-    # 開始値を 100 増やし、同じクラス内では 10 刻みで振る(あとで列を挟みやすい)。
+    # SQLite は型名が INTEGER の主キーだけを rowid として autoincrement するので、id は Integer にする。
+    # sort_order は列の並び順。継承の段が一段深くなるごとに開始値を 100 増やし、同じクラス内では 10 刻みで振る(あとで列を挟みやすい)。
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, sort_order=0)
     # 二つとも db が入れる(`db/postgres/timestamps.py`)ので、コードから書かない
     created_at: Mapped[datetime] = mapped_column(
@@ -114,8 +112,6 @@ class ContentBase(Base):
 
 
 class TextBase(ContentBase):
-    """本文を `text` に持つ行。"""
-
     __abstract__ = True
 
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
@@ -131,8 +127,7 @@ class Location(TextBase):
         Integer, ForeignKey("location.id"),
         comment="一つ上の場所。断面・知る相手・アイデアの効く場所は、この木をたどって配下の場所まで含む", sort_order=220)
 
-    # 位置は**一つの座標系だけ**で持つ。経度・緯度・高度で持ち、
-    # **どこを原点とするかは星ごとに決めて、その星の text に書く**。
+    # 位置は経度・緯度・高度の一つの座標系だけで持つ。原点は星ごとに決めて、その星の text に書く
     location_world: Mapped[float | None] = mapped_column(DECIMAL, comment="世界線番号 W", sort_order=230)
     location_planet: Mapped[int | None] = mapped_column(Integer, comment="惑星番号 P", sort_order=240)
     location_longitude: Mapped[float | None] = mapped_column(DECIMAL, comment="経度。基準の子午線から東へ何度(西は負)", sort_order=250)
@@ -165,9 +160,7 @@ class Location(TextBase):
         comment="ランダム生成の対象にするか。出来事の生成で新設された子の場所は親の値を継ぐ。"
         "場所を名指しする出来事の生成(GenerateEvent)はこの値を見ない")
 
-    # 自分の親(一つ上の場所)。木をのぼって道筋(location_path)を組むのに使う。
-    # 書き込みは常に parent_id を直に触るので、どちらも読み取り専用にしておく
-    # (viewonly を外すと、同じ外部キーを double-write しようとして SQLAlchemy が警告する)。
+    # 書き込みは常に parent_id を直に触るので読み取り専用にする(外すと、同じ外部キーを二重に書こうとして SQLAlchemy が警告する)
     parent: Mapped["Location | None"] = relationship(
         remote_side="Location.id", viewonly=True, lazy="noload")
     children: Mapped[list[Location]] = relationship(viewonly=True)
@@ -475,12 +468,7 @@ class Character(ContentBase):
     end: Mapped[Stamp | None] = mapped_column(
         StampType, comment="没年(この時からはいない)。空なら死んでいない", sort_order=250)
 
-    # 出自(生まれの場所)は別列を持たず、CharacterLocation の一番古い行として表す。
-    # 名字・体格・口調・性格は CharacterParameter が、居場所は期間ごとに CharacterLocation が持ち、
-    # 入口では `parameters` / `locations` の配列で出し入れする。誕生も専用の列を持たず、
-    # `parameters` の一番早く始まる行の start として表す(下の `start`)。
-    # 出来事ごとの来歴は CharacterHistory が持ち、入口では `histories` の配列で出し入れする
-    # (Idea の `histories` と同じく、基本の本文に時代ごとの行を足す形)。
+    # 出自・誕生は列を持たず、`locations` の一番古い行・`parameters` の一番早い start で表す
     CHILD_LISTS = ("parameters", "locations", "histories")
 
     @property
@@ -495,8 +483,6 @@ class Character(ContentBase):
         if not self.parameters:
             self.parameters.append(row)
         row.start = Stamp.parse(value)
-
-    # relationships
 
     parameters: Mapped[list[CharacterParameter]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
@@ -537,16 +523,13 @@ class CharacterParameter(Base):
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="この値が効き始める時。空なら初めから", sort_order=110)
 
-    # --- 名字 -------------------------------------------------------------
     family_name: Mapped[str | None] = mapped_column(
         String, comment="名字。結婚・養子・家の取り立てなどで変わる。名字を持たない身分なら空", sort_order=310)
 
-    # --- 体格 -------------------------------------------------------------
     sex: Mapped[str | None] = mapped_column(String,  comment="性別", sort_order=320)
     height: Mapped[float | None] = mapped_column(DECIMAL, comment="背丈 cm", sort_order=330)
     build: Mapped[str | None] = mapped_column(String,  comment="体格", sort_order=340)
 
-    # --- 口調 -------------------------------------------------------------
     first_person: Mapped[str | None] = mapped_column(String,  comment="一人称", sort_order=350)
     second_person: Mapped[str | None] = mapped_column(String,  comment="二人称", sort_order=360)
     third_person: Mapped[str | None] = mapped_column(String,  comment="三人称", sort_order=370)
@@ -554,9 +537,7 @@ class CharacterParameter(Base):
     dialect: Mapped[str | None] = mapped_column(
         String, comment="方言。方言の種類か、標準語で話すならその癖(語尾・言い回し・訛り)", sort_order=385)
 
-    # --- 性格 -----------------------------------------------------------
-    # 各列は personality_level への FK(Python 側は PersonalityLevel の値、無/低/並/高/必のまま扱える)。
-    # どの行でも決めていない軸は「並」(`data_access_logic/character/parameters.py`)。
+    # 性格。どの行でも決めていない軸は「並」(`data_access_logic/character/parameters.py`)
     sincerity: Mapped[str | None] = mapped_column(
         PersonalityLevelType, ForeignKey("personality_level.id"), comment="誠実性", sort_order=390)
     curiosity: Mapped[str | None] = mapped_column(
@@ -701,7 +682,6 @@ class CharacterHistory(Base):
         return self.start is not None and self.start <= time and (self.end is None or time < self.end)
 
 
-
 class CharacterHistoryKnower(KnowerMixin, Base):
     """人物の来歴の行を知る相手。この行に当たる人物だけが来歴を知る。"""
 
@@ -821,7 +801,7 @@ class IdeaHistory(Base):
     `location_id` の場所とその配下、`start` から `end` の手前までのあいだ効き、空の列はどこでも・いつでも効く。
     当てはまる行が無ければ本質の `name` をそのまま使う(`data_access_logic/idea/alias.py` の `called`)。
     行は、場所・期間に関わらず知る相手(`knowers`)に当たる人物だけが知る。場所・期間は、アイデアの効く範囲と作中の呼び名を決めるのにだけ使う。
-    効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/idea_context.py`)。
+    効く場所・時代にいる人物は、この名前でアイデアを認識している前提で本文を書く(`ai/instructions/materials.py` の `IDEA_NOTE`)。
     """
 
     __tablename__ = "idea_history"

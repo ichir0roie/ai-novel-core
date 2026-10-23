@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""本文の改行を整える `layout_novel_text`。
-
-書き方の文(文体・作風・注意書き・行の組み方)はここに定数で持たず、db の `style_preference` から読む
-(`data_access_logic/style_preference/extras.py`)。
-"""
+"""本文の改行を整える `layout_novel_text`。書き方の文はここに持たず、db の `style_preference` から読む。"""
 from __future__ import annotations
 
 import re

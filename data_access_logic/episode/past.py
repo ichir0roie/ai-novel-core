@@ -8,21 +8,12 @@ from data_access_logic.episode.models import CharacterEpisodeText, RecentEpisode
 from db.schema import Episode, EpisodeCharacter, Story
 
 
-def _before[Q: Select](query: Q, episode: Episode) -> Q:
-    """この話より前の、本文のある話に絞る。"""
+def _past[Q: Select](query: Q, episode: Episode) -> Q:
+    """この話より前の、本文のある話に絞り、新しい順に並べる。"""
     query = query.where(Episode.id != episode.id, Episode.main_text != "")
     if episode.start is not None:
         query = query.where(Episode.start <= episode.start)
-    return query
-
-
-def _past(query: Select[Episode], episode: Episode) -> Select[Episode]:
-    """新しい順。"""
-    return _before(query, episode).order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
-
-
-def _story_past_select(episode: Episode) -> Select[Episode]:
-    return _past(select(Episode).where(Episode.story_id == episode.story_id), episode)
+    return query.order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
 
 
 def _family_ids_select(episode: Episode) -> Select[int]:
@@ -34,7 +25,7 @@ def _family_ids_select(episode: Episode) -> Select[int]:
 
 
 def latest_past_episode(s: Session, episode: Episode) -> Episode | None:
-    return s.scalars(_story_past_select(episode).limit(1)).first()
+    return s.scalars(_past(select(Episode).where(Episode.story_id == episode.story_id), episode).limit(1)).first()
 
 
 def _family_past_select(episode: Episode) -> Select[Episode]:
@@ -72,12 +63,10 @@ def recent_appearances(s: Session, episode: Episode, character_id: int) -> list[
     """人物がこの話より前に関わった話(作品を問わない)のうち、新しい `constants.EPISODE_RECENT_APPEARANCE_COUNT` 話を
     本文つきで。古い順。プロットは読まない。"""
     links = s.scalars(
-        _before(select(EpisodeCharacter).join(EpisodeCharacter.episode), episode)
+        _past(select(EpisodeCharacter).join(EpisodeCharacter.episode), episode)
         .where(EpisodeCharacter.character_id == character_id)
         .options(joinedload(EpisodeCharacter.episode).options(defer(Episode.plot_text), joinedload(Episode.story)))
-        .order_by(Episode.start.desc().nulls_last(), Episode.id.desc())
         .limit(constants.EPISODE_RECENT_APPEARANCE_COUNT)
         .execution_options(populate_existing=True)
     ).all()
     return [CharacterEpisodeText.model_validate(link) for link in reversed(links)]
-

@@ -4,12 +4,7 @@
 揃えるのは流れ(`data_access_logic/flows/summary.py`)
 (古い要約の元を一度に引き、AI の結果は得たその場で一件ずつ書き戻して commit する)。
 """
-import logging
-
-
 from data_access_logic.material import Material
-
-logger = logging.getLogger(__name__)
 
 
 class SummaryTargets(Material):

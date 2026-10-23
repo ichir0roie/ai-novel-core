@@ -23,12 +23,11 @@ def overlay(values: CharacterParameterValues, row: BaseModel) -> None:
 def parameters_at(character: Character, time: Stamp | None) -> CharacterParameterValues:
     """時刻までに始まった行を、始まりの古い順に重ねる。どの行も決めていない性格の軸は「並」。
     時刻が空なら、始まりの無い行と一番早く始まる行(誕生の行)だけ、つまり生まれたときの値。"""
-    rows = list(character.parameters)
     if time is None:
         born = character.start
-        selected = [row for row in rows if row.start is None or row.start == born]
+        selected = [row for row in character.parameters if row.start is None or row.start == born]
     else:
-        selected = [row for row in rows if row.covers(time)]
+        selected = [row for row in character.parameters if row.covers(time)]
     values = CharacterParameterValues()
     for row in sorted(selected, key=_order):
         overlay(values, CharacterParameterRow.model_validate(row))

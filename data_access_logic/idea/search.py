@@ -104,4 +104,4 @@ def search(
             scores[idea.id] = (idea, total + score, [*matched, idea_draft.keyword])
     ranked = sorted(scores.values(), key=lambda found: (-found[1], found[0].id))
     hits = [IdeaHit(idea=idea, score=score, keywords=matched) for idea, score, matched in ranked]
-    return hits[:limit] if limit is not None else hits
+    return hits[:limit]

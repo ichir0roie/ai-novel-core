@@ -17,7 +17,6 @@ class AppendText(CommitEntrypoint):
     空行を置くなら、文の頭に空行を書く。
     """
 
-
     def __init__(self, episode_id: int, text: str):
         self.episode_id = episode_id
         self.text = text

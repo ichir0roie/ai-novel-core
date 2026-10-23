@@ -10,23 +10,17 @@
 """
 from __future__ import annotations
 
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.models import IdeaDraft
+from data_access_logic.idea.resolve_ideas import ResolvedIdea
 from data_access_logic.idea.search import search
 from db.stamp import Stamp
 
 
-class FoundIdea(BaseModel):
-    id: int
-    name: str
-    kind: str
-    parent_idea_id: int | None = None
-    called: str
-    text: str | None = None
+class FoundIdea(ResolvedIdea):
     score: int
     keywords: list[str]
 
@@ -44,6 +38,6 @@ class SearchIdeas(SessionEntrypoint):
         return [
             FoundIdea(id=hit.idea.id, name=hit.idea.name, kind=hit.idea.kind,
                       parent_idea_id=hit.idea.parent_idea_id,
-                      called=histories[hit.idea.id].name if hit.idea.id in histories else hit.idea.name,
+                      called=history.name if (history := histories.get(hit.idea.id)) else hit.idea.name,
                       text=hit.idea.text, score=hit.score, keywords=hit.keywords)
             for hit in hits]

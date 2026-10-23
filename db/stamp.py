@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""python の `datetime` は 9999 年までしか持てないので使わない。
+"""作中の時刻。暦は西暦の続きで万の位に乗る年も出る(`43600712`、`999990101000000`)ので、
+9999 年までしか持てない `datetime` は使わず、年・月・日・時・分・秒をそのまま持つ。
 
-作中の暦は西暦の続きで、万の位に乗る年も出る(`43600712`、`999990101000000`)。
-`datetime` はそこで `year is out of range` と言って止まるため、
-ここでは年・月・日・時・分・秒をそのまま持つ小さな値として扱う。
-
-台帳には整数として入れる(`年*10^10 + 月*10^8 + … + 秒`)。
-桁を並べただけなので、大小がそのまま時の前後になる。
+db には桁を並べた整数(`年*10^10 + 月*10^8 + … + 秒`)で入れるので、大小がそのまま時の前後になる。
 """
 from __future__ import annotations
 
@@ -15,11 +11,6 @@ import re
 from functools import total_ordering
 
 _DIGITS = re.compile(r"\A\d+\Z")
-
-# 年の下に付く五つの欄。桁数と、書かれなかったときの値
-_PARTS = (("month", 2, 1), ("day", 2, 1),
-          ("hour", 2, 0), ("minute", 2, 0), ("second", 2, 0))
-
 
 # 月ごとの日数(平年)と、グレゴリオ暦の四百年の日数
 _MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -60,11 +51,9 @@ class Stamp:
                 and 0 <= self.second < 60):
             raise StampError(f"時刻の桁が範囲の外: {self}")
 
-    # --- 作る -----------------------------------------------------------
-
     @classmethod
     def parse(cls, value) -> "Stamp | None":
-        if value is None or value == "":
+        if value is None:
             return None
         if isinstance(value, Stamp):
             return value
@@ -88,8 +77,7 @@ class Stamp:
         parts = [p for p in re.split(r"[-/ :T]", text) if p != ""]
         if not parts or not all(p.isdigit() for p in parts):
             raise StampError(f"時刻として読めない: {value!r}")
-        nums = [int(p) for p in parts[:6]]
-        return cls(*nums)
+        return cls(*(int(p) for p in parts[:6]))
 
     @classmethod
     def from_int(cls, value) -> "Stamp | None":
@@ -103,8 +91,6 @@ class Stamp:
         year, month = divmod(rest, 100)
         return cls(year, month, day, hour, minute, second)
 
-    # --- 出す -----------------------------------------------------------
-
     def to_int(self) -> int:
         return (((((self.year * 100 + self.month) * 100 + self.day) * 100
                   + self.hour) * 100 + self.minute) * 100 + self.second)
@@ -116,9 +102,7 @@ class Stamp:
     def __repr__(self) -> str:
         return f"Stamp({self})"
 
-    # --- pydantic -------------------------------------------------------
-
-    # モデルの欄に置けるようにする。JSON では `__str__` の文字列で行き来する(API で材料を運ぶため)
+    # pydantic のモデルの欄に置けるようにする。JSON では `__str__` の文字列で行き来する(API で材料を運ぶため)
     @classmethod
     def __get_pydantic_core_schema__(cls, _source, _handler):
         from pydantic_core import core_schema
@@ -138,8 +122,6 @@ class Stamp:
             raise ValueError("時刻が空")
         return stamp
 
-    # --- 進める ---------------------------------------------------------
-
     def plus_days(self, days: int) -> "Stamp":
         """`days` 日後。月末・閏年をまたいで数え、時・分・秒はそのまま。"""
         ordinal = (_days_before_year(self.year) + sum(_days_in_month(self.year, m) for m in range(1, self.month))
@@ -155,8 +137,6 @@ class Stamp:
             day -= _days_in_month(year, month)
             month += 1
         return Stamp(year, month, day, self.hour, self.minute, self.second)
-
-    # --- 比べる ---------------------------------------------------------
 
     def __eq__(self, other) -> bool:
         return isinstance(other, Stamp) and self.to_int() == other.to_int()

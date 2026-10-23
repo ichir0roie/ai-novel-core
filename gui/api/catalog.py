@@ -9,7 +9,8 @@ from __future__ import annotations
 import importlib
 import inspect
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import data_access_logic
 from data_access_logic.entrypoint import CommitEntrypoint, Entrypoint, RandomDraft, SessionEntrypoint
@@ -45,8 +46,8 @@ def _params(callable_: Callable) -> list[EntranceParam]:
 
 
 def _doc(obj: object) -> str:
-    doc = inspect.getdoc(obj) or ""
-    return doc.strip().splitlines()[0] if doc.strip() else ""
+    doc = (inspect.getdoc(obj) or "").strip()
+    return doc.splitlines()[0] if doc else ""
 
 
 def uses_claude(cls: type) -> bool:
@@ -76,7 +77,6 @@ def entrance_classes() -> dict[str, type[Entrypoint]]:
 
 
 def entrance_meta(entrance_id: str, cls: type[Entrypoint]) -> EntranceMeta:
-    module = inspect.getmodule(cls)
     return EntranceMeta(
-        id=entrance_id, area=entrance_id.split(".")[0], name=cls.__name__, doc=_doc(cls) or _doc(module),
+        id=entrance_id, area=entrance_id.split(".")[0], name=cls.__name__, doc=_doc(cls) or _doc(inspect.getmodule(cls)),
         params=_params(cls.__init__), writes=issubclass(cls, CommitEntrypoint) or uses_claude(cls))

@@ -49,8 +49,6 @@ def alive_characters_select(time: Stamp) -> Select:
     return select(Character).where(or_(born.is_(None), born <= time), or_(Character.end.is_(None), Character.end > time))
 
 
-
-
 def check_within_parent_span(parent: Location, child_start: Stamp | None, child_end: Stamp | None, label: str) -> None:
     if parent.start is not None:
         if child_start is not None and child_start < parent.start:

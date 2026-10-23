@@ -13,9 +13,7 @@ from typing import cast
 from pydantic import BaseModel
 
 from data_access_logic.step import output_adapter, step_id
-from web_session.transport import ApiError, post, run_entrance
-
-__all__ = ["ApiError", "call", "run_entrance"]
+from web_session.transport import post
 
 
 def call[Out](step: Callable[..., Out], form: BaseModel | None = None) -> Out:
@@ -24,4 +22,3 @@ def call[Out](step: Callable[..., Out], form: BaseModel | None = None) -> Out:
     入力は渡した欄だけを送る(修正のフォームは、渡した欄だけを直す。省いた欄は API の側で同じ既定値になる)。"""
     body = None if form is None else form.model_dump(mode="json", exclude_unset=True)
     return cast(Out, output_adapter(step).validate_python(post(f"/api/steps/{step_id(step)}", body)))
-

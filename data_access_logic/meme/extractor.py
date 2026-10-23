@@ -13,7 +13,7 @@ import logging
 import random
 import re
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
@@ -102,8 +102,9 @@ def without_duplicates(ai: AIClient, candidates: list[MemeDraft], existing: list
     seen = {_normalized(text) for text in existing}
     fresh = []
     for candidate in candidates:
-        if _normalized(candidate.text) not in seen:
-            seen.add(_normalized(candidate.text))
+        key = _normalized(candidate.text)
+        if key not in seen:
+            seen.add(key)
             fresh.append(candidate)
 
     for chunk in batches([MemeText(text=text) for text in existing], constants.MEME_DEDUPE_LETTERS) or [[]]:
@@ -144,10 +145,14 @@ def save_memes(s: Session, memes: list[MemeDraft]) -> int:
     return len(memes) * 2
 
 
+def _meme_sources(s: Session, condition: ColumnElement[bool]) -> list[SourceText]:
+    memes = s.scalars(select(Meme).where(condition).order_by(Meme.id)).all()
+    return [source_of(meme, "ミーム", strip_fact_check(meme.text)) for meme in memes]
+
+
 def unpaired_sources(s: Session) -> list[SourceText]:
     """アンチミームの無いミーム。GUI で手で足したもの、アンチミームを作る前からあったもの。"""
-    memes = s.scalars(select(Meme).where(Meme.anti_meme_id.is_(None)).order_by(Meme.id)).all()
-    return [source_of(meme, "ミーム", strip_fact_check(meme.text)) for meme in memes]
+    return _meme_sources(s, Meme.anti_meme_id.is_(None))
 
 
 def anti_draft(ai: AIClient, batch: list[SourceText]) -> list[AntiMeme] | None:
@@ -176,8 +181,7 @@ def save_anti_memes(s: Session, antis: list[AntiMeme]) -> int:
 
 
 def unclassified_sources(s: Session) -> list[SourceText]:
-    memes = s.scalars(select(Meme).where(Meme.category.is_(None)).order_by(Meme.id)).all()
-    return [source_of(meme, "ミーム", strip_fact_check(meme.text)) for meme in memes]
+    return _meme_sources(s, Meme.category.is_(None))
 
 
 def classify_draft(ai: AIClient, batch: list[SourceText]) -> list[MemeCategory] | None:

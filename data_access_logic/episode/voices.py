@@ -131,7 +131,7 @@ def write_voices(s: Session, episode_id: int, voices: list[VoiceDraft]) -> list[
     """今の値と違う欄だけを、話の時刻から効く行へ書く。書いた人物の id を返す。
     登場人物でない人物・変わらない人物は書かない。話の時刻が空なら書かない。"""
     episode = load_episode(s, episode_id)
-    start: Stamp | None = episode.start
+    start = episode.start
     if start is None:
         return []
     cast = {character.id: character for character in cast_characters(episode)}

@@ -45,13 +45,13 @@ class EventPlan(Material):
     character_ids: list[int]
 
 
-def _members(s: Session, form: EventForm, location_id: int | None, time: Stamp) -> list[Character]:
+def _members(s: Session, form: EventForm, time: Stamp) -> list[Character]:
     """当事者を名指しされたらその人物(メインキャラクター・手のふさがった者も含む)、
     されなければその場所・時刻に居合わせて手の空いたサブキャラクター。"""
     if not form.character_ids:
-        if location_id is None:
+        if form.location_id is None:
             raise ValueError("location_id(場所)か character_ids(当事者)のどちらかは必須")
-        return _present_characters(s, location_id, time)
+        return _present_characters(s, form.location_id, time)
     return [s.get_one(Character, character_id) for character_id in dict.fromkeys(form.character_ids)]
 
 
@@ -60,7 +60,7 @@ def plan_event(s: Session, form: EventForm) -> EventPlan:
     time = form.time or form.start or s.scalar(common_query.latest_time_select())
     if time is None:
         raise ValueError("time(時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
-    members = _members(s, form, form.location_id, time)
+    members = _members(s, form, time)
     location_id = form.location_id
     if location_id is None:
         location_id = _current_location_id(members[0], time)
@@ -77,7 +77,6 @@ def plan_event(s: Session, form: EventForm) -> EventPlan:
 
 
 def finish_generated(s: Session, event_id: int, form: EventForm) -> Event:
-    """`hidden` / `parent_event_id` / `end` は下書きの値をそのまま持たせる。"""
     record = s.get_one(Event, event_id)
     record.hidden = form.hidden
     record.parent_event_id = form.parent_event_id

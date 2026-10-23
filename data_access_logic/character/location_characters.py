@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""ある時刻にある場所にいる人物。話の登場人物を選ぶ画面が、候補を話の場所・時刻で絞るのに使う。
-
+"""ある時刻にある場所にいる人物(話の登場人物を選ぶ画面の候補)。
 居場所は国・地方のように広めに持つことがあるので、上位の場所にいる人物もその場所にいるとみなす。
 """
 from __future__ import annotations
@@ -16,6 +15,6 @@ from db.stamp import Stamp
 
 def location_character_ids(s: Session, location_id: int, time: Stamp) -> list[int]:
     location_ids = [step.id for step in common_query.location_path(s, location_id)]
-    character_locations = s.scalars(select(CharacterLocation)
-                       .where(CharacterLocation.location_id.in_(location_ids), alive_at(CharacterLocation, time))).all()
-    return sorted({character_location.character_id for character_location in character_locations if character_location.character_id is not None})
+    character_ids = s.scalars(select(CharacterLocation.character_id).where(
+        CharacterLocation.location_id.in_(location_ids), alive_at(CharacterLocation, time))).all()
+    return sorted({character_id for character_id in character_ids if character_id is not None})

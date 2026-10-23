@@ -56,29 +56,27 @@ def get_row[M: Base](s: Session, model: type[M], id_: int) -> M:
     return row
 
 
-def _in_span(column: InstrumentedAttribute[Stamp], since: Stamp, until: Stamp) -> ColumnElement[bool]:
-    # 列は `StampType` なので、`Stamp` のまま渡す(整数を渡すと年として読まれる)
-    return column.between(since, until)
-
-
 def latest_time_select() -> Select:
     return select(func.max(Event.time))
 
 
 # ---------------------------------------------------------------- 場所の木
 
-def descendant_location_ids(s: Session, location_id: int) -> list[int]:
-    """何段あるか分からないので一段ずつたどる。"""
-    get_row(s, Location, location_id)
-    found = [location_id]
-    frontier = [location_id]
+def _descendant_ids(s: Session, model: type[Location] | type[Story], parent_id: InstrumentedAttribute[int | None],
+                    root_id: int) -> list[int]:
+    """`root_id` 自身とその子孫の id。何段あるか分からないので一段ずつたどる。"""
+    get_row(s, model, root_id)
+    found = [root_id]
+    frontier = [root_id]
     while frontier:
-        children = s.scalars(
-            select(Location.id).where(Location.parent_id.in_(frontier))).all()
-        children = [child for child in children if child not in found]
-        found.extend(children)
-        frontier = children
+        frontier = [child for child in s.scalars(select(model.id).where(parent_id.in_(frontier))).all()
+                    if child not in found]
+        found.extend(frontier)
     return found
+
+
+def descendant_location_ids(s: Session, location_id: int) -> list[int]:
+    return _descendant_ids(s, Location, Location.parent_id, location_id)
 
 
 def story_path_ids(s: Session, story_id: int) -> list[int]:
@@ -92,17 +90,8 @@ def story_path_ids(s: Session, story_id: int) -> list[int]:
 
 
 def descendant_story_ids(s: Session, story_id: int) -> list[int]:
-    """この作品とその子孫(章・外伝)の id。何段あるか分からないので一段ずつたどる。"""
-    get_row(s, Story, story_id)
-    found = [story_id]
-    frontier = found
-    while frontier:
-        children = s.scalars(
-            select(Story.id).where(Story.parent_story_id.in_(frontier))).all()
-        children = [child for child in children if child not in found]
-        found = found + children
-        frontier = children
-    return found
+    """この作品とその子孫(章・外伝)の id。"""
+    return _descendant_ids(s, Story, Story.parent_story_id, story_id)
 
 
 def idea_scope_ids(s: Session, location_id: int) -> list[int]:
@@ -175,7 +164,7 @@ def events_at_select(when: Stamp | str, location_ids: Collection[int] | None = N
     since, until = span(when)
     query = (select(Event)
              .options(*EVENT_LOAD_OPTIONS)
-             .where(_in_span(Event.time, since, until)))
+             .where(Event.time.between(since, until)))
     if location_ids is not None:
         query = query.where(Event.location_id.in_(list(location_ids)))
     query = query.order_by(Event.time.desc(), Event.id.desc())
@@ -300,10 +289,8 @@ def story_episodes_select(story_id: int) -> Select:
 
 
 def episodes_select(story_id: int, count: int = 10, before: Stamp | str | None = None) -> Select:
-    """呼び出し側は取り出した後に `reversed()` して古い順に並べ直す
-    (新しい順に `limit` するため、select 自体は新しい順のまま返す)。
-    `before` は時刻。start がそれより前の話だけに絞る(start の無い話は外れる)。
-    """
+    """新しい順に `limit` するので新しい順のまま返す(呼ぶ側で `reversed()` する)。
+    `before` を渡せば、start がそれより前の話だけ(start の無い話は外れる)。"""
     query = select(Episode).where(Episode.story_id == story_id)
     if before is not None:
         query = query.where(Episode.start < Stamp.parse(before))

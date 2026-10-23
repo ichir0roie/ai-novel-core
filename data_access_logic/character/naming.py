@@ -122,9 +122,7 @@ def _kana(text: str) -> str | None:
 
 
 def _reading(draft: PersonNameDraft | NameDraft) -> str | None:
-    if isinstance(draft, PersonNameDraft):
-        return _kana(draft.reading)
-    return _kana(draft.name)
+    return _kana(draft.reading if isinstance(draft, PersonNameDraft) else draft.name)
 
 
 def _head(reading: str) -> str | None:

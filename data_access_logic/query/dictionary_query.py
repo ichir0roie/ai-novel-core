@@ -54,9 +54,8 @@ def history_in_scope(location_ids: Collection[int] | None = None, time: Stamp | 
 
 def histories_select(essence_ids: Collection[int], location_ids: Collection[int] | None = None,
                         time: Stamp | None = None) -> Select:
-    conditions = [IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time)]
     return (select(IdeaHistory)
-            .where(*conditions)
+            .where(IdeaHistory.idea_id.in_(list(essence_ids)), history_in_scope(location_ids, time))
             .order_by(IdeaHistory.start.desc().nulls_last(), IdeaHistory.id))
 
 

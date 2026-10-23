@@ -67,17 +67,13 @@ def _brave() -> str | None:
     return None
 
 
-def _brave_profile_dir() -> str:
-    return os.path.join(CORE_DIR, BRAVE_PROFILE_DIR_NAME)
-
-
 def _open_browser(url: str) -> None:
     brave = _brave()
     if brave is None:
         logger.info("Brave が見つからないので既定のブラウザで開く")
         webbrowser.open(url)
         return
-    profile = _brave_profile_dir()
+    profile = os.path.join(CORE_DIR, BRAVE_PROFILE_DIR_NAME)
     os.makedirs(profile, exist_ok=True)
     logger.info(f"Brave をプロファイル {profile} で開く")
     # Ctrl+C でサーバーを止めてもブラウザは残すため、プロセスグループを分けて起動だけする
@@ -202,13 +198,13 @@ def _wait_for(port: int, name: str, process: subprocess.Popen, path: str = "/", 
     return False
 
 
-def _popen(args: list[str], cwd: str | None = None, env: dict | None = None, **kwargs) -> subprocess.Popen:
-    # 子をまとめて止められるよう、POSIX ではプロセスグループを分ける
+def _popen(args: list[str], **kwargs) -> subprocess.Popen:
+    # 子をまとめて止められるよう、プロセスグループを分ける
     if os.name == "posix":
         kwargs["start_new_session"] = True
     else:
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-    return subprocess.Popen(args, cwd=cwd, env=env, **kwargs)
+    return subprocess.Popen(args, **kwargs)
 
 
 def _terminate(process: subprocess.Popen) -> None:
@@ -242,9 +238,9 @@ def main(argv: list[str] | None = None) -> int:
         _open_browser(f"http://localhost:{args.web_port}/")
         return 0
 
-    for port, name in ((args.api_port, "API"), (args.web_port, "画面")):
+    for port, name, option in ((args.api_port, "API", "--api-port"), (args.web_port, "画面", "--web-port")):
         if _port_open(port) and not _free_port(port, name):
-            logger.error(f"ポート {port}({name})を空けられない。手で止めるか --{'api' if name == 'API' else 'web'}-port で変える")
+            logger.error(f"ポート {port}({name})を空けられない。手で止めるか {option} で変える")
             return 1
     if not os.path.isdir(os.path.join(WEB_DIR, "node_modules")):
         logger.info("gui/web/node_modules が無いので npm install を回す")
@@ -270,15 +266,18 @@ def main(argv: list[str] | None = None) -> int:
     probing = {"API": False, "画面": False}
     source_mtime = _latest_source_mtime()
 
+    def respawn(port: int, name: str, spawn, path: str) -> subprocess.Popen:
+        process = spawn()
+        _wait_for(port, name, process, path)
+        down_since[name] = None
+        probing[name] = False
+        return process
+
     def watch(process: subprocess.Popen, port: int, name: str, spawn, path: str = "/") -> subprocess.Popen:
         # 片方が落ちてももう片方は止めず、落ちた方だけ自動で再起動する
         if process.poll() is not None:
             logger.warning(f"{name} が止まった(終了コード {process.returncode})。再起動する")
-            process = spawn()
-            _wait_for(port, name, process, path)
-            down_since[name] = None
-            probing[name] = False
-            return process
+            return respawn(port, name, spawn, path)
         if not probing[name]:
             return process
         if _http_alive(port, path):
@@ -293,10 +292,7 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning(f"{name} が応答しないまま {STALL_TIMEOUT:.0f} 秒止まっている"
                            "(reload 先のコードにエラーが残っている?)。作り直す")
             _terminate(process)
-            process = spawn()
-            _wait_for(port, name, process, path)
-            down_since[name] = None
-            probing[name] = False
+            return respawn(port, name, spawn, path)
         return process
 
     # Ctrl+C(SIGINT)だけでなく、タスクの停止などの SIGTERM でも finally を通して両方止める

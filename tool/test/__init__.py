@@ -10,6 +10,8 @@ import sys
 
 from sqlalchemy.engine import make_url
 
+from db.postgres.init_db import ALEMBIC_INI, admin_engine, database_exists
+
 logger = logging.getLogger(__name__)
 
 TEST_DATABASE_NAME = "novel_test"
@@ -33,9 +35,9 @@ def _dev_database_url() -> str:
 
 def _test_database_url() -> str:
     url = make_url(_dev_database_url()).set(database=TEST_DATABASE_NAME)
+    production = make_url(PRODUCTION_DATABASE_URL) if PRODUCTION_DATABASE_URL else None
     # 取り違えて本番(転送越しの RDS も 127.0.0.1)に書かないよう、開発用の db と同じサーバーの別の db だけを許す
-    if url.host not in ("127.0.0.1", "localhost") or PRODUCTION_DATABASE_URL and \
-            (make_url(PRODUCTION_DATABASE_URL).host, make_url(PRODUCTION_DATABASE_URL).port) == (url.host, url.port):
+    if url.host not in ("127.0.0.1", "localhost") or production and (production.host, production.port) == (url.host, url.port):
         raise RuntimeError(f"テスト用の db が手元の PostGIS を指していない: {url.render_as_string(hide_password=True)}")
     return url.render_as_string(hide_password=False)
 
@@ -63,9 +65,7 @@ def ensure_test_db() -> None:
 
     with engine.connect() as conn:
         current = conn.scalar(text("SELECT version_num FROM alembic_version"))
-    alembic_ini = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                               "db", "alembic", "alembic.ini")
-    head = ScriptDirectory.from_config(Config(alembic_ini)).get_current_head()
+    head = ScriptDirectory.from_config(Config(str(ALEMBIC_INI))).get_current_head()
     if current != head:
         logger.warning(f"テスト用の db のバージョン({current})がコードのバージョン({head})と違う。"
                        "`.venv/bin/python -m tool.test.recreate_db` で作り直す")
@@ -74,11 +74,11 @@ def ensure_test_db() -> None:
 def _test_db_has_rows() -> bool:
     from sqlalchemy import inspect, text
 
-    from db.schema import Base, engine, make_url_engine
+    from db.schema import Base, engine
 
-    admin = make_url_engine(make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False))
+    admin = admin_engine(make_url(TEST_DATABASE_URL))
     with admin.connect() as conn:
-        exists = conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": TEST_DATABASE_NAME})
+        exists = database_exists(conn, TEST_DATABASE_NAME)
     admin.dispose()
     if not exists:
         return False
@@ -100,7 +100,7 @@ def copy_production_db() -> dict[str, int]:
     from db.schema import engine, make_url_engine
 
     engine.dispose()
-    admin = make_url_engine(make_url(TEST_DATABASE_URL).set(database="postgres").render_as_string(hide_password=False))
+    admin = admin_engine(make_url(TEST_DATABASE_URL))
     with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text(f'DROP DATABASE IF EXISTS "{TEST_DATABASE_NAME}" WITH (FORCE)'))
     admin.dispose()

@@ -74,6 +74,20 @@ def _known_names(ideas: list[dict]) -> list[str]:
     return [name["呼び名"] for idea in ideas for name in idea["知っている呼び名"]]
 
 
+def _known_person(knowledge: dict, name: str) -> dict:
+    return next(character for character in knowledge["知っている人物"] if character["名前"] == name)
+
+
+def _member(members: list[dict], character_id: int) -> dict:
+    return next(member for member in members if member["人物id"] == character_id)
+
+
+def _previous_episode(world) -> Episode:
+    """太郎の台詞が一つある、話の一月前の話。"""
+    return Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
+                   start="1200/03/01 12:00:00")
+
+
 def test_new_character_knows_its_history(shown):
     result = shown(CommitCharacter(CharacterCreateForm(
         name="知る人テスト", text="説明", histories=[CharacterHistoryRow(start=1195, description="市で店を開く")])))
@@ -144,7 +158,7 @@ def test_read_knowledge(shown, world):
     # 性格は本人にだけ渡す
     assert len(me["性格"]) == 12 and me["性格"]["誠実性"] in PERSONALITY_LEVELS
     assert _histories(me) == ["太郎の秘密"]
-    hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
+    hanako_known = _known_person(result, "テスト花子")
     assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
     assert "ミーム" not in hanako_known and "性格" not in hanako_known
     assert _histories(hanako_known) == ["都の噂", "太郎も知る秘密"]
@@ -218,7 +232,7 @@ def test_read_knowledge_relation_histories_until_the_time(shown, world):
 
     relation = next(relation for relation in result["関係"] if relation["関係"] == "幼なじみ")
     assert relation["説明"] == "同じ通りで育った"
-    assert [history.split("、", 1)[1] for history in relation["来歴(古い順)"]] == ["市で再会する"]
+    assert _histories(relation) == ["市で再会する"]
 
 
 def test_read_knowledge_leaves_out_undated_relations(shown, world):
@@ -282,6 +296,7 @@ def test_read_knowledge_idea_history_only_by_knowers(shown, world, mock_ai):
     with get_env_session() as s:
         assert called(s, [idea["id"]], world.location_id, Stamp.parse("1200/01/01"))[idea["id"]].name == "古い数え方"
 
+
 def test_update_knowledge(shown, world, mock_ai):
     taro, hanako = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=hanako, histories=[
@@ -306,8 +321,7 @@ def test_update_knowledge(shown, world, mock_ai):
     assert shown(ReadKnowableRows(idea_id=idea["id"]))["idea_histories"][0]["knowers"] == [
         {"knower_id": taro, "location_id": None, "start": "1190/01/01 00:00:00"}]
     knowledge = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
-    hanako_known = next(character for character in knowledge["知っている人物"] if character["名前"] == "テスト花子")
-    assert _histories(hanako_known) == ["花子の打ち明け話"]
+    assert _histories(_known_person(knowledge, "テスト花子")) == ["花子の打ち明け話"]
 
 
 def test_read_knowable_rows_needs_one_source():
@@ -430,7 +444,7 @@ def test_read_knowledge_tells_kind_of_histories(shown, world):
     assert result["自分"]["来歴(古い順)"] == ["5年前、隠し事: 袋に短刀"]
     assert result["自分"]["装い"] == ["腰に木剣", "灰色の外套"]
     assert result["自分"]["スキル"] == []
-    known = next(character for character in others["知っている人物"] if character["名前"] == "テスト花子")
+    known = _known_person(others, "テスト花子")
     assert "5年前、隠し事: 袋に短刀" not in known["来歴(古い順)"]
     assert known["装い"] == ["腰に木剣", "灰色の外套"]
 
@@ -483,7 +497,7 @@ def test_read_stage(shown, world):
     assert result["場所(広い順)"] == ["テスト星", "テスト都"]
     assert result["場所の説明"] == "テスト用の都"
     # 語り部には人物の表層と知り合いの組だけを渡し、芯・来歴・関係の説明・設定は渡さない
-    hanako_row = next(member for member in result["登場人物"] if member["人物id"] == hanako)
+    hanako_row = _member(result["登場人物"], hanako)
     assert hanako_row == {"人物id": hanako, "名前": "テスト花子", "年齢": hanako_row["年齢"], "性別": "女",
                           "体格": "細身", "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
     taro, _ = world.character_ids
@@ -540,7 +554,7 @@ def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
     result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
     episode = result["この話"]
-    hanako_row = next(member for member in episode["登場人物"] if member["人物id"] == hanako)
+    hanako_row = _member(episode["登場人物"], hanako)
     assert hanako_row["来歴(古い順)"] == HANAKO_HISTORIES
     # 本文を書く材料には、話の時刻より先の筋(筋書き)・関わった話・関係を渡さない
     assert "筋書き" not in hanako_row
@@ -575,8 +589,7 @@ def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
 
 def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkeypatch):
     with get_env_session() as s:
-        s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                      start="1200/03/01 12:00:00"))
+        s.add(_previous_episode(world))
         s.commit()
     asked = []
 
@@ -593,8 +606,7 @@ def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkey
 def test_refresh_voices(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
     with get_env_session() as s:
-        s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                      start="1200/03/01 12:00:00"))
+        s.add(_previous_episode(world))
         s.commit()
     prompts = []
 
@@ -621,7 +633,7 @@ def test_refresh_voices(shown, world, mock_ai, monkeypatch):
         rows = [row for row in s.get_one(Character, taro).parameters if row.start == Stamp.parse("1200/04/01 12:00:00")]
     # 調整し直しても、行は増えない。変わった欄だけを書き、ほかは前の行のまま
     assert [(row.first_person, row.tone, row.second_person) for row in rows] == [("俺", "砕けた短い言い切り", None)]
-    member = next(member for member in first["この話"]["登場人物"] if member["人物id"] == taro)
+    member = _member(first["この話"]["登場人物"], taro)
     assert (member["一人称"], member["口調"], member["二人称"]) == ("俺", "砕けた短い言い切り", "あなた")
     assert "直前の話の本文(古い順)" in prompts[0]
 
@@ -629,8 +641,7 @@ def test_refresh_voices(shown, world, mock_ai, monkeypatch):
 def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
     with get_env_session() as s:
-        s.add(Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                      start="1200/03/01 12:00:00"))
+        s.add(_previous_episode(world))
         # 見本の話より後に、作者が太郎の口調を変えた
         s.add(CharacterParameter(character_id=taro, start=Stamp.parse("1200/03/15 12:00:00"), tone="作者が決めた口調"))
         s.commit()
@@ -650,8 +661,7 @@ def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, moc
 
     # 変える前の見本では太郎の話し方を直さない。AI が太郎を返しても書かない
     assert all("テスト太郎" not in prompt for prompt in asked)
-    member = next(member for member in result["この話"]["登場人物"] if member["人物id"] == taro)
-    assert member["口調"] == "作者が決めた口調"
+    assert _member(result["この話"]["登場人物"], taro)["口調"] == "作者が決めた口調"
 
 
 TARO, HANAKO, STRANGER = 1, 2, 3
@@ -954,7 +964,7 @@ def test_read_episode_brief_recent_histories(shown, world, mock_ai):
 
     result = shown(ReadEpisodeBrief(episode_id=world.episode_id))
 
-    hanako_row = next(member for member in result["この話"]["登場人物"] if member["人物id"] == hanako)
+    hanako_row = _member(result["この話"]["登場人物"], hanako)
     # 出来事の行は新しいほうから決まった数だけ、種別の付いた行は古くても効いていれば渡す
     limit = constants.EPISODE_BRIEF_HISTORY_LIMIT
     assert [row["来歴"] for row in hanako_row["来歴(古い順)"]] == [
@@ -991,11 +1001,10 @@ def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatc
 
     # AI を呼ばず、関わった話は人物ごとの入口で読む。語り部には筋書きも来歴も渡さない
     assert asked == []
-    taro_row = next(member for member in result["登場人物"] if member["人物id"] == world.character_ids[0])
+    taro_row = _member(result["登場人物"], world.character_ids[0])
     assert not {"関わった話(古い順)", "筋書き", "来歴(古い順)"} & set(taro_row)
     # 候補は結ぶかを決める名前と人物像だけ
-    candidate = next(member for member in result["登場人物の候補"] if member["人物id"] == other)
-    assert candidate == {"人物id": other, "名前": "テスト次郎", "種別": "人物", "年齢": 30, "人物像": "次郎の芯"}
+    assert _member(result["登場人物の候補"], other) == {"人物id": other, "名前": "テスト次郎", "種別": "人物", "年齢": 30, "人物像": "次郎の芯"}
 
 
 def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):

@@ -23,14 +23,11 @@ from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
 from db.child_lists import child_model
 from db.schema import Base, Character, Episode, Event, Story
-from gui.api.models import Option, RecordList, RecordResponse
+from gui.api.models import Labels, Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of, writer_of
 
 # エピソード画面の「関連」に出す出来事・話の件数の上限(時期だけで絞ると際限なく広がりうるため)
 _CONTEXT_LIMIT = 100
-
-# 参照先の名前。{列名: {id: 名前}}
-Labels = dict[str, dict[int, str]]
 
 
 class RecordSummary(BaseModel):
@@ -90,10 +87,15 @@ def _preview(spec: TableSpec, row: Base) -> str:
     return ""
 
 
-def summary_of(spec: TableSpec, row: Base) -> RecordSummary:
-    """`row` は `loading` で読んだ行。"""
+def _summary(spec: TableSpec, row: Base) -> RecordSummary:
     return RecordSummary(record=spec.record_model.model_validate(row), text_columns=(*spec.model.TEXT_COLUMNS, "text"),
                          label=label_of(spec.model, row), preview=_preview(spec, row))
+
+
+def summaries_of(s: Session, spec: TableSpec, rows: Sequence[Base]) -> tuple[list[RecordSummary], Labels]:
+    """`rows` は `loading` で読んだ行。一覧の行と、その参照先の名前。"""
+    summaries = [_summary(spec, row) for row in rows]
+    return summaries, reference_labels(s, spec, [summary.record for summary in summaries])
 
 
 def reference_labels(s: Session, spec: TableSpec, records: list[Material]) -> Labels:
@@ -168,10 +170,9 @@ def list_records(s: Session, spec: TableSpec, q: str | None, limit: int, offset:
     total = s.scalar(select(func.count()).select_from(model).where(*conditions)) or 0
     rows = s.scalars(loading(select(model).where(*conditions).order_by(*_ordering(model, sort, order))
                              .limit(limit).offset(offset), spec.record_model)).all()
-    summaries = [summary_of(spec, row) for row in rows]
+    summaries, labels = summaries_of(s, spec, rows)
     return RecordList(total=total, limit=limit, offset=offset,
-                      items=[summary.model_dump(mode="json") for summary in summaries],
-                      labels=reference_labels(s, spec, [summary.record for summary in summaries]))
+                      items=[summary.model_dump(mode="json") for summary in summaries], labels=labels)
 
 
 def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[int] | None = None) -> list[Option]:
@@ -187,14 +188,13 @@ def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[in
     parent_column = spec.tree_parent_column
     return [Option(id=row.id, label=label_of(model, row),
                    parent_id=getattr(row, parent_column) if parent_column else None,
-                   born=str(row.start) if spec.model is Character and row.start is not None else None)
+                   born=str(row.start) if model is Character and row.start is not None else None)
             for row in rows]
 
 
 def _context_block(s: Session, table: str, rows: Sequence[Base]) -> ContextBlock:
-    spec = spec_of(table)
-    summaries = [summary_of(spec, row) for row in rows]
-    return ContextBlock(items=summaries, labels=reference_labels(s, spec, [summary.record for summary in summaries]))
+    items, labels = summaries_of(s, spec_of(table), rows)
+    return ContextBlock(items=items, labels=labels)
 
 
 def _episode_context(s: Session, episode: EpisodeRecord) -> EpisodeContext:

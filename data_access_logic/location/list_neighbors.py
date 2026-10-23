@@ -73,9 +73,10 @@ class ListNeighbors(SessionEntrypoint):
         diff = (float(location.location_altitude) - float(origin.location_altitude)
                 if location.location_altitude is not None and origin.location_altitude is not None else None)
         point = map_location_of(location, parents)
-        direction = "同じ経緯度" if deg < 0.01 else bearing_name(bearing)
+        same_place = deg < 0.01
+        direction = "同じ経緯度" if same_place else bearing_name(bearing)
         parent = f"・{point.parent_name}" if point.parent_name else ""
-        where = "同じ経緯度" if deg < 0.01 else f"{direction} {distance_text(km, deg)}"
+        where = direction if same_place else f"{direction} {distance_text(km, deg)}"
         return Neighbor(
             point=point, distance_deg=round(deg, 2), distance_km=None if km is None else round(km),
             bearing_deg=round(bearing), bearing=direction, altitude_diff_m=diff,

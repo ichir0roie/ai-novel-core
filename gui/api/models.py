@@ -10,6 +10,8 @@ from data_access_logic.character.relation_graph import RelationGraph
 from data_access_logic.map.collect import PlanetMap
 
 ColumnType = Literal["integer", "number", "boolean", "string", "stamp", "json", "id_list"]
+# 参照先の名前。{列名: {id: 名前}}
+Labels = dict[str, dict[int, str]]
 
 
 class ColumnMeta(BaseModel):
@@ -80,14 +82,13 @@ class RecordList(BaseModel):
     limit: int
     offset: int
     items: list[dict[str, Any]]
-    # 参照先の名前。{列名: {id: 名前}}
-    labels: dict[str, dict[int, str]] = Field(default_factory=dict)
+    labels: Labels = Field(default_factory=dict)
 
 
 class RecordResponse(BaseModel):
     record: dict[str, Any]
     label: str
-    labels: dict[str, dict[int, str]] = Field(default_factory=dict)
+    labels: Labels = Field(default_factory=dict)
     # 表示だけの関連情報(結んだ本文・居場所など)
     related: dict[str, Any] = Field(default_factory=dict)
 
@@ -131,15 +132,11 @@ class LocationCharactersResponse(BaseModel):
 class TimelineResponse(BaseModel):
     # 一覧(`RecordList`)の一行と同じ形
     items: list[dict[str, Any]]
-    labels: dict[str, dict[int, str]] = Field(default_factory=dict)
+    labels: Labels = Field(default_factory=dict)
 
 
 class Health(BaseModel):
     dialect: str
-
-
-class Created(BaseModel):
-    id: int
 
 
 class EntranceParam(BaseModel):
@@ -189,5 +186,3 @@ class BatchItem(BaseModel):
 
 class BatchResponse(BaseModel):
     responses: list[BatchItem]
-
-

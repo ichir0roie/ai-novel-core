@@ -257,6 +257,10 @@ def _place(location: LocationMaterial) -> dict[str, Any]:
     return {"場所id": location.id, "名前": location.name, "種別": location.kind}
 
 
+def _viewpoint(character: CharacterMaterial | None) -> dict[str, Any] | None:
+    return None if character is None else {"人物id": character.id, "名前": character.name}
+
+
 class EpisodeBriefSerialized(EpisodeBrief):
     """このセッションの Claude が読む形に整形する。"""
 
@@ -265,11 +269,14 @@ class EpisodeBriefSerialized(EpisodeBrief):
     location_events: list[EventSerialized]
     later_events: list[EventSerialized]
 
+    def _member(self, member: CastSerialized | MentionedSerialized) -> dict[str, Any]:
+        return {"人物id": member.character.id, **_without_plot(member.model_dump()),
+                **secrets_for_prompt(self.secrets[member.character.id])}
+
     # 読んだ Claude が登場人物・場所・視点を id で直すので、AI へ渡す形と違って id を残す
     @model_serializer
     def _for_claude(self) -> dict[str, Any]:
         episode = self.main_episode
-        viewpoint = episode.viewpoint_character
         return {
             "材料の読み方": EPISODE_BRIEF_NOTES,
             "書き方": self.guide,
@@ -282,12 +289,9 @@ class EpisodeBriefSerialized(EpisodeBrief):
                 "終わり": str(episode.end) if episode.end else None,
                 "場所(広い順)": [{**_place(location), **line}
                                for location, line in zip(self.locations, _location_lines(self.locations))],
-                "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
-                "登場人物": [{"人物id": member.character.id, **_without_plot(member.model_dump()),
-                          **secrets_for_prompt(self.secrets[member.character.id])}
-                         for member in self.cast],
-                "名前だけ出る人物": [{"人物id": member.character.id, **_without_plot(member.model_dump()),
-                              **secrets_for_prompt(self.secrets[member.character.id])} for member in self.mentioned],
+                "視点": _viewpoint(episode.viewpoint_character),
+                "登場人物": [self._member(member) for member in self.cast],
+                "名前だけ出る人物": [self._member(member) for member in self.mentioned],
                 "設定": [{"アイデアid": whole.idea.id, **whole_idea_for_prompt(whole)} for whole in self.ideas],
                 "プロット": episode.plot_text,
                 "今の本文": episode.main_text,
@@ -330,14 +334,13 @@ class EpisodeCastingSerialized(EpisodeCasting):
     @model_serializer
     def _for_claude(self) -> dict[str, Any]:
         episode = self.main_episode
-        viewpoint = episode.viewpoint_character
         return {
             "この話": {
                 "話id": episode.id,
                 "題": episode.title,
                 "時刻": str(episode.start),
                 "場所(広い順)": [_place(location) for location in self.locations],
-                "視点": None if viewpoint is None else {"人物id": viewpoint.id, "名前": viewpoint.name},
+                "視点": _viewpoint(episode.viewpoint_character),
                 "プロット": episode.plot_text,
             },
             "登場人物": [member.model_dump() for member in self.cast],

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import SessionEntrypoint
+from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.episode_session.record import KnowerCover, KnowerGap
 from data_access_logic.history_start import by_start
 from data_access_logic.material import Named
-from db.schema import CharacterHistory, Episode, EpisodeCharacter
+from db.schema import CharacterHistory
 from db.stamp import Stamp
 
 
@@ -29,11 +29,7 @@ class ReadKnowerGaps(SessionEntrypoint):
         self.episode_id = episode_id
 
     def execute(self, s: Session) -> list[KnowerGap]:
-        episode = s.scalar(select(Episode).where(Episode.id == self.episode_id).options(
-            selectinload(Episode.episode_characters).joinedload(EpisodeCharacter.character))
-            .execution_options(populate_existing=True))
-        if episode is None:
-            raise ValueError(f"話 id={self.episode_id} が見つからない")
+        episode = load_episode(s, self.episode_id)
         time = episode.start
         if time is None:
             raise ValueError(f"話 id={self.episode_id} の時刻(start)が空")

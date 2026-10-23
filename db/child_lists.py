@@ -28,16 +28,17 @@ def child_columns(model: type, name: str) -> list[str]:
             if column.key != "id" and column.key not in foreign_keys and column.key not in TIMESTAMP_COLUMNS]
 
 
+def _write[Row](target: Row, row: BaseModel, skip: str | None = None) -> Row:
+    for name, value in row:
+        if name != skip:
+            setattr(target, name, value)
+    return target
+
+
 def replaced_rows(current: Sequence[Child], rows: Sequence[BaseModel], child: type[Child]) -> list[Child]:
     """同じ位置にある既存の行を使い回す(並びを変えなければ id が変わらない)。余った行は、返したリストで置き換えると消える。
     `rows` の欄は子の列と同じ名前で持つ(`CharacterParameterRow` など)。"""
-    replaced = []
-    for index, row in enumerate(rows):
-        target = current[index] if index < len(current) else child()
-        for name, value in row:
-            setattr(target, name, value)
-        replaced.append(target)
-    return replaced
+    return [_write(current[index] if index < len(current) else child(), row) for index, row in enumerate(rows)]
 
 
 def _history_key(child: type, row: object) -> tuple[object, ...]:
@@ -51,13 +52,8 @@ def _replaced_knowers(current: Sequence[Child], rows: Sequence[BaseModel], child
     """知る相手の行は、同じ人物・場所の今ある行だけを使い回す(位置で使い回すと、別の相手へ書き換える途中で
     `(来歴, knower_id)` の一意制約に当たる)。"""
     kept = {(getattr(knower, "knower_id"), getattr(knower, "location_id")): knower for knower in current}
-    replaced = []
-    for row in rows:
-        target = kept.pop((getattr(row, "knower_id"), getattr(row, "location_id")), None) or child()
-        for name, value in row:
-            setattr(target, name, value)
-        replaced.append(target)
-    return replaced
+    return [_write(kept.pop((getattr(row, "knower_id"), getattr(row, "location_id")), None) or child(), row)
+            for row in rows]
 
 
 def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], child: type[History],
@@ -74,13 +70,8 @@ def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], ch
     replaced = []
     for row in rows:
         same = by_key.get(_history_key(child, row))
-        target = same.pop(0) if same else None
-        is_new = target is None
-        if target is None:
-            target = child()
-        for name, value in row:
-            if name != "knowers":
-                setattr(target, name, value)
+        is_new = not same
+        target = _write(same.pop(0) if same else child(), row, skip="knowers")
         # 知る相手の行の型は来歴の型ごとに違い、型を一つに決めて代入できないので、ほかの列と同じく setattr で書く
         knowers = getattr(row, "knowers")
         if knowers is not None:

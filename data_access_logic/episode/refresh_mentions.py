@@ -23,18 +23,14 @@ class RefreshMentions(CommitEntrypoint):
     `episode_ids` を省けばすべての話。登場人物(`mentioned` でない行)は変えない。
     """
 
-
     def __init__(self, episode_ids: list[int] | None = None):
         self.episode_ids = episode_ids
 
     def execute(self, s: Session) -> list[EpisodeMentions]:
-        query = select(Episode.id).order_by(Episode.id)
+        query = select(Episode).order_by(Episode.id)
         if self.episode_ids is not None:
             query = query.where(Episode.id.in_(self.episode_ids))
         characters = named_characters(s)
-        refreshed = []
-        for episode_id in s.scalars(query).all():
-            mentioned_ids = save_mentions(s, episode_id, characters)
-            refreshed.append(EpisodeMentions(
-                id=episode_id, title=s.get_one(Episode, episode_id).title, mentioned_character_ids=mentioned_ids))
-        return refreshed
+        return [EpisodeMentions(id=episode.id, title=episode.title,
+                                mentioned_character_ids=save_mentions(s, episode.id, characters))
+                for episode in s.scalars(query).all()]

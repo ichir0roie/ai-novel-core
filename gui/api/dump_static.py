@@ -45,18 +45,14 @@ def entrances() -> dict[str, Any]:
                                    for entrance_id in sorted(interface.DB_ENTRANCES)]).model_dump(mode="json")
 
 
-def dumped(value: dict[str, Any]) -> str:
-    return json.dumps(value, ensure_ascii=False, indent=2) + "\n"
-
-
-def main() -> list[str]:
-    written = []
-    for path, value in ((OPENAPI_PATH, openapi()), (TABLES_PATH, tables()), (ENTRANCES_PATH, entrances())):
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(dumped(value))
-        written.append(path)
-    return written
+def files() -> dict[str, str]:
+    """書き出す先のパスと中身。"""
+    return {path: json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+            for path, value in ((OPENAPI_PATH, openapi()), (TABLES_PATH, tables()), (ENTRANCES_PATH, entrances()))}
 
 
 if __name__ == "__main__":
-    print("\n".join(main()))
+    for path, text in files().items():
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(path)

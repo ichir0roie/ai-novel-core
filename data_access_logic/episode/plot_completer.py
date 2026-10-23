@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""プロット補完。本文は書かない(本文はスキル `episode` でこのセッションの Claude が書く)。
-
-材料は `material.writing_targets` → 要約を揃える → `material.episode_material`。
-AI だけの段(`plot_draft`・`casting_draft`)と db だけの段(`save_plot`・`material.known_locations`・`add_cast_member`・`add_location`)に分けてあり、
-流れ(`data_access_logic/flows/episode.py`)がつなぐ。
-"""
+"""プロット補完。AI の段(`plot_draft`・`casting_draft`)と db の段を、流れ(`flows/episode.py`)がつなぐ。"""
 from __future__ import annotations
 
 import logging
@@ -63,12 +58,10 @@ def plot_draft(ai: AIClient, material: EpisodeMaterial, order: str | None, model
     return draft.plot_text
 
 
-def save_plot(s: Session, episode_id: int, plot_text: str) -> Episode:
-    record = s.get_one(Episode, episode_id)
-    record.plot_text = plot_text
+def save_plot(s: Session, episode_id: int, plot_text: str) -> None:
+    s.get_one(Episode, episode_id).plot_text = plot_text
     s.flush()
     save_mentions(s, episode_id)
-    return record
 
 
 def known_characters(s: Session, episode_id: int, time: Stamp) -> list[MentionedMaterial]:
@@ -100,7 +93,7 @@ def add_cast_member(s: Session, episode_id: int, character_id: int) -> None:
     logger.info(f"{record.name}(id={record.id})を登場人物に足した")
 
 
-def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidateDraft, parent_id: int | None) -> Location:
+def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidateDraft, parent_id: int | None) -> None:
     location = Location(
         parent_id=parent_id,
         name=candidate.name,
@@ -113,7 +106,6 @@ def add_location(s: Session, episode_id: int, candidate: EpisodeLocationCandidat
     s.get_one(Episode, episode_id).location_id = location.id
     s.flush()
     logger.info(f"舞台 {location.name}(id={location.id})を足し、話の場所にした")
-    return location
 
 
 def character_draft(candidate: EpisodeCharacterCandidateDraft) -> CharacterForm:

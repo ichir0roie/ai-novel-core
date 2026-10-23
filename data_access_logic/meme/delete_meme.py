@@ -13,7 +13,6 @@ class DeleteMeme(CommitEntrypoint):
     """ミームを消す。GUI の一覧で選んだものをまとめて消すので、id の配列で受ける。
     アンチミームも一緒に消す(残すと対の無いミームとして、消したミームに近いアンチミームを作り直すため)。"""
 
-
     def __init__(self, meme_ids: list[int]):
         self.meme_ids = meme_ids
 

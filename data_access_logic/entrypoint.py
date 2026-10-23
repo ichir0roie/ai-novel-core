@@ -37,8 +37,8 @@ def dumped(result: BaseModel | Sequence[BaseModel]) -> dict | list[dict]:
 
 
 def loading(query: Select, record_model: type[Material]) -> Select:
-    """`record_model` に詰めるのに要る noload のリレーション(当事者・登場人物)を読む。
-    同じセッションに行が残っていると eager load が効かないので `populate_existing` を付ける。"""
+    """`record_model` に要る noload のリレーションを読む。同じセッションに行が残っていると eager load が効かないので
+    `populate_existing` を付ける。"""
     return query.options(*record_model.LOAD_OPTIONS).execution_options(populate_existing=True)
 
 
@@ -87,8 +87,8 @@ class ListEntrypoint(SessionEntrypoint):
         raise NotImplementedError
 
 
-# `execute()` は `s.begin()` に包むので、その中で `s.commit()` は呼ばない
-# (成功時は抜けるときにまとめて commit、例外時は rollback される。docstring にすると、継いだ入口の説明として GUI に出てしまう)
+# `execute()` は `s.begin()` に包むので、中で `s.commit()` を呼ばない
+# (docstring にすると、継いだ入口の説明として GUI に出てしまう)
 class CommitEntrypoint(SessionEntrypoint):
     def result(self) -> BaseModel | Sequence[BaseModel]:
         with get_env_session() as s, s.begin():
@@ -103,17 +103,15 @@ class CommitEntrypoint(SessionEntrypoint):
     @classmethod
     def check_knowers(cls, s: Session, form: BaseModel) -> None:
         """来歴・履歴の行の `knowers`(知る相手)の人物・場所があるか。"""
-        for knower in (knower for row in (getattr(form, "histories", None) or []) for knower in (row.knowers or [])):
-            cls.check_exists(s, Character, knower.knower_id, "knowers.knower_id")
-            cls.check_exists(s, Location, knower.location_id, "knowers.location_id")
+        for row in getattr(form, "histories", None) or []:
+            for knower in row.knowers or []:
+                cls.check_exists(s, Character, knower.knower_id, "knowers.knower_id")
+                cls.check_exists(s, Location, knower.location_id, "knowers.location_id")
 
     @staticmethod
     def finalize(s: Session, record: Base) -> None:
-        """`StampType` のような列は bind するとき(`process_bind_param`)にしか
-        型変換が掛からない。`flush` しただけでは record の属性は渡した生の値のまま残るので、
-        レスポンスのモデルに詰める前に `refresh` で db に書いた値を読み直し、
-        `process_result_value` を通した本来の型(`Stamp` 等)に揃える。
-        """
+        """`StampType` などの列は bind するときにしか型変換が掛からず、`flush` しただけでは属性が渡した生の値のまま残る。
+        `refresh` で読み直して本来の型(`Stamp` 等)に揃える。"""
         s.flush()
         s.refresh(record)
 
@@ -121,7 +119,7 @@ class CommitEntrypoint(SessionEntrypoint):
 class RandomDraft(Entrypoint):
     """db に触れない下書き。返した形のまま、確定する入口の引数に渡せる。"""
 
-    # `randomizer/` の factory。確定する入口の引数のモデルをそのまま組む
+    # `randomizer/` の factory
     builder: staticmethod
 
     def __init__(self, **overrides: Any) -> None:

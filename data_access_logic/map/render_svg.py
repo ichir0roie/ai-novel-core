@@ -33,11 +33,9 @@ def marker(category: str, x: float, y: float, r: float, color: str, extra: str =
 
 
 def shape_path(frame: Frame, polygon: dict) -> str:
-    parts = []
-    for ring in polygon["coordinates"]:
-        parts.append(" ".join(f"{'M' if i == 0 else 'L'}{frame.x(lon):.1f},{frame.y(lat):.1f}"
-                              for i, (lon, lat) in enumerate(ring)) + " Z")
-    return " ".join(parts)
+    return " ".join(" ".join(f"{'M' if i == 0 else 'L'}{frame.x(lon):.1f},{frame.y(lat):.1f}"
+                             for i, (lon, lat) in enumerate(ring)) + " Z"
+                    for ring in polygon["coordinates"])
 
 
 def alt_text(alt: float | None) -> str:

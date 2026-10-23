@@ -28,6 +28,10 @@ def _skill(person: dict, name: str) -> dict | None:
     return next((skill for skill in person["スキル"] if skill["名前"] == name), None)
 
 
+def _known_person(knowledge: dict, name: str) -> dict:
+    return next(character for character in knowledge["知っている人物"] if character["名前"] == name)
+
+
 def test_commit_character_skill_knows_its_owner(shown, world):
     taro, hanako = world.character_ids
 
@@ -86,7 +90,7 @@ def test_read_knowledge_skills_only_known_rows_until_the_time(shown, world):
     assert "作者だけの仕組み" not in str(result)
     # 知っている行が一つも無いスキルは、持っていることも知らない
     assert _skill(result["自分"], "テスト未来の技") is None
-    hanako_known = next(character for character in result["知っている人物"] if character["名前"] == "テスト花子")
+    hanako_known = _known_person(result, "テスト花子")
     assert _skill(hanako_known, "テスト治癒") == {"名前": "テスト治癒", "来歴(古い順)": ["10年前、傷をふさぐ"]}
     assert _skill(hanako_known, "テスト隠形") is None
 
@@ -127,8 +131,7 @@ def test_update_knowledge_of_skill_histories(shown, world):
     assert forgotten not in [row["id"] for row in result["character_skill_histories"]]
     assert result == shown(ReadKnownRows(knower_id=taro))
     knowledge = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
-    hanako_known = next(character for character in knowledge["知っている人物"] if character["名前"] == "テスト花子")
-    assert _skill(hanako_known, "テスト隠形") == {"名前": "テスト隠形", "来歴(古い順)": ["15年前、気配を消す"]}
+    assert _skill(_known_person(knowledge, "テスト花子"), "テスト隠形") =={"名前": "テスト隠形", "来歴(古い順)": ["15年前、気配を消す"]}
 
 
 def test_delete_character_skill(shown, world):

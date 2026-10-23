@@ -22,6 +22,12 @@ import sys
 import warnings
 from typing import Any
 
+from sqlalchemy import JSON, Boolean, MetaData, bindparam, func, select, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import make_url
+
+from db.postgres.postgis import POSTGIS_COLUMNS
+
 logger = logging.getLogger(__name__)
 
 _BATCH = 1000
@@ -41,8 +47,6 @@ def main(argv: list[str] | None = None) -> None:
     if not url:
         sys.exit("URL が無い。--url か DEM_DATABASE_URL で PostgreSQL の URL を渡す")
     os.environ["DEM_DATABASE_URL"] = url
-
-    from sqlalchemy.engine import make_url
 
     from data_access_logic.logs import configure_logging
     from db.schema import engine, make_url_engine
@@ -64,8 +68,6 @@ def main(argv: list[str] | None = None) -> None:
 
 def copy_database(source, engine, truncate: bool = False) -> dict[str, int]:
     """source の全表の行を engine(PostgreSQL)へ写し、表ごとの行数を返す。"""
-    from sqlalchemy import MetaData, func, select, text
-
     from db.schema import Base
 
     if engine.dialect.name != "postgresql":
@@ -107,8 +109,6 @@ def copy_database(source, engine, truncate: bool = False) -> dict[str, int]:
 
 
 def _check_revision(src, dst) -> None:
-    from sqlalchemy import text
-
     def revision(conn) -> str | None:
         try:
             return conn.scalar(text("SELECT version_num FROM alembic_version"))
@@ -122,8 +122,6 @@ def _check_revision(src, dst) -> None:
 
 
 def _check_empty(dst, target_meta, tables) -> None:
-    from sqlalchemy import func, select
-
     filled = [table.name for table in tables if table.name != "personality_level"
               and dst.scalar(select(func.count()).select_from(target_meta.tables[table.name]))]
     if filled:
@@ -131,8 +129,6 @@ def _check_empty(dst, target_meta, tables) -> None:
 
 
 def _check_orphans(src, source_meta, tables) -> None:
-    from sqlalchemy import func, select
-
     found = []
     for table in tables:
         if table.name not in source_meta.tables:
@@ -158,8 +154,6 @@ def _self_ref_columns(table) -> list[str]:
 
 
 def _plain(value: Any, column) -> Any:
-    from sqlalchemy import Boolean
-
     if value is not None and isinstance(column.type, Boolean):
         # SQLite は真偽を 0/1 で持つ。PostgreSQL の boolean は整数を受け付けない
         return bool(value)
@@ -167,11 +161,6 @@ def _plain(value: Any, column) -> Any:
 
 
 def _copy_table(src, dst, source_table, target_table, self_refs: list[str]) -> int:
-    from sqlalchemy import JSON, bindparam, select
-    from sqlalchemy.dialects.postgresql import JSONB
-
-    from db.postgres.postgis import POSTGIS_COLUMNS
-
     # PostGIS の幾何は生成列なので写さない(写し先が値から作り直す)
     columns = [column.name for column in source_table.columns
                if column.name in target_table.c and (source_table.name, column.name) not in POSTGIS_COLUMNS]
@@ -205,8 +194,6 @@ def _copy_table(src, dst, source_table, target_table, self_refs: list[str]) -> i
 
 
 def _sync_sequence(dst, table_name: str) -> None:
-    from sqlalchemy import text
-
     # id を明示して入れたので、次の insert が既存の id とぶつからないよう連番を最大の id へ寄せる
     dst.execute(text(
         f"SELECT setval(pg_get_serial_sequence('\"{table_name}\"', 'id'), "

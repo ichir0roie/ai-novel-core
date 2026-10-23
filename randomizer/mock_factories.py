@@ -19,8 +19,7 @@ _session = scoped_session(sessionmaker())
 _LOCALE = "ja_JP"
 _YEAR_RANGE = (4000, 5000)
 
-# 実際の生成(data_access_logic/character/generator.py)は人物説明に合わせて AI が自分で
-# 決めるが、ここは db にそれらしい見た目のダミー行を積むだけの目的なので、少ない候補からのサイコロでよい。
+# 実際の生成では人物説明に合わせて AI が決める。ここはダミーの行を積むだけなので、少ない候補からのサイコロでよい
 _SEX_CHOICES = ("男", "女", "不定")
 _BUILD_CHOICES = ("細身", "小柄", "がっしり", "長身", "ふくよか", "痩身")
 _HISTORY_KIND_CHOICES = ("持ち物", "記憶", "隠し事")
@@ -45,6 +44,9 @@ def bind(engine) -> None:
 
 def commit() -> None:
     _session.commit()
+
+
+def close() -> None:
     _session.remove()
 
 
@@ -58,7 +60,7 @@ def _random_stamp(after: Stamp | None = None) -> Stamp:
 def _pick_id(model: type[Base], factory_class: type[factory.Factory] | None = None, p_none: float = 0.0) -> int | None:
     if p_none and randgen.random() < p_none:
         return None
-    ids = _session().execute(select(model.id)).scalars().all()
+    ids = _session.scalars(select(model.id)).all()
     if ids:
         return randgen.choice(ids)
     if factory_class is None:
@@ -70,10 +72,6 @@ def _pool(model: type[Base], factory_name: str | None = None, p_none: float = 0.
     # 参照先のファクトリはこの後で定義されるので、名前で持って呼ぶときに引く
     return factory.LazyFunction(
         lambda: _pick_id(model, globals()[factory_name] if factory_name else None, p_none))
-
-
-def _stamp() -> factory.LazyFunction:
-    return factory.LazyFunction(_random_stamp)
 
 
 def _optional_stamp(p_none: float = 0.3) -> factory.LazyFunction:
@@ -175,9 +173,7 @@ class CharacterHistoryFactory(_ModelFactory):
         model = CharacterHistory
 
     character_id = _pool(Character, "CharacterFactory")
-    # 起きた時刻。空なら時期未定
-    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp())
-    # 空なら起きた出来事
+    start = _optional_stamp()
     kind = factory.LazyFunction(lambda: None if randgen.random() < 0.6 else randgen.choice(_HISTORY_KIND_CHOICES))
     description = _text()
 
@@ -188,8 +184,7 @@ class CharacterSkillFactory(_ModelFactory):
 
     character_id = _pool(Character, "CharacterFactory")
     name = factory.Faker("random_element", elements=_SKILL_NAMES)
-    # 空なら技・術・技能
-    kind = factory.LazyFunction(lambda: None if randgen.random() < 0.7 else "装い")
+    kind =factory.LazyFunction(lambda: None if randgen.random() < 0.7 else "装い")
     text = _text()
 
 
@@ -198,8 +193,7 @@ class CharacterSkillHistoryFactory(_ModelFactory):
         model = CharacterSkillHistory
 
     character_skill_id = _pool(CharacterSkill, "CharacterSkillFactory")
-    # 起きた時刻。空なら時期未定
-    start = factory.LazyFunction(lambda: None if randgen.random() < 0.3 else _random_stamp())
+    start = _optional_stamp()
     description = _text()
 
 
@@ -210,7 +204,7 @@ class EventFactory(_ModelFactory):
     name = factory.Sequence(lambda n: f"出来事{n}")
     hidden = factory.Faker("boolean", chance_of_getting_true=10)
     text = _text()
-    time = _stamp()
+    time = factory.LazyFunction(_random_stamp)
     parent_event_id = _pool(Event, p_none=0.3)
     location_id = _pool(Location, "LocationFactory", p_none=0.1)
     start = _optional_stamp()
@@ -262,7 +256,7 @@ class EpisodeFactory(_ModelFactory):
 
     story_id = _pool(Story, "StoryFactory")
     title = factory.Faker("sentence", nb_words=4, locale=_LOCALE)
-    plot_text = factory.Faker("text", max_nb_chars=200, locale=_LOCALE)
+    plot_text = _text()
     main_text = _text()
     start = _optional_stamp()
     end = _end_after_start()

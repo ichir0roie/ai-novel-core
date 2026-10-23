@@ -145,9 +145,7 @@ class EventRecordDraft(BaseModel):
     character_updates: list[CharacterUpdateDraft] = Field(description="この出来事を通して人となりについて新しく分かった人物・対象")
     location_abolished: bool = Field(description="この出来事でこの場所自体が消滅・放棄されたか")
     location_founded: FoundedLocationDraft | None = Field(description="この出来事でこの場所の配下に生まれた新しい場所")
-    event_duration_days: int = Field(
-        ge=constants.EVENT_DURATION_RANGE_DAYS[0], le=constants.EVENT_DURATION_RANGE_DAYS[1],
-        description=EVENT_DURATION_INSTRUCTION)
+    event_duration_days: int = Field(ge=_SHORTEST_DAYS, le=_LONGEST_DAYS, description=EVENT_DURATION_INSTRUCTION)
 
     @field_validator("event_name")
     @classmethod
@@ -164,4 +162,4 @@ class EventRecordDraft(BaseModel):
             days = int(value)
         except (TypeError, ValueError):
             return constants.DEFAULT_EVENT_DURATION_DAYS
-        return min(max(days, constants.EVENT_DURATION_RANGE_DAYS[0]), constants.EVENT_DURATION_RANGE_DAYS[1])
+        return min(max(days, _SHORTEST_DAYS), _LONGEST_DAYS)

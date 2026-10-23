@@ -20,20 +20,19 @@ from ai.instructions.materials import TIME_NOTE
 from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.form import CharacterForm
+from data_access_logic.character.consistency import Reconciled, reconciled
+from data_access_logic.character.form import CharacterForm, CharacterParameterForm
 from data_access_logic.character.generator_models import (
     BirthLocationMaterial, BirthSources, CharacterBirthMaterialSerialized, CharacterContent, CharacterCreation,
     CharacterNameMaterialSerialized, CharacterWriting, CompletionTarget, HistoryItemDraft, NearbyCharacter, NonPersonContentDraft,
     PersonContentDraft, PersonNameDraft, StoryElementsDraft, StoryElementsRequestSerialized,
 )
 from data_access_logic.character.histories import add_history, histories_at
-from data_access_logic.character.skills import OUTFIT_KIND
-from data_access_logic.character.consistency import Reconciled, reconciled
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.character.naming import named
-from data_access_logic.character.form import CharacterParameterForm
 from data_access_logic.character.parameters import overlay, parameter_row, parameters_at
 from data_access_logic.character.record import CharacterHistoryRow, CharacterSkillHistoryRow
+from data_access_logic.character.skills import OUTFIT_KIND
 from data_access_logic.idea.models import IdeaContextMaterial, IdeaMaterial
 from data_access_logic.meme.extractor import draw_from, meme_pool, position_legend
 from data_access_logic.meme.models import DrawnMeme
@@ -118,13 +117,14 @@ def _meme_categories(person: bool) -> tuple[str, ...]:
 
 
 def birth_sources(s: Session, born_location_id: int | None, time: Stamp, person: bool) -> BirthSources:
-    born_location = (s.scalar(
-        select(Location).where(Location.id == born_location_id)
-        .options(joinedload(Location.parent)).execution_options(populate_existing=True))
-        if born_location_id is not None else None)
-    stories = story_creation_query.load_location_story(s, born_location_id) if born_location_id is not None else []
-    later_ideas = (s.scalars(dictionary_query.later_ideas_select(
-        common_query.idea_scope_ids(s, born_location_id), time)).all() if born_location_id is not None else [])
+    born_location, stories, later_ideas = None, [], []
+    if born_location_id is not None:
+        born_location = s.scalar(
+            select(Location).where(Location.id == born_location_id)
+            .options(joinedload(Location.parent)).execution_options(populate_existing=True))
+        stories = story_creation_query.load_location_story(s, born_location_id)
+        later_ideas = s.scalars(dictionary_query.later_ideas_select(
+            common_query.idea_scope_ids(s, born_location_id), time)).all()
     return BirthSources(
         born_location=BirthLocationMaterial.model_validate(born_location) if born_location is not None else None,
         stories=[StoryPlotMaterial.model_validate(story) for story in stories],
@@ -364,7 +364,8 @@ def completion_content(
     """決まっている名前・属性・出自と、作者が書いた外見・ミーム・行動原理・筋書きを核に、説明と来歴だけを AI に書かせる。"""
     material = _birth_material(
         ai, rng, sources, target.time, target.person,
-        None if target.parameters is None else CharacterParameterForm.model_validate(target.parameters.model_dump()), target.name,
+        None if target.parameters is None else CharacterParameterForm.model_validate(target.parameters, from_attributes=True),
+        target.name,
         None if target.person else target.kind, target.age, None, target.hint_text, None, None, draw_memes=False)
     subject = "人物" if target.person else "対象"
     content = _content(ai, material, f"この{subject}の説明を決める。")

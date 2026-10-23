@@ -46,7 +46,6 @@ def _resolved(idea: IdeaMaterial, history: IdeaHistoryMaterial | None = None) ->
 
 
 class ResolveIdeas(CommitEntrypoint):
-
     def __init__(self, ideas: list[IdeaDraft], location_id: int | None = None, time: Stamp | str | None = None):
         self.ideas = ideas
         self.location_id = location_id

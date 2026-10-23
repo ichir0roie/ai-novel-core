@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""本文は書かない(本文はスキル `episode` でこのセッションの Claude が書く)。
+"""本文の無い話の枠(題・プロット・時刻)を AI に決めさせる。
 
-db だけの段(`framing_targets` → 要約を揃える → `frame_material` → `save_frame_draft`)と、AI だけの段(`frame_draft`)に分けてある。
-流れ(`data_access_logic/flows/episode.py`)がつなぐ。
+db の段(`framing_targets` → 要約を揃える → `frame_material` → `save_frame_draft`)と AI の段(`frame_draft`)を、
+流れ(`flows/episode.py`)がつなぐ。
 """
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ def frame_start(material: EpisodeFrameMaterial, draft: EpisodeFrameDraft) -> Sta
     return start
 
 
-def save_frame_draft(s: Session, episode_id: int, draft: EpisodeFrameDraft, start: Stamp) -> Episode:
+def save_frame_draft(s: Session, episode_id: int, draft: EpisodeFrameDraft, start: Stamp) -> None:
     record = s.get_one(Episode, episode_id)
     record.title = draft.title
     record.plot_text = draft.plot_text
@@ -108,4 +108,3 @@ def save_frame_draft(s: Session, episode_id: int, draft: EpisodeFrameDraft, star
     s.flush()
     save_mentions(s, episode_id)
     logger.info(f"{start}「{record.title}」 id={record.id} の枠を決めた")
-    return record

@@ -9,7 +9,6 @@ db へは表の持ち主のロール(`novel_migrator`。`infra/sql/novel_migrato
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
@@ -18,11 +17,10 @@ from alembic.script import ScriptDirectory
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from db.postgres.init_db import ALEMBIC_INI
 from db.schema import engine
 
 logger = logging.getLogger(__name__)
-
-ALEMBIC_INI = Path(__file__).parent / "alembic" / "alembic.ini"
 
 app = FastAPI()
 
