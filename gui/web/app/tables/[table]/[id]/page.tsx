@@ -136,6 +136,17 @@ export default function RecordPage() {
     }
   };
 
+  /** 画面の変更を捨て、db の今の行を読み直す。ほかの人・AI の段が直した分も入る */
+  const revert = async () => {
+    setBusy(true);
+    setSaved(null);
+    try {
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // 話の画面の Ctrl+S は本文だけを保存する(ほかの欄の変更は Save ボタンで送る)
   useSaveShortcut(() => void save(false, table === "episode" ? ["main_text"] : undefined), loaded !== null && !busy);
 
@@ -238,7 +249,7 @@ export default function RecordPage() {
             actions={
               <div className="actionbar">
                 <div className="inner">
-                  <button onClick={() => loaded && setValue(loaded.record)} disabled={busy || !dirty}>
+                  <button onClick={() => void revert()} disabled={busy}>
                     {T.record.revert}
                   </button>
                   <button onClick={() => save(true)} disabled={busy || !dirty}>

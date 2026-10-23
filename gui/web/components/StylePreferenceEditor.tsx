@@ -49,8 +49,8 @@ export default function StylePreferenceEditor() {
     }
   };
 
-  const reload = async () => {
-    if (dirty && !window.confirm(T.styleEditor.discard)) return;
+  /** 変更を捨て、db の今の一覧と行を読み直す */
+  const revert = async () => {
     setStatus(null);
     try {
       await loadList();
@@ -58,6 +58,11 @@ export default function StylePreferenceEditor() {
     } catch (e) {
       setStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     }
+  };
+
+  const reload = () => {
+    if (dirty && !window.confirm(T.styleEditor.discard)) return;
+    void revert();
   };
 
   const items = data?.items ?? [];
@@ -105,7 +110,7 @@ export default function StylePreferenceEditor() {
           <button type="button" className="primary" disabled={!dirty} onClick={save}>
             {T.record.save}
           </button>
-          <button type="button" disabled={!dirty} onClick={() => setText(saved)}>
+          <button type="button" onClick={() => void revert()}>
             {T.record.revert}
           </button>
           <button type="button" onClick={reload}>

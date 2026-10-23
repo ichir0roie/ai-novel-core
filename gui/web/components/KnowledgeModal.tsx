@@ -285,30 +285,32 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
   const [done, setDone] = useState<string | null>(null);
   const locationLabels = new Map(useOptions("location").map((o) => [o.id, o.label]));
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
+  /** 木と、この人物が知る行を db から読む。isCancelled が true を返したら受けた値を捨てる */
+  const loadTree = useCallback(async (isCancelled: () => boolean = () => false) => {
+    const [locations, characters, characterLocations, ideas, known] = await Promise.all([
       listAllRecords("location", { sort: "id", order: "asc" }),
       listAllRecords("character", { sort: "id", order: "asc" }),
       getCharacterLocations(),
       listAllRecords("idea", { sort: "id", order: "asc" }),
       readKnownRows(characterId),
-    ])
-      .then(([locations, characters, characterLocations, ideas, known]) => {
-        if (cancelled) return;
-        const characterTree = buildCharacterTree(locations, characters, characterLocations.locations);
-        setTree({
-          locations: characterTree.nodes, unplaced: characterTree.unplaced, ideas: buildIdeaTree(ideas),
-          places: buildPlaceTree(locations), home: homeChain(locations, characterLocations.locations[String(characterId)]),
-          homeId: characterLocations.locations[String(characterId)],
-        });
-        setSaved(known);
-      })
-      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
+    ]);
+    if (isCancelled()) return;
+    const characterTree = buildCharacterTree(locations, characters, characterLocations.locations);
+    setTree({
+      locations: characterTree.nodes, unplaced: characterTree.unplaced, ideas: buildIdeaTree(ideas),
+      places: buildPlaceTree(locations), home: homeChain(locations, characterLocations.locations[String(characterId)]),
+      homeId: characterLocations.locations[String(characterId)],
+    });
+    setSaved(known);
+  }, [characterId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadTree(() => cancelled).catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
     };
-  }, [characterId]);
+  }, [loadTree]);
 
   const loadRows = useCallback(async (source: Source) => {
     setRows(null);
@@ -360,6 +362,22 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
       onSaved();
     } catch (e) {
       setError(T.knowledge.failed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 付け外しを捨て、木・知る行・選んだ行を db から読み直す */
+  const revert = async () => {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    setChanges(new Map());
+    try {
+      await loadTree();
+      if (selected) await loadRows(selected);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -435,7 +453,7 @@ export default function KnowledgeModal({ characterId, characterName, onClose, on
           <span className="spacer" />
           {error && <span className="status error">{error}</span>}
           {done && !error && <span className="status ok">{done}</span>}
-          <button type="button" onClick={() => setChanges(new Map())} disabled={busy || changes.size === 0}>
+          <button type="button" onClick={() => void revert()} disabled={busy}>
             {T.record.revert}
           </button>
           <button type="button" onClick={close}>
