@@ -82,6 +82,7 @@
 | db・AI とやり取りするコード、`db/schema.py`・マイグレーション、AI へ渡す文面・世界ごとの好みを書く・直す、列名を確かめる | `.claude/docs/data-access.md` |
 | AWS の資源に触れる、API(Lambda)の段・流れ(`data_access_logic/flows/`)・web の口(`web_session/`)のコードを書く | `.claude/docs/aws.md` |
 | PostgreSQL の構成・AWS へのデプロイ・GitHub Actions を調べる・直す | `.docs/README.md` から当たる文書 |
+| 話を小説家になろうへ投稿する(手元だけ) | `.claude/docs/narou.md` |
 
 # コーディング規約
 
