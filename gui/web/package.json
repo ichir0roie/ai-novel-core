@@ -18,7 +18,7 @@
     "@aws-sdk/credential-provider-node": "^3.972.84",
     "@smithy/signature-v4": "^5.7.4",
     "aws-amplify": "^6.22.1",
-    "next": "16.3.6",
+    "next": "16.4.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
