@@ -4,7 +4,6 @@ import "./globals.css";
 import AuthGate from "@/components/AuthGate";
 import HintLayer from "@/components/Hint";
 import Nav from "@/components/Nav";
-import ResumeLastPage from "@/components/ResumeLastPage";
 import SavingOverlay from "@/components/SavingOverlay";
 import { T } from "@/lib/text";
 
@@ -19,9 +18,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <AuthGate>
           <Nav />
-          <Suspense>
-            <ResumeLastPage />
-          </Suspense>
           {/* 画面は useSearchParams を読むので、next build の静的な書き出しでは読めるまで待つ境界が要る */}
           <main>
             <Suspense>{children}</Suspense>
