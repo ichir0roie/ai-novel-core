@@ -19,7 +19,7 @@
 playwright は `requirements-narou.txt` で入れ、初めて動かす手元では、ブラウザを
 `.venv/bin/python -m playwright install chromium` で入れておく。
 
-仮実装: 管理画面の URL のほかは、リンク・入力欄・ボタンを確かめていない(下の定数)。初めて投稿するときに画面と突き合わせて直す。
+画面の URL・入力欄・ボタン(下の定数)は、2026-10 のなろうの画面と突き合わせてある。一覧のページ送り(`NEXT_PAGE_LINK`)だけは未確認。
 """
 from __future__ import annotations
 
@@ -56,18 +56,31 @@ USER_DATA_DIR = STATE_DIR / "browser"
 LOGIN_URL = "https://ssl.syosetu.com/login/input/"
 NOVEL_LIST_URL = "https://syosetu.com/usernovel/list/"
 NOVEL_URL = "https://syosetu.com/usernovelmanage/top/ncode/{novel}/"
-PART_URL = "https://syosetu.com/usernoveldatamanage/top/ncode/{novel}/noveldataid/{part}/"
+# 新しいエピソードは下書きとして足してから投稿する作り。編集は確認の画面を経て保存する
+NEW_PART_URL = "https://syosetu.com/draftepisode/input/ncode/{novel}/"
+EDIT_URL = "https://syosetu.com/usernoveldatamanage/updateinput/ncode/{novel}/noveldataid/{part}/"
 NOVEL_ID_PATTERN = re.compile(r"/usernovelmanage/top/ncode/(\d+)")
-PART_ID_PATTERN = re.compile(r"/noveldataid/(\d+)")
-# 小説の管理画面から次話投稿の画面へ、部分の管理画面から編集の画面へ移るリンクの文言
-NEW_PART_LINK = "次話投稿"
-EDIT_PART_LINK = "編集"
-# 一覧がページに分かれるときの、次のページへのリンクの文言
+# 部分の一覧で読むのは部分の管理画面へのリンク。同じ部分を指す編集(updateinput)のリンクは拾わない
+PART_LINK_PATTERN = re.compile(r"/usernoveldatamanage/top/ncode/\d+/noveldataid/(\d+)")
+# 一覧のリンクの題。「連載」「ep.1」「代表作」などの印は span に入るので、リンクの直下の文字だけを読む
+LINK_TITLE_SCRIPT = ("e => [...e.childNodes].filter(n => n.nodeType === Node.TEXT_NODE)"
+                     ".map(n => n.textContent).join('')")
+# 一覧がページに分かれるときの、次のページへのリンクの文言(75 部分では分かれず、未確認)
 NEXT_PAGE_LINK = "次へ"
 SUBTITLE_FIELD = "input[name='subtitle']"
 TEXT_FIELD = "textarea[name='novel']"
-CONFIRM_BUTTON = "input[type='submit'][value*='確認']"
-SUBMIT_BUTTON = "input[type='submit'][value*='投稿']"
+# 編集: 入力の画面 →「保存[確認]」→ 確認の画面(updateconfirm)→「保存[実行]」
+EDIT_CONFIRM_BUTTON = "input[type='submit'][value='保存[確認]']"
+EDIT_SUBMIT_BUTTON = "input[type='submit'][value='保存[実行]']"
+# 新しいエピソード: 入力の画面 →「下書き保存」→ 下書きの画面の「投稿」で重ねる窓(postinput)→「投稿[確認]」
+# → 確認の窓(postconfirm)→「投稿[実行]」→ 終わりの窓(postend)。窓の中身は開いたときに読み込まれる
+SAVE_DRAFT_BUTTON = "input[type='submit'][value='下書き保存']"
+DRAFT_POST_LINK = "a.c-button--primary:text-is('投稿')"
+POST_CONFIRM_BUTTON = ".js-post_confirm_button"
+POST_BUTTON = ".js-post_button"
+POST_MODAL = ".remodal[data-remodal-id='{name}']"
+# 窓の中身が読み込まれるのを待つ長さ
+MODAL_TIMEOUT_MS = 15 * 1000
 
 # 手でログインし終えるのを待つ長さ
 LOGIN_TIMEOUT_MS = 10 * 60 * 1000
@@ -134,14 +147,8 @@ def read_post(episode_id: int) -> Post:
             raise SystemExit(f"話 {episode_id} に本文が無い")
         if not (episode.title or "").strip():
             raise SystemExit(f"話 {episode_id} に題(サブタイトル)が無い")
-        novel_id = novel_id_of(s, episode.story_id)
-        if episode.narou_novel_data_id is None:
-            unposted = unposted_before(s, episode, novel_id)
-            if unposted:
-                listed = "、".join(f"{e.id}「{e.title}」" for e in unposted)
-                raise SystemExit(f"話 {episode_id} より前(start 順)に、小説 {novel_id} へまだ投稿していない話がある: {listed}")
-        return Post(episode_id=episode.id, novel_id=novel_id, novel_data_id=episode.narou_novel_data_id,
-                    subtitle=episode.title, text=episode.main_text)
+        return Post(episode_id=episode.id, novel_id=novel_id_of(s, episode.story_id),
+                    novel_data_id=episode.narou_novel_data_id, subtitle=episode.title, text=episode.main_text)
 
 
 def novel_id_of(s: Session, story_id: int) -> int:
@@ -161,12 +168,6 @@ def novel_episodes(s: Session, novel_id: int) -> list[Episode]:
                  if novel_id_of(s, story_id) == novel_id}
     return list(s.scalars(select(Episode).where(Episode.story_id.in_(story_ids))
                           .order_by(Episode.start.asc().nulls_last(), Episode.id.asc())))
-
-
-def unposted_before(s: Session, episode: Episode, novel_id: int) -> list[Episode]:
-    """同じ小説へ投稿する話のうち、この話より前(start 順)で、まだ投稿していない話。"""
-    episodes = novel_episodes(s, novel_id)
-    return [e for e in episodes[:episodes.index(episode)] if e.narou_novel_data_id is None]
 
 
 def save_novel_data_id(episode_id: int, novel_data_id: int) -> None:
@@ -192,22 +193,26 @@ def open_site(headed: bool, logged_in: bool = True) -> Iterator[Site]:
 def login() -> None:
     with open_site(headed=True, logged_in=False) as site:
         site.goto(LOGIN_URL)
-        logger.info("ブラウザでなろうにログインする(%d 分待つ)", LOGIN_TIMEOUT_MS // 60000)
-        site.page.wait_for_url(lambda url: not is_login_page(url), timeout=LOGIN_TIMEOUT_MS)
+        logger.info("ブラウザでなろうに「ログイン状態を保持」を付けてログインし、終えたら窓を閉じる(%d 分待つ)",
+                    LOGIN_TIMEOUT_MS // 60000)
+        # ログインの画面を離れた所で閉じると、ログインの途中の画面で閉じてしまうことがあるので、人が閉じるまで待つ
+        site.page.wait_for_event("close", timeout=LOGIN_TIMEOUT_MS)
     logger.info("ログインのクッキーを %s に残した", USER_DATA_DIR)
 
 
 def fill_form(site: Site, post: Post) -> None:
-    """次話投稿か編集の画面を開いてサブタイトルと本文を入れ、確認画面まで進める。"""
+    """新しいエピソードか編集の入力の画面を開いてサブタイトルと本文を入れる。編集は確認の画面まで進める。
+
+    新しいエピソードは、次の「下書き保存」でなろうに下書きが残るので、入れたところで止める。
+    """
     if post.novel_data_id is None:
-        site.goto(NOVEL_URL.format(novel=post.novel_id))
-        site.click_link(NEW_PART_LINK)
+        site.goto(NEW_PART_URL.format(novel=post.novel_id))
     else:
-        site.goto(PART_URL.format(novel=post.novel_id, part=post.novel_data_id))
-        site.click_link(EDIT_PART_LINK)
+        site.goto(EDIT_URL.format(novel=post.novel_id, part=post.novel_data_id))
     site.fill(SUBTITLE_FIELD, post.subtitle)
     site.fill(TEXT_FIELD, post.text)
-    site.click(CONFIRM_BUTTON)
+    if post.novel_data_id is not None:
+        site.click(EDIT_CONFIRM_BUTTON)
 
 
 @dataclass
@@ -227,10 +232,9 @@ def listed_links(site: Site, url: str, pattern: re.Pattern[str]) -> list[Listed]
             match = pattern.search(link.get_attribute("href") or "")
             if match is None:
                 continue
-            title = link.inner_text().strip()
-            # 同じ行の「編集」などのリンクも同じ番号を指すので、長い方の文言を題とみなす
-            current = listed.get(int(match[1]))
-            if current is None or len(title) > len(current.title):
+            if int(match[1]) not in listed:
+                # 題の前の印との間は &nbsp; で空くので、strip で落とす
+                title = str(link.evaluate(LINK_TITLE_SCRIPT)).strip()
                 listed[int(match[1])] = Listed(id=int(match[1]), title=title)
         # 最後のページにも「次へ」が残る作りでも止まるよう、新しい番号が無ければ終える
         if len(listed) == found or site.page.get_by_role("link", name=NEXT_PAGE_LINK).count() == 0:
@@ -239,21 +243,41 @@ def listed_links(site: Site, url: str, pattern: re.Pattern[str]) -> list[Listed]
 
 
 def posted_novel_data_id(site: Site, post: Post) -> int | None:
-    """投稿したあとの画面の URL か、小説の管理画面の部分の一覧から、足した部分の番号を読む。"""
-    match = PART_ID_PATTERN.search(site.page.url)
-    if match:
-        return int(match[1])
-    parts = listed_links(site, NOVEL_URL.format(novel=post.novel_id), PART_ID_PATTERN)
+    """小説の管理画面の部分の一覧から、足した部分の番号を読む。"""
+    parts = listed_links(site, NOVEL_URL.format(novel=post.novel_id), PART_LINK_PATTERN)
     # 同じ題の部分があれば、一番新しく足したもの
     return max((part.id for part in parts if part.title == post.subtitle), default=None)
 
 
+def open_modal(site: Site, button: str, name: str) -> str:
+    """ボタンを押して重ねる窓を開き、中身が読み込まれるのを待って、窓の文字を返す。"""
+    site.click(button)
+    modal = POST_MODAL.format(name=name)
+    site.page.wait_for_selector(f"{modal} :is(button, a, input)", state="visible", timeout=MODAL_TIMEOUT_MS)
+    return site.page.inner_text(modal)
+
+
+def post_draft(site: Site, post: Post) -> None:
+    """入力の画面から下書きに保存し、下書きの画面の窓を進めて投稿する。予約・割り込み・完結は既定(しない)のまま。"""
+    site.click(SAVE_DRAFT_BUTTON)
+    logger.info("下書きに保存した: %s", site.page.url)
+    open_modal(site, DRAFT_POST_LINK, "postinput")
+    confirm = open_modal(site, POST_CONFIRM_BUTTON, "postconfirm")
+    # 予約掲載の話が残っているときなどは、投稿のボタンの代わりに断りの文が出る(下書きはなろうに残る)
+    if "エラー" in confirm:
+        raise SystemExit(f"なろうが投稿を受け付けなかった: {' '.join(confirm.split())}")
+    end = open_modal(site, POST_BUTTON, "postend")
+    if "投稿が完了しました" not in end:
+        raise SystemExit(f"投稿の終わりの窓が思っていた形でない: {' '.join(end.split())}")
+
+
 def submit_form(site: Site, post: Post) -> None:
-    """確認画面から投稿まで押す。次話として足したなら、部分の番号を話に書き戻す。"""
-    site.click(SUBMIT_BUTTON)
+    """投稿まで押す。編集なら保存し、新しいエピソードなら投稿して部分の番号を話に書き戻す。"""
     if post.novel_data_id is not None:
+        site.click(EDIT_SUBMIT_BUTTON)
         logger.info("話 %d で、小説 %d の部分 %d を書き換えた", post.episode_id, post.novel_id, post.novel_data_id)
         return
+    post_draft(site, post)
     novel_data_id = posted_novel_data_id(site, post)
     if novel_data_id is None:
         logger.warning("話 %d を小説 %d に投稿したが、部分の番号が読めなかった。部分の管理画面の URL の noveldataid を、"
@@ -335,7 +359,7 @@ def match_novels(apply: bool, headed: bool) -> dict[str, list[dict]]:
 def match_parts(story_id: int | None, apply: bool, headed: bool) -> dict[int, dict[str, list[dict]]]:
     """なろうの小説ごとに、部分の一覧を話に当てはめる(話の題とサブタイトルで組む)。
 
-    `story_id` を渡せば、その作品の話を投稿する小説だけを見る。本文の無い話は、投稿していないので見ない。
+    `story_id` を渡せば、その作品の話を投稿する小説だけを見る。本文の無い話も見る(なろうに投稿してあり、db に本文の無い話がある)。
     """
     with get_env_session() as s:
         if story_id is None:
@@ -343,11 +367,11 @@ def match_parts(story_id: int | None, apply: bool, headed: bool) -> dict[int, di
         else:
             novel_ids = [novel_id_of(s, story_id)]
         rows = {novel_id: [Row(id=e.id, title=e.title, narou_id=e.narou_novel_data_id)
-                           for e in novel_episodes(s, novel_id) if e.main_text.strip()]
+                           for e in novel_episodes(s, novel_id)]
                 for novel_id in novel_ids}
     with open_site(headed) as site:
         results = {novel_id: pair_by_title(rows[novel_id],
-                                           listed_links(site, NOVEL_URL.format(novel=novel_id), PART_ID_PATTERN))
+                                           listed_links(site, NOVEL_URL.format(novel=novel_id), PART_LINK_PATTERN))
                    for novel_id in novel_ids}
     if apply:
         with get_env_session() as s, s.begin():
