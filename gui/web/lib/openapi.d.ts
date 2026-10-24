@@ -425,8 +425,6 @@ export interface components {
             instruction: string;
             /** Main Text */
             main_text: string;
-            /** Narou Novel Data Id */
-            narou_novel_data_id?: number | null;
             /** Character Ids */
             readonly character_ids: number[];
             /**

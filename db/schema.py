@@ -932,9 +932,6 @@ class Episode(ContentBase):
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
-    narou_novel_data_id: Mapped[int | None] = mapped_column(
-        Integer, comment="小説家になろうに投稿した部分の番号(部分の管理画面の URL の noveldataid)。空ならまだ投稿していない",
-        sort_order=230)
 
     start: Mapped[Stamp | None] = mapped_column(
         StampType, comment="話が立つ時刻。作品の中の話はこの順に並ぶ(空の話は後ろに id 順)", sort_order=250)
@@ -981,6 +978,20 @@ class EpisodeCharacter(Base):
 
     episode: Mapped["Episode"] = relationship(back_populates="episode_characters", lazy="noload")
     character: Mapped["Character"] = relationship(lazy="noload")
+
+
+class NarouPart(Base):
+    """小説家になろうに投稿した部分と話の結び。投稿してもこの表だけを書き、話の行(updated_at)には触れない。"""
+
+    __tablename__ = "narou_part"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), unique=True, sort_order=100)
+    novel_data_id: Mapped[int] = mapped_column(
+        Integer, unique=True, comment="部分の番号(部分の管理画面の URL の noveldataid)", sort_order=110)
+    posted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        comment="最後に投稿・書き換えた時刻。話の updated_at の方が新しければ、投稿のあとに話を直していて、なろうが古い",
+        sort_order=120)
 
 
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、

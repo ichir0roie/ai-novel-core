@@ -1105,17 +1105,6 @@
             "type": "string",
             "title": "Main Text"
           },
-          "narou_novel_data_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Narou Novel Data Id"
-          },
           "character_ids": {
             "items": {
               "type": "integer"
