@@ -40,7 +40,6 @@ class EpisodeCommitForm(Form):
     end: Timestamp | None = None
     viewpoint_character_id: int | None = None
     location_id: int | None = None
-    narou_novel_data_id: int | None = None
     # 渡すと登場人物(`episode_character`)をまるごと置き換える
     character_ids: Annotated[list[int] | None, References("character")] = Field(
         default=None, description="登場人物の id")

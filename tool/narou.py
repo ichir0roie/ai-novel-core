@@ -8,14 +8,17 @@
     .venv/bin/python -m tool.narou login                          # ブラウザが開くので、手でログインする
     .venv/bin/python -m tool.narou post --episode 61              # 確認画面まで進め、スクショを撮って止まる
     .venv/bin/python -m tool.narou post --episode 61 --submit     # 確認画面から投稿まで押す
+    .venv/bin/python -m tool.narou outdated                       # 投稿のあとに直した(なろうが古い)話を出す
+    .venv/bin/python -m tool.narou link --episode 61 --part 123   # 話に部分の番号を手で結ぶ(unlink で外す)
     .venv/bin/python -m tool.narou match-novels [--apply]         # なろうの小説を作品に当てはめる
     .venv/bin/python -m tool.narou match-parts [--story 3] [--apply]  # なろうの部分を話に当てはめる
 
 `match-*` は、なろうの一覧と db の行を題で突き合わせた案を JSON で出す。`--apply` を付けると、案のとおりに番号を書く。
 
 投稿先の小説は、話の作品(章・外伝なら番号のある一番近い親の作品)の `story.narou_novel_id`。
-まだ投稿していない話(`episode.narou_novel_data_id` が空)は次話として足し、投稿した部分の番号を話に書き戻す。
-投稿した話は、その部分を今の題・本文で書き換える。
+話と部分の結び(部分の番号と、最後に投稿・書き換えた時刻)は表 `narou_part` に持ち、話の行には書かない。
+まだ投稿していない話(結びが無い)は次話として足し、結びを書く。投稿した話は、その部分を今の題・本文で書き換える。
+書き換えるのは、投稿のあとに話を直した(話の `updated_at` が投稿した時刻より新しい)ときだけ(`--force` で、直していなくても書き換える)。
 playwright は `requirements-narou.txt` で入れ、初めて動かす手元では、ブラウザを
 `.venv/bin/python -m playwright install chromium` で入れておく。
 
@@ -33,19 +36,19 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from data_access_logic.episode.commit_episode import CommitEpisode
-from data_access_logic.episode.form import EpisodeCommitForm
 from data_access_logic.logs import configure_logging
 from data_access_logic.query import common_query
 from data_access_logic.story.form import StoryUpdateForm
 from data_access_logic.story.update_story import UpdateStory
-from db.schema import Episode, Story, get_env_session
+from db.schema import Episode, NarouPart, Story, get_env_session
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +141,13 @@ class Site:
         self._operate(lambda: self.page.fill(selector, text))
 
 
-def read_post(episode_id: int) -> Post:
+def part_of(s: Session, episode_id: int) -> NarouPart | None:
+    """話を投稿した部分。まだ投稿していなければ None"""
+    return s.scalar(select(NarouPart).where(NarouPart.episode_id == episode_id))
+
+
+def read_post(episode_id: int, force: bool) -> Post:
+    """`force` でなければ、投稿のあとに直していない話(なろうが最新)は書き換えずに止める。"""
     with get_env_session() as s:
         episode = s.get(Episode, episode_id)
         if episode is None:
@@ -147,8 +156,12 @@ def read_post(episode_id: int) -> Post:
             raise SystemExit(f"話 {episode_id} に本文が無い")
         if not (episode.title or "").strip():
             raise SystemExit(f"話 {episode_id} に題(サブタイトル)が無い")
+        part = part_of(s, episode_id)
+        if part is not None and not force and episode.updated_at <= part.posted_at:
+            raise SystemExit(f"話 {episode_id} は投稿({local_time(part.posted_at)})のあとに直していない。"
+                             "なろうは最新なので書き換えない(書き換えるなら --force)")
         return Post(episode_id=episode.id, novel_id=novel_id_of(s, episode.story_id),
-                    novel_data_id=episode.narou_novel_data_id, subtitle=episode.title, text=episode.main_text)
+                    novel_data_id=part.novel_data_id if part else None, subtitle=episode.title, text=episode.main_text)
 
 
 def novel_id_of(s: Session, story_id: int) -> int:
@@ -170,9 +183,39 @@ def novel_episodes(s: Session, novel_id: int) -> list[Episode]:
                           .order_by(Episode.start.asc().nulls_last(), Episode.id.asc())))
 
 
-def save_novel_data_id(episode_id: int, novel_data_id: int) -> None:
+def record_posted(s: Session, episode_id: int, novel_data_id: int) -> None:
+    """話を部分として投稿・書き換えたこと(部分の番号と今の時刻)を結びの表に書く。話の行(updated_at)には触れない。"""
+    s.execute(insert(NarouPart).values(episode_id=episode_id, novel_data_id=novel_data_id, posted_at=func.now())
+              .on_conflict_do_update(index_elements=[NarouPart.episode_id],
+                                     set_={"novel_data_id": novel_data_id, "posted_at": func.now()}))
+
+
+def save_posted(episode_id: int, novel_data_id: int) -> None:
     with get_env_session() as s, s.begin():
-        CommitEpisode(EpisodeCommitForm(id=episode_id, narou_novel_data_id=novel_data_id)).execute(s)
+        common_query.get_row(s, Episode, episode_id)
+        record_posted(s, episode_id, novel_data_id)
+
+
+def unlink_part(episode_id: int) -> None:
+    """話と部分の結びを外す(なろうで部分を消したときなど)。"""
+    with get_env_session() as s, s.begin():
+        s.execute(delete(NarouPart).where(NarouPart.episode_id == episode_id))
+
+
+def outdated_episodes() -> list[dict]:
+    """なろうに投稿した話のうち、投稿のあとに直した(なろうが古い)話。直した順。本文の無い話は書き換えられないので外す。"""
+    with get_env_session() as s:
+        rows = s.execute(select(Episode, NarouPart).join(NarouPart, NarouPart.episode_id == Episode.id)
+                         .where(Episode.main_text != "", Episode.updated_at > NarouPart.posted_at)
+                         .order_by(Episode.updated_at))
+        return [{"id": episode.id, "題": episode.title, "なろうの番号": part.novel_data_id,
+                 "直した時刻": local_time(episode.updated_at), "投稿した時刻": local_time(part.posted_at)}
+                for episode, part in rows.tuples()]
+
+
+def local_time(moment: datetime) -> str:
+    """db の時刻(UTC で返る)を、手元の時刻帯で秒まで出す。"""
+    return moment.astimezone().isoformat(sep=" ", timespec="seconds")
 
 
 @contextmanager
@@ -275,20 +318,24 @@ def submit_form(site: Site, post: Post) -> None:
     """投稿まで押す。編集なら保存し、新しいエピソードなら投稿して部分の番号を話に書き戻す。"""
     if post.novel_data_id is not None:
         site.click(EDIT_SUBMIT_BUTTON)
+        if "updateend" not in site.page.url:
+            raise SystemExit(f"書き換えの保存が終わらなかった: {site.page.url}")
+        save_posted(post.episode_id, post.novel_data_id)
         logger.info("話 %d で、小説 %d の部分 %d を書き換えた", post.episode_id, post.novel_id, post.novel_data_id)
         return
     post_draft(site, post)
     novel_data_id = posted_novel_data_id(site, post)
     if novel_data_id is None:
         logger.warning("話 %d を小説 %d に投稿したが、部分の番号が読めなかった。部分の管理画面の URL の noveldataid を、"
-                       "GUI の話の画面の narou_novel_data_id に入れる", post.episode_id, post.novel_id)
+                       "`python -m tool.narou link --episode %d --part <番号>` で結ぶ",
+                       post.episode_id, post.novel_id, post.episode_id)
         return
-    save_novel_data_id(post.episode_id, novel_data_id)
+    save_posted(post.episode_id, novel_data_id)
     logger.info("話 %d を小説 %d の部分 %d として投稿した", post.episode_id, post.novel_id, novel_data_id)
 
 
-def post_episode(episode_id: int, submit: bool, headed: bool) -> None:
-    post = read_post(episode_id)
+def post_episode(episode_id: int, submit: bool, force: bool, headed: bool) -> None:
+    post = read_post(episode_id, force)
     screenshot = STATE_DIR / f"episode-{episode_id}-confirm.png"
     with open_site(headed) as site:
         fill_form(site, post)
@@ -366,7 +413,8 @@ def match_parts(story_id: int | None, apply: bool, headed: bool) -> dict[int, di
             novel_ids = sorted(set(s.scalars(select(Story.narou_novel_id).where(Story.narou_novel_id.is_not(None)))))
         else:
             novel_ids = [novel_id_of(s, story_id)]
-        rows = {novel_id: [Row(id=e.id, title=e.title, narou_id=e.narou_novel_data_id)
+        linked = {part.episode_id: part.novel_data_id for part in s.scalars(select(NarouPart))}
+        rows = {novel_id: [Row(id=e.id, title=e.title, narou_id=linked.get(e.id))
                            for e in novel_episodes(s, novel_id)]
                 for novel_id in novel_ids}
     with open_site(headed) as site:
@@ -376,8 +424,9 @@ def match_parts(story_id: int | None, apply: bool, headed: bool) -> dict[int, di
     if apply:
         with get_env_session() as s, s.begin():
             for result in results.values():
+                # 当てはめた時点で、なろうの本文はその話と同じとみなす(投稿した時刻を今にする)
                 for pair in result["当てはめる"]:
-                    CommitEpisode(EpisodeCommitForm(id=pair["id"], narou_novel_data_id=pair["なろうの番号"])).execute(s)
+                    record_posted(s, pair["id"], pair["なろうの番号"])
         logger.info("話 %d 件に部分の番号を入れた", sum(len(result["当てはめる"]) for result in results.values()))
     return results
 
@@ -389,7 +438,14 @@ def main() -> None:
     post = commands.add_parser("post", help="話を次話として投稿する(投稿した話なら、その部分を書き換える)")
     post.add_argument("--episode", type=int, required=True, help="話の id")
     post.add_argument("--submit", action="store_true", help="確認画面から投稿まで押す(無ければ確認画面で止める)")
+    post.add_argument("--force", action="store_true", help="投稿のあとに直していない話(なろうが最新)も書き換える")
     post.add_argument("--headed", action="store_true", help="ブラウザを見える形で開く")
+    commands.add_parser("outdated", help="投稿のあとに直した(なろうが古い)話を出す")
+    link = commands.add_parser("link", help="話に部分の番号を手で結ぶ(結んだ時点で、なろうの本文はその話と同じとみなす)")
+    link.add_argument("--episode", type=int, required=True, help="話の id")
+    link.add_argument("--part", type=int, required=True, help="部分の番号(部分の管理画面の URL の noveldataid)")
+    unlink = commands.add_parser("unlink", help="話と部分の結びを外す(なろうで部分を消したときなど)")
+    unlink.add_argument("--episode", type=int, required=True, help="話の id")
     match_novels_command = commands.add_parser("match-novels", help="なろうの小説の一覧を作品に当てはめる")
     match_parts_command = commands.add_parser("match-parts", help="なろうの部分の一覧を話に当てはめる")
     match_parts_command.add_argument("--story", type=int, help="この作品の話を投稿する小説だけを見る(無ければ番号のある小説すべて)")
@@ -403,7 +459,15 @@ def main() -> None:
     if args.command == "login":
         login()
     elif args.command == "post":
-        post_episode(args.episode, args.submit, args.headed)
+        post_episode(args.episode, args.submit, args.force, args.headed)
+    elif args.command == "outdated":
+        print(json.dumps(outdated_episodes(), ensure_ascii=False, indent=2))
+    elif args.command == "link":
+        save_posted(args.episode, args.part)
+        logger.info("話 %d に部分 %d を結んだ", args.episode, args.part)
+    elif args.command == "unlink":
+        unlink_part(args.episode)
+        logger.info("話 %d と部分の結びを外した", args.episode)
     elif args.command == "match-novels":
         print(json.dumps(match_novels(args.apply, args.headed), ensure_ascii=False, indent=2))
     else:

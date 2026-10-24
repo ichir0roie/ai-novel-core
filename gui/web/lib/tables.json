@@ -164,21 +164,6 @@
           "comment": "サブタイトル。本文の見出しから読む"
         },
         {
-          "key": "narou_novel_data_id",
-          "type": "integer",
-          "nullable": true,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": "小説家になろうに投稿した部分の番号(部分の管理画面の URL の noveldataid)。空ならまだ投稿していない"
-        },
-        {
           "key": "start",
           "type": "stamp",
           "nullable": true,
