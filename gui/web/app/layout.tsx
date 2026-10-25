@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 import "./globals.css";
+import ApiWarmUp from "@/components/ApiWarmUp";
 import AuthGate from "@/components/AuthGate";
 import HintLayer from "@/components/Hint";
 import Nav from "@/components/Nav";
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <HintLayer />
           <SavingOverlay />
+          <ApiWarmUp />
         </AuthGate>
       </body>
     </html>

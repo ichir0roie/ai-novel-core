@@ -124,6 +124,16 @@ def health() -> Health:
     return Health(dialect=engine.dialect.name)
 
 
+@app.get("/api/warm_up", status_code=204)
+def warm_up(s: Session = Depends(session_dep)) -> Response:
+    """画面が見えている間、1 分ごとに叩く(`gui/web/components/ApiWarmUp.tsx`)。Lambda の実行環境は数分空くと落ち、
+    冷えた要求は起動と db への接続(IAM 認証)で数秒待つので、実行環境とプールの接続を温めておく"""
+    from sqlalchemy import select
+
+    s.execute(select(1))
+    return Response(status_code=204)
+
+
 @app.get("/api/table_counts", response_model=TableCounts)
 def table_counts(s: Session = Depends(session_dep)) -> TableCounts:
     """表ごとの行の数。トップページが出す(表の列などの情報は、画面が `gui/web/lib/tables.json` に持つ)"""

@@ -38,6 +38,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/warm_up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Warm Up
+         * @description 画面が見えている間、1 分ごとに叩く(`gui/web/components/ApiWarmUp.tsx`)。Lambda の実行環境は数分空くと落ち、
+         *     冷えた要求は起動と db への接続(IAM 認証)で数秒待つので、実行環境とプールの接続を温めておく
+         */
+        get: operations["warm_up_api_warm_up_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/table_counts": {
         parameters: {
             query?: never;
@@ -914,6 +935,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Health"];
                 };
+            };
+        };
+    };
+    warm_up_api_warm_up_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
