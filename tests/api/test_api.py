@@ -21,6 +21,13 @@ def test_health(client):
     assert health["dialect"] == "postgresql"
 
 
+def test_warm_up(client):
+    response = client.get("/api/warm_up")
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+
 def test_table_counts(client, world):
     response = client.get("/api/table_counts")
 

@@ -82,6 +82,17 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
 }
 
+/** API の実行環境と db の接続を温める(`components/ApiWarmUp`)。応答に本文が無く、まとめる GET にも混ぜないので、`api` を通さない。
+ * 失敗しても次の回で温め直すので、画面には出さない */
+export async function warmUp(): Promise<void> {
+  try {
+    if (loginRequired) await fetchAuthSession();
+    await fetch("/api/warm_up", { cache: "no-store" });
+  } catch {
+    // 黙って次の回を待つ
+  }
+}
+
 export const getTableCounts = () => api<components["schemas"]["TableCounts"]>("/api/table_counts");
 
 export const listRecords = (table: string, params: URLSearchParams) =>

@@ -45,6 +45,18 @@
         }
       }
     },
+    "/api/warm_up": {
+      "get": {
+        "summary": "Warm Up",
+        "description": "画面が見えている間、1 分ごとに叩く(`gui/web/components/ApiWarmUp.tsx`)。Lambda の実行環境は数分空くと落ち、\n冷えた要求は起動と db への接続(IAM 認証)で数秒待つので、実行環境とプールの接続を温めておく",
+        "operationId": "warm_up_api_warm_up_get",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
     "/api/table_counts": {
       "get": {
         "summary": "Table Counts",
