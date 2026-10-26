@@ -23,6 +23,7 @@ from data_access_logic.step import RowId
 from data_access_logic.flows import event_seed
 from data_access_logic.caller import call
 from data_access_logic.flows.summary import refresh
+from db.writer import generated
 
 
 def _write_text(ai: AIClient, event_id: int) -> GeneratedEvent:
@@ -56,6 +57,7 @@ def _progress(ai: AIClient, rng: random.Random, form: EventForm) -> GeneratedEve
     return GeneratedEvent.model_validate({**record.model_dump(), "moves": moved})
 
 
+@generated()
 def generate_event(event: EventForm | None = None, seed: int | None = None, ai: AIClient = ai_client) -> GeneratedEvent:
     """`GenerateEvent` に当たる。足した出来事の本文も種の元になるので、書き戻したあとで種を抜き出す。
     レスポンスの `moves` は、この出来事で居場所を移した人物の移動先。"""

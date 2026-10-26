@@ -21,6 +21,7 @@ class IdeaHistoryRow(Form):
 
 class IdeaRecord(Material):
     id: int
+    origin: str = "user"
     name: str
     kind: str
     parent_idea_id: int | None = None

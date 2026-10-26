@@ -10,6 +10,7 @@ from db.schema import Episode
 
 class EpisodeHead(Material):
     id: int
+    origin: str = "user"
     story_id: int
     title: str
     start: Timestamp | None = None

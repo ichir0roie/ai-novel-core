@@ -26,6 +26,8 @@ from data_access_logic.episode.reading import EpisodeNeighbors
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.logs import configure_logging
 from data_access_logic.map.story_route import StoryRoute
+from db import writer
+from db.guard import ProtectedRowError
 from db.schema import engine, get_env_session
 from gui.api import interface
 from gui.api.models import (
@@ -70,7 +72,17 @@ async def _require_api_key(request: Request, call_next):
             return JSONResponse(status_code=401, content={"detail": f"{API_KEY_HEADER} が無いか違う"})
         # おかしな書き込みがあったときに、画面からか web のセッションからかを切り分けられるよう、鍵の名前だけを出す
         logger.info(f"{caller}: {request.method} {request.url.path}")
+        request.state.caller = caller
     return await call_next(request)
+
+
+# 画面の鍵の名前。画面からの書き込みは、ヘッダに関わらずいつも作者の手で書く
+_GUI_CALLER = "gui"
+
+
+def _writing_of(request: Request) -> writer.Writing:
+    """書き込みの書き手(`db/writer.py`)。web のセッションは流れの書き手をヘッダで運ぶ。"""
+    return writer.from_headers(request.headers, fixed_user=getattr(request.state, "caller", None) == _GUI_CALLER)
 
 
 def session_dep() -> Iterator[Session]:
@@ -85,6 +97,11 @@ async def _unknown_record(_request: Request, error: UnknownRecordError):
 
 @app.exception_handler(interface.ClaudeEntranceForbidden)
 async def _claude_forbidden(_request: Request, error: interface.ClaudeEntranceForbidden):
+    return JSONResponse(status_code=403, content={"detail": str(error)})
+
+
+@app.exception_handler(ProtectedRowError)
+async def _protected_row(_request: Request, error: ProtectedRowError):
     return JSONResponse(status_code=403, content={"detail": str(error)})
 
 
@@ -170,12 +187,13 @@ def list_options(table: str, q: str | None = None, limit: int = Query(200, ge=1,
 
 
 @app.post("/api/tables/{table}/records", response_model=RecordResponse, status_code=201)
-def create_record(table: str, data: dict[str, Any], s: Session = Depends(session_dep)) -> RecordResponse:
+def create_record(table: str, data: dict[str, Any], http: Request,
+                  s: Session = Depends(session_dep)) -> RecordResponse:
     from gui.api import records
     from gui.api.tables import spec_of
 
     spec = spec_of(table)
-    with s.begin():
+    with writer.restored(_writing_of(http)), s.begin():
         record = records.create_record(s, spec, data)
     return records.response_of(s, spec, record)
 
@@ -189,30 +207,33 @@ def get_record(table: str, record_id: int, s: Session = Depends(session_dep)) ->
 
 
 @app.patch("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
-def update_record(table: str, record_id: int, data: dict[str, Any],
+def update_record(table: str, record_id: int, data: dict[str, Any], http: Request,
                   s: Session = Depends(session_dep)) -> RecordResponse:
     from gui.api import records
     from gui.api.tables import spec_of
 
     spec = spec_of(table)
-    with s.begin():
+    with writer.restored(_writing_of(http)), s.begin():
         record = records.update_record(s, spec, record_id, data)
     return records.response_of(s, spec, record)
 
 
 @app.post("/api/interface/{entrance_id}", response_model=RunResult)
-def run_entrance(entrance_id: str, request: RunRequest) -> RunResult:
+def run_entrance(entrance_id: str, request: RunRequest, http: Request) -> RunResult:
     """db だけの入口を呼ぶ(入口の一覧は、画面が `gui/web/lib/entrances.json` に持つ)"""
-    return RunResult(entrance=entrance_id, result=interface.call(interface.db_entrance_class(entrance_id), request.args))
+    with writer.restored(_writing_of(http)):
+        return RunResult(entrance=entrance_id,
+                         result=interface.call(interface.db_entrance_class(entrance_id), request.args))
 
 
 @app.post("/api/steps/{step_id}")
-def run_step(step_id: str, body: Any = Body(None)) -> Any:
+def run_step(step_id: str, http: Request, body: Any = Body(None)) -> Any:
     """db の段(`data_access_logic/<領域>/steps.py`)を一つのトランザクションで回す。web のセッション(`web_session/`)が、
     流れと AI を自分で持ったまま db に触る所だけを頼む"""
     from data_access_logic import step
 
-    return step.run_json(step_id, body)
+    with writer.restored(_writing_of(http)):
+        return step.run_json(step_id, body)
 
 
 @app.post("/api/batch", response_model=BatchResponse)

@@ -74,6 +74,7 @@ class CharacterRelationHistoryRow(_ChildRow):
 
 class CharacterHead(Material):
     id: int
+    origin: str = "user"
     name: str | None = None
     kind: str
     main_character: bool
@@ -98,6 +99,7 @@ class CharacterRecord(CharacterHead):
 
 class CharacterLocationRecord(Material):
     id: int
+    origin: str = "user"
     character_id: int | None = None
     location_id: int
     start: Timestamp | None = None
@@ -106,6 +108,7 @@ class CharacterLocationRecord(Material):
 
 class CharacterRelationRecord(Material):
     id: int
+    origin: str = "user"
     character_1_id: int
     character_2_id: int
     relation: str
@@ -119,6 +122,7 @@ class CharacterRelationRecord(Material):
 
 class CharacterSkillRecord(Material):
     id: int
+    origin: str = "user"
     character_id: int
     name: str
     # 「装い」なら身に着けている物。空なら技・術・技能

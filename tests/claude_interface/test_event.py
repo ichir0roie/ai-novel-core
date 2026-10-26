@@ -115,4 +115,4 @@ def test_update_events_rejects_cycle(shown, world):
 def test_update_event_seed(shown, world):
     result = shown(UpdateEventSeed(EventSeedUpdateForm(id=world.event_seed_id, text="直した種", consolidated=True)))
 
-    assert result == {"id": world.event_seed_id, "text": "直した種", "consolidated": True}
+    assert result == {"id": world.event_seed_id, "origin": "user", "text": "直した種", "consolidated": True}

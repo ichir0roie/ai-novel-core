@@ -10,6 +10,7 @@ from db.schema import Event
 
 class EventColumns(Material):
     id: int
+    origin: str = "user"
     name: str
     hidden: bool
     time: Timestamp

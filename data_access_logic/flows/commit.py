@@ -27,6 +27,7 @@ from data_access_logic.step import RowId
 from data_access_logic.flows import event_seed, fact_check, meme
 from data_access_logic.caller import call
 from data_access_logic.flows.summary import rewrite_event_summaries
+from db.writer import generated
 
 
 def _move_cast(ai: AIClient, episode_id: int) -> list[CharacterMove]:
@@ -59,13 +60,14 @@ def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> Comm
     レスポンスの `relations` に返す。"""
     record = call(episode_steps.commit_episode, episode)
     written = [SourceRow(table="episode", id=record.id)] if episode.main_text is not None else []
-    meme.refresh(ai, written)
     moved: list[CharacterMove] = []
     related: list[CharacterRelationRecord] = []
-    if written:
-        event_seed.refresh_and_consolidate(ai, written)
-        moved = _move_cast(ai, record.id)
-        related = _relate_cast(ai, record.id)
+    with generated():
+        meme.refresh(ai, written)
+        if written:
+            event_seed.refresh_and_consolidate(ai, written)
+            moved = _move_cast(ai, record.id)
+            related = _relate_cast(ai, record.id)
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
 
 
@@ -74,27 +76,31 @@ def revise_episode(episode: EpisodeReviseForm, ai: AIClient = ai_client) -> Epis
     今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので。
     推敲は筋を変えないので、種は抜き出し直さず、ミームだけを直した本文から抜き出す。"""
     record = call(episode_steps.revise_episode, episode)
-    meme.refresh(ai, [SourceRow(table="episode", id=record.id)])
+    with generated():
+        meme.refresh(ai, [SourceRow(table="episode", id=record.id)])
     return record
 
 
 def commit_event(event: EventCreateForm, ai: AIClient = ai_client) -> EventRecord:
     record = call(event_steps.commit_event, event)
     written = [SourceRow(table="event", id=record.id)]
-    meme.refresh(ai, written)
-    rewrite_event_summaries(ai, [record.id])
-    event_seed.refresh_and_consolidate(ai, written)
+    with generated():
+        meme.refresh(ai, written)
+        rewrite_event_summaries(ai, [record.id])
+        event_seed.refresh_and_consolidate(ai, written)
     return record
 
 
 def update_event(event: EventUpdateForm, ai: AIClient = ai_client) -> EventRecord:
     """本文を渡したときだけ、直した本文からミームを抜き出す。"""
     record = call(event_steps.update_event, event)
-    meme.refresh(ai, [SourceRow(table="event", id=record.id)] if event.text is not None else [])
-    rewrite_event_summaries(ai, [record.id])
+    with generated():
+        meme.refresh(ai, [SourceRow(table="event", id=record.id)] if event.text is not None else [])
+        rewrite_event_summaries(ai, [record.id])
     return record
 
 
+@generated()
 def _meme_source_follow_up(ai: AIClient, table: str, record_id: int, text: str, fact_check_enabled: bool) -> int:
     """確定したもの自身を検め、検証結果を足した本文からミームを抜き出し、足したミームも検める。足したミームの件数を返す。"""
     if fact_check_enabled and text.strip():
