@@ -310,7 +310,7 @@ class Oracle(TextBase):
 
 class StyleScope(enum.StrEnum):
     # 全体は AI が書くすべての文に効く。残りは使う所ごとの範囲で、使う所は 全体 → その範囲 の順に足す。
-    # 本文だけは 全体 → 作品の指示(story.instruction) → 本文 → 話の指示(episode.instruction) の順に足す
+    # 本文だけは 全体 → 作品の指示(story.instruction) → 本文 → 推敲 → 話の指示(episode.instruction) の順に足す
     ALL = "全体"
     EPISODE = "本文"
     PLOT = "プロット"
@@ -324,6 +324,8 @@ class StyleScope(enum.StrEnum):
     ACTING = "人物役"
     # 語り部(話を書くセッションの Claude)が手番の語り・要求を書き、場面を運ぶときの書き方と運び方
     NARRATOR = "語り部"
+    # これまでの推敲で直したことと、その直し方をまとめた記録。本文の範囲の本文の行の後に足し、本文を書く・直すたびに見直す
+    REVISION = "推敲"
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
@@ -331,7 +333,7 @@ STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 
 class StylePreference(TextBase):
     """AI に書かせる文の文体の指示。範囲ごとに一行。
-    使う所は、全体の行 → その範囲の行(本文は 全体 → 作品の指示 → 本文 → 話の指示)の順に、書くたびに db から読んで足す。
+    使う所は、全体の行 → その範囲の行(本文は 全体 → 作品の指示 → 本文 → 推敲 → 話の指示)の順に、書くたびに db から読んで足す。
     仕事ごとの指示・材料の読み方のような、システムの挙動に関わる文はコードに持ち、ここには置かない。
     初期値はコードに持たない。行の無い範囲は何も足さない。"""
 

@@ -22,12 +22,14 @@ def _story_texts(s: Session, story_id: int | None) -> list[str]:
 def writing_style(s: Session, scope: StyleScope = StyleScope.ALL, story_id: int | None = None,
                   episode_id: int | None = None) -> str:
     """使う所の範囲 `scope` に効く指示を、全体の行 → その範囲の行 の順につなぐ。空の指示は足さない。
-    作品・話の指示は本文の決まりなので、本文の範囲だけに、全体の行 → 作品の指示(祖先の作品から順に) → 本文の行 → 話の指示 の順で足す。"""
+    作品・話の指示と推敲の記録は本文の決まりなので、本文の範囲だけに、全体の行 → 作品の指示(祖先の作品から順に) → 本文の行
+    → 推敲の行 → 話の指示 の順で足す。"""
     episode = scope == StyleScope.EPISODE
     parts = [
         _scope_text(s, StyleScope.ALL),
         *(_story_texts(s, story_id) if episode else []),
         _scope_text(s, scope) if scope != StyleScope.ALL else "",
+        _scope_text(s, StyleScope.REVISION) if episode else "",
         (s.scalar(select(Episode.instruction).where(Episode.id == episode_id)) or "")
         if episode and episode_id is not None else "",
     ]
