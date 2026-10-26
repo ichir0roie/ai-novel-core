@@ -174,3 +174,20 @@ def test_search_world_finds_rows_across_tables(shown, world):
     hit = next(hit for hit in result["hits"] if hit["table"] == "character" and hit["id"] == world.character_ids[0])
     assert word in hit["words"] and hit["origin"] == "user"
     assert any(linked["table"] == "character" for linked in hit["linked"])
+
+
+def test_ai_writer_can_commit_events_without_touching_user_memes(shown, world, mock_ai):
+    """出来事の確定に続くミームの対づけ・種のまとめは、AI の書き手のあいだは作者のミーム・種を直さない。"""
+    from data_access_logic.event.commit_event import CommitEvent
+    from data_access_logic.event.form import EventCreateForm
+
+    expansion_id = _start(shown)
+    with get_env_session() as s:
+        assert s.get_one(Meme, world.meme_id).anti_meme_id is None
+    with writing("ai", expansion_id):
+        record = CommitEvent(EventCreateForm(name="展開の出来事", time="1200/05/01", text="港で疫病が流行った",
+                                             location_id=world.location_id)).run()
+    assert isinstance(record, dict)
+    with get_env_session() as s:
+        assert s.get_one(Event, record["id"]).origin == "ai"
+        assert s.get_one(Meme, world.meme_id).anti_meme_id is None

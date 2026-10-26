@@ -13,7 +13,7 @@ import logging
 import random
 import re
 
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import ColumnElement, false, select, true
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
@@ -25,7 +25,9 @@ from data_access_logic.meme.models import (
 from data_access_logic.source_text import (
     SourceBatchSerialized, SourceRow, SourceText, batches, row_of, source_of, strip_fact_check,
 )
-from db.schema import MEME_CATEGORIES, Episode, Event, Expansion, ExpansionMode, Meme, Oracle, StyleScope
+from db import writer
+from db.schema import MEME_CATEGORIES, Episode, Event, Expansion, ExpansionMode, Meme, Oracle, Origin, StyleScope
+from db.writer import Writer
 
 logger = logging.getLogger(__name__)
 
@@ -147,8 +149,19 @@ def save_memes(s: Session, memes: list[MemeDraft]) -> int:
     return len(memes) * 2
 
 
+def _writable() -> ColumnElement[bool]:
+    """書き手(`db/writer.py`)が直してよいミーム。分類・対を振るのは今あるミームを直すことなので、AI の書き手は AI の行だけ、
+    人物モードはどれも直さない(作者の行は、作者が回す `RefreshGeneratedContent` で振る)。"""
+    state = writer.current()
+    if state.writer is Writer.AI_APPEND:
+        return false()
+    if state.by_ai:
+        return Meme.origin == Origin.AI
+    return true()
+
+
 def _meme_sources(s: Session, condition: ColumnElement[bool]) -> list[SourceText]:
-    memes = s.scalars(select(Meme).where(condition).order_by(Meme.id)).all()
+    memes = s.scalars(select(Meme).where(condition, _writable()).order_by(Meme.id)).all()
     return [source_of(meme, "ミーム", strip_fact_check(meme.text)) for meme in memes]
 
 
