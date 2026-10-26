@@ -317,6 +317,22 @@ a.button-link:hover { border-color: var(--accent); }
 .modal-body { padding: 1rem; overflow: auto; }
 .modal-actions { display: flex; gap: 0.6rem; align-items: center; padding: 0.7rem 1rem; border-top: 1px solid var(--line); flex-shrink: 0; }
 .modal-actions .spacer { flex: 1; }
+/* スマホで本文の欄を画面全体に広げたもの(FullscreenText)。メニューボタンより上、保存中の覆いより下。
+   上端・高さは見えている所(visualViewport)に JS で合わせる */
+.fullscreen-text {
+  position: fixed; top: 0; left: 0; right: 0; height: 100dvh; z-index: 35;
+  display: flex; flex-direction: column; background: var(--panel);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.fullscreen-text-head { display: flex; align-items: center; gap: 0.2rem; padding: 0.3rem 0.4rem 0.3rem 0.9rem; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.fullscreen-text-head h2 { flex: 1; margin: 0; font-size: 0.95rem; color: var(--muted); }
+.fullscreen-text-head button.icon { padding: 0.35rem; border: 0; display: flex; color: var(--muted); }
+.fullscreen-text-head button.icon:hover { color: var(--accent); }
+.fullscreen-text textarea {
+  flex: 1; min-height: 0; border: 0; border-radius: 0; resize: none; padding: 0.7rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom));
+  background: var(--panel); line-height: 1.8;
+}
+.fullscreen-text textarea:focus { outline: none; }
 /* 作品・話の AI への指示のモーダル(InstructionModal)の入力欄 */
 .instruction-input { width: 100%; min-height: 50dvh; resize: vertical; box-sizing: border-box; font: inherit; }
 
@@ -562,6 +578,8 @@ a.button-link:hover { border-color: var(--accent); }
   .record { gap: 0.9rem; }
   .record-text textarea.section, .record-text .markdown-preview { min-height: 60dvh; }
   .actionbar { padding: 0.6rem 0.7rem; }
+  /* 話のプロット・本文は押すと画面全体に広げて直す(FullscreenText)ので、ここは中身を見せるだけ */
+  div.markdown-preview.plain { white-space: pre-wrap; }
 
   .modal-backdrop { padding: 0.5rem; }
   .modal.wide:has(.character-sheet) { height: 95dvh; }

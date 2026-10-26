@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import FullscreenText from "@/components/FullscreenText";
 import InstructionModal from "@/components/InstructionModal";
 import KnowledgeModal from "@/components/KnowledgeModal";
 import RecordForm from "@/components/RecordForm";
@@ -22,6 +23,7 @@ import {
   type RecordResponse,
 } from "@/lib/api";
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
+import { useNarrow } from "@/lib/media";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useSaveShortcut } from "@/lib/saving";
 import { stampOrder } from "@/lib/stamp";
@@ -77,6 +79,9 @@ export default function RecordPage() {
   const [saved, setSaved] = useState<string | null>(null);
   const [organizing, setOrganizing] = useState(false);
   const [instructing, setInstructing] = useState(false);
+  // スマホの話の画面では、プロット・本文を押すと画面全体に広げて直す。広げている欄の名前
+  const narrow = useNarrow();
+  const [fullscreen, setFullscreen] = useState<string | null>(null);
   // 作品・話の AI への指示は、ふだんは欄に出さず、ボタンからモーダルで直す
   const hasInstruction = table === "story" || table === "episode";
 
@@ -146,8 +151,7 @@ export default function RecordPage() {
     }
   };
 
-  // 話の画面の Ctrl+S は本文だけを保存する(ほかの欄の変更は Save ボタンで送る)
-  useSaveShortcut(() => void save(false, table === "episode" ? ["main_text"] : undefined), loaded !== null && !busy);
+  useSaveShortcut(() => void save(false), loaded !== null && !busy);
 
   const remove = async () => {
     if (!loaded) return;
@@ -197,6 +201,7 @@ export default function RecordPage() {
             onChange={setValue}
             mode="edit"
             hidden={hasInstruction ? ["instruction"] : undefined}
+            onOpenSection={table === "episode" && narrow ? setFullscreen : undefined}
             titleNote={
               <>
                 <Link href={listHref(table, loaded.record)}>{meta.name}</Link> / {T.idMark(id)}
@@ -279,6 +284,18 @@ export default function RecordPage() {
               </div>
             }
           />
+          {fullscreen && (
+            <FullscreenText
+              title={T.record.sectionTitles[fullscreen] ?? fullscreen}
+              value={(value[fullscreen] as string | null) ?? ""}
+              onChange={(text) => setValue({ ...value, [fullscreen]: text })}
+              onBack={() => setFullscreen(null)}
+              onSave={() => {
+                setFullscreen(null);
+                void save(false);
+              }}
+            />
+          )}
           {instructing && (
             <InstructionModal
               value={(loaded.record.instruction as string | null) ?? ""}
