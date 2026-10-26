@@ -15,6 +15,10 @@ type Props = {
   collapsible?: boolean;
 };
 
+export function MarkdownPreview({ text }: { text: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>;
+}
+
 /** 本文の欄。表示中はマークダウンのプレビュー、クリックすると編集(textarea)に切り替わり、
  * フォーカスが外れるとまたプレビューに戻る。 */
 export default function MarkdownField({ value, onChange, autoHeight, collapsible }: Props) {
@@ -40,7 +44,7 @@ export default function MarkdownField({ value, onChange, autoHeight, collapsible
       {text === "" ? (
         <span className="hint">{T.record.emptySection}</span>
       ) : (
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        <MarkdownPreview text={text} />
       )}
     </div>
   );
@@ -74,7 +78,7 @@ function CollapsiblePreview({ text, onEdit }: { text: string; onEdit: () => void
           else if (toggle) setOpen(!open);
         }}
       >
-        {empty ? <span className="hint">{T.record.emptySection}</span> : <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>}
+        {empty ? <span className="hint">{T.record.emptySection}</span> : <MarkdownPreview text={text} />}
       </div>
       <button type="button" className="ghost markdown-edit" onClick={onEdit}>
         {T.record.edit}

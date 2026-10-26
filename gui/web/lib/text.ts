@@ -114,6 +114,11 @@ export const T = {
     saveAndBack: "Save and back",
     save: "Save",
     emptySection: "(empty — click to edit)",
+    emptyText: "(empty)",
+    back: "Back",
+    saveAndClose: "Save",
+    // スマホで本文の欄を画面全体に広げたときの見出し
+    sectionTitles: { plot_text: "プロット", main_text: "本文" } as Record<string, string>,
     edit: "Edit",
     expand: "Click to show all",
     collapse: "Click to fold",

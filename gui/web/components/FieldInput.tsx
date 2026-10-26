@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
-import MarkdownField from "./MarkdownField";
+import MarkdownField, { MarkdownPreview } from "./MarkdownField";
 import { ChoicePicker } from "./Picker";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
 import StampInput from "./StampInput";
@@ -62,6 +62,8 @@ type Props = {
   collapsible?: boolean;
   // 参照の欄で、絞り込み欄が空のときに出す選択肢の id(ReferenceSelect へ渡す)
   defaultIds?: number[] | null;
+  /** 渡すと本文(section)欄はその場で直さず、押したらこれを呼ぶ(スマホで画面全体に広げて直す) */
+  onOpen?: () => void;
 };
 
 function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
@@ -94,7 +96,7 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   );
 }
 
-export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, collapsible, defaultIds }: Props) {
+export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, collapsible, defaultIds, onOpen }: Props) {
   const readonly = disabled || column.readonly;
   if (readonly) {
     return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
@@ -147,6 +149,20 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
   }
   if (column.type === "stamp") {
     return <StampInput value={(value as string | null) ?? null} onChange={onChange} disabled={disabled} />;
+  }
+  if (column.section && !compact && onOpen) {
+    const text = (value as string | null) ?? "";
+    return (
+      <div className={`section markdown-preview ${column.markdown === false ? "plain" : ""}`} onClick={onOpen}>
+        {text === "" ? (
+          <span className="hint">{T.record.emptySection}</span>
+        ) : column.markdown === false ? (
+          text
+        ) : (
+          <MarkdownPreview text={text} />
+        )}
+      </div>
+    );
   }
   if (column.section && !compact) {
     return column.markdown === false ? (

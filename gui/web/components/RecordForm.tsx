@@ -58,6 +58,8 @@ type Props = {
   aside?: ReactNode;
   /** フォームに並べない列(別の口で直す列) */
   hidden?: string[];
+  /** 渡すと本文(section)欄はその場で直さず、押したら欄の名前を渡してこれを呼ぶ */
+  onOpenSection?: (key: string) => void;
 };
 
 /** 見出しとして出す名前の欄。クリックすると入力欄になり、Enter・Esc・フォーカスが外れると見出しに戻る。 */
@@ -88,8 +90,9 @@ function EditableTitle({ value, placeholder, onChange }: { value: string; placeh
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
  * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, aside, hidden }: Props) {
+export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, aside, hidden, onOpenSection }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
+  const open = (key: string) => (onOpenSection ? () => onOpenSection(key) : undefined);
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only)
     && !hidden?.includes(column.key));
   // 名前の欄は見出しで直し、id は見出しの横に出すので、フォームには並べない
@@ -187,7 +190,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
             <label>
               <Spec hint={columnHint(column)}>{column.key}</Spec>
             </label>
-            <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} />
+            <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)} onOpen={open(column.key)} />
           </div>
         ))}
         {textLeft && flowLists}
@@ -202,7 +205,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 <Spec hint={columnHint(column)}>{column.key}</Spec>
               </label>
               <FieldInput column={column} value={value[column.key]} onChange={(v) => set(column.key, v)}
-                autoHeight={flowChildLists.length > 0} collapsible={collapsible} />
+                autoHeight={flowChildLists.length > 0} collapsible={collapsible} onOpen={open(column.key)} />
             </div>
           ))}
           {!textLeft && flowLists}
