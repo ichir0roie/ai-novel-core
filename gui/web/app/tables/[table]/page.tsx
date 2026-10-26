@@ -11,7 +11,6 @@ import CharacterTree from "@/components/CharacterTree";
 import StylePreferenceEditor from "@/components/StylePreferenceEditor";
 import ListTable, { nextSort, Pager } from "@/components/ListTable";
 import NameId from "@/components/NameId";
-import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 const PAGE = 50;
@@ -21,7 +20,6 @@ const RESERVED = new Set(["q", "limit", "offset", "sort", "order"]);
 const BULK_DELETE: Partial<Record<string, (ids: number[]) => Promise<unknown>>> = { meme: deleteMemes };
 
 export default function TablePage() {
-  const openPage = useOpenPage();
   const { table } = useParams<{ table: string }>();
   const router = useRouter();
   const search = useSearchParams();
@@ -210,7 +208,7 @@ export default function TablePage() {
         sort={sort}
         order={order}
         onSort={sortBy}
-        onOpen={(id, e) => openPage(`/tables/${table}/${id}`, e)}
+        onOpen={(id) => router.push(`/tables/${table}/${id}`)}
         onFilter={(key, value) => setParam(key, value)}
         selection={bulkDelete ? {
           selected,

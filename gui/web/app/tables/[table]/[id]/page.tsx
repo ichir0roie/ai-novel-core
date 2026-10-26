@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import InstructionModal from "@/components/InstructionModal";
 import KnowledgeModal from "@/components/KnowledgeModal";
@@ -23,7 +23,6 @@ import {
 } from "@/lib/api";
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
-import { useOpenPage } from "@/lib/nav";
 import { useSaveShortcut } from "@/lib/saving";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -68,7 +67,7 @@ function listHref(table: string, record: Rec): string {
 }
 
 export default function RecordPage() {
-  const openPage = useOpenPage();
+  const router = useRouter();
   const { table, id } = useParams<{ table: string; id: string }>();
   const meta = tableMeta(table);
   const [loaded, setLoaded] = useState<RecordResponse | null>(null);
@@ -126,7 +125,7 @@ export default function RecordPage() {
       setValue({ ...record, ...kept });
       invalidateOptions(table);
       setSaved(T.record.saved(Object.keys(sending)));
-      if (thenBack) openPage(listHref(table, record));
+      if (thenBack) router.push(listHref(table, record));
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -177,7 +176,7 @@ export default function RecordPage() {
       else if (table === "character_skill") await deleteCharacterSkill(Number(id));
       else await deleteIdeaDetachingChildren(Number(id), childIds);
       invalidateOptions(table);
-      openPage(listHref(table, loaded.record));
+      router.push(listHref(table, loaded.record));
     } catch (e) {
       setError(T.record.deleteFailed(e instanceof Error ? e.message : String(e)));
       setBusy(false);
@@ -214,7 +213,7 @@ export default function RecordPage() {
                         className="ghost"
                         disabled={!episode}
                         title={episode ? `${T.nameId(episode.title, episode.id)}${episode.start ? ` — ${episode.start}` : ""}` : none}
-                        onClick={(e) => episode && openPage(`/tables/episode/${episode.id}`, e)}
+                        onClick={() => episode && router.push(`/tables/episode/${episode.id}`)}
                       >
                         {label}
                       </button>

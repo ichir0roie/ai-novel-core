@@ -19,11 +19,13 @@ type Props = {
   onClose: () => void;
   /** その場で話を足し終えたとき */
   onAdded: () => void;
+  /** 追加ページへ移る */
+  onOpenPage: (url: string) => void;
 };
 
 /** タイムラインの空いた所を押したときの小さなモーダル。時刻(start・end)・タイトル・プロットだけでその場で話を足すか、
- * ほかの欄も書くなら追加ページを別タブに開く。 */
-export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded }: Props) {
+ * ほかの欄も書くなら追加ページへ移る。 */
+export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded, onOpenPage }: Props) {
   const [start, setStart] = useState<string | null>((initial.start as string | null) ?? null);
   const [end, setEnd] = useState<string | null>((initial.end as string | null) ?? null);
   const [title, setTitle] = useState("");
@@ -36,8 +38,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
     const params = new URLSearchParams(
       Object.entries({ ...initial, start, end, title: title || null, plot_text: plot || null }).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
     );
-    window.open(`/tables/episode/new?${params}`, "_blank", "noopener,noreferrer");
-    onClose();
+    onOpenPage(`/tables/episode/new?${params}`);
   };
 
   const add = async () => {
@@ -74,7 +75,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded 
       actions={
         <>
           <button type="button" onClick={open} disabled={busy}>
-            {T.timeline.openInNewTab}
+            {T.timeline.openForm}
           </button>
           <span className="spacer" />
           <button type="button" onClick={onClose} disabled={busy}>

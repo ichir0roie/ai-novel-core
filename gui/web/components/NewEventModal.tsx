@@ -18,11 +18,13 @@ type Props = {
   onClose: () => void;
   /** その場で出来事を足し終えたとき */
   onAdded: () => void;
+  /** 追加ページへ移る */
+  onOpenPage: (url: string) => void;
 };
 
 /** 出来事のタイムラインで出来事を足す小さなモーダル。名前・期間・本文だけでその場で足すか、
- * ほかの欄(当事者など)も書くなら追加ページを別タブに開く。 */
-export default function NewEventModal({ start: initialStart, parent, location, onClose, onAdded }: Props) {
+ * ほかの欄(当事者など)も書くなら追加ページへ移る。 */
+export default function NewEventModal({ start: initialStart, parent, location, onClose, onAdded, onOpenPage }: Props) {
   const [name, setName] = useState("");
   const [start, setStart] = useState<string | null>(initialStart);
   const [end, setEnd] = useState<string | null>(null);
@@ -49,8 +51,7 @@ export default function NewEventModal({ start: initialStart, parent, location, o
         .filter(([, v]) => v != null && v !== "" && v !== false)
         .map(([k, v]) => [k, String(v)]),
     );
-    window.open(`/tables/event/new?${params}`, "_blank", "noopener,noreferrer");
-    onClose();
+    onOpenPage(`/tables/event/new?${params}`);
   };
 
   const add = async () => {
@@ -76,7 +77,7 @@ export default function NewEventModal({ start: initialStart, parent, location, o
       actions={
         <>
           <button type="button" onClick={open} disabled={busy}>
-            {T.timeline.openInNewTab}
+            {T.timeline.openForm}
           </button>
           <span className="spacer" />
           <button type="button" onClick={onClose} disabled={busy}>
