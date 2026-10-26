@@ -82,8 +82,6 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # SQLite は ALTER が弱いので表を作り直す batch で書く。PostgreSQL はそのまま ALTER する
-            render_as_batch=connection.dialect.name == "sqlite",
             include_object=include_object,
             process_revision_directives=add_updated_at_triggers,
         )

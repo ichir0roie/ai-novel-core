@@ -170,7 +170,7 @@ def open_tunnel(target: RdsTarget, port: int, key_dir: Path) -> subprocess.Popen
     sys.exit("踏み台への ssh が繋がらなかった")
 
 
-def connection_env(target: RdsTarget, secret: MasterSecret, port: int, database: str) -> dict[str, str]:
+def connection_env(secret: MasterSecret, port: int, database: str) -> dict[str, str]:
     from sqlalchemy.engine import URL
 
     url = URL.create("postgresql+psycopg", username=secret.username, password=secret.password,
@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> None:
                 return
             tunnel = open_tunnel(target, args.port, Path(key_dir))
             try:
-                env = connection_env(target, read_master_secret(target.db_master_secret_arn), args.port,
+                env = connection_env(read_master_secret(target.db_master_secret_arn), args.port,
                                      args.database or target.db_name)
                 try:
                     returncode = subprocess.run(command, env={**os.environ, **env}).returncode

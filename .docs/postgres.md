@@ -129,7 +129,7 @@ alembic の autogenerate は、これらの列・索引と PostGIS の `spatial_
 | 違い | 直し方 |
 | --- | --- |
 | PostgreSQL の `json` は等値が無く、行ごとの `DISTINCT` で落ちる | `polygon` は PostgreSQL では `jsonb`(`PolygonType.load_dialect_impl`) |
-| NULL の並び(SQLite は最小、PostgreSQL は最大) | NULL を持てる列の並びに、SQLite と同じ向き(降順は `.nulls_last()`、昇順は `.nulls_first()`)を明示(人物の居場所・来歴・出来事・呼び名のリレーション、`character_location_select`、`episode/summary.py`) |
+| NULL の並び(SQLite は最小、PostgreSQL は最大) | NULL を持てる列の並びに、SQLite と同じ向き(降順は `.nulls_last()`、昇順は `.nulls_first()`)を明示(人物の居場所・来歴・出来事・呼び名のリレーション、`character_location_select`) |
 | `DISTINCT` の並び(PostgreSQL は崩れる) | 居合わせる人物の id(`resident_character_ids_select`)を id の順に並べる |
 | `boolean` に 0/1 を入れられない | 移すときに `bool` に直す |
 | ALTER の強さ | alembic は SQLite でだけ batch(表の作り直し)で書く |
