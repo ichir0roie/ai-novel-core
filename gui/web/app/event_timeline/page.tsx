@@ -376,7 +376,7 @@ export default function EventTimelinePage() {
     setDraft(at);
   }
 
-  // 別のタブで出来事を足して戻ってきたら読み直す。保存・ドラッグの途中は待つ
+  // 窓に戻ってきたら読み直す(ほかの窓や Claude が出来事を変えていることがある)。保存・ドラッグの途中は待つ
   const [reloads, setReloads] = useState(0);
   const busy = useRef(false);
   useLayoutEffect(() => {
@@ -658,6 +658,14 @@ export default function EventTimelinePage() {
     if (dirty && !window.confirm(T.eventTimeline.confirmDiscardEdit)) return false;
     setViewing(null);
     return true;
+  };
+
+  /** 別のページへ移る。溜めた移しがあれば捨ててよいかを尋ねる(ページの中の移動では beforeunload が出ない) */
+  const leaveTo = (url: string) => {
+    if (changes.size > 0 && !window.confirm(T.timeline.confirmDiscard(changes.size))) return;
+    // スクロールが止まるのを待つ中心の書き換えが残っていると、移る途中でこの画面へ戻される
+    if (scrollTimer.current) clearTimeout(scrollTimer.current);
+    router.push(url);
   };
 
   /** 押した出来事の名前・本文を保存する。変えた欄だけを渡す */
@@ -1092,9 +1100,12 @@ export default function EventTimelinePage() {
               </button>
               <button
                 type="button"
-                onClick={() => window.open(`/tables/event/${viewingNow.id}`, "_blank", "noopener,noreferrer")}
+                onClick={() => {
+                  if (dirty && !window.confirm(T.eventTimeline.confirmDiscardEdit)) return;
+                  leaveTo(`/tables/event/${viewingNow.id}`);
+                }}
               >
-                {T.timeline.openInNewTab}
+                {T.openRecord}
               </button>
               <button
                 type="button"
@@ -1142,6 +1153,7 @@ export default function EventTimelinePage() {
           location={filteredPlace}
           onClose={() => setAdding(null)}
           onAdded={() => setReloads((n) => n + 1)}
+          onOpenPage={leaveTo}
         />
       )}
       <Tooltip tip={tip} />

@@ -3,7 +3,7 @@
 
     ListPendingReviews().show()
 
-本文に残った TODO を、
+本文に残った TODO と、世界の展開が残した作者の行との食い違い(`expansion_conflict` のうち open のもの)を、
 `{"key", "kind", "title", "detail"}` の形(`items.PendingReview`)で返す。`key` は同じものを二度タスクにしないための印。
 """
 from __future__ import annotations
@@ -16,4 +16,4 @@ from data_access_logic.review import items
 
 class ListPendingReviews(SessionEntrypoint):
     def execute(self, s: Session) -> list[items.PendingReview]:
-        return items.todo_items(s)
+        return [*items.todo_items(s), *items.conflict_items(s)]

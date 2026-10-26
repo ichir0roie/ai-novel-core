@@ -11,7 +11,6 @@ import CharacterTree from "@/components/CharacterTree";
 import StylePreferenceEditor from "@/components/StylePreferenceEditor";
 import ListTable, { nextSort, Pager } from "@/components/ListTable";
 import NameId from "@/components/NameId";
-import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 
 const PAGE = 50;
@@ -21,7 +20,6 @@ const RESERVED = new Set(["q", "limit", "offset", "sort", "order"]);
 const BULK_DELETE: Partial<Record<string, (ids: number[]) => Promise<unknown>>> = { meme: deleteMemes };
 
 export default function TablePage() {
-  const openPage = useOpenPage();
   const { table } = useParams<{ table: string }>();
   const router = useRouter();
   const search = useSearchParams();
@@ -131,8 +129,10 @@ export default function TablePage() {
 
   // 列名の query で絞り込んでいるもの(参照列のセルをクリックすると増える)。見出しに出す作品は除く
   const filters = [...search.entries()].filter(
-    ([key]) => !RESERVED.has(key) && !(storyId && key === "story_id") && meta.columns.some((c) => c.key === key),
+    ([key]) => !RESERVED.has(key) && key !== "origin" && !(storyId && key === "story_id")
+      && meta.columns.some((c) => c.key === key),
   );
+  const hasOrigin = meta.columns.some((c) => c.key === "origin");
   const toggle = (id: number) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -183,6 +183,14 @@ export default function TablePage() {
           <input type="search" placeholder={T.list.searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
           <button type="submit">{T.list.search}</button>
         </form>
+        {hasOrigin && (
+          // 出自で絞る(AI が確かめを経ずに足した行だけを見る、など)
+          <select className="origin" title={T.list.origin} value={search.get("origin") ?? ""} onChange={(e) => setParam("origin", e.target.value || null)}>
+            <option value="">{T.list.origin}: {T.list.originAll}</option>
+            <option value="user">{T.list.origin}: {T.list.originUser}</option>
+            <option value="ai">{T.list.origin}: {T.list.originAi}</option>
+          </select>
+        )}
         {filters.length > 0 && (
           <span className="chips">
             {filters.map(([key, value]) => (
@@ -210,7 +218,7 @@ export default function TablePage() {
         sort={sort}
         order={order}
         onSort={sortBy}
-        onOpen={(id, e) => openPage(`/tables/${table}/${id}`, e)}
+        onOpen={(id) => router.push(`/tables/${table}/${id}`)}
         onFilter={(key, value) => setParam(key, value)}
         selection={bulkDelete ? {
           selected,

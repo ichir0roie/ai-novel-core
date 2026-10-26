@@ -1,13 +1,12 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import RecordForm, { emptyRecord } from "@/components/RecordForm";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec, type TableMeta } from "@/lib/api";
 import { useCopyFromPreviousEpisode } from "@/lib/previousEpisode";
 import { PageTitle, tableMeta } from "@/lib/meta";
-import { useOpenPage } from "@/lib/nav";
 import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
@@ -30,7 +29,7 @@ function initialValue(meta: TableMeta, searchParams: URLSearchParams): Rec {
 }
 
 export default function NewRecordPage() {
-  const openPage = useOpenPage();
+  const router = useRouter();
   const { table } = useParams<{ table: string }>();
   const searchParams = useSearchParams();
   const meta = tableMeta(table);
@@ -55,7 +54,7 @@ export default function NewRecordPage() {
       }
       const created = await createRecord(table, data);
       invalidateOptions(table);
-      openPage(`/tables/${table}/${created.record.id}`);
+      router.push(`/tables/${table}/${created.record.id}`);
       setBusy(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -81,7 +80,7 @@ export default function NewRecordPage() {
           actions={
             <div className="actionbar">
               <div className="inner">
-                <button onClick={() => openPage(`/tables/${table}`)} disabled={busy}>
+                <button onClick={() => router.push(`/tables/${table}`)} disabled={busy}>
                   {T.create.cancel}
                 </button>
                 <button className="primary" onClick={submit} disabled={busy}>

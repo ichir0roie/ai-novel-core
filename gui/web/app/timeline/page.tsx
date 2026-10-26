@@ -524,7 +524,7 @@ export default function TimelinePage() {
     setDraft(at);
   }
 
-  // 別のタブで話・作品を足して戻ってきたら読み直す。保存・ドラッグの途中は、読み直した話で札が動かないよう待つ
+  // 窓に戻ってきたら読み直す(ほかの窓や Claude が話・作品を変えていることがある)。保存・ドラッグの途中は、読み直した話で札が動かないよう待つ
   const [reloads, setReloads] = useState(0);
   const busy = useRef(false);
   useLayoutEffect(() => {
@@ -880,6 +880,14 @@ export default function TimelinePage() {
     setViewing(null);
   };
 
+  /** 別のページへ移る。溜めた移しがあれば捨ててよいかを尋ねる(ページの中の移動では beforeunload が出ない) */
+  const leaveTo = (url: string) => {
+    if (changes.size > 0 && !window.confirm(T.timeline.confirmDiscard(changes.size))) return;
+    // スクロールが止まるのを待つ中心の書き換えが残っていると、移る途中でこの画面へ戻される
+    if (scrollTimer.current) clearTimeout(scrollTimer.current);
+    router.push(url);
+  };
+
   /** 押した話の時刻・プロットを保存する。時刻はどちらかを変えたら両方を渡す(溜めた移しを当てた時刻を書くため) */
   const saveEdit = async (item: Item) => {
     if (!edit) return;
@@ -924,7 +932,7 @@ export default function TimelinePage() {
     } else if (changes.size > 0) void apply();
   });
 
-  /** 空いた所を押したら、その日・その列の作品で話を足す(時刻・タイトル・プロットだけならその場で、ほかの欄も書くなら追加ページを別タブに開く) */
+  /** 空いた所を押したら、その日・その列の作品で話を足す(時刻・タイトル・プロットだけならその場で、ほかの欄も書くなら追加ページへ移る) */
   const onTrackClick = (e: MouseEvent<HTMLDivElement>, row: Row) => {
     if (pxPerDay === 0) return;
     const snapped = snapDay(
@@ -996,8 +1004,10 @@ export default function TimelinePage() {
       {row.storyId !== null ? (
         <Link
           href={`/tables/story/${row.storyId}`}
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault();
+            leaveTo(`/tables/story/${row.storyId}`);
+          }}
         >
           {row.label}
         </Link>
@@ -1293,15 +1303,16 @@ export default function TimelinePage() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  window.open(
-                    `/tables/episode/${viewingNow.id}`,
-                    "_blank",
-                    "noopener,noreferrer",
+                onClick={() => {
+                  if (
+                    (plotChanged || timeChanged) &&
+                    !window.confirm(T.timeline.confirmDiscardEdit)
                   )
-                }
+                    return;
+                  leaveTo(`/tables/episode/${viewingNow.id}`);
+                }}
               >
-                {T.timeline.openInNewTab}
+                {T.openRecord}
               </button>
               <button
                 type="button"
@@ -1356,6 +1367,7 @@ export default function TimelinePage() {
           storyLabel={adding.storyLabel}
           onClose={() => setAdding(null)}
           onAdded={() => setReloads((n) => n + 1)}
+          onOpenPage={leaveTo}
         />
       )}
       <Tooltip tip={tip} />

@@ -165,8 +165,15 @@ export default function SkillsModal({ characterId, characterName, onClose }: Pro
                   onChange={(e) => edit(draft.key, "name", e.target.value)}
                 />
                 {draft.saved ? (
-                  <Link href={`/tables/character_skill/${draft.saved.id}`} className="hint" target="_blank" title={T.skills.openRecord}>
-                    {T.idMark(draft.saved.id)} ↗
+                  <Link
+                    href={`/tables/character_skill/${draft.saved.id}`}
+                    className="hint"
+                    title={T.skills.openRecord}
+                    onClick={(e) => {
+                      if (changed.length > 0 && !window.confirm(T.skills.confirmDiscard(changed.length))) e.preventDefault();
+                    }}
+                  >
+                    {T.idMark(draft.saved.id)} →
                   </Link>
                 ) : (
                   <span className="hint">{T.skills.unsaved}</span>

@@ -117,7 +117,28 @@ class TextBase(ContentBase):
     text: Mapped[str] = mapped_column(String,  nullable=False, sort_order=10000)
 
 
-class Location(TextBase):
+class Origin(enum.StrEnum):
+    USER = "user"
+    AI = "ai"
+
+
+class OriginMixin:
+    """行の出自。書き込むときに守り(`db/guard.py`)が書き手(`db/writer.py`)から入れるので、コードから書かない。
+
+    AI の書き手は作者の行を直せない・消せない。作者が AI の行を直すと、その行は作者の行になる。
+    """
+
+    origin: Mapped[str] = mapped_column(
+        String, nullable=False, default=Origin.USER.value, server_default=Origin.USER.value, index=True,
+        comment="出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない",
+        sort_order=89990)
+
+
+# 画面・入口の欄で書かせない、守りが入れる列
+MANAGED_COLUMNS = TIMESTAMP_COLUMNS | {"origin"}
+
+
+class Location(OriginMixin, TextBase):
 
     __tablename__ = "location"
 
@@ -174,7 +195,7 @@ class Location(TextBase):
         "時刻が空の行は構想で、作者だけが読む")
 
 
-class LocationHistory(Base):
+class LocationHistory(OriginMixin, Base):
     """場所の来歴を、起きた出来事ごとの一行で持つ子テーブル。場所の芯(時期を限らない姿)は `Location.text` に持つ。
 
     関係の来歴(CharacterRelationHistory)と同じく、ある時刻の話・出来事には、その時刻までに始まった行だけを渡す
@@ -202,7 +223,7 @@ class LocationHistory(Base):
         return self.start is not None and self.start <= time
 
 
-class Event(TextBase):
+class Event(OriginMixin, TextBase):
 
     __tablename__ = "event"
 
@@ -239,7 +260,7 @@ class Event(TextBase):
     summary: Mapped["EventSummary | None"] = relationship(lazy="noload", viewonly=True)
 
 
-class EventCharacter(Base):
+class EventCharacter(OriginMixin, Base):
     __tablename__ = "event_character"
 
     event_id: Mapped[int] = mapped_column(Integer, ForeignKey("event.id"), index=True, sort_order=100)
@@ -263,7 +284,7 @@ class EventSummary(Base):
     text: Mapped[str] = mapped_column(String, comment="要約", sort_order=120)
 
 
-class EventSeed(Base):
+class EventSeed(OriginMixin, Base):
     __tablename__ = "event_seed"
 
     text: Mapped[str] = mapped_column(String, comment="種", sort_order=100)
@@ -283,7 +304,7 @@ class MemeCategory(enum.StrEnum):
 MEME_CATEGORIES = tuple(category.value for category in MemeCategory)
 
 
-class Meme(TextBase):
+class Meme(OriginMixin, TextBase):
     """ミームは移り変わり・伝染していくものなので、どの元から抜き出したか、どの人物が持つかは持たない。
     ミームどうしで持つのは、反転した対(アンチミーム)だけ。
     """
@@ -300,7 +321,7 @@ class Meme(TextBase):
         sort_order=210)
 
 
-class Oracle(TextBase):
+class Oracle(OriginMixin, TextBase):
     """著者自身の創作・AI についての覚え書き。物語のデータではない。"""
 
     __tablename__ = "oracle"
@@ -310,7 +331,7 @@ class Oracle(TextBase):
 
 class StyleScope(enum.StrEnum):
     # 全体は AI が書くすべての文に効く。残りは使う所ごとの範囲で、使う所は 全体 → その範囲 の順に足す。
-    # 本文だけは 全体 → 作品の指示(story.instruction) → 本文 → 話の指示(episode.instruction) の順に足す
+    # 本文だけは 全体 → 作品の指示(story.instruction) → 本文 → 推敲 → 話の指示(episode.instruction) の順に足す
     ALL = "全体"
     EPISODE = "本文"
     PLOT = "プロット"
@@ -324,6 +345,8 @@ class StyleScope(enum.StrEnum):
     ACTING = "人物役"
     # 語り部(話を書くセッションの Claude)が手番の語り・要求を書き、場面を運ぶときの書き方と運び方
     NARRATOR = "語り部"
+    # これまでの推敲で直したことと、その直し方をまとめた記録。本文の範囲の本文の行の後に足し、本文を書く・直すたびに見直す
+    REVISION = "推敲"
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
@@ -331,7 +354,7 @@ STYLE_SCOPES = tuple(scope.value for scope in StyleScope)
 
 class StylePreference(TextBase):
     """AI に書かせる文の文体の指示。範囲ごとに一行。
-    使う所は、全体の行 → その範囲の行(本文は 全体 → 作品の指示 → 本文 → 話の指示)の順に、書くたびに db から読んで足す。
+    使う所は、全体の行 → その範囲の行(本文は 全体 → 作品の指示 → 本文 → 推敲 → 話の指示)の順に、書くたびに db から読んで足す。
     仕事ごとの指示・材料の読み方のような、システムの挙動に関わる文はコードに持ち、ここには置かない。
     初期値はコードに持たない。行の無い範囲は何も足さない。"""
 
@@ -430,7 +453,7 @@ def _knower_args(table: str, subject: str) -> tuple:
             CheckConstraint("(knower_id IS NULL) <> (location_id IS NULL)", name=f"ck_{table}_one_knower"))
 
 
-class Character(ContentBase):
+class Character(OriginMixin, ContentBase):
     """人物に限らず、国・組織・集団・物も一行として持つ(`kind` で区別)。
 
     ミームは人物どうしで移り変わり・伝染していくものなので、`Meme` 側との FK は持たない。
@@ -507,7 +530,7 @@ class Character(ContentBase):
     )
 
 
-class CharacterParameter(Base):
+class CharacterParameter(OriginMixin, Base):
     """人物の名字・体格・口調・性格を、変わった時ごとに一行で持つ。
 
     行は `start` から先ずっと効き、終わりを持たない(後に始まる行が上書きする)。空の列は「この行では決めない」。
@@ -569,7 +592,7 @@ class CharacterParameter(Base):
         return self.start is None or self.start <= time
 
 
-class CharacterLocation(Base):
+class CharacterLocation(OriginMixin, Base):
 
     __tablename__ = "character_location"
 
@@ -586,7 +609,7 @@ class CharacterLocation(Base):
     location: Mapped[Location] = relationship(lazy="noload")
 
 
-class CharacterRelation(TextBase):
+class CharacterRelation(OriginMixin, TextBase):
     """`character_1_id` から見た `character_2_id` との関係を一行で持つ。
 
     `text` は時期を限らない関係の芯(どういう間柄か)。関係の中で起きたこと・変わったことは、人物の来歴と同じく
@@ -623,7 +646,7 @@ class CharacterRelation(TextBase):
         "時刻が空の行は構想で、作者だけが読む")
 
 
-class CharacterRelationHistory(Base):
+class CharacterRelationHistory(OriginMixin, Base):
     """関係の来歴を、起きた出来事ごとの一行で持つ子テーブル。関係の芯は `CharacterRelation.text` に持つ。
 
     人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻までに始まった行だけを渡す
@@ -647,7 +670,7 @@ class CharacterRelationHistory(Base):
         return self.start is not None and self.start <= time
 
 
-class CharacterHistory(Base):
+class CharacterHistory(OriginMixin, Base):
     """人物の来歴を、起きた出来事ごとの一行で持つ子テーブル。人物の芯は `Character.text` に持つ。
 
     時が進むにつれて起きたこと・変わった立場・境遇などを、起きた時刻を `start` にした行として書き足す。
@@ -682,7 +705,7 @@ class CharacterHistory(Base):
         return self.start is not None and self.start <= time and (self.end is None or time < self.end)
 
 
-class CharacterHistoryKnower(KnowerMixin, Base):
+class CharacterHistoryKnower(OriginMixin, KnowerMixin, Base):
     """人物の来歴の行を知る相手。この行に当たる人物だけが来歴を知る。"""
 
     __tablename__ = "character_history_knower"
@@ -695,7 +718,7 @@ class CharacterHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
-class CharacterSkill(TextBase):
+class CharacterSkill(OriginMixin, TextBase):
     """人物の持つスキル(技・術・技能)と装い(身に着けている物)を一行で持つ。
 
     本文(`text`)はスキルの本質(何ができるか・仕組み・限界)で、アイデアの本文と同じく作者(語り部と、話を書くセッションの Claude)
@@ -728,7 +751,7 @@ class CharacterSkill(TextBase):
         "行は知る相手だけが知る")
 
 
-class CharacterSkillHistory(Base):
+class CharacterSkillHistory(OriginMixin, Base):
     """スキルの来歴を、起きた出来事ごとの一行で持つ子テーブル。スキルの本質は `CharacterSkill.text` に持つ。
 
     人物の来歴(CharacterHistory)と同じく、ある時刻の話・人物役には、その時刻までに始まり、まだ終わっていない行だけを渡すので、
@@ -759,7 +782,7 @@ class CharacterSkillHistory(Base):
         return self.start is not None and self.start <= time and (self.end is None or time < self.end)
 
 
-class CharacterSkillHistoryKnower(KnowerMixin, Base):
+class CharacterSkillHistoryKnower(OriginMixin, KnowerMixin, Base):
     """スキルの来歴の行を知る相手。この行に当たる人物だけが来歴を知る。"""
 
     __tablename__ = "character_skill_history_knower"
@@ -772,7 +795,7 @@ class CharacterSkillHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
-class Idea(TextBase):
+class Idea(OriginMixin, TextBase):
     __tablename__ = "idea"
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
@@ -793,7 +816,7 @@ class Idea(TextBase):
         "行は知る相手だけが知る")
 
 
-class IdeaHistory(Base):
+class IdeaHistory(OriginMixin, Base):
     """アイデアの履歴。作中での呼び名と受け止め方(作中の人物が知っていること)を、場所・時代ごとに一行で持つ。
 
     語り部と話を書くセッションの Claude には、話の時刻までに始まったアイデアをすべて渡し、作中の呼び名は話の時刻・場所に効く行から選ぶ。
@@ -826,7 +849,7 @@ class IdeaHistory(Base):
         back_populates="history", lazy="selectin", cascade="all, delete-orphan", order_by="IdeaHistoryKnower.id")
 
 
-class IdeaHistoryKnower(KnowerMixin, Base):
+class IdeaHistoryKnower(OriginMixin, KnowerMixin, Base):
     """アイデアの履歴(呼び名)の行を知る相手。この行に当たる人物だけが履歴を知る(効く場所・期間に住んでいても、当たらなければ知らない)。"""
 
     __tablename__ = "idea_history_knower"
@@ -839,7 +862,7 @@ class IdeaHistoryKnower(KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
-class LocationHistoryKnower(KnowerMixin, Base):
+class LocationHistoryKnower(OriginMixin, KnowerMixin, Base):
     """場所の来歴の行を知る相手。この行に当たる人物だけが来歴を知る。"""
 
     __tablename__ = "location_history_knower"
@@ -886,7 +909,7 @@ def _date_new_knowers(s: Session, _flush_context, _instances) -> None:
             row.start = _knower_start(s, row)
 
 
-class Story(TextBase):
+class Story(OriginMixin, TextBase):
 
     __tablename__ = "story"
 
@@ -915,7 +938,7 @@ class Story(TextBase):
         order_by="[Episode.start.asc().nulls_last(), Episode.id.asc()]")
 
 
-class Episode(ContentBase):
+class Episode(OriginMixin, ContentBase):
     """話。プロット・時刻・視点・場所と本文、本文の概要までを一行に持つ。"""
 
     __tablename__ = "episode"
@@ -965,7 +988,7 @@ class Episode(ContentBase):
         return value
 
 
-class EpisodeCharacter(Base):
+class EpisodeCharacter(OriginMixin, Base):
     __tablename__ = "episode_character"
 
     episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
@@ -992,6 +1015,107 @@ class NarouPart(Base):
         DateTime(timezone=True), nullable=False,
         comment="最後に投稿・書き換えた時刻。話の updated_at の方が新しければ、投稿のあとに話を直していて、なろうが古い",
         sort_order=120)
+
+
+class ExpansionMode(enum.StrEnum):
+    # 作者の一言から AI が枝葉を広げる(スキル `expand`)
+    AUTHOR = "author"
+    # 人物が自分から動く(`ActCharacter`)
+    CHARACTER = "character"
+
+
+class ExpansionStatus(enum.StrEnum):
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+    REVERTED = "reverted"
+
+
+class Expansion(Base):
+    """世界の展開の一回(`.docs/world-expansion.md`)。その中で変えた行は `ExpansionChange` に、作者の行との食い違いは `ExpansionConflict` に持つ。"""
+
+    __tablename__ = "expansion"
+
+    mode: Mapped[str] = mapped_column(String, nullable=False, comment="作者モード(author)か人物モード(character)か", sort_order=100)
+    prompt: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="",
+        comment="作者の一言(作者モード)か、人物の狙い(人物モード)。作者の一言は本筋の正として、後の展開のつじつま合わせでも読む",
+        sort_order=110)
+    story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id"), index=True, comment="どの作品の枝か。空なら作品を限らない", sort_order=120)
+    actor_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, comment="人物モードで動いた人物", sort_order=130)
+    time: Mapped[Stamp | None] = mapped_column(StampType, comment="展開の時刻(一言の時刻・人物が動いた時刻)", sort_order=140)
+    location_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("location.id"), comment="展開の場所", sort_order=150)
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default=ExpansionStatus.RUNNING.value, server_default=ExpansionStatus.RUNNING.value,
+        comment="running / done / failed / reverted", sort_order=160)
+    summary: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="", comment="何を足し・直したかの要約", sort_order=10000)
+
+    changes: Mapped[list["ExpansionChange"]] = relationship(
+        back_populates="expansion", lazy="noload", order_by="ExpansionChange.id", viewonly=True)
+    conflicts: Mapped[list["ExpansionConflict"]] = relationship(
+        back_populates="expansion", lazy="noload", order_by="ExpansionConflict.id", viewonly=True)
+
+
+class ChangeOp(enum.StrEnum):
+    ADD = "add"
+    UPDATE = "update"
+    DELETE = "delete"
+
+
+class ExpansionChange(Base):
+    """展開の中で変えた行を一行ずつ。書き込むときに守り(`db/guard.py`)が書くので、コードから書かない。
+    取り消し(`RevertExpansion`)は、これを逆の順にたどって戻す。"""
+
+    __tablename__ = "expansion_change"
+
+    expansion_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("expansion.id"), index=True, nullable=False, sort_order=100)
+    table_name: Mapped[str] = mapped_column(String, nullable=False, comment="変えた行の表", sort_order=110)
+    row_id: Mapped[int] = mapped_column(Integer, nullable=False, comment="変えた行の id", sort_order=120)
+    op: Mapped[str] = mapped_column(String, nullable=False, comment="add / update / delete", sort_order=130)
+    before: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        comment="直す・消す前の行の列の値。足した行は空", sort_order=140)
+    reason: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="", comment="なぜ変えたか", sort_order=150)
+
+    expansion: Mapped[Expansion] = relationship(back_populates="changes", lazy="noload")
+
+
+class ConflictStatus(enum.StrEnum):
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    DISMISSED = "dismissed"
+
+
+class ExpansionConflict(Base):
+    """展開が見つけた、作者の行との食い違い。AI は作者の行を直せないので、直す案を添えて作者の判断を待つ。"""
+
+    __tablename__ = "expansion_conflict"
+
+    expansion_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("expansion.id"), index=True, nullable=False, sort_order=100)
+    table_name: Mapped[str] = mapped_column(String, nullable=False, comment="食い違う作者の行の表", sort_order=110)
+    row_id: Mapped[int] = mapped_column(Integer, nullable=False, comment="食い違う作者の行の id", sort_order=120)
+    detail: Mapped[str] = mapped_column(String, nullable=False, comment="何と何が食い違うか", sort_order=130)
+    proposal: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="", comment="こう直せば合う、という案", sort_order=140)
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default=ConflictStatus.OPEN.value, server_default=ConflictStatus.OPEN.value,
+        comment="open / accepted / dismissed", sort_order=150)
+
+    expansion: Mapped[Expansion] = relationship(back_populates="conflicts", lazy="noload")
+
+
+def _install_guard() -> None:
+    # 守りは表の定義を使うので、ここで読み込む(`db/guard.py` が `db.schema` を読むので、上で import すると輪になる)
+    from db import guard
+
+    guard.install()
 
 
 # 読み書きする db の SQLAlchemy の URL。手元は踏み台越しの RDS(`tool.aws.rds --serve`)、Lambda は VPC の中の RDS、
@@ -1072,3 +1196,6 @@ engine = (make_url_engine(DATABASE_URL, iam_auth=DATABASE_IAM_AUTH) if DATABASE_
 
 def get_env_session():
     return Session(engine)
+
+
+_install_guard()

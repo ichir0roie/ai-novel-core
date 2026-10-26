@@ -10,6 +10,7 @@
 | [claude-tasks.md](claude-tasks.md) | AI(claude)を回す仕組み(流れ `data_access_logic/flows/` と段、web の口 `web_session/`)と、後回しの AI の段 |
 | [cost.md](cost.md) | 費用の見直し(RDS を EC2 と S3 のバックアップに替える案・リザーブドインスタンス、main へのマージごとのデプロイの費用) |
 | [web-session.md](web-session.md) | Claude Code on the web のセッションから db に届く道(API を通す。その環境の設定) |
+| [world-expansion.md](world-expansion.md) | 世界の展開の設計(作者の一言から AI が枝葉を広げる作者モード、人物が自分から動く人物モード、行の出自と AI の守り) |
 
 ## 全体の形
 

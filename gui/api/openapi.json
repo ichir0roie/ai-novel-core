@@ -1048,6 +1048,11 @@
             "type": "integer",
             "title": "Id"
           },
+          "origin": {
+            "type": "string",
+            "title": "Origin",
+            "default": "user"
+          },
           "story_id": {
             "type": "integer",
             "title": "Story Id"

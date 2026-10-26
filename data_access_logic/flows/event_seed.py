@@ -14,6 +14,7 @@ from data_access_logic.event_seed import steps as seed_steps
 from data_access_logic.source_text import SourceRow, SourceRows, batches
 from data_access_logic.step import RowIds
 from data_access_logic.caller import call
+from db.writer import current
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,10 @@ def refresh(ai: AIClient, rows: list[SourceRow]) -> int:
 
 
 def consolidate(ai: AIClient) -> None:
-    """棚卸し前の種が `constants.EVENT_SEED_CONSOLIDATE_EVERY` 件たまったら、似た種をまとめる。"""
+    """棚卸し前の種が `constants.EVENT_SEED_CONSOLIDATE_EVERY` 件たまったら、似た種をまとめる。
+    まとめるのは今ある種を直し・消すことなので、AI の書き手(世界の展開)のあいだはしない(次に作者の手で回すときにまとめる)。"""
+    if current().by_ai:
+        return
     piles = call(seed_steps.seed_piles)
     if piles is None:
         return

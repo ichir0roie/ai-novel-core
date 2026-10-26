@@ -19,6 +19,7 @@ class LocationHistoryRow(Form):
 
 class LocationRecord(Material):
     id: int
+    origin: str = "user"
     name: str | None = None
     kind: str | None = None
     parent_id: int | None = None

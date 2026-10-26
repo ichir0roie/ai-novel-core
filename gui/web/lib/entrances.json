@@ -1,6 +1,96 @@
 {
   "entrances": [
     {
+      "id": "character.add_knower.AddKnower",
+      "area": "character",
+      "name": "AddKnower",
+      "doc": "既にある来歴・呼び名の行に、知る相手を一人(か一つの場所)足す。今ある知る相手には触れない。",
+      "params": [
+        {
+          "name": "table",
+          "required": true,
+          "default": null,
+          "annotation": "KnownTable"
+        },
+        {
+          "name": "row_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "knower",
+          "required": true,
+          "default": null,
+          "annotation": "KnowerRow"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.append_history.AppendCharacterHistory",
+      "area": "character",
+      "name": "AppendCharacterHistory",
+      "doc": "人物の来歴の行を一つ足す。今ある行には触れない。知る相手を渡さなければ本人だけが知る。",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterHistoryRow"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.append_relation_history.AppendRelationHistory",
+      "area": "character",
+      "name": "AppendRelationHistory",
+      "doc": "関係の来歴の行を一つ足す。今ある行には触れない。",
+      "params": [
+        {
+          "name": "character_relation_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterRelationHistoryRow"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.append_skill_history.AppendSkillHistory",
+      "area": "character",
+      "name": "AppendSkillHistory",
+      "doc": "スキルの来歴の行を一つ足す。今ある行には触れない。知る相手を渡さなければスキルを持つ本人だけが知る。",
+      "params": [
+        {
+          "name": "character_skill_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterSkillHistoryRow"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "character.commit_character.CommitCharacter",
       "area": "character",
       "name": "CommitCharacter",
@@ -756,6 +846,150 @@
       "writes": true
     },
     {
+      "id": "expansion.add_conflict.AddConflict",
+      "area": "expansion",
+      "name": "AddConflict",
+      "doc": "展開が見つけた、作者の行との食い違いを残す。AI は作者の行を直せないので、直す案を添えて作者の判断を待つ",
+      "params": [
+        {
+          "name": "conflict",
+          "required": true,
+          "default": null,
+          "annotation": "ConflictCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "expansion.finish_expansion.FinishExpansion",
+      "area": "expansion",
+      "name": "FinishExpansion",
+      "doc": "世界の展開を終える。何を足し・直したかの要約を書き、状態を done(途中で止まったなら failed)にする。",
+      "params": [
+        {
+          "name": "expansion",
+          "required": true,
+          "default": null,
+          "annotation": "ExpansionFinishForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "expansion.list_expansions.ListExpansions",
+      "area": "expansion",
+      "name": "ListExpansions",
+      "doc": "世界の展開を新しい順に並べる。展開ごとに、足した・直した・消した行の数と、残っている食い違いの数を添える。",
+      "params": [
+        {
+          "name": "limit",
+          "required": false,
+          "default": 50,
+          "annotation": "int"
+        },
+        {
+          "name": "status",
+          "required": false,
+          "default": null,
+          "annotation": "str | None"
+        },
+        {
+          "name": "mode",
+          "required": false,
+          "default": null,
+          "annotation": "str | None"
+        },
+        {
+          "name": "actor_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "expansion.read_expansion.ReadExpansion",
+      "area": "expansion",
+      "name": "ReadExpansion",
+      "doc": "展開を一つ、変えた行と食い違いの一覧つきで読む。",
+      "params": [
+        {
+          "name": "expansion_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "expansion.resolve_conflict.ResolveConflict",
+      "area": "expansion",
+      "name": "ResolveConflict",
+      "doc": "作者が食い違いを受けた(accepted)か、捨てた(dismissed)かを書く。受けたときに作者の行を直すのは、",
+      "params": [
+        {
+          "name": "conflict",
+          "required": true,
+          "default": null,
+          "annotation": "ConflictResolveForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "expansion.revert_expansion.RevertExpansion",
+      "area": "expansion",
+      "name": "RevertExpansion",
+      "doc": "世界の展開を一つ取り消す。展開の中で変えた行(`expansion_change`)を逆の順にたどり、足した行を消し、直した・消した行を",
+      "params": [
+        {
+          "name": "expansion_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "expansion.start_expansion.StartExpansion",
+      "area": "expansion",
+      "name": "StartExpansion",
+      "doc": "世界の展開を一回始める(`.docs/world-expansion.md`)。返った id を書き手と一緒に立てて(`db.writer.writing`)、",
+      "params": [
+        {
+          "name": "expansion",
+          "required": true,
+          "default": null,
+          "annotation": "ExpansionCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.append_history.AppendIdeaHistory",
+      "area": "idea",
+      "name": "AppendIdeaHistory",
+      "doc": "アイデアの呼び名の行を一つ足す。今ある行には触れない。知る相手を渡さなければ、作中のだれも知らない行になる。",
+      "params": [
+        {
+          "name": "idea_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "IdeaHistoryRow"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "idea.commit_idea.CommitIdea",
       "area": "idea",
       "name": "CommitIdea",
@@ -877,6 +1111,27 @@
           "required": true,
           "default": null,
           "annotation": "IdeaUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "location.append_history.AppendLocationHistory",
+      "area": "location",
+      "name": "AppendLocationHistory",
+      "doc": "場所の来歴の行を一つ足す。今ある行には触れない。知る相手を渡さなければ、その場所(その時刻に住む人物)が知る。",
+      "params": [
+        {
+          "name": "location_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "LocationHistoryRow"
         }
       ],
       "writes": true
@@ -1288,6 +1543,33 @@
         }
       ],
       "writes": true
+    },
+    {
+      "id": "world.search_world.SearchWorld",
+      "area": "world",
+      "name": "SearchWorld",
+      "doc": "語で、物語の中身の表(人物・出来事・アイデア・場所・関係・スキル・ミーム・話・作品)をまたいで行を引く。db だけで読む。",
+      "params": [
+        {
+          "name": "words",
+          "required": true,
+          "default": null,
+          "annotation": "list[str]"
+        },
+        {
+          "name": "story_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
+        },
+        {
+          "name": "limit_per_table",
+          "required": false,
+          "default": 10,
+          "annotation": "int"
+        }
+      ],
+      "writes": false
     }
   ]
 }

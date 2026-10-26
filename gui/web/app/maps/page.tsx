@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import NameId from "@/components/NameId";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getMaps, getStoryRoute, type MapLocation, type MapsResponse, type StoryRoute } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
-import { useOpenPage } from "@/lib/nav";
 import {
   altDiffText, altText, angular, bearing, bearingName, distanceKm, distanceText, fitFrame, MARGIN, outerRing,
   locationLabels, polygonCenter, textWidth, type Box, type Polygon,
@@ -28,7 +27,7 @@ function Marker({ category, x, y, r, color, strokeWidth = 1 }: { category: strin
 }
 
 export default function MapsPage() {
-  const openPage = useOpenPage();
+  const router = useRouter();
   const search = useSearchParams();
   // 場所の詳細から飛んできたとき。その場所の星を選び、その場所を中心に置いて描く
   const focus = Number(search.get("location")) || null;
@@ -216,7 +215,7 @@ export default function MapsPage() {
         {!route && focus != null && (
           <>
             {focusLocation && (
-              <button type="button" onClick={() => openPage(focusLocation.link)}>
+              <button type="button" onClick={() => router.push(focusLocation.link)}>
                 {T.openRecord}
               </button>
             )}
@@ -342,7 +341,7 @@ export default function MapsPage() {
                       style={{ cursor: "pointer" }}
                       opacity={route && !routeIds.has(p.id) ? 0.3 : 1}
                       onClick={() => !route && setOrigin(origin === p.id ? null : p.id)}
-                      onDoubleClick={() => openPage(p.link)}
+                      onDoubleClick={() => router.push(p.link)}
                       onMouseMove={(e) =>
                         show(e, [
                           T.maps.nameKind(T.nameId(p.name, p.id), p.kind),
@@ -398,7 +397,7 @@ export default function MapsPage() {
                   <h2>
                     <NameId name={route.story_name} id={route.story_id} />
                   </h2>
-                  <button type="button" className="primary" onClick={(e) => openPage(`/tables/story/${route.story_id}`, e)}>
+                  <button type="button" className="primary" onClick={() => router.push(`/tables/story/${route.story_id}`)}>
                     {T.openRecord}
                   </button>
                 </div>
@@ -469,7 +468,7 @@ export default function MapsPage() {
                       ({originPoint.kind} / {originPoint.parent_id == null ? "-" : T.nameId(originPoint.parent_name, originPoint.parent_id)})
                     </span>
                   </h2>
-                  <button type="button" className="primary" onClick={() => openPage(originPoint.link)}>
+                  <button type="button" className="primary" onClick={() => router.push(originPoint.link)}>
                     {T.openRecord}
                   </button>
                 </div>

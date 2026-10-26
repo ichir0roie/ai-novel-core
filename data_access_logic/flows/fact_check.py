@@ -13,6 +13,7 @@ from data_access_logic.fact_check import steps as fact_steps
 from data_access_logic.source_text import SourceRow, batches
 from data_access_logic.flows import meme
 from data_access_logic.caller import call
+from db.writer import generated
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ def extract_memes(ai: AIClient, rows: list[SourceRow], fact_check: bool) -> int:
     return added
 
 
+@generated()
 def check_and_extract(ai: AIClient, table: str, ids: list[int] | None, limit: int | None) -> fact_checker.FactChecked:
     """検めたあと、ミームの元(oracle)なら検めた行の本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
     checked = check(ai, table, ids, limit)

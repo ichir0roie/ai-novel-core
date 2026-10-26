@@ -11,7 +11,7 @@ from typing import TypeVar
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 
-from db.schema import TIMESTAMP_COLUMNS, Character, CharacterHistory, CharacterSkillHistory, IdeaHistory, Location, LocationHistory
+from db.schema import MANAGED_COLUMNS, Character, CharacterHistory, CharacterSkillHistory, IdeaHistory, Location, LocationHistory
 
 Child = TypeVar("Child")
 History = TypeVar("History", CharacterHistory, CharacterSkillHistory, IdeaHistory, LocationHistory)
@@ -25,7 +25,7 @@ def child_columns(model: type, name: str) -> list[str]:
     relationship = sa_inspect(model).relationships[name]
     foreign_keys = {remote.key for _, remote in relationship.local_remote_pairs}
     return [column.key for column in relationship.mapper.class_.__table__.columns
-            if column.key != "id" and column.key not in foreign_keys and column.key not in TIMESTAMP_COLUMNS]
+            if column.key != "id" and column.key not in foreign_keys and column.key not in MANAGED_COLUMNS]
 
 
 def _write[Row](target: Row, row: BaseModel, skip: str | None = None) -> Row:
@@ -54,6 +54,11 @@ def _replaced_knowers(current: Sequence[Child], rows: Sequence[BaseModel], child
     kept = {(getattr(knower, "knower_id"), getattr(knower, "location_id")): knower for knower in current}
     return [_write(kept.pop((getattr(row, "knower_id"), getattr(row, "location_id")), None) or child(), row)
             for row in rows]
+
+
+def appended_history(row: BaseModel, child: type[History], owner: Character | Location | None = None) -> History:
+    """来歴の行を一つ作る。今ある行には触れない(知る相手の既定は `replaced_histories` の新しい行と同じ)。"""
+    return replaced_histories([], [row], child, owner)[0]
 
 
 def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], child: type[History],
