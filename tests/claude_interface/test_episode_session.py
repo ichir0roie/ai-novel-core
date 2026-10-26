@@ -34,10 +34,8 @@ from data_access_logic.episode.refresh_voices import RefreshVoices
 from data_access_logic.episode.voices import VoiceDraft, VoiceDrafts
 from data_access_logic.episode_session import store
 from data_access_logic.episode_session.add_ideas import AddIdeas
-from data_access_logic.episode_session.append_text import AppendText
 from data_access_logic.episode_session.read_knower_gaps import ReadKnowerGaps
 from data_access_logic.episode_session.read_stage import ReadStage
-from data_access_logic.episode_session.replace_text import ReplaceText
 from data_access_logic.episode_session.store import SessionStore
 from data_access_logic.idea.alias import called
 from data_access_logic.idea.commit_idea import CommitIdea
@@ -891,29 +889,6 @@ def test_write_file_keeps_the_whole_result(tmp_path, monkeypatch: pytest.MonkeyP
     # 標準出力にはパスだけを出し、中身は全部ファイルにある
     assert written["file"] == str(tmp_path / "knowledge-e1-c2.json")
     assert json.loads((tmp_path / "knowledge-e1-c2.json").read_text(encoding="utf-8")) == result
-
-
-def _main_text(world) -> str:
-    with get_env_session() as s:
-        return s.get_one(Episode, world.episode_id).main_text
-
-
-def test_narrator_appends_to_the_main_text(shown, world):
-    shown(AppendText(episode_id=world.episode_id, text="太郎は振り向いた。\n「よう」"))
-
-    assert _main_text(world) == "市で二人が出会った。\n太郎は振り向いた。\n「よう」"
-    with pytest.raises(ValueError, match="text が空"):
-        AppendText(episode_id=world.episode_id, text=" ").run()
-
-
-def test_narrator_rewrites_what_the_author_noted_like_a_plot(shown, world):
-    shown(AppendText(episode_id=world.episode_id, text="太郎が花子に声をかける。\n花子は驚く。"))
-    # 作者の箇条を本文の文に起こし直す
-    shown(ReplaceText(episode_id=world.episode_id, old="太郎が花子に声をかける。\n花子は驚く。",
-                      new="「よう」\n太郎の声に、花子の肩が跳ねた。"))
-    assert _main_text(world) == "市で二人が出会った。\n「よう」\n太郎の声に、花子の肩が跳ねた。"
-    with pytest.raises(ValueError, match="0 度"):
-        ReplaceText(episode_id=world.episode_id, old="鐘が鳴った。", new="鐘").run()
 
 
 def test_wait_returns_without_the_moves():

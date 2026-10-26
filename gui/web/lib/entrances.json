@@ -614,27 +614,6 @@
       "writes": true
     },
     {
-      "id": "episode_session.append_text.AppendText",
-      "area": "episode_session",
-      "name": "AppendText",
-      "doc": "語り部が、人物役の一手を起こした文を本文の終わりに書き足す。作者の書いた所は直さない。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "text",
-          "required": true,
-          "default": null,
-          "annotation": "str"
-        }
-      ],
-      "writes": true
-    },
-    {
       "id": "episode_session.read_knower_gaps.ReadKnowerGaps",
       "area": "episode_session",
       "name": "ReadKnowerGaps",
@@ -663,33 +642,6 @@
         }
       ],
       "writes": false
-    },
-    {
-      "id": "episode_session.replace_text.ReplaceText",
-      "area": "episode_session",
-      "name": "ReplaceText",
-      "doc": "語り部が、本文のうち `old` の箇所を `new` に置き換える(作者がプロットのように書いた所を、本文の文に起こし直す)。",
-      "params": [
-        {
-          "name": "episode_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "old",
-          "required": true,
-          "default": null,
-          "annotation": "str"
-        },
-        {
-          "name": "new",
-          "required": true,
-          "default": null,
-          "annotation": "str"
-        }
-      ],
-      "writes": true
     },
     {
       "id": "event.create_random_event.CreateRandomEvent",

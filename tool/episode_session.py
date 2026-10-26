@@ -2,13 +2,12 @@
 """話のセッション(語り部と人物役の手番)を、手元でも web のセッションでも同じコマンドで扱う。
 
 手番の行は db に置かず、手元のファイル(`data_access_logic/episode_session/store.py`)に持つ。掛け合いの前に読む材料
-(knowledge・stage)・語を引く ideas・本文は、手元は入口を直に回し、web のセッション(`CLAUDE_CODE_REMOTE=true`)は API の入口を呼ぶ。
+(knowledge・stage)・語を引く ideas は、手元は入口を直に回し、web のセッション(`CLAUDE_CODE_REMOTE=true`)は API の入口を呼ぶ。
 人物役は表を見張らない。語り部が番の行の id を人物役に送り、人物役はその行だけを読んで一手を入れる。
 人物役がはじめに読む材料(knowledge・played)は標準出力に出さずファイルに書き、そのパスを出す(Read で最後まで読む)。
 
     人物役: knowledge / style / ideas / played / turn / answer
     語り部: knower-gaps / stage(登場人物と知り合いの組を手番のファイルに写す)/ appearance / add / wait / add-ideas / moves / read
-    作者と代わる代わる書く語り部: text / append / replace
     演じ直す前・掛け合いを終えたとき: clear(--from で、その行から後だけ)
 
     .venv/bin/python -m tool.episode_session turn --episode 102 --character 1 --record 1290
@@ -115,13 +114,6 @@ def _read_json(path: str) -> Any:
     return json.loads(sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8"))
 
 
-def _text_arg(args: argparse.Namespace) -> str:
-    """文を、--file のファイルか、--text の引数(- なら標準入力)から読む。"""
-    if args.file is not None:
-        return Path(args.file).read_text(encoding="utf-8")
-    return sys.stdin.read() if args.text == "-" else args.text
-
-
 def _out_name(args: argparse.Namespace) -> str:
     """書き出すファイルの名。人物役は何人も同時に動くので、コマンドと話・人物・行で分ける。"""
     parts = [args.command] + [f"{key[0]}{getattr(args, key)}" for key in ("episode", "character", "record", "after")
@@ -208,19 +200,6 @@ def main() -> None:
     read = commands.add_parser("read", help="セッションの行をすべて読む")
     read.add_argument("--episode", type=int, required=True)
 
-    text = commands.add_parser("text", help="いま保存されている本文の全文を読む")
-    text.add_argument("--episode", type=int, required=True)
-
-    append = commands.add_parser("append", help="人物役の一手を起こした文を本文の終わりに書き足す")
-    append.add_argument("--episode", type=int, required=True)
-    appended = append.add_mutually_exclusive_group(required=True)
-    appended.add_argument("--file", help="書き足す文のファイル")
-    appended.add_argument("--text", help="書き足す文。- なら標準入力から読む")
-
-    replace = commands.add_parser("replace", help="本文のうち old の箇所を new に置き換える(作者がプロットのように書いた所を起こし直す)")
-    replace.add_argument("--episode", type=int, required=True)
-    replace.add_argument("--edit", required=True, help='JSON {"old": 置き換える文, "new": 置き換えた文} のファイル。- なら標準入力から読む')
-
     clear = commands.add_parser("clear", help="話のセッションの行をすべて消す(手番を演じ直す前と、掛け合いを終えたときに)")
     clear.add_argument("--episode", type=int, required=True)
     clear.add_argument("--from", dest="from_record", type=int, help="この行の id から後(この行を含む)だけを消す")
@@ -278,13 +257,6 @@ def run(args: argparse.Namespace) -> Any:
         case "read":
             session = SessionStore(args.episode).load()
             return [_row(record, session.cast) for record in session.records]
-        case "text":
-            [episode] = call("episode.read_episode_texts.ReadEpisodeTexts", {"episode_ids": [args.episode]})
-            return {"title": episode["title"], "main_text": episode["main_text"]}
-        case "append":
-            return call("episode_session.append_text.AppendText", {"episode_id": args.episode, "text": _text_arg(args)})
-        case "replace":
-            return call("episode_session.replace_text.ReplaceText", {"episode_id": args.episode, **_read_json(args.edit)})
         case "clear":
             return {"episode_id": args.episode, "deleted": SessionStore(args.episode).clear(args.from_record)}
     raise ValueError(f"知らないコマンド: {args.command}")
