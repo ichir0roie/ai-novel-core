@@ -25,7 +25,7 @@ from data_access_logic.meme.models import (
 from data_access_logic.source_text import (
     SourceBatchSerialized, SourceRow, SourceText, batches, row_of, source_of, strip_fact_check,
 )
-from db.schema import MEME_CATEGORIES, Episode, Event, Meme, Oracle, StyleScope
+from db.schema import MEME_CATEGORIES, Episode, Event, Expansion, ExpansionMode, Meme, Oracle, StyleScope
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ _CLASSIFY_SYSTEM = "人物の行動原理になる「ミーム」を番号つき
 
 def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
     """渡した行の本文。元の列が空の行は外す。oracle の本文には検証結果(`# 検証結果` の節)も含む。
-    アイデアの本文と人物の筋書きからは抜き出さず、話の本文から抜き出す。"""
+    アイデアの本文と人物の筋書きからは抜き出さず、話の本文と、世界の展開の一言・狙い(`expansion.prompt`)から抜き出す。"""
     sources: list[SourceText] = []
     for row in rows:
         record = row_of(s, row.table, row.id)
@@ -73,8 +73,10 @@ def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
             source = source_of(record, "出来事", record.text)
         elif isinstance(record, Episode):
             source = source_of(record, "話の本文", record.main_text)
+        elif isinstance(record, Expansion):
+            source = source_of(record, "作者の一言" if record.mode == ExpansionMode.AUTHOR else "人物の狙い", record.prompt)
         else:
-            raise ValueError(f"ミームを抜き出す元は oracle / event / episode のいずれか: {row.table!r}")
+            raise ValueError(f"ミームを抜き出す元は oracle / event / episode / expansion のいずれか: {row.table!r}")
         if source.text.strip():
             sources.append(source)
     return sources

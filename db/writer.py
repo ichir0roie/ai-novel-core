@@ -29,6 +29,8 @@ class Writing:
     expansion_id: int | None = None
     # AI が作者の確かめを経ずに生んだ行を書いている(AI の生成の流れ)。足した行の出自を ai にし、作者の行に書いても出自を変えない
     generated: bool = False
+    # 展開の取り消しで、控えた行の値をそのまま戻している。出自も控えた値のまま書く
+    restoring: bool = False
 
     @property
     def by_ai(self) -> bool:
@@ -64,6 +66,16 @@ def generated() -> Iterator[Writing]:
     token = _writing.set(state)
     try:
         yield state
+    finally:
+        _writing.reset(token)
+
+
+@contextmanager
+def restoring() -> Iterator[Writing]:
+    """展開の取り消しで、控えた行の値を戻す。作者の手で書く。"""
+    token = _writing.set(Writing(restoring=True))
+    try:
+        yield current()
     finally:
         _writing.reset(token)
 

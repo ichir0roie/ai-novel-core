@@ -118,7 +118,7 @@ def _before_insert(_mapper, _connection, target: Base) -> None:
     state = current()
     if state.by_ai:
         _check_ai_table(target, "足せない")
-    if isinstance(target, OriginMixin):
+    if isinstance(target, OriginMixin) and not state.restoring:
         target.origin = (Origin.AI if state.by_ai or state.generated else Origin.USER).value
 
 
@@ -142,19 +142,19 @@ def _before_update(_mapper, connection, target: Base) -> None:
     if target.__tablename__ in UNGUARDED_TABLES:
         return
     changes = _changes(target)
-    if isinstance(target, OriginMixin) and "origin" in changes:
+    state = current()
+    if isinstance(target, OriginMixin) and "origin" in changes and not state.restoring:
         # 出自は守りだけが決める(入口・画面から渡された値は使わない)
         old = changes.pop("origin")[0]
         target.origin = _snapshot(connection, target)["origin"] if old is NO_VALUE else old
-    if not changes:
+    if not changes or state.restoring:
         return
-    state = current()
     if state.writer is Writer.AI_APPEND:
         _check_ai_table(target, "直せない")
         _check_append(target, changes)
     elif state.by_ai:
         _check_ai_table(target, "直せない")
-        if target.origin == Origin.USER:
+        if getattr(target, "origin", None) == Origin.USER:
             raise ProtectedRowError(f"AI の書き手は作者の行 {_label(target)} を直せない")
     elif isinstance(target, OriginMixin) and target.origin == Origin.AI and not state.generated:
         target.origin = Origin.USER.value

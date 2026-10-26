@@ -56,6 +56,11 @@ def _replaced_knowers(current: Sequence[Child], rows: Sequence[BaseModel], child
             for row in rows]
 
 
+def appended_history(row: BaseModel, child: type[History], owner: Character | Location | None = None) -> History:
+    """来歴の行を一つ作る。今ある行には触れない(知る相手の既定は `replaced_histories` の新しい行と同じ)。"""
+    return replaced_histories([], [row], child, owner)[0]
+
+
 def replaced_histories(current: Sequence[History], rows: Sequence[BaseModel], child: type[History],
                        owner: Character | Location | None = None) -> list[History]:
     """来歴の行を置き換え、行の `knowers`(知る相手の行の配列)で知る相手を置き換える。
