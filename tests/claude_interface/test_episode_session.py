@@ -121,6 +121,8 @@ def test_read_knowledge(shown, world):
         id=taro, appearance="背が高い", text="太郎の芯", meme="- 今表: 太郎のミーム", principle="太郎の行動原理",
         plot="太郎の先の筋書き",
         histories=[CharacterHistoryRow(start=1190, description="太郎の秘密",
+                                       knowers=[KnowerRow(knower_id=taro)]),
+                   CharacterHistoryRow(start=1195, kind="思考の癖", description="損得より先に人の顔を見る",
                                        knowers=[KnowerRow(knower_id=taro)])])))
     shown(UpdateCharacter(CharacterUpdateForm(
         id=hanako, appearance="髪が赤い", text="花子の芯", meme="- 裏: 花子のミーム", plot="花子の先",
@@ -156,6 +158,8 @@ def test_read_knowledge(shown, world):
     # 性格は本人にだけ渡す
     assert len(me["性格"]) == 12 and me["性格"]["誠実性"] in PERSONALITY_LEVELS
     assert _histories(me) == ["太郎の秘密"]
+    # 思考の癖は来歴と分けて、何年前かを付けずに渡す
+    assert me["思考の癖"] == ["損得より先に人の顔を見る"]
     hanako_known = _known_person(result, "テスト花子")
     assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
     assert "ミーム" not in hanako_known and "性格" not in hanako_known

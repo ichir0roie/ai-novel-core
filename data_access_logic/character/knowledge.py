@@ -11,6 +11,7 @@
   受け止め方)、スキルの名前と来歴の行だけ。
 - アイデアはすべて渡すと多すぎるので、はじめはプロットに名前(本質の名前か知っている呼び名)が出るものだけ。手番の要求に出た語は、
   人物役が `known_ideas_by_words` で引く。
+- 種別「思考の癖」の来歴は、本人の「思考の癖」として、来歴と分けて何年前かを付けずに渡す。
 - 装いは種別「装い」のスキルで持ち、見た人にそのまま知れるので、見た目(`skills.outfit_at`)に入れ、スキルの一覧には入れない。
 - 人物の範囲は本人と、その時刻に関係(`character_relation`)のある人物。本人には外見・芯・ミーム・行動原理・性格を、関係のある人物には
   外見と芯を渡し、plot はだれにも渡さない。話を渡したときは、関係のある人物の外見・芯・来歴をその話の登場人物・名前だけ出る人物の分だけ
@@ -83,6 +84,10 @@ class KnownName(Material):
     detail: str | None = None
 
 
+# 作者の書いた人物の内心から縮めた、考え方の傾向の来歴の種別。人物役には来歴と分けて渡す
+THINKING_HABIT = "思考の癖"
+
+
 class KnownHistory(Material):
     start: Timestamp | None = None
     # 人物の来歴の種別(装い・持ち物など)。スキル・場所の来歴には無い
@@ -122,7 +127,13 @@ def _history_line(start: Stamp | None, description: str, year: int, kind: str | 
 
 
 def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[str]:
-    return [_history_line(history.start, history.description, year, history.kind) for history in histories]
+    return [_history_line(history.start, history.description, year, history.kind) for history in histories
+            if history.kind != THINKING_HABIT]
+
+
+def _habits_for_prompt(histories: list[KnownHistory]) -> list[str]:
+    # 考え方の傾向は時期で読み分けないので、何年前かを付けない
+    return [history.description for history in histories if history.kind == THINKING_HABIT]
 
 
 def _skills_for_prompt(known: list[KnownSkill], year: int) -> list[dict[str, Any]]:
@@ -206,6 +217,7 @@ class KnowledgeSerialized(Material):
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
                 "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
                 "行動原理": me.principle, "性格": personality_for_prompt(parameters),
+                "思考の癖": _habits_for_prompt(me.histories),
                 "来歴(古い順)": _histories_for_prompt(me.histories, year),
                 "スキル": _skills_for_prompt(me.skills, year),
             },
