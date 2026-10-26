@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "./Modal";
+import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
 type Props = {
@@ -28,6 +29,8 @@ export default function InstructionModal({ value, error, onClose, onSave }: Prop
     setBusy(false);
     if (ok) onClose();
   };
+
+  useSaveShortcut(() => void save(), !busy && dirty);
 
   return (
     <Modal
