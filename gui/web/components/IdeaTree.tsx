@@ -1,10 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { deleteIdeaDetachingChildren, listAllRecords, updateRecord, type Rec } from "@/lib/api";
 import NameId from "./NameId";
 import { buildIdeaTree, collapsibleIds, descendantIds, findNode, type IdeaNode } from "@/lib/ideaTree";
-import { useOpenPage } from "@/lib/nav";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
 
@@ -24,7 +24,7 @@ type RowProps = {
 };
 
 function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove, onMoveHere, onContextMenu }: RowProps) {
-  const openPage = useOpenPage();
+  const router = useRouter();
   const inMoveMode = movingId !== null;
   const isSelf = movingId === node.id;
   const isBlocked = inMoveMode && (isSelf || blocked.has(node.id));
@@ -45,7 +45,7 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
               if (!isBlocked) onMoveHere(node.id);
               return;
             }
-            openPage(`/tables/idea/${node.id}`, e);
+            router.push(`/tables/idea/${node.id}`);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -108,7 +108,7 @@ function IdeaRow({ node, openState, movingId, blocked, onStartMove, onCancelMove
 /** アイデア一覧をツリーで表示する。各行の Move ボタンで移動モードに入り、そのあと別のアイデアをクリックすると
  * `parent_idea_id` をそこへ差し替える(量が多いとスクロールで見切れるドラッグ&ドロップは使わない)。 */
 export default function IdeaTree() {
-  const openPage = useOpenPage();
+  const router = useRouter();
   const [ideas, setIdeas] = useState<Rec[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -225,9 +225,9 @@ export default function IdeaTree() {
             <button
               type="button"
               className="context-menu-item"
-              onClick={(e) => {
+              onClick={() => {
                 setMenu(null);
-                openPage(`/tables/idea/new?parent_idea_id=${menu.node.id}`, e);
+                router.push(`/tables/idea/new?parent_idea_id=${menu.node.id}`);
               }}
             >
               {T.ideaTree.addChild}

@@ -289,7 +289,7 @@ export const T = {
     add: "+ Add skill",
     none: "No skills yet",
     unsaved: "new (not saved)",
-    openRecord: "Open this skill's page in a new tab",
+    openRecord: "Open this skill's page",
     changes: (n: number) => `${n} skill${n === 1 ? "" : "s"} changed`,
     saved: (n: number) => `Saved ${n} skill${n === 1 ? "" : "s"}`,
     failed: (error: string) => `Could not save: ${error}`,
@@ -387,7 +387,7 @@ export const T = {
     gap: "No episodes (squeezed)",
     skipped: (days: number) =>
       days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
-    openInNewTab: "Open in new tab",
+    openForm: "Open the full form",
     newEpisode: "New episode",
     newEpisodeIn: (story: string) => `Story: ${story}`,
     start: "Start",
