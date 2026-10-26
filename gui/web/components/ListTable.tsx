@@ -83,6 +83,7 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
             >
               <td>{String(item.id)}</td>
               <td className="name">
+                {item.origin === "ai" && <OriginBadge />}
                 {selection ? (
                   <span
                     className="open"
@@ -134,6 +135,15 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** AI が作者の確かめを経ずに足した行(出自 ai)の印。 */
+export function OriginBadge() {
+  return (
+    <span className="badge ai" title={T.list.aiBadgeHint}>
+      {T.list.aiBadge}
+    </span>
   );
 }
 

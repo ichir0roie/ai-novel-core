@@ -423,6 +423,11 @@ export interface components {
         EpisodeRecord: {
             /** Id */
             id: number;
+            /**
+             * Origin
+             * @default user
+             */
+            origin: string;
             /** Story Id */
             story_id: number;
             /** Title */

@@ -1,8 +1,8 @@
 import { labelOf } from "./api";
 import type { ColumnMeta, Labels, Rec, TableMeta } from "./api";
 
-// 一覧のテーブルには出さない列(id は別で出す。他は座標・フラグなど見ても意味が薄い)
-const HIDDEN = new Set(["id", "polygon"]);
+// 一覧のテーブルには出さない列(id は別で出す。出自は名前の横の印で出す。他は座標・フラグなど見ても意味が薄い)
+const HIDDEN = new Set(["id", "polygon", "origin"]);
 // 話の一覧は作品の詳細から開く前提なので、作品の列は出さない。ミームは本文だけを見て選んで消すので、分類も出さない
 const HIDDEN_BY_TABLE: Record<string, string[]> = { episode: ["story_id"], meme: ["category"] };
 // 本文のプレビュー列を出さないテーブル(ミーム・文体の好みは名前の列が本文そのもの)

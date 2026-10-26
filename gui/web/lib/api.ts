@@ -207,6 +207,37 @@ export type KnownRows = {
 export const readKnownRows = async (knowerId: number) =>
   (await readEntrance("character.read_known_rows.ReadKnownRows", { knower_id: knowerId })).result as KnownRows;
 
+/** 世界の展開(`expansion.*`)。作者モード・人物モードの一回ごとの記録。 */
+export type Expansion = {
+  id: number; mode: string; prompt: string; story_id: number | null; actor_id: number | null; time: string | null;
+  location_id: number | null; status: string; summary: string; created_at: string;
+};
+export type ExpansionListItem = Expansion & {
+  counts: { added: number; updated: number; deleted: number; open_conflicts: number };
+};
+export type ExpansionChange = {
+  id: number; table_name: string; row_id: number; op: string; before: Rec | null; reason: string; created_at: string;
+};
+export type ExpansionConflict = {
+  id: number; expansion_id: number; table_name: string; row_id: number; detail: string; proposal: string; status: string;
+};
+export type ExpansionDetail = Expansion & { changes: ExpansionChange[]; conflicts: ExpansionConflict[] };
+
+export const listExpansions = async (args: { limit?: number; mode?: string; status?: string }) =>
+  (await readEntrance("expansion.list_expansions.ListExpansions", args)).result as ExpansionListItem[];
+
+export const readExpansion = async (expansionId: number) =>
+  (await readEntrance("expansion.read_expansion.ReadExpansion", { expansion_id: expansionId })).result as ExpansionDetail;
+
+/** 展開を取り消す。足した行を消し、直した・消した行を戻す(あとで直された行があれば何も戻さずに失敗する)。 */
+export const revertExpansion = async (expansionId: number) =>
+  (await runEntrance("expansion.revert_expansion.RevertExpansion", { expansion_id: expansionId })).result as
+    { id: number; reverted: number };
+
+/** 食い違いを受けた・捨てたと書く(作者の行を直すのは別に行う)。 */
+export const resolveConflict = (conflictId: number, status: "accepted" | "dismissed") =>
+  runEntrance("expansion.resolve_conflict.ResolveConflict", { conflict: { id: conflictId, status } });
+
 export type KnowledgeChange = { id: number; known: boolean; start: string | null };
 
 /** 知る相手の付け外しをまとめて直し、直したあとの知る行を返す(`character.update_knowledge.UpdateKnowledge`)。 */
