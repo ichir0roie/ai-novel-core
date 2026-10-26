@@ -8,8 +8,6 @@ import { T } from "@/lib/text";
 
 export type SortOrder = "asc" | "desc";
 
-type ClickLike = { ctrlKey: boolean; metaKey: boolean };
-
 type Selection = {
   selected: Set<number>;
   onToggle: (id: number) => void;
@@ -22,8 +20,8 @@ type Props = {
   sort: string;
   order: SortOrder;
   onSort: (key: string) => void;
-  /** 行(選べる一覧では名前の文字)を開く。Enter で開くときは e が無い */
-  onOpen: (id: string, e?: ClickLike) => void;
+  /** 行(選べる一覧では名前の文字)を開く */
+  onOpen: (id: string) => void;
   /** 参照列のセルを押したとき、その値で絞り込む。渡さなければ参照列もただの文字 */
   onFilter?: (key: string, value: string) => void;
   /** 渡すと行を選べる一覧にする(行のクリックは選ぶだけ) */
@@ -76,7 +74,7 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
               className={selection?.selected.has(Number(item.id)) ? "row selected" : "row"}
               tabIndex={0}
               // まとめて消せる一覧では、行のクリックは選ぶだけにして、詳細へは名前の文字から飛ぶ
-              onClick={(e) => (selection ? selection.onToggle(Number(item.id)) : onOpen(String(item.id), e))}
+              onClick={() => (selection ?selection.onToggle(Number(item.id)) : onOpen(String(item.id)))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") onOpen(String(item.id));
               }}
@@ -88,7 +86,7 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
                     className="open"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onOpen(String(item.id), e);
+                      onOpen(String(item.id));
                     }}
                   >
                     {String(item.label ?? "")}

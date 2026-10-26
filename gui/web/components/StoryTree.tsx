@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { listAllRecords, updateStories, type Rec } from "@/lib/api";
 import NameId from "./NameId";
 import { buildStoryTree, collapsibleIds, descendantIds, findNode, type StoryNode } from "@/lib/storyTree";
-import { useOpenPage } from "@/lib/nav";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
@@ -158,7 +158,7 @@ const renumber = (draft: Draft, ids: number[]): Draft => {
  *  変更はブラウザに溜め、Apply で `story.update_stories.UpdateStories` にまとめて渡す。
  *  ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない。行の右クリックで、子の作品・話を足すメニューを出す。 */
 export default function StoryTree() {
-  const openPage = useOpenPage();
+  const router = useRouter();
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -341,9 +341,9 @@ export default function StoryTree() {
             <button
               type="button"
               className="context-menu-item"
-              onClick={(e) => {
+              onClick={() => {
                 setMenu(null);
-                openPage(`/tables/story/new?parent_story_id=${menu.node.id}`, e);
+                router.push(`/tables/story/new?parent_story_id=${menu.node.id}`);
               }}
             >
               {T.storyTree.addChild}
@@ -351,9 +351,9 @@ export default function StoryTree() {
             <button
               type="button"
               className="context-menu-item"
-              onClick={(e) => {
+              onClick={() => {
                 setMenu(null);
-                openPage(`/tables/episode/new?story_id=${menu.node.id}`, e);
+                router.push(`/tables/episode/new?story_id=${menu.node.id}`);
               }}
             >
               {T.storyTree.addEpisode}
