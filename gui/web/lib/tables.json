@@ -80,6 +80,21 @@
           "comment": "親の作品。章・外伝は親の作品の子にする"
         },
         {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
+        },
+        {
           "key": "text",
           "type": "string",
           "nullable": false,
@@ -239,6 +254,21 @@
           "comment": "字数。本文から数える"
         },
         {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
+        },
+        {
           "key": "character_ids",
           "type": "id_list",
           "nullable": true,
@@ -381,6 +411,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "没年(この時からはいない)。空なら死んでいない"
+        },
+        {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
         },
         {
           "key": "location_id",
@@ -1107,6 +1152,21 @@
           "comment": "この関係が終わる時。空なら続いている"
         },
         {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
+        },
+        {
           "key": "text",
           "type": "string",
           "nullable": false,
@@ -1229,6 +1289,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "種別。「装い」なら身に着けている物で、見た人に知れる。空なら技・術・技能"
+        },
+        {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
         },
         {
           "key": "text",
@@ -1428,6 +1503,21 @@
           "readonly": false,
           "create_only": false,
           "comment": null
+        },
+        {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
         },
         {
           "key": "character_ids",
@@ -1739,6 +1829,21 @@
           "comment": null
         },
         {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
+        },
+        {
           "key": "text",
           "type": "string",
           "nullable": false,
@@ -1861,6 +1966,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "上位のアイデア"
+        },
+        {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
         },
         {
           "key": "text",
@@ -2023,6 +2143,21 @@
           "comment": "反転したミーム(アンチミーム)。対の二行が互いを指す。空なら次の抽出で AI が作る"
         },
         {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
+        },
+        {
           "key": "text",
           "type": "string",
           "nullable": false,
@@ -2075,6 +2210,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "題。覚え書きを呼ぶ名前"
+        },
+        {
+          "key": "origin",
+          "type": "string",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": "出自。user は作者が作った・直した行、ai は AI が作者の確かめを経ずに足した行。AI は user の行に触らない"
         },
         {
           "key": "text",

@@ -20,6 +20,10 @@ from pydantic import BaseModel, TypeAdapter
 from data_access_logic.entrypoint import Entrypoint, UnknownRecordError
 
 DB_ENTRANCES = frozenset({
+    "character.add_knower.AddKnower",
+    "character.append_history.AppendCharacterHistory",
+    "character.append_relation_history.AppendRelationHistory",
+    "character.append_skill_history.AppendSkillHistory",
     "character.commit_character.CommitCharacter",
     "character.commit_character_location.CommitCharacterLocation",
     "character.commit_character_relation.CommitCharacterRelation",
@@ -63,12 +67,21 @@ DB_ENTRANCES = frozenset({
     "event.read_events.ReadEvents",
     "event.update_events.UpdateEvents",
     "event_seed.update_event_seed.UpdateEventSeed",
+    "expansion.add_conflict.AddConflict",
+    "expansion.finish_expansion.FinishExpansion",
+    "expansion.list_expansions.ListExpansions",
+    "expansion.read_expansion.ReadExpansion",
+    "expansion.resolve_conflict.ResolveConflict",
+    "expansion.revert_expansion.RevertExpansion",
+    "expansion.start_expansion.StartExpansion",
+    "idea.append_history.AppendIdeaHistory",
     "idea.commit_idea.CommitIdea",
     "idea.delete_idea.DeleteIdea",
     "idea.merge_idea.MergeIdea",
     "idea.resolve_ideas.ResolveIdeas",
     "idea.search_ideas.SearchIdeas",
     "idea.update_idea.UpdateIdea",
+    "location.append_history.AppendLocationHistory",
     "location.commit_location.CommitLocation",
     "location.create_random_location.CreateRandomLocation",
     "location.delete_location.DeleteLocation",
@@ -92,6 +105,7 @@ DB_ENTRANCES = frozenset({
     "style_preference.commit_style_preference.CommitStylePreference",
     "style_preference.read_writing_style.ReadWritingStyle",
     "style_preference.update_style_preference.UpdateStylePreference",
+    "world.search_world.SearchWorld",
 })
 
 CLAUDE_ENTRANCES = frozenset({
@@ -107,6 +121,7 @@ CLAUDE_ENTRANCES = frozenset({
     "event.generate_event.GenerateEvent",
     "event.update_event.UpdateEvent",
     "event_seed.extract_event_seeds.ExtractEventSeeds",
+    "expansion.act_character.ActCharacter",
     "fact_check.check_facts.CheckFacts",
     "meme.extract_memes.ExtractMemes",
     "meme.refresh_generated_content.RefreshGeneratedContent",

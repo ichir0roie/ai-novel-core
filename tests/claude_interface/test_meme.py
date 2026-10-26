@@ -36,8 +36,9 @@ def test_delete_meme(shown, world):
 
     result = shown(DeleteMeme(meme_ids=[world.meme_id, other["id"]]))
 
-    assert result == [{"id": world.meme_id, "category": "信条", "anti_meme_id": None, "text": "テストの信条"},
-                      {"id": other["id"], "category": "信条", "anti_meme_id": None, "text": "一緒に消える信条"}]
+    assert result == [{"id": world.meme_id, "origin": "user", "category": "信条", "anti_meme_id": None, "text": "テストの信条"},
+                      {"id": other["id"], "origin": "user", "category": "信条", "anti_meme_id": None,
+                       "text": "一緒に消える信条"}]
 
 
 def test_delete_meme_deletes_its_anti_meme(shown, world, mock_ai):
@@ -87,7 +88,7 @@ def test_update_meme(shown, world):
     result = shown(UpdateMeme(MemeUpdateForm(
         id=world.meme_id, text="約束は守る", category=MemeCategory.LAW)))
 
-    assert result == {"id": world.meme_id, "category": "理", "anti_meme_id": None, "text": "約束は守る"}
+    assert result == {"id": world.meme_id, "origin": "user", "category": "理", "anti_meme_id": None, "text": "約束は守る"}
 
 
 def test_commit_oracle(shown, mock_ai):
@@ -105,7 +106,7 @@ def test_update_oracle(shown, world):
     result = shown(UpdateOracle(OracleUpdateForm(
         id=world.oracle_id, text="直した覚え書き", title="直した題")))
 
-    assert result == {"id": world.oracle_id, "title": "直した題", "text": "直した覚え書き"}
+    assert result == {"id": world.oracle_id, "origin": "user", "title": "直した題", "text": "直した覚え書き"}
 
 
 def test_list_pending_reviews(shown, world):

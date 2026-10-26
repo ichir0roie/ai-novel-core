@@ -21,6 +21,8 @@ const API_KEY_HEADER = "x-novel-api-key";
 const { runWithAmplifyServerContext } = createServerRunner({ config: amplifyConfig });
 
 const REQUEST_HEADERS = ["content-type", "accept"];
+// web のセッションの流れが運ぶ書き手(`db/writer.py`)。画面からの書き込みは API がいつも作者として扱うので、web のときだけ流す
+const WRITER_HEADERS = ["x-novel-writer", "x-novel-expansion", "x-novel-generated"];
 const RESPONSE_HEADERS = ["content-type", "cache-control", "location"];
 
 // Lambda の関数 URL は認証が AWS_IAM なので、Amplify の SSR のコンピュートロールで SigV4 の署名を付ける。手元の API には付けない
@@ -87,7 +89,7 @@ async function forward(request: NextRequest, context: { params: Promise<{ path: 
   const target = new URL(`${apiUrl}/api/${path.map(encodeURIComponent).join("/")}`);
   target.search = encodeQuery(request.nextUrl.searchParams);
   const headers = new Headers();
-  for (const name of REQUEST_HEADERS) {
+  for (const name of caller === "web" ? [...REQUEST_HEADERS, ...WRITER_HEADERS] : REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }

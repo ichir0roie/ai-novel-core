@@ -20,6 +20,7 @@ from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId, RowIds
 from db.schema import CHARACTER_KIND_PERSON
 from db.stamp import Stamp
+from db.writer import generated
 from data_access_logic.caller import call
 
 
@@ -63,6 +64,7 @@ def _complete_text(ai: AIClient, rng: random.Random, character_id: int) -> Chara
         id=character_id, writing=generator.completed_text(ai, target, material, content, ideas)))
 
 
+@generated()
 def generate_character(
     character: CharacterForm | None = None, time: Stamp | str | None = None, seed: int | None = None,
     plot_text: str | None = None, ai: AIClient = ai_client,
@@ -81,6 +83,7 @@ def generate_character(
     return record
 
 
+@generated()
 def generate_characters(
     location_ids: list[int], time: Stamp | str, count: tuple[int, int] = (2, 4), person: bool = True,
     seed: int | None = None, ai: AIClient = ai_client,

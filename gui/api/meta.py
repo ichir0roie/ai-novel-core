@@ -98,8 +98,8 @@ def _row_model(spec: TableSpec, name: str) -> type[BaseModel]:
 def table_columns(spec: TableSpec) -> list[ColumnMeta]:
     model = spec.model
     sections = set(model.TEXT_COLUMNS)
-    # 字数は本文から自動で数えるので、フォームでは直に書けない
-    readonly_columns = {"letters"} if spec.name == "episode" else set()
+    # 字数は本文から自動で数えるので、フォームでは直に書けない。出自は書き込むときに守り(`db/guard.py`)が決める
+    readonly_columns = {"origin", *({"letters"} if spec.name == "episode" else ())}
     # AI 生成前のプロットは、AI が書く本文とは並べず、左側の欄の下にスクロール欄で置く
     side_columns = {"plot_text"} if spec.name == "episode" else set()
     # 話の本文は小説の地の文なので、マークダウンとして解釈せずただのテキストとして扱う

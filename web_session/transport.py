@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 
+from db import writer
+
 # `gui/api/app.py` の `API_KEY_HEADER` と同じ名前
 _API_KEY_HEADER = "x-novel-api-key"
 # 段は db だけなので短いが、Lambda の立ち上がり(コンテナの冷えた起動)を待てるようにする
@@ -35,8 +37,9 @@ def post(path: str, body: Any) -> Any:
     global _client
     if _client is None:
         _client = httpx.Client(timeout=_TIMEOUT)
+    # 書き手(`db/writer.py`)は、流れの中で立てた値を API へ運ぶ
     response = _client.post(f"{_base_url()}{path}", json=body,
-                            headers={_API_KEY_HEADER: os.environ.get("NOVEL_API_KEY", "")})
+                            headers={_API_KEY_HEADER: os.environ.get("NOVEL_API_KEY", ""), **writer.headers()})
     if response.is_error:
         raise ApiError(f"{path} が {response.status_code} を返した: {response.text[-2000:]}")
     return response.json()

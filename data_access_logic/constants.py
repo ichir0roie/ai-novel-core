@@ -90,3 +90,16 @@ EPISODE_PLACE_EVENT_LIMIT = 3
 IDEA_CONTEXT_LIMIT = 100
 # 清書に渡すアイデア一件の本文の字数の上限。
 IDEA_CONTEXT_LETTERS = 400
+
+# data_access_logic/expansion(人物モード `ActCharacter`)
+# 動く人物を渡さないとき、その時刻の行動力ごとの重みでサブキャラクターから引く。無は動かない
+ACTOR_WEIGHTS = {"無": 0, "低": 1, "並": 2, "高": 3, "必": 5}
+# 人物が前に出た出来事・話から、次の一手までに空ける日数の範囲
+ACT_INTERVAL_DAYS = (1, 30)
+# 人物が見る、居合わせる人物の上限
+ACT_PRESENT_LIMIT = 10
+# 狙いの成り行き。サイコロで一つ選び、裁く段に渡す(狙いがいつも通るとは限らない)
+ACT_OUTCOMES = ("思い通りに運ぶ", "半ばだけ運ぶ", "思わぬ方へ転ぶ", "裏目に出る")
+# 一手で生む人物・アイデアの上限
+ACT_NEW_CHARACTER_LIMIT = 2
+ACT_NEW_IDEA_LIMIT = 3

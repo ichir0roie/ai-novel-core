@@ -24,6 +24,7 @@ from data_access_logic.episode_session.store import SessionStore
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.stamp import Stamp
+from db.writer import generated
 from data_access_logic.flows import character
 from data_access_logic.caller import call
 from data_access_logic.flows.summary import refresh
@@ -66,6 +67,7 @@ def _record(episode_id: int) -> EpisodeRecord:
     return call(episode_steps.episode_record, RowId(id=episode_id))
 
 
+@generated()
 def generate_frame(frame: EpisodeForm, ai: AIClient = ai_client) -> EpisodeRecord:
     """`GenerateFrame` に当たる。"""
     saved = call(episode_steps.save_episode_frame, frame)
@@ -73,6 +75,7 @@ def generate_frame(frame: EpisodeForm, ai: AIClient = ai_client) -> EpisodeRecor
     return _record(saved.id)
 
 
+@generated()
 def complete_plot(
     episode: EpisodeForm, order: str | None = None, model: str | None = None, effort: str | None = None,
     ai: AIClient = ai_client,
@@ -102,6 +105,7 @@ def complete_plot(
     return _record(saved.id)
 
 
+@generated()
 def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.VoiceDraft]:
     """`RefreshVoices` に当たる。同じ作品の直前の五話のセリフから、登場人物の話し方を調整して書き戻す。
     書いた人物の調整案を返す。"""
@@ -121,6 +125,7 @@ def refresh_voices(episode_id: int, ai: AIClient = ai_client) -> list[voices.Voi
     return adjusted
 
 
+@generated()
 def read_episode_brief(episode_id: int, ai: AIClient = ai_client) -> EpisodeBriefSerialized:
     """`ReadEpisodeBrief` に当たる。前の話の概要・出来事の要約は作り直さず、そのときのまま読む。
     設定は、プロット・話のセッションの行・今の本文から AI が挙げた語で引く。語の数を AI が絞るので、元ごとに挙げさせる。

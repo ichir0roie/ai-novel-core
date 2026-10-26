@@ -3,6 +3,7 @@ from data_access_logic.material import Material
 
 class StoryRecord(Material):
     id: int
+    origin: str = "user"
     name: str
     parent_story_id: int | None = None
     display_order: int | None = None
