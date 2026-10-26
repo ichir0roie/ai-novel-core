@@ -300,7 +300,7 @@ def open_modal(site: Site, button: str, name: str) -> str:
     return site.page.inner_text(modal)
 
 
-def post_draft(site: Site, post: Post) -> None:
+def post_draft(site: Site) -> None:
     """入力の画面から下書きに保存し、下書きの画面の窓を進めて投稿する。予約・割り込み・完結は既定(しない)のまま。"""
     site.click(SAVE_DRAFT_BUTTON)
     logger.info("下書きに保存した: %s", site.page.url)
@@ -323,7 +323,7 @@ def submit_form(site: Site, post: Post) -> None:
         save_posted(post.episode_id, post.novel_data_id)
         logger.info("話 %d で、小説 %d の部分 %d を書き換えた", post.episode_id, post.novel_id, post.novel_data_id)
         return
-    post_draft(site, post)
+    post_draft(site)
     novel_data_id = posted_novel_data_id(site, post)
     if novel_data_id is None:
         logger.warning("話 %d を小説 %d に投稿したが、部分の番号が読めなかった。部分の管理画面の URL の noveldataid を、"
