@@ -1,12 +1,6 @@
 from data_access_logic.material import Material, Named, Timestamp
 
 
-class TextSaved(Material):
-    episode_id: int
-    # 保存した本文の字数
-    letters: int
-
-
 class SessionIdeas(Material):
     """語り部が足した語の行き先。本文は返さず、名前だけ(語り部は設定を読まない)。"""
 
