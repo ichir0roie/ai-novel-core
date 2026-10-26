@@ -143,12 +143,12 @@ def _check_append(target: Base, changes: dict[str, tuple[Any, Any]]) -> None:
     if set(changes) != {APPENDABLE_COLUMN}:
         raise ProtectedRowError(
             f"人物モードは {_label(target)} の {', '.join(sorted(changes))} を直せない(end で終わりを付けることだけ)")
-    old, new = changes[APPENDABLE_COLUMN]
+    old, new = (Stamp.parse(value) for value in changes[APPENDABLE_COLUMN])
     # 没年まで続く居場所の行のように、先に入っている end より前で終えるのは、終わりを付けることに数える
-    if new is None or (old is not None and not Stamp.parse(new) < Stamp.parse(old)):
+    if new is None or (old is not None and not new < old):
         raise ProtectedRowError(f"人物モードは {_label(target)} の end を空に戻したり先へ延ばしたりできない")
     start = getattr(target, "start", None)
-    if isinstance(start, Stamp) and Stamp.parse(new) < start:
+    if isinstance(start, Stamp) and new < start:
         raise ProtectedRowError(f"{_label(target)} の end を start より前にはできない")
 
 

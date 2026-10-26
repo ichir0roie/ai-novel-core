@@ -121,7 +121,7 @@ def test_act_character_entrance_is_registered():
 
 def test_failed_act_marks_the_expansion_failed(world):
     class Silent(MockAIClient):
-        def generate(self, prompt, output, **kwargs):
+        def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
             return None
 
     with pytest.raises(ValueError, match="一手が得られなかった"):
