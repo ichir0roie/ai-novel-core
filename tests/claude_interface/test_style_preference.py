@@ -68,13 +68,14 @@ def test_update_style_preference_refuses_scope_that_has_a_row(shown):
         shown(UpdateStylePreference(StylePreferenceUpdateForm(id=episode_row["id"], scope=StyleScope.ALL)))
 
 
-def test_episode_scope_adds_all_then_stories_then_scope_then_episode(shown, world):
+def test_episode_scope_adds_all_then_stories_then_scope_then_revisions_then_episode(shown, world):
     parent_story = world.story_id
     child_story = _story(shown, "子の作品", parent_story)
     other_story = _story(shown, "別の作品")
     everywhere = _row(shown, "全体の好み", StyleScope.ALL)
     plot_only = _row(shown, "プロットの好み", StyleScope.PLOT)
     episode_only = _row(shown, "本文の好み", StyleScope.EPISODE)
+    revisions = _row(shown, "推敲の記録", StyleScope.REVISION)
     in_child = _story_instruction(shown, child_story, "子の作品の指示")
     in_parent = _story_instruction(shown, parent_story, "親の作品の指示")
     in_other = _story_instruction(shown, other_story, "別の作品の指示")
@@ -84,7 +85,8 @@ def test_episode_scope_adds_all_then_stories_then_scope_then_episode(shown, worl
     text = shown(ReadWritingStyle(WritingStyleForm(
         scope=StyleScope.EPISODE, story_id=child_story, episode_id=world.episode_id)))["text"]
 
-    assert text.index(everywhere) < text.index(in_parent) < text.index(in_child) < text.index(episode_only) < text.index(in_episode)
+    assert (text.index(everywhere) < text.index(in_parent) < text.index(in_child) < text.index(episode_only)
+            < text.index(revisions) < text.index(in_episode))
     assert plot_only not in text
     assert in_other not in text
 
@@ -92,6 +94,7 @@ def test_episode_scope_adds_all_then_stories_then_scope_then_episode(shown, worl
 def test_other_scopes_have_neither_story_nor_episode_instructions(shown, world):
     everywhere = _row(shown, "全体の好み", StyleScope.ALL)
     plot_only = _row(shown, "プロットの好み", StyleScope.PLOT)
+    revisions = _row(shown, "推敲の記録", StyleScope.REVISION)
     in_story = _story_instruction(shown, world.story_id, "作品の指示")
     in_episode = _text("話の指示")
     shown(CommitEpisode(EpisodeCommitForm(id=world.episode_id, instruction=in_episode)))
@@ -102,6 +105,7 @@ def test_other_scopes_have_neither_story_nor_episode_instructions(shown, world):
     assert text.index(everywhere) < text.index(plot_only)
     assert in_story not in text
     assert in_episode not in text
+    assert revisions not in text
 
 
 def test_writing_style_without_story_has_neither_story_nor_narrow_texts(shown, world):
