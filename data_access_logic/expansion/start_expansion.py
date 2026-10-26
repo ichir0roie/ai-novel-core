@@ -14,16 +14,20 @@ from data_access_logic.expansion.record import ExpansionRecord
 from db.schema import Character, Expansion, Location, Story
 
 
+def start(s: Session, form: ExpansionCreateForm) -> ExpansionRecord:
+    CommitEntrypoint.check_exists(s, Story, form.story_id, "story_id")
+    CommitEntrypoint.check_exists(s, Character, form.actor_id, "actor_id")
+    CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
+    record = Expansion()
+    form.write_to(record)
+    s.add(record)
+    CommitEntrypoint.finalize(s, record)
+    return ExpansionRecord.model_validate(record)
+
+
 class StartExpansion(CommitEntrypoint):
     def __init__(self, expansion: ExpansionCreateForm):
         self.expansion = expansion
 
     def execute(self, s: Session) -> ExpansionRecord:
-        self.check_exists(s, Story, self.expansion.story_id, "story_id")
-        self.check_exists(s, Character, self.expansion.actor_id, "actor_id")
-        self.check_exists(s, Location, self.expansion.location_id, "location_id")
-        record = Expansion()
-        self.expansion.write_to(record)
-        s.add(record)
-        self.finalize(s, record)
-        return ExpansionRecord.model_validate(record)
+        return start(s, self.expansion)

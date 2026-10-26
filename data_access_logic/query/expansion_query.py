@@ -7,7 +7,11 @@ from datetime import datetime
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from db.schema import ConflictStatus, Expansion, ExpansionChange, ExpansionConflict
+from db.schema import (
+    ConflictStatus, Episode, EpisodeCharacter, Event, EventCharacter, Expansion, ExpansionChange, ExpansionConflict,
+    Origin,
+)
+from db.stamp import Stamp
 
 
 def expansions_select(limit: int, status: str | None, mode: str | None, actor_id: int | None) -> Select:
@@ -46,6 +50,25 @@ def open_conflicts_select() -> Select:
 
 def changes_select(expansion_id: int) -> Select:
     return select(ExpansionChange).where(ExpansionChange.expansion_id == expansion_id).order_by(ExpansionChange.id)
+
+
+def open_arcs_select(character_id: int) -> Select:
+    """人物がまだ追っている企て。人物モードが足した、親の無い・終わりの空いた出来事で、人物が当事者のもの。"""
+    return (select(Event)
+            .where(Event.origin == Origin.AI, Event.parent_event_id.is_(None), Event.end.is_(None),
+                   Event.event_characters.any(EventCharacter.character_id == character_id))
+            .order_by(Event.time))
+
+
+def last_appearance(s: Session, character_id: int) -> Stamp | None:
+    """人物が最後に出た出来事・話の時刻。"""
+    event_time = s.scalar(select(func.max(func.coalesce(Event.start, Event.time)))
+                          .where(Event.event_characters.any(EventCharacter.character_id == character_id)))
+    episode_time = s.scalar(select(func.max(Episode.start))
+                            .where(Episode.episode_characters.any(EpisodeCharacter.character_id == character_id)))
+    times = [Stamp.from_int(value) if isinstance(value, int) else value for value in (event_time, episode_time)]
+    dated = [time for time in times if time is not None]
+    return max(dated) if dated else None
 
 
 def last_change_times(s: Session, expansion_id: int) -> dict[tuple[str, int], datetime]:

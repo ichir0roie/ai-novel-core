@@ -18,7 +18,7 @@ class Writer(enum.StrEnum):
     USER = "user"
     # 作者モードの展開。出自が ai の行だけを直せる・消せる
     AI = "ai"
-    # 人物モード。足すことと、空の `end` に時刻を入れることだけ
+    # 人物モード。足すことと、`end` で終わりを付ける(空なら入れ、入っていれば早める)ことだけ
     AI_APPEND = "ai_append"
 
 

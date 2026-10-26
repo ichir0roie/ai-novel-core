@@ -14,15 +14,19 @@ from data_access_logic.query import common_query
 from db.schema import Expansion, ExpansionStatus
 
 
+def finish(s: Session, form: ExpansionFinishForm) -> ExpansionRecord:
+    record = common_query.get_row(s, Expansion, form.id)
+    if record.status != ExpansionStatus.RUNNING:
+        raise ValueError(f"expansion id={record.id} は {record.status} で、もう終わっている")
+    record.summary = form.summary
+    record.status = form.status
+    CommitEntrypoint.finalize(s, record)
+    return ExpansionRecord.model_validate(record)
+
+
 class FinishExpansion(CommitEntrypoint):
     def __init__(self, expansion: ExpansionFinishForm):
         self.expansion = expansion
 
     def execute(self, s: Session) -> ExpansionRecord:
-        record = common_query.get_row(s, Expansion, self.expansion.id)
-        if record.status != ExpansionStatus.RUNNING:
-            raise ValueError(f"expansion id={record.id} は {record.status} で、もう終わっている")
-        record.summary = self.expansion.summary
-        record.status = self.expansion.status
-        self.finalize(s, record)
-        return ExpansionRecord.model_validate(record)
+        return finish(s, self.expansion)

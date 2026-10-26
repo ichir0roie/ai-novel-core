@@ -7,7 +7,7 @@
 
 - 作者(`user`): どの行も直せる。足した行の出自は `user`(AI の生成の流れの中なら `ai`)。AI の行を直すと、その行は作者の行になる
 - 作者モード(`ai`): 出自 `ai` の行だけを直せる・消せる。作品・話・書き方など、AI に書かせない表には触れない
-- 人物モード(`ai_append`): 足すことと、空の `end` に時刻を入れることだけ
+- 人物モード(`ai_append`): 足すことと、`end` で終わりを付けることだけ(同じトランザクションで足した行を整えるのは、足すことに数える)
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import Column, Numeric, event, insert, select
-from sqlalchemy.orm import ORMExecuteState, Session
+from sqlalchemy.orm import ORMExecuteState, Session, object_session
 from sqlalchemy.orm.base import NO_VALUE
 from sqlalchemy import inspect as sa_inspect
 
@@ -31,8 +31,10 @@ AI_FORBIDDEN_TABLES = frozenset({
 })
 # 守りも記録もしない表(本文から作り直す派生と、展開の記録そのもの)
 UNGUARDED_TABLES = frozenset({"event_summary", "expansion", "expansion_change", "expansion_conflict"})
-# 人物モードが直してよい列。空のときに時刻を入れることだけを許す
+# 人物モードが直してよい列。終わりを付ける(空なら時刻を入れ、入っていればそれより前に早める)ことだけを許す
 APPENDABLE_COLUMN = "end"
+# このトランザクションで足した行を、セッションの info に持つ鍵
+_INSERTED_KEY = "guard_inserted"
 
 
 class ProtectedRowError(PermissionError):
@@ -122,17 +124,29 @@ def _before_insert(_mapper, _connection, target: Base) -> None:
         target.origin = (Origin.AI if state.by_ai or state.generated else Origin.USER).value
 
 
+def _inserted(target: Base) -> set[tuple[str, int]]:
+    """このトランザクションで足した行。足した直後にその行を整える(親を結ぶ・終わりを入れる)のは、足すことのうちに数える。"""
+    session = object_session(target)
+    return set() if session is None else session.info.setdefault(_INSERTED_KEY, set())
+
+
+def _forget_inserted(session: Session, *_args) -> None:
+    session.info.pop(_INSERTED_KEY, None)
+
+
 def _after_insert(_mapper, connection, target: Base) -> None:
+    _inserted(target).add((target.__tablename__, target.id))
     _log(connection, target, ChangeOp.ADD)
 
 
 def _check_append(target: Base, changes: dict[str, tuple[Any, Any]]) -> None:
     if set(changes) != {APPENDABLE_COLUMN}:
         raise ProtectedRowError(
-            f"人物モードは {_label(target)} の {', '.join(sorted(changes))} を直せない(空の end に時刻を入れることだけ)")
+            f"人物モードは {_label(target)} の {', '.join(sorted(changes))} を直せない(end で終わりを付けることだけ)")
     old, new = changes[APPENDABLE_COLUMN]
-    if old is not None or new is None:
-        raise ProtectedRowError(f"人物モードは {_label(target)} の入っている end を変えられない")
+    # 没年まで続く居場所の行のように、先に入っている end より前で終えるのは、終わりを付けることに数える
+    if new is None or (old is not None and not Stamp.parse(new) < Stamp.parse(old)):
+        raise ProtectedRowError(f"人物モードは {_label(target)} の end を空に戻したり先へ延ばしたりできない")
     start = getattr(target, "start", None)
     if isinstance(start, Stamp) and Stamp.parse(new) < start:
         raise ProtectedRowError(f"{_label(target)} の end を start より前にはできない")
@@ -151,7 +165,8 @@ def _before_update(_mapper, connection, target: Base) -> None:
         return
     if state.writer is Writer.AI_APPEND:
         _check_ai_table(target, "直せない")
-        _check_append(target, changes)
+        if (target.__tablename__, target.id) not in _inserted(target):
+            _check_append(target, changes)
     elif state.by_ai:
         _check_ai_table(target, "直せない")
         if getattr(target, "origin", None) == Origin.USER:
@@ -204,3 +219,5 @@ def install() -> None:
     event.listen(Base, "before_update", _before_update, propagate=True)
     event.listen(Base, "before_delete", _before_delete, propagate=True)
     event.listen(Session, "do_orm_execute", _bulk)
+    event.listen(Session, "after_commit", _forget_inserted)
+    event.listen(Session, "after_soft_rollback", _forget_inserted)

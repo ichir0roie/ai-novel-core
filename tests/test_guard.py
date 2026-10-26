@@ -76,14 +76,19 @@ def test_ai_may_add_children_to_user_rows(world):
         assert s.get_one(Character, character_id).origin == "user"
 
 
-def test_append_writer_only_adds_and_sets_empty_end(world):
+def test_append_writer_only_adds_and_ends_rows(world):
     character_id = world.character_ids[0]
     with writing("ai_append"), get_env_session() as s, s.begin():
         location = s.get_one(CharacterLocation, world.character_location_id)
         assert location.end is None
         location.end = Stamp.parse("1500")
+    # 入っている終わりを早めるのは、終わりを付けることに数える
+    with writing("ai_append"), get_env_session() as s, s.begin():
+        s.get_one(CharacterLocation, world.character_location_id).end = Stamp.parse("1400")
     with pytest.raises(ProtectedRowError), writing("ai_append"), get_env_session() as s, s.begin():
         s.get_one(CharacterLocation, world.character_location_id).end = Stamp.parse("1600")
+    with pytest.raises(ProtectedRowError), writing("ai_append"), get_env_session() as s, s.begin():
+        s.get_one(CharacterLocation, world.character_location_id).end = None
     with pytest.raises(ProtectedRowError), writing("ai_append"), get_env_session() as s, s.begin():
         s.get_one(Character, character_id).text = "書き換える"
     with pytest.raises(ProtectedRowError), writing("ai_append"), get_env_session() as s, s.begin():
