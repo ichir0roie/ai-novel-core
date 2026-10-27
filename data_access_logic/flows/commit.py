@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `ReviseEpisode` / `CommitOracle` の `run()`)。
+"""行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `CommitOracle` の `run()`)。
 
 確定は db の段一つで済ませる(GUI の API が呼ぶ `execute(s)` と同じ)。そのあとの AI の段(ミームの抜き出し・要約・種・事実確認)は、
-AI が答えなくても確定は残る。ミーム・種を抜き出すのは、その場で書いた行からだけ。
+AI が答えなくても確定は残る。種を抜き出すのは、その場で書いた行からだけ。ミームを抜き出すのは、本文を渡して確定した話の本文からだけ
+(ほかの行や推敲からも抜くと、似たミームばかり増えるので)。
 """
 from __future__ import annotations
 
@@ -14,17 +15,18 @@ from data_access_logic.character.record import CharacterMove, CharacterRelationR
 from data_access_logic.episode import moves as episode_moves
 from data_access_logic.episode.relations import RelationsForm, allowed_relations, relations_draft
 from data_access_logic.episode import steps as episode_steps
-from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
-from data_access_logic.episode.record import CommittedEpisode, EpisodeRecord
+from data_access_logic.episode.form import EpisodeCommitForm
+from data_access_logic.episode.record import CommittedEpisode
 from data_access_logic.event import steps as event_steps
 from data_access_logic.event.form import EventCreateForm, EventUpdateForm
 from data_access_logic.event.record import EventRecord
 from data_access_logic.oracle import steps as oracle_steps
 from data_access_logic.oracle.form import OracleCreateForm
-from data_access_logic.oracle.record import MemeSourceCommitted
+from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.source_text import SourceRow
 from data_access_logic.step import RowId
-from data_access_logic.flows import event_seed, fact_check, meme
+from data_access_logic.flows import event_seed, meme
+from data_access_logic.flows.fact_check import check
 from data_access_logic.caller import call
 from data_access_logic.flows.summary import rewrite_event_summaries
 from db.writer import generated
@@ -63,52 +65,33 @@ def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> Comm
     moved: list[CharacterMove] = []
     related: list[CharacterRelationRecord] = []
     with generated():
-        meme.refresh(ai, written)
         if written:
+            meme.refresh(ai, written)
             event_seed.refresh_and_consolidate(ai, written)
             moved = _move_cast(ai, record.id)
             related = _relate_cast(ai, record.id)
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
 
 
-def revise_episode(episode: EpisodeReviseForm, ai: AIClient = ai_client) -> EpisodeRecord:
-    """`commit_episode` と違い、登場人物の居場所・関係を本文から動かさない。昔の話を推敲すると、
-    今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので。
-    推敲は筋を変えないので、種は抜き出し直さず、ミームだけを直した本文から抜き出す。"""
-    record = call(episode_steps.revise_episode, episode)
-    with generated():
-        meme.refresh(ai, [SourceRow(table="episode", id=record.id)])
-    return record
-
-
 def commit_event(event: EventCreateForm, ai: AIClient = ai_client) -> EventRecord:
     record = call(event_steps.commit_event, event)
     written = [SourceRow(table="event", id=record.id)]
     with generated():
-        meme.refresh(ai, written)
         rewrite_event_summaries(ai, [record.id])
         event_seed.refresh_and_consolidate(ai, written)
     return record
 
 
 def update_event(event: EventUpdateForm, ai: AIClient = ai_client) -> EventRecord:
-    """本文を渡したときだけ、直した本文からミームを抜き出す。"""
     record = call(event_steps.update_event, event)
     with generated():
-        meme.refresh(ai, [SourceRow(table="event", id=record.id)] if event.text is not None else [])
         rewrite_event_summaries(ai, [record.id])
     return record
 
 
-@generated()
-def _meme_source_follow_up(ai: AIClient, table: str, record_id: int, text: str, fact_check_enabled: bool) -> int:
-    """確定したもの自身を検め、検証結果を足した本文からミームを抜き出し、足したミームも検める。足したミームの件数を返す。"""
-    if fact_check_enabled and text.strip():
-        fact_check.check(ai, table, ids=[record_id])
-    return fact_check.extract_memes(ai, [SourceRow(table=table, id=record_id)], fact_check_enabled)
-
-
-def commit_oracle(oracle: OracleCreateForm, fact_check: bool = True, ai: AIClient = ai_client) -> MemeSourceCommitted:
+def commit_oracle(oracle: OracleCreateForm, fact_check: bool = True, ai: AIClient = ai_client) -> OracleRecord:
     committed = call(oracle_steps.commit_oracle, oracle)
-    added = _meme_source_follow_up(ai, "oracle", committed.id, committed.text, fact_check)
-    return MemeSourceCommitted(record=call(oracle_steps.oracle_record, RowId(id=committed.id)), memes_added=added)
+    if fact_check and committed.text.strip():
+        with generated():
+            check(ai, "oracle", ids=[committed.id])
+    return call(oracle_steps.oracle_record, RowId(id=committed.id))

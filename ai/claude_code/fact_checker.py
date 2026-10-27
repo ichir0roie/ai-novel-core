@@ -2,7 +2,7 @@
 """Dラボの MCP のサーバー名は環境ごとに違う(`claude mcp list` で見る)ので、許可ルールを
 `DEM_CLAUDE_AI_DLAB_TOOLS` で差し替えられるようにしている。繋がっていなければ AI はネット検索だけで検める。
 
-db だけの段(`check_sources` / `save_fact_checks` / `last_meme_id` / `new_meme_ids`)と、AI だけの段(`check_draft`)に分けてある。
+db だけの段(`check_sources` / `save_fact_checks`)と、AI だけの段(`check_draft`)に分けてある。
 流れ(`data_access_logic/flows/fact_check.py`)がつなぐ。
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 import os
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ai.claude_code.ai_client import load_env
 from data_access_logic.ai_client import AIClient
@@ -79,7 +79,6 @@ class FactCheckNote(Material):
 
 class FactChecked(BaseModel):
     checked: int
-    memes_added: int
 
 
 MODELS = {"oracle": Oracle, "meme": Meme}
@@ -133,11 +132,3 @@ def save_fact_checks(s: Session, notes: list[FactCheckNote]) -> int:
         record.text = _append_fact_check(record.text, note.fact_check)
     s.flush()
     return len(notes)
-
-
-def last_meme_id(s: Session) -> int:
-    return s.scalar(select(func.max(Meme.id))) or 0
-
-
-def new_meme_ids(s: Session, last_id: int) -> list[int]:
-    return list(s.scalars(select(Meme.id).where(Meme.id > last_id)).all())

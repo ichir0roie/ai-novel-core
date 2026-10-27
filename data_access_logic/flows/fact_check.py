@@ -11,7 +11,6 @@ from ai.claude_code import fact_checker
 from data_access_logic.ai_client import AIClient
 from data_access_logic.fact_check import steps as fact_steps
 from data_access_logic.source_text import SourceRow, batches
-from data_access_logic.flows import meme
 from data_access_logic.caller import call
 from db.writer import generated
 
@@ -33,24 +32,6 @@ def check(ai: AIClient, table: str, ids: list[int] | None = None, limit: int | N
     return written
 
 
-def check_new_memes(ai: AIClient, last_id: int) -> int:
-    """`last_id` より後に足したミームだけを検める。検めた件数を返す。"""
-    ids = call(fact_steps.new_meme_ids, fact_steps.LastMemeId(last_id=last_id))
-    return len(check(ai, "meme", ids=ids)) if ids else 0
-
-
-def extract_memes(ai: AIClient, rows: list[SourceRow], fact_check: bool) -> int:
-    """`rows` からミームを抜き出し、`fact_check` なら足したミームも検める。足したミームの件数を返す。"""
-    last_id = call(fact_steps.last_meme_id)
-    added = meme.refresh(ai, rows)
-    if fact_check:
-        check_new_memes(ai, last_id)
-    return added
-
-
 @generated()
-def check_and_extract(ai: AIClient, table: str, ids: list[int] | None, limit: int | None) -> fact_checker.FactChecked:
-    """検めたあと、ミームの元(oracle)なら検めた行の本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。"""
-    checked = check(ai, table, ids, limit)
-    added = 0 if table == "meme" else extract_memes(ai, checked, fact_check=True)
-    return fact_checker.FactChecked(checked=len(checked), memes_added=added)
+def check_facts(ai: AIClient, table: str, ids: list[int] | None, limit: int | None) -> fact_checker.FactChecked:
+    return fact_checker.FactChecked(checked=len(check(ai, table, ids, limit)))

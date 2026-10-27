@@ -668,6 +668,21 @@
       "writes": true
     },
     {
+      "id": "episode.revise_episode.ReviseEpisode",
+      "area": "episode",
+      "name": "ReviseEpisode",
+      "doc": "本文のある話の本文だけを直す(推敲)。確定のあとに AI を回さない。`CommitEpisode` と違い、登場人物の居場所・関係を",
+      "params": [
+        {
+          "name": "episode",
+          "required": true,
+          "default": null,
+          "annotation": "EpisodeReviseForm"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "episode.update_episodes.UpdateEpisodes",
       "area": "episode",
       "name": "UpdateEpisodes",

@@ -3,8 +3,7 @@
 
 db の段は `data_access_logic/expansion/steps.py`、AI の段は `data_access_logic/expansion/actor.py` の `intent_draft` / `outcome_draft`。
 一手ごとに展開(`expansion`、mode=character)を一つ立て、書き手 `ai_append`(足すことと、`end` で終わりを付けることだけ)で書くので、
-足した行は展開の記録に残り、`RevertExpansion` で取り消せる。ミームは抜き出さない(既にあるミームの対を直すことになるので)。
-要るときは、足した出来事の行を渡して `ExtractMemes` を回す。
+足した行は展開の記録に残り、`RevertExpansion` で取り消せる。ミームは抜き出さない(話の本文の確定のあとにだけ抜き出す)。
 """
 from __future__ import annotations
 

@@ -4,7 +4,7 @@ from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
 from data_access_logic.episode.read_episodes import ReadEpisodes
 from data_access_logic.episode.revise_episode import ReviseEpisode
 from data_access_logic.episode.relations import EpisodeRelationsDraft, RelationDraft
-from data_access_logic.flows.commit import commit_episode, revise_episode
+from data_access_logic.flows.commit import commit_episode
 from db.schema import CharacterRelation, Episode, StyleScope, get_env_session
 from tool.test.mock_ai_client import MockAIClient
 
@@ -80,17 +80,14 @@ def test_revise_episode(shown, world, mock_ai):
     assert result["plot_text"] and result["title"]
 
 
-def test_revise_episode_leaves_relations(world):
-    taro, hanako = world.character_ids
-    ai = _RelatingAI([RelationDraft(character_1_id=hanako, character_2_id=taro, relation="市で出会った人", text="",
-                                    history="")])
+def test_revise_episode_runs_no_ai(world, mock_ai):
     with get_env_session() as s:
         before = s.query(CharacterRelation).count()
 
-    revise_episode(EpisodeReviseForm(id=world.episode_id, main_text="市で花子が太郎に名乗った。", plot_text="名乗り"), ai)
+    ReviseEpisode(EpisodeReviseForm(id=world.episode_id, main_text="市で花子が太郎に名乗った。", plot_text="名乗り")).run()
 
-    # 本文から関係・居場所を動かす段は回さない
-    assert not any("誰から(人物id)" in call["prompt"] for call in ai.calls)
+    # 本文から関係・居場所を動かさず、ミーム・種も抜き出さない
+    assert not mock_ai.calls
     with get_env_session() as s:
         assert s.query(CharacterRelation).count() == before
         assert s.get_one(Episode, world.episode_id).plot_text == "名乗り"

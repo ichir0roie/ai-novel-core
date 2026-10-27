@@ -1,6 +1,6 @@
 ---
 name: expand
-description: 作者モード(世界の展開)。作者(ユーザ)が一言(「北の港で疫病が流行る」「ノアには姉がいた」「ep12 で二人を仲違いさせたい」)を言うたびに、それに関わるアイデア・ミーム・出来事(筋=プロットは出来事の親子で持つ)・人物・関係・来歴を AI の行として足し、関わる AI の行を直してつじつまを合わせる。作者の行(出自 user)には触れず、食い違いと作者の行を直す指示は案にして作者の判断を待つ。展開ごとに変えた行が記録され、取り消せる。作品全体を読み込んで整理するのもここ。話の本文(`main_text`)は書かない。「ex3」(3 は作品の id)、「ex3 北の港で疫病が流行る」、「ex 〇〇」、「世界を広げて」「この設定から枝葉を広げて」「作品全体を詰めたい」「全体の整合を見ながら筋を直したい」などの依頼で使う。人物が自分から動く人物モードはスキル `auto-act`。
+description: 作者モード(世界の展開)。作者(ユーザ)が一言(「北の港で疫病が流行る」「ノアには姉がいた」「ep12 で二人を仲違いさせたい」)を言うたびに、それに関わるアイデア・出来事(筋=プロットは出来事の親子で持つ)・人物・関係・来歴を AI の行として足し、関わる AI の行を直してつじつまを合わせる。作者の行(出自 user)には触れず、食い違いと作者の行を直す指示は案にして作者の判断を待つ。展開ごとに変えた行が記録され、取り消せる。作品全体を読み込んで整理するのもここ。話の本文(`main_text`)は書かない。「ex3」(3 は作品の id)、「ex3 北の港で疫病が流行る」、「ex 〇〇」、「世界を広げて」「この設定から枝葉を広げて」「作品全体を詰めたい」「全体の整合を見ながら筋を直したい」などの依頼で使う。人物が自分から動く人物モードはスキル `auto-act`。
 ---
 
 入口・呼び方は `data_access_logic/readme.md` の「依頼内容 → 呼ぶコード」の表のとおり(手元は `.claude/docs/db.md`、web のセッションは `.claude/docs/web-db.md`)。設計は `.docs/world-expansion.md`。
@@ -51,7 +51,6 @@ with writing('ai', <展開id>):
 | 関係 | `CommitCharacterRelation`・来歴は `character.append_relation_history.AppendRelationHistory` | 間柄が変わるなら `end` で区切った新しい関係の行 |
 | 場所 | `CommitLocation`・来歴は `location.append_history.AppendLocationHistory` | |
 | 知る相手 | `character.add_knower.AddKnower` `{'table': '<来歴・呼び名の表>', 'row_id': …, 'knower': {'knower_id': …}}` | 秘密は人物だけを知る相手に |
-| ミーム | `meme.extract_memes.ExtractMemes` `{'rows': [{'table': 'expansion', 'id': <展開id>}, {'table': 'event', 'id': …}]}` | 一言と足した出来事から抜き出す |
 | 食い違いを残す | `expansion.add_conflict.AddConflict` `{'conflict': {'expansion_id': …, 'table_name': …, 'row_id': …, 'detail': …, 'proposal': …}}` | 作者の行にだけ残す(AI の行は直す) |
 | 食い違いを決める | `expansion.resolve_conflict.ResolveConflict` `{'conflict': {'id': …, 'status': 'accepted' / 'dismissed'}}` | 下の 3 |
 | 展開を読む・取り消す | `expansion.read_expansion.ReadExpansion` `{'expansion_id': …}` / `expansion.revert_expansion.RevertExpansion` `{'expansion_id': …}` | 下の 4 |
@@ -114,7 +113,6 @@ with writing('user', <展開id>), get_env_session() as s, s.begin():
    - 出来事 → 出来事と、当事者・場所の来歴の行。結果の出来事が続くなら、それも時刻つきで足す
    - 筋 → 出来事の木。筋の全体を親の出来事にし、場面を子の出来事にする。本筋の書き進めた所より先の時刻の出来事は、後の生成に「後に決まっている出来事」として渡って筋を守らせる。サブキャラクターの来歴の行は、出来事の時刻が来るまで(本文のある話の時刻を越えて)足さない
    - 人物 → `GenerateCharacter` と関係。作者の人物に起きたことは `AppendCharacterHistory` で来歴の行を足す(秘密は知る相手を絞る)
-   - ミーム → 一言と足した出来事から `ExtractMemes`
 5. **つじつまを合わせる**: 足した行と 3 で引いた行を、作者の一言(これまでの分もすべて)・作者の行と照らす。観点は、時刻(出来事・話の順、年齢・生没年、関係の始まり、居場所)・人物(芯・来歴・筋書きと行い)・関係(間柄とやり取り)・知ること(秘密の知る相手と振る舞い)・設定(説明・呼び名と使い方)・場所(説明・来歴と描き方)・伏線(張った所と回収する所)
    - 食い違う相手が AI の行(`origin` が `ai`) → 作者の一言と作者の行に合うように直すか消す(書き手 `ai`)
    - 食い違う相手が作者の行 → 直さずに `AddConflict` で残す。`proposal` に、直す行と直したあとの中身を具体に書く。本文のある話は、本文を直す案ではなく、どこが合わなくなるかを書く
