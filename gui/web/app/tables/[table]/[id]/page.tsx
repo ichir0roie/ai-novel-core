@@ -25,6 +25,7 @@ import {
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
 import { useNarrow } from "@/lib/media";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
+import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
@@ -70,6 +71,7 @@ function listHref(table: string, record: Rec): string {
 
 export default function RecordPage() {
   const router = useRouter();
+  const openPage = useOpenPage();
   const { table, id } = useParams<{ table: string; id: string }>();
   const meta = tableMeta(table);
   const [loaded, setLoaded] = useState<RecordResponse | null>(null);
@@ -218,7 +220,7 @@ export default function RecordPage() {
                         className="ghost"
                         disabled={!episode}
                         title={episode ? `${T.nameId(episode.title, episode.id)}${episode.start ? ` — ${episode.start}` : ""}` : none}
-                        onClick={() => episode && router.push(`/tables/episode/${episode.id}`)}
+                        onClick={(e) => episode && openPage(`/tables/episode/${episode.id}`, e)}
                       >
                         {label}
                       </button>

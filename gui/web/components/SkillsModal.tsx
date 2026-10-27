@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { childListHint, columnHint } from "@/lib/hint";
 import { tableMeta } from "@/lib/meta";
+import { inNewTab } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 import ChildListEditor from "./ChildListEditor";
@@ -170,7 +171,7 @@ export default function SkillsModal({ characterId, characterName, onClose }: Pro
                     className="hint"
                     title={T.skills.openRecord}
                     onClick={(e) => {
-                      if (changed.length > 0 && !window.confirm(T.skills.confirmDiscard(changed.length))) e.preventDefault();
+                      if (!inNewTab(e) && changed.length > 0 && !window.confirm(T.skills.confirmDiscard(changed.length))) e.preventDefault();
                     }}
                   >
                     {T.idMark(draft.saved.id)} →

@@ -27,6 +27,7 @@ import {
   type Rec,
 } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
+import { inNewTab, openInNewTab, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import {
   dayNumber,
@@ -660,8 +661,10 @@ export default function EventTimelinePage() {
     return true;
   };
 
-  /** 別のページへ移る。溜めた移しがあれば捨ててよいかを尋ねる(ページの中の移動では beforeunload が出ない) */
-  const leaveTo = (url: string) => {
+  /** 別のページへ移る(Ctrl(⌘)を押しながらなら別タブで開く)。溜めた移しがあれば捨ててよいかを尋ねる(ページの中の移動では beforeunload が出ない) */
+  const leaveTo = (url: string, e?: OpenModifiers) => {
+    // 別タブで開くなら、この画面の溜めた移しは消えない
+    if (inNewTab(e)) return openInNewTab(url);
     if (changes.size > 0 && !window.confirm(T.timeline.confirmDiscard(changes.size))) return;
     // スクロールが止まるのを待つ中心の書き換えが残っていると、移る途中でこの画面へ戻される
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
@@ -1100,9 +1103,9 @@ export default function EventTimelinePage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (dirty && !window.confirm(T.eventTimeline.confirmDiscardEdit)) return;
-                  leaveTo(`/tables/event/${viewingNow.id}`);
+                onClick={(e) => {
+                  if (!inNewTab(e) && dirty && !window.confirm(T.eventTimeline.confirmDiscardEdit)) return;
+                  leaveTo(`/tables/event/${viewingNow.id}`, e);
                 }}
               >
                 {T.openRecord}

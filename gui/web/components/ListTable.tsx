@@ -1,6 +1,7 @@
 "use client";
 
 import type { RecordList, TableMeta } from "@/lib/api";
+import type { OpenModifiers } from "@/lib/openPage";
 import { Spec } from "./Hint";
 import { columnHint } from "@/lib/hint";
 import { cellText, listColumns, NO_PREVIEW } from "@/lib/listColumns";
@@ -20,8 +21,8 @@ type Props = {
   sort: string;
   order: SortOrder;
   onSort: (key: string) => void;
-  /** 行(選べる一覧では名前の文字)を開く */
-  onOpen: (id: string) => void;
+  /** 行(選べる一覧では名前の文字)を開く。e は Ctrl(⌘)で別タブに開くかを見るための操作 */
+  onOpen: (id: string, e: OpenModifiers) => void;
   /** 参照列のセルを押したとき、その値で絞り込む。渡さなければ参照列もただの文字 */
   onFilter?: (key: string, value: string) => void;
   /** 渡すと行を選べる一覧にする(行のクリックは選ぶだけ) */
@@ -74,9 +75,9 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
               className={selection?.selected.has(Number(item.id)) ? "row selected" : "row"}
               tabIndex={0}
               // まとめて消せる一覧では、行のクリックは選ぶだけにして、詳細へは名前の文字から飛ぶ
-              onClick={() => (selection ?selection.onToggle(Number(item.id)) : onOpen(String(item.id)))}
+              onClick={(e) => (selection ? selection.onToggle(Number(item.id)) : onOpen(String(item.id), e))}
               onKeyDown={(e) => {
-                if (e.key === "Enter") onOpen(String(item.id));
+                if (e.key === "Enter") onOpen(String(item.id), e);
               }}
             >
               <td>{String(item.id)}</td>
@@ -87,7 +88,7 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
                     className="open"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onOpen(String(item.id));
+                      onOpen(String(item.id), e);
                     }}
                   >
                     {String(item.label ?? "")}

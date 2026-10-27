@@ -29,6 +29,7 @@ import {
   type TimelineResponse,
 } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
+import { inNewTab, openInNewTab, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import {
   dayNumber,
@@ -880,8 +881,10 @@ export default function TimelinePage() {
     setViewing(null);
   };
 
-  /** 別のページへ移る。溜めた移しがあれば捨ててよいかを尋ねる(ページの中の移動では beforeunload が出ない) */
-  const leaveTo = (url: string) => {
+  /** 別のページへ移る(Ctrl(⌘)を押しながらなら別タブで開く)。溜めた移しがあれば捨ててよいかを尋ねる(ページの中の移動では beforeunload が出ない) */
+  const leaveTo = (url: string, e?: OpenModifiers) => {
+    // 別タブで開くなら、この画面の溜めた移しは消えない
+    if (inNewTab(e)) return openInNewTab(url);
     if (changes.size > 0 && !window.confirm(T.timeline.confirmDiscard(changes.size))) return;
     // スクロールが止まるのを待つ中心の書き換えが残っていると、移る途中でこの画面へ戻される
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
@@ -1005,6 +1008,8 @@ export default function TimelinePage() {
         <Link
           href={`/tables/story/${row.storyId}`}
           onClick={(e) => {
+            // Ctrl(⌘)を押しながらなら、リンクのまま別タブで開かせる
+            if (inNewTab(e)) return;
             e.preventDefault();
             leaveTo(`/tables/story/${row.storyId}`);
           }}
@@ -1303,13 +1308,14 @@ export default function TimelinePage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
                   if (
+                    !inNewTab(e) &&
                     (plotChanged || timeChanged) &&
                     !window.confirm(T.timeline.confirmDiscardEdit)
                   )
                     return;
-                  leaveTo(`/tables/episode/${viewingNow.id}`);
+                  leaveTo(`/tables/episode/${viewingNow.id}`, e);
                 }}
               >
                 {T.openRecord}

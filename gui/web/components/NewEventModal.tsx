@@ -5,6 +5,7 @@ import Modal from "@/components/Modal";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import { createRecord, type Rec } from "@/lib/api";
+import type { OpenModifiers } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
@@ -18,8 +19,8 @@ type Props = {
   onClose: () => void;
   /** その場で出来事を足し終えたとき */
   onAdded: () => void;
-  /** 追加ページへ移る */
-  onOpenPage: (url: string) => void;
+  /** 追加ページへ移る(Ctrl(⌘)を押しながらなら別タブで開く) */
+  onOpenPage: (url: string, e: OpenModifiers) => void;
 };
 
 /** 出来事のタイムラインで出来事を足す小さなモーダル。名前・期間・本文だけでその場で足すか、
@@ -45,13 +46,13 @@ export default function NewEventModal({ start: initialStart, parent, location, o
     location_id: location?.id ?? null,
   });
 
-  const open = () => {
+  const open = (e: OpenModifiers) => {
     const params = new URLSearchParams(
       Object.entries(data())
         .filter(([, v]) => v != null && v !== "" && v !== false)
         .map(([k, v]) => [k, String(v)]),
     );
-    onOpenPage(`/tables/event/new?${params}`);
+    onOpenPage(`/tables/event/new?${params}`, e);
   };
 
   const add = async () => {

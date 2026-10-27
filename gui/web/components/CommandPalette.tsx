@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useOpenPage, type OpenModifiers } from "@/lib/openPage";
 import { T } from "@/lib/text";
 
 export type Destination = { href: string; label: string };
@@ -11,9 +11,9 @@ type Props = {
   onClose: () => void;
 };
 
-/** Ctrl+K(Mac は ⌘K)で開く、行き先の名前を打ち込んで飛ぶメニュー。↑↓ で選び Enter で飛ぶ。背景クリックか Escape で閉じる。 */
+/** Ctrl+K(Mac は ⌘K)で開く、行き先の名前を打ち込んで飛ぶメニュー。↑↓ で選び Enter で飛ぶ(Ctrl+Enter・Ctrl+クリックは別タブ)。背景クリックか Escape で閉じる。 */
 export default function CommandPalette({ destinations, onClose }: Props) {
-  const router = useRouter();
+  const openPage = useOpenPage();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -32,10 +32,10 @@ export default function CommandPalette({ destinations, onClose }: Props) {
     listRef.current?.children[cursor]?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
-  const go = (destination: Destination | undefined) => {
+  const go = (destination: Destination | undefined, e: OpenModifiers) => {
     if (!destination) return;
     onClose();
-    router.push(destination.href);
+    openPage(destination.href, e);
   };
 
   return (
@@ -55,7 +55,7 @@ export default function CommandPalette({ destinations, onClose }: Props) {
               setCursor((value) => Math.max(value - 1, 0));
             } else if (e.key === "Enter") {
               e.preventDefault();
-              go(matches[cursor]);
+              go(matches[cursor], e);
             } else if (e.key === "Escape") {
               onClose();
             }
@@ -64,7 +64,7 @@ export default function CommandPalette({ destinations, onClose }: Props) {
         <ul ref={listRef}>
           {matches.map((destination, index) => (
             <li key={destination.href} className={index === cursor ? "on" : ""}>
-              <button type="button" onMouseMove={() => setCursor(index)} onClick={() => go(destination)}>
+              <button type="button" onMouseMove={() => setCursor(index)} onClick={(e) => go(destination, e)}>
                 {destination.label}
               </button>
             </li>

@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { listAllRecords, updateStories, type Rec } from "@/lib/api";
 import NameId from "./NameId";
 import { buildStoryTree, collapsibleIds, descendantIds, findNode, type StoryNode } from "@/lib/storyTree";
+import { inNewTab, useOpenPage } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 import { useTreeOpen } from "@/lib/treeOpen";
@@ -57,8 +57,8 @@ function StoryRow({ node, siblings, index, move }: RowProps) {
         className="tree-name"
         onClick={(e) => {
           e.stopPropagation();
-          // 編集モードで画面を移ると溜めた変更が消えるので、開かない
-          if (move.editing) e.preventDefault();
+          // 編集モードで画面を移ると溜めた変更が消えるので、開かない(別タブなら消えない)
+          if (move.editing && !inNewTab(e)) e.preventDefault();
         }}
       >
         <NameId name={node.name} id={node.id} />
@@ -158,7 +158,7 @@ const renumber = (draft: Draft, ids: number[]): Draft => {
  *  変更はブラウザに溜め、Apply で `story.update_stories.UpdateStories` にまとめて渡す。
  *  ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない。行の右クリックで、子の作品・話を足すメニューを出す。 */
 export default function StoryTree() {
-  const router = useRouter();
+  const openPage = useOpenPage();
   const [source, setSource] = useState<Source | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -341,9 +341,9 @@ export default function StoryTree() {
             <button
               type="button"
               className="context-menu-item"
-              onClick={() => {
+              onClick={(e) => {
                 setMenu(null);
-                router.push(`/tables/story/new?parent_story_id=${menu.node.id}`);
+                openPage(`/tables/story/new?parent_story_id=${menu.node.id}`, e);
               }}
             >
               {T.storyTree.addChild}
@@ -351,9 +351,9 @@ export default function StoryTree() {
             <button
               type="button"
               className="context-menu-item"
-              onClick={() => {
+              onClick={(e) => {
                 setMenu(null);
-                router.push(`/tables/episode/new?story_id=${menu.node.id}`);
+                openPage(`/tables/episode/new?story_id=${menu.node.id}`, e);
               }}
             >
               {T.storyTree.addEpisode}
