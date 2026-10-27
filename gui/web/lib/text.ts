@@ -338,6 +338,8 @@ export const T = {
     title: "Location map",
     centeredOn: (name: string) => `Map centered on ${name}`,
     fullMap: "Full map",
+    fitLocations: "Fit locations",
+    wholePlanet: "Whole planet",
     cannotPlace: (id: number) => `Location id=${id} has neither coordinates nor a polygon, so it cannot be placed on the map. `,
     nonePlaceable: "No location has coordinates or a polygon.",
     radius: (km: number) => `radius ≈ ${Math.round(km).toLocaleString()} km, 1° latitude ≈ ${Math.round((km * Math.PI) / 180).toLocaleString()} km`,

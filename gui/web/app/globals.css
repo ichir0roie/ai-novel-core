@@ -429,7 +429,7 @@ a.button-link:hover { border-color: var(--accent); }
 .viz-head { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.4rem; }
 .viz-head h2 { flex: 1; min-width: 0; }
 .viz-head button { flex-shrink: 0; padding: 0.3rem 0.7rem; }
-.viz-side dl { margin: 0 0 0.75rem; display: grid; grid-template-columns: 4em 1fr; gap: 2px 8px; }
+.viz-side dl { margin: 0 0 0.75rem; display: grid; grid-template-columns: max-content 1fr; gap: 2px 8px; }
 .viz-side dt { color: var(--muted); }
 .viz-side dd { margin: 0; }
 .viz-side table { border-collapse: collapse; width: 100%; }
