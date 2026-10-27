@@ -485,6 +485,27 @@
       "writes": true
     },
     {
+      "id": "character.update_history.UpdateCharacterHistory",
+      "area": "character",
+      "name": "UpdateCharacterHistory",
+      "doc": "人物の来歴の行を一つ、id で指して直す。渡した欄だけを直し、同じ人物のほかの行には触れない。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterHistoryChange"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "character.update_knowledge.UpdateKnowledge",
       "area": "character",
       "name": "UpdateKnowledge",
@@ -495,6 +516,48 @@
           "required": true,
           "default": null,
           "annotation": "KnowledgeForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_relation_history.UpdateRelationHistory",
+      "area": "character",
+      "name": "UpdateRelationHistory",
+      "doc": "関係の来歴の行を一つ、id で指して直す。渡した欄だけを直し、同じ関係のほかの行には触れない。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterRelationHistoryChange"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_skill_history.UpdateSkillHistory",
+      "area": "character",
+      "name": "UpdateSkillHistory",
+      "doc": "スキルの来歴の行を一つ、id で指して直す。渡した欄だけを直し、同じスキルのほかの行には触れない。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterSkillHistoryChange"
         }
       ],
       "writes": true
@@ -1116,6 +1179,27 @@
       "writes": false
     },
     {
+      "id": "idea.update_history.UpdateIdeaHistory",
+      "area": "idea",
+      "name": "UpdateIdeaHistory",
+      "doc": "アイデアの呼び名の行を一つ、id で指して直す。渡した欄だけを直し、同じアイデアのほかの行には触れない。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "IdeaHistoryChange"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "idea.update_idea.UpdateIdea",
       "area": "idea",
       "name": "UpdateIdea",
@@ -1230,6 +1314,27 @@
         }
       ],
       "writes": false
+    },
+    {
+      "id": "location.update_history.UpdateLocationHistory",
+      "area": "location",
+      "name": "UpdateLocationHistory",
+      "doc": "場所の来歴の行を一つ、id で指して直す。渡した欄だけを直し、同じ場所のほかの行には触れない。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "history",
+          "required": true,
+          "default": null,
+          "annotation": "LocationHistoryChange"
+        }
+      ],
+      "writes": true
     },
     {
       "id": "location.update_location.UpdateLocation",

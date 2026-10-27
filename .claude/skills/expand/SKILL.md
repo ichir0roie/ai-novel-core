@@ -47,7 +47,7 @@ with writing('ai', <展開id>):
 | 関わる行を引く | `world.search_world.SearchWorld` `{'words': [<語と言い換え>], 'story_id': …}` | 当たった行の `origin` で、AI が直せる行か作者の行かが分かる |
 | 設定(アイデア) | `idea.resolve_ideas.ResolveIdeas`(当たらない語は候補として足す)・`CommitIdea` / `UpdateIdea`(AI の行だけ)・呼び名を足すのは `idea.append_history.AppendIdeaHistory` | 人名・場所の名前は足さない |
 | 出来事(筋) | `event.commit_event.CommitEvent`(中身を決めて足す)・`event.generate_event.GenerateEvent`(場面の指定から AI に起こさせる)・`UpdateEvent` / `DeleteEvent`(AI の行だけ) | AI を回すので web では `run_in_background`。筋の親の出来事を先に足し、場面はその `parent_event_id` で子にする |
-| 人物 | `character.generate_character.GenerateCharacter`(`plot_text` に主張を渡す)・`CommitCharacter`・来歴を足すのは `character.append_history.AppendCharacterHistory`・`UpdateCharacter`(AI の人物だけ。配列はまるごと置き換わる) | 作者の人物には来歴の行を足すだけ(`AppendCharacterHistory`) |
+| 人物 | `character.generate_character.GenerateCharacter`(`plot_text` に主張を渡す)・`CommitCharacter`・来歴を足すのは `character.append_history.AppendCharacterHistory`・AI の来歴の行を一つ直すのは `character.update_history.UpdateCharacterHistory`(行の id で指す)・`UpdateCharacter`(AI の人物だけ。配列はまるごと置き換わる) | 作者の人物には来歴の行を足すだけ(`AppendCharacterHistory`) |
 | 関係 | `CommitCharacterRelation`・来歴は `character.append_relation_history.AppendRelationHistory` | 間柄が変わるなら `end` で区切った新しい関係の行 |
 | 場所 | `CommitLocation`・来歴は `location.append_history.AppendLocationHistory` | |
 | 知る相手 | `character.add_knower.AddKnower` `{'table': '<来歴・呼び名の表>', 'row_id': …, 'knower': {'knower_id': …}}` | 秘密は人物だけを知る相手に |

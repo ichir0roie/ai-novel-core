@@ -6,7 +6,7 @@ from db.schema import PersonalityLevel
 
 
 class _ChildRow(Form):
-    """人物の子の行(id と character_id は持たない。行は配列の並びで決まる)。入口の引数とレスポンスの両方に使う。"""
+    """人物の子の行(character_id は持たない。来歴でない行は id も持たず、配列の並びで決まる)。入口の引数とレスポンスの両方に使う。"""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
@@ -42,7 +42,14 @@ class CharacterLocationRow(_ChildRow):
     end: Timestamp | None = None
 
 
-class CharacterHistoryRow(_ChildRow):
+class _HistoryRow(_ChildRow):
+    """来歴の行。`id` は読み出しで入る。配列で渡すときは、入れれば今ある行をその id で指し(時刻や並びで当てない)、空なら新しい行か、
+    時刻・並びで当てる行(`db/child_lists.py`)。"""
+
+    id: int | None = None
+
+
+class CharacterHistoryRow(_HistoryRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
     start: Timestamp | None = None
     # 効き終わる時刻(失った持ち物・忘れた記憶など)。この時刻からは話・出来事に渡さない。空なら終わりを限らない
@@ -55,7 +62,7 @@ class CharacterHistoryRow(_ChildRow):
     knowers: list[KnowerRow] | None = None
 
 
-class CharacterSkillHistoryRow(_ChildRow):
+class CharacterSkillHistoryRow(_HistoryRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・人物役には渡さない)
     start: Timestamp | None = None
     # 効き終わる時刻(衰えた・手放した・別の行に移り変わったなど)。この時刻からは話・人物役に渡さない。空なら終わりを限らない
@@ -66,7 +73,7 @@ class CharacterSkillHistoryRow(_ChildRow):
     knowers: list[KnowerRow] | None = None
 
 
-class CharacterRelationHistoryRow(_ChildRow):
+class CharacterRelationHistoryRow(_HistoryRow):
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・人物役には渡さない)
     start: Timestamp | None = None
     description: str

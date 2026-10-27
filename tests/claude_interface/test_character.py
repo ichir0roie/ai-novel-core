@@ -85,7 +85,8 @@ def test_commit_character_relation(shown, world):
     assert result["relation"] == "商売敵"
     assert result["text"] == "市で客を取り合う"
     assert (result["start"], result["end"]) == ("1200/04/01 00:00:00", "1210/01/01 00:00:00")
-    assert result["histories"] == [{"start": "1205/01/01 00:00:00", "description": "値下げで競り合う"}]
+    assert [{key: value for key, value in row.items() if key != "id"} for row in result["histories"]] == [
+        {"start": "1205/01/01 00:00:00", "description": "値下げで競り合う"}]
 
 
 def test_delete_character_relation(shown, world):
@@ -325,8 +326,10 @@ def test_update_character_relation(shown, world):
     assert (result["character_1_id"], result["character_2_id"]) == (world.character_ids[1], world.character_ids[0])
     assert (result["relation"], result["text"]) == ("許嫁", "親が決めた")
     assert (result["start"], result["end"]) == ("1190/01/01 00:00:00", "1205/01/01 00:00:00")
-    assert result["histories"] == [{"start": "1195/01/01 00:00:00", "description": "縁談が流れかける"}]
+    histories = result["histories"]
+    assert [{key: value for key, value in row.items() if key != "id"} for row in histories] == [
+        {"start": "1195/01/01 00:00:00", "description": "縁談が流れかける"}]
 
     # 来歴を渡さなければ、今の行はそのまま
     result = shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, text="親が決めた縁")))
-    assert result["histories"] == [{"start": "1195/01/01 00:00:00", "description": "縁談が流れかける"}]
+    assert result["histories"] == histories
