@@ -59,7 +59,15 @@ export function fitFrame(points: LonLat[], shapes: { polygon: Polygon }[], zoom:
       latMax: Math.min(90, ce(center.lat + halfLat, GRID)),
     };
   }
-  const scale = (lons.length ? Math.max(MIN_SCALE, TARGET_WIDTH / (box.lonMax - box.lonMin)) : MIN_SCALE / 2) * zoom;
+  return toFrame(box, (lons.length ? Math.max(MIN_SCALE, TARGET_WIDTH / (box.lonMax - box.lonMin)) : MIN_SCALE / 2) * zoom);
+}
+
+/** 星の全体(経度 ±180°・緯度 ±90°)を収める枠。 */
+export function globeFrame(zoom: number): Frame {
+  return toFrame({ lonMin: -180, lonMax: 180, latMin: -90, latMax: 90 }, (TARGET_WIDTH / 360) * zoom);
+}
+
+function toFrame(box: { lonMin: number; lonMax: number; latMin: number; latMax: number }, scale: number): Frame {
   const span = Math.max(box.lonMax - box.lonMin, box.latMax - box.latMin);
   return {
     ...box,

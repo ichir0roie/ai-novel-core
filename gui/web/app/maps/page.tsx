@@ -8,7 +8,7 @@ import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getMaps, getStoryRoute, type MapLocation, type MapsResponse, type StoryRoute } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
 import {
-  altDiffText, altText, angular, bearing, bearingName, distanceKm, distanceText, fitFrame, MARGIN, outerRing,
+  altDiffText, altText, angular, bearing, bearingName, distanceKm, distanceText, fitFrame, globeFrame, MARGIN, outerRing,
   locationLabels, polygonCenter, textWidth, type Box, type Polygon,
 } from "@/lib/map";
 import { badgeText, legPath, ROUTE_COLOR, routeLegs, routeVisits, type Visit } from "@/lib/storyRoute";
@@ -41,6 +41,8 @@ export default function MapsPage() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [origin, setOrigin] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
+  // 場所の収まる枠でなく、星の全体を描く
+  const [whole, setWhole] = useState(false);
   const [route, setRoute] = useState<StoryRoute | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const { tip, show, hide } = useTooltip();
@@ -92,17 +94,20 @@ export default function MapsPage() {
   );
   // 作品の道筋を描くときは、道筋の場所が収まる枠にする
   const frame = useMemo(
-    () => (here.length ? fitFrame(here.map((v) => ({ lon: v.lon, lat: v.lat })), [], zoom) : fitFrame(points, shapes, zoom, center)),
-    [here, points, shapes, zoom, center],
+    () =>
+      whole
+        ? globeFrame(zoom)
+        : here.length ? fitFrame(here.map((v) => ({ lon: v.lon, lat: v.lat })), [], zoom) : fitFrame(points, shapes, zoom, center),
+    [whole, here, points, shapes, zoom, center],
   );
-  // 選んだ立ち寄り(無ければ最初の立ち寄り)が見えるよう、図をスクロールする
+  // 選んだ立ち寄り(無ければ最初の立ち寄り)か、中心に置く場所が見えるよう、図をスクロールする
   const graphRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = graphRef.current;
-    const v = here.find((h) => h.n === selected) ?? here[0];
+    const v = here.find((h) => h.n === selected) ?? here[0] ?? center;
     if (!el || !v) return;
     el.scrollTo({ left: frame.x(v.lon) - el.clientWidth / 2, top: frame.y(v.lat) - el.clientHeight / 2, behavior: "smooth" });
-  }, [here, selected, frame]);
+  }, [here, selected, frame, center]);
   // 選んだ立ち寄りの行が見えるよう、横の一覧もスクロールする
   const sideRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -243,6 +248,14 @@ export default function MapsPage() {
               {name}
             </label>
           ))}
+        </span>
+        <span className="segment">
+          <button type="button" className={whole ? "" : "on"} onClick={() => setWhole(false)}>
+            {T.maps.fitLocations}
+          </button>
+          <button type="button" className={whole ? "on" : ""} onClick={() => setWhole(true)}>
+            {T.maps.wholePlanet}
+          </button>
         </span>
         <label className="hint">
           {T.zoom} <input type="range" min="0.5" max="4" step="0.25" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {zoom}×
