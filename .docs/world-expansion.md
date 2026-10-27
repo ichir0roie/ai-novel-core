@@ -131,6 +131,8 @@ expansion_conflict(食い違い)           作者の行と食い違うが、AI �
 | `idea.append_history.AppendIdeaHistory` | アイデアの呼び名の行 |
 | `character.add_knower.AddKnower` | 既にある来歴・呼び名の行に、知る相手を一人足す(人物が話を聞いて知った、など) |
 
+既にある行を一つだけ直す・消すのは、行の id を指す `Update*History` / `Delete*History`(人物・スキル・関係・場所・アイデアごと。直すのは渡した欄だけ。書き手の守りは配列の入口と同じ)。いくつもの行をまとめて書くのは `batch.run_batch.RunBatch`(一件ずつの入口へのリクエストを並べ、一つのトランザクションで書く)。
+
 ### 表をまたいで引く入口
 
 `query.world_query`(新設)と `world.search_world.SearchWorld(keywords, time=None, location_id=None, story_id=None, limit=None)`。

@@ -1,7 +1,10 @@
+from typing import Annotated
+
 from pydantic import Field
 
 from data_access_logic.idea.record import IdeaHistoryRow
-from data_access_logic.material import Form
+from data_access_logic.knowers import KnowerRow
+from data_access_logic.material import Form, References, Timestamp
 
 
 class IdeaCreateForm(Form):
@@ -22,3 +25,16 @@ class IdeaUpdateForm(Form):
     parent_idea_id: int | None = None
     # 渡すと配列をまるごと置き換える
     histories: list[IdeaHistoryRow] | None = None
+
+
+class IdeaHistoryChange(Form):
+    """アイデアの履歴(呼び名)の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
+
+    location_id: Annotated[int | None, References("location")] = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    # 渡すなら空にできない
+    name: str = Field(default=None, min_length=1)
+    detail: str | None = None
+    # 渡せば知る相手をまるごと置き換える
+    knowers: list[KnowerRow] | None = None

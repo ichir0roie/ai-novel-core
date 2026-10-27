@@ -6,6 +6,7 @@ from data_access_logic.character.record import (
     CharacterHistoryRow, CharacterLocationRow, CharacterParameterRow, CharacterRelationHistoryRow,
     CharacterSkillHistoryRow,
 )
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Draft, Form, References, Timestamp
 from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
 
@@ -158,6 +159,37 @@ class CharacterSkillUpdateForm(Form):
     text: str | None = None
     # 渡せば来歴の行をまるごと置き換える
     histories: list[CharacterSkillHistoryRow] | None = None
+
+
+class CharacterHistoryChange(Form):
+    """人物の来歴の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
+
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    kind: str | None = None
+    # 渡すなら空にできない
+    description: str = Field(default=None, min_length=1)
+    # 渡せば知る相手をまるごと置き換える
+    knowers: list[KnowerRow] | None = None
+
+
+class CharacterSkillHistoryChange(Form):
+    """スキルの来歴の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
+
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    # 渡すなら空にできない
+    description: str = Field(default=None, min_length=1)
+    # 渡せば知る相手をまるごと置き換える
+    knowers: list[KnowerRow] | None = None
+
+
+class CharacterRelationHistoryChange(Form):
+    """関係の来歴の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
+
+    start: Timestamp | None = None
+    # 渡すなら空にできない
+    description: str = Field(default=None, min_length=1)
 
 
 class KnowledgeChange(Form):

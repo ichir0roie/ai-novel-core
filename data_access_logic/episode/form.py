@@ -70,12 +70,6 @@ class EpisodeCreateForm(EpisodeCommitForm):
     story_id: int = Field(...)
 
 
-class EpisodeUpdateForm(EpisodeCommitForm):
-    """既にある話を直すときの `EpisodeCommitForm`(まとめて直す入口が、新しい話を足さないよう `id` を必須にする)。"""
-
-    id: int = Field(...)
-
-
 def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> None:
     """登場人物を置き換える。名前だけ出る人物(`mentioned`)の行は、登場人物になった人物の分だけ消す。"""
     s.execute(delete(EpisodeCharacter).where(

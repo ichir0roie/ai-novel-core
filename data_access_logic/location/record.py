@@ -5,10 +5,12 @@ from data_access_logic.material import Form, Material, Timestamp
 
 
 class LocationHistoryRow(Form):
-    """場所の来歴の行(id と location_id は持たない。行は配列の並びで決まる)。入口の引数とレスポンスの両方に使う。"""
+    """場所の来歴の行(location_id は持たない)。入口の引数とレスポンスの両方に使う。"""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
+    # 読み出しで入る。配列で渡すときは、入れれば今ある行をその id で指し、空なら新しい行か、始まりで当てる行
+    id: int | None = None
     # 起きた時刻。出来事ごとに一行にする。空なら時期が決まっていない(話・出来事には渡さない)
     start: Timestamp | None = None
     description: str

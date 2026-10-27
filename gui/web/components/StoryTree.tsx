@@ -155,7 +155,7 @@ const renumber = (draft: Draft, ids: number[]): Draft => {
  *  上の Move ボタンで編集モードに入ると、行に Change parent と ▲▼ が出る。
  *  親の付け替えは、Change parent を押して別の作品をクリックする(一番上の欄なら親なし)。新しい親の子の一番下に付く。
  *  兄弟の中の並びは ▲▼ で入れ替え、兄弟みんなの `display_order` を上から 1, 2, … に振り直す。
- *  変更はブラウザに溜め、Apply で `story.update_stories.UpdateStories` にまとめて渡す。
+ *  変更はブラウザに溜め、Apply で一件ずつの `story.update_story.UpdateStory` をバッチ(`batch.run_batch.RunBatch`)にまとめて渡す。
  *  ドラッグ&ドロップはタッチで動かず、量が多いとスクロールで見切れるので持たない。行の右クリックで、子の作品・話を足すメニューを出す。 */
 export default function StoryTree() {
   const openPage = useOpenPage();

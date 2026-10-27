@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from data_access_logic.knowers import KnowerRow
 from data_access_logic.location.record import LocationHistoryRow
 from data_access_logic.material import Form, Timestamp
 from db.polygon import parse_polygon
@@ -47,3 +48,13 @@ class LocationUpdateForm(_LocationColumns):
     active_random_generation: bool | None = None
     # 渡せば来歴の行をまるごと置き換える
     histories: list[LocationHistoryRow] | None = None
+
+
+class LocationHistoryChange(Form):
+    """場所の来歴の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
+
+    start: Timestamp | None = None
+    # 渡すなら空にできない
+    description: str = Field(default=None, min_length=1)
+    # 渡せば知る相手をまるごと置き換える
+    knowers: list[KnowerRow] | None = None

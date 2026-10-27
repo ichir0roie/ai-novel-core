@@ -47,9 +47,9 @@ def test_commit_idea(shown, world, mock_ai):
     assert (result["name"], result["kind"], result["text"]) == ("テスト飛空艇", "技術", "空を渡る船")
     assert result["parent_idea_id"] == world.idea_id
     assert "start" not in result
-    assert result["histories"] == [{"location_id": world.location_id, "start": "1195/01/01 00:00:00",
-                                    "end": "1250/01/01 00:00:00", "name": "空舟", "detail": "都の俗称",
-                                    "knowers": []}]
+    assert [{key: value for key, value in row.items() if key != "id"} for row in result["histories"]] == [
+        {"location_id": world.location_id, "start": "1195/01/01 00:00:00", "end": "1250/01/01 00:00:00",
+         "name": "空舟", "detail": "都の俗称", "knowers": []}]
     # 本文は作者だけが読むので、確定のあとに AI を回さない
     assert not mock_ai.calls
 

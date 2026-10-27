@@ -5,10 +5,12 @@ from data_access_logic.material import Form, Material, Timestamp
 
 
 class IdeaHistoryRow(Form):
-    """アイデアの子の行(id と idea_id は持たない。今ある行とは効く場所と始まりで対応させる)。入口の引数とレスポンスの両方に使う。"""
+    """アイデアの子の行(idea_id は持たない)。入口の引数とレスポンスの両方に使う。"""
 
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
+    # 読み出しで入る。配列で渡すときは、入れれば今ある行をその id で指し、空なら新しい行か、効く場所と始まりで当てる行
+    id: int | None = None
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
