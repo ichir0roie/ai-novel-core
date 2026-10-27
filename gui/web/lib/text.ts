@@ -38,6 +38,7 @@ export const T = {
     timeline: "Timeline",
     eventTimeline: "Event timeline",
     maps: "Map",
+    relations: "Relations",
     expansions: "Expansions",
     search: "Jump to a page (type a table or page name)",
     noMatch: "No matching page",
