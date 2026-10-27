@@ -6,6 +6,8 @@ from sqlalchemy import select
 from data_access_logic.character.add_knower import AddKnower
 from data_access_logic.character.append_relation_history import AppendRelationHistory
 from data_access_logic.character.commit_character_skill import CommitCharacterSkill
+from data_access_logic.character.delete_history import DeleteCharacterHistory
+from data_access_logic.character.delete_relation_history import DeleteRelationHistory
 from data_access_logic.character.form import (
     CharacterHistoryChange, CharacterRelationHistoryChange, CharacterSkillCreateForm, CharacterSkillHistoryChange,
     CharacterUpdateForm,
@@ -16,15 +18,20 @@ from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_history import UpdateCharacterHistory
 from data_access_logic.character.update_relation_history import UpdateRelationHistory
 from data_access_logic.character.update_skill_history import UpdateSkillHistory
+from data_access_logic.idea.delete_history import DeleteIdeaHistory
 from data_access_logic.idea.form import IdeaHistoryChange
 from data_access_logic.idea.update_history import UpdateIdeaHistory
 from data_access_logic.knowers import KnowerRow
 from data_access_logic.location.append_history import AppendLocationHistory
+from data_access_logic.location.delete_history import DeleteLocationHistory
 from data_access_logic.location.form import LocationHistoryChange
 from data_access_logic.location.record import LocationHistoryRow
 from data_access_logic.location.update_history import UpdateLocationHistory
 from db.guard import ProtectedRowError
-from db.schema import Character, CharacterHistory, IdeaHistory, get_env_session
+from db.schema import (
+    Character, CharacterHistory, CharacterHistoryKnower, CharacterRelationHistory, IdeaHistory, LocationHistory,
+    get_env_session,
+)
 from db.writer import writing
 
 
@@ -106,6 +113,31 @@ def test_replacing_histories_matches_rows_by_id(shown, world):
     with pytest.raises(ValueError, match="この行の子の行に無い"):
         UpdateCharacter(CharacterUpdateForm(id=character_id, histories=[
             CharacterHistoryRow(id=2_000_000_000, description="無い行")])).run()
+
+
+def test_delete_entrances_remove_one_row_with_its_knowers(shown, world):
+    character_id, other_id = world.character_ids
+    dated, undated = _histories(shown, character_id)
+    knower = shown(AddKnower(table="character_history", row_id=dated["id"], knower=KnowerRow(knower_id=other_id)))
+    relation_row = shown(AppendRelationHistory(character_relation_id=world.relation_id, history=CharacterRelationHistoryRow(
+        start="1200", description="港で会う")))
+    place_row = shown(AppendLocationHistory(location_id=world.location_id, history=LocationHistoryRow(
+        start="1200", description="港で火事が起きる")))
+    with get_env_session() as s:
+        idea_row_id = s.scalars(select(IdeaHistory.id).where(IdeaHistory.idea_id == world.idea_id)).one()
+
+    deleted = shown(DeleteCharacterHistory(history_id=dated["id"]))
+    shown(DeleteRelationHistory(history_id=relation_row["id"]))
+    shown(DeleteLocationHistory(history_id=place_row["id"]))
+    shown(DeleteIdeaHistory(history_id=idea_row_id))
+
+    assert deleted["id"] == dated["id"]
+    assert _histories(shown, character_id) == [undated]
+    with get_env_session() as s:
+        assert s.get(CharacterHistoryKnower, knower["id"]) is None
+        assert s.get(CharacterRelationHistory, relation_row["id"]) is None
+        assert s.get(LocationHistory, place_row["id"]) is None
+        assert s.get(IdeaHistory, idea_row_id) is None
 
 
 def test_append_writer_cannot_rewrite_an_author_row(world):

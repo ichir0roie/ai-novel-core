@@ -17,11 +17,13 @@ class UpdateStory(CommitEntrypoint):
 
     def execute(self, s: Session) -> StoryRecord:
         record = common_query.get_row(s, Story, self.story.id)
-        if self.story.parent_story_id is not None:
-            self.check_exists(s, Story, self.story.parent_story_id, "parent_story_id")
-            if record.id in common_query.story_path_ids(s, self.story.parent_story_id):
-                raise ValueError(f"story_id={record.id} を、自分か自分の子孫の作品の子にはできない")
-
+        self.check_exists(s, Story, self.story.parent_story_id, "parent_story_id")
         self.story.write_changes_to(record)
         self.finalize(s, record)
         return StoryRecord.model_validate(record)
+
+    def verify(self, s: Session) -> None:
+        # 親の入れ替え(A の子の B を A の親にするなど)は、バッチで全部書いてから確かめる
+        record = common_query.get_row(s, Story, self.story.id)
+        if record.parent_story_id is not None and record.id in common_query.story_path_ids(s, record.parent_story_id):
+            raise ValueError(f"story_id={record.id} を、自分か自分の子孫の作品の子にはできない")

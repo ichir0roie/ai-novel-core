@@ -92,7 +92,13 @@ class ListEntrypoint(SessionEntrypoint):
 class CommitEntrypoint(SessionEntrypoint):
     def result(self) -> BaseModel | Sequence[BaseModel]:
         with get_env_session() as s, s.begin():
-            return self.execute(s)
+            result = self.execute(s)
+            self.verify(s)
+            return result
+
+    def verify(self, s: Session) -> None:
+        """書いたあとの形を確かめる(親の付け替えの循環など)。`execute` のすぐあとに呼ぶ。バッチ(`batch.run_batch.RunBatch`)は
+        全部のリクエストを書いてから呼ぶので、一件ずつでは途中で崩れて見える入れ替えも通る。"""
 
     @staticmethod
     def check_exists(s: Session, model: type[Base], id_: int | None, label: str) -> None:

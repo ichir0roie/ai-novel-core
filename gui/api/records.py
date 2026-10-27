@@ -251,9 +251,15 @@ def get_record(s: Session, spec: TableSpec, record_id: int) -> RecordResponse:
 
 def create_record(s: Session, spec: TableSpec, data: dict[str, Any]) -> Material:
     writer = writer_of(spec.name)
-    return writer.creator(writer.create_form.model_validate(data)).execute(s)
+    return _written(s, writer.creator(writer.create_form.model_validate(data)))
 
 
 def update_record(s: Session, spec: TableSpec, record_id: int, data: dict[str, Any]) -> Material:
     writer = writer_of(spec.name)
-    return writer.updater(writer.update_form(id=record_id, **data)).execute(s)
+    return _written(s, writer.updater(writer.update_form(id=record_id, **data)))
+
+
+def _written(s: Session, entrance: Any) -> Material:
+    record = entrance.execute(s)
+    entrance.verify(s)
+    return record

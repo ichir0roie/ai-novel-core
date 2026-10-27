@@ -1,6 +1,21 @@
 {
   "entrances": [
     {
+      "id": "batch.run_batch.RunBatch",
+      "area": "batch",
+      "name": "RunBatch",
+      "doc": "結果は、リクエストの順に、それぞれの入口が一件だけ呼ばれたときと同じもの。書いたあとの確かめ(親の付け替えの循環など)は、",
+      "params": [
+        {
+          "name": "requests",
+          "required": true,
+          "default": null,
+          "annotation": "list[BatchRequest]"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "character.add_knower.AddKnower",
       "area": "character",
       "name": "AddKnower",
@@ -196,6 +211,51 @@
       "params": [
         {
           "name": "character_skill_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_history.DeleteCharacterHistory",
+      "area": "character",
+      "name": "DeleteCharacterHistory",
+      "doc": "人物の来歴の行を一つ、id で指して消す。知る相手の行も消える。同じ人物のほかの行には触れない。消した行を返す。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_relation_history.DeleteRelationHistory",
+      "area": "character",
+      "name": "DeleteRelationHistory",
+      "doc": "関係の来歴の行を一つ、id で指して消す。同じ関係のほかの行には触れない。消した行を返す。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_skill_history.DeleteSkillHistory",
+      "area": "character",
+      "name": "DeleteSkillHistory",
+      "doc": "スキルの来歴の行を一つ、id で指して消す。知る相手の行も消える。同じスキルのほかの行には触れない。消した行を返す。",
+      "params": [
+        {
+          "name": "history_id",
           "required": true,
           "default": null,
           "annotation": "int"
@@ -746,21 +806,6 @@
       "writes": true
     },
     {
-      "id": "episode.update_episodes.UpdateEpisodes",
-      "area": "episode",
-      "name": "UpdateEpisodes",
-      "doc": "話をまとめて直す。GUI のタイムラインの変更モードで溜めた時刻・作品の移しを、一つのトランザクションで書く。",
-      "params": [
-        {
-          "name": "episodes",
-          "required": true,
-          "default": null,
-          "annotation": "list[EpisodeUpdateForm]"
-        }
-      ],
-      "writes": true
-    },
-    {
       "id": "episode_session.add_ideas.AddIdeas",
       "area": "episode_session",
       "name": "AddIdeas",
@@ -892,21 +937,6 @@
         }
       ],
       "writes": false
-    },
-    {
-      "id": "event.update_events.UpdateEvents",
-      "area": "event",
-      "name": "UpdateEvents",
-      "doc": "出来事をまとめて直す。GUI の出来事のタイムラインの変更モードで溜めた時刻・親の移しを、一つのトランザクションで書く。",
-      "params": [
-        {
-          "name": "events",
-          "required": true,
-          "default": null,
-          "annotation": "list[EventUpdateForm]"
-        }
-      ],
-      "writes": true
     },
     {
       "id": "event_seed.update_event_seed.UpdateEventSeed",
@@ -1078,6 +1108,21 @@
           "required": true,
           "default": null,
           "annotation": "IdeaCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "idea.delete_history.DeleteIdeaHistory",
+      "area": "idea",
+      "name": "DeleteIdeaHistory",
+      "doc": "アイデアの呼び名の行を一つ、id で指して消す。知る相手の行も消える。同じアイデアのほかの行には触れない。消した行を返す。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
         }
       ],
       "writes": true
@@ -1257,6 +1302,21 @@
       "doc": "db に触れない下書き。返した形のまま、確定する入口の引数に渡せる。",
       "params": [],
       "writes": false
+    },
+    {
+      "id": "location.delete_history.DeleteLocationHistory",
+      "area": "location",
+      "name": "DeleteLocationHistory",
+      "doc": "場所の来歴の行を一つ、id で指して消す。知る相手の行も消える。同じ場所のほかの行には触れない。消した行を返す。",
+      "params": [
+        {
+          "name": "history_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
     },
     {
       "id": "location.delete_location.DeleteLocation",
@@ -1588,21 +1648,6 @@
         }
       ],
       "writes": false
-    },
-    {
-      "id": "story.update_stories.UpdateStories",
-      "area": "story",
-      "name": "UpdateStories",
-      "doc": "作品をまとめて直す。GUI の作品ツリーの編集モードで溜めた並び・親の付け替えを、一つのトランザクションで書く。",
-      "params": [
-        {
-          "name": "stories",
-          "required": true,
-          "default": null,
-          "annotation": "list[StoryUpdateForm]"
-        }
-      ],
-      "writes": true
     },
     {
       "id": "story.update_story.UpdateStory",

@@ -10,16 +10,14 @@
 from __future__ import annotations
 
 import importlib
-import inspect
-import typing
 from functools import cache
 from typing import Any
 
-from pydantic import BaseModel, TypeAdapter
-
+from data_access_logic.entrance_args import built
 from data_access_logic.entrypoint import Entrypoint, UnknownRecordError
 
 DB_ENTRANCES = frozenset({
+    "batch.run_batch.RunBatch",
     "character.add_knower.AddKnower",
     "character.append_history.AppendCharacterHistory",
     "character.append_relation_history.AppendRelationHistory",
@@ -32,6 +30,9 @@ DB_ENTRANCES = frozenset({
     "character.delete_character.DeleteCharacter",
     "character.delete_character_relation.DeleteCharacterRelation",
     "character.delete_character_skill.DeleteCharacterSkill",
+    "character.delete_history.DeleteCharacterHistory",
+    "character.delete_relation_history.DeleteRelationHistory",
+    "character.delete_skill_history.DeleteSkillHistory",
     "character.list_character_relations.ListCharacterRelations",
     "character.list_characters.ListCharacters",
     "character.move_characters.MoveCharacters",
@@ -59,7 +60,6 @@ DB_ENTRANCES = frozenset({
     "episode.read_episodes.ReadEpisodes",
     "episode.refresh_mentions.RefreshMentions",
     "episode.revise_episode.ReviseEpisode",
-    "episode.update_episodes.UpdateEpisodes",
     "episode_session.add_ideas.AddIdeas",
     "episode_session.read_knower_gaps.ReadKnowerGaps",
     "episode_session.read_stage.ReadStage",
@@ -67,7 +67,6 @@ DB_ENTRANCES = frozenset({
     "event.delete_event.DeleteEvent",
     "event.list_events.ListEvents",
     "event.read_events.ReadEvents",
-    "event.update_events.UpdateEvents",
     "event_seed.update_event_seed.UpdateEventSeed",
     "expansion.add_conflict.AddConflict",
     "expansion.finish_expansion.FinishExpansion",
@@ -78,6 +77,7 @@ DB_ENTRANCES = frozenset({
     "expansion.start_expansion.StartExpansion",
     "idea.append_history.AppendIdeaHistory",
     "idea.commit_idea.CommitIdea",
+    "idea.delete_history.DeleteIdeaHistory",
     "idea.delete_idea.DeleteIdea",
     "idea.merge_idea.MergeIdea",
     "idea.resolve_ideas.ResolveIdeas",
@@ -87,6 +87,7 @@ DB_ENTRANCES = frozenset({
     "location.append_history.AppendLocationHistory",
     "location.commit_location.CommitLocation",
     "location.create_random_location.CreateRandomLocation",
+    "location.delete_history.DeleteLocationHistory",
     "location.delete_location.DeleteLocation",
     "location.list_locations.ListLocations",
     "location.list_neighbors.ListNeighbors",
@@ -104,7 +105,6 @@ DB_ENTRANCES = frozenset({
     "story.read_brief.ReadBrief",
     "story.read_cast.ReadCast",
     "story.start_story.StartStory",
-    "story.update_stories.UpdateStories",
     "story.update_story.UpdateStory",
     "style_preference.commit_style_preference.CommitStylePreference",
     "style_preference.read_writing_style.ReadWritingStyle",
@@ -152,26 +152,6 @@ def db_entrance_class(entrance_id: str) -> type[Entrypoint]:
     return entrance_class(entrance_id)
 
 
-def _has_model(annotation: Any) -> bool:
-    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-        return True
-    return any(_has_model(argument) for argument in typing.get_args(annotation))
-
-
-@cache
-def _signature(cls: type[Entrypoint]) -> tuple[inspect.Signature, dict[str, TypeAdapter]]:
-    """引数の signature と、型が pydantic のモデルの引数を読み込む TypeAdapter。"""
-    hints = typing.get_type_hints(cls.__init__)
-    return inspect.signature(cls), {name: TypeAdapter(hint) for name, hint in hints.items() if _has_model(hint)}
-
-
 def call(cls: type[Entrypoint], args: dict[str, Any]) -> Any:
-    """JSON で来た引数を入口の signature に当て、型が pydantic のモデルの引数はモデルに読み込んでから、入口を組み立てて
-    `run()` を呼ぶ(dump 済みの結果)。引数の食い違いは ValueError にして 400 へ。"""
-    signature, adapters = _signature(cls)
-    try:
-        signature.bind(**args)
-    except TypeError as error:
-        raise ValueError(f"{cls.__module__.removeprefix('data_access_logic.')}.{cls.__name__} の引数が合わない: {error}") from error
-    arguments = {name: adapters[name].validate_python(value) if name in adapters else value for name, value in args.items()}
-    return cls(**arguments).run()
+    """JSON で来た引数で入口を組み立てて `run()` を呼ぶ(dump 済みの結果)。"""
+    return built(cls, args).run()

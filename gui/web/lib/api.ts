@@ -155,14 +155,21 @@ export const deleteIdeaDetachingChildren = (ideaId: number, childIds: number[]) 
     })(),
   );
 
-/** 作品の並び・親をまとめて直す(一つでも通らなければ何も直さない)。`story.update_stories.UpdateStories` を呼ぶ。 */
-export const updateStories = (stories: Rec[]) => runEntrance("story.update_stories.UpdateStories", { stories });
+/** 一件ずつの入口へのリクエストを並べて、一つのトランザクションで書く(一つでも通らなければ何も書かない)。`batch.run_batch.RunBatch` を呼ぶ。 */
+export const runBatch = (requests: { entrance: string; args: Rec }[]) =>
+  runEntrance("batch.run_batch.RunBatch", { requests });
 
-/** 話の時刻・作品をまとめて直す(一つでも通らなければ何も直さない)。`episode.update_episodes.UpdateEpisodes` を呼ぶ。 */
-export const updateEpisodes = (episodes: Rec[]) => runEntrance("episode.update_episodes.UpdateEpisodes", { episodes });
+/** 作品の並び・親をまとめて直す。一件ずつは `story.update_story.UpdateStory`。 */
+export const updateStories = (stories: Rec[]) =>
+  runBatch(stories.map((story) => ({ entrance: "story.update_story.UpdateStory", args: { story } })));
 
-/** 出来事の時刻・親をまとめて直す(一つでも通らなければ何も直さない)。`event.update_events.UpdateEvents` を呼ぶ。 */
-export const updateEvents = (events: Rec[]) => runEntrance("event.update_events.UpdateEvents", { events });
+/** 話の時刻・作品をまとめて直す。一件ずつは `episode.commit_episode.CommitEpisode`(確定のあとの AI は回さない)。 */
+export const updateEpisodes = (episodes: Rec[]) =>
+  runBatch(episodes.map((episode) => ({ entrance: "episode.commit_episode.CommitEpisode", args: { episode } })));
+
+/** 出来事の時刻・親をまとめて直す。一件ずつは `event.update_event.UpdateEvent`(要約・ミームの AI は回さない)。 */
+export const updateEvents = (events: Rec[]) =>
+  runBatch(events.map((event) => ({ entrance: "event.update_event.UpdateEvent", args: { event } })));
 
 /** 出来事を子孫の出来事ごと消す。`event.delete_event.DeleteEvent` を呼ぶ。 */
 export const deleteEventWithChildren = (eventId: number) =>
