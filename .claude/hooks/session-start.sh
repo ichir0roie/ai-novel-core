@@ -5,6 +5,7 @@
 # API を叩くだけの作業に python は要らないので、web では環境変数だけ渡してすぐ戻り、.venv は裏で用意する。
 # 開発用の PostgreSQL はここでは用意しない。テストで要ったときに tool.test が infra_local/postgis.sh で用意する。
 # gui.dev がブラウザに使う専用プロファイル(.brave-profile/)も用意する。
+# web では、db の書き方の全体の行を API で読んで標準出力に出し、セッションの文脈に入れる(CLAUDE.md の「書く文の書き方」)。
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
@@ -13,6 +14,19 @@ mkdir -p .brave-profile .cache
 # 裏で回した用意の進み具合。.venv が揃えば python を置き、途中で止まれば failed を置く。
 # .claude/hooks/wait-setup.sh(PreToolUse フック)が、python を使うコマンドをこれが揃うまで待たせる
 setup_dir=.cache/session-setup
+
+# 手元は、この時点では RDS への転送がまだ起きていないので読まない。読めなくてもセッションは始める
+print_writing_style() {
+  [ -n "${NOVEL_API_URL:-}" ] && [ -n "${NOVEL_API_KEY:-}" ] && command -v jq >/dev/null || return 0
+  local style
+  style=$(curl -sS --max-time 15 -H "x-novel-api-key: $NOVEL_API_KEY" -H 'content-type: application/json' \
+    -d '{"args":{"writing_style":{}}}' \
+    "${NOVEL_API_URL%/}/api/interface/style_preference.read_writing_style.ReadWritingStyle" 2>/dev/null \
+    | jq -r '.result.text // empty' 2>/dev/null) || style=""
+  [ -n "$style" ] || return 0
+  printf '# db の書き方(全体の行)\n\n%s\n\ndb に入れる文は、書く前にその範囲の書き方も ReadWritingStyle で読む(CLAUDE.md の「書く文の書き方」)。\n' "$style"
+}
+
 background=0
 [ "${1:-}" = --background ] && background=1
 if [ "${CLAUDE_CODE_REMOTE:-}" = true ] && [ "$background" = 0 ]; then
@@ -26,6 +40,7 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = true ] && [ "$background" = 0 ]; then
   mkdir -p "$setup_dir"
   setsid nohup .claude/hooks/session-start.sh --background >> .cache/session-setup.log 2>&1 < /dev/null &
   echo ".venv は裏で用意している(ログは .cache/session-setup.log)" >&2
+  print_writing_style
   exit 0
 fi
 if [ "$background" = 1 ]; then
