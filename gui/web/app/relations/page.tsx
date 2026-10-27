@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NameId from "@/components/NameId";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getRelations, type Relation, type RelationCharacter, type RelationsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
+import { useOpenPage } from "@/lib/openPage";
 import { T } from "@/lib/text";
 
 const R_NODE = 18;
@@ -72,7 +73,7 @@ function edgePath(a: Pos, b: Pos, bend: number) {
 }
 
 export default function RelationsPage() {
-  const router = useRouter();
+  const openPage = useOpenPage();
   const search = useSearchParams();
   // 人物の詳細から飛んできたとき。その人物に関わる関係だけを描く
   const focus = Number(search.get("character")) || null;
@@ -218,7 +219,7 @@ export default function RelationsPage() {
             <h2>
               <NameId name={c.name} id={c.id} /> <span className="hint">({c.kind ?? ""})</span>
             </h2>
-            <button type="button" className="primary" onClick={() => router.push(c.link)}>
+            <button type="button" className="primary" onClick={(e) => openPage(c.link, e)}>
               {T.openRecord}
             </button>
           </div>
@@ -265,7 +266,7 @@ export default function RelationsPage() {
           <h2>
             {nameOf(r.character_1_id)} → {nameOf(r.character_2_id)}
           </h2>
-          <button type="button" className="primary" onClick={() => router.push(`/tables/character_relation/${r.id}`)}>
+          <button type="button" className="primary" onClick={(e) => openPage(`/tables/character_relation/${r.id}`, e)}>
             {T.openRecord}
           </button>
         </div>
@@ -362,7 +363,7 @@ export default function RelationsPage() {
                     style={{ cursor: "pointer" }}
                     opacity={dim ? 0.25 : 1}
                     onClick={() => pickRelation(r)}
-                    onDoubleClick={() => router.push(`/tables/character_relation/${r.id}`)}
+                    onDoubleClick={(ev) => openPage(`/tables/character_relation/${r.id}`, ev)}
                     onMouseMove={(ev) => show(ev, [T.relations.arrow(nameOf(r.character_1_id), nameOf(r.character_2_id), r.relation), spanText(r) && T.relations.periodOf(spanText(r)), firstLine(r.text)])}
                     onMouseLeave={hide}
                   >
@@ -387,7 +388,7 @@ export default function RelationsPage() {
                       drag.current = { id: c.id, x: ev.clientX, y: ev.clientY, moved: false };
                       ev.preventDefault();
                     }}
-                    onDoubleClick={() => router.push(c.link)}
+                    onDoubleClick={(ev) => openPage(c.link, ev)}
                     onMouseMove={(ev) => show(ev, [T.relations.nameKind(nameOf(c.id), c.kind), c.sex && T.relations.sexOf(c.sex), spanText(c) && T.relations.periodOf(spanText(c))])}
                     onMouseLeave={hide}
                   >

@@ -5,6 +5,7 @@ import Modal from "@/components/Modal";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import { createRecord, getPreviousEpisode, type Rec } from "@/lib/api";
+import type { OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
@@ -19,8 +20,8 @@ type Props = {
   onClose: () => void;
   /** その場で話を足し終えたとき */
   onAdded: () => void;
-  /** 追加ページへ移る */
-  onOpenPage: (url: string) => void;
+  /** 追加ページへ移る(Ctrl(⌘)を押しながらなら別タブで開く) */
+  onOpenPage: (url: string, e: OpenModifiers) => void;
 };
 
 /** タイムラインの空いた所を押したときの小さなモーダル。時刻(start・end)・タイトル・プロットだけでその場で話を足すか、
@@ -34,11 +35,11 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded,
   const [error, setError] = useState<string | null>(null);
   const storyId = typeof initial.story_id === "number" ? initial.story_id : null;
 
-  const open = () => {
+  const open = (e: OpenModifiers) => {
     const params = new URLSearchParams(
       Object.entries({ ...initial, start, end, title: title || null, plot_text: plot || null }).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
     );
-    onOpenPage(`/tables/episode/new?${params}`);
+    onOpenPage(`/tables/episode/new?${params}`, e);
   };
 
   const add = async () => {

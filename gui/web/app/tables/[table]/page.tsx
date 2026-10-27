@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { deleteMemes, getRecord, labelOf, listRecords, type RecordList } from "@/lib/api";
 import { PageTitle, tableMeta } from "@/lib/meta";
+import { useOpenPage } from "@/lib/openPage";
 import StoryTree from "@/components/StoryTree";
 import IdeaTree from "@/components/IdeaTree";
 import CharacterTree from "@/components/CharacterTree";
@@ -22,6 +23,7 @@ const BULK_DELETE: Partial<Record<string, (ids: number[]) => Promise<unknown>>> 
 export default function TablePage() {
   const { table } = useParams<{ table: string }>();
   const router = useRouter();
+  const openPage = useOpenPage();
   const search = useSearchParams();
   const meta = tableMeta(table);
   const [data, setData] = useState<RecordList | null>(null);
@@ -218,7 +220,7 @@ export default function TablePage() {
         sort={sort}
         order={order}
         onSort={sortBy}
-        onOpen={(id) => router.push(`/tables/${table}/${id}`)}
+        onOpen={(id, e) => openPage(`/tables/${table}/${id}`, e)}
         onFilter={(key, value) => setParam(key, value)}
         selection={bulkDelete ? {
           selected,

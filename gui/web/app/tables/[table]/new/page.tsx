@@ -7,6 +7,7 @@ import { invalidateOptions } from "@/components/ReferenceSelect";
 import { createRecord, type Rec, type TableMeta } from "@/lib/api";
 import { useCopyFromPreviousEpisode } from "@/lib/previousEpisode";
 import { PageTitle, tableMeta } from "@/lib/meta";
+import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
@@ -30,6 +31,7 @@ function initialValue(meta: TableMeta, searchParams: URLSearchParams): Rec {
 
 export default function NewRecordPage() {
   const router = useRouter();
+  const openPage = useOpenPage();
   const { table } = useParams<{ table: string }>();
   const searchParams = useSearchParams();
   const meta = tableMeta(table);
@@ -80,7 +82,7 @@ export default function NewRecordPage() {
           actions={
             <div className="actionbar">
               <div className="inner">
-                <button onClick={() => router.push(`/tables/${table}`)} disabled={busy}>
+                <button onClick={(e) => openPage(`/tables/${table}`, e)} disabled={busy}>
                   {T.create.cancel}
                 </button>
                 <button className="primary" onClick={submit} disabled={busy}>
