@@ -56,7 +56,7 @@ with writing('ai', <展開id>):
 | 食い違いを決める | `expansion.resolve_conflict.ResolveConflict` `{'conflict': {'id': …, 'status': 'accepted' / 'dismissed'}}` | 下の 3 |
 | 展開を読む・取り消す | `expansion.read_expansion.ReadExpansion` `{'expansion_id': …}` / `expansion.revert_expansion.RevertExpansion` `{'expansion_id': …}` | 下の 4 |
 | 作品の筋書き・話の枠とプロット | `story.update_story.UpdateStory`・下の「話の行を書く」 | 作者の行。作者が認めた案だけ、作者の書き手で直す |
-| 書き方 | `style_preference.read_writing_style.ReadWritingStyle` `{'writing_style': {'scope': '<書く文の範囲>'}}` | 行を書く前に読む。範囲は、出来事は出来事、人物の芯・筋書きは人物、来歴は来歴、関係は関係、設定の説明はアイデア、作品の筋書き・場所の説明は全体(`scope` を省く)、プロットはプロット |
+| 書き方 | `style_preference.read_writing_style.ReadWritingStyle` `{'writing_style': {'scope': '<書く文の範囲>'}}` | 行を書く前に読む。範囲は CLAUDE.md の「書く文の書き方」の表(出来事は出来事、人物の芯・筋書きは人物、来歴は来歴、関係は関係、設定の説明はアイデア、場所の説明・来歴は場所、作品の筋書きは筋書き、プロットはプロット) |
 
 ### 話の行を書く
 

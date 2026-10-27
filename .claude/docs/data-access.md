@@ -57,7 +57,7 @@ AI へ渡す文面は db の行(書き方・作風)を土台にし、コード�
   - いくつもの仕事で使う材料の読み方と、どの生成にも効く禁止事項は `ai/instructions/materials.py`。見出し一つにつき定数一つ。`generate` が足すのは禁止事項(`SAFETY_NOTE`)だけで、材料の読み方(`TIME_NOTE`・`LATER_EVENTS_NOTE` など)は、その見出しの材料を渡す仕事の指示にだけ入れる
   - 分類の一覧・件数のようなコードの値は、AI に渡す材料(プロンプト)に入れる
 - db に持つ: 文体・作風・書き方の注意書き・行の組み方。作風に依存するので、`core`(このリポジトリ)に定数として持たない
-  - 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係・人物役・語り部・推敲。`db/schema.py` の `StyleScope`)ごとに `style_preference` に一行。推敲の行は、これまでの推敲で直したことと直し方の記録で、スキル `revise-episode` が推敲のたびに整理して書き直す。作品ごとの本文の決まりは `story.instruction`、話ごとの本文の決まりは `episode.instruction`(本文の範囲だけに足す。空なら足さない)
+  - 全体と使う所の範囲(本文・プロット・人物・来歴・出来事・アイデア・ミーム・関係・場所・筋書き・人物役・語り部・推敲。`db/schema.py` の `StyleScope`。場所・筋書きは AI の生成には使わず、このセッションの Claude が書く前に読む)ごとに `style_preference` に一行。推敲の行は、これまでの推敲で直したことと直し方の記録で、スキル `revise-episode` が推敲のたびに整理して書き直す。作品ごとの本文の決まりは `story.instruction`、話ごとの本文の決まりは `episode.instruction`(本文の範囲だけに足す。空なら足さない)
   - db の行に、材料の形・出力の欄・仕事の手順のような挙動の文を書かない
   - スキル・エージェントの定義にも書き方を書かない。文を書く所ごとに、その範囲の行を読んで従う(スキルは `ReadWritingStyle`・`ReadEpisodeBrief` の「書き方」、手番の語り部は `ReadWritingStyle` の語り部の範囲、人物役・対話役は `tool.episode_session style`)。語り部の範囲には、語り・要求の言い回しと、場面の運び方の好み(手番の絞り方・プロットの台詞の促し方・状況の起こし方)を置き、手番の JSON の形・コマンド・番の送り方は挙動としてスキルに残す。材料・仕組みに関わる決まり(材料の言い回しを写さない、端役に名前を付けないなど)は挙動として残す
   - 足すのは GUI の `style_preference` の画面、作品・話の画面の `instruction`、入口 `style_preference.commit_style_preference.CommitStylePreference`(範囲の行の末尾に足す) / `update_style_preference.UpdateStylePreference`
