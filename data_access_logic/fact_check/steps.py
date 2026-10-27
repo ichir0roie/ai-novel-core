@@ -20,10 +20,6 @@ class NotesForm(BaseModel):
     notes: list[fact_checker.FactCheckNote]
 
 
-class LastMemeId(BaseModel):
-    last_id: int
-
-
 @db_step
 def check_sources(s: Session, form: CheckScope) -> list[SourceText]:
     return fact_checker.check_sources(s, form.table, form.ids, form.limit)
@@ -32,13 +28,3 @@ def check_sources(s: Session, form: CheckScope) -> list[SourceText]:
 @db_step
 def save_fact_checks(s: Session, form: NotesForm) -> int:
     return fact_checker.save_fact_checks(s, form.notes)
-
-
-@db_step
-def last_meme_id(s: Session) -> int:
-    return fact_checker.last_meme_id(s)
-
-
-@db_step
-def new_meme_ids(s: Session, form: LastMemeId) -> list[int]:
-    return fact_checker.new_meme_ids(s, form.last_id)

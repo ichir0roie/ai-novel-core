@@ -8,7 +8,6 @@ from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.meme.commit_meme import CommitMeme
 from data_access_logic.meme.delete_meme import DeleteMeme
 from data_access_logic.meme.draw_memes import DrawMemes
-from data_access_logic.meme.extract_memes import ExtractMemes
 from data_access_logic.meme.form import MemeCreateForm, MemeUpdateForm
 from data_access_logic.meme.refresh_generated_content import RefreshGeneratedContent
 from data_access_logic.meme.update_meme import UpdateMeme
@@ -67,14 +66,6 @@ def test_draw_memes(shown, world):
     assert result == shown(DrawMemes(person=True, seed=4))
 
 
-def test_extract_memes(shown, world, mock_ai):
-    result = shown(ExtractMemes(rows=[SourceRow(table="episode", id=world.episode_id)], fact_check=True))
-
-    assert isinstance(result["memes_added"], int)
-    # 渡した話の本文を AI に渡す
-    assert any("市で二人が出会った。" in call["prompt"] for call in mock_ai.calls)
-
-
 def test_refresh_generated_content(shown, world, mock_ai):
     result = shown(RefreshGeneratedContent())
 
@@ -95,11 +86,11 @@ def test_commit_oracle(shown, mock_ai):
     result = shown(CommitOracle(
         OracleCreateForm(text="書く前に結末を決める", title="結末の覚え書き"), fact_check=True))
 
-    record = result["record"]
-    assert record["title"] == "結末の覚え書き"
-    assert record["text"].startswith("書く前に結末を決める")
-    assert isinstance(result["memes_added"], int)
+    assert result["title"] == "結末の覚え書き"
+    assert result["text"].startswith("書く前に結末を決める")
+    # 検めるだけで、覚え書きからミームを抜き出さない
     assert mock_ai.calls
+    assert all(call["schema"].get("title") != "MemesDraft" for call in mock_ai.calls)
 
 
 def test_update_oracle(shown, world):
@@ -118,18 +109,18 @@ def test_list_pending_reviews(shown, world):
     assert f"todo:meme:{world.meme_id}" in [item["key"] for item in result]
 
 
-def test_meme_sources_are_the_passed_rows(world):
+def test_meme_sources_are_episode_texts(world):
     with get_env_session() as s:
-        sources = sources_of(s, [SourceRow(table="episode", id=world.episode_id),
-                                 SourceRow(table="oracle", id=world.oracle_id)])
+        sources = sources_of(s, [SourceRow(table="episode", id=world.episode_id)])
 
-    assert [(source.table, source.id, source.label) for source in sources] == [
-        ("episode", world.episode_id, "話の本文"), ("oracle", world.oracle_id, "覚え書き")]
+    assert [(source.table, source.id, source.label) for source in sources] == [("episode", world.episode_id, "話の本文")]
 
 
-def test_meme_sources_refuse_ideas_and_characters(world):
+@pytest.mark.parametrize("table", ["oracle", "event", "character"])
+def test_meme_sources_refuse_other_than_episodes(world, table):
+    ids = {"oracle": world.oracle_id, "event": world.event_id, "character": world.character_ids[0]}
     with get_env_session() as s, pytest.raises(ValueError):
-        sources_of(s, [SourceRow(table="character", id=world.character_ids[0])])
+        sources_of(s, [SourceRow(table=table, id=ids[table])])
 
 
 def test_extracted_memes_are_saved_with_their_anti_memes(world):

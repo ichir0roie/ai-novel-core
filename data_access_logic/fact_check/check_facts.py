@@ -4,15 +4,14 @@
     CheckFacts("meme", limit=10).show()    まだ検めていないミームを 10 件だけ検める
     CheckFacts("oracle", ids=[30]).show()  名指ししたものを検め直す
 
-アイデアの本文は作者だけが読むので検めない。oracle は、検めたあと本文(検証結果の節を含む)からミームを抜き出し、足したミームも検める。
-`{"checked": 検めた件数, "memes_added": 足したミームの件数}` を返す。
+アイデアの本文は作者だけが読むので検めない。`{"checked": 検めた件数}` を返す。
 """
 from __future__ import annotations
 
 from ai.claude_code import ai_client, fact_checker
 from data_access_logic.ai_client import AIClient
 from data_access_logic.entrypoint import Entrypoint
-from data_access_logic.flows.fact_check import check_and_extract
+from data_access_logic.flows.fact_check import check_facts
 
 __all__ = ["CheckFacts"]
 
@@ -27,4 +26,4 @@ class CheckFacts(Entrypoint):
         self.ai = ai
 
     def result(self) -> fact_checker.FactChecked:
-        return check_and_extract(self.ai, self.table, self.ids, self.limit)
+        return check_facts(self.ai, self.table, self.ids, self.limit)

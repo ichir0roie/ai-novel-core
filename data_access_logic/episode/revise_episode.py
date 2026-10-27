@@ -7,18 +7,15 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.episode import steps
 from data_access_logic.episode.form import EpisodeReviseForm
 from data_access_logic.episode.record import EpisodeRecord
-from data_access_logic.flows import commit
 
 
 class ReviseEpisode(CommitEntrypoint):
-    """本文のある話の本文だけを直す(推敲)。登場人物の居場所・関係は本文から動かさない。"""
+    """本文のある話の本文だけを直す(推敲)。確定のあとに AI を回さない。`CommitEpisode` と違い、登場人物の居場所・関係を
+    本文から動かさない(昔の話を推敲すると、今の居場所がその話の頃の場所へ戻り、とうに知り合った二人に関係が重なるので)。
+    推敲は筋を変えないので、ミームも出来事の種も抜き出し直さない。"""
 
     def __init__(self, episode: EpisodeReviseForm):
         self.episode = episode
 
     def execute(self, s: Session) -> EpisodeRecord:
         return steps.revise_episode(s, self.episode)
-
-    # 確定のあとは、ミームの抜き出しと要約だけを AI で追いかける(`flows/commit.py`)
-    def result(self) -> EpisodeRecord:
-        return commit.revise_episode(self.episode)

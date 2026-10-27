@@ -27,8 +27,7 @@ def test_check_facts(shown, world, mock_ai, monkeypatch):
 
     result = shown(CheckFacts(table="oracle", ids=[world.oracle_id]))
 
-    assert result["checked"] == 1
-    assert isinstance(result["memes_added"], int)
+    assert result == {"checked": 1}
     with get_env_session() as s:
         assert f"{fact_checker.FACT_CHECK_HEADING}\n## 妥当性\n検めた1" in s.get_one(Oracle, world.oracle_id).text
 

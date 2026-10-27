@@ -10,7 +10,7 @@ from data_access_logic.flows.refresh import RefreshedAll
 __all__ = ["RefreshGeneratedContent"]
 
 
-# 数は、足したアンチミームと作り直した要約の件数。ミームを抜き出すのは `ExtractMemes`(行を渡す)
+# 数は、足したアンチミームと作り直した要約の件数。ミームを抜き出すのは、本文を渡した `CommitEpisode` だけ
 class RefreshGeneratedContent(Entrypoint):
     def __init__(self, ai: AIClient = ai_client):
         self.ai = ai

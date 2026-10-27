@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。抜き出すのは、流れが渡した行(書いたその場の行)だけ。
+"""ミームどうし・元との関係は持たない(移り変わり・伝染していくため)。抜き出すのは、本文を渡して確定した話の本文だけ
+(覚え書き・出来事・推敲した本文からも抜くと、似たミームばかり増えるので)。
 ミームどうしで持つのは、反転した対(アンチミーム、`anti_meme_id`)だけ。抜き出すときに対で作り、対の無いミームには後から作る。
 
 db だけの段(`sources_of` / `meme_texts` / `save_memes` / `unpaired_sources` / `save_anti_memes` /
@@ -26,7 +27,7 @@ from data_access_logic.source_text import (
     SourceBatchSerialized, SourceRow, SourceText, batches, row_of, source_of, strip_fact_check,
 )
 from db import writer
-from db.schema import MEME_CATEGORIES, Episode, Event, Expansion, ExpansionMode, Meme, Oracle, Origin, StyleScope
+from db.schema import MEME_CATEGORIES, Episode, Meme, Origin, StyleScope
 from db.writer import Writer
 
 logger = logging.getLogger(__name__)
@@ -42,14 +43,13 @@ CATEGORY_DESCRIPTIONS = {
 _CATEGORY_GUIDE = "\n".join(f"  - {name}: {CATEGORY_DESCRIPTIONS[name]}" for name in MEME_CATEGORIES)
 
 _EXTRACT_SYSTEM = """\
-著者の創作についての覚え書き・その検証結果・起きた出来事・話の本文を番号つきで渡すので、それぞれから、人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出す。
+話の本文を番号つきで渡すので、それぞれから、人物の行動原理の芯になりうる「ミーム」(繰り返し現れる考え方・価値観・行動の型)を抜き出す。
 - 人名・地名・組織名・その作品だけの固有名詞を抜き、他の人物にも乗り移りうる普遍的な考え方として書く。
 - 一つのミームは一文(40字以内を目安)。何を大事にし、何をきっかけにどう動くかを書く。
 - 特定の人物にしか当てはまらない立場や境遇をなぞるだけのものは抜き出さない。
-- 作者の前書き・使用環境・書き方の約束など、考え方にならない文からは抜き出さない。
-- 出来事と話の本文からは、当事者がその出来事を経て選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの記録からは抜き出さない。
-- 本文中の「検証結果」の節は、覚え書きを現実に照らした調べ書き。そこに出てくる現実の人・集団の考え方や行動の傾向を抜き出す。出典の一覧と妥当性の判定からは抜き出さない。
-- 一つの元から 0〜3 件。同じ元の中で似たミームは一つにまとめる。
+- 人物がその話で選んだこと・手放したこと・行き着いた考え方だけを抜き出す。起きたことをなぞっただけの所からは抜き出さない。
+- 誰にでも当てはまり、人物ごとの動き方を分けない考え方は抜き出さない。
+- 一つの本文から 0〜2 件。はっきりしたものが無ければ 0 件でよい。同じ本文の中で似たミームは一つにまとめる。
 - それぞれに、渡す分類から一つを振る。
 - それぞれに、反転したアンチミームを一つ添える。"""
 
@@ -64,21 +64,13 @@ _CLASSIFY_SYSTEM = "人物の行動原理になる「ミーム」を番号つき
 
 
 def sources_of(s: Session, rows: list[SourceRow]) -> list[SourceText]:
-    """渡した行の本文。元の列が空の行は外す。oracle の本文には検証結果(`# 検証結果` の節)も含む。
-    アイデアの本文と人物の筋書きからは抜き出さず、話の本文と、世界の展開の一言・狙い(`expansion.prompt`)から抜き出す。"""
+    """渡した話の本文。本文が空の話は外す。"""
     sources: list[SourceText] = []
     for row in rows:
         record = row_of(s, row.table, row.id)
-        if isinstance(record, Oracle):
-            source = source_of(record, "覚え書き", record.text)
-        elif isinstance(record, Event):
-            source = source_of(record, "出来事", record.text)
-        elif isinstance(record, Episode):
-            source = source_of(record, "話の本文", record.main_text)
-        elif isinstance(record, Expansion):
-            source = source_of(record, "作者の一言" if record.mode == ExpansionMode.AUTHOR else "人物の狙い", record.prompt)
-        else:
-            raise ValueError(f"ミームを抜き出す元は oracle / event / episode / expansion のいずれか: {row.table!r}")
+        if not isinstance(record, Episode):
+            raise ValueError(f"ミームを抜き出す元は話(episode)の本文だけ: {row.table!r}")
+        source = source_of(record, "話の本文", record.main_text or "")
         if source.text.strip():
             sources.append(source)
     return sources
