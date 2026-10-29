@@ -23,7 +23,6 @@ import {
   type RecordResponse,
 } from "@/lib/api";
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
-import { useNarrow } from "@/lib/media";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
@@ -81,8 +80,7 @@ export default function RecordPage() {
   const [saved, setSaved] = useState<string | null>(null);
   const [organizing, setOrganizing] = useState(false);
   const [instructing, setInstructing] = useState(false);
-  // スマホの話の画面では、プロット・本文を押すと画面全体に広げて直す。広げている欄の名前
-  const narrow = useNarrow();
+  // 狭い画面の話の画面では、プロット・本文を押すと画面全体に広げて直す。広げている欄の名前
   const [fullscreen, setFullscreen] = useState<string | null>(null);
   // 作品・話の AI への指示は、ふだんは欄に出さず、ボタンからモーダルで直す
   const hasInstruction = table === "story" || table === "episode";
@@ -203,7 +201,7 @@ export default function RecordPage() {
             onChange={setValue}
             mode="edit"
             hidden={hasInstruction ? ["instruction"] : undefined}
-            onOpenSection={table === "episode" && narrow ? setFullscreen : undefined}
+            onOpenSection={table === "episode" ? setFullscreen : undefined}
             titleNote={
               <>
                 <Link href={listHref(table, loaded.record)}>{meta.name}</Link> / {T.idMark(id)}
