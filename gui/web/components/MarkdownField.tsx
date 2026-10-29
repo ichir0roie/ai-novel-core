@@ -15,7 +15,7 @@ type Props = {
   collapsible?: boolean;
 };
 
-export function MarkdownPreview({ text }: { text: string }) {
+function MarkdownPreview({ text }: { text: string }) {
   return <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>;
 }
 

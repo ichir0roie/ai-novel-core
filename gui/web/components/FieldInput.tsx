@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
-import MarkdownField, { MarkdownPreview } from "./MarkdownField";
+import MarkdownField from "./MarkdownField";
 import { ChoicePicker } from "./Picker";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
 import StampInput from "./StampInput";
@@ -62,7 +62,7 @@ type Props = {
   collapsible?: boolean;
   // 参照の欄で、絞り込み欄が空のときに出す選択肢の id(ReferenceSelect へ渡す)
   defaultIds?: number[] | null;
-  /** 渡すと本文(section)欄はその場で直さず、押したらこれを呼ぶ(スマホで画面全体に広げて直す) */
+  /** 渡すと、狭い画面では本文(section)欄をその場で直さず、押すとこれを呼ぶボタンにする(画面全体に広げて直す) */
   onOpen?: () => void;
 };
 
@@ -150,25 +150,26 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
   if (column.type === "stamp") {
     return <StampInput value={(value as string | null) ?? null} onChange={onChange} disabled={disabled} />;
   }
-  if (column.section && !compact && onOpen) {
-    const text = (value as string | null) ?? "";
-    return (
-      <div className={`section markdown-preview ${column.markdown === false ? "plain" : ""}`} onClick={onOpen}>
-        {text === "" ? (
-          <span className="hint">{T.record.emptySection}</span>
-        ) : column.markdown === false ? (
-          text
-        ) : (
-          <MarkdownPreview text={text} />
-        )}
-      </div>
-    );
-  }
   if (column.section && !compact) {
-    return column.markdown === false ? (
-      <textarea className="section" value={(value as string | null) ?? ""} onChange={(e) => onChange(e.target.value)} />
+    const text = (value as string | null) ?? "";
+    const editor = column.markdown === false ? (
+      <textarea className="section" value={text} onChange={(e) => onChange(e.target.value)} />
     ) : (
-      <MarkdownField value={(value as string | null) ?? null} onChange={onChange} autoHeight={autoHeight} collapsible={collapsible} />
+      <MarkdownField value={text} onChange={onChange} autoHeight={autoHeight} collapsible={collapsible} />
+    );
+    if (!onOpen) return editor;
+    // どちらを出すかは幅で CSS が決める(JS で幅を読むと、読み違えたときに広い画面の欄のまま出る)
+    return (
+      <>
+        <div className="section-inline">{editor}</div>
+        <button type="button" className="section-open" onClick={onOpen}>
+          <span className={`section-open-text ${text === "" ? "empty" : ""}`}>{text === "" ? T.record.emptyText : text}</span>
+          <span className="section-open-foot">
+            <span>{T.record.letters(text.length)}</span>
+            <span>{T.record.openFull}</span>
+          </span>
+        </button>
+      </>
     );
   }
   if (!compact && CHILD_FREEFORM_TEXT_KEYS.has(column.key)) {

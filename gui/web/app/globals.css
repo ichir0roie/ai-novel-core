@@ -229,6 +229,18 @@ a.button-link:hover { border-color: var(--accent); }
 .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview {
   flex: 1; height: auto; min-height: 0; resize: none; overflow: auto;
 }
+/* 話のプロット・本文を画面全体に広げて直すボタン。狭い画面(下の max-width: 960px)でだけ、その場の欄(.section-inline)と入れ替える */
+.section-inline { display: contents; }
+.section-open {
+  display: none; flex-direction: column; gap: 0.4rem; width: 100%; padding: 0.6rem 0.75rem; text-align: left;
+  border-radius: 8px; background: var(--panel);
+}
+.section-open-text {
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  white-space: pre-wrap; line-height: 1.7;
+}
+.section-open-text.empty { color: var(--muted); }
+.section-open-foot { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.8rem; }
 @media (max-width: 960px) {
   .record.split { grid-template-columns: minmax(0, 1fr); }
   .record { overflow: auto; display: flex; flex-direction: column; }
@@ -237,6 +249,10 @@ a.button-link:hover { border-color: var(--accent); }
   .record-text textarea.section, .record-text .markdown-preview { height: auto; min-height: 40rem; resize: vertical; }
   .record-side .field.section.side { flex: none; }
   .record-side .field.section.side textarea.section, .record-side .field.section.side .markdown-preview { height: auto; min-height: 28rem; resize: vertical; }
+  /* 話のプロット・本文は、その場の欄の代わりに、押すと画面全体に広げて直す(FullscreenText)ボタンを出す */
+  .section-inline { display: none; }
+  .section-open { display: flex; }
+  .record-side .field.section.side:has(> .section-open) { min-height: 0; }
 }
 
 /* 保存系のボタンを、左の欄の一番下に置く(フロートさせず、通常の流れの末尾) */
@@ -578,8 +594,6 @@ a.button-link:hover { border-color: var(--accent); }
   .record { gap: 0.9rem; }
   .record-text textarea.section, .record-text .markdown-preview { min-height: 60dvh; }
   .actionbar { padding: 0.6rem 0.7rem; }
-  /* 話のプロット・本文は押すと画面全体に広げて直す(FullscreenText)ので、ここは中身を見せるだけ */
-  div.markdown-preview.plain { white-space: pre-wrap; }
 
   .modal-backdrop { padding: 0.5rem; }
   .modal.wide:has(.character-sheet) { height: 95dvh; }

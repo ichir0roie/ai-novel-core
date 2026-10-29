@@ -119,7 +119,9 @@ export const T = {
     emptyText: "(empty)",
     back: "Back",
     saveAndClose: "Save",
-    // スマホで本文の欄を画面全体に広げたときの見出し
+    letters: (count: number) => `${count} chars`,
+    openFull: "Tap to open ›",
+    // 狭い画面で本文の欄を画面全体に広げたときの見出し
     sectionTitles: { plot_text: "プロット", main_text: "本文" } as Record<string, string>,
     edit: "Edit",
     expand: "Click to show all",
