@@ -14,6 +14,7 @@ import {
 } from "react";
 import Modal from "@/components/Modal";
 import NewEventModal from "@/components/NewEventModal";
+import OpenableText from "@/components/OpenableText";
 import { invalidateOptions, useOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import TreeReferenceSelect from "@/components/TreeReferenceSelect";
@@ -1139,11 +1140,18 @@ export default function EventTimelinePage() {
               </div>
               <div className="field">
                 <label>{T.eventTimeline.text}</label>
-                <textarea
+                <OpenableText
+                  title={T.eventTimeline.text}
                   value={form.text}
-                  onChange={(e) => setForm({ ...form, text: e.target.value })}
-                  disabled={saving}
-                />
+                  onChange={(text) => setForm({ ...form, text })}
+                  onSave={dirty && !saving && form.name.trim() ? () => void saveViewing(viewingNow) : undefined}
+                >
+                  <textarea
+                    value={form.text}
+                    onChange={(e) => setForm({ ...form, text: e.target.value })}
+                    disabled={saving}
+                  />
+                </OpenableText>
               </div>
             </>
           )}

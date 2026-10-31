@@ -119,6 +119,7 @@ export const T = {
     emptyText: "(empty)",
     back: "Back",
     saveAndClose: "Save",
+    done: "Done",
     letters: (count: number) => `${count} chars`,
     openFull: "Tap to open ›",
     // 狭い画面で本文の欄を画面全体に広げたときの見出し

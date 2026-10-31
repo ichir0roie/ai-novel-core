@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import OpenableText from "@/components/OpenableText";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import { createRecord, type Rec } from "@/lib/api";
@@ -110,7 +111,9 @@ export default function NewEventModal({ start: initialStart, parent, location, o
       </label>
       <div className="field">
         <label>{T.eventTimeline.text}</label>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} />
+        <OpenableText title={T.eventTimeline.text} value={text} onChange={setText}>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} />
+        </OpenableText>
       </div>
     </Modal>
   );
