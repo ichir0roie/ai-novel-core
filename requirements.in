@@ -6,7 +6,7 @@
 # データ編集 GUI の API(gui/api)に fastapi と uvicorn、その TestClient に httpx を使う。watchfiles は uvicorn --reload の監視用
 # PostgreSQL(DEM_DATABASE_URL)へは psycopg で繋ぐ(`.docs/postgres.md`)。boto3 は RDS の IAM データベース認証のトークンと、
 # 手元の転送越しに繋ぐときの RDS のエンドポイント(SSM)を引くのに使う
-sqlalchemy>=2.0
+sqlalchemy>=2.1.6
 pydantic>=2.0
 alembic>=1.20
 factory-boy>=3.3
