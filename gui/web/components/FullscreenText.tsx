@@ -11,18 +11,19 @@ type Props = {
   onChange: (value: string) => void;
   /** 変更は画面に残したまま閉じる */
   onBack: () => void;
-  /** 閉じて保存する */
-  onSave: () => void;
+  /** 閉じて保存する。保存の口が無い欄(足すモーダルなど)では渡さず、✓ は閉じるだけになる */
+  onSave?: () => void;
 };
 
-/** スマホで本文の欄を画面全体に広げて読み書きする。左上に欄の名前、右上に戻る・保存のアイコン。
+/** 狭い画面で本文の欄を画面全体に広げて読み書きする。左上に欄の名前、右上に戻る・保存のアイコン。
  * 入力中(キーボードが開いている間)は、その一行を隠して全部を文に使う。 */
 export default function FullscreenText({ title, value, onChange, onBack, onSave }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [typing, setTyping] = useState(false);
   // キーボードが開くと見えている高さ(visualViewport)だけが縮み、fixed の 100dvh のままでは下がキーボードに隠れる
   const [view, setView] = useState<{ top: number; height: number } | null>(null);
-  useSaveShortcut(onSave);
+  useSaveShortcut(() => onSave?.(), onSave !== undefined);
+  const doneLabel = onSave ? T.record.saveAndClose : T.record.done;
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -53,7 +54,7 @@ export default function FullscreenText({ title, value, onChange, onBack, onSave 
               <path d="M10 6l-6 6 6 6M4 12h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          <button type="button" className="ghost icon" onClick={onSave} aria-label={T.record.saveAndClose} title={T.record.saveAndClose}>
+          <button type="button" className="ghost icon" onClick={onSave ?? onBack} aria-label={doneLabel} title={doneLabel}>
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

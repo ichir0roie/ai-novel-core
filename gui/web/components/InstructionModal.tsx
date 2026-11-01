@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "./Modal";
+import OpenableText from "./OpenableText";
 import { useSaveShortcut } from "@/lib/saving";
 import { T } from "@/lib/text";
 
@@ -51,7 +52,9 @@ export default function InstructionModal({ value, error, onClose, onSave }: Prop
       }
     >
       <p className="hint">{T.instruction.note}</p>
-      <textarea className="instruction-input" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} />
+      <OpenableText title={T.instruction.title} value={draft} onChange={setDraft} onSave={() => void save()}>
+        <textarea className="instruction-input" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} />
+      </OpenableText>
     </Modal>
   );
 }

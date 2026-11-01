@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "@/components/Modal";
+import OpenableText from "@/components/OpenableText";
 import { invalidateOptions } from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import { createRecord, getPreviousEpisode, type Rec } from "@/lib/api";
@@ -104,7 +105,9 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded,
       </div>
       <div className="field">
         <label>{T.timeline.newEpisodePlot}</label>
-        <textarea value={plot} onChange={(e) => setPlot(e.target.value)} />
+        <OpenableText title={T.timeline.newEpisodePlot} value={plot} onChange={setPlot}>
+          <textarea value={plot} onChange={(e) => setPlot(e.target.value)} />
+        </OpenableText>
       </div>
     </Modal>
   );

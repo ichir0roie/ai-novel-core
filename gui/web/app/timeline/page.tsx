@@ -16,6 +16,7 @@ import {
 import { AutoGrowTextarea } from "@/components/FieldInput";
 import Modal from "@/components/Modal";
 import NewEpisodeModal from "@/components/NewEpisodeModal";
+import OpenableText from "@/components/OpenableText";
 import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
@@ -1358,10 +1359,17 @@ export default function TimelinePage() {
               {/* プレビューと切り替える欄(MarkdownField)だと、外れたときに高さが変わって下のボタンの押下が外れるので、常に書ける欄にする */}
               <div className="field">
                 <label>plot_text</label>
-                <AutoGrowTextarea
+                <OpenableText
+                  title="plot_text"
                   value={edit.plot}
                   onChange={(plot) => setEdit({ ...edit, plot })}
-                />
+                  onSave={(plotChanged || timeChanged) && !savingEdit && edit.start ? () => void saveEdit(viewingNow) : undefined}
+                >
+                  <AutoGrowTextarea
+                    value={edit.plot}
+                    onChange={(plot) => setEdit({ ...edit, plot })}
+                  />
+                </OpenableText>
               </div>
             </>
           )}

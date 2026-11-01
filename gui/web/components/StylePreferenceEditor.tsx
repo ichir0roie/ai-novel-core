@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import OpenableText from "./OpenableText";
 import { getRecord, listRecords, updateRecord, type RecordList } from "@/lib/api";
 import { T } from "@/lib/text";
 
@@ -102,7 +103,9 @@ export default function StylePreferenceEditor() {
             <div className="hint">
               {T.idMark(selectedId)} {String(current?.scope ?? "")}
             </div>
-            <textarea className="section" value={text} onChange={(e) => setText(e.target.value)} />
+            <OpenableText title={`${T.idMark(selectedId)} ${String(current?.scope ?? "")}`} value={text} onChange={setText} onSave={() => void save()}>
+              <textarea className="section" value={text} onChange={(e) => setText(e.target.value)} />
+            </OpenableText>
           </>
         )}
         {status && <div className={`status ${status.kind}`}>{status.message}</div>}

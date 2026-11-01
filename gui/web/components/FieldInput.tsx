@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ColumnMeta } from "@/lib/api";
 import MarkdownField from "./MarkdownField";
+import OpenableText from "./OpenableText";
 import { ChoicePicker } from "./Picker";
 import ReferenceSelect, { ReferenceMultiSelect } from "./ReferenceSelect";
 import StampInput from "./StampInput";
@@ -62,8 +63,8 @@ type Props = {
   collapsible?: boolean;
   // 参照の欄で、絞り込み欄が空のときに出す選択肢の id(ReferenceSelect へ渡す)
   defaultIds?: number[] | null;
-  /** 渡すと、狭い画面では本文(section)欄をその場で直さず、押すとこれを呼ぶボタンにする(画面全体に広げて直す) */
-  onOpen?: () => void;
+  /** 狭い画面で本文(section)欄を画面全体に広げたとき、✓ で閉じて保存する(OpenableText の onSave) */
+  onSave?: () => void;
 };
 
 function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v: unknown) => void; disabled?: boolean }) {
@@ -96,7 +97,7 @@ function JsonInput({ value, onChange, disabled }: { value: unknown; onChange: (v
   );
 }
 
-export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, collapsible, defaultIds, onOpen }: Props) {
+export default function FieldInput({ column, value, onChange, compact, disabled, autoHeight, collapsible, defaultIds, onSave }: Props) {
   const readonly = disabled || column.readonly;
   if (readonly) {
     return <div className="readonly">{value == null ? "—" : Array.isArray(value) || typeof value === "object" ? JSON.stringify(value) : String(value)}</div>;
@@ -157,19 +158,10 @@ export default function FieldInput({ column, value, onChange, compact, disabled,
     ) : (
       <MarkdownField value={text} onChange={onChange} autoHeight={autoHeight} collapsible={collapsible} />
     );
-    if (!onOpen) return editor;
-    // どちらを出すかは幅で CSS が決める(JS で幅を読むと、読み違えたときに広い画面の欄のまま出る)
     return (
-      <>
-        <div className="section-inline">{editor}</div>
-        <button type="button" className="section-open" onClick={onOpen}>
-          <span className={`section-open-text ${text === "" ? "empty" : ""}`}>{text === "" ? T.record.emptyText : text}</span>
-          <span className="section-open-foot">
-            <span>{T.record.letters(text.length)}</span>
-            <span>{T.record.openFull}</span>
-          </span>
-        </button>
-      </>
+      <OpenableText title={T.record.sectionTitles[column.key] ?? column.key} value={text} onChange={onChange} onSave={onSave}>
+        {editor}
+      </OpenableText>
     );
   }
   if (!compact && CHILD_FREEFORM_TEXT_KEYS.has(column.key)) {
