@@ -18,7 +18,8 @@ class ReadKnowledge(SessionEntrypoint):
     時刻は `time`、渡さなければ話の時刻。人物役には時刻を渡さないので、`tool.episode_session` が手番のファイルにある
     その人物の一番新しい手番の時刻を渡す。
     話を渡さず `time` だけを渡せば、その時刻で読む(スキル `call-character` で歳を言って呼ぶとき)。プロットが無いので、アイデアは入らない。
-    知っている人物は、関係のある人物すべて。"""
+    知っている人物は、関係のある人物すべて。
+    自分が前の話で言ったセリフは、言ってからの日数で原文・鮮明・あやふやのどれかで入る(演じている話のセリフは入れない)。"""
 
     def __init__(self, character_id: int, episode_id: int | None = None, time: Stamp | str | None = None):
         self.character_id = character_id
@@ -32,4 +33,5 @@ class ReadKnowledge(SessionEntrypoint):
             plot_text = common_query.get_row(s, Episode, self.episode_id).plot_text or ""
             scene_ids = set(s.scalars(
                 select(EpisodeCharacter.character_id).where(EpisodeCharacter.episode_id == self.episode_id)).all())
-        return knowledge_of(s, self.character_id, knowing_time(s, self.episode_id, self.time), plot_text, scene_ids)
+        return knowledge_of(s, self.character_id, knowing_time(s, self.episode_id, self.time), plot_text, scene_ids,
+                            self.episode_id)

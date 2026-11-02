@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.episode.record import EpisodeHead
 from data_access_logic.query import common_query
-from db.schema import Episode, EpisodeCharacter, NarouPart
+from db.schema import CharacterSpeech, Episode, EpisodeCharacter, NarouPart
 
 
 class DeleteEpisode(CommitEntrypoint):
@@ -20,5 +20,6 @@ class DeleteEpisode(CommitEntrypoint):
         # 関連は noload なので、cascade に頼らず中間テーブルを先に消す
         s.execute(delete(EpisodeCharacter).where(EpisodeCharacter.episode_id == record.id))
         s.execute(delete(NarouPart).where(NarouPart.episode_id == record.id))
+        s.execute(delete(CharacterSpeech).where(CharacterSpeech.episode_id == record.id))
         s.delete(record)
         return deleted

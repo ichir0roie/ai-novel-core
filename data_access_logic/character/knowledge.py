@@ -15,6 +15,8 @@
 - 人物の範囲は本人と、その時刻に関係(`character_relation`)のある人物。本人には外見・芯・ミーム・行動原理・性格を、関係のある人物には
   外見と芯を渡し、plot はだれにも渡さない。話を渡したときは、関係のある人物の外見・芯・来歴をその話の登場人物・名前だけ出る人物の分だけ
   渡す(場にいない人物は関係の行の名前と間柄で足りる)。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
+- 本人が前の話で言ったセリフ(`character_speech`)は、その時刻までに始まった話のもの(演じている話は除く)を、言ってからの日数で
+  原文(数日)・鮮明(一年)・あやふや(それより後)のどれか一つにして、話ごとに渡す。
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from pydantic import model_serializer
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from data_access_logic import constants
 from data_access_logic.character import skills
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, personality_for_prompt
@@ -36,8 +39,8 @@ from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
-    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, Episode, IdeaHistory, IdeaHistoryKnower,
-    KnowerMixin, LocationHistory, LocationHistoryKnower,
+    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode, IdeaHistory,
+    IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
 )
 from db.stamp import Stamp
 
@@ -185,6 +188,36 @@ class KnownIdea(Material):
     names: list[KnownName]
 
 
+class SpeechEpisode(Material):
+    id: int
+    start: Timestamp
+
+
+class KnownSpeech(Material):
+    verbatim: str
+    vivid: str
+    vague: str
+    episode: SpeechEpisode
+
+
+def _speeches_for_prompt(speeches: list[KnownSpeech], time: Stamp) -> list[dict[str, Any]]:
+    """話ごとに、言ってからの日数で原文・鮮明・あやふやのどれか一つを渡す。"""
+    by_episode: dict[int, list[KnownSpeech]] = {}
+    for speech in speeches:
+        by_episode.setdefault(speech.episode.id, []).append(speech)
+    recalled: list[dict[str, Any]] = []
+    for lines in by_episode.values():
+        start = lines[0].episode.start
+        if start.plus_days(constants.SPEECH_VERBATIM_DAYS) >= time:
+            when, recall, texts = "この数日", "言ったとおりに覚えている", [line.verbatim for line in lines]
+        elif start.plus_days(constants.SPEECH_VIVID_DAYS) >= time:
+            when, recall, texts = _ago(start, time.year), "中身ははっきり覚えている", [line.vivid for line in lines]
+        else:
+            when, recall, texts = _ago(start, time.year), "おぼろげに覚えている", [line.vague for line in lines]
+        recalled.append({"いつ": when, "覚え": recall, "セリフ": texts})
+    return recalled
+
+
 class KnowledgeSerialized(Material):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
@@ -196,6 +229,8 @@ class KnowledgeSerialized(Material):
     characters: list[KnownCharacter]
     ideas: list[KnownIdea]
     places: list[KnownPlace]
+    # 本人が前の話で言ったセリフ(話の時刻・本文の順)
+    speeches: list[KnownSpeech]
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -208,6 +243,7 @@ class KnowledgeSerialized(Material):
                 "行動原理": me.principle, "性格": personality_for_prompt(parameters),
                 "来歴(古い順)": _histories_for_prompt(me.histories, year),
                 "スキル": _skills_for_prompt(me.skills, year),
+                "言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, self.time),
             },
             "関係": _relations_for_prompt(self.relations, year),
             "知っている人物": [
@@ -321,12 +357,26 @@ def _of_word(word: str) -> Callable[[list[str]], bool]:
     return lambda names: any(overlaps(name) for name in names)
 
 
+def _speeches(s: Session, character_id: int, time: Stamp, acting_episode_id: int | None) -> list[KnownSpeech]:
+    """`time` までに始まった話で言ったセリフ。演じている話のセリフは、本文を書き直すときに先回りになるので入れない。"""
+    query = (select(CharacterSpeech).join(Episode, CharacterSpeech.episode_id == Episode.id)
+             .where(CharacterSpeech.character_id == character_id, Episode.start.is_not(None), Episode.start <= time)
+             .options(joinedload(CharacterSpeech.episode))
+             .order_by(Episode.start, Episode.id, CharacterSpeech.position)
+             .execution_options(populate_existing=True))
+    if acting_episode_id is not None:
+        query = query.where(Episode.id != acting_episode_id)
+    return [KnownSpeech.model_validate(row) for row in s.scalars(query).all()]
+
+
 def knowledge_of(
     s: Session, character_id: int, time: Stamp, plot_text: str, scene_ids: set[int] | None,
+    acting_episode_id: int | None,
 ) -> KnowledgeSerialized:
     """アイデアは、`plot_text` に名前の出るものだけを入れる。
     知っている人物(外見・芯・来歴)は、関係のある人物のうち `scene_ids`(話の登場人物・名前だけ出る人物)にいる人物だけ。
-    ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。"""
+    ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。
+    言ったセリフは、`acting_episode_id`(演じている話)のものを除く。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)
@@ -344,6 +394,7 @@ def knowledge_of(
                     for other in others],
         ideas=_ideas(s, viewer, _in_text(plot_text)),
         places=_places(s, viewer),
+        speeches=_speeches(s, character_id, time, acting_episode_id),
     )
 
 

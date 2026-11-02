@@ -97,7 +97,7 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
     mentioned = "\n".join([*(event.name for event in recent), *(arc.name for arc in arcs), nudge or ""])
     prompt = ActorSerialized(
         time=time, location_name=s.get_one(Location, pick.location_id).name,
-        knowledge=knowledge_of(s, character.id, time, mentioned, None),
+        knowledge=knowledge_of(s, character.id, time, mentioned, None, None),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, time)) for other in present],
         recent_events=[event.name for event in recent], arcs=arcs, seeds=seeds, nudge=nudge,

@@ -1007,6 +1007,30 @@ class EpisodeCharacter(OriginMixin, Base):
     character: Mapped["Character"] = relationship(lazy="noload")
 
 
+class CharacterSpeech(Base):
+    """人物が話の本文で言ったセリフ。人物役には、言ってからの日数で原文・鮮明・あやふやのどれか一つを渡す
+    (`data_access_logic/character/knowledge.py`)。本文から AI が拾う写しなので出自を持たず、本文が変わったら
+    (`source_hash` が食い違ったら)、その話の行をまとめて拾い直す(`data_access_logic/episode/speeches.py`)。"""
+
+    __tablename__ = "character_speech"
+
+    episode_id: Mapped[int] = mapped_column(Integer, ForeignKey("episode.id"), index=True, sort_order=100)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, comment="言った人物", sort_order=110)
+    position: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="話の本文の中で何番目のセリフか(0 から)", sort_order=120)
+    verbatim: Mapped[str] = mapped_column(
+        String, nullable=False, comment="原文。本文の「」の中をそのまま。言ってから数日のあいだ渡す", sort_order=130)
+    vivid: Mapped[str] = mapped_column(
+        String, nullable=False, comment="鮮明。言い回しは崩れても中身と要の語が残る覚え。一年のあいだ渡す", sort_order=140)
+    vague: Mapped[str] = mapped_column(
+        String, nullable=False, comment="あやふや。何を言ったかの大筋だけの覚え。一年より後に渡す", sort_order=150)
+    source_hash: Mapped[str] = mapped_column(
+        String, nullable=False, comment="拾った本文の sha256。本文と食い違ったら、その話の行を拾い直す", sort_order=160)
+
+    episode: Mapped["Episode"] = relationship(lazy="noload")
+
+
 class NarouPart(Base):
     """小説家になろうに投稿した部分と話の結び。投稿してもこの表だけを書き、話の行(updated_at)には触れない。"""
 

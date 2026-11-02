@@ -103,3 +103,8 @@ ACT_OUTCOMES = ("思い通りに運ぶ", "半ばだけ運ぶ", "思わぬ方へ�
 # 一手で生む人物・アイデアの上限
 ACT_NEW_CHARACTER_LIMIT = 2
 ACT_NEW_IDEA_LIMIT = 3
+
+# data_access_logic/character/knowledge.py(人物役が読む、自分が言ったセリフ)
+# 言ってからこの日数までは原文、ここから鮮明の日数までは鮮明、それより後はあやふやを渡す
+SPEECH_VERBATIM_DAYS = 3
+SPEECH_VIVID_DAYS = 365

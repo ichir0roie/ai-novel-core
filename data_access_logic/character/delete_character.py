@@ -9,7 +9,7 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, CharacterHistoryKnower, CharacterRelation, CharacterSkillHistoryKnower, Episode, EpisodeCharacter,
+    Character, CharacterHistoryKnower, CharacterRelation, CharacterSkillHistoryKnower, CharacterSpeech, Episode, EpisodeCharacter,
     EventCharacter, IdeaHistoryKnower, LocationHistoryKnower,
 )
 
@@ -44,6 +44,8 @@ class DeleteCharacter(CommitEntrypoint):
         deleted = DeletedCharacter.model_validate(record)
         # 期間ごとの値・説明の変化・出自と居場所は selectin で読まれ、cascade で消える。それ以外は先に消す
         s.execute(delete(EpisodeCharacter).where(EpisodeCharacter.character_id == record.id))
+        # 話から外した人物のセリフの行は、後回しの段で拾い直すまで残っている
+        s.execute(delete(CharacterSpeech).where(CharacterSpeech.character_id == record.id))
         # 自分の来歴の知る人の行は cascade で消える。ほかの人物の来歴・スキルの来歴・アイデアの履歴の知る人に入った行は先に消す
         for knower_model in (CharacterHistoryKnower, CharacterSkillHistoryKnower, IdeaHistoryKnower, LocationHistoryKnower):
             s.execute(delete(knower_model).where(knower_model.knower_id == record.id))
