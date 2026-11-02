@@ -2,7 +2,7 @@
 """行を確定したあと AI の段を追いかける流れ(`CommitEvent` / `UpdateEvent` / `CommitEpisode` / `CommitOracle` の `run()`)。
 
 確定は db の段一つで済ませる(GUI の API が呼ぶ `execute(s)` と同じ)。そのあとの AI の段(ミームの抜き出し・要約・種・事実確認)は、
-AI が答えなくても確定は残る。種を抜き出すのは、その場で書いた行からだけ。ミームを抜き出すのは、本文を渡して確定した話の本文からだけ
+AI が答えなくても確定は残る(セリフは後回しの段で拾い直す)。種を抜き出すのは、その場で書いた行からだけ。ミームを抜き出すのは、本文を渡して確定した話の本文からだけ
 (ほかの行や推敲からも抜くと、似たミームばかり増えるので)。
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ from data_access_logic.oracle.form import OracleCreateForm
 from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.source_text import SourceRow
 from data_access_logic.step import RowId
-from data_access_logic.flows import event_seed, meme
+from data_access_logic.flows import event_seed, meme, speech
 from data_access_logic.flows.fact_check import check
 from data_access_logic.caller import call
 from data_access_logic.flows.summary import rewrite_event_summaries
@@ -59,7 +59,7 @@ def _relate_cast(ai: AIClient, episode_id: int) -> list[CharacterRelationRecord]
 def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> CommittedEpisode:
     """本文を渡したときは、その本文からミームと出来事の種を抜き出す。本文の中で住まい・拠点が変わった登場人物の居場所も移し、
     その移動先をレスポンスの `moves` に返す(移動先が空なら何もしない)。本文で会った・知り合いだと分かった登場人物どうしの関係も足し、
-    レスポンスの `relations` に返す。"""
+    レスポンスの `relations` に返す。登場人物が言ったセリフも拾い直す(人物役が前の話の自分のセリフを読む)。"""
     record = call(episode_steps.commit_episode, episode)
     written = [SourceRow(table="episode", id=record.id)] if episode.main_text is not None else []
     moved: list[CharacterMove] = []
@@ -70,6 +70,7 @@ def commit_episode(episode: EpisodeCommitForm, ai: AIClient = ai_client) -> Comm
             event_seed.refresh_and_consolidate(ai, written)
             moved = _move_cast(ai, record.id)
             related = _relate_cast(ai, record.id)
+            speech.refresh(ai, [record.id])
     return CommittedEpisode.model_validate({**record.model_dump(), "moves": moved, "relations": related})
 
 
