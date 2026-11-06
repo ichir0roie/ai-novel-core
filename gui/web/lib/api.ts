@@ -294,6 +294,16 @@ export const getTimeline = (params: { story_id?: number | null }) => {
   return api<TimelineResponse>(`/api/timeline?${query}`);
 };
 
+export type OverviewResponse = components["schemas"]["OverviewResponse"];
+export type OverviewEvent = components["schemas"]["OverviewEvent"];
+export type OverviewCharacter = components["schemas"]["OverviewCharacter"];
+export type OverviewEpisode = components["schemas"]["OverviewEpisode"];
+
+export const getOverview = (params: { story_id: number; margin_days: number }) =>
+  api<OverviewResponse>(
+    `/api/overview?${new URLSearchParams({ story_id: String(params.story_id), margin_days: String(params.margin_days) })}`,
+  );
+
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */
 export async function listAllRecords(table: string, params: Record<string, string> = {}): Promise<Rec[]> {
   const items: Rec[] = [];

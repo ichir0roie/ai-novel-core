@@ -7,7 +7,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.expansion import acting
-from data_access_logic.expansion.act_models import ActorBrief, ActorPick, ActSaved, ActSaveForm, NewCharacterLink
+from data_access_logic.expansion.act_models import (
+    ActFrameForm, ActorBrief, ActorPick, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm, ImpactFrame, InviteForm,
+    NewCharacterLink,
+)
 from data_access_logic.expansion.finish_expansion import finish
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
 from data_access_logic.expansion.record import ExpansionRecord
@@ -22,6 +25,8 @@ class PickForm(BaseModel):
     character_id: int | None = None
     time: Stamp | None = None
     seed: int | None = None
+    # この実行でもう動いた・巻きこまれた人物。引く相手から外す
+    exclude_ids: list[int] = []
 
 
 class BriefForm(BaseModel):
@@ -37,7 +42,22 @@ class PromptForm(BaseModel):
 
 @db_step
 def pick_actor(s: Session, form: PickForm) -> ActorPick:
-    return acting.pick_actor(s, form.character_id, form.time, form.seed)
+    return acting.pick_actor(s, form.character_id, form.time, form.seed, form.exclude_ids)
+
+
+@db_step
+def invitable(s: Session, form: InviteForm) -> list[int]:
+    return acting.invitable(s, form)
+
+
+@db_step
+def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
+    return acting.dialogue_brief(s, form)
+
+
+@db_step
+def act_frame(s: Session, form: ActFrameForm) -> ImpactFrame:
+    return acting.act_frame(s, form)
 
 
 @db_step

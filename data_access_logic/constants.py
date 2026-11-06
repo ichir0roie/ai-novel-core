@@ -100,9 +100,42 @@ ACT_INTERVAL_DAYS = (1, 30)
 ACT_PRESENT_LIMIT = 10
 # 狙いの成り行き。サイコロで一つ選び、裁く段に渡す(狙いがいつも通るとは限らない)
 ACT_OUTCOMES = ("思い通りに運ぶ", "半ばだけ運ぶ", "思わぬ方へ転ぶ", "裏目に出る")
-# 一手で生む人物・アイデアの上限
+# 一手で生む人物・アイデアの上限(影響の枠がさらに絞る)
 ACT_NEW_CHARACTER_LIMIT = 2
 ACT_NEW_IDEA_LIMIT = 3
+# 人物の目の段(狙い・対話の手番)は数が多いので一番安いモデルで回し、裁く段だけを強いモデルで実行ごとに一回にまとめる
+ACT_MODEL = "claude-haiku-5-5"
+ACT_EFFORT = "low"
+ACT_JUDGE_MODEL = "claude-opus-5-5"
+ACT_JUDGE_EFFORT = "high"
+# 一回の実行で回す手の上限(裁く段に一度に渡す数)
+ACT_RUN_LIMIT = 8
+# 段(無/低/並/高/必)の並び。影響力・行動力を数で比べるのに使う
+LEVEL_RANKS = {"無": 0, "低": 1, "並": 2, "高": 3, "必": 4}
+# 主要人物は、影響力の値が低くてもこの段より下に扱わない(ほかの人物の一手から動かされにくくする)
+MAIN_CHARACTER_MIN_INFLUENCE = "高"
+# 気力。行動力の段ごとの上限。一手を打つ・出来事の当事者になると減り、日が経つと戻る
+ACT_ENERGY_MAX = {"無": 0, "低": 3, "並": 4, "高": 6, "必": 8}
+# 気力が 1 戻るまでの日数(ゲームの中の日)
+ACT_ENERGY_RECOVERY_DAYS = 7
+# 気力の減り。自分から一手を打つ・ほかの人物の一手に巻きこまれるか当事者になる
+ACT_COST_ACT = 2
+ACT_COST_INVOLVED = 1
+# 手数。この日数のあいだに一人が自分から打てる手の数
+ACT_WINDOW_DAYS = 30
+ACT_WINDOW_LIMIT = 3
+# 巻きこみ。一手で巻きこめる相手の数と、対話の手番(動いた人物の最初の一手を除く)の上限
+ACT_INVITE_LIMIT = 2
+ACT_DIALOGUE_TURN_LIMIT = 6
+# 影響の枠。動いた人物の影響力の段ごとに、来歴・居場所を動かせる人数、居場所を移せる人数、生める人物・アイデアの数
+ACT_IMPACT_PEOPLE = {"無": 1, "低": 2, "並": 3, "高": 5, "必": 8}
+ACT_IMPACT_MOVES = {"無": 1, "低": 1, "並": 2, "高": 3, "必": 5}
+ACT_IMPACT_NEW_CHARACTERS = {"無": 0, "低": 1, "並": 1, "高": 2, "必": 2}
+ACT_IMPACT_IDEAS = {"無": 1, "低": 1, "並": 2, "高": 3, "必": 3}
+# 場所をなくす・作ることのできる、動いた人物の影響力の下限
+ACT_IMPACT_LOCATION_MIN = "高"
+# 成り行きが裏目・思わぬ方へ転んだときは、枠を一段狭める
+ACT_NARROWING_OUTCOMES = ("思わぬ方へ転ぶ", "裏目に出る")
 
 # data_access_logic/character/knowledge.py(人物役が読む、自分が言ったセリフ)
 # 言ってからこの日数までは原文、ここから鮮明の日数までは鮮明、それより後はあやふやを渡す

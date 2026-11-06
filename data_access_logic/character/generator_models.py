@@ -85,6 +85,7 @@ def _personality(parameters: CharacterParameterValues | CharacterParameterForm) 
 def _parameters_for_prompt(parameters: CharacterParameterValues | CharacterParameterForm | None) -> dict[str, Any]:
     return {
         "性格": _personality(parameters) if parameters else None,
+        "影響力": parameters.influence if parameters else None,
         "性別": parameters.sex if parameters else None,
         "背丈": parameters.height if parameters else None,
         "体格": parameters.build if parameters else None,
@@ -229,6 +230,8 @@ class PersonContentDraft(BaseModel):
     age: int = Field(ge=0, description=_PERSON_AGE_DESCRIPTION)
     principle: str = Field(description="行動原理(ミーム)どうしの関係を整理した2〜4文。ミームが渡されていなければ空文字")
     personality: PersonalityDraft = Field(description="性格の各軸(無/低/並/高/必)")
+    influence: PersonalityLevel = Field(
+        description="影響力(無/低/並/高/必)。町・組織での立場の重さ。ふつうの住人は低か並、家や組織の頭は高、国や大きな組織を動かす者は必")
     sex: str = Field(description="性別。「男」「女」に限らない")
     height: float = Field(gt=0, description="背丈(cm)")
     build: str = Field(description="体格。1文")

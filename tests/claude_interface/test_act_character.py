@@ -1,61 +1,102 @@
-"""人物モード(`ActCharacter`)。人物の一手と、その結果を足すこと(足すことと end を入れることだけ)。"""
-import pytest
+"""人物モード(`ActCharacter`)。人物の一手と、巻きこんだ相手との対話、まとめて裁いた結果を足すこと(足すことと end を入れることだけ)と、
+気力・手数・影響の枠による縛り。"""
+import json
+
 from sqlalchemy import select
 
+from data_access_logic import constants
 from data_access_logic.character.record import CharacterMove
+from data_access_logic.event.progress_models import CharacterUpdateDraft
+from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_character import ActCharacter
-from data_access_logic.expansion.act_models import ActIdeaDraft, ActOutcomeDraft, IntentDraft, NewCharacterDraft
+from data_access_logic.expansion.act_models import (
+    ActIdeaDraft, ActOutcomeDraft, BatchOutcomeDraft, BatchOutcomeItem, DialogueTurnDraft, ImpactFrame, IntentDraft,
+    InviteDraft, NewCharacterDraft,
+)
 from data_access_logic.expansion.read_expansion import ReadExpansion
 from data_access_logic.expansion.revert_expansion import RevertExpansion
 from data_access_logic.flows import act
 from db.schema import (
-    Character, CharacterHistory, CharacterLocation, Event, Expansion, IdeaHistory, get_env_session,
+    Character, CharacterHistory, CharacterLocation, CharacterParameter, CharacterRelation, Event, Expansion, IdeaHistory,
+    get_env_session,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
 
-class ScriptedAI(MockAIClient):
-    """人物の一手と、その裁きだけを決めた答えにする。人物の生成などほかの呼び出しはモックに任せる。"""
+def _outcome(actor_id: int, destination_id: int, arc_closed: bool, others: list[int]) -> dict:
+    return dict(
+        event_name="診療所の開業", event_text="村の空き家を借りて診療所を開いた", character_ids=[actor_id, *others],
+        character_moves=[CharacterMove(character_id=id_, location_id=destination_id) for id_ in [actor_id, *others]],
+        character_updates=[CharacterUpdateDraft(character_id=id_, text="【名前】は手を貸すと決めた") for id_ in others],
+        location_abolished=False, location_founded=None, event_duration_days=3,
+        ideas=[ActIdeaDraft(keyword="潮風療法", kind="技術", description="潮風に当てて熱を下げる手当て",
+                            called="潮風の手当て", detail="熱が下がると村人は信じている", knower_ids=[actor_id])],
+        new_characters=[NewCharacterDraft(description="診療所で雇われた若い助手", person=True, relation="雇い人")],
+        arc_closed=arc_closed)
 
-    def __init__(self, actor_id: int, destination_id: int, arc_id: int | None = None, arc_closed: bool = False):
+
+class ScriptedAI(MockAIClient):
+    """人物の一手・対話の手番・まとめた裁きだけを決めた答えにする。人物の生成などほかの呼び出しはモックに任せる。"""
+
+    def __init__(self, actor_id: int, destination_id: int, arc_id: int | None = None, arc_closed: bool = False,
+                 invite_ids: list[int] | None = None):
         super().__init__(seed=0)
         self.actor_id = actor_id
         self.destination_id = destination_id
         self.arc_id = arc_id
         self.arc_closed = arc_closed
+        self.invite_ids = invite_ids or []
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
+        call = {"output": output, "prompt": prompt, "system": system, "style_scope": style_scope, "model": model,
+                "effort": effort}
         if output is IntentDraft:
-            self.calls.append({"prompt": prompt, "system": system, "style_scope": style_scope})
+            self.calls.append(call)
             return IntentDraft(inner="港の病人を放っておけない", aim="村に診療所を開く", action="村へ移って診療所を開く",
                                speech="ここで診ます", arc_id=self.arc_id,
-                               new_arc_name=None if self.arc_id is not None else "診療所を開く")
-        if output is ActOutcomeDraft:
-            self.calls.append({"prompt": prompt, "system": system, "style_scope": style_scope})
-            return ActOutcomeDraft(
-                event_name="診療所の開業", event_text="村の空き家を借りて診療所を開いた", character_ids=[self.actor_id],
-                character_moves=[CharacterMove(character_id=self.actor_id, location_id=self.destination_id)],
-                character_updates=[], location_abolished=False, location_founded=None, event_duration_days=3,
-                ideas=[ActIdeaDraft(keyword="潮風療法", kind="技術", description="潮風に当てて熱を下げる手当て",
-                                    called="潮風の手当て", detail="熱が下がると村人は信じている", knower_ids=[self.actor_id])],
-                new_characters=[NewCharacterDraft(description="診療所で雇われた若い助手", person=True, relation="雇い人")],
-                arc_closed=self.arc_closed)
+                               new_arc_name=None if self.arc_id is not None else "診療所を開く",
+                               invites=[InviteDraft(character_id=id_, reason="手伝ってほしい") for id_ in self.invite_ids])
+        if output is DialogueTurnDraft:
+            self.calls.append(call)
+            if "あなたはこの狙いで動いている" in prompt:
+                return DialogueTurnDraft(thought="これで決まり", action="頭を下げる", speech="助かる", aim="礼を言う", done=True)
+            return DialogueTurnDraft(thought="放っておけない", action="うなずく", speech="手を貸す", aim="手伝う", done=False)
+        if output is BatchOutcomeDraft:
+            self.calls.append(call)
+            acts = json.loads(prompt.rsplit("\n", 1)[0])["手"]
+            return BatchOutcomeDraft(outcomes=[
+                BatchOutcomeItem(act_number=item["手の番号"],
+                                 **_outcome(self.actor_id, self.destination_id, self.arc_closed, self.invite_ids))
+                for item in acts])
         return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
                                 effort=effort, style_scope=style_scope)
+
+    def calls_of(self, output) -> list[dict]:
+        return [call for call in self.calls if call.get("output") is output]
+
+
+def _one(run):
+    assert not run.failed, run.failed
+    assert len(run.acted) == 1
+    return run.acted[0]
 
 
 def test_act_character_adds_rows_and_records_the_expansion(world):
     actor_id = world.character_ids[1]
     ai = ScriptedAI(actor_id, world.neighbor_id)
 
-    acted = act.act_character(character_id=actor_id, time="1200/05/01", seed=1, ai=ai)
+    acted = _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1, ai=ai))
 
     assert acted.actor.character_id == actor_id and acted.actor.location_id == world.location_id
     assert acted.arc_id is not None and acted.event.name == "診療所の開業"
     # 人物の目には、作者だけが読む筋書きを渡さない
-    intent_prompt = ai.calls[0]["prompt"]
-    assert "あなたが知っていること" in intent_prompt
+    intent_call = ai.calls_of(IntentDraft)[0]
+    assert "あなたが知っていること" in intent_call["prompt"]
+    # 人物の目の段は一番安いモデル、裁く段は強いモデル
+    assert (intent_call["model"], intent_call["effort"]) == (constants.ACT_MODEL, constants.ACT_EFFORT)
+    judge_call = ai.calls_of(BatchOutcomeDraft)[0]
+    assert (judge_call["model"], judge_call["effort"]) == (constants.ACT_JUDGE_MODEL, constants.ACT_JUDGE_EFFORT)
     with get_env_session() as s:
         expansion = s.get_one(Expansion, acted.expansion_id)
         assert (expansion.mode, expansion.status, expansion.actor_id) == ("character", "done", actor_id)
@@ -78,10 +119,10 @@ def test_act_character_adds_rows_and_records_the_expansion(world):
 
 def test_act_character_continues_and_closes_an_arc(world):
     actor_id = world.character_ids[1]
-    first = act.act_character(character_id=actor_id, time="1200/05/01", seed=1,
-                              ai=ScriptedAI(actor_id, world.neighbor_id))
-    second = act.act_character(character_id=actor_id, time="1200/06/01", seed=2,
-                               ai=ScriptedAI(actor_id, world.location_id, arc_id=first.arc_id, arc_closed=True))
+    first = _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1,
+                                   ai=ScriptedAI(actor_id, world.neighbor_id)))
+    second = _one(act.act_character(character_id=actor_id, time="1200/06/01", seed=2,
+                                    ai=ScriptedAI(actor_id, world.location_id, arc_id=first.arc_id, arc_closed=True)))
 
     assert second.arc_id == first.arc_id
     with get_env_session() as s:
@@ -93,8 +134,8 @@ def test_act_character_can_be_reverted(world):
     actor_id = world.character_ids[1]
     with get_env_session() as s:
         histories_before = len(s.get_one(Character, actor_id).histories)
-    acted = act.act_character(character_id=actor_id, time="1200/05/01", seed=1,
-                              ai=ScriptedAI(actor_id, world.neighbor_id))
+    acted = _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1,
+                                   ai=ScriptedAI(actor_id, world.neighbor_id)))
 
     RevertExpansion(expansion_id=acted.expansion_id).run()
 
@@ -108,9 +149,9 @@ def test_act_character_can_be_reverted(world):
 
 def test_act_character_picks_a_sub_character(world):
     actor_id = world.character_ids[1]
-    acted = act.act_character(time="1200/05/01", seed=3, ai=ScriptedAI(actor_id, world.neighbor_id))
+    run = act.act_character(time="1200/05/01", seed=3, ai=ScriptedAI(actor_id, world.neighbor_id))
     with get_env_session() as s:
-        assert s.get_one(Character, acted.actor.character_id).main_character is False
+        assert s.get_one(Character, _one(run).actor.character_id).main_character is False
 
 
 def test_act_character_entrance_is_registered():
@@ -124,8 +165,82 @@ def test_failed_act_marks_the_expansion_failed(world):
         def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
             return None
 
-    with pytest.raises(ValueError, match="一手が得られなかった"):
-        act.act_character(character_id=world.character_ids[1], time="1200/05/01", ai=Silent())
+    run = act.act_character(character_id=world.character_ids[1], time="1200/05/01", ai=Silent())
+
+    assert not run.acted and "一手が得られなかった" in run.failed[0].error
     with get_env_session() as s:
-        latest = s.scalars(select(Expansion).order_by(Expansion.id.desc())).first()
-        assert latest is not None and latest.status == "failed"
+        assert s.get_one(Expansion, run.failed[0].expansion_id).status == "failed"
+
+
+def test_invited_character_talks_and_a_stronger_one_is_not_moved(world):
+    """花子(影響力 並)が主要人物の太郎(影響力は高として扱う)を巻きこむ。太郎は手番で応じるが、
+    花子の一手では太郎の人となりの変化・住まいの移動は書かれない。"""
+    actor_id, main_id = world.character_ids[1], world.character_ids[0]
+    ai = ScriptedAI(actor_id, world.neighbor_id, invite_ids=[main_id])
+
+    acted = _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1, ai=ai))
+
+    assert acted.invited_ids == [main_id]
+    assert [turn.character_id for turn in acted.dialogue] == [actor_id, main_id, actor_id]
+    turn_calls = ai.calls_of(DialogueTurnDraft)
+    assert {call["model"] for call in turn_calls} == {constants.ACT_MODEL}
+    # 巻きこまれた太郎は、花子の口火を名前つきで見聞きしている(幼なじみなので名前を知っている)
+    assert "テスト花子: 村へ移って診療所を開く「ここで診ます」" in turn_calls[0]["prompt"]
+    assert acted.frame is not None and acted.frame.resistant_ids == [main_id]
+    with get_env_session() as s:
+        expansion = s.get_one(Expansion, acted.expansion_id)
+        assert "巻きこんだ相手とのやり取り" in expansion.prompt and "手を貸す" in expansion.prompt
+        locations = s.scalars(select(CharacterLocation).where(CharacterLocation.character_id == main_id)).all()
+        assert [row.end for row in locations] == [None]
+        assert not [history for history in s.scalars(select(CharacterHistory).where(
+            CharacterHistory.character_id == main_id)).all() if history.origin == "ai"]
+
+
+def test_energy_runs_out_and_recovers(world):
+    actor_id = world.character_ids[1]
+    _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1,
+                           ai=ScriptedAI(actor_id, world.neighbor_id)))
+
+    # 行動力 低(気力の上限 3)で一手に 2 使うので、翌日にはもう打てない
+    tired = act.act_character(character_id=actor_id, time="1200/05/02", seed=2,
+                              ai=ScriptedAI(actor_id, world.location_id))
+    assert not tired.acted and "気力か手数が足りない" in tired.failed[0].error
+    # 時刻を省けば、気力の戻る日まで待ってから動く
+    rested = _one(act.act_character(character_id=actor_id, seed=3, ai=ScriptedAI(actor_id, world.location_id)))
+    with get_env_session() as s:
+        character = s.get_one(Character, actor_id)
+        assert budget.energy_at(s, character, Stamp.parse(rested.actor.time)) >= 0
+
+
+def test_one_judge_call_for_the_whole_run(world):
+    actor_id = world.character_ids[1]
+    with get_env_session() as s:
+        other = Character(name="テスト次郎", text="テスト次郎の説明", kind="人物", main_character=False, end="1260/01/01",
+                          parameters=[CharacterParameter(start="1170/01/01", sex="男", proactivity="高")])
+        s.add(other)
+        s.flush()
+        s.add(CharacterLocation(character_id=other.id, location_id=world.location_id, start="1170/01/01"))
+        s.add(CharacterRelation(character_1_id=actor_id, character_2_id=other.id, relation="隣人", text="", start="1180/01/01"))
+        s.commit()
+    ai = ScriptedAI(actor_id, world.neighbor_id)
+
+    run = act.act_character(character_id=actor_id, time="1200/05/01", seed=1, act_count=2, ai=ai)
+
+    assert len(ai.calls_of(BatchOutcomeDraft)) == 1
+    assert len(ai.calls_of(IntentDraft)) == len(run.acted) + len(
+        [failure for failure in run.failed if failure.expansion_id is not None])
+    assert actor_id in [acted.actor.character_id for acted in run.acted]
+    # 同じ実行で同じ人物は二度動かない
+    assert len({acted.actor.character_id for acted in run.acted}) == len(run.acted)
+
+
+def test_clamp_keeps_the_actor_first_and_cuts_the_rest():
+    outcome = ActOutcomeDraft(**_outcome(1, 9, False, [2, 3, 4]))
+    frame = ImpactFrame(influence="低", people=2, moves=1, new_characters=0, ideas=1, location_change=False,
+                        resistant_ids=[3])
+
+    clamped = budget.clamp(outcome, frame, actor_id=1)
+
+    assert [move.character_id for move in clamped.character_moves] == [1]
+    assert [update.character_id for update in clamped.character_updates] == [2, 4]
+    assert clamped.new_characters == [] and len(clamped.ideas) == 1

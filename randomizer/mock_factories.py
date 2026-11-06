@@ -166,6 +166,7 @@ class CharacterParameterFactory(_ModelFactory):
     flexibility_of_values = _personality()
     sensitivity = _personality()
     imagination = _personality()
+    influence = _personality()
 
 
 class CharacterHistoryFactory(_ModelFactory):

@@ -20,12 +20,39 @@ from db.stamp import Stamp
 
 
 class ActorPick(BaseModel):
-    """動く人物と、動く時刻・場所。"""
+    """動く人物と、動く時刻・場所。気力・影響力は、その時刻の値(`expansion/budget.py`)。"""
 
     character_id: int
     name: str | None = None
     time: Timestamp
     location_id: int
+    energy: float = 0
+    influence: str = "並"
+
+
+class ImpactFrame(BaseModel):
+    """一手が世界を動かせる幅(`expansion/budget.py`)。裁く段に渡し、裁いた結果がはみ出た分はコードが切る。"""
+
+    influence: str
+    # 来歴に変化を残せる(人となりが分かる)人数。動いた人物を含む
+    people: int
+    moves: int
+    new_characters: int
+    ideas: int
+    location_change: bool
+    # 動いた人物より影響力が上で、この一手では来歴・居場所を動かされない人物
+    resistant_ids: list[int] = []
+    resistant_names: list[str] = []
+
+    def for_prompt(self) -> dict[str, Any]:
+        return {
+            "人となりの変化を残せる人数(動いた人物を含む)": self.people,
+            "住まい・拠点を移せる人数": self.moves,
+            "新しく現れる人物・対象の数": self.new_characters,
+            "生まれる・広まる事柄の数": self.ideas,
+            "場所をなくす・新しく作る": "できる" if self.location_change else "できない",
+            "動かされにくい人物(人となりの変化・住まいの移動を書かない)": self.resistant_names,
+        }
 
 
 class PresentPerson(Material):
@@ -85,6 +112,13 @@ class ActorBrief(BaseModel):
     arcs: list[OpenArc]
 
 
+class InviteDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character_id: int = Field(description="直に話しかけて巻きこみたい相手の人物id。目の前にいて名前を知っている人物からだけ選ぶ")
+    reason: str = Field(description="その相手を巻きこみたいわけ")
+
+
 class IntentDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
@@ -96,6 +130,9 @@ class IntentDraft(BaseModel):
     arc_id: int | None = Field(description="追っている企てを続ける一手なら、その企てid。続けないなら null")
     new_arc_name: str | None = Field(
         description="この一手が、何度も手を重ねて果たす新しい企ての始まりなら、その企ての短い名前。そうでなければ null")
+    invites: list[InviteDraft] = Field(
+        default_factory=list,
+        description=f"この一手で直に話しかけ、返事を聞きたい相手。一人で済む一手なら空。{constants.ACT_INVITE_LIMIT}人まで")
 
     @field_validator("aim", "action")
     @classmethod
@@ -110,6 +147,87 @@ class IntentDraft(BaseModel):
         if self.speech:
             lines.append(f"言葉: 「{self.speech}」")
         return "\n".join(lines)
+
+
+class DialogueBrief(BaseModel):
+    """巻きこまれた人物・動いた人物が対話の手番を打つ材料(段の出力)。人物役と同じく、その時刻に知ることのできるデータと目の前の様子だけ。"""
+
+    character_id: int
+    name: str | None = None
+    # 人物の目で整形した材料(知っていること・目の前にいる人物)
+    prompt: dict[str, Any]
+    # この人物が名前を知っている人物。見聞きしたことの名前は、ここにいる人物だけ名前で書く
+    known_ids: list[int]
+
+
+class DialogueBriefForm(BaseModel):
+    character_id: int
+    time: Stamp
+    location_id: int
+    # 対話に加わる人物(本人を含めてよい)。居合わせる人物の頭に必ず入れる
+    participant_ids: list[int]
+    # 対話に出た文。知っているアイデアは、ここに名前の出るものだけを渡す
+    mentioned: str
+
+
+class DialogueSerialized(Material):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
+
+    time: Timestamp
+    location_name: str | None = None
+    knowledge: KnowledgeSerialized
+    present: list[PresentPerson]
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return {
+            "いまの時刻": str(self.time),
+            "いる場所": self.location_name,
+            "あなたが知っていること": self.knowledge.model_dump(),
+            "目の前にいる人物": [
+                {"名前": person.name or "(名を知らない)", **person.looks.model_dump()} for person in self.present],
+        }
+
+
+class InviteForm(BaseModel):
+    actor_id: int
+    time: Stamp
+    location_id: int
+    candidate_ids: list[int]
+    # この実行でもう動いた・巻きこまれた人物(同じ実行の中では、まだ記録に無いので気力で数えられない)
+    exclude_ids: list[int] = []
+
+
+class DialogueTurnDraft(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
+
+    thought: str = Field(description="内心。本人にしか見えない")
+    action: str = Field(description="行動。動きの行き先と的を書く。黙って見ているだけなら「黙って見ている」")
+    speech: str | None = Field(description="口にする言葉。黙っているなら null")
+    aim: str = Field(description="この手番の狙いを一文で")
+    done: bool = Field(description="この手番でこの場の話を終える(立ち去る・断る・狙いを果たした・あきらめた)なら true")
+
+
+class DialogueTurn(BaseModel):
+    character_id: int
+    name: str | None = None
+    thought: str
+    action: str
+    speech: str | None = None
+    aim: str
+    done: bool = False
+
+    def seen_by(self, viewer_id: int, known_ids: list[int]) -> str:
+        """見聞きした人に見える形。名前を知らない相手は名前を出さない。"""
+        if self.character_id == viewer_id:
+            who = "あなた"
+        else:
+            who = self.name if self.character_id in known_ids and self.name else "名を知らない人"
+        return f"{who}: {self.action}" + (f"「{self.speech}」" if self.speech else "")
+
+    def as_text(self) -> str:
+        return f"{self.name}: {self.action}" + (f"「{self.speech}」" if self.speech else "") + f"(狙い: {self.aim})"
 
 
 class ActIdeaDraft(BaseModel):
@@ -139,6 +257,19 @@ class ActOutcomeDraft(EventRecordDraft):
     arc_closed: bool = Field(description="続けた企てが、この一手で果たされたか潰えたか")
 
 
+class BatchOutcomeItem(ActOutcomeDraft):
+    act_number: int = Field(description="どの手の記録か。渡した手の番号")
+
+    def outcome(self) -> ActOutcomeDraft:
+        return ActOutcomeDraft.model_validate(self.model_dump(exclude={"act_number"}))
+
+
+class BatchOutcomeDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcomes: list[BatchOutcomeItem] = Field(description="渡した手ごとに一件ずつ、手の番号の順に")
+
+
 class OutcomeRequest(Material):
     situation: LocationSituationMaterial
     destinations: list[LocationMaterial]
@@ -146,6 +277,9 @@ class OutcomeRequest(Material):
     intent: IntentDraft
     roll: str
     arc: OpenArc | None = None
+    # 巻きこんだ相手との対話(動いた人物の最初の一手のあとの手番)
+    dialogue: list[DialogueTurn] = []
+    frame: ImpactFrame
 
 
 class OutcomeRequestSerialized(OutcomeRequest):
@@ -163,8 +297,28 @@ class OutcomeRequestSerialized(OutcomeRequest):
             "人物の内心": self.intent.inner,
             "人物の狙いと行動": self.intent.as_text(),
             "続けた企て": None if self.arc is None else {"名前": self.arc.name, "狙い": self.arc.text},
+            "巻きこんだ相手とのやり取り(起きた順)": [turn.as_text() for turn in self.dialogue],
             "サイコロで決まった成り行き": self.roll,
+            "影響の枠": self.frame.for_prompt(),
         }
+
+
+class ActPlan(BaseModel):
+    """裁く前の一手。実行の中で手ごとに組み、裁く段にまとめて渡す。"""
+
+    expansion_id: int
+    pick: ActorPick
+    intent: IntentDraft
+    present_ids: list[int]
+    invited_ids: list[int] = []
+    request: OutcomeRequest
+
+
+class ActFrameForm(BaseModel):
+    actor_id: int
+    participant_ids: list[int]
+    time: Stamp
+    roll: str
 
 
 class ActSaveForm(BaseModel):
@@ -203,3 +357,20 @@ class ActedCharacter(BaseModel):
     idea_ids: list[int] = []
     characters: list[GeneratedCharacter] = []
     moves: list[CharacterMove] = []
+    invited_ids: list[int] = []
+    dialogue: list[DialogueTurn] = []
+    frame: ImpactFrame | None = None
+
+
+class ActFailure(BaseModel):
+    expansion_id: int | None = None
+    character_id: int | None = None
+    name: str | None = None
+    error: str
+
+
+class ActRun(BaseModel):
+    """一回の実行(`ActCharacter`)で打った手。裁く段はこの実行の手をまとめて一度だけ呼ぶ。"""
+
+    acted: list[ActedCharacter] = []
+    failed: list[ActFailure] = []

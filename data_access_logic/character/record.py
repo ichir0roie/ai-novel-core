@@ -34,6 +34,7 @@ class CharacterParameterRow(_ChildRow):
     flexibility_of_values: PersonalityLevel | None = None
     sensitivity: PersonalityLevel | None = None
     imagination: PersonalityLevel | None = None
+    influence: PersonalityLevel | None = None
 
 
 class CharacterLocationRow(_ChildRow):

@@ -589,6 +589,11 @@ class CharacterParameter(OriginMixin, Base):
         PersonalityLevelType, ForeignKey("personality_level.id"), comment="感受性", sort_order=490)
     imagination: Mapped[str | None] = mapped_column(
         PersonalityLevelType, ForeignKey("personality_level.id"), comment="想像力", sort_order=500)
+    # 性格ではなく立場の重さなので PERSONALITY_COLUMNS に入れない(人物役の「性格」に出さない)
+    influence: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="影響力。町・組織での立場の重さ。人物モードで、一手が世界を動かせる幅と、ほかの人物の一手から受ける影響の受けにくさ",
+        sort_order=510)
 
     character: Mapped[Character] = relationship(back_populates="parameters", lazy="noload")
 

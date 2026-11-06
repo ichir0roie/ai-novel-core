@@ -924,6 +924,27 @@
               "readonly": false,
               "create_only": false,
               "comment": "想像力"
+            },
+            {
+              "key": "influence",
+              "type": "string",
+              "nullable": true,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": [
+                "無",
+                "低",
+                "並",
+                "高",
+                "必"
+              ],
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "影響力。町・組織での立場の重さ。人物モードで、一手が世界を動かせる幅と、ほかの人物の一手から受ける影響の受けにくさ"
             }
           ],
           "comment": "名字・体格・口調・性格を、変わった時ごとに一行で持つ。行は start から先ずっと効き、後に始まる行が上書きする。一番早く始まる行の start が誕生",

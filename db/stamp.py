@@ -122,10 +122,17 @@ class Stamp:
             raise ValueError("時刻が空")
         return stamp
 
+    def _ordinal(self) -> int:
+        return (_days_before_year(self.year) + sum(_days_in_month(self.year, m) for m in range(1, self.month))
+                + self.day)
+
+    def days_until(self, other: "Stamp") -> int:
+        """`other` までの日数(時刻は見ない)。`other` が前なら負。"""
+        return other._ordinal() - self._ordinal()
+
     def plus_days(self, days: int) -> "Stamp":
         """`days` 日後。月末・閏年をまたいで数え、時・分・秒はそのまま。"""
-        ordinal = (_days_before_year(self.year) + sum(_days_in_month(self.year, m) for m in range(1, self.month))
-                   + self.day + days)
+        ordinal = self._ordinal() + days
         year = ordinal * 400 // _DAYS_IN_400_YEARS + 1
         while _days_before_year(year) >= ordinal:
             year -= 1

@@ -32,7 +32,8 @@ from db.schema import engine, get_env_session
 from gui.api import interface
 from gui.api.models import (
     BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Health, LocationCharactersResponse, MapsResponse,
-    OptionList, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult, TableCounts, TimelineResponse,
+    OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult, TableCounts,
+    TimelineResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -327,6 +328,14 @@ def get_timeline(story_id: int | None = None, s: Session = Depends(session_dep))
     from gui.api import timeline
 
     return timeline.timeline(s, story_id=story_id)
+
+
+@app.get("/api/overview", response_model=OverviewResponse)
+def get_overview(story_id: int, margin_days: int = 30, s: Session = Depends(session_dep)) -> OverviewResponse:
+    """選んだ章の期間(前後に `margin_days` 日の余白)の話・出来事・人物・関係。画面(`/overview`)が人物ごとの列に並べる"""
+    from gui.api import overview
+
+    return overview.overview(s, story_id, max(0, margin_days))
 
 
 @app.get("/api/previous_episode", response_model=EpisodeRecord | None)

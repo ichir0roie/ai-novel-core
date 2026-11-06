@@ -15,35 +15,52 @@ from data_access_logic.character.moves import allowed_moves, update_locations
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.entrypoint import record_of
 from data_access_logic.event import progress
-from data_access_logic.event.plan import _current_location_id, _present_characters
+from data_access_logic.event.plan import _current_location_id
 from data_access_logic.event.record import EventRecord
+from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_models import (
-    ActorBrief, ActorPick, ActorSerialized, ActSaved, ActSaveForm, NewCharacterLink, OpenArc, PresentPerson,
+    ActFrameForm, ActorBrief, ActorPick, ActorSerialized, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm,
+    DialogueSerialized, ImpactFrame, InviteForm, NewCharacterLink, OpenArc, PresentPerson,
 )
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
 from db.schema import (
-    CHARACTER_KIND_PERSON, Character, CharacterRelation, Event, EventCharacter, IdeaHistory, IdeaHistoryKnower, Location,
+    CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Event, EventCharacter, IdeaHistory,
+    IdeaHistoryKnower, Location,
 )
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
 
 
+def _people_here(s: Session, location_id: int, time: Stamp) -> list[Character]:
+    """その場所・時刻に居合わせて手の空いた人物・対象。出来事の生成(`_present_characters`)と違って主要人物も含める。
+    主要人物は自分からは動かないが、目に入り、巻きこまれる側にはなる(動かされにくさは影響の枠で守る)。"""
+    busy_ids = set(s.scalars(world_creation_query.busy_character_ids_select(time)).all())
+    characters = s.scalars(
+        world_creation_query.alive_characters_select(time)
+        .where(Character.locations.any(CharacterLocation.location_id == location_id))
+        .order_by(Character.id)).all()
+    return [character for character in characters
+            if character.id not in busy_ids and _current_location_id(character, time) == location_id]
+
+
 def _weight(character: Character, time: Stamp) -> int:
     return constants.ACTOR_WEIGHTS.get(parameters_at(character, time).proactivity or "並", 0)
 
 
-def _choose_actor(s: Session, rng: random.Random, time: Stamp) -> Character:
-    """その時刻に生きて居場所のある、人物のサブキャラクターから、行動力の重みで引く。"""
+def _choose_actor(s: Session, rng: random.Random, time: Stamp, exclude_ids: list[int]) -> Character:
+    """その時刻に生きて居場所があり、気力と手数の足りる、人物のサブキャラクターから、行動力の重みで引く。"""
     candidates = [character for character in s.scalars(
         world_creation_query.alive_characters_select(time)
         .where(world_creation_query.character_active_condition(), Character.kind == CHARACTER_KIND_PERSON)
-        .order_by(Character.id)).all() if _current_location_id(character, time) is not None]
+        .order_by(Character.id)).all()
+        if character.id not in exclude_ids and _current_location_id(character, time) is not None
+        and budget.can_act(s, character, time)]
     weights = [_weight(character, time) for character in candidates]
     if not candidates or not any(weights):
-        raise ValueError(f"{time} に動ける(生きて居場所があり、行動力が無でない)サブキャラクターがいない")
+        raise ValueError(f"{time} に動ける(生きて居場所があり、行動力が無でなく、気力と手数の残る)サブキャラクターがいない")
     return rng.choices(candidates, weights=weights)[0]
 
 
@@ -58,23 +75,39 @@ def _next_time(s: Session, rng: random.Random, character: Character) -> Stamp:
     return latest
 
 
-def pick_actor(s: Session, character_id: int | None, time: Stamp | None, seed: int | None) -> ActorPick:
+def _ready(s: Session, character: Character, at: Stamp, fixed: bool) -> Stamp:
+    """`at` に打てなければ、気力と手数の戻る日まで待たせる。時刻を名指しされたら待たせずに止める。"""
+    ready = budget.ready_time(s, character, at)
+    if ready is None:
+        raise ValueError(f"{character.name}(id={character.id})は行動力が無いので自分からは動かない")
+    if fixed and ready != at:
+        raise ValueError(
+            f"{character.name}(id={character.id})は {at} には気力か手数が足りない"
+            f"(気力 {budget.energy_at(s, character, at):.1f}・{constants.ACT_WINDOW_DAYS}日の手数 "
+            f"{budget.acts_in_window(s, character.id, at)})。{ready} からなら動ける")
+    return ready
+
+
+def pick_actor(
+    s: Session, character_id: int | None, time: Stamp | None, seed: int | None, exclude_ids: list[int],
+) -> ActorPick:
     rng = random.Random(seed)
     if character_id is not None:
         character = common_query.get_row(s, Character, character_id)
-        at = time or _next_time(s, rng, character)
+        at = _ready(s, character, time or _next_time(s, rng, character), time is not None)
     else:
         latest = time or s.scalar(common_query.latest_time_select())
         if latest is None:
             raise ValueError("世界にまだ出来事が無いので、動く時刻を決められない。time を渡す")
-        character = _choose_actor(s, rng, latest)
-        at = time or _next_time(s, rng, character)
+        character = _choose_actor(s, rng, latest, exclude_ids)
+        at = time or _ready(s, character, _next_time(s, rng, character), False)
     if character.end is not None and character.end <= at:
         raise ValueError(f"{character.name}(id={character.id})は {at} にはもういない(没年 {character.end})")
     location_id = _current_location_id(character, at)
     if location_id is None:
         raise ValueError(f"{character.name}(id={character.id})の {at} の居場所が分からない")
-    return ActorPick(character_id=character.id, name=character.name, time=at, location_id=location_id)
+    return ActorPick(character_id=character.id, name=character.name, time=at, location_id=location_id,
+                     energy=round(budget.energy_at(s, character, at), 1), influence=budget.influence_of(character, at))
 
 
 def open_arcs(s: Session, character_id: int) -> list[OpenArc]:
@@ -87,7 +120,7 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
     character = s.get_one(Character, pick.character_id)
     time = Stamp.parse(pick.time)
     assert time is not None
-    present = [other for other in _present_characters(s, pick.location_id, time)
+    present = [other for other in _people_here(s, pick.location_id, time)
                if other.id != character.id][:constants.ACT_PRESENT_LIMIT]
     known_ids = set(_related_ids(s, character, time))
     recent = s.scalars(common_query.events_of_location_select(
@@ -103,6 +136,45 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
         recent_events=[event.name for event in recent], arcs=arcs, seeds=seeds, nudge=nudge,
     ).model_dump()
     return ActorBrief(prompt=prompt, present_ids=[other.id for other in present], arcs=arcs)
+
+
+def invitable(s: Session, form: InviteForm) -> list[int]:
+    """狙う段が巻きこみたいと挙げた相手のうち、目の前にいて、動いた人物が名前を知り、気力の残る人物(挙げた順、上限まで)。"""
+    actor = s.get_one(Character, form.actor_id)
+    present_ids = {other.id for other in _people_here(s, form.location_id, form.time)}
+    known_ids = set(_related_ids(s, actor, form.time))
+    chosen = []
+    for character_id in dict.fromkeys(form.candidate_ids):
+        if (character_id == actor.id or character_id in form.exclude_ids or character_id not in present_ids
+                or character_id not in known_ids):
+            continue
+        if budget.can_be_involved(s, s.get_one(Character, character_id), form.time):
+            chosen.append(character_id)
+    return chosen[:constants.ACT_INVITE_LIMIT]
+
+
+def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
+    """対話の手番の材料。人物役(`ReadKnowledge`)と同じく、その時刻に知ることのできるデータと、目の前にいる人物だけ。"""
+    character = s.get_one(Character, form.character_id)
+    others = [s.get_one(Character, id_) for id_ in form.participant_ids if id_ != character.id]
+    seen_ids = {other.id for other in others}
+    others += [other for other in _people_here(s, form.location_id, form.time)
+               if other.id != character.id and other.id not in seen_ids]
+    others = others[:constants.ACT_PRESENT_LIMIT]
+    known_ids = _related_ids(s, character, form.time)
+    prompt = DialogueSerialized(
+        time=form.time, location_name=s.get_one(Location, form.location_id).name,
+        knowledge=knowledge_of(s, character.id, form.time, form.mentioned, None, None),
+        present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
+                               looks=appearance_of(s, other, form.time)) for other in others],
+    ).model_dump()
+    return DialogueBrief(character_id=character.id, name=character.name, prompt=prompt, known_ids=known_ids)
+
+
+def act_frame(s: Session, form: ActFrameForm) -> ImpactFrame:
+    actor = s.get_one(Character, form.actor_id)
+    participants = [s.get_one(Character, id_) for id_ in dict.fromkeys(form.participant_ids)]
+    return budget.frame(s, actor, participants, form.time, form.roll)
 
 
 def _arc_id(s: Session, form: ActSaveForm) -> int | None:

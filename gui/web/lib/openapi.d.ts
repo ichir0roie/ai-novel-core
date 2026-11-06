@@ -332,6 +332,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overview
+         * @description 選んだ章の期間(前後に `margin_days` 日の余白)の話・出来事・人物・関係。画面(`/overview`)が人物ごとの列に並べる
+         */
+        get: operations["get_overview_api_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/previous_episode": {
         parameters: {
             query?: never;
@@ -556,6 +576,122 @@ export interface components {
         OptionList: {
             /** Items */
             items: components["schemas"]["Option"][];
+        };
+        /** OverviewCharacter */
+        OverviewCharacter: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string | null;
+            /** Main Character */
+            main_character: boolean;
+            /** In Cast */
+            in_cast: boolean;
+            /** Influence */
+            influence: string;
+        };
+        /** OverviewEpisode */
+        OverviewEpisode: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string | null;
+            /** Start */
+            start: string;
+            /** End */
+            end: string | null;
+            /** Story Id */
+            story_id: number;
+            /** Story Name */
+            story_name: string | null;
+            /** In Story */
+            in_story: boolean;
+        };
+        /** OverviewEvent */
+        OverviewEvent: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Start */
+            start: string;
+            /** End */
+            end: string | null;
+            /** Parent Event Id */
+            parent_event_id: number | null;
+            /** Location Name */
+            location_name: string | null;
+            /** Origin */
+            origin: string;
+            /** Hidden */
+            hidden: boolean;
+            /** Text */
+            text: string;
+            /** Character Ids */
+            character_ids: number[];
+            /** Expansion Id */
+            expansion_id: number | null;
+            /** Actor Id */
+            actor_id: number | null;
+            /** Invited Ids */
+            invited_ids: number[];
+            /** Expansion Summary */
+            expansion_summary: string | null;
+            /** Expansion Prompt */
+            expansion_prompt: string | null;
+            size: components["schemas"]["OverviewSize"];
+        };
+        /** OverviewRelation */
+        OverviewRelation: {
+            /** Id */
+            id: number;
+            /** Character 1 Id */
+            character_1_id: number;
+            /** Character 2 Id */
+            character_2_id: number;
+            /** Relation */
+            relation: string;
+            /** Start */
+            start: string | null;
+            /** End */
+            end: string | null;
+        };
+        /** OverviewResponse */
+        OverviewResponse: {
+            /** Story Id */
+            story_id: number;
+            /** Story Name */
+            story_name: string | null;
+            /** Since */
+            since: string;
+            /** Until */
+            until: string;
+            /** Episodes */
+            episodes: components["schemas"]["OverviewEpisode"][];
+            /** Events */
+            events: components["schemas"]["OverviewEvent"][];
+            /** Characters */
+            characters: components["schemas"]["OverviewCharacter"][];
+            /** Relations */
+            relations: components["schemas"]["OverviewRelation"][];
+        };
+        /**
+         * OverviewSize
+         * @description 出来事の大きさ。当事者の数と、人物モードの一手が足した行(居場所の移動・場所・現れた人物・事柄)を同じ重みで足す。
+         */
+        OverviewSize: {
+            /** People */
+            people: number;
+            /** Moves */
+            moves: number;
+            /** Locations */
+            locations: number;
+            /** New Characters */
+            new_characters: number;
+            /** Ideas */
+            ideas: number;
+            /** Total */
+            total: number;
         };
         /** Planet */
         Planet: {
@@ -1446,6 +1582,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimelineResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_overview_api_overview_get: {
+        parameters: {
+            query: {
+                story_id: number;
+                margin_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewResponse"];
                 };
             };
             /** @description Validation Error */

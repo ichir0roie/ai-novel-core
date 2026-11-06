@@ -57,6 +57,7 @@ export default function Nav() {
     ...visibleTables.map((table) => ({ href: `/tables/${table.name}`, label: table.name })),
     { href: "/timeline", label: T.nav.timeline },
     { href: "/event_timeline", label: T.nav.eventTimeline },
+    { href: "/overview", label: T.nav.overview },
     { href: "/maps", label: T.nav.maps },
     { href: "/relations", label: T.nav.relations },
     { href: "/expansions", label: T.nav.expansions },
@@ -95,6 +96,7 @@ export default function Nav() {
           <span className="group">
             <Link href="/timeline" className={isActive("/timeline") ? "active" : ""}>{T.nav.timeline}</Link>
             <Link href="/event_timeline" className={isActive("/event_timeline") ? "active" : ""}>{T.nav.eventTimeline}</Link>
+            <Link href="/overview" className={isActive("/overview") ? "active" : ""}>{T.nav.overview}</Link>
             <Link href="/maps" className={isActive("/maps") ? "active" : ""}>{T.nav.maps}</Link>
             <Link href="/relations" className={isActive("/relations") ? "active" : ""}>{T.nav.relations}</Link>
             <Link href="/expansions" className={isActive("/expansions") ? "active" : ""}>{T.nav.expansions}</Link>
