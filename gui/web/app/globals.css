@@ -687,6 +687,40 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
   .timeline-page > .status { margin: 0 8px 6px; }
   .timeline { --timeline-axis: 52px; }
 }
+/* 動きの見取り図(/overview)。時間の軸・話の列はタイムラインと同じ骨組みに、人物ごとの列と出来事の点を重ねる */
+.overview-status { font-size: 0.8rem; }
+.overview-head { align-items: stretch; }
+.overview-people-head { display: grid; }
+.overview-person {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; padding: 4px 0; min-height: 7.5rem;
+  border-top: 0; border-left: 0; border-radius: 0; cursor: pointer; color: var(--muted); font: inherit;
+}
+.overview-person.cast { color: var(--ink); font-weight: 600; }
+.overview-person.focused { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.overview-name { writing-mode: vertical-rl; max-height: 6rem; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; }
+.overview-influence { font-size: 0.7rem; color: var(--muted); font-weight: 400; }
+.overview-people { position: relative; }
+.overview-lane { position: absolute; top: 0; bottom: 0; border-right: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.overview-lane.focused { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.overview-svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.overview-event { cursor: pointer; }
+.overview-event line { stroke: var(--muted); }
+.overview-event.ai line { stroke: var(--accent); }
+.overview-dot { fill: var(--muted); }
+.overview-event.ai .overview-dot { fill: var(--accent); }
+.overview-invited { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+.overview-actor { fill: var(--danger); }
+.overview-invite { fill: none; stroke: var(--accent); stroke-width: 1.2; }
+#overview-arrow path { fill: var(--accent); }
+.overview-label { font-size: 11px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; pointer-events: none; }
+.overview-event.dimmed, .overview-arc.dimmed { opacity: 0.15; }
+.overview-event.selected .overview-dot, .overview-event.selected .overview-actor { stroke: var(--ink); stroke-width: 2; }
+.overview-event:hover .overview-label { font-weight: 600; }
+.overview-arc { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: color-mix(in srgb, var(--accent) 45%, transparent); cursor: pointer; }
+.timeline-item.overview-faint { opacity: 0.55; border-style: dashed; color: inherit; text-decoration: none; }
+.overview .timeline-item { color: inherit; text-decoration: none; cursor: pointer; }
+.overview-relations { margin: 0; padding-left: 1.2rem; line-height: 1.8; }
+.overview-partner { padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; font: inherit; }
 .episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
 .episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
 .episode-sheet-relations { display: flex; flex-wrap: wrap; gap: 0.3rem; }

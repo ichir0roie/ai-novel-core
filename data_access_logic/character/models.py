@@ -56,6 +56,7 @@ class CharacterParameterValues(Material):
     flexibility_of_values: PersonalityLevel = PersonalityLevel.NORMAL
     sensitivity: PersonalityLevel = PersonalityLevel.NORMAL
     imagination: PersonalityLevel = PersonalityLevel.NORMAL
+    influence: PersonalityLevel = PersonalityLevel.NORMAL
 
 
 PERSONALITY_LABELS = {

@@ -135,6 +135,80 @@ class TimelineResponse(BaseModel):
     labels: Labels = Field(default_factory=dict)
 
 
+class OverviewEpisode(BaseModel):
+    # 画面の型で欄が省けない(undefined にならない)よう、見取り図の応答の欄には既定値を付けない
+    id: int
+    title: str | None
+    start: str
+    end: str | None
+    story_id: int
+    story_name: str | None
+    # 選んだ章(とその子孫)の話か。false は同じ期間の兄弟の作品(外伝など)の話
+    in_story: bool
+
+
+class OverviewSize(BaseModel):
+    """出来事の大きさ。当事者の数と、人物モードの一手が足した行(居場所の移動・場所・現れた人物・事柄)を同じ重みで足す。"""
+
+    people: int
+    moves: int
+    locations: int
+    new_characters: int
+    ideas: int
+    total: int
+
+
+class OverviewEvent(BaseModel):
+    id: int
+    name: str
+    start: str
+    end: str | None
+    parent_event_id: int | None
+    location_name: str | None
+    origin: str
+    hidden: bool
+    text: str
+    character_ids: list[int]
+    # 人物モードの一手で足した出来事なら、その展開と動いた人物・巻きこんだ相手
+    expansion_id: int | None
+    actor_id: int | None
+    invited_ids: list[int]
+    expansion_summary: str | None
+    expansion_prompt: str | None
+    size: OverviewSize
+
+
+class OverviewCharacter(BaseModel):
+    id: int
+    name: str | None
+    main_character: bool
+    # 選んだ章の話の登場人物(名前だけ出る人物は含めない)か
+    in_cast: bool
+    # 期間の終わりの影響力(主要人物は下限をかけた値)
+    influence: str
+
+
+class OverviewRelation(BaseModel):
+    id: int
+    character_1_id: int
+    character_2_id: int
+    relation: str
+    start: str | None
+    end: str | None
+
+
+class OverviewResponse(BaseModel):
+    story_id: int
+    story_name: str | None
+    # 章の話の始まりから終わりまでに、前後の余白を足した期間
+    since: str
+    until: str
+    episodes: list[OverviewEpisode]
+    events: list[OverviewEvent]
+    characters: list[OverviewCharacter]
+    relations: list[OverviewRelation]
+
+
 class Health(BaseModel):
     dialect: str
 

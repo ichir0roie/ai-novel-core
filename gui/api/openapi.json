@@ -824,6 +824,56 @@
         }
       }
     },
+    "/api/overview": {
+      "get": {
+        "summary": "Get Overview",
+        "description": "選んだ章の期間(前後に `margin_days` 日の余白)の話・出来事・人物・関係。画面(`/overview`)が人物ごとの列に並べる",
+        "operationId": "get_overview_api_overview_get",
+        "parameters": [
+          {
+            "name": "story_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Story Id"
+            }
+          },
+          {
+            "name": "margin_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Margin Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/previous_episode": {
       "get": {
         "summary": "Previous Episode",
@@ -1531,6 +1581,410 @@
           "items"
         ],
         "title": "OptionList"
+      },
+      "OverviewCharacter": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "main_character": {
+            "type": "boolean",
+            "title": "Main Character"
+          },
+          "in_cast": {
+            "type": "boolean",
+            "title": "In Cast"
+          },
+          "influence": {
+            "type": "string",
+            "title": "Influence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "main_character",
+          "in_cast",
+          "influence"
+        ],
+        "title": "OverviewCharacter"
+      },
+      "OverviewEpisode": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "story_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Name"
+          },
+          "in_story": {
+            "type": "boolean",
+            "title": "In Story"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "start",
+          "end",
+          "story_id",
+          "story_name",
+          "in_story"
+        ],
+        "title": "OverviewEpisode"
+      },
+      "OverviewEvent": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "parent_event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Event Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "character_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Character Ids"
+          },
+          "expansion_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expansion Id"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "invited_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Invited Ids"
+          },
+          "expansion_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expansion Summary"
+          },
+          "expansion_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expansion Prompt"
+          },
+          "size": {
+            "$ref": "#/components/schemas/OverviewSize"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "start",
+          "end",
+          "parent_event_id",
+          "location_name",
+          "origin",
+          "hidden",
+          "text",
+          "character_ids",
+          "expansion_id",
+          "actor_id",
+          "invited_ids",
+          "expansion_summary",
+          "expansion_prompt",
+          "size"
+        ],
+        "title": "OverviewEvent"
+      },
+      "OverviewRelation": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "character_1_id": {
+            "type": "integer",
+            "title": "Character 1 Id"
+          },
+          "character_2_id": {
+            "type": "integer",
+            "title": "Character 2 Id"
+          },
+          "relation": {
+            "type": "string",
+            "title": "Relation"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "character_1_id",
+          "character_2_id",
+          "relation",
+          "start",
+          "end"
+        ],
+        "title": "OverviewRelation"
+      },
+      "OverviewResponse": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "story_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Name"
+          },
+          "since": {
+            "type": "string",
+            "title": "Since"
+          },
+          "until": {
+            "type": "string",
+            "title": "Until"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewEpisode"
+            },
+            "type": "array",
+            "title": "Episodes"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewCharacter"
+            },
+            "type": "array",
+            "title": "Characters"
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/OverviewRelation"
+            },
+            "type": "array",
+            "title": "Relations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id",
+          "story_name",
+          "since",
+          "until",
+          "episodes",
+          "events",
+          "characters",
+          "relations"
+        ],
+        "title": "OverviewResponse"
+      },
+      "OverviewSize": {
+        "properties": {
+          "people": {
+            "type": "integer",
+            "title": "People"
+          },
+          "moves": {
+            "type": "integer",
+            "title": "Moves"
+          },
+          "locations": {
+            "type": "integer",
+            "title": "Locations"
+          },
+          "new_characters": {
+            "type": "integer",
+            "title": "New Characters"
+          },
+          "ideas": {
+            "type": "integer",
+            "title": "Ideas"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "people",
+          "moves",
+          "locations",
+          "new_characters",
+          "ideas",
+          "total"
+        ],
+        "title": "OverviewSize",
+        "description": "出来事の大きさ。当事者の数と、人物モードの一手が足した行(居場所の移動・場所・現れた人物・事柄)を同じ重みで足す。"
       },
       "Planet": {
         "properties": {

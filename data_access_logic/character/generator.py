@@ -224,7 +224,7 @@ def _decided_parameters(content: PersonContentDraft, fixed: CharacterParameterFo
         sex=content.sex or None, height=round(content.height, 1), build=content.build or None,
         first_person=content.first_person or None, second_person=content.second_person or None,
         third_person=content.third_person or None, tone=content.tone or None, dialect=content.dialect or None,
-        **content.personality.model_dump())
+        influence=content.influence, **content.personality.model_dump())
     overlay(parameters, fixed)
     return parameters
 
