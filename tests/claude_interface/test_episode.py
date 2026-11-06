@@ -25,13 +25,15 @@ class _RelatingAI(MockAIClient):
 
 
 def test_commit_episode(shown, world, mock_ai):
+    # 画面のほかから足す話のプロットは、メモの節の箇条書きだけ
+    memo = "## メモ\n- 取引の夜"
     result = shown(CommitEpisode(EpisodeCommitForm(
-        story_id=world.story_id, title="テスト第二話", plot_text="取引の夜", main_text="夜になった。\n取引がまとまった。",
+        story_id=world.story_id, title="テスト第二話", plot_text=memo, main_text="夜になった。\n取引がまとまった。",
         start="1200/04/01 15:00:00", end="1200/04/01 20:00:00", viewpoint_character_id=world.character_ids[1],
         location_id=world.location_id, character_ids=world.character_ids)))
 
     assert result["story_id"] == world.story_id
-    assert (result["title"], result["plot_text"]) == ("テスト第二話", "取引の夜")
+    assert (result["title"], result["plot_text"]) == ("テスト第二話", memo)
     assert "取引がまとまった。" in result["main_text"]
     assert result["letters"] == len(result["main_text"])
     assert (result["start"], result["end"]) == ("1200/04/01 15:00:00", "1200/04/01 20:00:00")
@@ -84,10 +86,11 @@ def test_revise_episode_runs_no_ai(world, mock_ai):
     with get_env_session() as s:
         before = s.query(CharacterRelation).count()
 
-    ReviseEpisode(EpisodeReviseForm(id=world.episode_id, main_text="市で花子が太郎に名乗った。", plot_text="名乗り")).run()
+    plot = "市で出会う\n\n## 推敲\n- 名乗りを足す"
+    ReviseEpisode(EpisodeReviseForm(id=world.episode_id, main_text="市で花子が太郎に名乗った。", plot_text=plot)).run()
 
     # 本文から関係・居場所を動かさず、ミーム・種も抜き出さない
     assert not mock_ai.calls
     with get_env_session() as s:
         assert s.query(CharacterRelation).count() == before
-        assert s.get_one(Episode, world.episode_id).plot_text == "名乗り"
+        assert s.get_one(Episode, world.episode_id).plot_text == plot

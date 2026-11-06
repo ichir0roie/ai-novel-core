@@ -116,8 +116,6 @@ CLAUDE_ENTRANCES = frozenset({
     "character.generate_character.GenerateCharacter",
     "character.generate_characters.GenerateCharacters",
     "episode.commit_episode.CommitEpisode",
-    "episode.complete_plot.CompletePlot",
-    "episode.generate_frame.GenerateFrame",
     "episode.read_episode_brief.ReadEpisodeBrief",
     "episode.refresh_voices.RefreshVoices",
     "event.commit_event.CommitEvent",

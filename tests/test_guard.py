@@ -1,14 +1,15 @@
 """書き手(`db/writer.py`)ごとの守りと、展開の中で変えた行の記録(`db/guard.py`)。"""
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from db.guard import ProtectedRowError
+from db.plot_memo import MAX_MEMO_CHARS, MAX_MEMO_LINES, PlotMemoError, check_appended
 from db.schema import (
-    Character, CharacterHistory, CharacterLocation, Expansion, ExpansionChange, Meme, Story,
+    Character, CharacterHistory, CharacterLocation, Episode, Expansion, ExpansionChange, Meme, Story,
     get_env_session,
 )
 from db.stamp import Stamp
-from db.writer import generated, writing
+from db.writer import generated, on_screen, writing
 
 
 def _ai_meme(text: str) -> int:
@@ -158,3 +159,69 @@ def test_orphaned_children_are_guarded(world):
         s.get_one(Character, character_id).histories = []
     with get_env_session() as s:
         assert s.get_one(Character, character_id).histories
+
+
+def _plot(episode_id: int) -> str:
+    with get_env_session() as s:
+        return s.get_one(Episode, episode_id).plot_text
+
+
+def _write_plot(episode_id: int, plot_text: str) -> None:
+    with get_env_session() as s, s.begin():
+        s.get_one(Episode, episode_id).plot_text = plot_text
+
+
+def test_plot_body_is_written_only_on_screen(world):
+    """画面のほかの書き手(手元の Claude・web のセッション)は、プロットの本文を書き換えられない。"""
+    before = _plot(world.episode_id)
+    with pytest.raises(ProtectedRowError):
+        _write_plot(world.episode_id, "Claude が書いたプロット")
+    with pytest.raises(ProtectedRowError):
+        _write_plot(world.episode_id, before + "\n書き足した場面")
+    assert _plot(world.episode_id) == before
+
+    with on_screen():
+        _write_plot(world.episode_id, "作者が書き直したプロット")
+    assert _plot(world.episode_id) == "作者が書き直したプロット"
+
+
+def test_memo_lines_can_be_appended_off_screen(world):
+    before = _plot(world.episode_id)
+    _write_plot(world.episode_id, f"{before}\n\n## メモ\n- 港の場面はまだ決めていない")
+    _write_plot(world.episode_id, _plot(world.episode_id) + "\n- 雨にするかは迷っている")
+    assert _plot(world.episode_id) == f"{before}\n\n## メモ\n- 港の場面はまだ決めていない\n- 雨にするかは迷っている"
+    # メモを消す・直すのも画面だけ
+    with pytest.raises(ProtectedRowError):
+        _write_plot(world.episode_id, before)
+
+
+def test_new_episodes_off_screen_start_with_memo_only(world):
+    with get_env_session() as s, s.begin():
+        s.add(Episode(story_id=world.story_id, title="メモだけの話", plot_text="## メモ\n- 二人が再会する予定"))
+    with pytest.raises(ProtectedRowError), get_env_session() as s, s.begin():
+        s.add(Episode(story_id=world.story_id, title="本文のある枠", plot_text="二人が再会する"))
+
+
+def test_plot_cannot_be_bulk_updated_off_screen(world):
+    with pytest.raises(ProtectedRowError), get_env_session() as s, s.begin():
+        s.execute(update(Episode).where(Episode.id == world.episode_id).values(plot_text="一括で書いた"))
+    with get_env_session() as s, s.begin():
+        s.execute(update(Episode).where(Episode.id == world.episode_id).values(title="一括で直した題"))
+
+
+@pytest.mark.parametrize("new", [
+    "本文\n\n## メモ\n本文のような文",          # 箇条書きでない
+    "本文\n- メモの節の外の箇条書き",             # メモの節の外
+    "本文書き足し",                               # 本文の行に続けた
+    "本文\n\n## メモ\n- " + "長" * (MAX_MEMO_CHARS + 1),
+    "本文\n\n## メモ\n" + "\n".join(f"- {n}" for n in range(MAX_MEMO_LINES + 1)),
+])
+def test_plot_memo_rejects_anything_but_short_memo_lines(new):
+    with pytest.raises(PlotMemoError):
+        check_appended("本文", new)
+
+
+def test_plot_memo_accepts_memo_and_revision_lines():
+    check_appended("本文\n\n## 推敲\n- 前の指示", "本文\n\n## 推敲\n- 前の指示\n- 次の指示")
+    check_appended("", "## メモ\n- 予定")
+    check_appended("本文", "本文\n")

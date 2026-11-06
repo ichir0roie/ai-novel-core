@@ -1,28 +1,11 @@
 from typing import Annotated
 
 from pydantic import Field, model_validator
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_
 from sqlalchemy.orm import Session
 
-from data_access_logic.episode.mentions import save_mentions
-from data_access_logic.material import Draft, Form, References, Timestamp
-from db.schema import Episode, EpisodeCharacter
-
-
-class EpisodeForm(Draft):
-    """話の下書き。"""
-
-    id: int | None = None
-    story_id: int | None = None
-    title: str | None = None
-    plot_text: str | None = None
-    start: Timestamp | None = None
-    end: Timestamp | None = None
-    viewpoint_character_id: int | None = None
-    location_id: int | None = None
-    character_ids: Annotated[list[int] | None, References("character")] = Field(
-        default=None,
-        description="この話に出す人物。初めはこの話の登場人物(episode_character)。選んだ人物で登場人物を置き換える")
+from data_access_logic.material import Form, References, Timestamp
+from db.schema import EpisodeCharacter
 
 
 class EpisodeCommitForm(Form):
@@ -80,40 +63,3 @@ def set_characters(s: Session, episode_id: int, character_ids: list[int]) -> Non
     s.flush()
 
 
-def has_cast(s: Session, episode_id: int) -> bool:
-    """登場人物(名前だけ出る人物でない行)がいるか。"""
-    return s.scalar(select(EpisodeCharacter.character_id).where(
-        EpisodeCharacter.episode_id == episode_id, EpisodeCharacter.mentioned.is_(False)).limit(1)) is not None
-
-
-def save_frame(s: Session, form: EpisodeForm) -> Episode:
-    """AI 呼び出し(数分〜十数分かかることがある)の前に下書きを保存しておき、途中で失敗しても編集を失わないようにする
-    (呼ぶ側がこの後すぐ commit する)。名前だけ出る人物も拾い直して、AI に渡す材料に入れる。"""
-    if form.id is not None:
-        record = s.get_one(Episode, form.id)
-        # AI を回して下書きを書き戻す前に止める
-        if record.main_text.strip():
-            raise ValueError(f"話 id={form.id} には本文が入っているので、枠・プロットを AI に決めさせない")
-    elif form.story_id is not None:
-        record = Episode(story_id=form.story_id, title="", plot_text="")
-        s.add(record)
-    else:
-        raise ValueError("story_id は必須")
-
-    if form.title is not None:
-        record.title = form.title
-    if form.plot_text is not None:
-        record.plot_text = form.plot_text
-    if form.start is not None:
-        record.start = form.start
-    if form.end is not None:
-        record.end = form.end
-    if form.viewpoint_character_id is not None:
-        record.viewpoint_character_id = form.viewpoint_character_id
-    if form.location_id is not None:
-        record.location_id = form.location_id
-    s.flush()
-    if form.character_ids is not None:
-        set_characters(s, record.id, form.character_ids)
-    save_mentions(s, record.id)
-    return record

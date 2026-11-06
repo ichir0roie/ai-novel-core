@@ -42,7 +42,6 @@ db の触り方(入口越し・読み取り)は `.claude/docs/db.md` を見る�
 | `CommitStory` / `UpdateStory` | `story.form.StoryCreateForm` / `StoryUpdateForm` |
 | `CommitEpisode` | `episode.form.EpisodeCommitForm` |
 | `ReviseEpisode` | `episode.form.EpisodeReviseForm` |
-| `GenerateFrame` / `CompletePlot` | `episode.form.EpisodeForm`(下書き。空の欄は指定なし) |
 | `GenerateCharacter` | `character.form.CharacterForm`(下書き) |
 | `GenerateEvent` | `event.form.EventForm`(下書き) |
 | `SearchIdeas` / `ResolveIdeas` / `AddIdeas` | `idea.models.IdeaDraft` のリスト |
@@ -119,8 +118,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この作品の子に章・外伝を作って」   | `story.commit_story.CommitStory(StoryCreateForm(name=…, parent_story_id=<親の作品id>, …))`。付け替えは `UpdateStory(StoryUpdateForm(id=…, parent_story_id=…))`(自分か子孫の子にはできない。`None` を渡せば親から外す)。子の作品の話を書くときは、親をたどった作品の筋書き(`親の作品`)を渡す。前の話の範囲は下の「出来事の生成・話の材料」の「前の話は」の段落 |
 | 「作品を直して」「筋書きを直して」   | `story.update_story.UpdateStory(story)`                                      |
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話か子の作品が残っていれば止まる |
-| 「この下書きから話の枠を AI に決めさせて」 | `episode.generate_frame.GenerateFrame(frame=EpisodeForm(story_id=…, viewpoint_character_id=…, location_id=…, character_ids=[…], …))`。下書きを枠として保存してから、題・プロット(`style_preference` のプロットの行の形)・時刻を下書きを核に AI が決める(`id` を渡せばその本文の無い枠を決め直す。本文のある話は保存の前に止まる)。時刻は下書きにあればそれ、無ければ直前の話の後から AI が選ぶ。視点(`viewpoint_character_id`。Character への FK)・場所(`location_id`。Location への FK)は AI には決めさせず、下書きにあればその id をそのまま使う(無ければ NULL のまま)。登場人物は下書きの `character_ids`(省けば枠の `episode_character`)で、足した枠の `episode_character` にも残す。書き直したプロットに名前が出る既存の人物は `mentioned` の行として登録し(下の「名前だけ出る人物」)、その設定を AI に渡す |
-| 「プロットを補完して」「プロットを場面まで書き直して」「足りない人物・舞台を作って」 | `episode.complete_plot.CompletePlot(episode=EpisodeForm(story_id=…, character_ids=[…], …), order=None, model=None, effort=None)`。プロット補完。今のプロット(`plot_text`)を核に、`order`(作者の注文。展開・焦点・雰囲気など)も取り入れて、本文全体を場面に割ったプロット(`style_preference` のプロットの行の形)を AI に書き直させ、それでプロットをそっくり置き換える(今のプロットの中身は書き直したプロットに含めさせる。本文は書かない)。書き直したプロットに出るのに登場人物にいない人物は `generate_character` で作り(プロットが固有の名で呼ぶときだけその名を核にし、役職・あだ名は説明に添える)、話の `episode_character` に足す。書き直したプロットの主な舞台が話の場所より細かく、その直下の既知の場所にも無ければ、その場所の下に作って話の `location_id` にする。プロットか時刻が空なら先に `GenerateFrame` と同じ生成で枠を決める。登場人物は下書きの `character_ids`(話の `episode_character` と同じ欄)、省けば枠の `episode_character` で、空なら枠を決める前に止まる。`model` / `effort` はプロットの書き直しと候補の呼び出しにだけ効く(省けば AI の client の既定)。書き直したプロットに名前が出る既存の人物は `mentioned` の行として登録し(下の「名前だけ出る人物」)、その設定を AI に渡す |
+| 「プロットを書いて」「プロットを補完して」「話の枠を AI に決めさせて」 | しない。プロットは作者が画面で書く(下の「話のプロット」)。気づいたこと・予定は、プロットの末尾の「## メモ」の節に箇条書きで足す |
 | 「作品全体を詰めたい」「全体の整合を見ながら筋を直したい」「この一言から世界を広げて」 | スキル `expand`(作者モード)。作者の一言ごとに展開を立て、関わるアイデア・ミーム・出来事(筋は出来事の親子)・人物・関係・来歴を AI の行として足し、関わる AI の行を直してつじつまを合わせる。作者の行は直さず、食い違いと作者の行を直す指示は案(`expansion_conflict`)にして作者の判断を待ち、認められたら作者の書き手で直す。話の本文(`main_text`)は書かない・直さない(下の「世界の展開」) |
 | 「人物を動かして」「自走」 | スキル `auto-act`(人物モード)。`expansion.act_character.ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1)` を繰り返す。人物がその時刻に知ることのできるデータと目の前の様子から一手(内心・狙い・行動・言葉)を決め、巻きこみたい相手がいれば同じ材料で相手にも手番を返させて言葉を交わし(人物の目の段は一番安いモデル)、実行の手をまとめて作者の目でサイコロの成り行きと影響の枠に沿って一度だけ裁き(強いモデル)、気力・手数・影響の枠(`expansion/budget.py`。`.docs/world-expansion.md` の「リソース制限」)で縛ったうえで、出来事(企ては親の出来事にし、一手をその子に)・当事者の来歴・事柄(アイデアと呼び名。知った人物を知る相手に)・現れた人物と関係・居場所の移動を足す。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。一手ごとに展開(mode=character)を立てる(下の「世界の展開」) |
 | 「この一言に関わる行を探して」「表をまたいで引いて」 | `world.search_world.SearchWorld(words, story_id=None, limit_per_table=10)`。語の部分一致で、人物(名前・外見・芯・筋書き・来歴)・出来事・アイデア(呼び名も)・場所(来歴も)・関係(来歴も)・スキル・ミーム・話(題・プロット)・作品を引き、当たった語・抜き書き・出自(`origin`)と、一段広げた関わる行(人物の関係の相手・当事者の出来事・居場所、出来事の当事者・場所・親、場所の親、関係の二人)を返す。`story_id` を渡すと話・作品をその作品と子孫に絞る |
@@ -231,7 +229,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - `CommitCharacterSkill` / `UpdateCharacterSkill` は `histories` を受け取る。`UpdateCharacterSkill` に渡すと配列をまるごと置き換える。一行だけ直すのは `UpdateSkillHistory`
 - 人物を消すと(`DeleteCharacter`)、その人物のスキルと来歴も消える
 
-**アイデアの履歴(呼び名)**: アイデアの本文(`text`)は本質で、作者(語り部と、話を書くセッションの Claude)だけが読む。人物役にも、AI の生成(人物・出来事・話の枠・プロット補完)にも渡さず、生成には呼び名と受け止め方だけを渡す(`idea/models.py` の `idea_for_prompt`)。
+**アイデアの履歴(呼び名)**: アイデアの本文(`text`)は本質で、作者(語り部と、話を書くセッションの Claude)だけが読む。人物役にも、AI の生成(人物・出来事)にも渡さず、生成には呼び名と受け止め方だけを渡す(`idea/models.py` の `idea_for_prompt`)。
 作中の人物が知ること(本質の `name` とは別に、この場所・この時代ではこう呼び、こう受け止めている、ということ)は、
 `idea_history` テーブルに場所・時代ごとの行(`location_id` / `start` / `end` / `name` / `detail`)で積む。
 `detail` には、作中の人がそのアイデアについて知っていること・信じていることを、作中の言葉で書く。入口ではアイデアの `histories` に配列で並ぶ(行の id は出し、idea_id は出さない)。渡した行は、id があればその id の今ある行に、無ければ並びではなく効く場所と始まり(`location_id` / `start`)で
@@ -309,7 +307,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 サブキャラクター(`main_character` が false の人物・対象)の `histories` には、世界の書き進めた所(本文のある話の一番新しい `start`)より後のこと
 (後年の立場・死・「# 未来」の節・`plot` の先の筋・その時より後に始まる行など)を書かない。没年(`end`)と、居場所(`character_location`)の境目より後の始まり・終わりも入れない。出来事の生成はサブキャラクターを当事者に選ぶので、
 決まった未来があると、生成した出来事や進めたメインの出来事と食い違いやすくなるため。来歴は話の本文で起きたことを、
-話を確定するたびに足していく(スキル `episode` の「確定のあと」)。人物の自動生成(`generator.py`)も、説明・来歴に現在の時刻より後のことを書かせず、サブキャラクターには没年を持たせない。プロット補完で作る人物には話のプロットを渡し、その役どころに合う年齢にする。主要人物(`main_character` が true)は、作者の構想として未来まで書いてよい。未来の節目は、その時刻を `start` にした行にすれば、それより前の話・出来事には渡らない。時期がまだ決まっていない構想は `start` を空にした行に書けば、どの話・出来事にも渡らない。筋書き(`plot`)はいつの話・出来事にも渡るので、先の筋を前の話に見せたくなければ、来歴の行に書く。
+話を確定するたびに足していく(スキル `episode` の「確定のあと」)。人物の自動生成(`generator.py`)も、説明・来歴に現在の時刻より後のことを書かせず、サブキャラクターには没年を持たせない。話のために作る人物には話のプロットを渡し(`GenerateCharacter` の `plot_text`)、その役どころに合う年齢にする。主要人物(`main_character` が true)は、作者の構想として未来まで書いてよい。未来の節目は、その時刻を `start` にした行にすれば、それより前の話・出来事には渡らない。時期がまだ決まっていない構想は `start` を空にした行に書けば、どの話・出来事にも渡らない。筋書き(`plot`)はいつの話・出来事にも渡るので、先の筋を前の話に見せたくなければ、来歴の行に書く。
 
 **関係の芯と来歴**: 関係(`character_relation`)の `text` は、どういう間柄かという時期を限らない芯だけを書く。
 関係の中で起きたこと・変わったことは、人物の来歴と同じく、起きた時刻を `start` にした `histories` の行(`character_relation_history`)に書く。
@@ -387,7 +385,6 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 生成 | 下書き | 清書 |
 | ---- | ------ | ---- |
 | 人物の自動生成 | 中身を決めた説明 | 世界との検め(`consistency.py`)で、関係する設定と合わせて直す |
-| プロット補完(`data_access_logic/episode/plot_completer.py`) | 今のプロット(`plot_text`) | 書き直したプロット |
 | 本文の材料(`data_access_logic/episode/brief.py`) | プロット・話のセッションの行・今の本文(元ごとに語を挙げる) | このセッションの Claude が書く本文 |
 
 claude が対話で書くときは、自分で語と言い換えを挙げて `ResolveIdeas` を呼び、返った `ideas` を踏まえて書く。
@@ -424,7 +421,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 - 本文に字数の指定は無い(db の `style_preference` の本文の行)。筋(プロット、場面を手番で演じたならその行)と、渡された作品・登場人物・場所・
   直前の話・関係する設定などの周辺データを踏まえ、具体的な描写・会話・人物の動きまで詳しく書き起こす。
   場面の数と一場面の長さは決めず、中身に合わせる。プロットの形は `style_preference` のプロットの行
-  (枠の生成・プロット補完・スキル `episode` が共に使う。作者が手で直しやすいように、300〜500 字を目安に、場面ごとの見出し `# <場所と時間>` と、
+  (作者がプロットを書くときの目安。作者が手で直しやすいように、300〜500 字を目安に、場面ごとの見出し `# <場所と時間>` と、
   その下の地の文・台詞だけで書く。見出しは `#`・`##`・`###` だけ、箇条書き・`/`・`:` は使わない):
 
 ```
@@ -507,20 +504,23 @@ GUI の表から足したとき(`execute(s)`)と人物の筋書きからは自�
 
 話の本文は、生成関数ではなくこのセッションの Claude が書く・直す(スキル `episode` / `revise-episode`)。
 材料は `ReadEpisodeCasting` / `ReadEpisodeBrief`(`data_access_logic/episode/brief.py`)で読み、`CommitEpisode` で確定する。
-枠の生成(`GenerateFrame`)・プロット補完(`CompletePlot`)は、渡した値をまず話の行(枠)と登場人物(`episode_character`)として保存し
-(`data_access_logic/episode/form.py`)、その行だけから材料を読む(`data_access_logic/episode/material.py`)。
 話に渡す登場人物は、話と人物のリレーション(`episode_character`)だけ。`character_ids` を渡せばそれでリレーションを置き換え、
-省けば枠の `episode_character` を使う。
+省けば話の `episode_character` を使う。
+
+**話のプロット**: プロット(`plot_text`)は作者が画面で組み立てる。AI に具体的な文を書かせると、作者の考えがそれに寄ってしまうため。
+画面のほかの書き手(手元の Claude・web のセッション・AI の流れ)は、プロットの末尾の「## メモ」「## 推敲」の節に、
+「- 」で始まる短い箇条書き(一行 120 字・一度に 5 行まで)を足すことだけができる。本文の書き換え・メモの消し・一括の書き換えは、
+守り(`db/guard.py`。決まりは `db/plot_memo.py`)が止める。画面かどうかは API が画面の鍵(合言葉を確かめない手元の API では、書き手のヘッダの無い要求)を見て決め(`db/writer.py` の `screen`)、
+手元の Claude が入口を直に呼ぶ道は画面に数えない。テストの下ごしらえで作者のプロットを置くときは `on_screen()` の中で書く。
 
 **名前だけ出る人物**: 登場人物でなく、プロット・本文に名前が出る人物・対象は、`episode_character` に
-`mentioned=true` の行として持つ(`data_access_logic/episode/mentions.py` の `save_mentions`)。話の下書きを保存するとき
-(`save_frame`。`GenerateFrame` / `CompletePlot` の始め)と、枠の生成・プロット補完で
-AI の結果を書き戻したとき、`CommitEpisode` / `CastEpisode` で確定したときに、今のプロット・本文から拾い直して置き換える。名前は、前後が名前の端と同じ字種(カタカナ・漢字・英数)で
+`mentioned=true` の行として持つ(`data_access_logic/episode/mentions.py` の `save_mentions`)。
+`CommitEpisode` / `CastEpisode` で確定したときに、今のプロット・本文から拾い直して置き換える。名前は、前後が名前の端と同じ字種(カタカナ・漢字・英数)で
 続かない所だけを語として数え(「セラ」は「セラフィナ」に当たらない)、一字の名前は拾わない。
 話の場所と時刻があれば、その時刻の居場所がどれも別の星にある人物は、同じ名の別人として拾わない
 (居場所の無い人物・星の分からない居場所のある人物は拾う)。
 登場人物の `character_ids` は `mentioned` でない行だけで、置き換えても `mentioned` の行は残す(登場人物にした人物の行だけ消す)。
-本文・プロット・枠を書く材料には「名前だけ出る人物」として、その時点の歳・種別・口調・人物像を渡す(直近の出来事・相関は渡さない)。
+本文を書く材料には「名前だけ出る人物」として、その時点の歳・種別・口調・人物像を渡す(直近の出来事・相関は渡さない)。
 話のレコードでは `mentioned_character_ids` に並ぶ。
 前の話は、この話の時刻より前の、本文のある話から選ぶ(`data_access_logic/episode/past.py`)。
 ここでの同じ作品は、話の作品と、その親の作品・親を同じくする作品(章・外伝)を合わせたもの(親の無い作品は同じ作品だけ)。
@@ -528,10 +528,8 @@ AI の結果を書き戻したとき、`CommitEpisode` / `CastEpisode` で確定
 語り部(スキル `episode`)は、登場人物ごとに直近の話(`constants.EPISODE_RECENT_APPEARANCE_COUNT`)の本文を `ReadCharacterEpisodes` で読む。
 前の話の本文は校正済みとみなし、同じ作品の直前の話の本文を、新しい話から `constants.EPISODE_STYLE_SAMPLE_LETTERS` 字に収まるだけ「文体の見本」として渡す(直前の話だけで上限を超えるときは、その頭を上限まで)。見本からは言葉の選び方・言い回し・文の長さ・地の文とセリフの運びを汲ませ、内心の書き込みと場面の組み立ては「書き方」の決まりに従わせる(`style_preference` の `本文:材料の読み方` の行)。
 頼まれたときだけ(`RefreshVoices`)、同じ作品の直前の五話(`constants.EPISODE_VOICE_SAMPLE_COUNT`)のセリフから登場人物の話し方(一人称・二人称・三人称・口調・方言)を AI が全体として調整し(`data_access_logic/episode/voices.py`、流れは `refresh_voices`)、今の値と違う欄だけを、話の時刻から効く `character_parameter` の行として書く(同じ時刻の行があればその行を直す。それより前の話には効かない)。直前の話か登場人物が無い話・時刻の空の話では何もしない。章・外伝をまたぐ話には作品名を添える。作品の筋書きは、親の作品を「親の作品」としてたどって渡す。
-枠を作るとき(`framer`)は前の話の本文を渡さない。
 登場人物ごとに、その時点の歳・人となり・口調・相関・直近の出来事(要約)を渡す。話の場所の
 直近の出来事と、その場所か登場人物に掛かる「この時点より後に既に決まっている出来事」も渡し、矛盾させない。
-プロット補完では、プロットから中間段でアイデアを引いて「関係する設定」として渡す。
 Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_client.py` の `MODEL` / `EFFORT`)。待ち時間の既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、それより長く待つ呼び出し(事実確認)だけが `timeout` を渡す。
 
 上の表の「作る」「確定する」入口を使えば、Claude も対話の中で人物・場所・出来事の
@@ -547,7 +545,7 @@ Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_c
 - `event/` — 出来事(一覧・絞り込み・下書き・確定・修正・削除・AI 生成)
 - `event_seed/` — 出来事の種の修正
 - `story/` — 作品(一覧・書き始め・断面・顔ぶれ・確定・修正・削除)
-- `episode/` — 話(読み出し・確定・削除・作品の付け替え・AI の枠・プロット補完・Claude が自分で書くための材料)
+- `episode/` — 話(読み出し・確定・削除・作品の付け替え・Claude が自分で書くための材料)
 - `idea/` — アイデア(検索・確定・修正・削除・統合)と中間段(下書きの語をアイデアと照らす)
 - `meme/` — ミーム(確定・修正・削除・引く・抜き出す段・要約の取りこぼし)
 - `oracle/` — 覚え書き(確定・修正)
@@ -590,7 +588,7 @@ Entrypoint(entrypoint.py)
 │   │                           result() は確定のあとの AI(ミーム・要約・種・事実確認)まで流れ(flows/commit.py)で回す
 │   ├─ ListEntrypoint           select() の行を row() でモデルにして並べる → list_locations / list_characters / list_character_relations / list_events
 │   └─ read_*.py / list_*.py / start_story.py / search_ideas.py / list_pending_reviews.py / draw_memes.py
-├─ AI を回す入口(generate_*.py / complete_plot.py / read_episode_brief.py / refresh_voices.py /
+├─ AI を回す入口(generate_*.py / read_episode_brief.py / refresh_voices.py /
 │   refresh_generated_content.py / check_facts.py / act_character.py)  result() で流れ(flows/)を呼ぶだけ
 └─ RandomDraft                  db に触れない下書き作成 → create_random_*.py
 ```

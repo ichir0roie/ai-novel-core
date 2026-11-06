@@ -31,6 +31,9 @@ class Writing:
     generated: bool = False
     # 展開の取り消しで、控えた行の値をそのまま戻している。出自も控えた値のまま書く
     restoring: bool = False
+    # 画面(作者が自分の手で直す GUI)からの書き込み。話のプロットの本文を書けるのはこのときだけ(`db/plot_memo.py`)。
+    # ヘッダでは運ばない(web のセッションが名乗れないよう、API が画面の鍵を見て立てる)
+    screen: bool = False
 
     @property
     def by_ai(self) -> bool:
@@ -50,8 +53,8 @@ def current() -> Writing:
 
 @contextmanager
 def writing(writer: Writer | str, expansion_id: int | None = None) -> Iterator[Writing]:
-    """書き手を立てる。`generated` は外の文脈のものを引き継ぐ。"""
-    state = replace(current(), writer=Writer(writer), expansion_id=expansion_id)
+    """書き手を立てる。`generated` は外の文脈のものを引き継ぐ。画面から呼んでも、立てた書き手の書き込みは画面のものに数えない。"""
+    state = replace(current(), writer=Writer(writer), expansion_id=expansion_id, screen=False)
     token = _writing.set(state)
     try:
         yield state
@@ -66,6 +69,16 @@ def generated() -> Iterator[Writing]:
     token = _writing.set(state)
     try:
         yield state
+    finally:
+        _writing.reset(token)
+
+
+@contextmanager
+def on_screen() -> Iterator[Writing]:
+    """画面から作者の手で書く(テストの下ごしらえで、作者の書いたプロットを置くときにも使う)。"""
+    token = _writing.set(Writing(screen=True))
+    try:
+        yield current()
     finally:
         _writing.reset(token)
 
@@ -103,9 +116,9 @@ def headers(state: Writing | None = None) -> dict[str, str]:
 
 
 def from_headers(given: Mapping[str, str], fixed_user: bool = False) -> Writing:
-    """API が受けたヘッダから書き手を戻す。`fixed_user`(画面の鍵)なら、ヘッダに関わらず作者にする。"""
+    """API が受けたヘッダから書き手を戻す。`fixed_user`(画面の鍵)なら、ヘッダに関わらず画面から作者の手で書く。"""
     if fixed_user:
-        return Writing()
+        return Writing(screen=True)
     expansion = given.get(EXPANSION_HEADER)
     return Writing(writer=Writer(given.get(WRITER_HEADER) or Writer.USER),
                    expansion_id=int(expansion) if expansion else None,

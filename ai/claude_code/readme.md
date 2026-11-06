@@ -1,7 +1,7 @@
 # claude_code
 
 生成を Claude Code(`claude -p`)にやらせるための client と、検証の処理。
-生成そのもの(人物・出来事・話)は `data_access_logic/` の入口(`GenerateCharacter` / `GenerateEvent` / `GenerateFrame` など)にあり、
+生成そのもの(人物・出来事・話)は `data_access_logic/` の入口(`GenerateCharacter` / `GenerateEvent` など)にあり、
 AI を `ai` 引数(`data_access_logic/ai_client.py` の `AIClient`)で受け取る。既定はここの `ai_client`。
 
 ```

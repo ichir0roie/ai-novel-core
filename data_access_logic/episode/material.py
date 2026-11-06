@@ -1,32 +1,20 @@
 #!/usr/bin/env python3
-"""話の材料を組む共通の読み込みと、プロットを書き直す材料(`writing_targets` → 出来事の要約を揃える → `episode_material`)。"""
+"""話の材料を組む共通の読み込み。"""
 from __future__ import annotations
 
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from data_access_logic import constants
-from data_access_logic.character.cast import cast_event_ids, cast_of, mentioned_of, relations_at
-from data_access_logic.episode.models import (
-    EpisodeMaterialSerialized, StoryMaterial, TargetEpisode,
-)
-from data_access_logic.episode.mentions import cast_characters, mentioned_in
+from data_access_logic.character.cast import cast_event_ids
+from data_access_logic.episode.mentions import cast_characters
 from data_access_logic.event.models import EventSerialized
 from data_access_logic.event.summary import events_of
-from data_access_logic.idea.context import resolve_ideas
-from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.location.models import LocationMaterial
-from data_access_logic.location.reading import location_path_at
 from data_access_logic.query import common_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Character, Episode, EpisodeCharacter, Event, Location
 from db.stamp import Stamp
-
-
-class WritingTargets(SummaryTargets):
-    # アイデアと照らす語を AI に挙げさせる元(`keywords_of`)
-    plot_text: str
-    start: Stamp
 
 
 def load_episode(s: Session, episode_id: int) -> Episode:
@@ -45,11 +33,6 @@ def load_episode(s: Session, episode_id: int) -> Episode:
     if episode is None:
         raise ValueError(f"話 id={episode_id} が見つからない")
     return episode
-
-
-def check_cast(episode: Episode) -> None:
-    if not cast_characters(episode):
-        raise ValueError(f"話 id={episode.id} の登場人物(episode_character)が空。登場人物を指定してから書く")
 
 
 def known_locations(s: Session, location_id: int | None) -> list[LocationMaterial]:
@@ -86,33 +69,4 @@ def summary_targets_of(s: Session, episode: Episode, start: Stamp, with_location
     return SummaryTargets(
         event_ids=[*cast_event_ids(s, characters, start),
                    *(event.id for event in location_events), *(event.id for event in later_events)],
-    )
-
-
-def writing_targets(s: Session, episode_id: int) -> WritingTargets:
-    episode = load_episode(s, episode_id)
-    check_cast(episode)
-    main_episode = TargetEpisode.model_validate(episode)
-    targets = summary_targets_of(s, episode, main_episode.start)
-    return WritingTargets(event_ids=targets.event_ids, plot_text=main_episode.plot_text, start=main_episode.start)
-
-
-def episode_material(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> EpisodeMaterialSerialized:
-    """要約は揃えてある前提でそのまま読む。`keywords` の語をアイデアと照らし、当たらなかった造語は候補として足す(`resolve_ideas`)。"""
-    episode = load_episode(s, episode_id)
-    check_cast(episode)
-    main_episode = TargetEpisode.model_validate(episode)
-    time = main_episode.start
-    location_id = episode.location_id
-    characters = cast_characters(episode)
-    return EpisodeMaterialSerialized(
-        story=StoryMaterial.model_validate(episode.story),
-        main_episode=main_episode,
-        locations=location_path_at(s, location_id, time) if location_id is not None else [],
-        cast=cast_of(s, characters, time),
-        mentioned=mentioned_of(mentioned_in(episode), time),
-        relations=relations_at(s, characters, time),
-        location_events=location_events(s, location_id, time),
-        later_events=events_of(s, later_events_select(location_id, characters, time)),
-        ideas=resolve_ideas(s, keywords, location_id, time),
     )

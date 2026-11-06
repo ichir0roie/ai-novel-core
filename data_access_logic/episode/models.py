@@ -1,16 +1,16 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
+from pydantic import model_serializer
 
 from ai.instructions.materials import EPISODE_BRIEF_NOTES
 from data_access_logic.character.models import (
     CastCandidate, CastCandidateSerialized, CastingCandidate, CastingCandidateSerialized, CastMaterial, CastSerialized,
-    CharacterMaterial, CharacterRelationLine, CharacterSecrets, MentionedMaterial, MentionedSerialized, relations_for_prompt, secrets_for_prompt,
+    CharacterMaterial, CharacterSecrets, MentionedMaterial, MentionedSerialized, secrets_for_prompt,
 )
 from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.history_start import start_for_prompt
 from data_access_logic.idea.models import (
-    IdeaContextMaterial, IdeaContextSerialized, WholeIdeaMaterial, whole_idea_for_prompt,
+    WholeIdeaMaterial, whole_idea_for_prompt,
 )
 from data_access_logic.location.models import LocationLine, LocationMaterial
 from data_access_logic.material import Material, Named
@@ -59,45 +59,13 @@ class RecentEpisode(Material):
     main_text: str
 
 
-class UnwrittenEpisode(EpisodeBase):
-    plot_text: str
-    main_text: str
-
-    @field_validator("main_text")
-    @classmethod
-    def _unwritten(cls, value: str) -> str:
-        if value.strip():
-            raise ValueError("本文の入っている話は書き換えない")
-        return value
-
-
-class TargetEpisode(UnwrittenEpisode):
-    start: Stamp
-    viewpoint_character: CharacterMaterial | None = None
-
-    @field_validator("plot_text")
-    @classmethod
-    def _plotted(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("話のプロット(plot_text)が空")
-        return value
-
-
-class FrameEpisode(UnwrittenEpisode):
-    start: Stamp | None = None
-    end: Stamp | None = None
-    location: LocationMaterial | None = None
-    viewpoint_character: CharacterMaterial | None = None
-
-
 def _appearance(link: CharacterEpisode) -> dict[str, Any]:
     return {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
             "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
 
 
 def _without_plot(sheet: dict[str, Any]) -> dict[str, Any]:
-    # 筋書きは話の時刻より先の筋も含むので、本文を書く材料には渡さない(枠・プロットを作る AI の材料には残す)
+    # 筋書きは話の時刻より先の筋も含むので、本文を書く材料には渡さない
     return {key: value for key, value in sheet.items() if key != "筋書き"}
 
 
@@ -112,12 +80,6 @@ class CharacterEpisodesSerialized(Material):
         return [{**_appearance(link), "本文": link.episode.main_text} for link in self.appearances]
 
 
-def _location(locations: list[LocationMaterial]) -> str | None:
-    return " > ".join(
-        f"{location.name}({location.kind})" if location.kind else location.name
-        for location in locations if location.name) or None
-
-
 def _location_lines(locations: list[LocationLine]) -> list[dict[str, Any]]:
     return [{"名前": location.name, "種別": location.kind, "説明": location.text, "環境": location.environment,
              "来歴(古い順)": [f"{start_for_prompt(history.start)}: {history.description}" for history in location.histories]}
@@ -127,99 +89,6 @@ def _location_lines(locations: list[LocationLine]) -> list[dict[str, Any]]:
 def _story(story: StoryMaterial) -> dict[str, Any]:
     return {"作品名": story.name, "筋書き": story.text,
             "親の作品": None if story.parent_story is None else _story(story.parent_story)}
-
-
-class EpisodeMaterial(Material):
-    story: StoryMaterial
-    main_episode: TargetEpisode
-    # 話の場所とその親。広い順。来歴は話の時刻の年まで
-    locations: list[LocationLine]
-    cast: list[CastMaterial]
-    # 登場人物でなく、プロット・本文に名前が出るだけの人物
-    mentioned: list[MentionedMaterial]
-    # 登場人物のどれかが片側にいる関係
-    relations: list[CharacterRelationLine]
-    # 古い順
-    location_events: list[EventMaterial]
-    later_events: list[EventMaterial]
-    ideas: IdeaContextMaterial
-
-
-class EpisodeMaterialSerialized(EpisodeMaterial):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    cast: list[CastSerialized]
-    mentioned: list[MentionedSerialized]
-    location_events: list[EventSerialized]
-    later_events: list[EventSerialized]
-    ideas: IdeaContextSerialized
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        episode = self.main_episode
-        return {
-            "作品": _story(self.story),
-            "書く話": {
-                "時刻": str(episode.start),
-                "場所": _location(self.locations),
-                "場所の説明(広い順)": _location_lines(self.locations),
-                "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
-                "登場人物": [member.model_dump() for member in self.cast],
-                "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
-                "登場人物の関係": relations_for_prompt(self.relations),
-                "プロット": episode.plot_text,
-            },
-            "この場所の直近の出来事(古い順)": [
-                event.model_dump() for event in self.location_events],
-            "この時点より後に既に決まっている出来事": [
-                event.model_dump() for event in self.later_events],
-            "関係する設定": self.ideas.model_dump(),
-        }
-
-
-class EpisodePlotRequest(Material):
-    material: EpisodeMaterial
-    # 今のプロットに加えて、作者が新しいプロットに望むこと
-    order: str | None = None
-
-
-class EpisodePlotRequestSerialized(EpisodePlotRequest):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    material: EpisodeMaterialSerialized
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        return {**self.material.model_dump(), "作者の注文": self.order}
-
-
-class EpisodeCastingRequest(Material):
-    material: EpisodeMaterial
-    # 書き直したプロット。材料の「書く話」のプロット(書き直す前のプロット)と置き換える
-    plot_text: str
-    # 話の場所の直下にある場所
-    known_locations: list[LocationMaterial]
-    # 登場人物でなく、新しいプロットに名前が出る既知の人物
-    known_characters: list[MentionedMaterial]
-
-
-class EpisodeCastingRequestSerialized(EpisodeCastingRequest):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    material: EpisodeMaterialSerialized
-    known_characters: list[MentionedSerialized]
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        material = self.material.model_dump()
-        # 書き直す前のプロットと、それに名前の出る人物は渡さない(新しいプロットとその既知の人物に置き換える)
-        episode = {key: value for key, value in material["書く話"].items() if key != "名前だけ出る人物"}
-        return {
-            **material,
-            "書く話": {**episode, "プロット": self.plot_text},
-            "この場所の中の既知の場所": [_location([location]) for location in self.known_locations],
-            "新しいプロットに名前の出る既知の人物": [member.model_dump() for member in self.known_characters],
-        }
 
 
 class BriefEpisode(EpisodeBase):
@@ -348,121 +217,3 @@ class EpisodeCastingSerialized(EpisodeCasting):
             "登場人物の候補": [member.model_dump() for member in self.candidates],
             "この場所の中の既知の場所": [_place(location) for location in self.child_locations],
         }
-
-
-class EpisodeFrameMaterial(Material):
-    story: StoryMaterial
-    main_episode: FrameEpisode
-    # 話の場所とその親。広い順
-    locations: list[LocationMaterial]
-    cast: list[CastMaterial]
-    # 登場人物でなく、プロット・本文に名前が出るだけの人物
-    mentioned: list[MentionedMaterial]
-    # 登場人物のどれかが片側にいる関係
-    relations: list[CharacterRelationLine]
-    later_events: list[EventMaterial]
-
-
-class EpisodeFrameMaterialSerialized(EpisodeFrameMaterial):
-    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
-
-    cast: list[CastSerialized]
-    mentioned: list[MentionedSerialized]
-    later_events: list[EventSerialized]
-
-    @model_serializer
-    def _for_prompt(self) -> dict[str, Any]:
-        episode = self.main_episode
-        return {
-            "作品": _story(self.story),
-            "場所": _location(self.locations),
-            "登場人物": [member.model_dump() for member in self.cast],
-            "名前だけ出る人物": [member.model_dump() for member in self.mentioned],
-            "登場人物の関係": relations_for_prompt(self.relations),
-            "この時点より後に既に決まっている出来事": [
-                event.model_dump() for event in self.later_events],
-            "作者の指定": {
-                "題": episode.title.strip() or None,
-                "プロット": episode.plot_text.strip() or None,
-                "時刻": str(episode.start) if episode.start else None,
-                "終わり": str(episode.end) if episode.end else None,
-                "視点": episode.viewpoint_character.name if episode.viewpoint_character else None,
-                "場所": episode.location.name if episode.location else None,
-            },
-        }
-
-
-def _not_empty(value: str) -> str:
-    value = value.strip()
-    if not value:
-        raise ValueError("空")
-    return value
-
-
-class EpisodePlotDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    plot_text: str = Field(description="この話の新しいプロット")
-
-    @field_validator("plot_text")
-    @classmethod
-    def _filled(cls, value: str) -> str:
-        return _not_empty(value)
-
-
-class EpisodeCharacterCandidateDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    called: str = Field(description="新しいプロットでの呼び名")
-    name: str = Field(description="新しいプロットで固有の名で呼ばれていればその名(名字を含めない)。役職・続柄・あだ名だけなら空文字")
-    text: str = Field(description="人物像と、この話での役どころ")
-
-    @field_validator("called", "name", "text")
-    @classmethod
-    def _stripped(cls, value: str) -> str:
-        return value.strip()
-
-
-class EpisodeLocationCandidateDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(description="名前")
-    kind: str = Field(description="種別")
-    text: str = Field(description="説明")
-    environment: str = Field(description="環境")
-
-    @field_validator("name", "kind")
-    @classmethod
-    def _filled(cls, value: str) -> str:
-        return _not_empty(value)
-
-
-class EpisodeCastingDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    characters: list[EpisodeCharacterCandidateDraft] | None = Field(
-        description="新しいプロットに出てくるのに、登場人物にいない人物。いなければ null")
-    location: EpisodeLocationCandidateDraft | None = Field(
-        description="新しいプロットの主な舞台が、書く話の場所より細かく、この場所の中の既知の場所にも無いときの、その舞台。"
-                    "それ以外は null")
-
-
-class EpisodeFrameDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    title: str = Field(description="サブタイトル。短く")
-    plot_text: str = Field(description="プロット")
-    start: str | None = Field(description="時刻。「年/月/日」の形。作者の指定の時刻が決まっていれば null")
-
-    @field_validator("title")
-    @classmethod
-    def _stripped(cls, value: str) -> str:
-        return value.strip()
-
-    @field_validator("plot_text")
-    @classmethod
-    def _plot_text(cls, value: str) -> str:
-        return _not_empty(value)

@@ -82,8 +82,11 @@ _GUI_CALLER = "gui"
 
 
 def _writing_of(request: Request) -> writer.Writing:
-    """書き込みの書き手(`db/writer.py`)。web のセッションは流れの書き手をヘッダで運ぶ。"""
-    return writer.from_headers(request.headers, fixed_user=getattr(request.state, "caller", None) == _GUI_CALLER)
+    """書き込みの書き手(`db/writer.py`)。web のセッションは流れの書き手をヘッダで運ぶ。
+    合言葉を確かめない手元の API は、書き手のヘッダが無ければ画面からの書き込みとみなす(手元の Claude は API を通さず入口を直に呼ぶ)。"""
+    keyless_screen = not _API_KEYS and not writer.headers(writer.from_headers(request.headers))
+    return writer.from_headers(
+        request.headers, fixed_user=getattr(request.state, "caller", None) == _GUI_CALLER or keyless_screen)
 
 
 def session_dep() -> Iterator[Session]:

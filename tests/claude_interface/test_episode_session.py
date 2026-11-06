@@ -48,6 +48,7 @@ from db.schema import (
     PERSONALITY_LEVELS, Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp,
     get_env_session,
 )
+from db.writer import on_screen
 from tool import episode_session
 
 
@@ -63,7 +64,8 @@ def _histories(person: dict) -> list[str]:
 
 
 def _set_plot(world, plot_text: str) -> None:
-    with get_env_session() as s:
+    """作者が画面でプロットを書いたことにする。"""
+    with on_screen(), get_env_session() as s:
         s.get_one(Episode, world.episode_id).plot_text = plot_text
         s.commit()
 
@@ -567,7 +569,7 @@ def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
 
 
 def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
-    with get_env_session() as s:
+    with on_screen(), get_env_session() as s:
         for title, start, text in [("一番古い話", "1200/02/01 12:00:00", "一番古い話の本文。"),
                                    ("その前の話", "1200/02/15 12:00:00", "その前の話の本文。"),
                                    ("前の話", "1200/03/01 12:00:00", "前の話。\n続き。")]:
@@ -586,7 +588,7 @@ def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
 
 
 def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkeypatch):
-    with get_env_session() as s:
+    with on_screen(), get_env_session() as s:
         s.add(_previous_episode(world))
         s.commit()
     asked = []
@@ -603,7 +605,7 @@ def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkey
 
 def test_refresh_voices(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
-    with get_env_session() as s:
+    with on_screen(), get_env_session() as s:
         s.add(_previous_episode(world))
         s.commit()
     prompts = []
@@ -638,7 +640,7 @@ def test_refresh_voices(shown, world, mock_ai, monkeypatch):
 
 def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
-    with get_env_session() as s:
+    with on_screen(), get_env_session() as s:
         s.add(_previous_episode(world))
         # 見本の話より後に、作者が太郎の口調を変えた
         s.add(CharacterParameter(character_id=taro, start=Stamp.parse("1200/03/15 12:00:00"), tone="作者が決めた口調"))
@@ -985,7 +987,7 @@ def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatc
 def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
     taro, _ = world.character_ids
     monkeypatch.setattr(constants, "EPISODE_RECENT_APPEARANCE_COUNT", 2)
-    with get_env_session() as s:
+    with on_screen(), get_env_session() as s:
         for month in ["01", "02", "03"]:
             episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
                               main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00")
