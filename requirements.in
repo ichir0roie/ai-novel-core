@@ -8,7 +8,7 @@
 # 手元の転送越しに繋ぐときの RDS のエンドポイント(SSM)を引くのに使う
 sqlalchemy>=2.1.6
 pydantic>=2.0
-alembic>=1.20
+alembic>=1.20.1
 factory-boy>=3.3
 pytest>=8.0
 python-dotenv>=1.0
