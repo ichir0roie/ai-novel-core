@@ -720,6 +720,34 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 .timeline-item.overview-faint { opacity: 0.55; border-style: dashed; color: inherit; text-decoration: none; }
 .overview .timeline-item { color: inherit; text-decoration: none; cursor: pointer; }
 .overview-relations { margin: 0; padding-left: 1.2rem; line-height: 1.8; }
+/* 話を直す・足す左の枠。モーダルにせず表の左に並べ、話の列のすぐ右から出来事の列が見えたまま残るようにする */
+.overview-split { flex: 1; min-height: 0; display: flex; }
+.overview-split > .timeline { min-width: 0; border-width: 1px 0 0; border-radius: 0; }
+.overview-panel {
+  flex: 0 0 min(400px, 40vw); min-height: 0; overflow: auto; box-sizing: border-box; padding: 0.6rem 0.8rem;
+  background: var(--panel); border-top: 1px solid var(--line); border-right: 1px solid var(--line);
+}
+.overview-panel-section + .overview-panel-section { margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px solid var(--line); }
+.overview-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.overview-panel-head h2 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.overview-panel-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.overview-panel-actions .spacer { flex: 1; }
+.overview-period-events { margin: 0; padding-left: 1.2rem; line-height: 1.7; }
+/* 長いプロットで下の出来事が押し出されないよう、枠の中ではプロットの欄の高さを抑えて欄の中でスクロールする */
+.overview-panel textarea.auto-grow { max-height: 45dvh; overflow-y: auto; }
+.overview-period {
+  position: absolute; left: 0; right: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.overview .timeline-item.selected { box-shadow: 0 0 0 2px var(--accent); z-index: 2; }
+/* 兄弟の作品の列は押しても話を足さない */
+.overview .timeline-track.overview-readonly { cursor: default; }
+@media (max-width: 640px) {
+  .overview-split { flex-direction: column; }
+  .overview-panel { flex: 0 0 auto; max-height: 50dvh; border-right: 0; }
+}
 .overview-partner { padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; font: inherit; }
 .episode-sheet-characters { display: flex; flex-direction: column; gap: 0.5rem; }
 .episode-sheet-character { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }

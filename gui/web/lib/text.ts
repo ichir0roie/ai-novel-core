@@ -487,6 +487,10 @@ export const T = {
     clearFocus: "Show everyone",
     legend: "◆ acted · ○ drawn in · ● involved · dot size = event size · band = ongoing aim",
     hidden: "hidden",
+    confirmDiscardEpisode: "Discard the unsaved time / title / plot_text?",
+    added: (label: string) => `Added ${label}`,
+    eventsInPeriod: (n: number) => `${n} event${n === 1 ? "" : "s"} in this episode's period`,
+    noEventsInPeriod: "(no events in this period with the current filters)",
   },
 
   episodeSheet: {

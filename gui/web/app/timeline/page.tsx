@@ -13,10 +13,9 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
-import { AutoGrowTextarea } from "@/components/FieldInput";
+import EpisodeFields from "@/components/EpisodeFields";
 import Modal from "@/components/Modal";
 import NewEpisodeModal from "@/components/NewEpisodeModal";
-import OpenableText from "@/components/OpenableText";
 import ReferenceSelect from "@/components/ReferenceSelect";
 import StampInput from "@/components/StampInput";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
@@ -1339,39 +1338,12 @@ export default function TimelinePage() {
           </div>
           {editError && <div className="status error">{editError}</div>}
           {edit && (
-            <>
-              <div className="field">
-                <label>{T.timeline.start}</label>
-                <StampInput
-                  value={edit.start}
-                  onChange={(start) => setEdit({ ...edit, start })}
-                  disabled={savingEdit}
-                />
-              </div>
-              <div className="field">
-                <label>{T.timeline.end}</label>
-                <StampInput
-                  value={edit.end}
-                  onChange={(end) => setEdit({ ...edit, end })}
-                  disabled={savingEdit}
-                />
-              </div>
-              {/* プレビューと切り替える欄(MarkdownField)だと、外れたときに高さが変わって下のボタンの押下が外れるので、常に書ける欄にする */}
-              <div className="field">
-                <label>plot_text</label>
-                <OpenableText
-                  title="plot_text"
-                  value={edit.plot}
-                  onChange={(plot) => setEdit({ ...edit, plot })}
-                  onSave={(plotChanged || timeChanged) && !savingEdit && edit.start ? () => void saveEdit(viewingNow) : undefined}
-                >
-                  <AutoGrowTextarea
-                    value={edit.plot}
-                    onChange={(plot) => setEdit({ ...edit, plot })}
-                  />
-                </OpenableText>
-              </div>
-            </>
+            <EpisodeFields
+              value={edit}
+              onChange={setEdit}
+              disabled={savingEdit}
+              onSave={(plotChanged || timeChanged) && !savingEdit && edit.start ? () => void saveEdit(viewingNow) : undefined}
+            />
           )}
         </Modal>
       )}
