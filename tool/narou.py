@@ -22,7 +22,7 @@
 playwright は `requirements-narou.txt` で入れ、初めて動かす手元では、ブラウザを
 `.venv/bin/python -m playwright install chromium` で入れておく。
 
-画面の URL・入力欄・ボタン(下の定数)は、2026-10 のなろうの画面と突き合わせてある。一覧のページ送り(`NEXT_PAGE_LINK`)だけは未確認。
+画面の URL・入力欄・ボタン(下の定数)は、2026-10 のなろうの画面と突き合わせてある(一覧のページ送りの `NEXT_PAGE_LINK` は 2026-11)。
 """
 from __future__ import annotations
 
@@ -68,8 +68,8 @@ PART_LINK_PATTERN = re.compile(r"/usernoveldatamanage/top/ncode/\d+/noveldataid/
 # 一覧のリンクの題。「連載」「ep.1」「代表作」などの印は span に入るので、リンクの直下の文字だけを読む
 LINK_TITLE_SCRIPT = ("e => [...e.childNodes].filter(n => n.nodeType === Node.TEXT_NODE)"
                      ".map(n => n.textContent).join('')")
-# 一覧がページに分かれるときの、次のページへのリンクの文言(75 部分では分かれず、未確認)
-NEXT_PAGE_LINK = "次へ"
+# 一覧がページに分かれるとき(100 部分ごと)の、次のページへのリンク。部分の題に「次」が入っても当たらないよう、ページ送りの中で文字が「次」だけのもの
+NEXT_PAGE_LINK = "a.c-up-pager__item:text-is('次')"
 SUBTITLE_FIELD = "input[name='subtitle']"
 TEXT_FIELD = "textarea[name='novel']"
 # 編集: 入力の画面 →「保存[確認]」→ 確認の画面(updateconfirm)→「保存[実行]」
@@ -133,9 +133,6 @@ class Site:
 
     def click(self, selector: str) -> None:
         self._operate(lambda: self.page.click(selector))
-
-    def click_link(self, name: str) -> None:
-        self._operate(lambda: self.page.get_by_role("link", name=name).first.click())
 
     def fill(self, selector: str, text: str) -> None:
         self._operate(lambda: self.page.fill(selector, text))
@@ -279,10 +276,10 @@ def listed_links(site: Site, url: str, pattern: re.Pattern[str]) -> list[Listed]
                 # 題の前の印との間は &nbsp; で空くので、strip で落とす
                 title = str(link.evaluate(LINK_TITLE_SCRIPT)).strip()
                 listed[int(match[1])] = Listed(id=int(match[1]), title=title)
-        # 最後のページにも「次へ」が残る作りでも止まるよう、新しい番号が無ければ終える
-        if len(listed) == found or site.page.get_by_role("link", name=NEXT_PAGE_LINK).count() == 0:
+        # 最後のページにも「次」が残る作りでも止まるよう、新しい番号が無ければ終える
+        if len(listed) == found or site.page.locator(NEXT_PAGE_LINK).count() == 0:
             return list(listed.values())
-        site.click_link(NEXT_PAGE_LINK)
+        site.click(NEXT_PAGE_LINK)
 
 
 def posted_novel_data_id(site: Site, post: Post) -> int | None:

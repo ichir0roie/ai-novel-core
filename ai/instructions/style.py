@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import re
 
-# 一行がこの字数を超えるときは、文の切れ目か読点で折り返す。
-LINE_LETTERS = 50
-
 _SENTENCE_END = "。！？"
 _FULL_WIDTH_MARKS = str.maketrans("?!", "？！")
 _COMMA = "、"
@@ -23,43 +20,19 @@ def _quote_depth(text: str, depth: int = 0) -> int:
     return depth
 
 
-# 折り返した行(「」が閉じていない行・読点で終わる行)は、前の行へつなぎ直してから整える。
+# 長い行の折り返しは載せる媒体に任せる。前に折り返して入れた行(「」が閉じていない行・読点で終わる行)は、
+# 前の行へつなぎ直してから整える。
 def _join_wrapped_lines(lines: list[str]) -> list[str]:
     joined, depth = [], 0
-    for line in (line.strip() for line in lines):
+    for raw in lines:
+        line = raw.strip()
         if joined and (depth > 0 or joined[-1].endswith(_COMMA)):
-            joined[-1] += line
+            # 「？」の後ろの全角の空白で折り返した行は、行頭の全角の空白を残してつなぐ
+            joined[-1] += raw.rstrip().lstrip(" \t")
         else:
             joined.append(line)
         depth = _quote_depth(line, depth)
     return joined
-
-
-def _cut_after(text: str, marks: str) -> list[str]:
-    pieces, current = [], ""
-    for index, char in enumerate(text):
-        current += char
-        following = text[index + 1:index + 2]
-        if char in marks and following and following not in marks + _QUOTE_CLOSE:
-            pieces.append(current)
-            current = ""
-    if current:
-        pieces.append(current)
-    return pieces
-
-
-def _wrap(sentence: str) -> list[str]:
-    if len(sentence) <= LINE_LETTERS:
-        return [sentence]
-    pieces = [part for piece in _cut_after(sentence, _SENTENCE_END)
-              for part in (_cut_after(piece, _COMMA) if len(piece) > LINE_LETTERS else [piece])]
-    lines = [""]
-    for piece in pieces:
-        if lines[-1] and len(lines[-1]) + len(piece) > LINE_LETTERS:
-            lines.append(piece)
-        else:
-            lines[-1] += piece
-    return lines
 
 
 def _split_sentences(line: str) -> list[str]:
@@ -82,7 +55,7 @@ def _split_sentences(line: str) -> list[str]:
 
 
 # 空行一つは話し手や流れの切れ目、空行二つ以上は場面の切れ目として読む。
-# 読点も文の切れ目も無い長い文は、折り返さずに残す。半角の「?」「!」は全角にそろえる。
+# 地の文は一文一行にする。半角の「?」「!」は全角にそろえる。
 def layout_novel_text(text: str) -> str:
     scenes = []
     text = re.sub(r"(?<=[?!]) +(?=\S)", "", text.replace("\r\n", "\n")).translate(_FULL_WIDTH_MARKS)
@@ -91,8 +64,8 @@ def layout_novel_text(text: str) -> str:
             continue
         beats = [beat for beat in re.split(r"\n[ \t　]*\n", scene.strip()) if beat.strip()]
         scenes.append("\n\n".join(
-            "\n".join(wrapped for line in _join_wrapped_lines(beat.splitlines())
-                      for sentence in _split_sentences(line) for wrapped in _wrap(sentence))
+            "\n".join(sentence for line in _join_wrapped_lines(beat.splitlines())
+                      for sentence in _split_sentences(line))
             for beat in beats))
     return "\n\n\n".join(scenes)
 
