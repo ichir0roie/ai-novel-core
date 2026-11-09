@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """人物モードの流れ(`ActCharacter`)。人物が自分の知ることから一手を決め、巻きこみたい相手がいれば言葉を交わし、
 実行の中の手をまとめて作者の目で裁いて世界に足す。
+一手の前後に、動く人物か居合わせる人物が出るプロットつきの話があれば、狙う段の前に語り部が入り、そのプロットを動機にして
+人物の外の状況を整え、裁く段にプロットと動機を渡して、プロットに逆らう記録にさせない。
 
 db の段は `data_access_logic/expansion/steps.py`、AI の段は `data_access_logic/expansion/actor.py`。
 狙う段と対話の手番は手ごとに順に(並列にしない)一番安いモデルで回し、裁く段は実行ごとに一度だけ強いモデルで回す。
@@ -26,7 +28,7 @@ from data_access_logic.expansion import actor, budget
 from data_access_logic.expansion import steps as expansion_steps
 from data_access_logic.expansion.act_models import (
     ActedCharacter, ActFailure, ActFrameForm, ActOutcomeDraft, ActorPick, ActPlan, ActRun, ActSaveForm,
-    DialogueBriefForm, DialogueTurn, IntentDraft, InviteForm, NewCharacterLink, OutcomeRequest,
+    DialogueBriefForm, DialogueTurn, IntentDraft, InviteForm, Narration, NewCharacterLink, OutcomeRequest,
 )
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
 from data_access_logic.flows import character as character_flow
@@ -56,26 +58,44 @@ def _summary(acted: ActedCharacter) -> str:
         lines.append(f"居場所の移動: {len(acted.moves)} 人")
     if acted.frame is not None:
         lines.append(f"影響力: {acted.frame.influence} 気力: {pick.energy}")
+    if acted.narration is not None:
+        lines.append(f"語り部: {', '.join(f'ep{episode.id}' for episode in acted.narration.episodes)} のプロットを動機にした")
     return "\n".join(lines)
 
 
-def _prompt_text(intent: IntentDraft, dialogue: list[DialogueTurn]) -> str:
-    """展開に残す人物の狙い。対話があれば手番を起きた順に添える(取り消しの前に読み返せるように)。"""
-    if len(dialogue) <= 1:
-        return intent.as_text()
-    return "\n".join([intent.as_text(), "巻きこんだ相手とのやり取り:",
-                      *(f"- {turn.as_text()}" for turn in dialogue[1:])])
+def _prompt_text(intent: IntentDraft, dialogue: list[DialogueTurn], narration: Narration | None) -> str:
+    """展開に残す人物の狙い。語り部が入ったら動機・語り・要求を頭に、対話があれば手番を起きた順に添える(取り消しの前に読み返せるように)。
+    巻きこんだ相手とのやり取りは最後に置く(見取り図がその見出しから後を手番として読む)。"""
+    lines = [*([] if narration is None else [narration.as_text()]), intent.as_text()]
+    if len(dialogue) > 1:
+        lines += ["巻きこんだ相手とのやり取り:", *(f"- {turn.as_text()}" for turn in dialogue[1:])]
+    return "\n".join(lines)
 
 
-def _dialogue(ai: AIClient, pick: ActorPick, intent: IntentDraft, invited_ids: list[int]) -> list[DialogueTurn]:
+def _narration(ai: AIClient, pick: ActorPick, nudge: str | None) -> Narration | None:
+    """一手の前後に関わる話があれば、語り部にプロットを動機にして場を整えさせる。語り部の答えが得られなくても、
+    前後の話のプロットは裁く段に渡す(プロットに逆らわせない守りは外さない)。"""
+    brief = call(expansion_steps.narrator_brief, expansion_steps.NarratorBriefForm(pick=pick, nudge=nudge))
+    if not brief.episodes:
+        return None
+    draft = actor.narration_draft(ai, brief)
+    if draft is None:
+        return Narration(episodes=brief.episodes)
+    return Narration(episodes=brief.episodes, motivation=draft.motivation, narration=draft.narration,
+                     request=draft.request)
+
+
+def _dialogue(ai: AIClient, pick: ActorPick, intent: IntentDraft, invited_ids: list[int],
+              narration: Narration | None) -> list[DialogueTurn]:
     """動いた人物の一手を口火に、巻きこんだ相手と動いた人物に交互に手番を回す。並列にはしない。
     誰かが話を終える(動いた人物なら対話ごと、相手ならその相手だけが抜ける)か、手番が上限に達したら止める。"""
     time = Stamp.parse(pick.time)
     assert time is not None
     participants = [pick.character_id, *invited_ids]
+    told = None if narration is None else narration.narration
     briefs = {id_: call(expansion_steps.dialogue_brief, DialogueBriefForm(
         character_id=id_, time=time, location_id=pick.location_id, participant_ids=participants,
-        mentioned=intent.as_text())) for id_ in participants}
+        mentioned="\n".join([intent.as_text(), told or ""]), narration=told)) for id_ in participants}
     turns = [DialogueTurn(character_id=pick.character_id, name=pick.name, thought=intent.inner, action=intent.action,
                           speech=intent.speech, aim=intent.aim)]
     actor_request = (f"あなたはこの狙いで動いている: {intent.aim}。相手の返事を受けて、次の一手を返す。"
@@ -103,19 +123,23 @@ def _plan(ai: AIClient, rng: random.Random, pick: ActorPick, expansion_id: int, 
     time = Stamp.parse(pick.time)
     assert time is not None
     seeds = draw_from(rng, call(seed_steps.seed_pool))
-    brief = call(expansion_steps.actor_brief, expansion_steps.BriefForm(pick=pick, seeds=seeds, nudge=nudge))
+    narration = _narration(ai, pick, nudge)
+    brief = call(expansion_steps.actor_brief, expansion_steps.BriefForm(
+        pick=pick, seeds=seeds, nudge=nudge, narration=narration))
     intent = actor.intent_draft(ai, brief)
     if intent is None:
         raise ValueError("人物の一手が得られなかった")
     invited_ids = call(expansion_steps.invitable, InviteForm(
         actor_id=pick.character_id, time=time, location_id=pick.location_id,
         candidate_ids=[invite.character_id for invite in intent.invites], exclude_ids=used_ids)) if intent.invites else []
-    dialogue = _dialogue(ai, pick, intent, invited_ids) if invited_ids else []
+    dialogue = _dialogue(ai, pick, intent, invited_ids, narration) if invited_ids else []
     call(expansion_steps.note_prompt, expansion_steps.PromptForm(
-        expansion_id=expansion_id, prompt=_prompt_text(intent, dialogue)))
+        expansion_id=expansion_id, prompt=_prompt_text(intent, dialogue, narration)))
 
     present_ids = list(dict.fromkeys([*brief.present_ids, *invited_ids]))
-    scene = _prompt_text(intent, dialogue)
+    # 場面(状況の材料を引く文)には人物に見えた語りまでを入れ、語り部の動機とプロットは入れない(裁く段へは別の見出しで渡す)
+    told = None if narration is None else narration.narration
+    scene = "\n".join([*([] if told is None else [f"語り部の語り: {told}"]), _prompt_text(intent, dialogue, None)])
     situation_form = event_steps.SituationForm(
         location_id=pick.location_id, character_ids=[pick.character_id, *present_ids], time=time, scene=scene)
     refresh(ai, call(event_steps.situation_targets, situation_form))
@@ -129,7 +153,7 @@ def _plan(ai: AIClient, rng: random.Random, pick: ActorPick, expansion_id: int, 
     return ActPlan(expansion_id=expansion_id, pick=pick, intent=intent, present_ids=present_ids,
                    invited_ids=invited_ids, request=OutcomeRequest(
                        situation=situation, destinations=destinations, actor_name=pick.name, intent=intent,
-                       roll=roll, arc=arc, dialogue=dialogue[1:], frame=frame))
+                       roll=roll, arc=arc, dialogue=dialogue[1:], frame=frame, narration=narration))
 
 
 def _save(ai: AIClient, rng: random.Random, plan: ActPlan, outcome: ActOutcomeDraft) -> ActedCharacter:
@@ -155,7 +179,8 @@ def _save(ai: AIClient, rng: random.Random, plan: ActPlan, outcome: ActOutcomeDr
                 *request.dialogue] if request.dialogue else []
     return ActedCharacter(expansion_id=plan.expansion_id, actor=pick, intent=plan.intent, roll=request.roll,
                           event=saved.event, arc_id=saved.arc_id, idea_ids=saved.idea_ids, characters=created,
-                          moves=saved.moves, invited_ids=plan.invited_ids, dialogue=dialogue, frame=request.frame)
+                          moves=saved.moves, invited_ids=plan.invited_ids, dialogue=dialogue, frame=request.frame,
+                          narration=request.narration)
 
 
 def _failed(run: ActRun, expansion_id: int | None, pick: ActorPick | None, error: Exception) -> None:

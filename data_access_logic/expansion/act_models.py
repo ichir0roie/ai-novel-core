@@ -1,7 +1,8 @@
 """人物モード(`ActCharacter`)の材料と、AI の出力の形。
 
 人物の目(狙う段)には、その人物が知ることのできるデータ(`character/knowledge.py`)と、目の前の様子だけを渡す。
-作者の目(裁く段)には、場所の状況(出来事の生成と同じ `LocationSituationSerialized`)と、人物の狙いを渡す。
+語り部(狙う段の前)には、一手の前後の話のプロットを渡し、プロットに逆らわないための動機と、人物の目の前で起こす状況を決めさせる。
+作者の目(裁く段)には、場所の状況(出来事の生成と同じ `LocationSituationSerialized`)と、人物の狙いと、語り部の動機を渡す。
 """
 from typing import Any
 
@@ -70,6 +71,88 @@ class OpenArc(Material):
     text: str
 
 
+class NarratedEpisode(Material):
+    """語り部が動機にする話。本文のある話は、プロットと本文のとおりに起きたこととして扱う。"""
+
+    id: int
+    title: str
+    start: Timestamp
+    end: Timestamp | None = None
+    plot_text: str
+    written: bool
+
+
+def _episodes_for_prompt(episodes: list[NarratedEpisode]) -> list[dict[str, Any]]:
+    return [{"題": episode.title, "時刻": str(episode.start), "終わり": None if episode.end is None else str(episode.end),
+             "本文": "あり" if episode.written else "まだ無い", "プロット": episode.plot_text} for episode in episodes]
+
+
+class NarratorSerialized(Material):
+    """ai プロンプトが理解しやすい形に整形したレスポンスを行う。語り部は作者の側なので、居合わせる人物を名前で読む。
+    人物の来歴・筋書きは渡さない(人物の外のことだけを動かす)。"""
+
+    time: Timestamp
+    location_name: str | None = None
+    actor_name: str | None = None
+    present_names: list[str]
+    recent_events: list[str]
+    arcs: list[OpenArc]
+    episodes: list[NarratedEpisode]
+    nudge: str | None = None
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        return {
+            "一手の時刻": str(self.time),
+            "場所": self.location_name,
+            "動く人物": self.actor_name,
+            "居合わせる人物": self.present_names,
+            "この場所で近ごろ起きたこと(新しい順)": self.recent_events,
+            "動く人物が追っている企て": [{"名前": arc.name, "狙い": arc.text} for arc in self.arcs],
+            "前後の話(時刻の順)": _episodes_for_prompt(self.episodes),
+            "作者からの方向づけ": self.nudge,
+        }
+
+
+class NarratorBrief(BaseModel):
+    """語り部の材料(段の出力)。関わる話が無ければ `episodes` は空で、語り部は呼ばない。"""
+
+    prompt: dict[str, Any]
+    episodes: list[NarratedEpisode]
+
+
+class NarrationDraft(BaseModel):
+    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
+    model_config = ConfigDict(extra="forbid")
+
+    motivation: str = Field(
+        description="語り部の動機。前後の話のプロットに逆らわないために、この一手のあいだに起きてほしいこと・起きてはならないこと。"
+                    "人物には渡らず、一手を裁く作者だけが読む")
+    narration: str | None = Field(
+        description="動く人物の目の前で起こすこと(人の出入り・用事・知らせ・天気・道・物の在り処)。人物が見聞きできることだけを三人称で。"
+                    "起こさないなら null")
+    request: str | None = Field(
+        description="動く人物に求めること。プロットにあるその人物の行動・台詞のうち、この時刻にすることだけ。無ければ null")
+
+
+class Narration(BaseModel):
+    """語り部が一手に添えたもの。語り部の答えが得られなければ、動機は空のまま前後の話のプロットだけを裁く段に渡す。"""
+
+    episodes: list[NarratedEpisode]
+    motivation: str | None = None
+    narration: str | None = None
+    request: str | None = None
+
+    def as_text(self) -> str:
+        episodes = "・".join(f"ep{episode.id}「{episode.title}」" for episode in self.episodes)
+        lines = [f"語り部の動機({episodes}): {self.motivation or '(得られなかった。プロットだけを裁く段に渡した)'}"]
+        if self.narration:
+            lines.append(f"語り部の語り: {self.narration}")
+        if self.request:
+            lines.append(f"語り部の要求: {self.request}")
+        return "\n".join(lines)
+
+
 class ActorSerialized(Material):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。人物が知ることは整形した形で組むので、db の側で dump して
     `ActorBrief.prompt` に入れて運ぶ。"""
@@ -85,6 +168,9 @@ class ActorSerialized(Material):
     seeds: list[str]
     # 作者からの軽い方向づけ
     nudge: str | None = None
+    # 語り部が目の前で起こしたことと、求めること(プロットは渡さない)
+    narration: str | None = None
+    request: str | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -99,6 +185,8 @@ class ActorSerialized(Material):
             "あなたが追っている企て": [{"企てid": arc.id, "名前": arc.name, "狙い": arc.text} for arc in self.arcs],
             "思いつきの元": self.seeds,
             "作者からの方向づけ": self.nudge,
+            "語り部の語り(いま目の前で起きたこと)": self.narration,
+            "語り部の要求": self.request,
         }
 
 
@@ -168,6 +256,8 @@ class DialogueBriefForm(BaseModel):
     participant_ids: list[int]
     # 対話に出た文。知っているアイデアは、ここに名前の出るものだけを渡す
     mentioned: str
+    # 語り部が目の前で起こしたこと。居合わせる皆に見える
+    narration: str | None = None
 
 
 class DialogueSerialized(Material):
@@ -177,6 +267,7 @@ class DialogueSerialized(Material):
     location_name: str | None = None
     knowledge: KnowledgeSerialized
     present: list[PresentPerson]
+    narration: str | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
@@ -186,6 +277,7 @@ class DialogueSerialized(Material):
             "あなたが知っていること": self.knowledge.model_dump(),
             "目の前にいる人物": [
                 {"名前": person.name or "(名を知らない)", **person.looks.model_dump()} for person in self.present],
+            "語り部の語り(いま目の前で起きたこと)": self.narration,
         }
 
 
@@ -280,6 +372,7 @@ class OutcomeRequest(Material):
     # 巻きこんだ相手との対話(動いた人物の最初の一手のあとの手番)
     dialogue: list[DialogueTurn] = []
     frame: ImpactFrame
+    narration: Narration | None = None
 
 
 class OutcomeRequestSerialized(OutcomeRequest):
@@ -289,7 +382,14 @@ class OutcomeRequestSerialized(OutcomeRequest):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
+        narration = self.narration
         return {
+            "語り部の動機": None if narration is None else {
+                "前後の話(時刻の順)": _episodes_for_prompt(narration.episodes),
+                "動機": narration.motivation,
+                "人物の目の前で起こしたこと": narration.narration,
+                "人物に求めたこと": narration.request,
+            },
             "場所の状況": self.situation.model_dump(),
             "移動先の候補": [{"場所id": destination.id, "名前": destination.name, "種別": destination.kind}
                         for destination in self.destinations],
@@ -360,6 +460,7 @@ class ActedCharacter(BaseModel):
     invited_ids: list[int] = []
     dialogue: list[DialogueTurn] = []
     frame: ImpactFrame | None = None
+    narration: Narration | None = None
 
 
 class ActFailure(BaseModel):

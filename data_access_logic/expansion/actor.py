@@ -1,5 +1,7 @@
 """人物モード(`ActCharacter`)の AI だけの段。db に触らない。
 
+語り部の段は、一手の前後に関わる話があるときだけ、狙う段の前に一手ごとに一度回す(語り部の書き方の範囲)。
+前後の話のプロットを動機にし、プロットに逆らわないよう人物の外の状況を整え、裁く段に動機を残す。
 狙う段と対話の手番は人物の目(人物役と同じ書き方の範囲)で、人物が知ることだけから一手を決める。数が多いので一番安いモデルで回す。
 裁く段は作者の目(出来事の書き方の範囲)で、実行の中の手をまとめて一度だけ、サイコロの成り行きと影響の枠に沿って記録する。
 """
@@ -14,12 +16,21 @@ from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
 from data_access_logic.event.writer import EVENT_TEXT_FORMAT
 from data_access_logic.expansion.act_models import (
-    ActorBrief, BatchOutcomeDraft, DialogueBrief, DialogueTurn, DialogueTurnDraft, IntentDraft, OutcomeRequest,
-    OutcomeRequestSerialized,
+    ActorBrief, BatchOutcomeDraft, DialogueBrief, DialogueTurn, DialogueTurnDraft, IntentDraft, NarrationDraft,
+    NarratorBrief, OutcomeRequest, OutcomeRequestSerialized,
 )
 from db.schema import StyleScope
 
 logger = logging.getLogger(__name__)
+
+_NARRATOR_SYSTEM = """\
+あなたは物語の語り部として、ある人物がこれから打つ一手の前に場を整える。
+渡すのは、一手の時刻・場所・動く人物・居合わせる人物・この場所で近ごろ起きたことと、その前後にある、この人物たちが出る話のプロット。
+プロットは作者が決めた筋。あなたの動機は、この一手をプロットに逆らわせないこと。プロットの場面で起きることを先に起こさせず、
+プロットの前提(誰がどこにいて、何を持ち、誰と知り合いか)を崩させず、プロットに出る人物をその場面に出られなくさせない。
+本文のある話は、プロットのとおりに起きたこととして扱う。
+人物が何を思い、どう動くかは人物が決める。あなたが動かしてよいのは、人物の外のこと(人の出入り・用事・知らせ・天気・道・物の在り処)だけ。
+narration と request は人物に渡る。人物がその場で見聞きできることだけを書き、プロットそのもの・先の筋・人物の知らない人物の名前・素性・秘密を書かない。"""
 
 _INTENT_SYSTEM = """\
 あなたは物語の中の人物の一人として、次の一手を決める。渡すのは、あなたが知っていることと、いま目の前にあることだけ。
@@ -28,6 +39,8 @@ _INTENT_SYSTEM = """\
 企てを追っているなら、それを続けるか、別のことをするかを、あなた自身の考えで選ぶ。
 思いつきの元は、ほかの場面の筋の型。使うなら、あなたの立場と場所に合わせて形を変える。
 作者からの方向づけがあれば、それを踏まえる(言いなりにはならず、あなたらしい形で)。
+語り部の語りは、いま目の前で起きたこととして受ける。語り部の要求は、あなたが自分で決めたこととして演じ、言い回しと理由を自分で埋める。
+あなたのミーム・行動原理・性格とぶつかるときだけ断ってよい(断るなら、内心にその理由を書く)。
 一手は、一日から数日で片の付く大きさにする。大きな企ては、その最初の一手だけを決め、企ての名前を付ける。
 目の前の相手と言葉を交わして決めたいことがあれば、その相手を invites に挙げる。挙げてよいのは、目の前にいて名前を知っている人物だけ。"""
 
@@ -54,6 +67,9 @@ character_updates の text は、この出来事で新しく分かった、そ�
 ideas は、この一手で新しく生まれた・広まった事柄(技術・制度・概念・呼び名・噂など)だけ。人名・地名は入れない。knower_ids は、それを知った人物をその手の居合わせる人物・対象の中から選ぶ。
 new_characters は、この一手で新しく世界に現れる人物・対象(生まれた子・雇った者・作った組織など)だけ。居合わせる人物・対象は入れない。
 arc_closed は、続けた企てがあり、この一手でそれが果たされたか潰えたときだけ true。
+「語り部の動機」のある手は、前後の話のプロットに逆らう記録にしない。プロットの場面で起きることを先に起こさず、プロットの前提
+(誰がどこにいて、何を持ち、誰と知り合いか)を崩さず、プロットに出る人物をその場面に出られなくしない。成り行きがプロットとぶつかるときは、
+プロットに逆らわない形で成り行きを起こす(しくじる・遅れる・別の困りごとが起きる)。語り部の語りは、その場で起きたこととして記録に入れる。
 
 {EVENT_TEXT_FORMAT}
 
@@ -62,6 +78,16 @@ arc_closed は、続けた企てがあり、この一手でそれが果たされ
 {LATER_EVENTS_NOTE}
 
 {TIME_NOTE}"""
+
+
+def narration_draft(ai: AIClient, brief: NarratorBrief) -> NarrationDraft | None:
+    prompt = "\n".join([json.dumps(brief.prompt, ensure_ascii=False, indent=2),
+                        "前後の話のプロットに逆らわないよう、この一手の前に場を整える。"])
+    draft = ai.generate(prompt, NarrationDraft, system=_NARRATOR_SYSTEM, style_scope=StyleScope.NARRATOR,
+                        model=constants.ACT_NARRATOR_MODEL, effort=constants.ACT_NARRATOR_EFFORT)
+    if draft is None:
+        logger.warning("語り部の動機が得られなかった")
+    return draft
 
 
 def intent_draft(ai: AIClient, brief: ActorBrief) -> IntentDraft | None:

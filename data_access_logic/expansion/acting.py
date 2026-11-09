@@ -7,7 +7,8 @@ from __future__ import annotations
 import logging
 import random
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from data_access_logic import constants
 from data_access_logic.character.knowledge import _related_ids, appearance_of, knowledge_of
@@ -20,13 +21,14 @@ from data_access_logic.event.record import EventRecord
 from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_models import (
     ActFrameForm, ActorBrief, ActorPick, ActorSerialized, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm,
-    DialogueSerialized, ImpactFrame, InviteForm, NewCharacterLink, OpenArc, PresentPerson,
+    DialogueSerialized, ImpactFrame, InviteForm, NarratedEpisode, Narration, NarratorBrief, NarratorSerialized,
+    NewCharacterLink, OpenArc, PresentPerson,
 )
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
 from db.schema import (
-    CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Event, EventCharacter, IdeaHistory,
+    CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Episode, Event, EventCharacter, IdeaHistory,
     IdeaHistoryKnower, Location,
 )
 from db.stamp import Stamp
@@ -115,8 +117,59 @@ def open_arcs(s: Session, character_id: int) -> list[OpenArc]:
             for event in s.scalars(expansion_query.open_arcs_select(character_id)).all()]
 
 
-def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None) -> ActorBrief:
-    """人物の目で見た材料。知ることのできるデータ(知る相手で絞った来歴・関係・アイデア)と、目の前の様子だけ。"""
+def _distance_days(episode: Episode, time: Stamp) -> int:
+    assert episode.start is not None
+    end = episode.end or episode.start
+    if episode.start <= time <= end:
+        return 0
+    return min(abs(time.days_until(episode.start)), abs(time.days_until(end)))
+
+
+def related_episodes(s: Session, characters: list[Character], time: Stamp) -> list[NarratedEpisode]:
+    """一手の時刻の前後 `ACT_NARRATOR_EPISODE_DAYS` 日にかかる、プロットつきの話のうち、`characters` の誰かが登場人物に結ばれているか、
+    プロットに名前の出る話。近い話から上限まで取り、時刻の順に返す。作品は問わない(人物が出る話はどの章のプロットにも逆らわせない)。"""
+    since = time.plus_days(-constants.ACT_NARRATOR_EPISODE_DAYS)
+    until = time.plus_days(constants.ACT_NARRATOR_EPISODE_DAYS)
+    ids = {character.id for character in characters}
+    names = [character.name for character in characters if character.name]
+    episodes = [episode for episode in s.scalars(
+        select(Episode).options(selectinload(Episode.episode_characters))
+        .where(Episode.start.is_not(None), Episode.plot_text != "", Episode.start <= until,
+               func.coalesce(Episode.end, Episode.start) >= since)
+        .order_by(Episode.start, Episode.id).execution_options(populate_existing=True)).all()
+        if any(link.character_id in ids and not link.mentioned for link in episode.episode_characters)
+        or any(name in episode.plot_text for name in names)]
+    nearest = sorted(episodes, key=lambda episode: (_distance_days(episode, time), episode.id))
+    chosen = sorted(nearest[:constants.ACT_NARRATOR_EPISODE_LIMIT], key=lambda episode: (episode.start, episode.id))
+    return [NarratedEpisode(id=episode.id, title=episode.title, start=episode.start, end=episode.end,
+                            plot_text=episode.plot_text, written=bool(episode.main_text.strip())) for episode in chosen]
+
+
+def narrator_brief(s: Session, pick: ActorPick, nudge: str | None) -> NarratorBrief:
+    """語り部の材料。動く人物と居合わせる人物が出る前後の話のプロットと、場所・時刻・居合わせる人物・近ごろの出来事。
+    人物の来歴・筋書きは読まない(語り部が動かすのは人物の外のことだけ)。"""
+    character = s.get_one(Character, pick.character_id)
+    time = Stamp.parse(pick.time)
+    assert time is not None
+    present = [other for other in _people_here(s, pick.location_id, time)
+               if other.id != character.id][:constants.ACT_PRESENT_LIMIT]
+    episodes = related_episodes(s, [character, *present], time)
+    if not episodes:
+        return NarratorBrief(prompt={}, episodes=[])
+    recent = s.scalars(common_query.events_of_location_select(
+        pick.location_id, until=time, limit=constants.RECENT_EVENT_LIMIT)).all()
+    prompt = NarratorSerialized(
+        time=time, location_name=s.get_one(Location, pick.location_id).name, actor_name=character.name,
+        present_names=[other.name for other in present], recent_events=[event.name for event in recent],
+        arcs=open_arcs(s, character.id), episodes=episodes, nudge=nudge,
+    ).model_dump()
+    return NarratorBrief(prompt=prompt, episodes=episodes)
+
+
+def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None,
+                narration: Narration | None) -> ActorBrief:
+    """人物の目で見た材料。知ることのできるデータ(知る相手で絞った来歴・関係・アイデア)と、目の前の様子と、
+    語り部が目の前で起こしたこと・求めることだけ(語り部の動機と前後の話のプロットは渡さない)。"""
     character = s.get_one(Character, pick.character_id)
     time = Stamp.parse(pick.time)
     assert time is not None
@@ -126,14 +179,18 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
     recent = s.scalars(common_query.events_of_location_select(
         pick.location_id, until=time, limit=constants.RECENT_EVENT_LIMIT)).all()
     arcs = open_arcs(s, character.id)
-    # 人物が知っているアイデアのうち、目の前の出来事・企て・方向づけに名前の出るものを渡す
-    mentioned = "\n".join([*(event.name for event in recent), *(arc.name for arc in arcs), nudge or ""])
+    told = None if narration is None else narration.narration
+    asked = None if narration is None else narration.request
+    # 人物が知っているアイデアのうち、目の前の出来事・企て・方向づけ・語り部の語りと要求に名前の出るものを渡す
+    mentioned = "\n".join([*(event.name for event in recent), *(arc.name for arc in arcs), nudge or "", told or "",
+                           asked or ""])
     prompt = ActorSerialized(
         time=time, location_name=s.get_one(Location, pick.location_id).name,
         knowledge=knowledge_of(s, character.id, time, mentioned, None, None),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, time)) for other in present],
         recent_events=[event.name for event in recent], arcs=arcs, seeds=seeds, nudge=nudge,
+        narration=told, request=asked,
     ).model_dump()
     return ActorBrief(prompt=prompt, present_ids=[other.id for other in present], arcs=arcs)
 
@@ -167,6 +224,7 @@ def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
         knowledge=knowledge_of(s, character.id, form.time, form.mentioned, None, None),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, form.time)) for other in others],
+        narration=form.narration,
     ).model_dump()
     return DialogueBrief(character_id=character.id, name=character.name, prompt=prompt, known_ids=known_ids)
 

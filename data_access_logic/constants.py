@@ -110,6 +110,12 @@ ACT_JUDGE_MODEL = "claude-opus-5-5"
 ACT_JUDGE_EFFORT = "high"
 # 一回の実行で回す手の上限(裁く段に一度に渡す数)
 ACT_RUN_LIMIT = 8
+# 語り部。一手の時刻の前後この日数に、動く人物か居合わせる人物が出る(プロットに名前が出る)プロットつきの話があれば、
+# 近い話から上限まで、そのプロットを語り部の動機にする。語り部は一手ごとに一度だけ呼ぶ
+ACT_NARRATOR_EPISODE_DAYS = 30
+ACT_NARRATOR_EPISODE_LIMIT = 3
+ACT_NARRATOR_MODEL = "claude-sonnet-5-5"
+ACT_NARRATOR_EFFORT = "medium"
 # 段(無/低/並/高/必)の並び。影響力・行動力を数で比べるのに使う
 LEVEL_RANKS = {"無": 0, "低": 1, "並": 2, "高": 3, "必": 4}
 # 主要人物は、影響力の値が低くてもこの段より下に扱わない(ほかの人物の一手から動かされにくくする)

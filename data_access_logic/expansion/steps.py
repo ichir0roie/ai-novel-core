@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.expansion import acting
 from data_access_logic.expansion.act_models import (
     ActFrameForm, ActorBrief, ActorPick, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm, ImpactFrame, InviteForm,
-    NewCharacterLink,
+    Narration, NarratorBrief, NewCharacterLink,
 )
 from data_access_logic.expansion.finish_expansion import finish
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
@@ -29,10 +29,16 @@ class PickForm(BaseModel):
     exclude_ids: list[int] = []
 
 
+class NarratorBriefForm(BaseModel):
+    pick: ActorPick
+    nudge: str | None = None
+
+
 class BriefForm(BaseModel):
     pick: ActorPick
     seeds: list[str]
     nudge: str | None = None
+    narration: Narration | None = None
 
 
 class PromptForm(BaseModel):
@@ -76,8 +82,13 @@ def finish_expansion(s: Session, form: ExpansionFinishForm) -> ExpansionRecord:
 
 
 @db_step
+def narrator_brief(s: Session, form: NarratorBriefForm) -> NarratorBrief:
+    return acting.narrator_brief(s, form.pick, form.nudge)
+
+
+@db_step
 def actor_brief(s: Session, form: BriefForm) -> ActorBrief:
-    return acting.actor_brief(s, form.pick, form.seeds, form.nudge)
+    return acting.actor_brief(s, form.pick, form.seeds, form.nudge, form.narration)
 
 
 @db_step
