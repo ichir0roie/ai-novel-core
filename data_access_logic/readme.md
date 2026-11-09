@@ -476,7 +476,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 | 場所 | 場所の説明と来歴を書く所(このセッションの Claude が `ReadWritingStyle` で読む。AI の生成には使わない) |
 | 筋書き | 作品・章の筋書きを書く所(このセッションの Claude が `ReadWritingStyle` で読む。AI の生成には使わない) |
 | 人物役 | 人物役・対話役のエージェントの一手・返事(`tool.episode_session style` で読む) |
-| 語り部 | 手番の語り・要求と、場面の運び方(スキル `episode`・`interactive-episode` の語り部が `ReadWritingStyle` で読む) |
+| 語り部 | 手番の語り・要求と、場面の運び方(スキル `episode`・`interactive-episode`・`complete-episode` の語り部が `ReadWritingStyle` で読む。人物モード(`ActCharacter`)の語り部の段にも足す) |
 | 推敲 | これまでの推敲で直したことと、その直し方をまとめた記録。本文の範囲の本文の行の後に足す(本文を書く・直すときに見直す)。スキル `revise-episode` が推敲のたびに整理して書き直す |
 
 - 作品の指示・話の指示は、本文の範囲(本文の材料)だけで足す
