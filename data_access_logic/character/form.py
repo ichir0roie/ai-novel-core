@@ -162,6 +162,34 @@ class CharacterSkillUpdateForm(Form):
     histories: list[CharacterSkillHistoryRow] | None = None
 
 
+class CharacterMotivationCreateForm(Form):
+    character_id: int
+    # 思いが生まれた時刻(この時刻から効く)
+    start: Timestamp
+    # 果たした・消えた・強さが変わった時刻。空なら効いている
+    end: Timestamp | None = None
+    # 1 気にかかる程度 〜 5 何を捨てても果たしたい
+    strength: int = Field(ge=1, le=5)
+    # 何をしたいか・なぜか(本人の内心)
+    text: str = Field(min_length=1)
+
+
+class CharacterMotivationUpdateForm(Form):
+    id: int
+    character_id: int | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    strength: int | None = Field(default=None, ge=1, le=5)
+    text: str | None = Field(default=None, min_length=1)
+
+    @field_validator("character_id", "start", "strength", "text")
+    @classmethod
+    def _not_cleared(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("空にできない")
+        return value
+
+
 class CharacterHistoryChange(Form):
     """人物の来歴の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
 

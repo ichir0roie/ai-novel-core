@@ -10,6 +10,7 @@ import { invalidateOptions, prefetchOptions } from "@/components/ReferenceSelect
 import Related from "@/components/Related";
 import StoryEpisodes from "@/components/StoryEpisodes";
 import {
+  deleteCharacterMotivation,
   deleteCharacterSkill,
   deleteEpisode,
   deleteIdeaDetachingChildren,
@@ -60,10 +61,11 @@ function receiveRelated(table: string, result: RecordResponse) {
   if (table === "episode" && Array.isArray(ids)) receiveLocationCharacterIds(result.record.location_id, result.record.start, ids as number[]);
 }
 
-/** 記録のページから戻る一覧。話は同じ作品で、スキルは同じ人物で絞った一覧に戻す。 */
+/** 記録のページから戻る一覧。話は同じ作品で、スキル・モチベーションは同じ人物で絞った一覧に戻す。 */
 function listHref(table: string, record: Rec): string {
   if (table === "episode" && record.story_id != null) return `/tables/${table}?story_id=${record.story_id}`;
-  if (table === "character_skill" && record.character_id != null) return `/tables/${table}?character_id=${record.character_id}`;
+  if ((table === "character_skill" || table === "character_motivation") && record.character_id != null)
+    return `/tables/${table}?character_id=${record.character_id}`;
   return `/tables/${table}`;
 }
 
@@ -169,12 +171,15 @@ export default function RecordPage() {
         ? T.record.confirmDeleteEpisode(label)
         : table === "character_skill"
           ? T.record.confirmDeleteSkill(label)
-          : T.record.confirmDeleteIdea(label, childIds.length);
+          : table === "character_motivation"
+            ? T.record.confirmDeleteMotivation(label)
+            : T.record.confirmDeleteIdea(label, childIds.length);
     if (!window.confirm(message)) return;
     setBusy(true);
     try {
       if (table === "episode") await deleteEpisode(Number(id));
       else if (table === "character_skill") await deleteCharacterSkill(Number(id));
+      else if (table === "character_motivation") await deleteCharacterMotivation(Number(id));
       else await deleteIdeaDetachingChildren(Number(id), childIds);
       invalidateOptions(table);
       router.push(listHref(table, loaded.record));
@@ -272,7 +277,8 @@ export default function RecordPage() {
                   )}
                   <span className="spacer" />
                   <span className="meta">{dirty ? T.record.changed(Object.keys(changes)) : T.record.noChanges}</span>
-                  {(table === "episode" || table === "idea" || table === "character_skill") && (
+                  {(table === "episode" || table === "idea" || table === "character_skill" ||
+                    table === "character_motivation") && (
                     <button className="danger" onClick={() => void remove()} disabled={busy}>
                       {T.record.delete}
                     </button>

@@ -9,7 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from data_access_logic import constants
 from data_access_logic.character.knowledge import AppearanceSerialized, KnowledgeSerialized
-from data_access_logic.character.record import CharacterMove, GeneratedCharacter
+from data_access_logic.character.record import (
+    CharacterMotivationRecord, CharacterMove, GeneratedCharacter, MotivationChange,
+)
+from data_access_logic.event.models import EventSerialized
 from data_access_logic.event.progress_models import (
     EventRecordDraft, LocationSituationMaterial, LocationSituationSerialized,
 )
@@ -70,6 +73,46 @@ class OpenArc(Material):
     text: str
 
 
+class MotivationLine(Material):
+    """その時刻に効いているモチベーションの行。"""
+
+    id: int
+    start: Timestamp
+    strength: int
+    text: str
+
+    def for_prompt(self) -> dict[str, Any]:
+        return {"モチベーションid": self.id,
+                "強さ": f"{self.strength}({constants.MOTIVATION_STRENGTHS.get(self.strength, '')})",
+                "内容": self.text, "いつから": str(self.start)}
+
+
+class Motives(Material):
+    """人物の目に渡す、本人のモチベーションと前後の出来事。本人の内心なので、本人の材料にだけ入れる。"""
+
+    # 強い順
+    motivations: list[MotivationLine]
+    # 本人が当事者だった出来事(新しい順)
+    past_events: list[EventSerialized]
+    # 本人か居る場所に掛かる、この時刻より後に既に決まっている出来事(古い順)。本人はまだ知らない
+    later_events: list[EventSerialized]
+
+    def for_prompt(self) -> dict[str, Any]:
+        return {
+            "あなたのモチベーション(強い順)": [motivation.for_prompt() for motivation in self.motivations],
+            "あなたが関わったこれまでの出来事(新しい順)": [event.model_dump() for event in self.past_events],
+            "この先に決まっている出来事(あなたはまだ知らない)": [event.model_dump() for event in self.later_events],
+        }
+
+
+class ParticipantMotivations(Material):
+    """裁く段に渡す、居合わせる人物ごとの、その時刻に効いているモチベーション。"""
+
+    character_id: int
+    name: str | None = None
+    motivations: list[MotivationLine]
+
+
 class ActorSerialized(Material):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。人物が知ることは整形した形で組むので、db の側で dump して
     `ActorBrief.prompt` に入れて運ぶ。"""
@@ -77,6 +120,7 @@ class ActorSerialized(Material):
     time: Timestamp
     location_name: str | None = None
     knowledge: KnowledgeSerialized
+    motives: Motives
     present: list[PresentPerson]
     # この場所の直近の出来事の名前(新しい順)
     recent_events: list[str]
@@ -92,6 +136,7 @@ class ActorSerialized(Material):
             "いまの時刻": str(self.time),
             "いる場所": self.location_name,
             "あなたが知っていること": self.knowledge.model_dump(),
+            **self.motives.for_prompt(),
             "目の前にいる人物": [
                 {"人物id": person.character_id, "名前": person.name or "(名を知らない)", **person.looks.model_dump()}
                 for person in self.present],
@@ -127,6 +172,8 @@ class IntentDraft(BaseModel):
     aim: str = Field(description="この一手で果たしたいこと(狙い)")
     action: str = Field(description="実際にすること。誰に・どこで・何をするか")
     speech: str | None = Field(description="口にする言葉。黙って動くなら null")
+    motivation_id: int | None = Field(
+        description="この一手で果たそう・近づこうとしているモチベーションのid。あなたのモチベーションの中から。どれにも沿わないなら null")
     arc_id: int | None = Field(description="追っている企てを続ける一手なら、その企てid。続けないなら null")
     new_arc_name: str | None = Field(
         description="この一手が、何度も手を重ねて果たす新しい企ての始まりなら、その企ての短い名前。そうでなければ null")
@@ -176,6 +223,7 @@ class DialogueSerialized(Material):
     time: Timestamp
     location_name: str | None = None
     knowledge: KnowledgeSerialized
+    motives: Motives
     present: list[PresentPerson]
 
     @model_serializer
@@ -184,6 +232,7 @@ class DialogueSerialized(Material):
             "いまの時刻": str(self.time),
             "いる場所": self.location_name,
             "あなたが知っていること": self.knowledge.model_dump(),
+            **self.motives.for_prompt(),
             "目の前にいる人物": [
                 {"名前": person.name or "(名を知らない)", **person.looks.model_dump()} for person in self.present],
         }
@@ -254,6 +303,9 @@ class ActOutcomeDraft(EventRecordDraft):
         description=f"この一手で生まれた・広まった事柄。無ければ空。{constants.ACT_NEW_IDEA_LIMIT}件まで")
     new_characters: list[NewCharacterDraft] = Field(
         description=f"この一手で新しく現れる人物・対象。無ければ空。{constants.ACT_NEW_CHARACTER_LIMIT}件まで")
+    motivation_changes: list[MotivationChange] = Field(
+        description=f"この一手で生まれた・強さが変わった・果たした・消えたモチベーション。変わらなければ空。"
+        f"{constants.ACT_MOTIVATION_CHANGE_LIMIT}件まで")
     arc_closed: bool = Field(description="続けた企てが、この一手で果たされたか潰えたか")
 
 
@@ -280,6 +332,8 @@ class OutcomeRequest(Material):
     # 巻きこんだ相手との対話(動いた人物の最初の一手のあとの手番)
     dialogue: list[DialogueTurn] = []
     frame: ImpactFrame
+    # 居合わせる人物(動いた人物が先)ごとの、その時刻に効いているモチベーション
+    motivations: list[ParticipantMotivations] = []
 
 
 class OutcomeRequestSerialized(OutcomeRequest):
@@ -293,9 +347,14 @@ class OutcomeRequestSerialized(OutcomeRequest):
             "場所の状況": self.situation.model_dump(),
             "移動先の候補": [{"場所id": destination.id, "名前": destination.name, "種別": destination.kind}
                         for destination in self.destinations],
+            "居合わせる人物のモチベーション": [
+                {"人物id": person.character_id, "名前": person.name,
+                 "モチベーション(強い順)": [motivation.for_prompt() for motivation in person.motivations]}
+                for person in self.motivations],
             "動いた人物": self.actor_name,
             "人物の内心": self.intent.inner,
             "人物の狙いと行動": self.intent.as_text(),
+            "一手が沿ったモチベーションid": self.intent.motivation_id,
             "続けた企て": None if self.arc is None else {"名前": self.arc.name, "狙い": self.arc.text},
             "巻きこんだ相手とのやり取り(起きた順)": [turn.as_text() for turn in self.dialogue],
             "サイコロで決まった成り行き": self.roll,
@@ -337,6 +396,13 @@ class ActSaved(BaseModel):
     arc_id: int | None = None
     idea_ids: list[int] = []
     moves: list[CharacterMove] = []
+    # 一手で足したモチベーションの行(生まれた思いと、強さの変わった思いの新しい行)
+    motivations: list[CharacterMotivationRecord] = []
+
+
+class MotivesForm(BaseModel):
+    character_ids: list[int]
+    time: Stamp
 
 
 class NewCharacterLink(BaseModel):
@@ -357,6 +423,7 @@ class ActedCharacter(BaseModel):
     idea_ids: list[int] = []
     characters: list[GeneratedCharacter] = []
     moves: list[CharacterMove] = []
+    motivations: list[CharacterMotivationRecord] = []
     invited_ids: list[int] = []
     dialogue: list[DialogueTurn] = []
     frame: ImpactFrame | None = None

@@ -136,6 +136,21 @@
       "writes": true
     },
     {
+      "id": "character.commit_character_motivation.CommitCharacterMotivation",
+      "area": "character",
+      "name": "CommitCharacterMotivation",
+      "doc": "人物にモチベーション(いま何をしたがっているか)を一つ足す。人物モードの人物の目が、その時刻に効いている行を読む。",
+      "params": [
+        {
+          "name": "motivation",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterMotivationCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "character.commit_character_relation.CommitCharacterRelation",
       "area": "character",
       "name": "CommitCharacterRelation",
@@ -177,10 +192,25 @@
       "id": "character.delete_character.DeleteCharacter",
       "area": "character",
       "name": "DeleteCharacter",
-      "doc": "人物を消す。期間ごとの値・説明の変化・出自と居場所・相関・スキル・話に名前だけ出る行・",
+      "doc": "人物を消す。期間ごとの値・説明の変化・出自と居場所・相関・スキル・モチベーション・話に名前だけ出る行・",
       "params": [
         {
           "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_character_motivation.DeleteCharacterMotivation",
+      "area": "character",
+      "name": "DeleteCharacterMotivation",
+      "doc": "モチベーションの行を一つ消す。消した行を返す。",
+      "params": [
+        {
+          "name": "character_motivation_id",
           "required": true,
           "default": null,
           "annotation": "int"
@@ -262,6 +292,27 @@
         }
       ],
       "writes": true
+    },
+    {
+      "id": "character.list_character_motivations.ListCharacterMotivations",
+      "area": "character",
+      "name": "ListCharacterMotivations",
+      "doc": "人物のモチベーション。`time` を渡せばその時刻に効いている行を強い順に、省けばすべての行を始まりの新しい順に返す。",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": false
     },
     {
       "id": "character.list_character_relations.ListCharacterRelations",
@@ -510,6 +561,21 @@
           "required": true,
           "default": null,
           "annotation": "CharacterLocationUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_character_motivation.UpdateCharacterMotivation",
+      "area": "character",
+      "name": "UpdateCharacterMotivation",
+      "doc": "モチベーションの行を一つ直す。渡した欄だけを直す(`end` は null を渡せば空に戻す)。",
+      "params": [
+        {
+          "name": "motivation",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterMotivationUpdateForm"
         }
       ],
       "writes": true

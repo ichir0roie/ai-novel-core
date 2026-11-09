@@ -26,7 +26,7 @@ from data_access_logic.expansion import actor, budget
 from data_access_logic.expansion import steps as expansion_steps
 from data_access_logic.expansion.act_models import (
     ActedCharacter, ActFailure, ActFrameForm, ActOutcomeDraft, ActorPick, ActPlan, ActRun, ActSaveForm,
-    DialogueBriefForm, DialogueTurn, IntentDraft, InviteForm, NewCharacterLink, OutcomeRequest,
+    DialogueBriefForm, DialogueTurn, IntentDraft, InviteForm, MotivesForm, NewCharacterLink, OutcomeRequest,
 )
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
 from data_access_logic.flows import character as character_flow
@@ -54,6 +54,9 @@ def _summary(acted: ActedCharacter) -> str:
         lines.append(f"現れた人物: {', '.join(f'{c.name}(id={c.id})' for c in acted.characters)}")
     if acted.moves:
         lines.append(f"居場所の移動: {len(acted.moves)} 人")
+    if acted.motivations:
+        lines.append("モチベーション: " + "; ".join(
+            f"人物 id={row.character_id} {row.text}(強さ {row.strength})" for row in acted.motivations))
     if acted.frame is not None:
         lines.append(f"影響力: {acted.frame.influence} 気力: {pick.energy}")
     return "\n".join(lines)
@@ -73,6 +76,7 @@ def _dialogue(ai: AIClient, pick: ActorPick, intent: IntentDraft, invited_ids: l
     time = Stamp.parse(pick.time)
     assert time is not None
     participants = [pick.character_id, *invited_ids]
+    refresh(ai, call(expansion_steps.motive_targets, MotivesForm(character_ids=invited_ids, time=time)))
     briefs = {id_: call(expansion_steps.dialogue_brief, DialogueBriefForm(
         character_id=id_, time=time, location_id=pick.location_id, participant_ids=participants,
         mentioned=intent.as_text())) for id_ in participants}
@@ -103,6 +107,7 @@ def _plan(ai: AIClient, rng: random.Random, pick: ActorPick, expansion_id: int, 
     time = Stamp.parse(pick.time)
     assert time is not None
     seeds = draw_from(rng, call(seed_steps.seed_pool))
+    refresh(ai, call(expansion_steps.motive_targets, MotivesForm(character_ids=[pick.character_id], time=time)))
     brief = call(expansion_steps.actor_brief, expansion_steps.BriefForm(pick=pick, seeds=seeds, nudge=nudge))
     intent = actor.intent_draft(ai, brief)
     if intent is None:
@@ -125,11 +130,13 @@ def _plan(ai: AIClient, rng: random.Random, pick: ActorPick, expansion_id: int, 
     roll = rng.choice(constants.ACT_OUTCOMES)
     frame = call(expansion_steps.act_frame, ActFrameForm(
         actor_id=pick.character_id, participant_ids=[pick.character_id, *present_ids], time=time, roll=roll))
+    motivations = call(expansion_steps.participant_motivations, MotivesForm(
+        character_ids=[pick.character_id, *present_ids], time=time))
     arc = next((arc for arc in brief.arcs if arc.id == intent.arc_id), None)
     return ActPlan(expansion_id=expansion_id, pick=pick, intent=intent, present_ids=present_ids,
                    invited_ids=invited_ids, request=OutcomeRequest(
                        situation=situation, destinations=destinations, actor_name=pick.name, intent=intent,
-                       roll=roll, arc=arc, dialogue=dialogue[1:], frame=frame))
+                       roll=roll, arc=arc, dialogue=dialogue[1:], frame=frame, motivations=motivations))
 
 
 def _save(ai: AIClient, rng: random.Random, plan: ActPlan, outcome: ActOutcomeDraft) -> ActedCharacter:
@@ -155,7 +162,8 @@ def _save(ai: AIClient, rng: random.Random, plan: ActPlan, outcome: ActOutcomeDr
                 *request.dialogue] if request.dialogue else []
     return ActedCharacter(expansion_id=plan.expansion_id, actor=pick, intent=plan.intent, roll=request.roll,
                           event=saved.event, arc_id=saved.arc_id, idea_ids=saved.idea_ids, characters=created,
-                          moves=saved.moves, invited_ids=plan.invited_ids, dialogue=dialogue, frame=request.frame)
+                          moves=saved.moves, motivations=saved.motivations, invited_ids=plan.invited_ids,
+                          dialogue=dialogue, frame=request.frame)
 
 
 def _failed(run: ActRun, expansion_id: int | None, pick: ActorPick | None, error: Exception) -> None:

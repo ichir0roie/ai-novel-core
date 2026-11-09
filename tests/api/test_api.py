@@ -34,7 +34,7 @@ def test_table_counts(client, world):
 
     assert response.status_code == 200
     counts = response.json()["counts"]
-    assert set(counts) == {"story", "episode", "character", "character_relation", "character_skill", "event", "location", "idea",
+    assert set(counts) == {"story", "episode", "character", "character_relation", "character_skill", "character_motivation", "event", "location", "idea",
                            "meme", "oracle", "style_preference"}
     assert counts["story"] >= 1
 

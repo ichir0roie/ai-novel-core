@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from db.schema import (
-    Base, Character, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle, Story,
-    StylePreference,
+    Base, Character, CharacterMotivation, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle,
+    Story, StylePreference,
 )
 
 PREVIEW_LENGTH = 80
@@ -12,7 +12,7 @@ PREVIEW_LENGTH = 80
 # 行を呼ぶ名前にする列。無い表(ミームなど)は本文の頭で呼ぶ
 LABEL_COLUMNS: dict[type, str | None] = {
     Story: "name", Episode: "title", Character: "name", CharacterRelation: "relation", CharacterSkill: "name",
-    Event: "name",
+    CharacterMotivation: None, Event: "name",
     Location: "name", Idea: "name", Meme: None, Oracle: "title", StylePreference: None,
 }
 

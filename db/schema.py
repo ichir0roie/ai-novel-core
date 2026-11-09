@@ -804,6 +804,41 @@ class CharacterSkillHistoryKnower(OriginMixin, KnowerMixin, Base):
     knower: Mapped["Character | None"] = relationship(lazy="noload")
 
 
+class CharacterMotivation(OriginMixin, TextBase):
+    """人物がいま何をしたがっているか(モチベーション)を、一つの思いごとに一行で持つ。
+
+    `start` から効き、`end` が空のあいだ効いている。果たした・消えたら `end` を付ける。強さが変わったら、前の行を変わった時刻で終え、
+    同じ内容で新しい強さの行を足す(人物モードは足すことと `end` を付けることしかできないので、行を直さずに積む)。
+    人物モード(`ActCharacter`)の人物の目がその時刻に効いている本人の行を読んで次の一手を決め、裁く段が一手のあとの増減を足す。
+    本人の内心なので、ほかの人物には渡さない。
+    """
+
+    __tablename__ = "character_motivation"
+    __table_args__ = (
+        CheckConstraint("strength BETWEEN 1 AND 5", name="ck_character_motivation_strength"),
+        CheckConstraint("\"end\" IS NULL OR start < \"end\"", name="ck_character_motivation_span"),
+    )
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="思いを持つ人物", sort_order=100)
+    start: Mapped[Stamp] = mapped_column(
+        StampType, nullable=False, comment="思いが生まれた時刻(この時刻から効く)", sort_order=110)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="果たした・消えた・強さが変わった時刻(この時刻からは効かない)。空なら効いている", sort_order=115)
+    strength: Mapped[int] = mapped_column(
+        Integer, nullable=False,
+        comment="強さ。1 気にかかる程度 / 2 機会があればしたい / 3 手間をかけてもしたい / 4 ほかを後回しにしてもしたい / "
+        "5 何を捨てても果たしたい",
+        sort_order=120)
+    text: Mapped[str] = mapped_column(
+        String, nullable=False, comment="何をしたいか・なぜか(本人の内心)", sort_order=10000)
+
+    character: Mapped[Character] = relationship(lazy="noload")
+
+    def covers(self, time: Stamp) -> bool:
+        return self.start <= time and (self.end is None or time < self.end)
+
+
 class Idea(OriginMixin, TextBase):
     __tablename__ = "idea"
 

@@ -21,7 +21,7 @@ def test_dumped_files_are_current():
 def test_tables():
     tables = {table["name"]: table for table in dump_static.tables()["tables"]}
 
-    assert set(tables) == {"story", "episode", "character", "character_relation", "character_skill", "event", "location", "idea",
+    assert set(tables) == {"story", "episode", "character", "character_relation", "character_skill", "character_motivation", "event", "location", "idea",
                            "meme", "oracle", "style_preference"}
     assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
 
