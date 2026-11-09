@@ -17,6 +17,8 @@ type Props = {
   parent: { id: number; label: string } | null;
   /** 起きた場所(タイムラインで絞り込んでいる場所)。絞り込んでいなければ null */
   location: { id: number; label: string } | null;
+  /** 当事者にする人物(見取り図で押した人物の列)。省けば当事者を付けない */
+  characters?: { id: number; label: string }[];
   onClose: () => void;
   /** その場で出来事を足し終えたとき */
   onAdded: () => void;
@@ -26,7 +28,15 @@ type Props = {
 
 /** 出来事のタイムラインで出来事を足す小さなモーダル。名前・期間・本文だけでその場で足すか、
  * ほかの欄(当事者など)も書くなら追加ページへ移る。 */
-export default function NewEventModal({ start: initialStart, parent, location, onClose, onAdded, onOpenPage }: Props) {
+export default function NewEventModal({
+  start: initialStart,
+  parent,
+  location,
+  characters = [],
+  onClose,
+  onAdded,
+  onOpenPage,
+}: Props) {
   const [name, setName] = useState("");
   const [start, setStart] = useState<string | null>(initialStart);
   const [end, setEnd] = useState<string | null>(null);
@@ -45,12 +55,13 @@ export default function NewEventModal({ start: initialStart, parent, location, o
     text,
     parent_event_id: parent?.id ?? null,
     location_id: location?.id ?? null,
+    character_ids: characters.map((c) => c.id),
   });
 
   const open = (e: OpenModifiers) => {
     const params = new URLSearchParams(
       Object.entries(data())
-        .filter(([, v]) => v != null && v !== "" && v !== false)
+        .filter(([, v]) => v != null && v !== "" && v !== false && !(Array.isArray(v) && v.length === 0))
         .map(([k, v]) => [k, String(v)]),
     );
     onOpenPage(`/tables/event/new?${params}`, e);
@@ -94,6 +105,9 @@ export default function NewEventModal({ start: initialStart, parent, location, o
       {error && <div className="status error">{error}</div>}
       <div className="hint">{parent ? T.eventTimeline.newChildOf(parent.label) : T.eventTimeline.newRoot}</div>
       <div className="hint">{T.eventTimeline.newLocation(location?.label ?? T.none)}</div>
+      {characters.length > 0 && (
+        <div className="hint">{T.eventTimeline.newParticipants(characters.map((c) => c.label).join(", "))}</div>
+      )}
       <div className="field">
         <label>{T.eventTimeline.name}</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />

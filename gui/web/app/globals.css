@@ -718,7 +718,9 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 .overview-event:hover .overview-label { font-weight: 600; }
 .overview-arc { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: color-mix(in srgb, var(--accent) 45%, transparent); cursor: pointer; }
 .timeline-item.overview-faint { opacity: 0.55; border-style: dashed; color: inherit; text-decoration: none; }
-.overview .timeline-item { color: inherit; text-decoration: none; cursor: pointer; }
+.overview .timeline-item { color: inherit; text-decoration: none; }
+/* 人物の列の空いた所を押すと、その人物の出来事を足す(話の列の空いた所と同じ形) */
+.overview-people { cursor: cell; }
 .overview-relations { margin: 0; padding-left: 1.2rem; line-height: 1.8; }
 /* 話を直す・足す左の枠。モーダルにせず表の左に並べ、話の列のすぐ右から出来事の列が見えたまま残るようにする */
 .overview-split { flex: 1; min-height: 0; display: flex; }
