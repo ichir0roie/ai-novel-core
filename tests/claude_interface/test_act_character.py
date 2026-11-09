@@ -278,15 +278,17 @@ def test_narrator_takes_the_plot_as_its_motive(world):
 
 def test_narrator_finds_an_episode_by_a_name_in_the_plot(world):
     actor_id = world.character_ids[1]
+    # 前に回したテストの話が同じ名前で残り、近い話の上限を埋めるので、この回だけの名前にする
+    name = f"テスト峠越え{actor_id}"
     with get_env_session() as s:
-        name = s.get_one(Character, actor_id).name
+        s.get_one(Character, actor_id).name = name
+        s.commit()
     episode_id = _plotted_episode(world.story_id, [], "1231/06/20", f"{name}が峠を越える", cast=False)
     ai = ScriptedAI(actor_id, world.neighbor_id)
 
     acted = _one(act.act_character(character_id=actor_id, time="1231/06/01", seed=1, ai=ai))
 
-    # 前に回したテストの話も同じ名前で残るので、足した話が入っていることだけを見る
-    assert acted.narration is not None and episode_id in [episode.id for episode in acted.narration.episodes]
+    assert acted.narration is not None and [episode.id for episode in acted.narration.episodes] == [episode_id]
 
 
 def test_no_narrator_without_a_related_episode(world):
