@@ -68,6 +68,9 @@ const DOT_STEP = 0.9;
 const DOT_MAX = 13;
 // 名前を点の脇に出す出来事の大きさの下限(小さな出来事は吹き出しで読む)
 const LABEL_SIZE = 4;
+// 企ての帯を置く幅。列の左の空きと、押して出来事を足せるよう列の右に残す余白(px)
+const ARC_LEFT = 4;
+const ARC_RIGHT_SPACE = 16;
 // 章の話の列の key。兄弟の作品の列は `story-<作品の id>`
 const CHAPTER_KEY = "chapter";
 
@@ -126,6 +129,30 @@ function changeForm({ base, days, story }: Change): Rec {
 const columnKeyOf = (episode: OverviewEpisode) => (episode.in_story ? CHAPTER_KEY : `story-${episode.story_id}`);
 
 const radius = (event: OverviewEvent) => Math.min(DOT_MAX, DOT_BASE + (event.size.total - 1) * DOT_STEP);
+
+// 企ての帯の置き場所。slot は列の中で何本目にずらすか、slots はその列でずらす本数
+type ArcSlot = { owner: number; start: number; end: number; slot: number; slots: number };
+
+/** 企ての帯を、動いた人物の列ごとに時刻の順で並べ、期間の重なる帯は別の slot に置く(重ならなければ同じ slot に戻す) */
+function arcSlotsOf(arcs: { id: number; owner: number; start: number; end: number }[]): Map<number, ArcSlot> {
+  const slots = new Map<number, ArcSlot>();
+  const byOwner = new Map<number, typeof arcs>();
+  for (const arc of arcs) byOwner.set(arc.owner, [...(byOwner.get(arc.owner) ?? []), arc]);
+  for (const list of byOwner.values()) {
+    const ends: number[] = [];
+    const placed = [...list]
+      .sort((a, b) => a.start - b.start || a.id - b.id)
+      .map((arc) => {
+        let slot = ends.findIndex((end) => end <= arc.start);
+        if (slot < 0) slot = ends.length;
+        ends[slot] = arc.end;
+        return { arc, slot };
+      });
+    for (const { arc, slot } of placed)
+      slots.set(arc.id, { owner: arc.owner, start: arc.start, end: arc.end, slot, slots: ends.length });
+  }
+  return slots;
+}
 
 // 左の枠で書いている話。id が null なら、空いた所を押して足す話(足したあとは足した話の id)。saved は db の値(足す話は null)
 type EpisodePanel = { id: number | null; label: string; saved: EpisodeDraft | null; draft: EpisodeDraft };
@@ -753,6 +780,18 @@ export default function OverviewPage() {
 
   const x = (characterId: number) => (column.get(characterId) ?? 0) * CHARACTER_WIDTH + CHARACTER_WIDTH / 2;
 
+  const arcSlots = useMemo(() => {
+    const arcs = [];
+    for (const event of events) {
+      if (!parentIds.has(event.id)) continue;
+      const owner = event.actor_id ?? event.character_ids.find((id) => column.has(id));
+      const start = dayOf(event.start);
+      if (owner == null || !column.has(owner) || start === null) continue;
+      arcs.push({ id: event.id, owner, start, end: dayOf(event.end) ?? Infinity });
+    }
+    return arcSlotsOf(arcs);
+  }, [events, parentIds, column]);
+
   const renderEvents = () => {
     if (!scale) return null;
     const width = characters.length * CHARACTER_WIDTH;
@@ -772,23 +811,22 @@ export default function OverviewPage() {
           />
         ))}
         <svg className="overview-svg" width={width} height={scale.height}>
-          {/* 企て(子を持つ出来事)は、動いた人物の列に始まりから終わりまでの帯で描く */}
+          {/* 企て(子を持つ出来事)は、動いた人物の列に始まりから終わりまでの帯で描く。期間の重なる帯は、幅の半分ずつずらして重ねる */}
           {events
-            .filter((event) => parentIds.has(event.id))
+            .filter((event) => arcSlots.has(event.id))
             .map((event) => {
-              const owner = event.actor_id ?? event.character_ids.find((id) => column.has(id));
-              const start = dayOf(event.start);
-              if (owner == null || !column.has(owner) || start === null) return null;
+              const { owner, start, end, slot, slots } = arcSlots.get(event.id)!;
               const top = scale.toY(start);
-              const end = dayOf(event.end);
-              const bottom = end === null ? scale.height : scale.toY(end);
+              const bottom = end === Infinity ? scale.height : scale.toY(end);
+              // slots 本を半分ずつ重ねて、列の左から右の余白の手前までに収める
+              const width = (2 * (CHARACTER_WIDTH - ARC_LEFT - ARC_RIGHT_SPACE)) / (slots + 1);
               return (
                 <rect
                   key={`arc-${event.id}`}
                   className={`overview-arc ${dimmed(event) ? "dimmed" : ""}`}
-                  x={x(owner) - CHARACTER_WIDTH / 2 + 6}
+                  x={x(owner) - CHARACTER_WIDTH / 2 + ARC_LEFT + (slot * width) / 2}
                   y={top}
-                  width={CHARACTER_WIDTH - 12}
+                  width={width}
                   height={Math.max(4, bottom - top)}
                   rx={4}
                   onMouseMove={(e) => show(e, [T.overview.arc, ...eventLines(event)])}
