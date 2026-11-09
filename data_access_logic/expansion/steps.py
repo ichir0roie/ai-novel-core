@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from data_access_logic.expansion import acting
 from data_access_logic.expansion.act_models import (
     ActFrameForm, ActorBrief, ActorPick, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm, ImpactFrame, InviteForm,
-    NewCharacterLink,
+    MotivesForm, NewCharacterLink, ParticipantMotivations,
 )
 from data_access_logic.expansion.finish_expansion import finish
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
@@ -17,6 +17,7 @@ from data_access_logic.expansion.record import ExpansionRecord
 from data_access_logic.expansion.start_expansion import start
 from data_access_logic.query import common_query
 from data_access_logic.step import db_step
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Expansion
 from db.stamp import Stamp
 
@@ -53,6 +54,16 @@ def invitable(s: Session, form: InviteForm) -> list[int]:
 @db_step
 def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
     return acting.dialogue_brief(s, form)
+
+
+@db_step
+def motive_targets(s: Session, form: MotivesForm) -> SummaryTargets:
+    return acting.motive_targets(s, form.character_ids, form.time)
+
+
+@db_step
+def participant_motivations(s: Session, form: MotivesForm) -> list[ParticipantMotivations]:
+    return acting.participant_motivations(s, form.character_ids, form.time)
 
 
 @db_step

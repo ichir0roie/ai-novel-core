@@ -17,7 +17,9 @@ from functools import cache
 
 from pydantic import BaseModel
 
-from data_access_logic.character.record import CharacterRecord, CharacterRelationRecord, CharacterSkillRecord
+from data_access_logic.character.record import (
+    CharacterMotivationRecord, CharacterRecord, CharacterRelationRecord, CharacterSkillRecord,
+)
 from data_access_logic.entrypoint import UnknownRecordError
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.record import EventRecord
@@ -29,7 +31,8 @@ from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.story.record import StoryRecord
 from data_access_logic.style_preference.record import StylePreferenceRecord
 from db.schema import (
-    Character, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle, Story, StylePreference,
+    Character, CharacterMotivation, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle, Story,
+    StylePreference,
 )
 
 
@@ -65,6 +68,7 @@ TABLES: tuple[TableSpec, ...] = (
               ("name", "appearance", "text", "meme", "principle", "plot", "histories.description")),
     TableSpec("character_relation", CharacterRelation, CharacterRelationRecord, ("relation", "text", "histories.description")),
     TableSpec("character_skill", CharacterSkill, CharacterSkillRecord, ("name", "text", "histories.description")),
+    TableSpec("character_motivation", CharacterMotivation, CharacterMotivationRecord, ("text",), sort="start"),
     TableSpec("event", Event, EventRecord, ("name", "text")),
     TableSpec("location", Location, LocationRecord, ("name", "text"), tree_parent_column="parent_id"),
     TableSpec("idea", Idea, IdeaRecord, ("name", "text"), tree_parent_column="parent_idea_id"),
@@ -118,6 +122,14 @@ def _character_skill() -> TableWriter:
     return TableWriter(CommitCharacterSkill, UpdateCharacterSkill, CharacterSkillCreateForm, CharacterSkillUpdateForm)
 
 
+def _character_motivation() -> TableWriter:
+    from data_access_logic.character.commit_character_motivation import CommitCharacterMotivation
+    from data_access_logic.character.form import CharacterMotivationCreateForm, CharacterMotivationUpdateForm
+    from data_access_logic.character.update_character_motivation import UpdateCharacterMotivation
+    return TableWriter(CommitCharacterMotivation, UpdateCharacterMotivation, CharacterMotivationCreateForm,
+                       CharacterMotivationUpdateForm)
+
+
 def _event() -> TableWriter:
     from data_access_logic.event.commit_event import CommitEvent
     from data_access_logic.event.form import EventCreateForm, EventUpdateForm
@@ -162,7 +174,7 @@ def _style_preference() -> TableWriter:
 
 _WRITERS: dict[str, Callable[[], TableWriter]] = {
     "story": _story, "episode": _episode, "character": _character, "character_relation": _character_relation,
-    "character_skill": _character_skill, "event": _event, "location": _location, "idea": _idea, "meme": _meme,
+    "character_skill": _character_skill, "character_motivation": _character_motivation, "event": _event, "location": _location, "idea": _idea, "meme": _meme,
     "oracle": _oracle, "style_preference": _style_preference,
 }
 

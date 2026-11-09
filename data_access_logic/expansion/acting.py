@@ -7,24 +7,30 @@ from __future__ import annotations
 import logging
 import random
 
+from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from data_access_logic import constants
 from data_access_logic.character.knowledge import _related_ids, appearance_of, knowledge_of
+from data_access_logic.character.motivations import apply_changes, motivations_at
 from data_access_logic.character.moves import allowed_moves, update_locations
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character.record import CharacterMotivationRecord
 from data_access_logic.entrypoint import record_of
 from data_access_logic.event import progress
 from data_access_logic.event.plan import _current_location_id
 from data_access_logic.event.record import EventRecord
+from data_access_logic.event.summary import events_of
 from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_models import (
     ActFrameForm, ActorBrief, ActorPick, ActorSerialized, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm,
-    DialogueSerialized, ImpactFrame, InviteForm, NewCharacterLink, OpenArc, PresentPerson,
+    DialogueSerialized, ImpactFrame, InviteForm, MotivationLine, Motives, NewCharacterLink, OpenArc,
+    ParticipantMotivations, PresentPerson,
 )
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
+from data_access_logic.summary_targets import SummaryTargets
 from db.schema import (
     CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Event, EventCharacter, IdeaHistory,
     IdeaHistoryKnower, Location,
@@ -110,6 +116,45 @@ def pick_actor(
                      energy=round(budget.energy_at(s, character, at), 1), influence=budget.influence_of(character, at))
 
 
+def _past_events_select(character_id: int, time: Stamp) -> Select[Event]:
+    return common_query.events_of_character_select(character_id, until=time, limit=constants.RECENT_EVENT_LIMIT)
+
+
+def _later_events_select(character_id: int, location_id: int | None, time: Stamp) -> Select[Event]:
+    return common_query.events_after_select(location_id, [character_id], time, limit=constants.LATER_EVENT_LIMIT)
+
+
+def motive_targets(s: Session, character_ids: list[int], time: Stamp) -> SummaryTargets:
+    """人物の目に要約で渡す、前後の出来事。"""
+    event_ids = []
+    for character_id in character_ids:
+        location_id = _current_location_id(s.get_one(Character, character_id), time)
+        for query in (_past_events_select(character_id, time), _later_events_select(character_id, location_id, time)):
+            event_ids += [event.id for event in s.scalars(query).all()]
+    return SummaryTargets(event_ids=list(dict.fromkeys(event_ids)))
+
+
+def motives_of(s: Session, character: Character, time: Stamp) -> Motives:
+    """本人のモチベーションと前後の出来事。要約は揃えてある前提でそのまま読む。"""
+    location_id = _current_location_id(character, time)
+    return Motives(
+        motivations=[MotivationLine.model_validate(row) for row in motivations_at(s, character.id, time)],
+        past_events=events_of(s, _past_events_select(character.id, time)),
+        later_events=events_of(s, _later_events_select(character.id, location_id, time)),
+    )
+
+
+def participant_motivations(s: Session, character_ids: list[int], time: Stamp) -> list[ParticipantMotivations]:
+    """裁く段に渡す、居合わせる人物ごとのモチベーション(並びは渡した順。動いた人物を先に渡す)。"""
+    people = []
+    for character_id in dict.fromkeys(character_ids):
+        character = s.get_one(Character, character_id)
+        people.append(ParticipantMotivations(
+            character_id=character.id, name=character.name,
+            motivations=[MotivationLine.model_validate(row) for row in motivations_at(s, character.id, time)]))
+    return people
+
+
 def open_arcs(s: Session, character_id: int) -> list[OpenArc]:
     return [OpenArc(id=event.id, name=event.name, text=event.text)
             for event in s.scalars(expansion_query.open_arcs_select(character_id)).all()]
@@ -131,6 +176,7 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
     prompt = ActorSerialized(
         time=time, location_name=s.get_one(Location, pick.location_id).name,
         knowledge=knowledge_of(s, character.id, time, mentioned, None, None),
+        motives=motives_of(s, character, time),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, time)) for other in present],
         recent_events=[event.name for event in recent], arcs=arcs, seeds=seeds, nudge=nudge,
@@ -165,6 +211,7 @@ def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
     prompt = DialogueSerialized(
         time=form.time, location_name=s.get_one(Location, form.location_id).name,
         knowledge=knowledge_of(s, character.id, form.time, form.mentioned, None, None),
+        motives=motives_of(s, character, form.time),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, form.time)) for other in others],
     ).model_dump()
@@ -227,12 +274,14 @@ def save_act(s: Session, form: ActSaveForm) -> ActSaved:
                           [destination.id for destination in form.destinations])
     if moves:
         update_locations(s, moves, form.time)
+    motivations = apply_changes(s, form.outcome.motivation_changes, participant_ids, form.time)
     if arc_id is not None and form.outcome.arc_closed:
         arc = s.get_one(Event, arc_id)
         if arc.end is None:
             arc.end = form.time
             s.flush()
-    return ActSaved(event=record_of(s, EventRecord, record), arc_id=arc_id, idea_ids=idea_ids, moves=moves)
+    return ActSaved(event=record_of(s, EventRecord, record), arc_id=arc_id, idea_ids=idea_ids, moves=moves,
+                    motivations=[CharacterMotivationRecord.model_validate(row) for row in motivations])
 
 
 def link_new_character(s: Session, link: NewCharacterLink) -> None:

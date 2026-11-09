@@ -139,6 +139,8 @@ export const T = {
         : `Delete idea "${label}"? Its histories are removed too. This cannot be undone.`,
     confirmDeleteSkill: (label: string) =>
       `Delete skill "${label}"? Its histories and who knows them are removed too. This cannot be undone.`,
+    confirmDeleteMotivation: (label: string) =>
+      `Delete motivation "${label}"? To mark it fulfilled or gone instead, set its end. This cannot be undone.`,
     deleteFailed: (error: string) => `Could not delete: ${error}`,
     previousEpisode: "◀ Prev",
     nextEpisode: "Next ▶",

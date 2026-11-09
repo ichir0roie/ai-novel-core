@@ -147,6 +147,32 @@ class CharacterSkillName(Material):
     name: str
 
 
+class CharacterMotivationRecord(Material):
+    id: int
+    origin: str = "user"
+    character_id: int
+    # 思いが生まれた時刻(この時刻から効く)
+    start: Timestamp
+    # 果たした・消えた・強さが変わった時刻。空なら効いている
+    end: Timestamp | None = None
+    # 1〜5(`constants.MOTIVATION_STRENGTHS`)
+    strength: int
+    text: str
+
+
+# 人物モードの裁く段の応答(json schema として AI に渡すので、docstring を書くと description として AI に渡る)
+class MotivationChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character_id: int = Field(description="思いが生まれた・変わった・終わった人物の人物id。居合わせる人物の中からだけ選ぶ")
+    motivation_id: int | None = Field(
+        description="強さが変わった・果たした・消えたモチベーションのid(その人物のモチベーションの中から)。新しく生まれた思いなら null")
+    strength: int = Field(
+        ge=0, le=5, description="この出来事のあとの強さ。1〜5。果たした・消えたなら 0")
+    text: str | None = Field(
+        description="新しく生まれた思いの内容(何をしたいか・なぜか)。強さが変わっただけ・終わっただけなら null")
+
+
 class GeneratedCharacter(Material):
     id: int
     name: str | None = None

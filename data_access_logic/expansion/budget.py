@@ -4,7 +4,7 @@
   `ACT_COST_INVOLVED` 減る。`ACT_ENERGY_RECOVERY_DAYS` 日ごとに 1 戻る。数えるのは終えた展開(done)だけ(取り消した手は戻る)
 - 手数: `ACT_WINDOW_DAYS` 日のあいだに自分から打てる手は `ACT_WINDOW_LIMIT` まで
 - 影響の枠: 動いた人物の影響力(主要人物は `MAIN_CHARACTER_MIN_INFLUENCE` より下に扱わない)で幅が決まり、成り行きが悪ければ一段狭まる。
-  動いた人物より影響力が上の人物は、その一手では人となりの変化・住まいの移動を書かれない
+  動いた人物より影響力が上の人物は、その一手では人となりの変化(モチベーションの増減を含む)・住まいの移動を書かれない
 """
 from __future__ import annotations
 
@@ -125,8 +125,11 @@ def clamp(outcome: ActOutcomeDraft, impact: ImpactFrame, actor_id: int) -> ActOu
                if update.character_id not in resistant][:impact.people]
     moves = [move for move in first_actor(outcome.character_moves, lambda row: row.character_id)
              if move.character_id not in resistant][:impact.moves]
+    # 思いの増減も人となりの変化に数え、動かされにくい人物の分は書かない
+    motivation_changes = [change for change in first_actor(outcome.motivation_changes, lambda row: row.character_id)
+                          if change.character_id not in resistant][:constants.ACT_MOTIVATION_CHANGE_LIMIT]
     return outcome.model_copy(update={
-        "character_updates": updates, "character_moves": moves,
+        "character_updates": updates, "character_moves": moves, "motivation_changes": motivation_changes,
         "location_abolished": outcome.location_abolished and impact.location_change,
         "location_founded": outcome.location_founded if impact.location_change else None,
         "new_characters": outcome.new_characters[:impact.new_characters],

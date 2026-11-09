@@ -9,7 +9,7 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, CharacterHistoryKnower, CharacterRelation, CharacterSkillHistoryKnower, CharacterSpeech, Episode, EpisodeCharacter,
+    Character, CharacterHistoryKnower, CharacterMotivation, CharacterRelation, CharacterSkillHistoryKnower, CharacterSpeech, Episode, EpisodeCharacter,
     EventCharacter, IdeaHistoryKnower, LocationHistoryKnower,
 )
 
@@ -21,7 +21,7 @@ class DeletedCharacter(Material):
 
 
 class DeleteCharacter(CommitEntrypoint):
-    """人物を消す。期間ごとの値・説明の変化・出自と居場所・相関・スキル・話に名前だけ出る行・
+    """人物を消す。期間ごとの値・説明の変化・出自と居場所・相関・スキル・モチベーション・話に名前だけ出る行・
     来歴を知る人の行も消す。
 
     出来事の当事者か、話の登場人物・視点になっている人物は止まる(先に出来事・話から外す)。
@@ -52,6 +52,7 @@ class DeleteCharacter(CommitEntrypoint):
         # スキルは人物から辿らない(`Character` にリレーションが無い)ので、来歴・知る相手の行ごと cascade で消えるよう一行ずつ消す
         for skill in skills_of(s, record.id):
             s.delete(skill)
+        s.execute(delete(CharacterMotivation).where(CharacterMotivation.character_id == record.id))
         s.execute(delete(CharacterRelation).where(or_(
             CharacterRelation.character_1_id == record.id, CharacterRelation.character_2_id == record.id)))
         s.delete(record)

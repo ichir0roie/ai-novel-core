@@ -5,7 +5,7 @@ import json
 from sqlalchemy import select
 
 from data_access_logic import constants
-from data_access_logic.character.record import CharacterMove
+from data_access_logic.character.record import CharacterMove, MotivationChange
 from data_access_logic.event.progress_models import CharacterUpdateDraft
 from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_character import ActCharacter
@@ -17,14 +17,15 @@ from data_access_logic.expansion.read_expansion import ReadExpansion
 from data_access_logic.expansion.revert_expansion import RevertExpansion
 from data_access_logic.flows import act
 from db.schema import (
-    Character, CharacterHistory, CharacterLocation, CharacterParameter, CharacterRelation, Event, Expansion, IdeaHistory,
-    get_env_session,
+    Character, CharacterHistory, CharacterLocation, CharacterMotivation, CharacterParameter, CharacterRelation, Event,
+    EventCharacter, Expansion, IdeaHistory, get_env_session,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
 
 
-def _outcome(actor_id: int, destination_id: int, arc_closed: bool, others: list[int]) -> dict:
+def _outcome(actor_id: int, destination_id: int, arc_closed: bool, others: list[int],
+             motivation_changes: list[MotivationChange] | None = None) -> dict:
     return dict(
         event_name="診療所の開業", event_text="村の空き家を借りて診療所を開いた", character_ids=[actor_id, *others],
         character_moves=[CharacterMove(character_id=id_, location_id=destination_id) for id_ in [actor_id, *others]],
@@ -33,20 +34,23 @@ def _outcome(actor_id: int, destination_id: int, arc_closed: bool, others: list[
         ideas=[ActIdeaDraft(keyword="潮風療法", kind="技術", description="潮風に当てて熱を下げる手当て",
                             called="潮風の手当て", detail="熱が下がると村人は信じている", knower_ids=[actor_id])],
         new_characters=[NewCharacterDraft(description="診療所で雇われた若い助手", person=True, relation="雇い人")],
-        arc_closed=arc_closed)
+        motivation_changes=motivation_changes or [], arc_closed=arc_closed)
 
 
 class ScriptedAI(MockAIClient):
     """人物の一手・対話の手番・まとめた裁きだけを決めた答えにする。人物の生成などほかの呼び出しはモックに任せる。"""
 
     def __init__(self, actor_id: int, destination_id: int, arc_id: int | None = None, arc_closed: bool = False,
-                 invite_ids: list[int] | None = None):
+                 invite_ids: list[int] | None = None, motivation_id: int | None = None,
+                 motivation_changes: list[MotivationChange] | None = None):
         super().__init__(seed=0)
         self.actor_id = actor_id
         self.destination_id = destination_id
         self.arc_id = arc_id
         self.arc_closed = arc_closed
         self.invite_ids = invite_ids or []
+        self.motivation_id = motivation_id
+        self.motivation_changes = motivation_changes
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
         call = {"output": output, "prompt": prompt, "system": system, "style_scope": style_scope, "model": model,
@@ -54,7 +58,7 @@ class ScriptedAI(MockAIClient):
         if output is IntentDraft:
             self.calls.append(call)
             return IntentDraft(inner="港の病人を放っておけない", aim="村に診療所を開く", action="村へ移って診療所を開く",
-                               speech="ここで診ます", arc_id=self.arc_id,
+                               speech="ここで診ます", motivation_id=self.motivation_id, arc_id=self.arc_id,
                                new_arc_name=None if self.arc_id is not None else "診療所を開く",
                                invites=[InviteDraft(character_id=id_, reason="手伝ってほしい") for id_ in self.invite_ids])
         if output is DialogueTurnDraft:
@@ -67,7 +71,8 @@ class ScriptedAI(MockAIClient):
             acts = json.loads(prompt.rsplit("\n", 1)[0])["手"]
             return BatchOutcomeDraft(outcomes=[
                 BatchOutcomeItem(act_number=item["手の番号"],
-                                 **_outcome(self.actor_id, self.destination_id, self.arc_closed, self.invite_ids))
+                                 **_outcome(self.actor_id, self.destination_id, self.arc_closed, self.invite_ids,
+                                            self.motivation_changes))
                 for item in acts])
         return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
                                 effort=effort, style_scope=style_scope)
@@ -235,7 +240,8 @@ def test_one_judge_call_for_the_whole_run(world):
 
 
 def test_clamp_keeps_the_actor_first_and_cuts_the_rest():
-    outcome = ActOutcomeDraft(**_outcome(1, 9, False, [2, 3, 4]))
+    changes = [MotivationChange(character_id=id_, motivation_id=None, strength=2, text="思い") for id_ in (3, 2, 1)]
+    outcome = ActOutcomeDraft(**_outcome(1, 9, False, [2, 3, 4], changes))
     frame = ImpactFrame(influence="低", people=2, moves=1, new_characters=0, ideas=1, location_change=False,
                         resistant_ids=[3])
 
@@ -244,3 +250,63 @@ def test_clamp_keeps_the_actor_first_and_cuts_the_rest():
     assert [move.character_id for move in clamped.character_moves] == [1]
     assert [update.character_id for update in clamped.character_updates] == [2, 4]
     assert clamped.new_characters == [] and len(clamped.ideas) == 1
+    # 動かされにくい人物の思いは書かず、動いた人物の思いを先に残す
+    assert [change.character_id for change in clamped.motivation_changes] == [1, 2]
+
+
+def test_actor_acts_on_motivations_and_the_events_around(world):
+    """花子は効いているモチベーションと前後の出来事を読んで動き、裁く段の増減で、果たした思いは終わり、
+    強さの変わった思いは前の行を終えて新しい行が足され、新しい思いが生まれる。"""
+    actor_id, main_id = world.character_ids[1], world.character_ids[0]
+    with get_env_session() as s:
+        cure = CharacterMotivation(character_id=actor_id, start="1199/01/01", strength=4, text="港の病人を救いたい")
+        calm = CharacterMotivation(character_id=actor_id, start="1199/01/01", strength=2, text="静かに暮らしたい")
+        over = CharacterMotivation(character_id=actor_id, start="1198/01/01", end="1199/06/01", strength=3,
+                                   text="もう終わった思い")
+        future = CharacterMotivation(character_id=actor_id, start="1201/01/01", strength=5, text="まだ生まれていない思い")
+        festival = Event(name="テスト村祭り", text="都で祭りが開かれる", time="1200/08/01", start="1200/08/01",
+                         location_id=world.location_id, event_characters=[EventCharacter(character_id=actor_id)])
+        s.add_all([cure, calm, over, future, festival])
+        s.commit()
+        cure_id, calm_id, over_id = cure.id, calm.id, over.id
+    changes = [
+        MotivationChange(character_id=actor_id, motivation_id=cure_id, strength=0, text=None),
+        MotivationChange(character_id=actor_id, motivation_id=calm_id, strength=3, text=None),
+        MotivationChange(character_id=actor_id, motivation_id=None, strength=3, text="診療所を広めたい"),
+        # 効いていない行は指せない
+        MotivationChange(character_id=actor_id, motivation_id=over_id, strength=1, text=None),
+        # 太郎は花子より影響力が上なので、花子の一手では思いを書かれない
+        MotivationChange(character_id=main_id, motivation_id=None, strength=2, text="花子を手伝いたい"),
+    ]
+    ai = ScriptedAI(actor_id, world.neighbor_id, motivation_id=cure_id, motivation_changes=changes,
+                    invite_ids=[main_id])
+
+    acted = _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1, ai=ai))
+
+    intent_prompt = ai.calls_of(IntentDraft)[0]["prompt"]
+    assert intent_prompt.index("港の病人を救いたい") < intent_prompt.index("静かに暮らしたい")
+    assert "もう終わった思い" not in intent_prompt and "まだ生まれていない思い" not in intent_prompt
+    assert "テスト市" in intent_prompt and "テスト村祭り" in intent_prompt
+    # 巻きこまれた太郎は、花子の思いを読まない
+    assert "港の病人を救いたい" not in ai.calls_of(DialogueTurnDraft)[0]["prompt"]
+    judge_prompt = ai.calls_of(BatchOutcomeDraft)[0]["prompt"]
+    assert "居合わせる人物のモチベーション" in judge_prompt and f'"一手が沿ったモチベーションid": {cure_id}' in judge_prompt
+    assert sorted(row.text for row in acted.motivations) == ["診療所を広めたい", "静かに暮らしたい"]
+    time = Stamp.parse("1200/05/01")
+    with get_env_session() as s:
+        assert s.get_one(CharacterMotivation, cure_id).end == time
+        assert s.get_one(CharacterMotivation, calm_id).end == time
+        assert s.get_one(CharacterMotivation, over_id).end == Stamp.parse("1199/06/01")
+        added = s.scalars(select(CharacterMotivation).where(
+            CharacterMotivation.character_id == actor_id, CharacterMotivation.start == time)).all()
+        assert sorted((row.text, row.strength, row.origin) for row in added) == [
+            ("診療所を広めたい", 3, "ai"), ("静かに暮らしたい", 3, "ai")]
+        assert not s.scalars(select(CharacterMotivation).where(CharacterMotivation.character_id == main_id)).all()
+
+    RevertExpansion(expansion_id=acted.expansion_id).run()
+
+    with get_env_session() as s:
+        assert s.get_one(CharacterMotivation, cure_id).end is None
+        assert s.get_one(CharacterMotivation, calm_id).end is None
+        assert not s.scalars(select(CharacterMotivation).where(
+            CharacterMotivation.character_id == actor_id, CharacterMotivation.start == time)).all()
