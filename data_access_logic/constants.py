@@ -114,8 +114,8 @@ ACT_RUN_LIMIT = 8
 # 近い話から上限まで、そのプロットを語り部の動機にする。語り部は一手ごとに一度だけ呼ぶ
 ACT_NARRATOR_EPISODE_DAYS = 30
 ACT_NARRATOR_EPISODE_LIMIT = 3
-ACT_NARRATOR_MODEL = "claude-sonnet-5-5"
-ACT_NARRATOR_EFFORT = "medium"
+ACT_NARRATOR_MODEL = "claude-opus-5-5"
+ACT_NARRATOR_EFFORT = "high"
 # 段(無/低/並/高/必)の並び。影響力・行動力を数で比べるのに使う
 LEVEL_RANKS = {"無": 0, "低": 1, "並": 2, "高": 3, "必": 4}
 # 主要人物は、影響力の値が低くてもこの段より下に扱わない(ほかの人物の一手から動かされにくくする)
