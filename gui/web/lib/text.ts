@@ -434,6 +434,7 @@ export const T = {
     newChildOf: (label: string) => `Child of: ${label}`,
     newRoot: "A root event (no parent)",
     newLocation: (label: string) => `Location: ${label}`,
+    newParticipants: (labels: string) => `Participants: ${labels}`,
     name: "name",
     start: "Start",
     end: "End (empty for a point in time)",
@@ -491,6 +492,9 @@ export const T = {
     hidden: "hidden",
     confirmDiscardEpisode: "Discard the unsaved time / title / plot_text?",
     added: (label: string) => `Added ${label}`,
+    addedEvent: "Added the event",
+    addedEventOutside: (since: string, until: string) =>
+      `Added the event. It is outside this period (${since} – ${until}), so it is not shown here.`,
     eventsInPeriod: (n: number) => `${n} event${n === 1 ? "" : "s"} in this episode's period`,
     noEventsInPeriod: "(no events in this period with the current filters)",
   },

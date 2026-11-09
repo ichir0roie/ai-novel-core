@@ -100,9 +100,10 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
             .group_by(ExpansionChange.expansion_id)).all():
         parts[expansion_id]["ideas"] += count
 
-    cast_ids = set(s.scalars(select(EpisodeCharacter.character_id).where(
+    episode_counts = Counter(s.scalars(select(EpisodeCharacter.character_id).where(
         EpisodeCharacter.episode_id.in_([episode.id for episode in chapter_episodes]),
         EpisodeCharacter.mentioned.is_(False))).all())
+    cast_ids = set(episode_counts)
     participant_ids = {link.character_id for event in events for link in event.event_characters}
     characters = s.scalars(select(Character).where(Character.id.in_(cast_ids | participant_ids))).all()
     names = {character.id: character.name for character in characters}
@@ -128,8 +129,10 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
                               total=len(ids) + sum(counted.values()))))
 
     appearances = Counter(id_ for event in overview_events for id_ in event.character_ids)
-    ordered = sorted(characters, key=lambda character: (character.id not in cast_ids, -appearances[character.id],
-                                                        character.id))
+    influences = {character.id: budget.influence_of(character, until) for character in characters}
+    ordered = sorted(characters, key=lambda character: (
+        -budget.rank(influences[character.id]), -episode_counts[character.id], -appearances[character.id],
+        character.id))
     relations = s.scalars(select(CharacterRelation).where(
         CharacterRelation.character_1_id.in_(names), CharacterRelation.character_2_id.in_(names),
         or_(CharacterRelation.start.is_(None), CharacterRelation.start <= until),
@@ -139,7 +142,7 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
         events=overview_events,
         characters=[OverviewCharacter(id=character.id, name=character.name, main_character=character.main_character,
                                       in_cast=character.id in cast_ids,
-                                      influence=budget.influence_of(character, until))
+                                      influence=influences[character.id])
                     for character in ordered],
         relations=[OverviewRelation(id=relation.id, character_1_id=relation.character_1_id,
                                     character_2_id=relation.character_2_id, relation=relation.relation,

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
@@ -11,9 +10,11 @@ import {
   useState,
   type CSSProperties,
   type MouseEvent,
+  type PointerEvent,
 } from "react";
 import EpisodeFields, { addEpisode, type EpisodeDraft } from "@/components/EpisodeFields";
 import Modal from "@/components/Modal";
+import NewEventModal from "@/components/NewEventModal";
 import { newEpisodeUrl } from "@/components/NewEpisodeModal";
 import ReferenceSelect, { invalidateOptions } from "@/components/ReferenceSelect";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
@@ -25,19 +26,23 @@ import {
   type OverviewEpisode,
   type OverviewEvent,
   type OverviewResponse,
+  type Rec,
 } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
-import { inNewTab, useOpenPage, type OpenModifiers } from "@/lib/openPage";
+import { inNewTab, openInNewTab, useOpenPage, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
-import { fromDayNumber, formatStamp } from "@/lib/stamp";
+import { fromDayNumber, formatStamp, shiftDays } from "@/lib/stamp";
 import { T } from "@/lib/text";
 import {
   DEFAULT_VIEW,
+  DRAG_THRESHOLD,
   GAP_PX,
   ITEM_GAP,
   ITEM_HEIGHT,
   axisTicksOf,
   dayOf,
+  dragSteps,
+  roundHours,
   savedView,
   scaleOf,
   snapDay,
@@ -63,6 +68,11 @@ const DOT_STEP = 0.9;
 const DOT_MAX = 13;
 // 名前を点の脇に出す出来事の大きさの下限(小さな出来事は吹き出しで読む)
 const LABEL_SIZE = 4;
+// 企ての帯を置く幅。列の左の空きと、押して出来事を足せるよう列の右に残す余白(px)
+const ARC_LEFT = 4;
+const ARC_RIGHT_SPACE = 16;
+// 章の話の列の key。兄弟の作品の列は `story-<作品の id>`
+const CHAPTER_KEY = "chapter";
 
 type Filter = { people: "cast" | "involved"; origin: "all" | "ai" | "user"; minSize: number };
 const DEFAULT_FILTER: Filter = { people: "involved", origin: "all", minSize: 0 };
@@ -81,9 +91,16 @@ function savedFilter(): Filter {
 }
 
 type Placed = { episode: OverviewEpisode; y: number; height: number; lane: number };
+type Packed = { placed: Placed[]; lanes: number };
+// 話の列。章の列(storyId は選んだ作品)と、兄弟の作品ごとの列
+type EpisodeColumn = { key: string; storyId: number; label: string; packed: Packed; faint: boolean };
+// from は掴んだ列、over は落とす先の作品(掴んだ列の上・作品の無い列の上では null)
+type Drag = { episode: OverviewEpisode; from: string; startX: number; startY: number; dx: number; dy: number; over: number | null };
+// 変更モードで溜めた移し。base は読み込んだときの話で、days はそこから何日ずらすか、story は移す先の作品(移さないなら null)
+type Change = { base: OverviewEpisode; days: number; story: number | null };
 
 /** 話の札を、重ならないよう筋に振り分ける(話のタイムラインと同じく、上から空いた筋に入れる) */
-function pack(episodes: OverviewEpisode[], scale: Scale): { placed: Placed[]; lanes: number } {
+function pack(episodes: OverviewEpisode[], scale: Scale): Packed {
   const laneEnds: number[] = [];
   const placed = episodes.map((episode) => {
     const start = dayOf(episode.start) ?? 0;
@@ -98,10 +115,47 @@ function pack(episodes: OverviewEpisode[], scale: Scale): { placed: Placed[]; la
   return { placed, lanes: Math.max(1, laneEnds.length) };
 }
 
+/** 日付をずらしたときの開始・終了。開始・終了を同じ日数だけ動かす */
+const shifted = (episode: OverviewEpisode, days: number) => ({
+  start: shiftDays(episode.start, days) ?? episode.start,
+  end: episode.end === null ? null : shiftDays(episode.end, days),
+});
+
+/** 保存する欄。動かした分だけを渡す */
+function changeForm({ base, days, story }: Change): Rec {
+  return { id: base.id, ...(days !== 0 ? shifted(base, days) : {}), ...(story !== null ? { story_id: story } : {}) };
+}
+
+const columnKeyOf = (episode: OverviewEpisode) => (episode.in_story ? CHAPTER_KEY : `story-${episode.story_id}`);
+
 const radius = (event: OverviewEvent) => Math.min(DOT_MAX, DOT_BASE + (event.size.total - 1) * DOT_STEP);
 
-// 左の枠で直している話。id が null なら、空いた所を押して足す話。saved は db の値(足す話は null)、draft は書きかけ(読み込むまで null)
-type EpisodePanel = { id: number | null; label: string; saved: EpisodeDraft | null; draft: EpisodeDraft | null };
+// 企ての帯の置き場所。slot は列の中で何本目にずらすか、slots はその列でずらす本数
+type ArcSlot = { owner: number; start: number; end: number; slot: number; slots: number };
+
+/** 企ての帯を、動いた人物の列ごとに時刻の順で並べ、期間の重なる帯は別の slot に置く(重ならなければ同じ slot に戻す) */
+function arcSlotsOf(arcs: { id: number; owner: number; start: number; end: number }[]): Map<number, ArcSlot> {
+  const slots = new Map<number, ArcSlot>();
+  const byOwner = new Map<number, typeof arcs>();
+  for (const arc of arcs) byOwner.set(arc.owner, [...(byOwner.get(arc.owner) ?? []), arc]);
+  for (const list of byOwner.values()) {
+    const ends: number[] = [];
+    const placed = [...list]
+      .sort((a, b) => a.start - b.start || a.id - b.id)
+      .map((arc) => {
+        let slot = ends.findIndex((end) => end <= arc.start);
+        if (slot < 0) slot = ends.length;
+        ends[slot] = arc.end;
+        return { arc, slot };
+      });
+    for (const { arc, slot } of placed)
+      slots.set(arc.id, { owner: arc.owner, start: arc.start, end: arc.end, slot, slots: ends.length });
+  }
+  return slots;
+}
+
+// 左の枠で書いている話。id が null なら、空いた所を押して足す話(足したあとは足した話の id)。saved は db の値(足す話は null)
+type EpisodePanel = { id: number | null; label: string; saved: EpisodeDraft | null; draft: EpisodeDraft };
 
 const draftOf = (record: Record<string, unknown>): EpisodeDraft => ({
   start: (record.start as string | null) ?? null,
@@ -109,6 +163,9 @@ const draftOf = (record: Record<string, unknown>): EpisodeDraft => ({
   title: String(record.title ?? ""),
   plot: String(record.plot_text ?? ""),
 });
+
+// 押した話のモーダル。loaded は開くときに引いたタイトル・プロット(見取り図の応答にプロットは無い。引くまで null)
+type Viewing = { episode: OverviewEpisode; loaded: { title: string; plot: string } | null };
 
 /** 話の期間(日)。一点の話と、日の途中に始まる・終わる話は、その日をまるごと含める */
 function periodOf(draft: EpisodeDraft | null): { from: number; to: number } | null {
@@ -143,6 +200,18 @@ export default function OverviewPage() {
   const [savingEpisode, setSavingEpisode] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // 変更モード。札を動かしても保存せず、話の id ごとに移しを溜めて、適用でまとめて保存する(話のタイムラインと同じ)
+  const [editing, setEditing] = useState(false);
+  const [changes, setChanges] = useState<Map<number, Change>>(new Map());
+  const [applying, setApplying] = useState(false);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  // 押した話のモーダルと、書きかけの時刻・タイトル・プロット
+  const [viewing, setViewing] = useState<Viewing | null>(null);
+  const [edit, setEdit] = useState<EpisodeDraft | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  // 人物の列の空いた所を押して足す出来事の、押した時刻と人物
+  const [addingEvent, setAddingEvent] = useState<{ start: string; character: OverviewCharacter } | null>(null);
   const openPage = useOpenPage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrolledFor = useRef<string | null>(null);
@@ -195,6 +264,8 @@ export default function OverviewPage() {
     };
   }, [storyId, margin]);
 
+  const reread = () => getOverview({ story_id: storyId!, margin_days: margin });
+
   const scrollBoxRef = useCallback((element: HTMLDivElement | null) => {
     scrollRef.current = element;
     if (!element) return;
@@ -206,6 +277,34 @@ export default function OverviewPage() {
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  // 作品の名前。兄弟の作品の列の見出しと、移しの前後に出す
+  const storyNames = useMemo(() => {
+    const map = new Map<number, string>();
+    if (data) map.set(data.story_id, data.story_name ?? T.nameId(null, data.story_id));
+    for (const episode of data?.episodes ?? [])
+      if (!map.has(episode.story_id)) map.set(episode.story_id, episode.story_name ?? T.nameId(null, episode.story_id));
+    return map;
+  }, [data]);
+  const storyLabel = (id: number) => storyNames.get(id) ?? T.nameId(null, id);
+
+  // 溜めた移しを当てた話。札はこの時刻・作品の所に描く
+  const episodes = useMemo(
+    () =>
+      (data?.episodes ?? []).map((episode) => {
+        const change = changes.get(episode.id);
+        if (!change) return episode;
+        const moved = { ...episode, ...shifted(change.base, change.days) };
+        if (change.story === null) return moved;
+        return {
+          ...moved,
+          story_id: change.story,
+          story_name: storyNames.get(change.story) ?? null,
+          in_story: change.story === data?.story_id,
+        };
+      }),
+    [data, changes, storyNames],
+  );
 
   // 絞り込んだ出来事と、列に出す人物
   const events = useMemo(
@@ -237,25 +336,42 @@ export default function OverviewPage() {
 
   const spans: Span[] = useMemo(() => {
     const all: Span[] = [];
-    for (const item of [...(data?.episodes ?? []), ...events]) {
+    for (const item of [...episodes, ...events]) {
       const start = dayOf(item.start);
       if (start !== null) all.push(timeSpan(start, dayOf(item.end)));
     }
     return all;
-  }, [data, events]);
+  }, [episodes, events]);
   const scale = useMemo(() => scaleOf(spans, null, view, box.viewport), [spans, view, box.viewport]);
   const ticks = useMemo(
     () => (scale ? axisTicksOf(scale, spans, view.squeeze, screen, box.viewport) : []),
     [scale, spans, view.squeeze, screen, box.viewport],
   );
-  const chapter = useMemo(
-    () => (scale && data ? pack(data.episodes.filter((episode) => episode.in_story), scale) : null),
-    [scale, data],
-  );
-  const siblings = useMemo(
-    () => (scale && data ? pack(data.episodes.filter((episode) => !episode.in_story), scale) : null),
-    [scale, data],
-  );
+  // 章の列と、兄弟の作品ごとの列。兄弟の列は、読み込んだ話を移したあとも、話を運び戻せるよう残す
+  const episodeColumns = useMemo((): EpisodeColumn[] => {
+    if (!scale || !data) return [];
+    const byTime = (list: OverviewEpisode[]) =>
+      [...list].sort((a, b) => (dayOf(a.start) ?? 0) - (dayOf(b.start) ?? 0) || a.id - b.id);
+    const siblingIds = [
+      ...new Set([...data.episodes, ...episodes].filter((episode) => !episode.in_story).map((episode) => episode.story_id)),
+    ];
+    return [
+      {
+        key: CHAPTER_KEY,
+        storyId: data.story_id,
+        label: data.story_name ?? T.overview.episodes,
+        packed: pack(byTime(episodes.filter((episode) => episode.in_story)), scale),
+        faint: false,
+      },
+      ...siblingIds.map((id) => ({
+        key: `story-${id}`,
+        storyId: id,
+        label: storyNames.get(id) ?? T.nameId(null, id),
+        packed: pack(byTime(episodes.filter((episode) => !episode.in_story && episode.story_id === id)), scale),
+        faint: true,
+      })),
+    ];
+  }, [scale, data, episodes, storyNames]);
 
   // 読み込んだら、章の最初の話が画面の上の方に来るようにスクロールする
   useLayoutEffect(() => {
@@ -284,12 +400,21 @@ export default function OverviewPage() {
   const canSave =
     !!draft && !savingEpisode && !!draft.start && (episodePanel?.id === null || dirty);
 
+  // 押した話は、移しを溜めたら移したあとの時刻を出す
+  const viewingNow = viewing ? (episodes.find((episode) => episode.id === viewing.episode.id) ?? viewing.episode) : null;
+  const loaded = viewing?.loaded ?? null;
+  const editTimeChanged = !!edit && !!viewingNow && (edit.start !== viewingNow.start || edit.end !== viewingNow.end);
+  const editTitleChanged = !!edit && !!loaded && edit.title !== loaded.title;
+  const editPlotChanged = !!edit && !!loaded && edit.plot !== loaded.plot;
+  const editDirty = editTimeChanged || editTitleChanged || editPlotChanged;
+  const canSaveEdit = editDirty && !savingEdit && !!edit?.start;
+
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !editDirty && changes.size === 0) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  }, [dirty, editDirty, changes.size]);
 
   /** 左の枠の話を閉じる。書きかけがあれば捨ててよいかを尋ね、捨てないなら false */
   const closeEpisode = () => {
@@ -299,17 +424,38 @@ export default function OverviewPage() {
     return true;
   };
 
-  /** 押した話を左の枠で開く。時刻・タイトル・プロットは開くときに引く(見取り図の応答にプロットは無い) */
-  const openEpisode = (episode: OverviewEpisode) => {
-    if (episodePanel?.id === episode.id || !closeEpisode()) return;
-    setMessage(null);
-    setEpisodePanel({ id: episode.id, label: T.nameId(episode.title, episode.id), saved: null, draft: null });
+  /** 溜めた移しを捨ててよいかを尋ね、捨てるなら変更モードを出る。捨てないなら false */
+  const discardChanges = () => {
+    if (changes.size > 0 && !window.confirm(T.timeline.confirmDiscard(changes.size))) return false;
+    leaveEditing();
+    return true;
+  };
+
+  const leaveEditing = () => {
+    setChanges(new Map());
+    setEditing(false);
+  };
+
+  /** 押した話をモーダルで開く(話のタイムラインと同じ)。タイトル・プロットは開くときに引く */
+  const openViewing = (episode: OverviewEpisode) => {
+    setViewing({ episode, loaded: null });
+    setEdit(null);
+    setEditError(null);
     getRecord("episode", episode.id)
       .then((r) => {
-        const loaded = draftOf(r.record);
-        setEpisodePanel((p) => (p?.id === episode.id ? { ...p, saved: loaded, draft: loaded } : p));
+        const record = draftOf(r.record);
+        setViewing((v) => (v?.episode.id === episode.id ? { ...v, loaded: { title: record.title ?? "", plot: record.plot } } : v));
+        // 時刻は、移しを溜めた話なら移したあとの時刻から書き始める
+        setEdit({ start: episode.start, end: episode.end, title: record.title ?? "", plot: record.plot });
       })
-      .catch((e) => setPanelError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setEditError(e instanceof Error ? e.message : String(e)));
+  };
+
+  /** 押した話のモーダルを閉じる。書きかけがあれば捨ててよいかを尋ねる */
+  const closeViewing = () => {
+    if (editDirty && !window.confirm(T.overview.confirmDiscardEpisode)) return;
+    setViewing(null);
+    setEdit(null);
   };
 
   /** 話の列の空いた所を押したら、その時刻で選んだ作品に足す話を左の枠に出す */
@@ -325,17 +471,44 @@ export default function OverviewPage() {
     });
   };
 
-  /** 別のページへ移る(Ctrl(⌘)を押しながらなら別タブで開き、書きかけは残る) */
+  /** 人物の列の空いた所を押したら、その時刻・その人物を当事者にした出来事を足すモーダルを出す(出来事のタイムラインと同じ) */
+  const onPeopleClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!scale) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const character = characters[Math.floor((e.clientX - rect.left) / CHARACTER_WIDTH)];
+    if (!character) return;
+    hide();
+    setMessage(null);
+    const day = snapDay(scale.fromY(e.clientY - rect.top), scale.pxPerDay);
+    setAddingEvent({ start: formatStamp(fromDayNumber(day)), character });
+  };
+
+  /** 別のページへ移る(Ctrl(⌘)を押しながらなら別タブで開き、書きかけ・溜めた移しは残る) */
   const leaveTo = (url: string, e?: OpenModifiers) => {
-    if (!inNewTab(e) && dirty && !window.confirm(T.overview.confirmDiscardEpisode)) return;
+    if (!inNewTab(e)) {
+      if ((dirty || editDirty) && !window.confirm(T.overview.confirmDiscardEpisode)) return;
+      if (changes.size > 0 && !window.confirm(T.timeline.confirmDiscard(changes.size))) return;
+    }
     openPage(url, e);
   };
+
+  /** 書き終えたあと、読み直した話で溜めた移しの元を替える。時刻を書いた話は、溜めた時刻の移しを書いた時刻に含めたので外す */
+  const rebase = (fresh: OverviewResponse, id: number, wroteTime: boolean) =>
+    setChanges((previous) => {
+      const change = previous.get(id);
+      const base = fresh.episodes.find((episode) => episode.id === id);
+      if (!change || !base) return previous;
+      const next = new Map(previous);
+      const days = wroteTime ? 0 : change.days;
+      if (days === 0 && change.story === null) next.delete(id);
+      else next.set(id, { ...change, base, days });
+      return next;
+    });
 
   /** 左の枠の話を保存する(足す話なら選んだ作品に足す)。直した話は変えた欄だけを渡し、時刻はどちらかを変えたら両方を渡す */
   const saveEpisode = async () => {
     if (!episodePanel || !draft || storyId === null || !canSave) return;
     const sent = draft;
-    const reread = () => getOverview({ story_id: storyId, margin_days: margin });
     setSavingEpisode(true);
     setPanelError(null);
     setMessage(null);
@@ -366,6 +539,7 @@ export default function OverviewPage() {
         );
         if (titleChanged) invalidateOptions("episode");
         setData(fresh);
+        rebase(fresh, id, timeChanged);
         const label = T.nameId(sent.title, id);
         setEpisodePanel((p) => (p?.id === id ? { ...p, label, saved: sent } : p));
         setMessage(T.timeline.saved(label));
@@ -377,7 +551,141 @@ export default function OverviewPage() {
     }
   };
 
-  useSaveShortcut(() => void saveEpisode(), canSave);
+  /** 押した話の時刻・タイトル・プロットを保存する。時刻はどちらかを変えたら両方を渡す(溜めた移しを当てた時刻を書くため) */
+  const saveEdit = async () => {
+    if (!viewingNow || !edit || !canSaveEdit) return;
+    const id = viewingNow.id;
+    const sent = edit;
+    setSavingEdit(true);
+    setEditError(null);
+    setError(null);
+    setMessage(null);
+    try {
+      const fresh = await trackSaving(
+        updateEpisodes([
+          {
+            id,
+            ...(editTitleChanged ? { title: sent.title } : {}),
+            ...(editPlotChanged ? { plot_text: sent.plot } : {}),
+            ...(editTimeChanged ? { start: sent.start, end: sent.end } : {}),
+          },
+        ]).then(reread),
+      );
+      if (editTitleChanged) invalidateOptions("episode");
+      setData(fresh);
+      rebase(fresh, id, editTimeChanged);
+      const shown = fresh.episodes.find((episode) => episode.id === id);
+      setViewing((v) =>
+        v?.episode.id === id
+          ? { episode: shown ?? v.episode, loaded: { title: sent.title ?? "", plot: sent.plot } }
+          : v,
+      );
+      setMessage(T.timeline.saved(T.nameId(sent.title, id)));
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  /** 溜めた移しをまとめて保存する */
+  const apply = async () => {
+    if (storyId === null || changes.size === 0) return;
+    setApplying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const fresh = await trackSaving(updateEpisodes([...changes.values()].map(changeForm)).then(reread));
+      // 読み直した話と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
+      setData(fresh);
+      setMessage(T.timeline.applied(changes.size));
+      leaveEditing();
+    } catch (e) {
+      setError(T.timeline.applyFailed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  // 話のモーダルを開いていればその話を、左の枠に書きかけがあればその話を、どちらも無ければ溜めた移しを保存する
+  useSaveShortcut(() => {
+    if (viewingNow) {
+      if (canSaveEdit) void saveEdit();
+    } else if (canSave) void saveEpisode();
+    else if (changes.size > 0 && !applying) void apply();
+  });
+
+  /** 縦に dy px 動かしたら何日ずれるか(話のタイムラインと同じ刻みに丸める)。詰めた帯の上では一気に日が進む */
+  const daysAt = (episode: OverviewEpisode, dy: number) => {
+    if (!scale || scale.pxPerDay === 0) return 0;
+    const start = dayOf(episode.start) ?? 0;
+    const steps = dragSteps(view);
+    return Math.round((scale.fromY(scale.toY(start) + dy) - start) * steps) / steps;
+  };
+  const dragDays = (episode: OverviewEpisode) =>
+    drag?.episode.id === episode.id && Math.abs(drag.dy) > DRAG_THRESHOLD ? daysAt(episode, drag.dy) : 0;
+
+  /** 移しを溜める。同じ話を何度動かしても、読み込んだときの話からの移しにまとめる。元に戻ったら溜めた分から外す */
+  const move = (episode: OverviewEpisode, days: number, story: number | null) => {
+    const next = new Map(changes);
+    const previous = changes.get(episode.id);
+    const base = previous?.base ?? data?.episodes.find((e) => e.id === episode.id) ?? episode;
+    const target = story ?? previous?.story ?? null;
+    // 章の列は章の子の作品の話も並べるので、章の話を章の列へ戻したら元の作品のまま
+    const back = target === base.story_id || (target === storyId && base.in_story);
+    const change = { base, days: roundHours((previous?.days ?? 0) + days), story: back ? null : target };
+    if (change.days === 0 && change.story === null) next.delete(episode.id);
+    else next.set(episode.id, change);
+    setChanges(next);
+  };
+
+  /** 指の下の話の列の作品。札は掴んだ列に留まるので、掴んだ札ではなく位置から列を探す */
+  const storyUnder = (x: number, y: number, from: string): number | null => {
+    const col = document
+      .elementsFromPoint(x, y)
+      .map((el) => el.closest<HTMLElement>(".timeline-col[data-story]"))
+      .find(Boolean);
+    const story = Number(col?.dataset.story);
+    if (!col || col.dataset.key === from || !story) return null;
+    return story;
+  };
+
+  const onItemDown = (e: PointerEvent<HTMLDivElement>, episode: OverviewEpisode) => {
+    if (e.button !== 0 || applying) return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    hide();
+    setDrag({ episode, from: columnKeyOf(episode), startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, over: null });
+  };
+
+  const onItemMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (drag && editing)
+      setDrag({
+        ...drag,
+        dx: e.clientX - drag.startX,
+        dy: e.clientY - drag.startY,
+        over: storyUnder(e.clientX, e.clientY, drag.from),
+      });
+  };
+
+  const onItemUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (!drag) return;
+    const { episode, over } = drag;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    setDrag(null);
+    if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) {
+      // Ctrl(⌘)を押しながらなら、話のページを別タブで開く
+      if (inNewTab(e)) openInNewTab(`/tables/episode/${episode.id}`);
+      else openViewing(episode);
+      return;
+    }
+    // 変更モードの外では札を動かさない
+    if (!editing) return;
+    // 列を移すときの手ぶれで時刻が動かないよう、縦にしきい値を超えて動かしたときだけ時刻を送る
+    const days = Math.abs(dy) > DRAG_THRESHOLD ? daysAt(episode, dy) : 0;
+    if (days !== 0 || over !== null) move(episode, days, over);
+  };
 
   // 左の枠の話の期間と、その期間に重なる出来事(絞り込みは出来事の点と同じ)
   const period = periodOf(draft);
@@ -400,50 +708,101 @@ export default function OverviewPage() {
     T.overview.gap,
     `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`,
   ];
+  /** 吹き出しと押したときのモーダルに出す、時刻・作品と、移しを溜めた話は移す前の行 */
+  const detailLines = (episode: OverviewEpisode) => {
+    const base = changes.get(episode.id)?.base;
+    return [
+      T.span(episode.start, episode.end) || episode.start,
+      storyLabel(episode.story_id),
+      base && T.timeline.was(T.span(base.start, base.end) || base.start, storyLabel(base.story_id)),
+    ];
+  };
 
-  const renderEpisodes = (packed: { placed: Placed[]; lanes: number } | null, faint: boolean) =>
-    packed && (
-      <div className="timeline-col">
-        {/* 足す話は選んだ作品に入れるので、空いた所を押して足せるのは章の列だけ */}
-        <div
-          className={`timeline-track ${faint ? "overview-readonly" : ""}`}
-          style={{ width: packed.lanes * EPISODE_LANE_WIDTH, height: scale?.height }}
-          onClick={faint ? undefined : onTrackClick}
-        >
-          {packed.placed.map(({ episode, y, height, lane }) => (
-            <Link
+  const renderEpisodes = (col: EpisodeColumn) => (
+    <div
+      key={col.key}
+      className={`timeline-col ${drag?.over === col.storyId ? "drop-target" : ""}`}
+      data-key={col.key}
+      data-story={col.storyId}
+    >
+      {/* 足す話は選んだ作品に入れるので、空いた所を押して足せるのは章の列だけ */}
+      <div
+        className={`timeline-track ${col.faint ? "overview-readonly" : ""}`}
+        style={{ width: col.packed.lanes * EPISODE_LANE_WIDTH, height: scale?.height }}
+        onClick={col.faint ? undefined : onTrackClick}
+      >
+        {col.packed.placed.map(({ episode, y, height, lane }) => {
+          const days = dragDays(episode);
+          const dragging = drag?.episode.id === episode.id;
+          const target = days !== 0 && shifted(episode, days);
+          const offset = days && scale ? scale.toY((dayOf(episode.start) ?? 0) + days) - y : 0;
+          const className = [
+            "timeline-item",
+            episode.end ? "" : "point",
+            col.faint ? "overview-faint" : "",
+            viewing?.episode.id === episode.id || episodePanel?.id === episode.id ? "selected" : "",
+            dragging ? "dragging" : "",
+            changes.has(episode.id) ? "changed" : "",
+            applying && changes.has(episode.id) ? "saving" : "",
+          ].join(" ");
+          return (
+            <div
               key={episode.id}
-              href={`/tables/episode/${episode.id}`}
-              className={`timeline-item ${episode.end ? "" : "point"} ${faint ? "overview-faint" : ""} ${episodePanel?.id === episode.id ? "selected" : ""}`}
-              style={{ left: lane * EPISODE_LANE_WIDTH + 2, top: y, width: EPISODE_LANE_WIDTH - 4, height }}
-              onClick={(e) => {
-                e.stopPropagation();
-                // Ctrl(⌘)を押しながらなら、リンクのまま別タブで話のページを開く
-                if (inNewTab(e)) return;
-                e.preventDefault();
-                openEpisode(episode);
+              className={className}
+              style={{
+                left: lane * EPISODE_LANE_WIDTH + 2,
+                top: y,
+                width: EPISODE_LANE_WIDTH - 4,
+                transform: offset ? `translateY(${offset}px)` : undefined,
+                ...(dragging ? { minHeight: height } : { height }),
               }}
-              onMouseMove={(e) =>
-                show(e, [episode.title ?? `#${episode.id}`, T.span(episode.start, episode.end) || episode.start,
-                         episode.story_name ?? ""])
-              }
+              onPointerDown={(e) => onItemDown(e, episode)}
+              onPointerMove={onItemMove}
+              onPointerUp={onItemUp}
+              onPointerCancel={() => setDrag(null)}
+              onClick={(e) => e.stopPropagation()}
+              onMouseMove={(e) => !drag && show(e, [episode.title ?? `#${episode.id}`, ...detailLines(episode)])}
               onMouseLeave={hide}
             >
-              <span className="timeline-text">{episode.title ?? `#${episode.id}`}</span>
-            </Link>
-          ))}
-        </div>
+              <span className="timeline-text">
+                {episode.title ?? `#${episode.id}`}
+                {target && <span className="timeline-target"> → {target.start}</span>}
+                {dragging && drag.over !== null && (
+                  <span className="timeline-target"> → {storyLabel(drag.over)}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
-    );
+    </div>
+  );
 
   const x = (characterId: number) => (column.get(characterId) ?? 0) * CHARACTER_WIDTH + CHARACTER_WIDTH / 2;
+
+  const arcSlots = useMemo(() => {
+    const arcs = [];
+    for (const event of events) {
+      if (!parentIds.has(event.id)) continue;
+      const owner = event.actor_id ?? event.character_ids.find((id) => column.has(id));
+      const start = dayOf(event.start);
+      if (owner == null || !column.has(owner) || start === null) continue;
+      arcs.push({ id: event.id, owner, start, end: dayOf(event.end) ?? Infinity });
+    }
+    return arcSlotsOf(arcs);
+  }, [events, parentIds, column]);
 
   const renderEvents = () => {
     if (!scale) return null;
     const width = characters.length * CHARACTER_WIDTH;
     const dimmed = (event: OverviewEvent) => focus !== null && !event.character_ids.includes(focus);
+    // 出来事を押したら詳細を出す。下の人物の列へ届くと、出来事を足すモーダルが出てしまう
+    const pick = (e: MouseEvent, event: OverviewEvent) => {
+      e.stopPropagation();
+      setSelected(event);
+    };
     return (
-      <div className="overview-people" style={{ width, height: scale.height }}>
+      <div className="overview-people" style={{ width, height: scale.height }} onClick={onPeopleClick}>
         {characters.map((character) => (
           <div
             key={character.id}
@@ -452,28 +811,27 @@ export default function OverviewPage() {
           />
         ))}
         <svg className="overview-svg" width={width} height={scale.height}>
-          {/* 企て(子を持つ出来事)は、動いた人物の列に始まりから終わりまでの帯で描く */}
+          {/* 企て(子を持つ出来事)は、動いた人物の列に始まりから終わりまでの帯で描く。期間の重なる帯は、幅の半分ずつずらして重ねる */}
           {events
-            .filter((event) => parentIds.has(event.id))
+            .filter((event) => arcSlots.has(event.id))
             .map((event) => {
-              const owner = event.actor_id ?? event.character_ids.find((id) => column.has(id));
-              const start = dayOf(event.start);
-              if (owner == null || !column.has(owner) || start === null) return null;
+              const { owner, start, end, slot, slots } = arcSlots.get(event.id)!;
               const top = scale.toY(start);
-              const end = dayOf(event.end);
-              const bottom = end === null ? scale.height : scale.toY(end);
+              const bottom = end === Infinity ? scale.height : scale.toY(end);
+              // slots 本を半分ずつ重ねて、列の左から右の余白の手前までに収める
+              const width = (2 * (CHARACTER_WIDTH - ARC_LEFT - ARC_RIGHT_SPACE)) / (slots + 1);
               return (
                 <rect
                   key={`arc-${event.id}`}
                   className={`overview-arc ${dimmed(event) ? "dimmed" : ""}`}
-                  x={x(owner) - CHARACTER_WIDTH / 2 + 6}
+                  x={x(owner) - CHARACTER_WIDTH / 2 + ARC_LEFT + (slot * width) / 2}
                   y={top}
-                  width={CHARACTER_WIDTH - 12}
+                  width={width}
                   height={Math.max(4, bottom - top)}
                   rx={4}
                   onMouseMove={(e) => show(e, [T.overview.arc, ...eventLines(event)])}
                   onMouseLeave={hide}
-                  onClick={() => setSelected(event)}
+                  onClick={(e) => pick(e, event)}
                 />
               );
             })}
@@ -493,7 +851,7 @@ export default function OverviewPage() {
                 className={className}
                 onMouseMove={(e) => show(e, eventLines(event))}
                 onMouseLeave={hide}
-                onClick={() => setSelected(event)}
+                onClick={(e) => pick(e, event)}
               >
                 {xs.length > 1 && (
                   <line x1={Math.min(...xs)} x2={right} y1={y} y2={y} strokeWidth={Math.max(1.5, r / 2.5)} />
@@ -575,8 +933,7 @@ export default function OverviewPage() {
 
   const columns = [
     "var(--timeline-axis)",
-    `${(chapter?.lanes ?? 1) * EPISODE_LANE_WIDTH}px`,
-    ...(siblings && siblings.placed.length > 0 ? [`${siblings.lanes * EPISODE_LANE_WIDTH}px`] : []),
+    ...episodeColumns.map((col) => `${col.packed.lanes * EPISODE_LANE_WIDTH}px`),
     `${Math.max(1, characters.length) * CHARACTER_WIDTH}px`,
   ];
 
@@ -629,7 +986,7 @@ export default function OverviewPage() {
     </section>
   );
 
-  /** 左の枠。開いた話の欄と、その期間の出来事(押した出来事があればその詳細)を出す。どちらも無ければ出さない */
+  /** 左の枠。足す話の欄と、その期間の出来事(押した出来事があればその詳細)を出す。どちらも無ければ出さない */
   const renderPanel = () => {
     if (!episodePanel && !selected) return null;
     return (
@@ -646,23 +1003,19 @@ export default function OverviewPage() {
             {episodePanel.id === null && (
               <div className="hint">{T.timeline.newEpisodeIn(data?.story_name ?? T.nameId(null, storyId))}</div>
             )}
-            {draft ? (
-              <EpisodeFields
-                value={draft}
-                onChange={(next) => setEpisodePanel((p) => (p ? { ...p, draft: next } : p))}
-                disabled={savingEpisode}
-                onSave={canSave ? () => void saveEpisode() : undefined}
-              />
-            ) : (
-              !panelError && <div className="status info">{T.loading}</div>
-            )}
+            <EpisodeFields
+              value={episodePanel.draft}
+              onChange={(next) => setEpisodePanel((p) => (p ? { ...p, draft: next } : p))}
+              disabled={savingEpisode}
+              onSave={canSave ? () => void saveEpisode() : undefined}
+            />
             <div className="overview-panel-actions">
               <button
                 type="button"
-                disabled={!draft || savingEpisode}
+                disabled={savingEpisode}
                 onClick={(e) =>
                   episodePanel.id === null
-                    ? draft && leaveTo(newEpisodeUrl({ story_id: storyId }, draft), e)
+                    ? leaveTo(newEpisodeUrl({ story_id: storyId }, episodePanel.draft), e)
                     : leaveTo(`/tables/episode/${episodePanel.id}`, e)
                 }
               >
@@ -729,7 +1082,7 @@ export default function OverviewPage() {
             value={storyId}
             nullable
             onChange={(value) => {
-              if (!closeEpisode()) return;
+              if (!discardChanges() || !closeEpisode()) return;
               setSelected(null);
               setMessage(null);
               navigate({ story_id: value });
@@ -739,7 +1092,10 @@ export default function OverviewPage() {
         </div>
         <label className="hint timeline-filter">
           {T.overview.margin}
-          <select value={margin} onChange={(e) => navigate({ margin: Number(e.target.value) })}>
+          <select
+            value={margin}
+            onChange={(e) => discardChanges() && navigate({ margin: Number(e.target.value) })}
+          >
             {MARGINS.map((days) => (
               <option key={days} value={days}>
                 {T.overview.marginDays(days)}
@@ -792,12 +1148,27 @@ export default function OverviewPage() {
             {T.overview.clearFocus}
           </button>
         )}
+        {editing ? (
+          <>
+            <button type="button" className="primary" disabled={changes.size === 0 || applying} onClick={() => void apply()}>
+              {T.timeline.apply(changes.size)}
+            </button>
+            <button type="button" disabled={applying} onClick={discardChanges}>
+              {T.timeline.discard}
+            </button>
+          </>
+        ) : (
+          <button type="button" disabled={!data} onClick={() => setEditing(true)}>
+            {T.timeline.edit}
+          </button>
+        )}
       </div>
       {data && (
         <div className="status info overview-status">
           {T.overview.period(data.since, data.until)} · {T.overview.legend}
         </div>
       )}
+      {editing && <div className="status info">{T.timeline.editHint}</div>}
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}
       {storyId === null ? (
@@ -807,12 +1178,23 @@ export default function OverviewPage() {
       ) : (
         <div className="overview-split">
         {renderPanel()}
-        <div className="timeline overview" style={{ "--timeline-head": `${box.head}px` } as CSSProperties}>
+        <div
+          className={`timeline overview ${editing ? "editing" : ""}`}
+          aria-busy={applying}
+          style={{ "--timeline-head": `${box.head}px` } as CSSProperties}
+        >
           <div className="timeline-scroll" ref={scrollBoxRef} onScroll={onScroll}>
             <div className="timeline-head overview-head" style={{ gridTemplateColumns: columns.join(" ") }}>
               <div className="timeline-corner" />
-              <div className="timeline-label">{data.story_name ?? T.overview.episodes}</div>
-              {siblings && siblings.placed.length > 0 && <div className="timeline-label">{T.overview.siblings}</div>}
+              {episodeColumns.map((col) => (
+                <div
+                  key={col.key}
+                  className={`timeline-label ${drag?.over === col.storyId ? "drop-target" : ""}`}
+                  title={col.faint ? `${T.overview.siblings}: ${col.label}` : col.label}
+                >
+                  {col.label}
+                </div>
+              ))}
               <div className="overview-people-head" style={{ gridTemplateColumns: `repeat(${characters.length}, ${CHARACTER_WIDTH}px)` }}>
                 {characters.map(head)}
               </div>
@@ -825,7 +1207,7 @@ export default function OverviewPage() {
                 {ticks.map((tick) => (
                   <div key={tick.at} className={`timeline-grid ${tick.major ? "major" : ""}`} style={{ top: scale?.toY(tick.at) }} />
                 ))}
-                {/* 左の枠で開いた話の期間を、人物の列まで横切る帯で示す */}
+                {/* 左の枠で書いている話の期間を、人物の列まで横切る帯で示す */}
                 {scale && period && (
                   <div
                     className="overview-period"
@@ -854,13 +1236,65 @@ export default function OverviewPage() {
                   </div>
                 ))}
               </div>
-              {renderEpisodes(chapter, false)}
-              {siblings && siblings.placed.length > 0 && renderEpisodes(siblings, true)}
+              {episodeColumns.map(renderEpisodes)}
               <div className="timeline-col">{renderEvents()}</div>
             </div>
           </div>
         </div>
         </div>
+      )}
+      {viewingNow && (
+        <Modal
+          title={T.nameId(edit?.title ?? viewingNow.title, viewingNow.id)}
+          onClose={closeViewing}
+          actions={
+            <>
+              <span className="spacer" />
+              <button type="button" onClick={closeViewing}>
+                {T.close}
+              </button>
+              <button type="button" onClick={(e) => leaveTo(`/tables/episode/${viewingNow.id}`, e)}>
+                {T.openRecord}
+              </button>
+              <button type="button" className="primary" disabled={!canSaveEdit} onClick={() => void saveEdit()}>
+                {T.record.save}
+              </button>
+            </>
+          }
+        >
+          <div className="timeline-sheet">{detailLines(viewingNow).filter(Boolean).join("\n")}</div>
+          {editError && <div className="status error">{editError}</div>}
+          {edit ? (
+            <EpisodeFields
+              value={edit}
+              onChange={setEdit}
+              disabled={savingEdit}
+              onSave={canSaveEdit ? () => void saveEdit() : undefined}
+            />
+          ) : (
+            !editError && <div className="status info">{T.loading}</div>
+          )}
+        </Modal>
+      )}
+      {addingEvent && (
+        <NewEventModal
+          start={addingEvent.start}
+          parent={null}
+          location={null}
+          characters={[{ id: addingEvent.character.id, label: names.get(addingEvent.character.id) ?? `#${addingEvent.character.id}` }]}
+          onClose={() => setAddingEvent(null)}
+          onAdded={() => {
+            if (storyId === null) return;
+            // 軸は画面の高さまで伸びるので、章の期間の外も押せる。外に足した出来事は読み直しても出ないので、そう知らせる
+            const day = dayOf(addingEvent.start) ?? 0;
+            const outside = day < (dayOf(data?.since) ?? -Infinity) || day > (dayOf(data?.until) ?? Infinity);
+            setMessage(outside && data ? T.overview.addedEventOutside(data.since, data.until) : T.overview.addedEvent);
+            reread()
+              .then(setData)
+              .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+          }}
+          onOpenPage={leaveTo}
+        />
       )}
       {focused && showRelations && (
         <Modal title={T.overview.relationsOf(focused.name ?? `#${focused.id}`)} onClose={() => setShowRelations(false)}>

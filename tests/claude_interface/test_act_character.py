@@ -11,16 +11,17 @@ from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_character import ActCharacter
 from data_access_logic.expansion.act_models import (
     ActIdeaDraft, ActOutcomeDraft, BatchOutcomeDraft, BatchOutcomeItem, DialogueTurnDraft, ImpactFrame, IntentDraft,
-    InviteDraft, NewCharacterDraft,
+    InviteDraft, NarrationDraft, NewCharacterDraft,
 )
 from data_access_logic.expansion.read_expansion import ReadExpansion
 from data_access_logic.expansion.revert_expansion import RevertExpansion
 from data_access_logic.flows import act
 from db.schema import (
-    Character, CharacterHistory, CharacterLocation, CharacterMotivation, CharacterParameter, CharacterRelation, Event,
-    EventCharacter, Expansion, IdeaHistory, get_env_session,
+    Character, CharacterHistory, CharacterLocation, CharacterMotivation, CharacterParameter, CharacterRelation, Episode,
+    EpisodeCharacter, Event, EventCharacter, Expansion, IdeaHistory, get_env_session,
 )
 from db.stamp import Stamp
+from db.writer import on_screen
 from tool.test.mock_ai_client import MockAIClient
 
 
@@ -66,6 +67,10 @@ class ScriptedAI(MockAIClient):
             if "あなたはこの狙いで動いている" in prompt:
                 return DialogueTurnDraft(thought="これで決まり", action="頭を下げる", speech="助かる", aim="礼を言う", done=True)
             return DialogueTurnDraft(thought="放っておけない", action="うなずく", speech="手を貸す", aim="手伝う", done=False)
+        if output is NarrationDraft:
+            self.calls.append(call)
+            return NarrationDraft(motivation="診療所の話より前に村へ移らせない", narration="港から使いが来て、病人が増えたと告げた",
+                                  request="使いの話を聞く")
         if output is BatchOutcomeDraft:
             self.calls.append(call)
             acts = json.loads(prompt.rsplit("\n", 1)[0])["手"]
@@ -237,6 +242,89 @@ def test_one_judge_call_for_the_whole_run(world):
     assert actor_id in [acted.actor.character_id for acted in run.acted]
     # 同じ実行で同じ人物は二度動かない
     assert len({acted.actor.character_id for acted in run.acted}) == len(run.acted)
+
+
+def _plotted_episode(story_id: int, character_ids: list[int], start: str, plot: str, cast: bool = True) -> int:
+    with get_env_session() as s:
+        episode = Episode(story_id=story_id, title="テスト港の話", plot_text=plot, start=start)
+        # プロットは作者が画面で書いたものとして置く(画面のほかからはメモしか書けない)
+        with on_screen():
+            s.add(episode)
+            s.flush()
+        if cast:
+            s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=id_) for id_ in character_ids])
+        s.commit()
+        return episode.id
+
+
+def test_narrator_takes_the_plot_as_its_motive(world):
+    """一手の前後に、動く人物が出るプロットつきの話があれば、語り部がそのプロットを動機にする。
+    人物には語りと要求だけが渡り、プロットと動機は裁く段にだけ渡る。"""
+    actor_id = world.character_ids[1]
+    episode_id = _plotted_episode(world.story_id, [actor_id], "1230/03/05", "港で疫病の噂が立つ。花子は港に残って病人を診る")
+    ai = ScriptedAI(actor_id, world.neighbor_id)
+
+    acted = _one(act.act_character(character_id=actor_id, time="1230/03/01", seed=1, ai=ai))
+
+    narrator_call = ai.calls_of(NarrationDraft)[0]
+    assert "港に残って病人を診る" in narrator_call["prompt"]
+    assert (narrator_call["model"], narrator_call["effort"], narrator_call["style_scope"]) == (
+        constants.ACT_NARRATOR_MODEL, constants.ACT_NARRATOR_EFFORT, "語り部")
+    intent_prompt = ai.calls_of(IntentDraft)[0]["prompt"]
+    assert "港から使いが来て" in intent_prompt and "使いの話を聞く" in intent_prompt
+    assert "港に残って病人を診る" not in intent_prompt and "診療所の話より前に" not in intent_prompt
+    judge_prompt = ai.calls_of(BatchOutcomeDraft)[0]["prompt"]
+    assert "港に残って病人を診る" in judge_prompt and "診療所の話より前に村へ移らせない" in judge_prompt
+    assert acted.narration is not None and [episode.id for episode in acted.narration.episodes] == [episode_id]
+    with get_env_session() as s:
+        prompt = s.get_one(Expansion, acted.expansion_id).prompt
+        assert prompt.startswith(f"語り部の動機(ep{episode_id}「テスト港の話」)") and "村に診療所を開く" in prompt
+
+
+def test_narrator_finds_an_episode_by_a_name_in_the_plot(world):
+    actor_id = world.character_ids[1]
+    # 前に回したテストの話が同じ名前で残り、近い話の上限を埋めるので、この回だけの名前にする
+    name = f"テスト峠越え{actor_id}"
+    with get_env_session() as s:
+        s.get_one(Character, actor_id).name = name
+        s.commit()
+    episode_id = _plotted_episode(world.story_id, [], "1231/06/20", f"{name}が峠を越える", cast=False)
+    ai = ScriptedAI(actor_id, world.neighbor_id)
+
+    acted = _one(act.act_character(character_id=actor_id, time="1231/06/01", seed=1, ai=ai))
+
+    assert acted.narration is not None and [episode.id for episode in acted.narration.episodes] == [episode_id]
+
+
+def test_no_narrator_without_a_related_episode(world):
+    actor_id = world.character_ids[1]
+    # 遠すぎる話と、ほかの人物だけが出る話は関わらない
+    _plotted_episode(world.story_id, [actor_id], "1232/12/01", "港で疫病の噂が立つ")
+    _plotted_episode(world.story_id, [], "1232/03/02", "名も無い旅人が峠を越える", cast=False)
+    ai = ScriptedAI(actor_id, world.neighbor_id)
+
+    acted = _one(act.act_character(character_id=actor_id, time="1232/03/01", seed=1, ai=ai))
+
+    assert not ai.calls_of(NarrationDraft) and acted.narration is None
+    assert '"語り部の動機": null' in ai.calls_of(BatchOutcomeDraft)[0]["prompt"]
+
+
+def test_plots_reach_the_judge_even_if_the_narrator_is_silent(world):
+    actor_id = world.character_ids[1]
+    _plotted_episode(world.story_id, [actor_id], "1233/03/05", "港に残って病人を診る")
+
+    class SilentNarrator(ScriptedAI):
+        def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
+            if output is NarrationDraft:
+                return None
+            return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
+                                    effort=effort, style_scope=style_scope)
+
+    ai = SilentNarrator(actor_id, world.neighbor_id)
+    acted = _one(act.act_character(character_id=actor_id, time="1233/03/01", seed=1, ai=ai))
+
+    assert acted.narration is not None and acted.narration.motivation is None
+    assert "港に残って病人を診る" in ai.calls_of(BatchOutcomeDraft)[0]["prompt"]
 
 
 def test_clamp_keeps_the_actor_first_and_cuts_the_rest():
