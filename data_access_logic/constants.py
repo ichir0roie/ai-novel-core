@@ -136,6 +136,15 @@ ACT_IMPACT_IDEAS = {"無": 1, "低": 1, "並": 2, "高": 3, "必": 3}
 ACT_IMPACT_LOCATION_MIN = "高"
 # 成り行きが裏目・思わぬ方へ転んだときは、枠を一段狭める
 ACT_NARROWING_OUTCOMES = ("思わぬ方へ転ぶ", "裏目に出る")
+# モチベーション(`character_motivation`)の強さの目安。人物の目と裁く段に、数と一緒に渡す
+MOTIVATION_STRENGTHS = {
+    1: "気にかかる程度", 2: "機会があればしたい", 3: "手間をかけてもしたい", 4: "ほかを後回しにしてもしたい",
+    5: "何を捨てても果たしたい",
+}
+# 一人について材料に渡す、効いているモチベーションの上限(強い順)
+ACT_MOTIVATION_LIMIT = 5
+# 一手で足す・終えるモチベーションの上限(人数をまたいで数える。動いた人物の分を先に残す)
+ACT_MOTIVATION_CHANGE_LIMIT = 6
 
 # data_access_logic/character/knowledge.py(人物役が読む、自分が言ったセリフ)
 # 言ってからこの日数までは原文、ここから鮮明の日数までは鮮明、それより後はあやふやを渡す

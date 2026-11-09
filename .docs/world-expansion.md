@@ -46,8 +46,8 @@
 物語の中身を持つ表に `origin` 列を足す。値は `user`(作者)/ `ai`。
 
 - 対象: `story` `episode` `episode_character` `character` `character_parameter` `character_location` `character_relation` `character_relation_history`
-  `character_history` `character_skill` `character_skill_history` `event` `event_character` `idea` `idea_history` `location` `location_history`
-  `meme` `oracle` `event_seed` と、知る相手の四表(`*_knower`)
+  `character_history` `character_skill` `character_skill_history` `character_motivation` `event` `event_character` `idea` `idea_history`
+  `location` `location_history` `meme` `oracle` `event_seed` と、知る相手の四表(`*_knower`)
 - 対象にしない: `event_summary`(本文から作り直す派生)、`style_preference`(作者だけが書く)、`narou_part`、`personality_level`
 - `db/schema.py` に `OriginMixin`(`origin: Mapped[str]`、既定 `user`)を置き、上の表のクラスに足す。子の行(来歴・知る相手)も自分の `origin` を持つ。
   作者の人物に AI が来歴の行を足したとき、その行だけが `ai` になる
@@ -69,7 +69,7 @@
 - `ai` の書き手が AI の行を消すとき、その行を指す作者の行(作者の話の名前だけ出る人物の行・作者の来歴の知る相手など)も一緒に消える形なら、その作者の行で止まる
 - **`end` を付ける**: 書き手 `ai_append` が直してよいのは `end` 列だけで、空なら時刻を入れ、入っていればそれより前に早める直し(没年まで続く居場所の行を、移る時刻で終えるなど)。
   ほかの列が一つでも変わる直し、`end` を空に戻す・先へ延ばす直し、`end` を `start` より前にする直しは止める。同じトランザクションで足した行を整える(親を結ぶなど)のは、足すことに数える。`end` を持つ表は `character`(没年)・`character_location`・`character_relation`・`character_history`・
-  `character_skill_history`・`idea_history`・`event`・`location`。居場所を移すのは、今の居場所の行に `end` を付けて、移動先の行を足す(`character/moves.py` の `update_locations` と同じ形)。
+  `character_skill_history`・`character_motivation`・`idea_history`・`event`・`location`。居場所を移すのは、今の居場所の行に `end` を付けて、移動先の行を足す(`character/moves.py` の `update_locations` と同じ形)。
   許す直しは守りの中で列の名前(`APPENDABLE_COLUMN`)で持つので、あとで広げられる
 - API は `x-novel-writer` / `x-novel-expansion` / `x-novel-generated` ヘッダで書き手を受ける。鍵 `gui` は常に `user`、web のセッションの鍵は省けば `user`(今の動きを変えない)。展開の流れは自分で `ai` / `ai_append` を立てる
 - 今の AI の生成の入口(`GenerateEvent` `GenerateCharacter(s)` `AddIdeas` `ResolveIdeas` の候補、ミーム・種の抜き出し、話の確定のあとに足す関係)が足す行は、書き手が `user` でも出自を `ai` にする
@@ -183,13 +183,18 @@ db に列を足さず、展開と出来事の記録から数える。数える�
 1. **動く人物を選ぶ**: 渡されなければ、その時刻に生きて居場所があり、気力と手数の残る人物のサブキャラクター(`main_character` が false)の中から、行動力の重み(`constants.ACTOR_WEIGHTS`)で引く
 2. **時刻を決める**: その人物が最後に出た出来事・話より後で、サブキャラクターに未来を書かせない決まり(`data_access_logic/readme.md` の「人物の来歴」)を守る時刻。後に決まっている出来事(`LATER_EVENTS_NOTE`)とは矛盾させない
 3. **狙う(人物の目)**: `ReadKnowledge` と同じ材料(知る相手で絞った来歴・関係・アイデア、本人のミーム・行動原理・性格)と、居合わせる人物(主要人物も含む)・場所の直近の出来事から、
-   人物が「何を狙って何をするか」を一手で書く(人物役 `character-actor` の一手と同じ形。筋書き `plot` は渡さない)。`nudge` は作者からの軽い方向づけ
+   人物が「何を狙って何をするか」を一手で書く(人物役 `character-actor` の一手と同じ形。筋書き `plot` は渡さない)。`nudge` は作者からの軽い方向づけ。
+   本人のモチベーション(`character_motivation`。その時刻に効いている行を強い順)と前後の出来事(本人が関わったこれまでの出来事と、本人か居る場所に掛かる、この先に決まっている出来事)も渡し、
+   これまでの続きとして、どの思いを果たしに・近づきに動くかを決めさせる(沿った思いの id を一手に添える)。この先の出来事は本人はまだ知らないものとして、食い違わずにつながるように動かせ、先回りさせない。
+   巻きこまれた相手の手番にも、その人物自身のモチベーションと前後の出来事を渡す
 4. **巻きこむ**: 狙いで言葉を交わしたい相手を挙げたら(目の前にいて名前を知っていて、気力の残る人物だけ)、相手にも同じ材料(その人物がその時刻に知ることのできるデータと目の前の様子)と、
    見聞きしたこと・求められていることを渡し、動いた人物と交互に手番(内心・行動・言葉・狙い)を返させる。誰かが話を終えるか、手番が上限に達したら止める。手番は展開の `prompt` に残す
 5. **裁く(作者の目)**: 実行の手をまとめて、狙いと行動・やり取りから、世界で起きたことを決める。成否はサイコロ(`GenerateEvent` の候補 → 記録と同じ)と影響の枠。結果として足すもの:
    - 出来事(当事者は居合わせる人物から)と、当事者ごとの来歴の行
    - 新しいアイデア(人物が考えた・広めた。呼び名の行の知る相手は人物と聞いた相手)
    - 新しい人物・対象(生まれた子・雇った者・作った組織。`GenerateCharacter` で)と、その人物との新しい関係の行
+   - 居合わせる人物のモチベーションの増減(居合わせる人物ごとの効いている行を id つきで渡す)。生まれた思いは行を足し、果たした・消えた思いは `end` を付け、
+     強さの変わった思いは前の行に `end` を付けて新しい強さの行を足す。「動かされにくい人物」の思いは書かない
    - ミームは抜き出さない(ミームは話の本文の確定のあとにだけ抜き出す)
    - 終わったこと: 居場所を離れた(今の居場所の行に `end`、移動先の行を足す)、関係が終わった・持ち物を失った・死んだ(その行に `end`)
 6. **書く**: 足すことと `end` を付けることだけ。手ごとに `expansion`(`mode=character`、`actor_id`)に記録する(取り消しは一手ずつ)

@@ -31,6 +31,7 @@ db の触り方(入口越し・読み取り)は `.claude/docs/db.md` を見る�
 | `CommitCharacterLocation` / `UpdateCharacterLocation` | `character.form.CharacterLocationCreateForm` / `CharacterLocationUpdateForm` |
 | `CommitCharacterRelation` / `UpdateCharacterRelation` | `character.form.CharacterRelationCreateForm` / `CharacterRelationUpdateForm` |
 | `CommitCharacterSkill` / `UpdateCharacterSkill` | `character.form.CharacterSkillCreateForm` / `CharacterSkillUpdateForm`(来歴の行は `character.record.CharacterSkillHistoryRow`、その行を知る相手の行は `knowers.KnowerRow`) |
+| `CommitCharacterMotivation` / `UpdateCharacterMotivation` | `character.form.CharacterMotivationCreateForm` / `CharacterMotivationUpdateForm` |
 | `CommitEvent` / `UpdateEvent` | `event.form.EventCreateForm` / `EventUpdateForm` |
 | `Update*History`(来歴・呼び名の行一つ) | `character.form.CharacterHistoryChange` / `CharacterSkillHistoryChange` / `CharacterRelationHistoryChange`、`idea.form.IdeaHistoryChange`、`location.form.LocationHistoryChange` |
 | `RunBatch` | `batch.form.BatchRequest`(入口の id と、その入口を一件だけ呼ぶときと同じ引数)のリスト |
@@ -78,6 +79,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この人物たちを〇〇へ移して」「話のあとで居場所を変えて」 | `character.move_characters.MoveCharacters(moves=[CharacterMove(character_id=…, location_id=…)], time=…)`(`CharacterMove` は `character.record`)。人物ごとに、`time` に続いている居場所の行を `time` で閉じ、移動先の行を `time` から足す(没年があればそこまで)。人物・場所が無ければ止める。出来事の生成・話の確定のあとの移動も、この書き換え(`character/moves.py` の `update_locations`)を使う |
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`。`text` は時期を限らない関係の芯、関係の中で起きたことは出来事ごとの `histories` の行(起きた時刻を `start`)に書く(下の「関係の芯と来歴」)。来歴の行を一つ足す・直すのは `AppendRelationHistory` / `UpdateRelationHistory`(`UpdateCharacterRelation` に渡すと配列はまるごと置き換わる)。消すのは `character.delete_character_relation.DeleteCharacterRelation(character_relation_id)`(来歴の行も消える) |
 | 「この人物にスキルを足して」「スキルの来歴を足して」 | `character.commit_character_skill.CommitCharacterSkill(skill)` / `character.update_character_skill.UpdateCharacterSkill(skill)`。`text` はスキルの本質(作者だけが読む)、身につけた・伸びた・衰えたなどは出来事ごとの `histories` の行(起きた時刻を `start`、効き終わる時刻を `end`)に書く。装いは `kind` を「装い」にし、身に着けている物ごとに一つ足す(下の「人物のスキルと来歴」)。来歴の行を一つ足す・直すのは `AppendSkillHistory` / `UpdateSkillHistory`(`UpdateCharacterSkill` に渡すと配列はまるごと置き換わる)。消すのは `character.delete_character_skill.DeleteCharacterSkill(character_skill_id)`(来歴と、その知る相手の行も消える) |
+| 「この人物のモチベーションを足して」「〇〇は△△したがっている」「この思いは果たした」 | `character.commit_character_motivation.CommitCharacterMotivation(motivation)` / `update_character_motivation.UpdateCharacterMotivation(motivation)` / `delete_character_motivation.DeleteCharacterMotivation(character_motivation_id)`。読むのは `list_character_motivations.ListCharacterMotivations(character_id, time=None)`(`time` を渡せばその時刻に効いている行を強い順、省けばすべての行を始まりの新しい順)。行の形は下の「人物のモチベーション」 |
 | 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea)`。本体は場所も期間も持たず、効く場所・期間は `histories` の行の `location_id` / `start` / `end` で持つ(下の「アイデアの履歴(呼び名)」)。時刻を渡して引くときは、`start` の決まった行が時刻に掛かるアイデアだけが当たるので、行には `start` を入れる。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を、場所のある最初の行の `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。本文は作者だけが読むので、確定のあとに AI(事実確認)を回さない。確定したアイデアを返す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、本文の末尾の `# 検証結果` の節に入れる(前の節は置き換える)。`ids` を省くとまだその節の無いものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。検めた件数を `{"checked"}` で返す。ミームは抜き出さない |
@@ -120,7 +122,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話か子の作品が残っていれば止まる |
 | 「プロットを書いて」「プロットを補完して」「話の枠を AI に決めさせて」 | しない。プロットは作者が画面で書く(下の「話のプロット」)。気づいたこと・予定は、プロットの末尾の「## メモ」の節に箇条書きで足す |
 | 「作品全体を詰めたい」「全体の整合を見ながら筋を直したい」「この一言から世界を広げて」 | スキル `expand`(作者モード)。作者の一言ごとに展開を立て、関わるアイデア・ミーム・出来事(筋は出来事の親子)・人物・関係・来歴を AI の行として足し、関わる AI の行を直してつじつまを合わせる。作者の行は直さず、食い違いと作者の行を直す指示は案(`expansion_conflict`)にして作者の判断を待ち、認められたら作者の書き手で直す。話の本文(`main_text`)は書かない・直さない(下の「世界の展開」) |
-| 「人物を動かして」「自走」 | スキル `auto-act`(人物モード)。`expansion.act_character.ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1)` を繰り返す。人物がその時刻に知ることのできるデータと目の前の様子から一手(内心・狙い・行動・言葉)を決め、巻きこみたい相手がいれば同じ材料で相手にも手番を返させて言葉を交わし(人物の目の段は一番安いモデル)、実行の手をまとめて作者の目でサイコロの成り行きと影響の枠に沿って一度だけ裁き(強いモデル)、気力・手数・影響の枠(`expansion/budget.py`。`.docs/world-expansion.md` の「リソース制限」)で縛ったうえで、出来事(企ては親の出来事にし、一手をその子に)・当事者の来歴・事柄(アイデアと呼び名。知った人物を知る相手に)・現れた人物と関係・居場所の移動を足す。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。一手ごとに展開(mode=character)を立てる(下の「世界の展開」) |
+| 「人物を動かして」「自走」 | スキル `auto-act`(人物モード)。`expansion.act_character.ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1)` を繰り返す。人物がその時刻に知ることのできるデータ・本人のモチベーション・前後の出来事(本人が関わったこれまでの出来事と、この先に決まっている出来事)と目の前の様子から一手(内心・狙い・沿ったモチベーション・行動・言葉)を決め、巻きこみたい相手がいれば同じ材料で相手にも手番を返させて言葉を交わし(人物の目の段は一番安いモデル)、実行の手をまとめて作者の目でサイコロの成り行きと影響の枠に沿って一度だけ裁き(強いモデル)、気力・手数・影響の枠(`expansion/budget.py`。`.docs/world-expansion.md` の「リソース制限」)で縛ったうえで、出来事(企ては親の出来事にし、一手をその子に)・当事者の来歴・事柄(アイデアと呼び名。知った人物を知る相手に)・現れた人物と関係・居場所の移動・モチベーションの増減を足す。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。一手ごとに展開(mode=character)を立てる(下の「世界の展開」) |
 | 「この一言に関わる行を探して」「表をまたいで引いて」 | `world.search_world.SearchWorld(words, story_id=None, limit_per_table=10)`。語の部分一致で、人物(名前・外見・芯・筋書き・来歴)・出来事・アイデア(呼び名も)・場所(来歴も)・関係(来歴も)・スキル・ミーム・話(題・プロット)・作品を引き、当たった語・抜き書き・出自(`origin`)と、一段広げた関わる行(人物の関係の相手・当事者の出来事・居場所、出来事の当事者・場所・親、場所の親、関係の二人)を返す。`story_id` を渡すと話・作品をその作品と子孫に絞る |
 | 「来歴を一行だけ足して」「この行を知る人を足して」 | `character.append_history.AppendCharacterHistory(character_id, history)` / `character.append_skill_history.AppendSkillHistory(character_skill_id, history)` / `character.append_relation_history.AppendRelationHistory(character_relation_id, history)` / `location.append_history.AppendLocationHistory(location_id, history)` / `idea.append_history.AppendIdeaHistory(idea_id, history)`。来歴・呼び名の行を一つだけ足し、今ある行には触れない(行の形は `UpdateCharacter` などの `histories` の一行と同じ。知る相手の既定も同じ)。知る相手を一人足すのは `character.add_knower.AddKnower(table, row_id, knower)`(`table` は来歴・呼び名の表の名前)。どれも `{"table", "id"}` を返す |
 | 「来歴を一行だけ直して」「この呼び名の行の注釈を直して」 | `character.update_history.UpdateCharacterHistory(history_id, history)` / `character.update_skill_history.UpdateSkillHistory(history_id, history)` / `character.update_relation_history.UpdateRelationHistory(history_id, history)` / `location.update_history.UpdateLocationHistory(history_id, history)` / `idea.update_history.UpdateIdeaHistory(history_id, history)`。来歴・呼び名の行を一つ id で指し、`history` に渡した欄だけを直す(空にする欄は null を渡す。`description`・`name` は空にできない)。同じ親のほかの行には触れない。`knowers` を渡せば知る相手をまるごと置き換える。行の id は `ReadCharacter` と表の API の行の `histories` の各行の `id` で読む。直したあとの行を返す |
@@ -228,6 +230,16 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   (初対面の相手の `ReadAppearance`、人物役の知ることのできるデータ、語り部の材料 `stage`、本文の材料の「装い」)。スキルの一覧には入れない
 - `CommitCharacterSkill` / `UpdateCharacterSkill` は `histories` を受け取る。`UpdateCharacterSkill` に渡すと配列をまるごと置き換える。一行だけ直すのは `UpdateSkillHistory`
 - 人物を消すと(`DeleteCharacter`)、その人物のスキルと来歴も消える
+
+**人物のモチベーション(character_motivation)**: 人物がいま何をしたがっているかを、一つの思いごとに `character_motivation` の一行
+(`character_id` / `start` / `end` / `strength` / `text`)で持つ。人物モード(`ActCharacter`)が読んで書く。
+
+- `start` は思いが生まれた時刻(必須)。`end` が空のあいだ効いている。果たした・消えたら、その時刻を `end` に入れる
+- `strength` は 1〜5(1 気にかかる程度 / 2 機会があればしたい / 3 手間をかけてもしたい / 4 ほかを後回しにしてもしたい / 5 何を捨てても果たしたい。`constants.MOTIVATION_STRENGTHS`)
+- 強さが変わったら、行を直さず、前の行の `end` に変わった時刻を入れ、同じ内容で新しい強さの行を同じ時刻から足す(人物モードは足すことと `end` を付けることしかできないので、同じ形に揃える)
+- 人物モードの人物の目(狙う段・対話の手番)には、本人のその時刻に効いている行だけを強い順に `constants.ACT_MOTIVATION_LIMIT` 件まで渡す。本人の内心なので、ほかの人物の材料・話の材料・人物役(`ReadKnowledge`)には渡さない
+- 裁く段には居合わせる人物ごとの行を id つきで渡し、一手のあとの増減(生まれた・強まった・弱まった・果たした・消えた)を返させて、出来事の時刻の行として書く(`character/motivations.py` の `apply_changes`)。影響の枠の「動かされにくい人物」の思いは書かない
+- 人物を消すと(`DeleteCharacter`)、その人物のモチベーションも消える
 
 **アイデアの履歴(呼び名)**: アイデアの本文(`text`)は本質で、作者(語り部と、話を書くセッションの Claude)だけが読む。人物役にも、AI の生成(人物・出来事)にも渡さず、生成には呼び名と受け止め方だけを渡す(`idea/models.py` の `idea_for_prompt`)。
 作中の人物が知ること(本質の `name` とは別に、この場所・この時代ではこう呼び、こう受け止めている、ということ)は、

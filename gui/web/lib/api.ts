@@ -182,6 +182,12 @@ export const deleteMemes = (memeIds: number[]) => runEntrance("meme.delete_meme.
 export const deleteCharacterSkill = (skillId: number) =>
   runEntrance("character.delete_character_skill.DeleteCharacterSkill", { character_skill_id: skillId });
 
+/** 人物のモチベーションの行を一つ消す。`character.delete_character_motivation.DeleteCharacterMotivation` を呼ぶ。 */
+export const deleteCharacterMotivation = (motivationId: number) =>
+  runEntrance("character.delete_character_motivation.DeleteCharacterMotivation", {
+    character_motivation_id: motivationId,
+  });
+
 /** 話を消す(登場人物・踏まえたアイデアとの中間テーブルの行も消える)。`episode.delete_episode.DeleteEpisode` を呼ぶ。 */
 export const deleteEpisode = (episodeId: number) =>
   runEntrance("episode.delete_episode.DeleteEpisode", { episode_id: episodeId });
