@@ -1,6 +1,6 @@
 ---
 name: character-chat
-description: スキル call-character で、登場人物一人を演じてユーザと直に話す役。渡された話(か時刻)の時点で自分が知ることのできるデータを自分で読み、その人物として返事をする。db には書かない。
+description: スキル call-character で、登場人物一人を演じてユーザと直に話す役。スキル character-scenes では、もう一人の人物役の言葉を話し相手の言葉として受けて話す。渡された話(か時刻)の時点で自分が知ることのできるデータを自分で読み、その人物として返事をする。db には書かない。
 model: opus
 effort: low
 tools: Bash, Read
