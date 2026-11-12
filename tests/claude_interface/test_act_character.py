@@ -21,7 +21,6 @@ from db.schema import (
     EpisodeCharacter, Event, EventCharacter, Expansion, IdeaHistory, get_env_session,
 )
 from db.stamp import Stamp
-from db.writer import on_screen
 from tool.test.mock_ai_client import MockAIClient
 
 
@@ -247,10 +246,8 @@ def test_one_judge_call_for_the_whole_run(world):
 def _plotted_episode(story_id: int, character_ids: list[int], start: str, plot: str, cast: bool = True) -> int:
     with get_env_session() as s:
         episode = Episode(story_id=story_id, title="テスト港の話", plot_text=plot, start=start)
-        # プロットは作者が画面で書いたものとして置く(画面のほかからはメモしか書けない)
-        with on_screen():
-            s.add(episode)
-            s.flush()
+        s.add(episode)
+        s.flush()
         if cast:
             s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=id_) for id_ in character_ids])
         s.commit()

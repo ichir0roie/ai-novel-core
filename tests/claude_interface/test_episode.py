@@ -25,8 +25,7 @@ class _RelatingAI(MockAIClient):
 
 
 def test_commit_episode(shown, world, mock_ai):
-    # 画面のほかから足す話のプロットは、メモの節の箇条書きだけ
-    memo = "## メモ\n- 取引の夜"
+    memo = "夜に港で取引がまとまる"
     result = shown(CommitEpisode(EpisodeCommitForm(
         story_id=world.story_id, title="テスト第二話", plot_text=memo, main_text="夜になった。\n取引がまとまった。",
         start="1200/04/01 15:00:00", end="1200/04/01 20:00:00", viewpoint_character_id=world.character_ids[1],

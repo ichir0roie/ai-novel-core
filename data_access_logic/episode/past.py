@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, defer, joinedload
 from data_access_logic import constants
 from data_access_logic.episode.models import CharacterEpisodeText, RecentEpisode
 from db.schema import Episode, EpisodeCharacter, Story
+from db.stamp import Stamp
 
 
 def _past[Q: Select](query: Q, episode: Episode) -> Q:
@@ -22,6 +23,15 @@ def _family_ids_select(episode: Episode) -> Select[int]:
     parent_id = select(Story.parent_story_id).where(Story.id == episode.story_id).scalar_subquery()
     return select(Story.id).where(
         or_(Story.id == episode.story_id, Story.id == parent_id, Story.parent_story_id == parent_id))
+
+
+def neighbor_starts(s: Session, episode: Episode) -> tuple[Stamp | None, Stamp | None]:
+    """同じ作品(章・外伝を含む)で、この話の一つ前と一つ後の話の時刻。本文の有無は問わない(枠だけの話も話の区切り)。"""
+    assert episode.start is not None
+    family = select(Episode.start).where(Episode.story_id.in_(_family_ids_select(episode)), Episode.id != episode.id)
+    before = s.scalar(family.where(Episode.start < episode.start).order_by(Episode.start.desc()).limit(1))
+    after = s.scalar(family.where(Episode.start > episode.start).order_by(Episode.start.asc()).limit(1))
+    return before, after
 
 
 def latest_past_episode(s: Session, episode: Episode) -> Episode | None:

@@ -156,3 +156,13 @@ ACT_MOTIVATION_CHANGE_LIMIT = 6
 # 言ってからこの日数までは原文、ここから鮮明の日数までは鮮明、それより後はあやふやを渡す
 SPEECH_VERBATIM_DAYS = 3
 SPEECH_VIVID_DAYS = 365
+
+# data_access_logic/character/knowledge
+# 人物役に渡す、本人が居合わせた出来事の件数(新しいほうから)。そのうち新しい `KNOWLEDGE_EVENT_TEXT_COUNT` 件は本文で、
+# それより前は要約で渡す。出来事の本文は会話を写したもの(スキル `character-scenes`)で長く、全部を本文で渡すと材料が膨らむ
+KNOWLEDGE_EVENT_LIMIT = 10
+KNOWLEDGE_EVENT_TEXT_COUNT = 3
+
+# data_access_logic/episode_session/stage
+# 語り部に渡す、話の前・後の出来事の件数の上限(それぞれ。話に近いほうから)。前は前の話の時刻から、後は次の話の時刻までに限る
+STAGE_EVENT_LIMIT = 30

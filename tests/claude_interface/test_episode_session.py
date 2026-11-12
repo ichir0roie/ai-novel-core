@@ -4,7 +4,7 @@ import json
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from ai.claude_code import ai_client
 from data_access_logic import constants
@@ -45,10 +45,9 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    PERSONALITY_LEVELS, Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Idea, IdeaHistory, Stamp,
-    get_env_session,
+    PERSONALITY_LEVELS, Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter, Idea,
+    IdeaHistory, Stamp, get_env_session,
 )
-from db.writer import on_screen
 from tool import episode_session
 
 
@@ -65,7 +64,7 @@ def _histories(person: dict) -> list[str]:
 
 def _set_plot(world, plot_text: str) -> None:
     """作者が画面でプロットを書いたことにする。"""
-    with on_screen(), get_env_session() as s:
+    with get_env_session() as s:
         s.get_one(Episode, world.episode_id).plot_text = plot_text
         s.commit()
 
@@ -205,6 +204,26 @@ def test_read_knowledge_at_the_latest_turn(shown, world, monkeypatch: pytest.Mon
     assert result["自分"]["来歴(古い順)"] == ["13年前、市に越してくる", "今年、店を畳む"]
     # 時刻の入った手番の無い人物は、話の時刻で読む
     assert episode_session._knowing(world.episode_id, hanako, None) == {"episode_id": world.episode_id}
+
+
+def test_read_knowledge_events_the_character_was_at(shown, world, add_events, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(constants, "KNOWLEDGE_EVENT_TEXT_COUNT", 2)
+    taro, hanako = world.character_ids
+    add_events(("去年の会話", "1199/03/01 12:00:00", [taro, hanako]),
+               ("先週の会話", "1200/03/25 12:00:00", [taro]),
+               # 居合わせなかった出来事と、話の時刻より後の出来事は知らない
+               ("花子だけの会話", "1200/03/30 12:00:00", [hanako]),
+               ("話の後の会話", "1200/04/10 09:00:00", [taro]))
+
+    result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
+
+    events = result["自分"]["居合わせた出来事(古い順)"]
+    assert [(event["いつ"], event["名前"]) for event in events] == [
+        ("1年前", "去年の会話"), ("7日前", "先週の会話"), ("今日", "テスト市")]
+    # 新しいほうの出来事は本文で、それより前は要約で
+    assert "本文" not in events[0] and events[0]["要約"] is None
+    assert events[1]["本文"] == "先週の会話の本文"
+    assert events[2]["居合わせた人物"] == ["テスト太郎", "テスト花子"]
 
 
 def test_read_knowledge_at_a_time_without_episode(shown, world):
@@ -502,7 +521,63 @@ def test_read_stage(shown, world):
                           "体格": "細身", "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
     taro, _ = world.character_ids
     assert result["知り合い"] == [{"人物id": [taro, hanako], "誰から": "テスト太郎", "誰へ": "テスト花子", "関係": "幼なじみ"}]
-    assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い"}
+    assert set(result) == {"この話", "場所(広い順)", "場所の説明", "場所の来歴(古い順)", "登場人物", "知り合い",
+                           "話の前の出来事(古い順)", "話のあいだの出来事(古い順)", "話の後の出来事(古い順。先回りしない)"}
+
+
+@pytest.fixture
+def add_events(world):
+    """(名前, 時刻, 居合わせた人物) の出来事を足す。本文は「<名前>の本文」。語り部は人物を問わず時刻で出来事を読み、
+    テスト用の db には前に回した行が残るので、足した行はテストの終わりに消す。"""
+    added: list[int] = []
+
+    def add(*events: tuple[str, str, list[int]]) -> None:
+        with get_env_session() as s:
+            rows = [Event(name=name, text=f"{name}の本文", hidden=False, time=time, location_id=world.location_id,
+                          event_characters=[EventCharacter(character_id=id_) for id_ in ids])
+                    for name, time, ids in events]
+            s.add_all(rows)
+            s.commit()
+            added.extend(row.id for row in rows)
+    yield add
+    with get_env_session() as s:
+        s.execute(delete(EventCharacter).where(EventCharacter.event_id.in_(added)))
+        s.execute(delete(Event).where(Event.id.in_(added)))
+        s.commit()
+
+
+def test_read_stage_events_around_the_episode(shown, world, add_events):
+    taro, hanako = world.character_ids
+    # world の話(1200 年)には回すたびに出来事が足されるので、出来事の無い年に話を置く
+    with get_env_session() as s:
+        episodes = [Episode(story_id=world.story_id, title=title, plot_text=title, start=start, end=end)
+                    for title, start, end in (("前の話", "1700/03/01 12:00:00", None),
+                                              ("この話", "1700/04/01 12:00:00", None),
+                                              ("次の話", "1700/05/01 12:00:00", None))]
+        s.add_all(episodes)
+        s.commit()
+        episode_id = episodes[1].id
+    add_events(("前の話より前", "1700/02/20 12:00:00", [taro]),
+               ("あいだの会話", "1700/03/20 09:00:00", [hanako]),
+               # 人物の居合わせない出来事も渡す
+               ("都の祭り", "1700/03/31 10:00:00", []),
+               # 終わりの空いた話は、その日のうちが「あいだ」
+               ("話の日の会話", "1700/04/01 20:00:00", [taro, hanako]),
+               ("話の後の会話", "1700/04/10 09:00:00", [taro, hanako]),
+               ("次の話より後", "1700/05/02 12:00:00", [taro]))
+
+    result = shown(ReadStage(episode_id=episode_id))
+
+    def names(key: str) -> list[str]:
+        return [event["名前"] for event in result[key]]
+    # 前の話の時刻から次の話の時刻の手前まで
+    assert names("話の前の出来事(古い順)") == ["あいだの会話", "都の祭り"]
+    assert names("話のあいだの出来事(古い順)") == ["話の日の会話"]
+    assert names("話の後の出来事(古い順。先回りしない)") == ["話の後の会話"]
+    talk = result["話の後の出来事(古い順。先回りしない)"][0]
+    assert talk["本文"] == "話の後の会話の本文"
+    assert talk["居合わせた人物"] == ["テスト太郎", "テスト花子"]
+    assert talk["場所"] == "テスト都"
 
 
 def test_read_knower_gaps(shown, world):
@@ -569,7 +644,7 @@ def test_read_episode_brief(shown, world, mock_ai, monkeypatch):
 
 
 def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
-    with on_screen(), get_env_session() as s:
+    with get_env_session() as s:
         for title, start, text in [("一番古い話", "1200/02/01 12:00:00", "一番古い話の本文。"),
                                    ("その前の話", "1200/02/15 12:00:00", "その前の話の本文。"),
                                    ("前の話", "1200/03/01 12:00:00", "前の話。\n続き。")]:
@@ -588,7 +663,7 @@ def test_read_episode_brief_style_samples(shown, world, mock_ai, monkeypatch):
 
 
 def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkeypatch):
-    with on_screen(), get_env_session() as s:
+    with get_env_session() as s:
         s.add(_previous_episode(world))
         s.commit()
     asked = []
@@ -605,7 +680,7 @@ def test_read_episode_brief_does_not_adjust_voices(shown, world, mock_ai, monkey
 
 def test_refresh_voices(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
-    with on_screen(), get_env_session() as s:
+    with get_env_session() as s:
         s.add(_previous_episode(world))
         s.commit()
     prompts = []
@@ -640,7 +715,7 @@ def test_refresh_voices(shown, world, mock_ai, monkeypatch):
 
 def test_refresh_voices_keeps_voices_decided_after_the_samples(shown, world, mock_ai, monkeypatch):
     taro, hanako = world.character_ids
-    with on_screen(), get_env_session() as s:
+    with get_env_session() as s:
         s.add(_previous_episode(world))
         # 見本の話より後に、作者が太郎の口調を変えた
         s.add(CharacterParameter(character_id=taro, start=Stamp.parse("1200/03/15 12:00:00"), tone="作者が決めた口調"))
@@ -987,7 +1062,7 @@ def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatc
 def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
     taro, _ = world.character_ids
     monkeypatch.setattr(constants, "EPISODE_RECENT_APPEARANCE_COUNT", 2)
-    with on_screen(), get_env_session() as s:
+    with get_env_session() as s:
         for month in ["01", "02", "03"]:
             episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
                               main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00")

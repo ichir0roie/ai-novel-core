@@ -13,7 +13,6 @@ from db.schema import (
     EpisodeCharacter, Event, EventCharacter, EventSeed, Idea, IdeaHistory, Location, Meme, MemeCategory, Oracle,
     Story, engine, get_env_session,
 )
-from db.writer import on_screen
 from data_access_logic.entrypoint import Entrypoint
 
 
@@ -120,10 +119,8 @@ def world() -> Iterator[World]:
         episode = Episode(story_id=story.id, title="テスト第一話", plot_text="市で出会う", main_text="市で二人が出会った。",
                           start="1200/04/01 12:00:00", end="1200/04/01 18:00:00",
                           viewpoint_character_id=characters[0].id, location_id=location.id)
-        # プロットは作者が画面で書いたものとして置く(画面のほかからはメモしか書けない)
-        with on_screen():
-            s.add(episode)
-            s.flush()
+        s.add(episode)
+        s.flush()
         s.add_all([EpisodeCharacter(episode_id=episode.id, character_id=character.id) for character in characters])
         idea = Idea(name="テスト魔導", kind="技術", text="テスト用の技術",
                     histories=[IdeaHistory(location_id=location.id, start="1150/01/01", name="テスト術",

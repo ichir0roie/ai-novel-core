@@ -17,6 +17,9 @@
   渡す(場にいない人物は関係の行の名前と間柄で足りる)。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
 - 本人が前の話で言ったセリフ(`character_speech`)は、その時刻までに始まった話のもの(演じている話は除く)を、言ってからの日数で
   原文(数日)・鮮明(一年)・あやふや(それより後)のどれか一つにして、話ごとに渡す。
+- 本人が居合わせた出来事(`event_character` に本人がいる行)は、その時刻までのものを新しいほうから
+  `constants.KNOWLEDGE_EVENT_LIMIT` 件、古い順に渡す。新しい `constants.KNOWLEDGE_EVENT_TEXT_COUNT` 件は本文で、それより前は要約で。
+  話の外で人物が交わした会話(スキル `character-scenes`)を、話の中の人物役が覚えているようにするため。居合わせたので知る相手では絞らない。
 """
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ from typing import Any
 
 from pydantic import model_serializer
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from data_access_logic import constants
 from data_access_logic.character import skills
@@ -39,7 +42,7 @@ from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
-    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode, IdeaHistory,
+    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode, Event, IdeaHistory,
     IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
 )
 from db.stamp import Stamp
@@ -200,6 +203,34 @@ class KnownSpeech(Material):
     episode: SpeechEpisode
 
 
+class KnownEvent(Material):
+    name: str
+    time: Timestamp
+    location_name: str | None = None
+    # 居合わせた人物の名前(本人も含む)
+    characters: list[str]
+    # 新しい出来事だけ本文、それより前は要約(要約がまだ無ければ空)
+    text: str | None = None
+    summary: str | None = None
+
+
+def _when(start: Stamp, time: Stamp) -> str:
+    """出来事は会話の中身まで覚えているので、近いものは日で言う。一月より前は年で言う。"""
+    days = start.days_until(time)
+    if days <= 0:
+        return "今日"
+    if days <= 30:
+        return f"{days}日前"
+    return _ago(start, time.year) or ""
+
+
+def _events_for_prompt(events: list[KnownEvent], time: Stamp) -> list[dict[str, Any]]:
+    return [{"いつ": _when(event.time, time), "名前": event.name, "場所": event.location_name,
+             "居合わせた人物": event.characters,
+             **({"本文": event.text} if event.text is not None else {"要約": event.summary})}
+            for event in events]
+
+
 def _speeches_for_prompt(speeches: list[KnownSpeech], time: Stamp) -> list[dict[str, Any]]:
     """話ごとに、言ってからの日数で原文・鮮明・あやふやのどれか一つを渡す。"""
     by_episode: dict[int, list[KnownSpeech]] = {}
@@ -231,10 +262,14 @@ class KnowledgeSerialized(Material):
     places: list[KnownPlace]
     # 本人が前の話で言ったセリフ(話の時刻・本文の順)
     speeches: list[KnownSpeech]
+    # 本人が居合わせた出来事(古い順)。人物モード(`expansion/acting.py`)は出来事を別に渡すので None にして、見出しごと出さない
+    events: list[KnownEvent] | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         me, parameters, year = self.me, self.parameters, self.time.year
+        events = {} if self.events is None else {
+            "居合わせた出来事(古い順)": _events_for_prompt(self.events, self.time)}
         return {
             "自分": {
                 "名前": me.name, **me.looks.model_dump(), "名字": parameters.family_name,
@@ -244,6 +279,7 @@ class KnowledgeSerialized(Material):
                 "来歴(古い順)": _histories_for_prompt(me.histories, year),
                 "スキル": _skills_for_prompt(me.skills, year),
                 "言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, self.time),
+                **events,
             },
             "関係": _relations_for_prompt(self.relations, year),
             "知っている人物": [
@@ -369,14 +405,28 @@ def _speeches(s: Session, character_id: int, time: Stamp, acting_episode_id: int
     return [KnownSpeech.model_validate(row) for row in s.scalars(query).all()]
 
 
+def _events(s: Session, character_id: int, time: Stamp) -> list[KnownEvent]:
+    """`time` までに本人が居合わせた出来事。古い順。"""
+    rows = s.scalars(
+        common_query.events_of_character_select(character_id, until=time, limit=constants.KNOWLEDGE_EVENT_LIMIT)
+        .options(selectinload(Event.summary))
+        .execution_options(populate_existing=True)).all()
+    return [KnownEvent(name=row.name, time=row.time, location_name=None if row.location is None else row.location.name,
+                       characters=[link.character.name for link in row.event_characters if link.character is not None],
+                       text=row.text if index < constants.KNOWLEDGE_EVENT_TEXT_COUNT else None,
+                       summary=None if row.summary is None else row.summary.text)
+            for index, row in reversed(list(enumerate(rows)))]
+
+
 def knowledge_of(
     s: Session, character_id: int, time: Stamp, plot_text: str, scene_ids: set[int] | None,
-    acting_episode_id: int | None,
+    acting_episode_id: int | None, with_events: bool = False,
 ) -> KnowledgeSerialized:
     """アイデアは、`plot_text` に名前の出るものだけを入れる。
     知っている人物(外見・芯・来歴)は、関係のある人物のうち `scene_ids`(話の登場人物・名前だけ出る人物)にいる人物だけ。
     ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。
-    言ったセリフは、`acting_episode_id`(演じている話)のものを除く。"""
+    言ったセリフは、`acting_episode_id`(演じている話)のものを除く。
+    居合わせた出来事は `with_events` のときだけ入れる(人物モードは出来事を別に渡す)。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)
@@ -395,6 +445,7 @@ def knowledge_of(
         ideas=_ideas(s, viewer, _in_text(plot_text)),
         places=_places(s, viewer),
         speeches=_speeches(s, character_id, time, acting_episode_id),
+        events=_events(s, character_id, time) if with_events else None,
     )
 
 

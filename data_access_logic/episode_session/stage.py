@@ -4,6 +4,9 @@
 (名前・年齢・性別・体格・装い・外見)と、登場人物のだれとだれが知り合いか(関係の名前だけ)を渡す。装いは、話の時刻に効いている装いのスキルの来歴の行(身に着けている物ごと)。
 人物の芯・来歴(持ち物・記憶・隠し事の行も含む)、関係の説明・来歴、設定(アイデア)、前の話・本文は渡さない。人物の内側と、人物がこれまでに何をしたかは、
 人物役が自分の知ることのできるデータ(`character/knowledge.py`)から動いて出す。
+話の周りの出来事は、人物・場所を問わずすべて本文で渡す(話の外で人物たちが交わした会話(スキル `character-scenes`)を踏まえて
+状況を起こすため)。範囲は同じ作品(章・外伝を含む)の前の話の時刻から次の話の時刻の手前までで、話の前・話のあいだ・話の後に分ける。
+話の後の出来事は、先回りせず、食い違わないために読む。
 本文は手番を終えたあと、本体の Claude が本文の材料(`episode/brief.py`)を読んで書く。
 """
 from __future__ import annotations
@@ -11,21 +14,26 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import model_serializer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from data_access_logic import constants
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.skills import outfit_at
 from data_access_logic.character.models import CharacterMaterial, CharacterParameterValues, CharacterRelationLine
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
+from data_access_logic.episode.past import neighbor_starts
+from data_access_logic.event.reading import EventRow
 from data_access_logic.history_start import start_for_prompt
 from data_access_logic.location.models import LocationLine, LocationMaterial
 from data_access_logic.location.reading import location_at
 from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
-from db.schema import Location
+from db.schema import Episode, Event, Location
+from db.stamp import Stamp
 
 
 class StageEpisode(Material):
@@ -52,6 +60,10 @@ class Stage(Material):
     cast: list[StageMember]
     # 両側とも登場人物で、話の時刻に続いている関係。初対面かどうかを語り部が見分ける
     relations: list[CharacterRelationLine]
+    # 話の周りの出来事(古い順)。話の時刻より前・話のあいだ(時刻〜終わり、終わりが空ならその日のうち)・それより後
+    events_before: list[EventRow] = []
+    events_during: list[EventRow] = []
+    events_after: list[EventRow] = []
 
 
 class StageSerialized(Stage):
@@ -73,7 +85,45 @@ class StageSerialized(Stage):
             "知り合い": [{"人物id": [relation.character_1.id, relation.character_2.id], "誰から": relation.character_1.name,
                       "誰へ": relation.character_2.name, "関係": relation.relation}
                      for relation in self.relations],
+            "話の前の出来事(古い順)": _events_for_narrator(self.events_before),
+            "話のあいだの出来事(古い順)": _events_for_narrator(self.events_during),
+            "話の後の出来事(古い順。先回りしない)": _events_for_narrator(self.events_after),
         }
+
+
+def _events_for_narrator(events: list[EventRow]) -> list[dict[str, Any]]:
+    return [{"出来事id": event.id, "名前": event.name, "時刻": str(event.time),
+             "終わり": None if event.end is None else str(event.end), "場所": event.location_name,
+             "居合わせた人物": [character.name for character in event.characters], "本文": event.text}
+            for event in events]
+
+
+def _last_moment(episode_start: Stamp, episode_end: Stamp | None) -> Stamp:
+    """話のあいだの終わり。終わりが空なら、話の日のうち。"""
+    if episode_end is not None:
+        return episode_end
+    return Stamp(episode_start.year, episode_start.month, episode_start.day, 23, 59, 59)
+
+
+def _events_around(s: Session, episode: Episode) -> tuple[list[EventRow], list[EventRow], list[EventRow]]:
+    start = episode.start
+    assert start is not None
+    last = _last_moment(start, episode.end)
+    since, until = neighbor_starts(s, episode)
+    upto = select(Event).options(*common_query.EVENT_LOAD_OPTIONS).where(Event.time <= last)
+    if since is not None:
+        upto = upto.where(Event.time >= since)
+    later = select(Event).options(*common_query.EVENT_LOAD_OPTIONS).where(Event.time > last)
+    if until is not None:
+        later = later.where(Event.time < until)
+    limit = constants.STAGE_EVENT_LIMIT
+    upto_rows = list(reversed(s.scalars(
+        upto.order_by(Event.time.desc(), Event.id.desc()).limit(limit * 2).execution_options(populate_existing=True)).all()))
+    later_rows = s.scalars(
+        later.order_by(Event.time.asc(), Event.id.asc()).limit(limit).execution_options(populate_existing=True)).all()
+    before = [EventRow.model_validate(row) for row in upto_rows if row.time < start][-limit:]
+    during = [EventRow.model_validate(row) for row in upto_rows if row.time >= start]
+    return before, during, [EventRow.model_validate(row) for row in later_rows]
 
 
 def stage_of(s: Session, episode_id: int) -> StageSerialized:
@@ -84,6 +134,7 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
     location_id = episode.location_id
     characters = cast_characters(episode)
     cast_ids = {character.id for character in characters}
+    before, during, after = _events_around(s, episode)
     return StageSerialized(
         main_episode=episode,
         locations=common_query.location_path(s, location_id) if location_id is not None else [],
@@ -93,4 +144,5 @@ def stage_of(s: Session, episode_id: int) -> StageSerialized:
               for character in characters],
         relations=[line for line in relations_at(s, characters, time, dated_alive_at)
                    if line.character_1.id in cast_ids and line.character_2.id in cast_ids],
+        events_before=before, events_during=during, events_after=after,
     )

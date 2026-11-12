@@ -29,8 +29,9 @@ from data_access_logic.logs import configure_logging
 
 
 # 長い Bash の結果は Claude Code が頭だけを見せてファイルに逃がし、人物役は逃がされた先を読み落としたまま演じた
-# (知り合いを知らない人として返した)。人物の材料は数万字になるので、いつもファイルに書いて Read で読ませる
-FILE_COMMANDS = ("knowledge", "played")
+# (知り合いを知らない人として返した)。人物の材料は数万字になるので、いつもファイルに書いて Read で読ませる。
+# 語り部の材料(stage)も、話の周りの出来事の本文が入って長いので同じにする
+FILE_COMMANDS = ("knowledge", "played", "stage")
 OUT_DIR = Path(__file__).resolve().parent.parent / ".cache" / "episode_session"
 _WAIT_INTERVAL_SECONDS = 2
 
@@ -174,7 +175,8 @@ def main() -> None:
     knower_gaps.add_argument("--episode", type=int, required=True)
 
     stage_command = commands.add_parser(
-        "stage", help="語り部が読む材料(プロット・場所・登場人物の表層・知り合いの組)を読み、登場人物と知り合いの組を手番のファイルに写す")
+        "stage", help="語り部が読む材料(プロット・場所・登場人物の表層・知り合いの組・話の周りの出来事)を読み、"
+                      "登場人物と知り合いの組を手番のファイルに写す")
     stage_command.add_argument("--episode", type=int, required=True)
 
     add = commands.add_parser("add", help="手番の要求の行を足す(JSON: narration・witness_ids・simultaneous・time と、turns の配列: character_id・time・request・witness_ids)")

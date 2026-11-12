@@ -8,7 +8,6 @@ from factory.random import reseed_random
 from sqlalchemy import func, select
 
 from db.schema import Base, engine
-from db.writer import on_screen
 from randomizer import mock_factories
 
 
@@ -18,14 +17,12 @@ def seed_mock_db(n: int, seed: int, recreate: bool = False) -> dict[str, int]:
     reseed_random(seed)
 
     mock_factories.bind(engine)
-    # 話のプロットも作者が画面で書いた行として足す(画面のほかからはプロットにメモしか書けない)
-    with on_screen():
-        try:
-            for factory_class in mock_factories.ALL_FACTORIES:
-                factory_class.create_batch(n)
-            mock_factories.commit()
-        finally:
-            mock_factories.close()
+    try:
+        for factory_class in mock_factories.ALL_FACTORIES:
+            factory_class.create_batch(n)
+        mock_factories.commit()
+    finally:
+        mock_factories.close()
 
     with engine.connect() as conn:
         return {table.name: conn.execute(select(func.count()).select_from(table)).scalar_one()

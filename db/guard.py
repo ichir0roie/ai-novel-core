@@ -8,19 +8,17 @@
 - 作者(`user`): どの行も直せる。足した行の出自は `user`(AI の生成の流れの中なら `ai`)。AI の行を直すと、その行は作者の行になる
 - 作者モード(`ai`): 出自 `ai` の行だけを直せる・消せる。作品・話・書き方など、AI に書かせない表には触れない
 - 人物モード(`ai_append`): 足すことと、`end` で終わりを付けることだけ(同じトランザクションで足した行を整えるのは、足すことに数える)
-- 話のプロット(`episode.plot_text`)は、画面からの書き込みのほかは、末尾のメモの節に短い箇条書きを足すことだけ(`db/plot_memo.py`)
 """
 from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Column, Numeric, Update, event, insert, select
+from sqlalchemy import Column, Numeric, event, insert, select
 from sqlalchemy.orm import ORMExecuteState, Session, object_session
 from sqlalchemy.orm.base import NO_VALUE
 from sqlalchemy import inspect as sa_inspect
 
-from db.plot_memo import PlotMemoError, check_appended
 from db.schema import (
     TIMESTAMP_COLUMNS, Base, ChangeOp, ExpansionChange, Origin, OriginMixin, StampType,
 )
@@ -35,8 +33,6 @@ AI_FORBIDDEN_TABLES = frozenset({
 UNGUARDED_TABLES = frozenset({"event_summary", "expansion", "expansion_change", "expansion_conflict"})
 # 人物モードが直してよい列。終わりを付ける(空なら時刻を入れ、入っていればそれより前に早める)ことだけを許す
 APPENDABLE_COLUMN = "end"
-# 画面のほかからは、メモの節に箇条書きを足すことしかできない列
-PLOT_TABLE, PLOT_COLUMN = "episode", "plot_text"
 # このトランザクションで足した行を、セッションの info に持つ鍵
 _INSERTED_KEY = "guard_inserted"
 
@@ -118,24 +114,12 @@ def _check_ai_table(target: Base, action: str) -> None:
         raise ProtectedRowError(f"AI の書き手は {table} の行を{action}")
 
 
-def _check_plot(target: Base, old: Any) -> None:
-    """画面のほかからのプロットの書き換えが、メモの節に箇条書きを足すことだけかを確かめる。"""
-    state = current()
-    if target.__tablename__ != PLOT_TABLE or state.screen or state.restoring:
-        return
-    try:
-        check_appended(old or "", getattr(target, PLOT_COLUMN) or "")
-    except PlotMemoError as e:
-        raise ProtectedRowError(f"{_label(target)}: {e}") from e
-
-
 def _before_insert(_mapper, _connection, target: Base) -> None:
     if target.__tablename__ in UNGUARDED_TABLES:
         return
     state = current()
     if state.by_ai:
         _check_ai_table(target, "足せない")
-    _check_plot(target, "")
     if isinstance(target, OriginMixin) and not state.restoring:
         target.origin = (Origin.AI if state.by_ai or state.generated else Origin.USER).value
 
@@ -179,9 +163,6 @@ def _before_update(_mapper, connection, target: Base) -> None:
         target.origin = _snapshot(connection, target)["origin"] if old is NO_VALUE else old
     if not changes or state.restoring:
         return
-    if PLOT_COLUMN in changes:
-        old = changes[PLOT_COLUMN][0]
-        _check_plot(target, _snapshot(connection, target)[PLOT_COLUMN] if old is NO_VALUE else old)
     if state.writer is Writer.AI_APPEND:
         _check_ai_table(target, "直せない")
         if (target.__tablename__, target.id) not in _inserted(target):
@@ -217,10 +198,6 @@ def _bulk(execute_state: ORMExecuteState) -> None:
         return
     state = current()
     mapper = execute_state.bind_mapper
-    if (mapper is not None and execute_state.is_update and mapper.class_.__tablename__ == PLOT_TABLE
-            and not state.screen and not state.restoring
-            and isinstance(execute_state.statement, Update) and PLOT_COLUMN in execute_state.statement.compile().params):
-        raise ProtectedRowError(f"{PLOT_TABLE} の {PLOT_COLUMN} は一括では直せない(画面のほかからはメモを足すことだけ)")
     if mapper is None or (not state.by_ai and state.expansion_id is None):
         return
     model = mapper.class_

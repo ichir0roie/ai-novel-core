@@ -2,7 +2,7 @@
 """話の登場人物の話し方の調整と、Claude が自分で書くための材料の読み出しの流れ。
 
 db の段は `data_access_logic/episode/steps.py`。
-話のプロットは作者が画面で書く。AI にプロットを書かせる流れは置かない(`db/plot_memo.py`)。
+話のプロットを AI の流れに書かせる段は置かない(プロットを直すのは作者と、作者の書き手で書くこのセッションの Claude)。
 """
 from __future__ import annotations
 

@@ -124,17 +124,15 @@ def _patch_plot(client, world, plot_text: str, headers: dict[str, str] | None = 
                         headers=headers or {})
 
 
-def test_plot_is_written_from_the_screen(client, world, monkeypatch: pytest.MonkeyPatch):
-    """プロットの本文を書けるのは画面からだけ。web のセッションの鍵・書き手のヘッダを付けた要求は、メモを足すことだけ。"""
-    # 合言葉を確かめない手元の API: 書き手のヘッダが無ければ画面
+def test_plot_is_written_by_the_author_writers(client, world, monkeypatch: pytest.MonkeyPatch):
+    """プロットの本文は、画面からも web のセッションからも書ける。AI の書き手のヘッダを付けた要求は、話の行に触れない。"""
     assert _patch_plot(client, world, "画面で書いたプロット").status_code == 200
-    assert _patch_plot(client, world, "流れが書いたプロット", {"x-novel-generated": "1"}).status_code == 403
+    assert _patch_plot(client, world, "流れが書いたプロット", {"x-novel-generated": "1"}).status_code == 200
+    assert _patch_plot(client, world, "AI が書いたプロット", {"x-novel-writer": "ai"}).status_code == 403
 
     monkeypatch.setattr(api_app, "_API_KEYS", {"gui": "gui-key", "web": "web-key"})
     assert _patch_plot(client, world, "画面の鍵で書いたプロット", {"x-novel-api-key": "gui-key"}).status_code == 200
-    assert _patch_plot(client, world, "web が書いたプロット", {"x-novel-api-key": "web-key"}).status_code == 403
-    memo = "画面の鍵で書いたプロット\n\n## メモ\n- web が足したメモ"
-    assert _patch_plot(client, world, memo, {"x-novel-api-key": "web-key"}).status_code == 200
+    assert _patch_plot(client, world, "web が書いたプロット", {"x-novel-api-key": "web-key"}).status_code == 200
 
 
 def test_run_unknown_entrance(client):
