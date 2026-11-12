@@ -1281,6 +1281,7 @@ export default function OverviewPage() {
           start={addingEvent.start}
           parent={null}
           location={null}
+          story={data ? { id: data.story_id, label: storyLabel(data.story_id) } : null}
           characters={[{ id: addingEvent.character.id, label: names.get(addingEvent.character.id) ?? `#${addingEvent.character.id}` }]}
           onClose={() => setAddingEvent(null)}
           onAdded={() => {

@@ -182,7 +182,7 @@ class OverviewCharacter(BaseModel):
     id: int
     name: str | None
     main_character: bool
-    # 選んだ章の話の登場人物(名前だけ出る人物は含めない)か
+    # 選んだ章の話の登場人物(名前だけ出る人物は含めない)か、章の出来事の当事者か
     in_cast: bool
     # 期間の終わりの影響力(主要人物は下限をかけた値)
     influence: str
@@ -200,7 +200,7 @@ class OverviewRelation(BaseModel):
 class OverviewResponse(BaseModel):
     story_id: int
     story_name: str | None
-    # 章の話の始まりから終わりまでに、前後の余白を足した期間
+    # 章の話と出来事の始まりから終わりまでに、前後の余白を足した期間
     since: str
     until: str
     episodes: list[OverviewEpisode]

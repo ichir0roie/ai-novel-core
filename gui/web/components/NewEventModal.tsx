@@ -17,6 +17,8 @@ type Props = {
   parent: { id: number; label: string } | null;
   /** 起きた場所(タイムラインで絞り込んでいる場所)。絞り込んでいなければ null */
   location: { id: number; label: string } | null;
+  /** 筋に置く作品(見取り図で選んでいる章)。省けばどの章にも置かない */
+  story?: { id: number; label: string } | null;
   /** 当事者にする人物(見取り図で押した人物の列)。省けば当事者を付けない */
   characters?: { id: number; label: string }[];
   onClose: () => void;
@@ -32,6 +34,7 @@ export default function NewEventModal({
   start: initialStart,
   parent,
   location,
+  story = null,
   characters = [],
   onClose,
   onAdded,
@@ -55,6 +58,7 @@ export default function NewEventModal({
     text,
     parent_event_id: parent?.id ?? null,
     location_id: location?.id ?? null,
+    story_id: story?.id ?? null,
     character_ids: characters.map((c) => c.id),
   });
 
@@ -105,6 +109,7 @@ export default function NewEventModal({
       {error && <div className="status error">{error}</div>}
       <div className="hint">{parent ? T.eventTimeline.newChildOf(parent.label) : T.eventTimeline.newRoot}</div>
       <div className="hint">{T.eventTimeline.newLocation(location?.label ?? T.none)}</div>
+      {story && <div className="hint">{T.eventTimeline.newStory(story.label)}</div>}
       {characters.length > 0 && (
         <div className="hint">{T.eventTimeline.newParticipants(characters.map((c) => c.label).join(", "))}</div>
       )}

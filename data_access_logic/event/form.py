@@ -32,6 +32,7 @@ class EventCreateForm(Form):
     text: str = ""
     hidden: bool = False
     parent_event_id: int | None = None
+    story_id: int | None = None
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
@@ -46,6 +47,7 @@ class EventUpdateForm(Form):
     text: str | None = None
     hidden: bool | None = None
     parent_event_id: int | None = None
+    story_id: int | None = None
     location_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None

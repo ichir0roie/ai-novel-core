@@ -33,12 +33,12 @@ def _text(value: Stamp | None) -> str | None:
     return None if value is None else str(value)
 
 
-def _window(episodes: list[Episode], margin_days: int) -> tuple[Stamp, Stamp]:
-    starts = [episode.start for episode in episodes if episode.start is not None]
-    if not starts:
-        raise ValueError("この章には時刻のある話が無いので、期間を決められない")
-    ends = [episode.end or episode.start for episode in episodes if episode.start is not None]
-    return min(starts).plus_days(-margin_days), max(end for end in ends if end is not None).plus_days(margin_days)
+def _window(spans: list[tuple[Stamp, Stamp | None]], margin_days: int) -> tuple[Stamp, Stamp]:
+    if not spans:
+        raise ValueError("この章には時刻のある話も出来事も無いので、期間を決められない")
+    since = min(start for start, _ in spans)
+    until = max(end or start for start, end in spans)
+    return since.plus_days(-margin_days), until.plus_days(margin_days)
 
 
 def _invited_names(prompt: str) -> list[str]:
@@ -53,7 +53,11 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
     chapter_ids = common_query.descendant_story_ids(s, story_id)
     chapter_episodes = s.scalars(select(Episode).where(Episode.story_id.in_(chapter_ids), Episode.start.is_not(None))
                                  .order_by(Episode.start, Episode.id)).all()
-    since, until = _window(list(chapter_episodes), margin_days)
+    chapter_event_spans = s.execute(select(func.coalesce(Event.start, Event.time), func.coalesce(Event.end, Event.start))
+                                    .where(Event.story_id.in_(chapter_ids))).all()
+    since, until = _window(
+        [(episode.start, episode.end) for episode in chapter_episodes if episode.start is not None]
+        + [(start, end) for start, end in chapter_event_spans], margin_days)
 
     sibling_ids = ([] if story.parent_story_id is None else
                    [id_ for id_ in common_query.descendant_story_ids(s, story.parent_story_id)
@@ -103,7 +107,8 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
     episode_counts = Counter(s.scalars(select(EpisodeCharacter.character_id).where(
         EpisodeCharacter.episode_id.in_([episode.id for episode in chapter_episodes]),
         EpisodeCharacter.mentioned.is_(False))).all())
-    cast_ids = set(episode_counts)
+    cast_ids = set(episode_counts) | {link.character_id for event in events if event.story_id in chapter_ids
+                                      for link in event.event_characters}
     participant_ids = {link.character_id for event in events for link in event.event_characters}
     characters = s.scalars(select(Character).where(Character.id.in_(cast_ids | participant_ids))).all()
     names = {character.id: character.name for character in characters}

@@ -236,6 +236,9 @@ class Event(OriginMixin, TextBase):
 
     parent_event_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("event.id"), comment="上位の出来事(この出来事を含む大きな出来事)", sort_order=230)
+    story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id"), index=True,
+        comment="この出来事を筋に置く作品(章)。空なら、どの章にも置かない世界の出来事", sort_order=235)
 
     location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"), index=True,

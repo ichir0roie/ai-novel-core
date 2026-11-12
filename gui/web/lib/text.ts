@@ -434,6 +434,7 @@ export const T = {
     newChildOf: (label: string) => `Child of: ${label}`,
     newRoot: "A root event (no parent)",
     newLocation: (label: string) => `Location: ${label}`,
+    newStory: (label: string) => `Story: ${label}`,
     newParticipants: (labels: string) => `Participants: ${labels}`,
     name: "name",
     start: "Start",

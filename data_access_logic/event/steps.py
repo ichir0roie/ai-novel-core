@@ -20,7 +20,7 @@ from data_access_logic.location.models import LocationMaterial
 from data_access_logic.step import RowId, db_step
 from data_access_logic.summary_targets import SummaryTargets
 from data_access_logic.query import common_query
-from db.schema import Character, Event, EventCharacter, Location
+from db.schema import Character, Event, EventCharacter, Location, Story
 from db.stamp import Stamp
 
 
@@ -122,6 +122,7 @@ def save_progress(s: Session, form: ProgressForm) -> EventRecord:
 
 def _check_references(s: Session, form: EventCreateForm | EventUpdateForm) -> None:
     CommitEntrypoint.check_exists(s, Event, form.parent_event_id, "parent_event_id")
+    CommitEntrypoint.check_exists(s, Story, form.story_id, "story_id")
     CommitEntrypoint.check_exists(s, Location, form.location_id, "location_id")
     for character_id in form.character_ids or []:
         CommitEntrypoint.check_exists(s, Character, character_id, "character_ids")

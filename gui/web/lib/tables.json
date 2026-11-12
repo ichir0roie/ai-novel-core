@@ -1595,6 +1595,21 @@
           "comment": "上位の出来事(この出来事を含む大きな出来事)"
         },
         {
+          "key": "story_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "story",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この出来事を筋に置く作品(章)。空なら、どの章にも置かない世界の出来事"
+        },
+        {
           "key": "location_id",
           "type": "integer",
           "nullable": true,
