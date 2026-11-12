@@ -619,6 +619,8 @@ export interface components {
             end: string | null;
             /** Parent Event Id */
             parent_event_id: number | null;
+            /** In Story */
+            in_story: boolean;
             /** Location Name */
             location_name: string | null;
             /** Origin */

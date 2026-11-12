@@ -164,6 +164,8 @@ class OverviewEvent(BaseModel):
     start: str
     end: str | None
     parent_event_id: int | None
+    # 選んだ章(とその子孫)の筋に置いた出来事か。false は同じ期間のほかの出来事
+    in_story: bool
     location_name: str | None
     origin: str
     hidden: bool

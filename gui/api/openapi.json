@@ -1722,6 +1722,10 @@
             ],
             "title": "Parent Event Id"
           },
+          "in_story": {
+            "type": "boolean",
+            "title": "In Story"
+          },
           "location_name": {
             "anyOf": [
               {
@@ -1814,6 +1818,7 @@
           "start",
           "end",
           "parent_event_id",
+          "in_story",
           "location_name",
           "origin",
           "hidden",

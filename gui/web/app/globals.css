@@ -713,7 +713,14 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 .overview-invite { fill: none; stroke: var(--accent); stroke-width: 1.2; }
 #overview-arrow path { fill: var(--accent); }
 .overview-label { font-size: 11px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; pointer-events: none; }
+/* 重なって置けない名前は、指したときと選んだときだけ出す */
+.overview-label.spare { visibility: hidden; }
+.overview-event:hover .overview-label.spare { visibility: visible; }
+/* 章の筋に置いていない、同じ期間のほかの出来事 */
+.overview-event.outside, .overview-arc.outside { opacity: 0.45; }
 .overview-event.dimmed, .overview-arc.dimmed { opacity: 0.15; }
+.overview-lane.others { background: color-mix(in srgb, var(--muted) 6%, transparent); }
+.overview-others { cursor: default; font-style: italic; }
 .overview-event.selected .overview-dot, .overview-event.selected .overview-actor { stroke: var(--ink); stroke-width: 2; }
 .overview-event:hover .overview-label { font-weight: 600; }
 .overview-arc { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: color-mix(in srgb, var(--accent) 45%, transparent); cursor: pointer; }

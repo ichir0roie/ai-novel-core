@@ -66,16 +66,19 @@ const MARGINS = [0, 30, 90, 180];
 const DOT_BASE = 3.5;
 const DOT_STEP = 0.9;
 const DOT_MAX = 13;
-// 名前を点の脇に出す出来事の大きさの下限(小さな出来事は吹き出しで読む)
-const LABEL_SIZE = 4;
+// 出来事の名前の字の大きさと、点との間(px)。`.overview-label` の font-size と揃える
+const LABEL_FONT = 11;
+const LABEL_GAP = 3;
+// 列にいる人物が一人もいない出来事を置く「ほか」の列を指す、人物の id の代わりの値
+const OTHERS = -1;
 // 企ての帯を置く幅。列の左の空きと、押して出来事を足せるよう列の右に残す余白(px)
 const ARC_LEFT = 4;
 const ARC_RIGHT_SPACE = 16;
 // 章の話の列の key。兄弟の作品の列は `story-<作品の id>`
 const CHAPTER_KEY = "chapter";
 
-type Filter = { people: "cast" | "involved"; origin: "all" | "ai" | "user"; minSize: number };
-const DEFAULT_FILTER: Filter = { people: "involved", origin: "all", minSize: 0 };
+type Filter = { people: "cast" | "involved"; origin: "all" | "ai" | "user"; minSize: number; labels: boolean };
+const DEFAULT_FILTER: Filter = { people: "involved", origin: "all", minSize: 0, labels: true };
 
 function savedFilter(): Filter {
   try {
@@ -84,6 +87,7 @@ function savedFilter(): Filter {
       people: saved?.people === "cast" ? "cast" : "involved",
       origin: saved?.origin === "ai" || saved?.origin === "user" ? saved.origin : "all",
       minSize: Number.isFinite(saved?.minSize) ? Number(saved.minSize) : 0,
+      labels: saved?.labels !== false,
     };
   } catch {
     return DEFAULT_FILTER;
@@ -154,6 +158,36 @@ function arcSlotsOf(arcs: { id: number; owner: number; start: number; end: numbe
   return slots;
 }
 
+type Box = { x1: number; x2: number; y1: number; y2: number };
+const overlaps = (a: Box, b: Box) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
+// 名前の幅の見積もり。SVG の文字は描くまで幅が分からないので、全角を字の大きさ、半角をその 6 割と見る
+const labelWidth = (text: string) =>
+  [...text].reduce((width, c) => width + (c.charCodeAt(0) > 0xff ? LABEL_FONT : LABEL_FONT * 0.6), 0);
+
+// 出来事の点の並び(左端・右端の x と、点の y・半径)
+type Mark = { id: number; name: string; left: number; right: number; y: number; r: number };
+// 名前の左端と字の下の線。fits が false なら、ほかの名前・点と重なるので、選んだときと指したときだけ出す
+type LabelSpot = { x: number; y: number; fits: boolean };
+
+/** 出来事の名前を、点の並びの上・下・右の順に、ほかの名前・点と重ならない所へ、上の出来事から順に置く */
+function placeLabels(marks: Mark[]): Map<number, LabelSpot> {
+  const taken: Box[] = marks.map((m) => ({ x1: m.left - m.r, x2: m.right + m.r, y1: m.y - m.r, y2: m.y + m.r }));
+  const spots = new Map<number, LabelSpot>();
+  for (const m of [...marks].sort((a, b) => a.y - b.y || a.left - b.left)) {
+    const width = labelWidth(m.name);
+    const candidates = [
+      { x: m.left - m.r, y: m.y - m.r - LABEL_GAP },
+      { x: m.left - m.r, y: m.y + m.r + LABEL_GAP + LABEL_FONT },
+      { x: m.right + m.r + LABEL_GAP, y: m.y + LABEL_FONT / 2 - 1 },
+    ];
+    const boxes = candidates.map((c) => ({ x1: c.x, x2: c.x + width, y1: c.y - LABEL_FONT, y2: c.y + 2 }));
+    const free = boxes.findIndex((box) => !taken.some((other) => overlaps(other, box)));
+    if (free >= 0) taken.push(boxes[free]);
+    spots.set(m.id, { ...candidates[Math.max(0, free)], fits: free >= 0 });
+  }
+  return spots;
+}
+
 // 左の枠で書いている話。id が null なら、空いた所を押して足す話(足したあとは足した話の id)。saved は db の値(足す話は null)
 type EpisodePanel = { id: number | null; label: string; saved: EpisodeDraft | null; draft: EpisodeDraft };
 
@@ -210,8 +244,8 @@ export default function OverviewPage() {
   const [edit, setEdit] = useState<EpisodeDraft | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  // 人物の列の空いた所を押して足す出来事の、押した時刻と人物
-  const [addingEvent, setAddingEvent] = useState<{ start: string; character: OverviewCharacter } | null>(null);
+  // 人物の列の空いた所を押して足す出来事の、押した時刻と人物(「ほか」の列なら null で、当事者を付けない)
+  const [addingEvent, setAddingEvent] = useState<{ start: string; character: OverviewCharacter | null } | null>(null);
   const openPage = useOpenPage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrolledFor = useRef<string | null>(null);
@@ -323,7 +357,18 @@ export default function OverviewPage() {
       (character) => character.in_cast || (filter.people === "involved" && involved.has(character.id)),
     );
   }, [data, events, filter.people]);
-  const column = useMemo(() => new Map(characters.map((character, index) => [character.id, index])), [characters]);
+  // 列にいる人物が一人もいない出来事(当事者の無いもの・当事者が絞り込みで外れたもの)は、左端の「ほか」の列に置く
+  const hasOthers = useMemo(() => {
+    const shown = new Set(characters.map((character) => character.id));
+    return events.some((event) => !event.character_ids.some((id) => shown.has(id)));
+  }, [events, characters]);
+  const firstPerson = hasOthers ? 1 : 0;
+  const laneCount = characters.length + firstPerson;
+  const column = useMemo(() => {
+    const map = new Map(characters.map((character, index) => [character.id, index + firstPerson]));
+    if (hasOthers) map.set(OTHERS, 0);
+    return map;
+  }, [characters, hasOthers, firstPerson]);
   const names = useMemo(
     () => new Map((data?.characters ?? []).map((character) => [character.id, character.name ?? `#${character.id}`])),
     [data],
@@ -475,8 +520,9 @@ export default function OverviewPage() {
   const onPeopleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!scale) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const character = characters[Math.floor((e.clientX - rect.left) / CHARACTER_WIDTH)];
-    if (!character) return;
+    const lane = Math.floor((e.clientX - rect.left) / CHARACTER_WIDTH);
+    const character = lane < firstPerson ? null : characters[lane - firstPerson];
+    if (character === undefined) return;
     hide();
     setMessage(null);
     const day = snapDay(scale.fromY(e.clientY - rect.top), scale.pxPerDay);
@@ -784,9 +830,9 @@ export default function OverviewPage() {
     const arcs = [];
     for (const event of events) {
       if (!parentIds.has(event.id)) continue;
-      const owner = event.actor_id ?? event.character_ids.find((id) => column.has(id));
+      const owner = [event.actor_id, ...event.character_ids, OTHERS].find((id) => id !== null && column.has(id));
       const start = dayOf(event.start);
-      if (owner == null || !column.has(owner) || start === null) continue;
+      if (owner == null || start === null) continue;
       arcs.push({ id: event.id, owner, start, end: dayOf(event.end) ?? Infinity });
     }
     return arcSlotsOf(arcs);
@@ -794,8 +840,21 @@ export default function OverviewPage() {
 
   const renderEvents = () => {
     if (!scale) return null;
-    const width = characters.length * CHARACTER_WIDTH;
+    const width = laneCount * CHARACTER_WIDTH;
     const dimmed = (event: OverviewEvent) => focus !== null && !event.character_ids.includes(focus);
+    // 出来事ごとの点を置く列。列にいる当事者が一人もいなければ「ほか」の列
+    const lanesOf = (event: OverviewEvent) => {
+      const ids = event.character_ids.filter((id) => column.has(id));
+      return ids.length > 0 ? ids : [OTHERS];
+    };
+    const marks: Mark[] = [];
+    for (const event of events) {
+      const start = dayOf(event.start);
+      if (start === null) continue;
+      const xs = lanesOf(event).map(x);
+      marks.push({ id: event.id, name: event.name, left: Math.min(...xs), right: Math.max(...xs), y: scale.toY(start), r: radius(event) });
+    }
+    const labels = placeLabels(marks);
     // 出来事を押したら詳細を出す。下の人物の列へ届くと、出来事を足すモーダルが出てしまう
     const pick = (e: MouseEvent, event: OverviewEvent) => {
       e.stopPropagation();
@@ -803,6 +862,7 @@ export default function OverviewPage() {
     };
     return (
       <div className="overview-people" style={{ width, height: scale.height }} onClick={onPeopleClick}>
+        {hasOthers && <div className="overview-lane others" style={{ left: 0, width: CHARACTER_WIDTH }} />}
         {characters.map((character) => (
           <div
             key={character.id}
@@ -823,7 +883,7 @@ export default function OverviewPage() {
               return (
                 <rect
                   key={`arc-${event.id}`}
-                  className={`overview-arc ${dimmed(event) ? "dimmed" : ""}`}
+                  className={`overview-arc ${event.in_story ? "" : "outside"} ${dimmed(event) ? "dimmed" : ""}`}
                   x={x(owner) - CHARACTER_WIDTH / 2 + ARC_LEFT + (slot * width) / 2}
                   y={top}
                   width={width}
@@ -837,13 +897,21 @@ export default function OverviewPage() {
             })}
           {events.map((event) => {
             const start = dayOf(event.start);
-            const ids = event.character_ids.filter((id) => column.has(id));
-            if (start === null || ids.length === 0) return null;
+            const label = labels.get(event.id);
+            if (start === null || !label) return null;
+            const ids = lanesOf(event);
             const y = scale.toY(start);
             const xs = ids.map(x);
             const r = radius(event);
             const ai = event.expansion_id !== null;
-            const className = `overview-event ${ai ? "ai" : "user"} ${dimmed(event) ? "dimmed" : ""} ${selected?.id === event.id ? "selected" : ""}`;
+            const isSelected = selected?.id === event.id;
+            const className = [
+              "overview-event",
+              ai ? "ai" : "user",
+              event.in_story ? "" : "outside",
+              dimmed(event) ? "dimmed" : "",
+              isSelected ? "selected" : "",
+            ].join(" ");
             const right = Math.max(...xs);
             return (
               <g
@@ -890,11 +958,14 @@ export default function OverviewPage() {
                     />
                   ),
                 )}
-                {(event.size.total >= LABEL_SIZE || selected?.id === event.id) && (
-                  <text x={right + r + 4} y={y + 4} className="overview-label">
-                    {event.name}
-                  </text>
-                )}
+                {/* 名前を置けない・名前を出さないときも描いておき、指したときと選んだときに出す */}
+                <text
+                  x={label.x}
+                  y={label.y}
+                  className={`overview-label ${(filter.labels && label.fits) || isSelected ? "" : "spare"}`}
+                >
+                  {event.name}
+                </text>
               </g>
             );
           })}
@@ -934,7 +1005,7 @@ export default function OverviewPage() {
   const columns = [
     "var(--timeline-axis)",
     ...episodeColumns.map((col) => `${col.packed.lanes * EPISODE_LANE_WIDTH}px`),
-    `${Math.max(1, characters.length) * CHARACTER_WIDTH}px`,
+    `${Math.max(1, laneCount) * CHARACTER_WIDTH}px`,
   ];
 
   /** 押した出来事の詳細 */
@@ -1143,6 +1214,10 @@ export default function OverviewPage() {
             onChange={(e) => changeFilter({ minSize: Math.max(0, Number(e.target.value) || 0) })}
           />
         </label>
+        <label className="hint timeline-filter">
+          <input type="checkbox" checked={filter.labels} onChange={(e) => changeFilter({ labels: e.target.checked })} />
+          {T.overview.labels}
+        </label>
         {focus !== null && (
           <button type="button" onClick={() => setFocus(null)}>
             {T.overview.clearFocus}
@@ -1165,7 +1240,8 @@ export default function OverviewPage() {
       </div>
       {data && (
         <div className="status info overview-status">
-          {T.overview.period(data.since, data.until)} · {T.overview.legend}
+          {T.overview.period(data.since, data.until)} · {T.overview.counts(events.length, characters.length)} ·{" "}
+          {T.overview.legend}
         </div>
       )}
       {editing && <div className="status info">{T.timeline.editHint}</div>}
@@ -1195,7 +1271,12 @@ export default function OverviewPage() {
                   {col.label}
                 </div>
               ))}
-              <div className="overview-people-head" style={{ gridTemplateColumns: `repeat(${characters.length}, ${CHARACTER_WIDTH}px)` }}>
+              <div className="overview-people-head" style={{ gridTemplateColumns: `repeat(${laneCount}, ${CHARACTER_WIDTH}px)` }}>
+                {hasOthers && (
+                  <div className="timeline-label overview-person overview-others" title={T.overview.othersHint}>
+                    <span className="overview-name">{T.overview.others}</span>
+                  </div>
+                )}
                 {characters.map(head)}
               </div>
             </div>
@@ -1282,7 +1363,11 @@ export default function OverviewPage() {
           parent={null}
           location={null}
           story={data ? { id: data.story_id, label: storyLabel(data.story_id) } : null}
-          characters={[{ id: addingEvent.character.id, label: names.get(addingEvent.character.id) ?? `#${addingEvent.character.id}` }]}
+          characters={
+            addingEvent.character
+              ? [{ id: addingEvent.character.id, label: names.get(addingEvent.character.id) ?? `#${addingEvent.character.id}` }]
+              : []
+          }
           onClose={() => setAddingEvent(null)}
           onAdded={() => {
             if (storyId === null) return;
