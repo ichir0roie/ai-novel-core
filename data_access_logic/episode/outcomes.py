@@ -168,8 +168,7 @@ def _relate(s: Session, character: Character, met: MetCharacter, cast: dict[int,
 
 def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
     """差分を話の時刻で入れる。来歴は本人だけが知る行にし(ほかの人物の秘密を知ったなら、知った人物の行。秘密を持つ人物の行には
-    触れない)、知り合った相手は本人から相手への向きの関係を足す(すでにあれば足さない)。本文を確定してから呼ぶ(セリフの覚えを
-    今の本文に合わせ、後回しの段で拾い直させない)。"""
+    触れない)、知り合った相手は本人から相手への向きの関係を足す(すでにあれば足さない)。本文を確定してから呼ぶ。"""
     episode = load_episode(s, form.episode_id)
     time = episode.start
     if time is None or not episode.main_text.strip():

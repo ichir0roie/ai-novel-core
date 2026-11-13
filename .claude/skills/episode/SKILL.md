@@ -38,7 +38,6 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
 | 本文の材料を読む(登場人物・場所を結んだあと) | `episode.read_episode_brief.ReadEpisodeBrief` | `{'episode_id': …}` |
 | 手番を回していない話を世界に反映する | `episode.reflect_episode.ReflectEpisode` | `{'episode_id': …}`(`reflect.md`) |
-| 登場人物の話し方を直前の五話のセリフから調整する(頼まれたときだけ) | `episode.refresh_voices.RefreshVoices` | `{'episode_id': …}` |
 | 話に出た新しい語を足す | `episode_session.add_ideas.AddIdeas` | `{'episode_id': …, 'ideas': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}]}`(`turns.md` の「新しい語を足す」) |
 | 設定を引く | `idea.resolve_ideas.ResolveIdeas` | `{'ideas': [{'keyword': …, 'variants': […], 'description': …, 'kind': …}], 'location_id': …, 'time': '<話の時刻>'}` |
 | 人物を足す | `character.commit_character.CommitCharacter` | `{'character': {'name': …, 'appearance': <見た目>, 'text': <説明>, 'start': …, 'location_id': …, 'histories': [{'start': '<年/月/日>', 'description': <来歴の節目>}]}}` |
@@ -62,8 +61,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 
 - `ReadEpisodeCasting`: `この話`(`話id`・`題`・`時刻`・`場所(広い順)`・`視点`・`プロット`)・`登場人物`・`名前だけ出る人物`・`登場人物の候補`・`この場所の中の既知の場所`。`登場人物`・`名前だけ出る人物` には `人物id`・`名前`・`人物像`・`口調` などが付く(`来歴(古い順)`・`筋書き` は付かない)。`登場人物の候補` は `人物id`・`名前`・`種別`・`年齢`・`人物像` だけ
 - `ReadCastEpisodes`: 話ごとの配列(古い順)。`話id`・`作品`・`題`・`時刻`・`登場`・`名前だけ`(人物の名前の配列)・`本文`(人物ごとの一番新しい話だけ。ほかは null)。プロットは付かない
-- `ReadEpisodeBrief`: `書き方`・`作品`・`文体の見本(古い順)`・`この話`・`この場所の直近の出来事(古い順)`・`この時点より後に既に決まっている出来事`
-  - `文体の見本(古い順)` は本文の文字列の配列(`.["文体の見本(古い順)"][-1]` が直前の話。鍵は無い)
+- `ReadEpisodeBrief`: `書き方`・`作品`・`この話`・`この場所の直近の出来事(古い順)`・`この時点より後に既に決まっている出来事`
   - `この話` の中は `話id`・`題`・`時刻`・`終わり`・`場所(広い順)`・`視点`・`登場人物`・`名前だけ出る人物`・`設定`・`プロット`・`今の本文`
 - `ReadEpisodeTexts`: 列名の英語(`id`・`title`・`main_text` など)の配列
 - `tool.episode_session read` の行: `id`・`kind`(`人物`・`語り`・`作者`)・`character`(人物の名前。人物の行だけ)・`time`・`witnesses`(見聞きする人物の id)・`request`(語りの行では語り)・`simultaneous`・`thought`・`action`・`speech`・`aim`
@@ -97,8 +95,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 6. **手番を回す**: `turns.md`。このセッションの Claude が語り部を務め、人物役に場面を手番で最後まで演じさせる。終えたらまとめを報告して待ち、ユーザが認めたら人物役に「話を締める」を送って 7 へ進む。台詞・行動のある登場人物が一人だけの話と、ユーザが一人で書くよう頼んだときは飛ばす
 7. **本文の材料を読む**: `ReadEpisodeBrief(episode_id)`。長いので、出力をスクラッチパッドのファイルへ書き出して Read する。中身:
    - 書き方(db の全体の行・作品の指示・本文の行・推敲の行・話の指示)・材料の読み方・作品
-   - 登場人物の話し方: 話の時刻の口調・一人称・二人称などがそのまま入る(自動では調整しない。頼まれたときだけ `RefreshVoices` で調整してから読む)
-   - 文体の見本: 同じ作品(親の作品の章・外伝を含む)の直前の話の本文を、新しい話から字数の上限まで
+   - 登場人物の話し方: 話の時刻の口調・一人称・二人称などがそのまま入る。前の話の本文は文体の見本として渡さない(セリフの言い回しは口調の行と「書き方」の作品の指示で決める)
    - この話・結んだ登場人物(直近の出来事つき。筋書きは入らない)・名前だけ出る人物・設定・場所の直近の出来事・後に決まっている出来事
    - 設定: プロット・話のセッションの行・今の本文から AI が挙げた語でアイデアを引き、名前・呼び名に当たったものとその上位。当たらなかった造語は候補のアイデアとして足されて入る
    - 人物の来歴は、出来事の行の直近の 5 行と、話の時刻に効いている種別付きの行(持ち物など)だけが入る。「装い」は、話の時刻に身に着けている物ごとの今の姿。それより前のことは、手順 2 で読んだ関わった話から読む

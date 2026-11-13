@@ -118,6 +118,9 @@ def test_reflect_episode_drafts_outcomes_once(shown, world):
     assert result["histories"] == 1
     reflect_calls = [call for call in ai.calls if "今の装い" in call["prompt"]]
     assert len(reflect_calls) == 1 and "市で二人が出会った。" in reflect_calls[0]["prompt"]
+    # 本文からセリフを拾わない(AI は差分の一度だけ)
+    assert result["speeches"] == 0
+    assert len(ai.calls) == 1
 
 
 def test_revise_episode(shown, world, mock_ai):

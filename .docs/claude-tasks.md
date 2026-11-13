@@ -12,7 +12,6 @@ Lambda には claude が無く、あっても数分〜十数分の生成は Lamb
 GUI の追加・修正は `execute(s)` で確定だけし、AI の段を回さない。その印として次が残る。
 
 - 本文と食い違った `event_summary.source_hash`(出来事の要約が古い)
-- 本文と食い違った `character_speech.source_hash` か、セリフがあるのに行の無い話(人物のセリフが古い。推敲した話もここに入る)
 
 これは `RefreshGeneratedContent` がまとめて拾う。頼まれたら Claude のセッションが回す(スキル `run-ai-tasks`)。
 
