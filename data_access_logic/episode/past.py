@@ -4,7 +4,7 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, defer, joinedload
 
 from data_access_logic import constants
-from data_access_logic.episode.models import CharacterEpisodeText, RecentEpisode
+from data_access_logic.episode.models import CastAppearance, CharacterEpisodeText, RecentEpisode
 from db.schema import Episode, EpisodeCharacter, Story
 from db.stamp import Stamp
 
@@ -71,12 +71,26 @@ def style_samples(s: Session, episode: Episode) -> list[str]:
 
 def recent_appearances(s: Session, episode: Episode, character_id: int) -> list[CharacterEpisodeText]:
     """人物がこの話より前に関わった話(作品を問わない)のうち、新しい `constants.EPISODE_RECENT_APPEARANCE_COUNT` 話を
-    本文つきで。古い順。プロットは読まない。"""
+    本文つきで。新しい順。プロットは読まない。"""
     links = s.scalars(
         _past(select(EpisodeCharacter).join(EpisodeCharacter.episode), episode)
         .where(EpisodeCharacter.character_id == character_id)
-        .options(joinedload(EpisodeCharacter.episode).options(defer(Episode.plot_text), joinedload(Episode.story)))
+        .options(joinedload(EpisodeCharacter.episode).options(defer(Episode.plot_text), joinedload(Episode.story)),
+                 joinedload(EpisodeCharacter.character))
         .limit(constants.EPISODE_RECENT_APPEARANCE_COUNT)
         .execution_options(populate_existing=True)
     ).all()
-    return [CharacterEpisodeText.model_validate(link) for link in reversed(links)]
+    return [CharacterEpisodeText.model_validate(link) for link in links]
+
+
+def cast_appearances(s: Session, episode: Episode, character_ids: list[int]) -> list[CastAppearance]:
+    """人物たちがこの話より前に関わった話を、話ごとにまとめて古い順に。本文は、どれかの人物の一番新しい話にだけ付ける
+    (人物ごとに何話も本文で読むと、語り部の文脈が手番のたびに重くなる。古い話は題と時刻から、要れば本文を読む)。"""
+    merged: dict[int, CastAppearance] = {}
+    for character_id in character_ids:
+        for order, link in enumerate(recent_appearances(s, episode, character_id)):
+            appearance = merged.setdefault(link.episode.id, CastAppearance(episode=link.episode))
+            (appearance.mentioned if link.mentioned else appearance.appeared).append(link.character)
+            appearance.with_text = appearance.with_text or order == 0
+    return sorted(merged.values(), key=lambda appearance: (appearance.episode.start is None, appearance.episode.start,
+                                                            appearance.episode.id))

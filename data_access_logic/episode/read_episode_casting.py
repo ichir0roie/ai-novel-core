@@ -13,7 +13,7 @@ class ReadEpisodeCasting(SessionEntrypoint):
 
     この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物・登場人物の候補(登場人物と関係のある人物・
     話の場所にいる人物。名前と人物像だけ)・話の場所の中の既知の場所を、id 付きで返す。話の時刻(`start`)が空なら止まる。
-    人物が関わった話は入れない。人物ごとに `ReadCharacterEpisodes` で読む。
+    人物が関わった話は入れない。`ReadCastEpisodes` で読む。
     決めた登場人物・場所は `CastEpisode` で結んでから、`ReadEpisodeBrief` で本文の材料を読む。
     """
 

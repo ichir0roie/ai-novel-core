@@ -15,11 +15,11 @@ from data_access_logic.character.cast import (
 from data_access_logic.episode.caster import candidate_characters
 from data_access_logic.episode.mentions import cast_characters, mentioned_in
 from data_access_logic.episode.models import (
-    BriefEpisode, CastingEpisode, CharacterEpisodesSerialized, EpisodeBriefSerialized, EpisodeCastingSerialized,
+    BriefEpisode, CastEpisodesSerialized, CastingEpisode, EpisodeBriefSerialized, EpisodeCastingSerialized,
     StoryMaterial,
 )
 from data_access_logic.episode.material import known_locations, later_events_select, load_episode, location_events
-from data_access_logic.episode.past import recent_appearances, style_samples
+from data_access_logic.episode.past import cast_appearances, style_samples
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
@@ -41,7 +41,7 @@ def _episode(s: Session, episode_id: int) -> Episode:
 
 
 def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
-    """人物が関わった話は入れない(人物ごとに `character_episodes` で読む)。候補は名前と人物像だけにする。"""
+    """人物が関わった話は入れない(`cast_episodes` で読む)。候補は名前と人物像だけにする。"""
     episode = _episode(s, episode_id)
     main_episode = CastingEpisode.model_validate(episode)
     time = main_episode.start
@@ -56,11 +56,14 @@ def episode_casting(s: Session, episode_id: int) -> EpisodeCastingSerialized:
     )
 
 
-def character_episodes(s: Session, episode_id: int, character_id: int) -> CharacterEpisodesSerialized:
-    """人物がこの話より前に関わった、直近の話を本文つきで。"""
-    episode = common_query.get_row(s, Episode, episode_id)
-    common_query.get_row(s, Character, character_id)
-    return CharacterEpisodesSerialized(appearances=recent_appearances(s, episode, character_id))
+def cast_episodes(s: Session, episode_id: int, character_ids: list[int] | None) -> CastEpisodesSerialized:
+    """人物たちがこの話より前に関わった直近の話。人物を渡さなければ、話の登場人物と名前だけ出る人物。"""
+    episode = load_episode(s, episode_id)
+    if character_ids is None:
+        character_ids = [link.character_id for link in episode.episode_characters]
+    for character_id in character_ids:
+        common_query.get_row(s, Character, character_id)
+    return CastEpisodesSerialized(appearances=cast_appearances(s, episode, character_ids))
 
 
 class BriefTargets(Material):

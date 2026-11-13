@@ -14,7 +14,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 ## 入口
 
 入口は id と引数で呼ぶ。呼び方・行の引き方は、手元は `.claude/docs/db.md`、web のセッションは `.claude/docs/web-db.md`(自分の場所の方だけ読む)。
-`ReadEpisodeBrief`・`CommitEpisode` は AI を回すので数分かかることがある(web では `run_in_background`)。`ReadEpisodeCasting`・`ReadCharacterEpisodes` は db だけの入口で、すぐ返る。
+`ReadEpisodeBrief`・`CommitEpisode` は AI を回すので数分かかることがある(web では `run_in_background`)。`ReadEpisodeCasting`・`ReadCastEpisodes` は db だけの入口で、すぐ返る。
 入口と `tool.episode_session`(`stage`・`knower-gaps`・`read` など)の結果は、スクラッチパッドのファイルに書き出して Read で最後の行まで読む(`CLAUDE.md` の「ツールの使い分け」)。人物・話の材料は数万字になり、Bash の出力のままでは頭しか見えない。要る所だけを `jq` で抜くときは、書き出したファイルに当てる。
 
 ### 読む量を絞る
@@ -28,7 +28,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 | --- | --- | --- |
 | 話の枠を足す・プロットを直す・本文を確定する | `episode.commit_episode.CommitEpisode` | `{'episode': {…}}`。新しい枠は `{'story_id': …, 'start': '<年/月/日>', 'character_ids': […]}`、既存の話は `'id': …` と変える欄だけ(渡した欄だけが直る)。`plot_text` はプロットの全文(スクラッチパッドのファイルに置いて読む)。`main_text` を渡さなければ、確定のあとの AI の段は回らない |
 | 登場人物・場所を決める材料を読む | `episode.read_episode_casting.ReadEpisodeCasting` | `{'episode_id': …}` |
-| 人物が関わった直近の話を、本文つきで読む(人物ごとに呼ぶ) | `episode.read_character_episodes.ReadCharacterEpisodes` | `{'episode_id': …, 'character_id': …}` |
+| 登場人物が関わった直近の話を読む(本文は人物ごとの一番新しい話だけ) | `episode.read_cast_episodes.ReadCastEpisodes` | `{'episode_id': …}`(話の登場人物と名前だけ出る人物)か、`'character_ids': […]` を足してその人物だけ |
 | 話を id で読む(本文まで) | `episode.read_episode_texts.ReadEpisodeTexts` | `{'episode_ids': […]}` |
 | 名前だけ出る人物を拾い直す | `episode.refresh_mentions.RefreshMentions` | `{}`(すべての話)か `{'episode_ids': […]}` |
 | 登場人物・場所・視点を結ぶ | `episode.cast_episode.CastEpisode` | `{'episode_id': …, 'character_ids': […], 'location_id': …, 'viewpoint_character_id': …}` |
@@ -51,7 +51,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 見出しは推測せず、ここか `jq 'keys'` で確かめてから引く(無い見出しは黙って null になる。`jq` の書き方は `.claude/docs/setup.md` の「jq」)。web のセッションで `flows.run` から返るものは `.result` に包まれない。
 
 - `ReadEpisodeCasting`: `この話`(`話id`・`題`・`時刻`・`場所(広い順)`・`視点`・`プロット`)・`登場人物`・`名前だけ出る人物`・`登場人物の候補`・`この場所の中の既知の場所`。`登場人物`・`名前だけ出る人物` には `人物id`・`名前`・`人物像`・`口調` などが付く(`来歴(古い順)`・`筋書き` は付かない)。`登場人物の候補` は `人物id`・`名前`・`種別`・`年齢`・`人物像` だけ。関わった話は付かない
-- `ReadCharacterEpisodes`: その人物の直近の話の配列(古い順)。`話id`・`作品`・`題`・`時刻`・`出方`(`登場`・`名前だけ`)・`本文`。プロットは付かない
+- `ReadCastEpisodes`: 話ごとの配列(古い順)。`話id`・`作品`・`題`・`時刻`・`登場`・`名前だけ`(人物の名前の配列)・`本文`(人物ごとの一番新しい話だけ。ほかは null)。プロットは付かない
 - `ReadEpisodeBrief`: `書き方`・`作品`・`文体の見本(古い順)`・`この話`・`この場所の直近の出来事(古い順)`・`この時点より後に既に決まっている出来事`
   - `文体の見本(古い順)` は本文の文字列の配列(`.["文体の見本(古い順)"][-1]` が直前の話。鍵は無い)
   - `この話` の中は `話id`・`題`・`時刻`・`終わり`・`場所(広い順)`・`視点`・`登場人物`・`名前だけ出る人物`・`設定`・`プロット`・`今の本文`
@@ -70,8 +70,8 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
    - 作品・人物・場所は名前で頼まれても、引いた id を使う
 2. **人物の関わった話を読む**
    - `ReadEpisodeCasting(episode_id)` で id 付きで読む: 今の登場人物・名前だけ出る人物と、登場人物の候補・場所とその中の既知の場所
-   - 登場人物・名前だけ出る人物ごとに `ReadCharacterEpisodes(episode_id, character_id)` を呼び、その人物の直近の 5 話を本文で読む(作品を問わず、この話より前に登場したか名前が出た話)。結果はスクラッチパッドに書き出し、皆の分を合わせて重なりを除き(`話id` で)、`時刻` の順に本文を読んで、人物がこのところ何をしたか・何を持ち、誰と何を話したかを掴む
-   - それより前の話は、要るときだけ `ReadEpisodeTexts(episode_ids)` で本文を読む(人物が初めて出る話など)。語り部は来歴を読まない(上の「読む量を絞る」)
+   - `ReadCastEpisodes(episode_id)` を一度呼ぶ(登場人物・名前だけ出る人物の直近の話を、話ごとにまとめて古い順)。結果はスクラッチパッドに書き出して読み、本文の付いた話(人物ごとの一番新しい話)から、人物がこのところ何をしたか・何を持ち、誰と何を話したかを掴む
+   - 本文の付かない古い話は題と時刻だけ見る。プロットがその話の出来事を前提にしているときだけ、`ReadEpisodeTexts(episode_ids)` で本文を読む。語り部は来歴を読まない(上の「読む量を絞る」)
    - 人物の設定と本文が食い違えば本文を正とし、ユーザに報告する(人物の設定を直すかはユーザが決める)
    - 本文に出てくるのに db にいない人物(上役・家族など)を使うときは、同じ名前で作る
    - 関わった話が本文と比べて少なすぎる(名前が出ているのに挙がらない)ときは、`RefreshMentions()` で名前だけ出る人物を拾い直してから読み直す
@@ -314,7 +314,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 2. **登場人物・場所を結び直す**: プロット(書きかけの本文があれば、それも)と今の結びを突き合わせる(下の「登場人物・場所」)
    - 台詞・行動があるのに結んでいない人物は足す。プロットから消えた(台詞・行動の無くなった)人物は外す。主な舞台がプロットと違えば場所を変える。候補に無い人物・場所は作る
    - 食い違いが無ければ結び直さない。あれば `CastEpisode(episode_id, character_ids=[…], location_id=…, viewpoint_character_id=…)` で結ぶ(登場人物はまるごと置き換わるので残す人物も渡す。名前だけ出る人物は拾い直される)
-   - 足した人物に関わった話があれば、手順 2 と同じく読む
+   - 足した人物に関わった話があれば、`ReadCastEpisodes` に `character_ids`(足した人物)を渡して読む
    - プロットが無ければ、結んである登場人物・場所をそのまま使う。プロットも登場人物も無ければ始めず、プロットか登場人物を尋ねる
 3. **関係を整える**: 登場人物ごとに `character.list_character_relations.ListCharacterRelations(character_id)` で関係を読み、プロット・前の話と突き合わせる
    - 関係(`character_relation`)の無い二人は、人物役には初対面として渡る。前の話・プロットから、この話より前に知り合っているはずの二人に関係が無ければ、`CommitCharacterRelation` で足す(`start` は知り合った時刻。話の時刻より後にしない)。この話で初めて会う二人には足さない(確定のときに足される)

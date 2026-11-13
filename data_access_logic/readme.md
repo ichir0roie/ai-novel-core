@@ -138,7 +138,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この場所・この時の出来事を起こして」「ヴァレンツァで11579/03/02に〇〇な場面」 | `event.generate_event.GenerateEvent(event=EventForm(location_id=…, time=…, name="〇〇な場面"))`。当事者はその時刻にそこにいて手の空いたサブキャラクターから選ぶ(下の「出来事の生成」)。当事者を決めるなら `character_ids` |
 | 「このプロットで話を書いて」「〇〇と△△が出る話を 11579/03/02 で」「この枠に本文を書いて」 | スキル `episode`。このセッションの Claude が `ReadEpisodeCasting` でプロットから登場人物・場所を推測して `CastEpisode` で結び、プロットの語を `ResolveIdeas` でアイデアと照らし(当たらない語は候補として足す)、そのあと材料を `ReadEpisodeBrief` で読んで自分で本文を書き、`CommitEpisode` で確定する(新しい話は先に `CommitEpisode` で枠を足す) |
 | 「この話の登場人物・場所を決める材料を読ませて」 | `episode.read_episode_casting.ReadEpisodeCasting(episode_id)`。この話(題・時刻・場所・視点・プロット)・今の登場人物・名前だけ出る人物(筋書き・来歴は付けない)・登場人物の候補(登場人物と関係のある人物・話の場所にいる人物。名前と人物像だけ。プロット・本文に名前が出る人物は「名前だけ出る人物」に出る)・話の場所の中の既知の場所を、日本語の見出しと id 付きで返す。db だけで読み、AI は呼ばない。時刻が空なら止まる |
-| 「この人物が関わった直近の話を読ませて」 | `episode.read_character_episodes.ReadCharacterEpisodes(episode_id, character_id)`。人物がこの話より前に関わった話(作品を問わない)のうち直近の `constants.EPISODE_RECENT_APPEARANCE_COUNT` 話を、本文つき(プロットは返さない)で古い順に返す。語り部が登場人物のこれまでを掴むのに使う |
+| 「登場人物が関わった直近の話を読ませて」 | `episode.read_cast_episodes.ReadCastEpisodes(episode_id, character_ids=None)`。人物たち(省けば話の登場人物と名前だけ出る人物)がこの話より前に関わった話(作品を問わない)のうち、人物ごとに直近の `constants.EPISODE_RECENT_APPEARANCE_COUNT` 話を、話ごとにまとめて古い順に返す。本文は、どれかの人物の一番新しい話にだけ付く(ほかは題・時刻・出た人物だけ。プロットは返さない)。語り部が登場人物のこれまでを掴むのに使う |
 | 「人物を消して」 | `character.delete_character.DeleteCharacter(character_id)`。期間ごとの値・説明の変化・出自と居場所・相関・話に名前だけ出る行も消す。出来事の当事者か、話の登場人物・視点になっている人物は止まる |
 | 「この話を id で読ませて」「人物が関わった話の本文を読みたい」 | `episode.read_episode_texts.ReadEpisodeTexts(episode_ids)`。作品・題・時刻・プロット・本文を時刻の順に返す |
 | 「名前だけ出る人物を拾い直して」 | `episode.refresh_mentions.RefreshMentions(episode_ids=None)`。今のプロット・本文から `episode_character` の `mentioned` の行を拾い直す(省けばすべての話)。拾い直しは保存のときにしか走らないので、古い話やあとから人物を足した話の取りこぼしを埋める。登場人物の行は変えない |
@@ -539,7 +539,7 @@ AI の書き手(作者モード `ai`・人物モード `ai_append`)は話の行�
 前の話は、この話の時刻より前の、本文のある話から選ぶ(`data_access_logic/episode/past.py`)。
 ここでの同じ作品は、話の作品と、その親の作品・親を同じくする作品(章・外伝)を合わせたもの(親の無い作品は同じ作品だけ)。
 話の概要は持たない。これまでの筋・人物の立場・関係は、作品の筋書きと登場人物の来歴・関係で受け継ぐ。
-語り部(スキル `episode`)は、登場人物ごとに直近の話(`constants.EPISODE_RECENT_APPEARANCE_COUNT`)の本文を `ReadCharacterEpisodes` で読む。
+語り部(スキル `episode`)は、登場人物の直近の話を `ReadCastEpisodes` で読む。本文は人物ごとの一番新しい話だけで、それより前の話は題・時刻だけ(語り部の文脈は手番のたびに読み直されるので、本文を何話も積まない)。
 前の話の本文は校正済みとみなし、同じ作品の直前の話の本文を、新しい話から `constants.EPISODE_STYLE_SAMPLE_LETTERS` 字に収まるだけ「文体の見本」として渡す(直前の話だけで上限を超えるときは、その頭を上限まで)。見本からは言葉の選び方・言い回し・文の長さ・地の文とセリフの運びを汲ませ、内心の書き込みと場面の組み立ては「書き方」の決まりに従わせる(`style_preference` の `本文:材料の読み方` の行)。
 頼まれたときだけ(`RefreshVoices`)、同じ作品の直前の五話(`constants.EPISODE_VOICE_SAMPLE_COUNT`)のセリフから登場人物の話し方(一人称・二人称・三人称・口調・方言)を AI が全体として調整し(`data_access_logic/episode/voices.py`、流れは `refresh_voices`)、今の値と違う欄だけを、話の時刻から効く `character_parameter` の行として書く(同じ時刻の行があればその行を直す。それより前の話には効かない)。直前の話か登場人物が無い話・時刻の空の話では何もしない。章・外伝をまたぐ話には作品名を添える。作品の筋書きは、親の作品を「親の作品」としてたどって渡す。
 登場人物ごとに、その時点の歳・人となり・口調・相関・直近の出来事(要約)を渡す。話の場所の

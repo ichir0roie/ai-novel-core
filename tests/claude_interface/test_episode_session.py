@@ -27,7 +27,7 @@ from data_access_logic.character.record import (
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
-from data_access_logic.episode.read_character_episodes import ReadCharacterEpisodes
+from data_access_logic.episode.read_cast_episodes import ReadCastEpisodes
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode.read_episode_casting import ReadEpisodeCasting
 from data_access_logic.episode.refresh_voices import RefreshVoices
@@ -1059,22 +1059,26 @@ def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatc
     assert _member(result["登場人物の候補"], other) == {"人物id": other, "名前": "テスト次郎", "種別": "人物", "年齢": 30, "人物像": "次郎の芯"}
 
 
-def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
-    taro, _ = world.character_ids
+def test_read_cast_episodes_texts_only_latest_per_character(shown, world, monkeypatch):
+    taro, hanako = world.character_ids
     monkeypatch.setattr(constants, "EPISODE_RECENT_APPEARANCE_COUNT", 2)
     with get_env_session() as s:
-        for month in ["01", "02", "03"]:
+        for month, members in [("01", [taro]), ("02", [taro, hanako]), ("03", [taro])]:
             episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
                               main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00")
             s.add(episode)
             s.flush()
-            s.add(EpisodeCharacter(episode_id=episode.id, character_id=taro))
+            for member in members:
+                s.add(EpisodeCharacter(episode_id=episode.id, character_id=member, mentioned=member == hanako))
         s.commit()
 
-    result = shown(ReadCharacterEpisodes(episode_id=world.episode_id, character_id=taro))
+    result = shown(ReadCastEpisodes(episode_id=world.episode_id, character_ids=[taro, hanako]))
 
-    # 直近の話から数えて、古い順。本文を返し、プロットは返さない
-    assert [(row["題"], row["本文"]) for row in result] == [("02月の話", "02月の本文。"), ("03月の話", "03月の本文。")]
+    # 人物ごとの直近の話を話ごとにまとめて古い順。本文は人物ごとの一番新しい話にだけ付き、プロットは返さない
+    assert [(row["題"], row["登場"], row["名前だけ"], row["本文"]) for row in result] == [
+        ("02月の話", ["テスト太郎"], ["テスト花子"], "02月の本文。"),
+        ("03月の話", ["テスト太郎"], [], "03月の本文。"),
+    ]
     assert "プロット" not in str(result)
 
 

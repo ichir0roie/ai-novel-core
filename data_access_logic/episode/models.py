@@ -38,18 +38,21 @@ class AppearedEpisodeText(AppearedEpisode):
     main_text: str
 
 
-class CharacterEpisode(Material):
-    """人物が関わった話(`episode_character` の一行)。"""
+class CharacterEpisodeText(Material):
+    """人物が関わった話(`episode_character` の一行)を、本文つきで。"""
 
-    character_id: int
+    character: Named
     mentioned: bool
-    episode: AppearedEpisode
+    episode: AppearedEpisodeText
 
 
-class CharacterEpisodeText(CharacterEpisode):
-    """人物が関わった話を、本文つきで。"""
+class CastAppearance(Material):
+    """人物たちが関わった話一つ。本文は、どれかの人物の一番新しい話のときだけ渡す(`with_text`)。"""
 
     episode: AppearedEpisodeText
+    appeared: list[Named] = []
+    mentioned: list[Named] = []
+    with_text: bool = False
 
 
 class RecentEpisode(Material):
@@ -59,9 +62,6 @@ class RecentEpisode(Material):
     main_text: str
 
 
-def _appearance(link: CharacterEpisode) -> dict[str, Any]:
-    return {"話id": link.episode.id, "作品": link.episode.story.name, "題": link.episode.title,
-            "時刻": str(link.episode.start) if link.episode.start else None, "出方": "名前だけ" if link.mentioned else "登場"}
 
 
 def _without_plot(sheet: dict[str, Any]) -> dict[str, Any]:
@@ -69,15 +69,20 @@ def _without_plot(sheet: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in sheet.items() if key != "筋書き"}
 
 
-class CharacterEpisodesSerialized(Material):
-    """人物が関わった話を本文つきで。このセッションの Claude が読む形に整形する。"""
+class CastEpisodesSerialized(Material):
+    """人物たちが関わった話。このセッションの Claude が読む形に整形する。"""
 
     # 古い順
-    appearances: list[CharacterEpisodeText]
+    appearances: list[CastAppearance]
 
     @model_serializer
     def _for_claude(self) -> list[dict[str, Any]]:
-        return [{**_appearance(link), "本文": link.episode.main_text} for link in self.appearances]
+        return [{"話id": row.episode.id, "作品": row.episode.story.name, "題": row.episode.title,
+                 "時刻": str(row.episode.start) if row.episode.start else None,
+                 "登場": [character.name for character in row.appeared],
+                 "名前だけ": [character.name for character in row.mentioned],
+                 "本文": row.episode.main_text if row.with_text else None}
+                for row in self.appearances]
 
 
 def _location_lines(locations: list[LocationLine]) -> list[dict[str, Any]]:
@@ -193,7 +198,7 @@ class EpisodeCasting(Material):
 
 
 class EpisodeCastingSerialized(EpisodeCasting):
-    """このセッションの Claude が読む形に整形する。人物が関わった話は、人物ごとに `character_episodes` で読む。"""
+    """このセッションの Claude が読む形に整形する。人物が関わった話は `cast_episodes` で読む。"""
 
     cast: list[CastCandidateSerialized]
     mentioned: list[CastCandidateSerialized]

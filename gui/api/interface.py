@@ -58,7 +58,7 @@ DB_ENTRANCES = frozenset({
     "episode.cast_episode.CastEpisode",
     "episode.delete_episode.DeleteEpisode",
     "episode.move_episodes.MoveEpisodes",
-    "episode.read_character_episodes.ReadCharacterEpisodes",
+    "episode.read_cast_episodes.ReadCastEpisodes",
     "episode.read_episode_casting.ReadEpisodeCasting",
     "episode.read_episode_texts.ReadEpisodeTexts",
     "episode.read_episodes.ReadEpisodes",
