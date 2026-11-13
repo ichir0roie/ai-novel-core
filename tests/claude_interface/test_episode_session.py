@@ -27,7 +27,7 @@ from data_access_logic.character.record import (
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
 from data_access_logic.character.update_knowledge import UpdateKnowledge
-from data_access_logic.episode.read_character_episodes import ReadCharacterEpisodes
+from data_access_logic.episode.read_cast_episodes import ReadCastEpisodes
 from data_access_logic.episode.read_episode_brief import ReadEpisodeBrief
 from data_access_logic.episode.read_episode_casting import ReadEpisodeCasting
 from data_access_logic.episode.refresh_voices import RefreshVoices
@@ -45,7 +45,7 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    PERSONALITY_LEVELS, Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter, Idea,
+    PERSONALITY_LEVELS, Character, CharacterHistory, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter, Idea,
     IdeaHistory, Stamp, get_env_session,
 )
 from tool import episode_session
@@ -892,6 +892,67 @@ def test_moves_returns_the_moves_without_the_requests():
         ("語り", None, [TARO, HANAKO]), ("人物", "テスト太郎", [HANAKO]), ("人物", "テスト花子", [TARO])]
 
 
+def test_close_keeps_each_actors_outcome_until_replayed():
+    session = _staged()
+    [turn] = session.add({"witness_ids": [HANAKO], "turns": [{"character_id": TARO, "request": "名乗る"}]})
+    session.answer(turn.id, {"action": "名乗る", "speech": "太郎だ"})
+
+    outcome = session.close(TARO, {"histories": ["市で見知らぬ人と会った"],
+                                   "met": [{"name": "見知らぬ人", "relation": "市で会った人", "history": "名乗った"}]})
+
+    # 知り合った相手は名前で受け、登場人物の id に直す
+    assert outcome["met"] == [{"character_id": STRANGER, "relation": "市で会った人", "history": "名乗った"}]
+    assert session.outcomes() == [{**outcome, "character_id": TARO}]
+    assert session.speeches() == [{"character_id": TARO, "text": "太郎だ"}]
+    with pytest.raises(ValueError, match="登場人物でない"):
+        session.close(TARO, {"met": [{"name": "話に出ない人", "relation": "知人", "history": "会った"}]})
+    with pytest.raises(ValueError, match="知らない欄"):
+        session.close(TARO, {"history": "欄の名の書き違い"})
+    # 演じ直すと差分は古くなるので、行を消すと差分も消える
+    session.clear(turn.id)
+    assert session.outcomes() == []
+
+
+def test_apply_writes_the_actors_outcomes_and_speeches(world, mock_ai, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
+    taro, hanako = world.character_ids
+    session = SessionStore(world.episode_id)
+    episode_session.stage(session)
+    [turn] = session.add({"witness_ids": [hanako], "turns": [{"character_id": taro, "request": "声をかける"}]})
+    session.answer(turn.id, {"action": "手を振る", "speech": "よう、花子"})
+    session.close(taro, {"histories": ["市で花子に声をかけた"]})
+
+    applied = episode_session.apply(session)
+
+    assert not mock_ai.calls
+    assert (applied["histories"], applied["speeches"], applied["差分の無い人物"]) == (1, 1, ["テスト花子"])
+    with get_env_session() as s:
+        added = s.scalars(select(CharacterHistory).where(
+            CharacterHistory.character_id == taro, CharacterHistory.description == "市で花子に声をかけた")).one()
+        # 人物役が確かめを経ずに書いた差分は、AI の行になる
+        assert added.origin == "ai"
+
+
+def test_add_one_turn_from_arguments():
+    session = _staged()
+    args = episode_session.argparse.Namespace(character=TARO, request="鐘を聞いての一手", witness=f"{HANAKO}",
+                                              time="1200/04/01 12:00", narration="市に鐘が鳴った")
+
+    narration, turn = session.add(episode_session._turn_from_args(args))
+
+    assert (narration.kind, narration.request, narration.witnesses) == ("語り", "市に鐘が鳴った", [HANAKO])
+    assert (turn.character_id, turn.request, turn.witnesses, turn.time) == (TARO, "鐘を聞いての一手", [HANAKO],
+                                                                           "1200/04/01 12:00")
+    # 誰にも見せない手番は空の文字列で渡す
+    alone = episode_session.argparse.Namespace(character=HANAKO, request="一人で考える", witness="", time=None,
+                                               narration=None)
+    [alone_turn] = session.add(episode_session._turn_from_args(alone))
+    assert alone_turn.witnesses == []
+    # 番の行の id を省けば、いま開いている自分の番の行を読む
+    assert episode_session.read_turn(session, TARO, None)["record"]["id"] == turn.id
+    assert episode_session.read_turn(session, HANAKO, None)["status"] == "waiting"
+
+
 def test_clear_lets_the_actors_play_again():
     session = _staged()
     session.add({"witness_ids": [], "turns": [{"character_id": TARO, "request": "市に着いた"}]})
@@ -1059,22 +1120,26 @@ def test_read_episode_casting_without_episodes(shown, world, mock_ai, monkeypatc
     assert _member(result["登場人物の候補"], other) == {"人物id": other, "名前": "テスト次郎", "種別": "人物", "年齢": 30, "人物像": "次郎の芯"}
 
 
-def test_read_character_episodes_only_recent_texts(shown, world, monkeypatch):
-    taro, _ = world.character_ids
+def test_read_cast_episodes_texts_only_latest_per_character(shown, world, monkeypatch):
+    taro, hanako = world.character_ids
     monkeypatch.setattr(constants, "EPISODE_RECENT_APPEARANCE_COUNT", 2)
     with get_env_session() as s:
-        for month in ["01", "02", "03"]:
+        for month, members in [("01", [taro]), ("02", [taro, hanako]), ("03", [taro])]:
             episode = Episode(story_id=world.story_id, title=f"{month}月の話", plot_text=f"{month}月のプロット",
                               main_text=f"{month}月の本文。", start=f"1200/{month}/01 12:00:00")
             s.add(episode)
             s.flush()
-            s.add(EpisodeCharacter(episode_id=episode.id, character_id=taro))
+            for member in members:
+                s.add(EpisodeCharacter(episode_id=episode.id, character_id=member, mentioned=member == hanako))
         s.commit()
 
-    result = shown(ReadCharacterEpisodes(episode_id=world.episode_id, character_id=taro))
+    result = shown(ReadCastEpisodes(episode_id=world.episode_id, character_ids=[taro, hanako]))
 
-    # 直近の話から数えて、古い順。本文を返し、プロットは返さない
-    assert [(row["題"], row["本文"]) for row in result] == [("02月の話", "02月の本文。"), ("03月の話", "03月の本文。")]
+    # 人物ごとの直近の話を話ごとにまとめて古い順。本文は人物ごとの一番新しい話にだけ付き、プロットは返さない
+    assert [(row["題"], row["登場"], row["名前だけ"], row["本文"]) for row in result] == [
+        ("02月の話", ["テスト太郎"], ["テスト花子"], "02月の本文。"),
+        ("03月の話", ["テスト太郎"], [], "03月の本文。"),
+    ]
     assert "プロット" not in str(result)
 
 

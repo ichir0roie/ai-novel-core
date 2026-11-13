@@ -3,7 +3,6 @@ from typing import Any, ClassVar
 from pydantic import Field, computed_field, model_validator
 from sqlalchemy.orm import selectinload
 
-from data_access_logic.character.record import CharacterMove, CharacterRelationRecord
 from data_access_logic.material import Material, Timestamp
 from db.schema import Episode
 
@@ -56,10 +55,3 @@ class EpisodeRecord(EpisodeRow):
     @property
     def mentioned_character_ids(self) -> list[int]:
         return [link.character_id for link in self.episode_characters if link.mentioned]
-
-
-class CommittedEpisode(EpisodeRecord):
-    # 本文を確定したあと、本文の中で住まい・拠点が変わった登場人物の居場所を移した移動先。移していなければ空
-    moves: list[CharacterMove] = []
-    # 本文を確定したあと、本文で会った・知り合いだと分かった登場人物どうしに足した関係。足していなければ空
-    relations: list[CharacterRelationRecord] = []
