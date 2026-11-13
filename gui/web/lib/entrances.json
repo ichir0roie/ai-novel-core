@@ -689,6 +689,33 @@
       "writes": true
     },
     {
+      "id": "episode.apply_outcomes.ApplyOutcomes",
+      "area": "episode",
+      "name": "ApplyOutcomes",
+      "doc": "本文を確定した話に、登場人物ごとの差分とセリフを AI を挟まずに入れる(`data_access_logic/episode/outcomes.py`)。",
+      "params": [
+        {
+          "name": "episode_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "outcomes",
+          "required": true,
+          "default": null,
+          "annotation": "list[CharacterOutcome]"
+        },
+        {
+          "name": "speeches",
+          "required": false,
+          "default": null,
+          "annotation": "list[SessionSpeech] | None"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "episode.cast_episode.CastEpisode",
       "area": "episode",
       "name": "CastEpisode",
@@ -717,6 +744,21 @@
           "required": false,
           "default": null,
           "annotation": "int | None"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "episode.commit_episode.CommitEpisode",
+      "area": "episode",
+      "name": "CommitEpisode",
+      "doc": "",
+      "params": [
+        {
+          "name": "episode",
+          "required": true,
+          "default": null,
+          "annotation": "EpisodeCommitForm"
         }
       ],
       "writes": true

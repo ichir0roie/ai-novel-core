@@ -33,7 +33,7 @@
 | db だけの入口(claude を叩かない) | `curl -sS -H "$h" -H 'content-type: application/json' -d '{"args":{...}}' "$api/api/interface/<入口の id>"`(結果は `.result`) |
 | claude を叩く入口 | `web_session/flows.py` の `run` で、入口の id と引数(手元と同じ)を渡して python で回す。下の例(結果は包まれずにそのまま返る) |
 
-- どちらで呼ぶかは、`gui/api/interface.py` の固定の一覧で見る。`DB_ENTRANCES` にあるのが db だけの入口で、`CLAUDE_ENTRANCES` にあるもの(`ReadEpisodeBrief`・`CommitEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
+- どちらで呼ぶかは、`gui/api/interface.py` の固定の一覧で見る。`DB_ENTRANCES` にあるのが db だけの入口で、`CLAUDE_ENTRANCES` にあるもの(`ReadEpisodeBrief`・`ReflectEpisode`・`GenerateCharacter`・`CommitEvent` など)は `flows.run` で回す
 - claude を叩く入口を curl で呼ぶと、`{"detail":"… は claude コマンドを叩くので API からは呼べない …"}` が返る。打ち直さずに `flows.run` に替える
 
 ## 表の API(`/api/tables`)

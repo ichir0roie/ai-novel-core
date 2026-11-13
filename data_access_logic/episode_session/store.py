@@ -29,6 +29,8 @@ NARRATION = "語り"
 ANSWER_FIELDS = ("thought", "action", "speech", "aim")
 TURN_KEYS = {"character_id", "time", "request", "witness_ids"}
 ADD_KEYS = {"narration", "witness_ids", "simultaneous", "time", "turns"}
+OUTCOME_KEYS = {"histories", "met", "worn", "removed", "moved_to"}
+MET_KEYS = {"name", "relation", "history"}
 
 
 @dataclass
@@ -214,9 +216,41 @@ class SessionStore:
         times = [record.time for record in self.load().records if record.character_id == character_id and record.time]
         return times[-1] if times else None
 
+    def close(self, character_id: int, value: dict[str, Any]) -> dict[str, Any]:
+        """人物役が、演じ終えた話の自分の差分を書く(`data_access_logic/episode/outcomes.py` の `CharacterOutcome` の形)。
+        知り合った相手は名前で受け、登場人物の id に直す。書き直せば置き換わる。"""
+        session = self.load()
+        if character_id not in session.cast:
+            raise ValueError(f"人物 id={character_id} は話 id={self.episode_id} の登場人物でない")
+        _check_keys(value, OUTCOME_KEYS, "差分")
+        ids = {name: id_ for id_, name in session.cast.items()}
+        met = []
+        for partner in value.get("met") or []:
+            _check_keys(partner, MET_KEYS, "met の相手")
+            if partner.get("name") not in ids:
+                raise ValueError(f"met の相手「{partner.get('name')}」は登場人物でない。登場人物: {'・'.join(ids)}")
+            met.append({"character_id": ids[partner["name"]], "relation": partner.get("relation"),
+                        "history": partner.get("history")})
+        outcome = {**value, "character_id": character_id, "met": met}
+        _write(self._outcome_path(character_id), outcome)
+        return outcome
+
+    def outcomes(self) -> list[dict[str, Any]]:
+        """人物役の書いた差分。登場人物の順。"""
+        return [json.loads(path.read_text(encoding="utf-8"))
+                for character_id in self.load().cast if (path := self._outcome_path(character_id)).exists()]
+
+    def speeches(self) -> list[dict[str, Any]]:
+        """登場人物が手番で言ったセリフ。手番の順。"""
+        return [{"character_id": record.character_id, "text": record.speech} for record in self.load().records
+                if record.character_id is not None and record.speech and record.speech.strip()]
+
+    def _outcome_path(self, character_id: int) -> Path:
+        return self.dir / "outcomes" / f"{character_id}.json"
+
     def clear(self, from_record_id: int | None = None) -> int:
         """行を消す(`from_record_id` を渡すと、その行から後(その行を含む)だけ)。登場人物・知り合いの組は残す。
-        前の行が残ると、人物役に前の場面が届くので、手番を演じ直す前に消す。"""
+        前の行が残ると、人物役に前の場面が届くので、手番を演じ直す前に消す。人物役の差分は、演じ直せば古くなるので消す。"""
         session = self.load()
         if from_record_id is not None and all(record.id != from_record_id for record in session.records):
             raise ValueError(f"id={from_record_id} は話 id={self.episode_id} のセッションの行でない")
@@ -224,6 +258,8 @@ class SessionStore:
         session.records = [record for record in session.records if record not in dropped]
         for record in dropped:
             self._answer_path(record.id).unlink(missing_ok=True)
+        for character_id in session.cast:
+            self._outcome_path(character_id).unlink(missing_ok=True)
         if self._session_path.exists():
             self._save(session)
         return len(dropped)

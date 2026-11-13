@@ -7,11 +7,9 @@ from sqlalchemy.orm import Session
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
-from data_access_logic.episode import brief, moves, relations, speeches, voices
-from data_access_logic.episode.moves import EpisodeMovesMaterial
-from data_access_logic.episode.relations import EpisodeRelationsMaterial, RelationsForm
+from data_access_logic.episode import brief, outcomes, speeches, voices
+from data_access_logic.episode.outcomes import AppliedOutcomes, OutcomesForm, ReflectMaterial
 from data_access_logic.episode.speeches import EpisodeSpeechMaterial, SpeechesForm
-from data_access_logic.character.record import CharacterRelationRecord
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm, set_characters
 from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.models import EpisodeBrief
@@ -90,18 +88,13 @@ def episode_record(s: Session, form: RowId) -> EpisodeRecord:
 
 
 @db_step
-def moves_material(s: Session, form: RowId) -> EpisodeMovesMaterial | None:
-    return moves.moves_material(s, form.id)
+def reflect_material(s: Session, form: RowId) -> ReflectMaterial | None:
+    return outcomes.reflect_material(s, form.id)
 
 
 @db_step
-def relations_material(s: Session, form: RowId) -> EpisodeRelationsMaterial | None:
-    return relations.relations_material(s, form.id)
-
-
-@db_step
-def add_relations(s: Session, form: RelationsForm) -> list[CharacterRelationRecord]:
-    return relations.add_relations(s, form)
+def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
+    return outcomes.apply_outcomes(s, form)
 
 
 @db_step

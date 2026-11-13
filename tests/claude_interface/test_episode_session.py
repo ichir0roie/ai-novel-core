@@ -45,7 +45,7 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    PERSONALITY_LEVELS, Character, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter, Idea,
+    PERSONALITY_LEVELS, Character, CharacterHistory, CharacterParameter, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter, Idea,
     IdeaHistory, Stamp, get_env_session,
 )
 from tool import episode_session
@@ -890,6 +890,47 @@ def test_moves_returns_the_moves_without_the_requests():
     rows = [episode_session._row(record, session.load().cast) for record in session.load().records]
     assert [(row["kind"], row["character"], row["witnesses"]) for row in rows] == [
         ("語り", None, [TARO, HANAKO]), ("人物", "テスト太郎", [HANAKO]), ("人物", "テスト花子", [TARO])]
+
+
+def test_close_keeps_each_actors_outcome_until_replayed():
+    session = _staged()
+    [turn] = session.add({"witness_ids": [HANAKO], "turns": [{"character_id": TARO, "request": "名乗る"}]})
+    session.answer(turn.id, {"action": "名乗る", "speech": "太郎だ"})
+
+    outcome = session.close(TARO, {"histories": ["市で見知らぬ人と会った"],
+                                   "met": [{"name": "見知らぬ人", "relation": "市で会った人", "history": "名乗った"}]})
+
+    # 知り合った相手は名前で受け、登場人物の id に直す
+    assert outcome["met"] == [{"character_id": STRANGER, "relation": "市で会った人", "history": "名乗った"}]
+    assert session.outcomes() == [{**outcome, "character_id": TARO}]
+    assert session.speeches() == [{"character_id": TARO, "text": "太郎だ"}]
+    with pytest.raises(ValueError, match="登場人物でない"):
+        session.close(TARO, {"met": [{"name": "話に出ない人", "relation": "知人", "history": "会った"}]})
+    with pytest.raises(ValueError, match="知らない欄"):
+        session.close(TARO, {"history": "欄の名の書き違い"})
+    # 演じ直すと差分は古くなるので、行を消すと差分も消える
+    session.clear(turn.id)
+    assert session.outcomes() == []
+
+
+def test_apply_writes_the_actors_outcomes_and_speeches(world, mock_ai, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
+    taro, hanako = world.character_ids
+    session = SessionStore(world.episode_id)
+    episode_session.stage(session)
+    [turn] = session.add({"witness_ids": [hanako], "turns": [{"character_id": taro, "request": "声をかける"}]})
+    session.answer(turn.id, {"action": "手を振る", "speech": "よう、花子"})
+    session.close(taro, {"histories": ["市で花子に声をかけた"]})
+
+    applied = episode_session.apply(session)
+
+    assert not mock_ai.calls
+    assert (applied["histories"], applied["speeches"], applied["差分の無い人物"]) == (1, 1, ["テスト花子"])
+    with get_env_session() as s:
+        added = s.scalars(select(CharacterHistory).where(
+            CharacterHistory.character_id == taro, CharacterHistory.description == "市で花子に声をかけた")).one()
+        # 人物役が確かめを経ずに書いた差分は、AI の行になる
+        assert added.origin == "ai"
 
 
 def test_clear_lets_the_actors_play_again():

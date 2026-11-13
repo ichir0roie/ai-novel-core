@@ -11,16 +11,15 @@ Lambda には claude が無く、あっても数分〜十数分の生成は Lamb
 
 GUI の追加・修正は `execute(s)` で確定だけし、AI の段を回さない。その印として次が残る。
 
-- `meme.category` が空(分類を振っていない。手で足したミーム)
-- `meme.anti_meme_id` が空(アンチミームを作っていない。手で足したミーム)
 - 本文と食い違った `event_summary.source_hash`(出来事の要約が古い)
 - 本文と食い違った `character_speech.source_hash` か、セリフがあるのに行の無い話(人物のセリフが古い。推敲した話もここに入る)
 
 これは `RefreshGeneratedContent` がまとめて拾う。頼まれたら Claude のセッションが回す(スキル `run-ai-tasks`)。
 
-ミームは、本文を渡した `CommitEpisode` の確定のあとに、その話の本文からだけ抜き出す。ほかの行からは抜き出さない。
-出来事の種は、確定の入口(`run()`)がその場で書いた行からだけ抜き出す。抜き出し済みかの印は持たないので、
-GUI から足した・直した行は自動では拾わない。そこから種を抜くときは、行を渡して `ExtractEventSeeds` を回す。
+ミームの抜き出し・分類・アンチミームと、出来事の種の抜き出しは、いまは止めてある(どの確定のあとにも回さない)。
+種を抜くときは、行を渡して `ExtractEventSeeds` を回す。
+話の確定(`CommitEpisode`)は AI を回さない。本文を世界に反映するのは、手番を回した話は `tool.episode_session apply`(AI を挟まない)、
+回していない話は `ReflectEpisode`(`data_access_logic/readme.md` の「話の差分」)。
 
 ## 形
 

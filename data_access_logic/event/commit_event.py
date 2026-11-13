@@ -10,7 +10,7 @@ from data_access_logic.event.record import EventRecord
 from data_access_logic.flows import commit
 
 
-# 確定のあと(`run()` / `show()`)は、ミームの抜き出し・要約・出来事の種を AI で追いかける(`flows/commit.py`)
+# 確定のあと(`run()` / `show()`)は、要約を AI で追いかける(`flows/commit.py`)
 class CommitEvent(CommitEntrypoint):
     def __init__(self, event: EventCreateForm):
         self.event = event
