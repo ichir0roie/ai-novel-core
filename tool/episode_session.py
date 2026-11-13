@@ -36,6 +36,8 @@ from db.writer import generated
 FILE_COMMANDS = ("knowledge", "played", "stage")
 OUT_DIR = Path(__file__).resolve().parent.parent / ".cache" / "episode_session"
 _WAIT_INTERVAL_SECONDS = 2
+# 語り部が行を足す前に番の知らせが届いても、行が足されるまで人物役が待てる長さ
+_TURN_OPEN_SECONDS = 20
 
 
 def call(entrance_id: str, args: dict[str, Any]) -> Any:
@@ -46,13 +48,35 @@ def call(entrance_id: str, args: dict[str, Any]) -> Any:
     return interface.call(interface.db_entrance_class(entrance_id), args)
 
 
-def read_turn(store: SessionStore, character_id: int, record_id: int) -> dict[str, Any]:
-    """語り部に番を知らされた人物役が、その行(見聞きしたことと要求)を読む。待たない。
-    知らされた行がまだ番でない(前の手番が埋まっていない)か、別の行が番なら、そのことを返す。"""
-    state = store.turn(character_id)
-    if state["status"] == "turn" and state["record"]["id"] != record_id:
+def read_turn(store: SessionStore, character_id: int, record_id: int | None, open_seconds: float = 0) -> dict[str, Any]:
+    """語り部に番を知らされた人物役が、その行(見聞きしたことと要求)を読む。`record_id` を省けば、いま開いている自分の番の行。
+    語り部は行を足すのと番を知らせるのを同じ返答で並べるので、番がまだ開いていなければ `open_seconds` まで待ってから読む。
+    それでも番でない(前の手番が埋まっていない)か、別の行が番なら、そのことを返す。"""
+    deadline = time.monotonic() + open_seconds
+    while True:
+        state = store.turn(character_id)
+        if state["status"] == "turn" or time.monotonic() >= deadline:
+            break
+        time.sleep(_WAIT_INTERVAL_SECONDS)
+    if state["status"] == "turn" and record_id is not None and state["record"]["id"] != record_id:
         return {"status": "other", "record_id": state["record"]["id"]}
     return state
+
+
+def _turn_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    """引数で渡した手番一つ(と語り)を、`SessionStore.add` の形にする。"""
+    if args.character is None and args.narration is None:
+        raise ValueError("--turns か、--character と --request(語りだけなら --narration)を渡す")
+    value: dict[str, Any] = {"turns": []}
+    if args.witness is not None:
+        value["witness_ids"] = [int(id_) for id_ in args.witness.split(",") if id_.strip()]
+    if args.narration is not None:
+        value["narration"] = args.narration
+    if args.character is None:
+        value["time"] = args.time
+    else:
+        value["turns"] = [{"character_id": args.character, "request": args.request or "", "time": args.time}]
+    return value
 
 
 def _name(record: Record, cast: dict[int, str]) -> str | None:
@@ -167,10 +191,11 @@ def main() -> None:
     played.add_argument("--episode", type=int, required=True)
     played.add_argument("--character", type=int, required=True)
 
-    turn = commands.add_parser("turn", help="語り部に知らされた番の行(見聞きしたことと要求)を読む。待たない")
+    turn = commands.add_parser(
+        "turn", help="語り部に知らされた番の行(見聞きしたことと要求)を読む。番がまだ開いていなければ、少しだけ待つ")
     turn.add_argument("--episode", type=int, required=True)
     turn.add_argument("--character", type=int, required=True)
-    turn.add_argument("--record", type=int, required=True, help="語り部が送ってきた行の id")
+    turn.add_argument("--record", type=int, help="語り部が送ってきた行の id。省けば、いま開いている自分の番の行")
 
     answer = commands.add_parser("answer", help="自分の番の行に一手を入れる")
     answer.add_argument("--episode", type=int, required=True)
@@ -204,9 +229,16 @@ def main() -> None:
                       "登場人物と知り合いの組を手番のファイルに写す")
     stage_command.add_argument("--episode", type=int, required=True)
 
-    add = commands.add_parser("add", help="手番の要求の行を足す(JSON: narration・witness_ids・simultaneous・time と、turns の配列: character_id・time・request・witness_ids)")
+    add = commands.add_parser(
+        "add", help="手番の要求の行を足す。手番一つ(と語り)なら引数で、組の手番・いくつもの手番は JSON のファイル(--turns。"
+                    "narration・witness_ids・simultaneous・time と、turns の配列: character_id・time・request・witness_ids)で")
     add.add_argument("--episode", type=int, required=True)
-    add.add_argument("--turns", required=True, help="JSON のファイル。- なら標準入力から読む")
+    add.add_argument("--turns", help="JSON のファイル。- なら標準入力から読む")
+    add.add_argument("--character", type=int, help="手番一つを引数で足すときの、動く人物の id")
+    add.add_argument("--request", help="その人物への要求")
+    add.add_argument("--witness", help="見聞きする人物の id をカンマで並べる。誰にも見せないなら空の文字列")
+    add.add_argument("--time", help="手番(手番が無ければ語り)の作中の時刻")
+    add.add_argument("--narration", help="手番の前に足す語り")
 
     add_ideas = commands.add_parser(
         "add-ideas", help="場面に出した新しい語をアイデアと照らし、当たらなければ候補として足す(JSON の配列: keyword・description・kind)")
@@ -266,7 +298,7 @@ def run(args: argparse.Namespace) -> Any:
         case "played":
             return SessionStore(args.episode).played(args.character)
         case "turn":
-            return read_turn(SessionStore(args.episode), args.character, args.record)
+            return read_turn(SessionStore(args.episode), args.character, args.record, _TURN_OPEN_SECONDS)
         case "answer":
             store = SessionStore(args.episode)
             record = store.answer(args.record, {"thought": args.thought, "action": args.action, "speech": args.speech,
@@ -280,7 +312,7 @@ def run(args: argparse.Namespace) -> Any:
             return stage(SessionStore(args.episode))
         case "add":
             store = SessionStore(args.episode)
-            added = store.add(_read_json(args.turns))
+            added = store.add(_read_json(args.turns) if args.turns else _turn_from_args(args))
             cast = store.load().cast
             return [_row(record, cast) for record in added]
         case "add-ideas":

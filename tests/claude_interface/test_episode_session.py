@@ -933,6 +933,26 @@ def test_apply_writes_the_actors_outcomes_and_speeches(world, mock_ai, monkeypat
         assert added.origin == "ai"
 
 
+def test_add_one_turn_from_arguments():
+    session = _staged()
+    args = episode_session.argparse.Namespace(character=TARO, request="鐘を聞いての一手", witness=f"{HANAKO}",
+                                              time="1200/04/01 12:00", narration="市に鐘が鳴った")
+
+    narration, turn = session.add(episode_session._turn_from_args(args))
+
+    assert (narration.kind, narration.request, narration.witnesses) == ("語り", "市に鐘が鳴った", [HANAKO])
+    assert (turn.character_id, turn.request, turn.witnesses, turn.time) == (TARO, "鐘を聞いての一手", [HANAKO],
+                                                                           "1200/04/01 12:00")
+    # 誰にも見せない手番は空の文字列で渡す
+    alone = episode_session.argparse.Namespace(character=HANAKO, request="一人で考える", witness="", time=None,
+                                               narration=None)
+    [alone_turn] = session.add(episode_session._turn_from_args(alone))
+    assert alone_turn.witnesses == []
+    # 番の行の id を省けば、いま開いている自分の番の行を読む
+    assert episode_session.read_turn(session, TARO, None)["record"]["id"] == turn.id
+    assert episode_session.read_turn(session, HANAKO, None)["status"] == "waiting"
+
+
 def test_clear_lets_the_actors_play_again():
     session = _staged()
     session.add({"witness_ids": [], "turns": [{"character_id": TARO, "request": "市に着いた"}]})
