@@ -10,7 +10,7 @@ from data_access_logic.flows.refresh import RefreshedAll
 __all__ = ["RefreshGeneratedContent"]
 
 
-# 数は、作り直した要約・拾い直したセリフの件数。ミームは、いまは抜き出しも分類もしない
+# 数は、作り直した要約の件数。ミームは、いまは抜き出しも分類もしない
 class RefreshGeneratedContent(Entrypoint):
     def __init__(self, ai: AIClient = ai_client):
         self.ai = ai

@@ -108,6 +108,26 @@ def test_other_scopes_have_neither_story_nor_episode_instructions(shown, world):
     assert revisions not in text
 
 
+def test_acting_scope_adds_story_instructions_of_the_episode(shown, world):
+    child_story = _story(shown, "子の作品", world.story_id)
+    everywhere = _row(shown, "全体の好み", StyleScope.ALL)
+    acting = _row(shown, "人物役の好み", StyleScope.ACTING)
+    episode_only = _row(shown, "本文の好み", StyleScope.EPISODE)
+    in_parent = _story_instruction(shown, world.story_id, "親の作品の指示")
+    in_child = _story_instruction(shown, child_story, "子の作品の指示")
+    in_episode = _text("話の指示")
+    shown(CommitEpisode(EpisodeCommitForm(id=world.episode_id, story_id=child_story, instruction=in_episode)))
+
+    text = shown(ReadWritingStyle(WritingStyleForm(scope=StyleScope.ACTING, episode_id=world.episode_id)))["text"]
+    without_episode = shown(ReadWritingStyle(WritingStyleForm(scope=StyleScope.ACTING)))["text"]
+
+    # 章の作風をセリフに効かせるため、話の作品(と祖先)の指示を人物役の行の前に足す。話の指示と本文の行は足さない
+    assert text.index(everywhere) < text.index(in_parent) < text.index(in_child) < text.index(acting)
+    assert in_episode not in text
+    assert episode_only not in text
+    assert in_parent not in without_episode and acting in without_episode
+
+
 def test_writing_style_without_story_has_neither_story_nor_narrow_texts(shown, world):
     in_story = _story_instruction(shown, world.story_id, "作品の指示")
     plot_only = _row(shown, "プロットの好み", StyleScope.PLOT)

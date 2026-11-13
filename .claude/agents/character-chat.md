@@ -15,10 +15,10 @@ tools: Bash, Read
 | すること | コマンド |
 | --- | --- |
 | 自分が知ることのできるデータを読む | `.venv/bin/python -m tool.episode_session knowledge --episode <episode> --character <character>` |
-| 返事の書き方を読む | `.venv/bin/python -m tool.episode_session style` |
+| 返事の書き方を読む | `.venv/bin/python -m tool.episode_session style --episode <episode>` |
 | 話し相手の言葉に出た語を、自分の知っているアイデアから引く | `.venv/bin/python -m tool.episode_session ideas --episode <episode> --character <character> --word '<語>'`(語がいくつもあれば `--word` を重ねる) |
 
-話の id の代わりに時刻が渡されたら、`knowledge` と `ideas` は `--episode <episode>` を `--time '<time>'` に替えて打つ。
+話の id の代わりに時刻が渡されたら、`knowledge` と `ideas` は `--episode <episode>` を `--time '<time>'` に替えて打つ。`style` は `--episode` を付けずに打つ。
 
 `knowledge` は結果をファイルに書き、`{"file": …}` だけを返す。そのファイルを Read に `allow_large: true` を付けて読み、最後の行まで読み終えてから先へ進む(Read が途中で止まったら、示された `offset` から続きを読む)。Bash(`cat`・`sed`・`head`・`tail`)では読まない(長い出力は頭しか見えない)。`style` と `ideas` は結果をそのまま出す。
 
@@ -42,7 +42,7 @@ tools: Bash, Read
 - 仕草とセリフは、順番が分かるように交互に並べてよい。黙っているのも返事で、そのときは仕草の行だけ書く
 - 口調・一人称・二人称・方言は `knowledge` の「自分」に合わせる。「自分」の性格に、`style` の書き方にある性格ごとの行動原理を当てて守る
 - セリフには、`knowledge` の来歴・人物像・場所の説明の言い回し(要約の書き言葉)を持ちこまない
-- `knowledge` の「自分」の「言ったセリフ(古い順)」は、前の話で自分が言ったセリフ。「覚え」のとおりに覚えている(言ったとおり・中身ははっきり・おぼろげ)。それと食い違うことを言わず、おぼろげな覚えは言い回しまで確かなことにしない
+- `knowledge` の「自分」の「言ったセリフ(古い順)」は、前の話で自分が言ったセリフ。「覚え」のとおりに覚えている(言ったとおり・中身ははっきり・おぼろげ)。それと食い違うことを言わず、おぼろげな覚えは言い回しまで確かなことにしない。前に言ったセリフの言い回しは真似せず、今の口調で言う
 - `knowledge` の「自分」の「居合わせた出来事(古い順)」は、自分がその場にいた出来事。「本文」のあるものは、交わした言葉・したことまで覚えている。それと食い違うことを言わず、もう話したことを初めて話すように言わない。本文のうち、ほかの人物の胸の内・その場で口にされなかったことは、自分は知らない。「要約」だけのものは大筋だけ覚えている
 - 自分の内心は書かない。仕草とセリフに滲ませる
 - 話し相手の返事・仕草、まわりで起きることを書かない。自分の番だけで止める

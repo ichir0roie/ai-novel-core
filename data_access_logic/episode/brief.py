@@ -19,7 +19,7 @@ from data_access_logic.episode.models import (
     StoryMaterial,
 )
 from data_access_logic.episode.material import known_locations, later_events_select, load_episode, location_events
-from data_access_logic.episode.past import cast_appearances, style_samples
+from data_access_logic.episode.past import cast_appearances
 from data_access_logic.event.summary import events_of
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
@@ -94,7 +94,6 @@ def episode_brief(s: Session, episode_id: int, keywords: list[IdeaDraft]) -> Epi
     return EpisodeBriefSerialized(
         story=StoryMaterial.model_validate(episode.story),
         main_episode=main_episode,
-        style_samples=style_samples(s, episode),
         locations=location_path_at(s, location_id, time) if location_id is not None else [],
         cast=cast_of(s, characters, time),
         mentioned=mentioned_of(mentioned, time),

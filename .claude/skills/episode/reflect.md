@@ -26,7 +26,7 @@
 
 **手番を回していない話**(一人だけの話・「ep<話id> 書いた」・「ep<話id> 補完」):
 
-- 確定のあと、`episode.reflect_episode.ReflectEpisode` に `{'episode_id': …}` を渡す(AI が本文から全員の差分を一度で書き、同じように入れて、セリフを本文から拾い直す。数分かかるので、web では `run_in_background`)
+- 確定のあと、`episode.reflect_episode.ReflectEpisode` に `{'episode_id': …}` を渡す(AI が本文から全員の差分を一度で書き、同じように入れる。本文からセリフは拾わないので、人物役は手で書いた話のセリフを覚えていない。数分かかるので、web では `run_in_background`)
 
 どちらも、推敲(スキル `revise-episode`)で本文を直した話には入れ直さない(来歴・関係が重なり、昔の話の居場所に戻る)。
 

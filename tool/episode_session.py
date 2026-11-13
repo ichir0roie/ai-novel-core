@@ -186,6 +186,7 @@ def main() -> None:
 
     style = commands.add_parser("style", help="書き方(db の全体の行と範囲の行)を読む。一手・返事は人物役、差分の来歴は来歴、関係は関係の範囲")
     style.add_argument("--scope", default="人物役", choices=["人物役", "来歴", "関係"])
+    style.add_argument("--episode", type=int, help="演じている話。人物役の範囲に、その話の作品(章)の指示を足す")
 
     played = commands.add_parser("played", help="自分がもう動いた手番(要求と自分の一手)を読む(起こし直されたときに)")
     played.add_argument("--episode", type=int, required=True)
@@ -283,7 +284,8 @@ def run(args: argparse.Namespace) -> Any:
                         {"character_id": args.character, **_knowing(args.episode, args.character, args.time)})
         case "style":
             # `db.schema` は import すると db を決めるので(web のセッションは db に繋がない)、範囲の値をそのまま渡す
-            return call("style_preference.read_writing_style.ReadWritingStyle", {"writing_style": {"scope": args.scope}})
+            return call("style_preference.read_writing_style.ReadWritingStyle",
+                        {"writing_style": {"scope": args.scope, "episode_id": args.episode}})
         case "close":
             try:
                 outcome = json.loads(args.outcome)

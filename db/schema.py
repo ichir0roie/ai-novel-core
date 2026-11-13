@@ -1051,9 +1051,9 @@ class EpisodeCharacter(OriginMixin, Base):
 
 
 class CharacterSpeech(Base):
-    """人物が話の本文で言ったセリフ。人物役には、言ってからの日数で原文・鮮明・あやふやのどれか一つを渡す
-    (`data_access_logic/character/knowledge.py`)。本文から AI が拾う写しなので出自を持たず、本文が変わったら
-    (`source_hash` が食い違ったら)、その話の行をまとめて拾い直す(`data_access_logic/episode/speeches.py`)。"""
+    """人物が話で言ったセリフ。人物役には、言ってからの日数で原文・鮮明・あやふやのどれか一つを渡す
+    (`data_access_logic/character/knowledge.py`)。人物役が手番で言ったセリフを、話を締めるとき(`ApplyOutcomes`)に書く。
+    本文からは拾わない(本文の言い回しが人物役の口調を前の話へ引き戻すので)。本文を直しても行は残す。"""
 
     __tablename__ = "character_speech"
 

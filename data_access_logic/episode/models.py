@@ -55,13 +55,6 @@ class CastAppearance(Material):
     with_text: bool = False
 
 
-class RecentEpisode(Material):
-    """登場人物の話し方を調整する根拠にする話。本文と、話し方の根拠にできるかを決める時刻だけを持つ。"""
-
-    start: Stamp | None = None
-    main_text: str
-
-
 
 
 def _without_plot(sheet: dict[str, Any]) -> dict[str, Any]:
@@ -108,8 +101,6 @@ class BriefEpisode(EpisodeBase):
 class EpisodeBrief(Material):
     story: StoryMaterial
     main_episode: BriefEpisode
-    # 文体の見本にする、同じ作品の直前の話の本文。字数の上限まで。古い順
-    style_samples: list[str]
     # 話の場所とその親。広い順。来歴は話の時刻の年まで
     locations: list[LocationLine]
     cast: list[CastMaterial]
@@ -155,7 +146,6 @@ class EpisodeBriefSerialized(EpisodeBrief):
             "材料の読み方": EPISODE_BRIEF_NOTES,
             "書き方": self.guide,
             "作品": _story(self.story),
-            "文体の見本(古い順)": self.style_samples,
             "この話": {
                 "話id": episode.id,
                 "題": episode.title,

@@ -7,14 +7,12 @@ from sqlalchemy.orm import Session
 
 from ai.instructions.style import layout_novel_text
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
-from data_access_logic.episode import brief, outcomes, speeches, voices
+from data_access_logic.episode import brief, outcomes
 from data_access_logic.episode.outcomes import AppliedOutcomes, OutcomesForm, ReflectMaterial
-from data_access_logic.episode.speeches import EpisodeSpeechMaterial, SpeechesForm
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm, set_characters
 from data_access_logic.episode.mentions import save_mentions
 from data_access_logic.episode.models import EpisodeBrief
 from data_access_logic.episode.record import EpisodeRecord
-from data_access_logic.episode.voices import VoiceForm, VoiceSource
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.step import RowId, db_step
 from data_access_logic.query import common_query
@@ -25,16 +23,6 @@ class BriefForm(BaseModel):
     episode_id: int
     # プロット・話のセッションの行・今の本文から AI が挙げた、アイデアと照らす語
     keywords: list[IdeaDraft]
-
-
-@db_step
-def voice_sources(s: Session, form: RowId) -> list[VoiceSource]:
-    return voices.voice_sources(s, form.id)
-
-
-@db_step
-def write_voices(s: Session, form: VoiceForm) -> list[int]:
-    return voices.write_voices(s, form.episode_id, form.voices)
 
 
 @db_step
@@ -96,17 +84,3 @@ def reflect_material(s: Session, form: RowId) -> ReflectMaterial | None:
 def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
     return outcomes.apply_outcomes(s, form)
 
-
-@db_step
-def speech_material(s: Session, form: RowId) -> EpisodeSpeechMaterial:
-    return speeches.speech_material(s, form.id)
-
-
-@db_step
-def save_speeches(s: Session, form: SpeechesForm) -> int:
-    return speeches.save_speeches(s, form)
-
-
-@db_step
-def stale_speech_episodes(s: Session) -> list[int]:
-    return speeches.stale_speech_episodes(s)
