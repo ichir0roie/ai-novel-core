@@ -25,7 +25,6 @@ tools: Bash, Read
 | 番の行に一手を入れる | `.venv/bin/python -m tool.episode_session answer --episode <episode> --record <行の id> --thought '<内心>' --action '<行動>' --speech '<セリフ>' --aim '<狙い>'` |
 | 演じ終えた話の、自分の差分を書く | `.venv/bin/python -m tool.episode_session close --episode <episode> --character <character> --outcome '<JSON>'` |
 
-- コマンドは一つずつ打つ(`;` や `&&` で続けない)
 - `knowledge` と `played` は結果をファイルに書き、`{"file": …}` だけを返す。そのファイルを Read に `allow_large: true` を付けて読み、最後の行まで読み終えてから先へ進む。Read が途中で止まった(PARTIAL)なら、示された `offset` から続きを読む。Bash(`cat`・`sed`・`head`・`tail`)では読まない(長い出力は頭しか見えない)。ほかのコマンドは結果をそのまま出す
 - `turn` は、番がまだ開いていなければ少しだけ待ってから返る。ほかのコマンドはすぐ返る。手番の行(`played`・`turn`・`answer`・`close`)は手元のファイルにあり、db を読むのは `knowledge`・`style`・`ideas` だけ
 - db への接続エラーで落ちたら、一度だけ打ち直す。また落ちたら、エラーの一行を語り部に返して止まる。`error:` で始まる一行の断り(番がまだ来ていない・もう一手が入っているなど)は打ち直さず、その一行を語り部に返して止まる

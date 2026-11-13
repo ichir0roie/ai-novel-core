@@ -26,7 +26,7 @@ description: 作者が画面で書いたプロット(`plot_text`)から、作品
 
 入口は id と引数で呼ぶ。呼び方・行の引き方は、手元は `.claude/docs/db.md`、web のセッションは `.claude/docs/web-db.md`(自分の場所の方だけ読む)。
 `ReadEpisodeBrief`・`ReflectEpisode` は AI を回すので数分かかることがある(web では `run_in_background`)。ほかは db だけの入口で、すぐ返る。
-入口と `tool.episode_session` の結果は、スクラッチパッドのファイルに書き出して Read で最後の行まで読む(`CLAUDE.md` の「ツールの使い分け」)。要る所だけを `jq` で抜くときは、書き出したファイルに当てる。
+人物・話の材料は数万字になる。出力が頭だけになったら、逃がされたファイルを最後まで読む(`CLAUDE.md` の「ツールの使い分け」)。
 
 | すること | 入口の id | 引数 |
 | --- | --- | --- |
