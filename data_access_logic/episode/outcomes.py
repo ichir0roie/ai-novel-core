@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """話のあとに、登場人物ごとの差分(この話で起きたこと・知ったこと、知り合った相手、身に着けた・外した物、移った住まい)と、
 登場人物が言ったセリフを、AI を挟まずに db へ入れる(`data_access_logic/readme.md` の「話の差分」)。
+手番を回した話では、人物役が書いたモチベーションの増減も、人物モードと同じ形(`character/motivations.py` の `apply_changes`)で入れる。
+本文から AI が書く差分は、AI がモチベーションを読まないので増減を持たない。
 
 差分は、手番を回した話では人物役が自分の演じた手番から書き(`tool.episode_session close`)、手番を回していない話では
 AI が本文から一度に書く(`outcomes_draft`、流れ `flows/episode.py` の `reflect_episode`)。どちらも同じ形で `apply_outcomes` に渡す。
@@ -18,10 +20,11 @@ from sqlalchemy.orm import Session
 from data_access_logic.ai_client import AIClient
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.commit_character_skill import CommitCharacterSkill
+from data_access_logic.character.motivations import apply_changes
 from data_access_logic.character.form import CharacterRelationCreateForm, CharacterSkillCreateForm
 from data_access_logic.character.moves import move_destinations, update_locations
 from data_access_logic.character.record import (
-    CharacterHistoryRow, CharacterMove, CharacterRelationHistoryRow, CharacterSkillHistoryRow,
+    CharacterHistoryRow, CharacterMove, CharacterRelationHistoryRow, CharacterSkillHistoryRow, MotivationChange,
 )
 from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
@@ -29,8 +32,8 @@ from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.child_lists import appended_history
 from db.schema import (
-    Character, CharacterHistory, CharacterSkill, CharacterSkillHistory, CharacterSpeech, Location, StyleScope,
-    summary_source_hash,
+    Character, CharacterHistory, CharacterMotivation, CharacterSkill, CharacterSkillHistory, CharacterSpeech, Location,
+    StyleScope, summary_source_hash,
 )
 from db.stamp import Stamp
 
@@ -90,6 +93,8 @@ class OutcomesForm(BaseModel):
     outcomes: list[CharacterOutcome]
     # 話のセッションの行の、登場人物が言ったセリフ(手番の順)。None なら今の行をそのまま残す
     speeches: list[SessionSpeech] | None = None
+    # 人物役が書いた、本人のモチベーションの増減
+    motivations: list[MotivationChange] = []
 
 
 class AppliedOutcomes(Material):
@@ -102,6 +107,10 @@ class AppliedOutcomes(Material):
     # 「人物 → 場所」
     moves: list[str] = []
     speeches: int = 0
+    # 「人物: 内容(強さ n)」。足した行
+    motivations: list[str] = []
+    # 「人物: 内容」。終えた行(強さが変わった行も含む)
+    ended_motivations: list[str] = []
     # 当てられずに入れなかったもの
     skipped: list[str] = []
 
@@ -200,10 +209,24 @@ def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
             else:
                 update_locations(s, [CharacterMove(character_id=character.id, location_id=location_id)], time)
                 applied.moves.append(f"{character.name} → {outcome.moved_to}")
+    if form.motivations:
+        _motivate(s, form.motivations, cast, time, applied)
     if form.speeches is not None:
         applied.speeches = _save_speeches(s, episode.id, episode.main_text, form.speeches, cast)
     s.flush()
     return applied
+
+
+def _motivate(s: Session, changes: list[MotivationChange], cast: dict[int, Character], time: Stamp,
+              applied: AppliedOutcomes) -> None:
+    """指せない行(登場人物でない・話の時刻に効いていない)への増減は `apply_changes` が捨てる。"""
+    pointed = [change.motivation_id for change in changes if change.motivation_id is not None]
+    added = apply_changes(s, changes, list(cast), time)
+    for row in added:
+        applied.motivations.append(f"{cast[row.character_id].name}: {row.text}(強さ {row.strength})")
+    for row in s.scalars(select(CharacterMotivation).where(CharacterMotivation.id.in_(pointed))).all():
+        if row.end == time:
+            applied.ended_motivations.append(f"{cast[row.character_id].name}: {row.text}")
 
 
 def _save_speeches(s: Session, episode_id: int, main_text: str, speeches: list[SessionSpeech],

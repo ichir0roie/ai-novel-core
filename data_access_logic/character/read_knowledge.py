@@ -20,7 +20,8 @@ class ReadKnowledge(SessionEntrypoint):
     話を渡さず `time` だけを渡せば、その時刻で読む(スキル `call-character` で歳を言って呼ぶとき)。プロットが無いので、アイデアは入らない。
     知っている人物は、関係のある人物すべて。
     自分が前の話で言ったセリフは、言ってからの日数で原文・鮮明・あやふやのどれかで入る(演じている話のセリフは入れない)。
-    自分が居合わせた出来事は、その時刻までのものが新しいほうから決まった件数だけ入る(新しいものは本文、前のものは要約)。"""
+    自分が居合わせた出来事は、その時刻までのものが新しいほうから決まった件数だけ入る(新しいものは本文、前のものは要約)。
+    自分のモチベーションは、効いている行と終わった行(昔のモチベーション)を合わせて強い順に決まった件数だけ入る。"""
 
     def __init__(self, character_id: int, episode_id: int | None = None, time: Stamp | str | None = None):
         self.character_id = character_id
@@ -35,4 +36,4 @@ class ReadKnowledge(SessionEntrypoint):
             scene_ids = set(s.scalars(
                 select(EpisodeCharacter.character_id).where(EpisodeCharacter.episode_id == self.episode_id)).all())
         return knowledge_of(s, self.character_id, knowing_time(s, self.episode_id, self.time), plot_text, scene_ids,
-                            self.episode_id, with_events=True)
+                            self.episode_id, with_events=True, with_motivations=True)

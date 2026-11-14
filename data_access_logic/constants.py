@@ -158,6 +158,8 @@ SPEECH_VIVID_DAYS = 365
 # それより前は要約で渡す。出来事の本文は会話を写したもの(スキル `character-scenes`)で長く、全部を本文で渡すと材料が膨らむ
 KNOWLEDGE_EVENT_LIMIT = 10
 KNOWLEDGE_EVENT_TEXT_COUNT = 3
+# 人物役に渡す、本人のモチベーションの件数。効いている行と終わった行を合わせて強い順に数え、終わった行は昔のモチベーションとして渡す
+KNOWLEDGE_MOTIVATION_LIMIT = 10
 
 # data_access_logic/episode_session/stage
 # 語り部に渡す、話の前・後の出来事の件数の上限(それぞれ。話に近いほうから)。前は前の話の時刻から、後は次の話の時刻までに限る

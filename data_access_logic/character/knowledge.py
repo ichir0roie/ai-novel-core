@@ -20,6 +20,9 @@
 - 本人が居合わせた出来事(`event_character` に本人がいる行)は、その時刻までのものを新しいほうから
   `constants.KNOWLEDGE_EVENT_LIMIT` 件、古い順に渡す。新しい `constants.KNOWLEDGE_EVENT_TEXT_COUNT` 件は本文で、それより前は要約で。
   話の外で人物が交わした会話(スキル `character-scenes`)を、話の中の人物役が覚えているようにするため。居合わせたので知る相手では絞らない。
+- 本人のモチベーション(`character_motivation`)は、その時刻に効いている行と、もう終わった行を合わせて強い順に
+  `constants.KNOWLEDGE_MOTIVATION_LIMIT` 件まで渡し、終わった行は昔のモチベーションに分ける。強さが変わっただけで終えた行は、
+  同じ中身の効いている行があるので昔に入れない。本人の内心なので、知っている人物には渡さない。人物モードは別に渡す。
 """
 from __future__ import annotations
 
@@ -42,8 +45,8 @@ from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
-    Character, CharacterHistory, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode, Event, IdeaHistory,
-    IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
+    Character, CharacterHistory, CharacterMotivation, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode,
+    Event, IdeaHistory, IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
 )
 from db.stamp import Stamp
 
@@ -214,6 +217,33 @@ class KnownEvent(Material):
     summary: str | None = None
 
 
+class KnownMotivation(Material):
+    id: int
+    start: Timestamp
+    # 終わった時刻。効いている行は空
+    end: Timestamp | None = None
+    strength: int
+    text: str
+
+
+def _strength(strength: int) -> str:
+    return f"{strength}({constants.MOTIVATION_STRENGTHS.get(strength, '')})"
+
+
+def _motivations_for_prompt(motivations: list[KnownMotivation], time: Stamp) -> dict[str, list[dict[str, Any]]]:
+    """効いている行は、話の差分で指せるように id を付ける。終わった行は指して変えられないので id を付けない。"""
+    return {
+        "モチベーション(強い順)": [
+            {"モチベーションid": motivation.id, "強さ": _strength(motivation.strength), "内容": motivation.text,
+             "いつから": _when(motivation.start, time)}
+            for motivation in motivations if motivation.end is None],
+        "昔のモチベーション(強い順)": [
+            {"強さ": _strength(motivation.strength), "内容": motivation.text, "いつから": _when(motivation.start, time),
+             "いつ終わった": _when(motivation.end, time)}
+            for motivation in motivations if motivation.end is not None],
+    }
+
+
 def _when(start: Stamp, time: Stamp) -> str:
     """出来事は会話の中身まで覚えているので、近いものは日で言う。一月より前は年で言う。"""
     days = start.days_until(time)
@@ -264,12 +294,15 @@ class KnowledgeSerialized(Material):
     speeches: list[KnownSpeech]
     # 本人が居合わせた出来事(古い順)。人物モード(`expansion/acting.py`)は出来事を別に渡すので None にして、見出しごと出さない
     events: list[KnownEvent] | None = None
+    # 本人のモチベーション(強い順。終わった行は `end` を持つ)。人物モードは別に渡すので None にして、見出しごと出さない
+    motivations: list[KnownMotivation] | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         me, parameters, year = self.me, self.parameters, self.time.year
         events = {} if self.events is None else {
             "居合わせた出来事(古い順)": _events_for_prompt(self.events, self.time)}
+        motivations = {} if self.motivations is None else _motivations_for_prompt(self.motivations, self.time)
         return {
             "自分": {
                 "名前": me.name, **me.looks.model_dump(), "名字": parameters.family_name,
@@ -280,6 +313,7 @@ class KnowledgeSerialized(Material):
                 "スキル": _skills_for_prompt(me.skills, year),
                 "言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, self.time),
                 **events,
+                **motivations,
             },
             "関係": _relations_for_prompt(self.relations, year),
             "知っている人物": [
@@ -418,15 +452,38 @@ def _events(s: Session, character_id: int, time: Stamp) -> list[KnownEvent]:
             for index, row in reversed(list(enumerate(rows)))]
 
 
+def _motivations(s: Session, character_id: int, time: Stamp) -> list[KnownMotivation]:
+    """`time` までに生まれた本人の行。強い順に、効いている行と終わった行を合わせて決まった件数まで。
+    終わった行は、同じ中身の効いている行(強さが変わっただけ)か、もっと強い同じ中身の終わった行があれば外す。"""
+    rows = s.scalars(
+        select(CharacterMotivation)
+        .where(CharacterMotivation.character_id == character_id, CharacterMotivation.start <= time)
+        .order_by(CharacterMotivation.strength.desc(), CharacterMotivation.start.desc(), CharacterMotivation.id.desc())
+    ).all()
+    ended = {row.id for row in rows if row.end is not None and row.end <= time}
+    seen = {row.text for row in rows if row.id not in ended}
+    picked: list[KnownMotivation] = []
+    for row in rows:
+        if row.id in ended:
+            if row.text in seen:
+                continue
+            seen.add(row.text)
+        picked.append(KnownMotivation(id=row.id, start=row.start, end=row.end if row.id in ended else None,
+                                      strength=row.strength, text=row.text))
+        if len(picked) >= constants.KNOWLEDGE_MOTIVATION_LIMIT:
+            break
+    return picked
+
+
 def knowledge_of(
     s: Session, character_id: int, time: Stamp, plot_text: str, scene_ids: set[int] | None,
-    acting_episode_id: int | None, with_events: bool = False,
+    acting_episode_id: int | None, with_events: bool = False, with_motivations: bool = False,
 ) -> KnowledgeSerialized:
     """アイデアは、`plot_text` に名前の出るものだけを入れる。
     知っている人物(外見・芯・来歴)は、関係のある人物のうち `scene_ids`(話の登場人物・名前だけ出る人物)にいる人物だけ。
     ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。
     言ったセリフは、`acting_episode_id`(演じている話)のものを除く。
-    居合わせた出来事は `with_events` のときだけ入れる(人物モードは出来事を別に渡す)。"""
+    居合わせた出来事は `with_events`、本人のモチベーションは `with_motivations` のときだけ入れる(人物モードはどちらも別に渡す)。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)
@@ -446,6 +503,7 @@ def knowledge_of(
         places=_places(s, viewer),
         speeches=_speeches(s, character_id, time, acting_episode_id),
         events=_events(s, character_id, time) if with_events else None,
+        motivations=_motivations(s, character_id, time) if with_motivations else None,
     )
 
 

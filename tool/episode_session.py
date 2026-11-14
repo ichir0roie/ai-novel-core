@@ -6,9 +6,9 @@
 人物役は表を見張らない。語り部が番の行の id を人物役に送り、人物役はその行だけを読んで一手を入れる。
 人物役がはじめに読む材料(knowledge・played)は標準出力に出さずファイルに書き、そのパスを出す(Read で最後まで読む)。
 
-    人物役: knowledge / style / ideas / played / turn / answer / close(演じ終えた話の自分の差分)
+    人物役: knowledge / style / ideas / played / turn / answer / close(演じ終えた話の自分の差分とモチベーションの増減)
     語り部: knower-gaps / stage(登場人物と知り合いの組を手番のファイルに写す)/ appearance / add / wait / add-ideas / moves / read
-    本文を確定したあと: apply(人物役の差分と手番のセリフを db に入れる)
+    本文を確定したあと: apply(人物役の差分・モチベーションの増減と手番のセリフを db に入れる)
     演じ直す前・掛け合いを終えたとき: clear(--from で、その行から後だけ)
 
     .venv/bin/python -m tool.episode_session turn --episode 102 --character 1 --record 1290
@@ -129,13 +129,15 @@ def stage(store: SessionStore) -> Any:
 
 
 def apply(store: SessionStore) -> Any:
-    """人物役の差分と手番のセリフを、AI を挟まずに入れる。差分は人物役が確かめを経ずに書いたものなので、AI の行として書く。"""
+    """人物役の差分・モチベーションの増減と手番のセリフを、AI を挟まずに入れる。差分は人物役が確かめを経ずに書いたものなので、
+    AI の行として書く。"""
     session = store.load()
     outcomes = store.outcomes()
     written = {outcome["character_id"] for outcome in outcomes}
     with generated():
         applied = call("episode.apply_outcomes.ApplyOutcomes", {
-            "episode_id": store.episode_id, "outcomes": outcomes, "speeches": store.speeches()})
+            "episode_id": store.episode_id, "outcomes": outcomes, "speeches": store.speeches(),
+            "motivations": store.motivation_changes()})
     return {**applied, "差分の無い人物": [name for id_, name in session.cast.items() if id_ not in written]}
 
 
@@ -208,7 +210,7 @@ def main() -> None:
 
     close = commands.add_parser(
         "close", help="演じ終えた話の、自分の差分を書く(JSON: histories・met(name・relation・history)・worn(name・description)・"
-                      "removed・moved_to)")
+                      "removed・moved_to・motivations(id・strength・text))")
     close.add_argument("--episode", type=int, required=True)
     close.add_argument("--character", type=int, required=True)
     close.add_argument("--outcome", required=True, help="差分の JSON の文字列")

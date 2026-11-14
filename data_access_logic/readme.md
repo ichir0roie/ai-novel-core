@@ -130,7 +130,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「展開を始める・終える」「展開の一覧」「展開を取り消して」 | `expansion.start_expansion.StartExpansion(expansion)` / `finish_expansion.FinishExpansion(expansion)` / `list_expansions.ListExpansions(limit=50, status=None, mode=None, actor_id=None)` / `read_expansion.ReadExpansion(expansion_id)` / `revert_expansion.RevertExpansion(expansion_id)`。食い違いは `add_conflict.AddConflict(conflict)`(作者の行にだけ) / `resolve_conflict.ResolveConflict(conflict)`(下の「世界の展開」) |
 | 「この話を推敲して」「初登場キャラの描写を厚くして」 | スキル `revise-episode`。このセッションの Claude が `ReadEpisodeBrief` で材料を読んで自分で書き直し、`ReviseEpisode` で確定する(指示はプロットの「## 推敲」の節に積む。登場人物・場所が変わるなら、書く前に `CastEpisode` で結び直して材料を読み直す) |
 | 「本文を確定する」「話のプロットを入れる」 | `episode.commit_episode.CommitEpisode(episode)`。`id` を渡せばその話を直し(渡した欄だけ)、省けば `story_id` の作品に新しい話を足す。`plot_text`(プロット)か `main_text`(本文)のどちらかがあればよい。`main_text` は `ai/instructions/style.py` の `layout_novel_text` で改行を整えてから入れる(地の文は一文一行、空行二つ以上は場面の切れ目)。話に番号は無く、作品の中では `start` の順に並ぶ(`start` の無い話は後ろに id 順)。あいだに話を足すときは、前後の話のあいだの `start` を付ける。db だけの入口で、確定のあとに AI を回さない(世界への反映は下の「本文を世界に反映する」) |
-| 「本文を世界に反映する」「話の差分を入れて」 | 本文を確定したあと、登場人物ごとの差分(この話で起きたこと・知ったことの来歴、知り合った相手との関係、身に着けた・外した装い、移った住まい)とセリフを入れる(下の「話の差分」)。手番を回した話は `tool.episode_session apply --episode <id>`(人物役が `close` で書いた差分と手番のセリフを、db だけの入口 `episode.apply_outcomes.ApplyOutcomes(episode_id, outcomes, speeches=None)` で入れる)。手番を回していない話は `episode.reflect_episode.ReflectEpisode(episode_id)`(AI が本文から差分を一度に書いて同じ入れ方で入れる。セリフは本文から拾わない) |
+| 「本文を世界に反映する」「話の差分を入れて」 | 本文を確定したあと、登場人物ごとの差分(この話で起きたこと・知ったことの来歴、知り合った相手との関係、身に着けた・外した装い、移った住まい)とセリフを入れる(下の「話の差分」)。手番を回した話は `tool.episode_session apply --episode <id>`(人物役が `close` で書いた差分と手番のセリフを、db だけの入口 `episode.apply_outcomes.ApplyOutcomes(episode_id, outcomes, speeches=None, motivations=None)` で入れる)。手番を回していない話は `episode.reflect_episode.ReflectEpisode(episode_id)`(AI が本文から差分を一度に書いて同じ入れ方で入れる。セリフは本文から拾わない) |
 | 「本文だけを推敲して確定する」     | `episode.revise_episode.ReviseEpisode(episode=EpisodeReviseForm(id=…, main_text=…, plot_text=None, title=None))`。本文のある話の本文(と、渡せばプロット・題)だけを直す。時刻・登場人物・場所は変えない。確定のあとに AI を回さない(db だけの入口)。差分は入れないので、登場人物の居場所・関係も本文から動かない(昔の話を直しても、今の居場所が戻らない) |
 | 「話を別の作品(章)へ移して」       | `episode.move_episodes.MoveEpisodes(episode_ids, story_id)`。話の作品を付け替える。本文・要約はそのまま |
 | 「話の時刻・作品をまとめて直して」   | `RunBatch` に、話ごとの `episode.commit_episode.CommitEpisode` のリクエスト(`{'episode': {'id': …, 'start': …, 'end': …, 'story_id': …}}`)を並べて渡す(上の「まとめて直して」) |
@@ -232,12 +232,14 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 人物を消すと(`DeleteCharacter`)、その人物のスキルと来歴も消える
 
 **人物のモチベーション(character_motivation)**: 人物がいま何をしたがっているかを、一つの思いごとに `character_motivation` の一行
-(`character_id` / `start` / `end` / `strength` / `text`)で持つ。人物モード(`ActCharacter`)が読んで書く。
+(`character_id` / `start` / `end` / `strength` / `text`)で持つ。人物モード(`ActCharacter`)と話の人物役が読んで書く。
 
 - `start` は思いが生まれた時刻(必須)。`end` が空のあいだ効いている。果たした・消えたら、その時刻を `end` に入れる
 - `strength` は 1〜5(1 気にかかる程度 / 2 機会があればしたい / 3 手間をかけてもしたい / 4 ほかを後回しにしてもしたい / 5 何を捨てても果たしたい。`constants.MOTIVATION_STRENGTHS`)
 - 強さが変わったら、行を直さず、前の行の `end` に変わった時刻を入れ、同じ内容で新しい強さの行を同じ時刻から足す(人物モードは足すことと `end` を付けることしかできないので、同じ形に揃える)
-- 人物モードの人物の目(狙う段・対話の手番)には、本人のその時刻に効いている行だけを強い順に `constants.ACT_MOTIVATION_LIMIT` 件まで渡す。本人の内心なので、ほかの人物の材料・話の材料・人物役(`ReadKnowledge`)には渡さない
+- 人物モードの人物の目(狙う段・対話の手番)には、本人のその時刻に効いている行だけを強い順に `constants.ACT_MOTIVATION_LIMIT` 件まで渡す
+- 話の人物役・対話役(`ReadKnowledge`)には、本人の行を、効いている行と終わった行を合わせて強い順に `constants.KNOWLEDGE_MOTIVATION_LIMIT` 件まで渡す(終わった行は「昔のモチベーション」。強さが変わっただけで終えた行は外す)。人物役は話を締めるときに、本人の行の増減を差分として書き(`tool.episode_session close` の `motivations`)、`ApplyOutcomes` が `apply_changes` で話の時刻の行として書く
+- 本人の内心なので、ほかの人物の材料・話の材料(`ReadEpisodeBrief`)・知っている人物には渡さない
 - 裁く段には居合わせる人物ごとの行を id つきで渡し、一手のあとの増減(生まれた・強まった・弱まった・果たした・消えた)を返させて、出来事の時刻の行として書く(`character/motivations.py` の `apply_changes`)。影響の枠の「動かされにくい人物」の思いは書かない
 - 人物を消すと(`DeleteCharacter`)、その人物のモチベーションも消える
 
@@ -509,6 +511,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 当てられない値(装いに無い物・名前で一つに決まらない場所・登場人物でない相手)は入れずに `skipped` に返す(取りこぼしは損失として許す)。
 差分の出どころは二つ。手番を回した話は、人物役が演じ終えたあとに自分の差分を `tool.episode_session close` で手番のファイルに書き、語り部が確定のあとに `tool.episode_session apply` で、手番で言ったセリフといっしょに入れる(差分は確かめを経ないので、AI の行として書く)。
 手番を回していない話(作者が書いた本文・一人だけの話)は `ReflectEpisode` が、本文から全員の差分を AI に一度で書かせて同じように入れる。
+手番を回した話では、人物役が本人のモチベーションの増減(`motivations`)も差分に書き、`ApplyOutcomes` の `motivations` に人物モードと同じ形(`MotivationChange`)で渡して、`apply_changes` で話の時刻の行として書く(下の「人物のモチベーション」)。`ReflectEpisode` の AI はモチベーションを読まないので、増減を書かない。
 セリフ(`character_speech`)は、手番を回した話では手番の行のセリフを手番の順にそのまま入れ、鮮明・あやふやの覚えも言ったとおりにする(行の `source_hash` は今の本文にそろえる)。
 手番を回していない話(`ReflectEpisode`)と、推敲・GUI で本文を直した話では、本文からセリフを拾わない(本文の言い回しが、口調の行を直しても人物役を前の話の口調へ引き戻すので)。前に拾った行と手番の行は、本文を直してもそのまま残す。人物役は `ReadKnowledge` で、前の話で自分が言ったセリフを、言ってからの日数で原文(`constants.SPEECH_VERBATIM_DAYS` まで)・鮮明(`constants.SPEECH_VIVID_DAYS` まで)・あやふや(それより後)のどれか一つで読む。
 出来事の候補は、出来事の種(`event_seed` テーブル)からランダムに引いた種か、直前の出来事からの連想で立てる。
