@@ -711,6 +711,12 @@
           "required": false,
           "default": null,
           "annotation": "list[SessionSpeech] | None"
+        },
+        {
+          "name": "motivations",
+          "required": false,
+          "default": null,
+          "annotation": "list[MotivationChange] | None"
         }
       ],
       "writes": true

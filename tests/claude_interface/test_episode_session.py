@@ -9,11 +9,12 @@ from sqlalchemy import delete, select
 from ai.claude_code import ai_client
 from data_access_logic import constants
 from data_access_logic.character.commit_character import CommitCharacter
+from data_access_logic.character.commit_character_motivation import CommitCharacterMotivation
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.delete_character import DeleteCharacter
 from data_access_logic.character.form import (
-    CharacterCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterSkillCreateForm, CharacterUpdateForm,
-    KnowledgeChange, KnowledgeForm,
+    CharacterCreateForm, CharacterMotivationCreateForm, CharacterRelationCreateForm, CharacterRelationUpdateForm,
+    CharacterSkillCreateForm, CharacterUpdateForm, KnowledgeChange, KnowledgeForm,
 )
 from data_access_logic.character.read_appearance import ReadAppearance
 from data_access_logic.character.read_knowable_rows import ReadKnowableRows
@@ -43,8 +44,8 @@ from data_access_logic.idea.record import IdeaHistoryRow
 from data_access_logic.idea.update_idea import UpdateIdea
 from data_access_logic.knowers import KnowerRow
 from db.schema import (
-    PERSONALITY_LEVELS, CharacterHistory, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter, Idea,
-    IdeaHistory, Stamp, get_env_session,
+    PERSONALITY_LEVELS, CharacterHistory, CharacterMotivation, CharacterRelation, Episode, EpisodeCharacter, Event,
+    EventCharacter, Idea, IdeaHistory, Stamp, get_env_session,
 )
 from tool import episode_session
 
@@ -816,7 +817,7 @@ def test_close_keeps_each_actors_outcome_until_replayed():
 
     # 知り合った相手は名前で受け、登場人物の id に直す
     assert outcome["met"] == [{"character_id": STRANGER, "relation": "市で会った人", "history": "名乗った"}]
-    assert session.outcomes() == [{**outcome, "character_id": TARO}]
+    assert session.outcomes() == [{key: value for key, value in outcome.items() if key != "motivations"}]
     assert session.speeches() == [{"character_id": TARO, "text": "太郎だ"}]
     with pytest.raises(ValueError, match="登場人物でない"):
         session.close(TARO, {"met": [{"name": "話に出ない人", "relation": "知人", "history": "会った"}]})
@@ -845,6 +846,80 @@ def test_apply_writes_the_actors_outcomes_and_speeches(world, mock_ai, monkeypat
             CharacterHistory.character_id == taro, CharacterHistory.description == "市で花子に声をかけた")).one()
         # 人物役が確かめを経ずに書いた差分は、AI の行になる
         assert added.origin == "ai"
+
+
+def _motivate(shown, character_id: int, start: str, strength: int, text: str, end: str | None = None) -> int:
+    return shown(CommitCharacterMotivation(CharacterMotivationCreateForm(
+        character_id=character_id, start=start, end=end, strength=strength, text=text)))["id"]
+
+
+def test_read_knowledge_tells_own_motivations_and_past_ones(shown, world):
+    taro, hanako = world.character_ids
+    # 強さが変わっただけで終えた行は、同じ中身の効いている行があるので昔に入れない
+    _motivate(shown, taro, "1199/01/01", 2, "市に店を持ちたい", end="1200/01/01")
+    shop = _motivate(shown, taro, "1200/01/01", 4, "市に店を持ちたい")
+    _motivate(shown, taro, "1198/01/01", 5, "花子に謝りたい", end="1199/06/01")
+    # 話の時刻より後に生まれる思いと、話のあとで終わる思い(話の時刻ではまだ効いている)
+    _motivate(shown, taro, "1250/01/01", 5, "先の思い")
+    later = _motivate(shown, taro, "1199/01/01", 1, "話のあとで果たす思い", end="1201/01/01")
+    _motivate(shown, hanako, "1199/01/01", 3, "花子の思い")
+
+    me = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))["自分"]
+
+    assert [(row["モチベーションid"], row["強さ"][0], row["内容"]) for row in me["モチベーション(強い順)"]] == [
+        (shop, "4", "市に店を持ちたい"), (later, "1", "話のあとで果たす思い")]
+    assert [(row["強さ"][0], row["内容"]) for row in me["昔のモチベーション(強い順)"]] == [("5", "花子に謝りたい")]
+    # 昔の行は指して変えられないので、id を渡さない
+    assert all("モチベーションid" not in row for row in me["昔のモチベーション(強い順)"])
+    # ほかの人物の内心は渡さない
+    hanako_known = _known_person(shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro)), "テスト花子")
+    assert "花子の思い" not in str(hanako_known)
+
+
+def test_read_knowledge_gives_motivations_up_to_the_limit_by_strength(shown, world):
+    taro, _ = world.character_ids
+    for index in range(constants.KNOWLEDGE_MOTIVATION_LIMIT):
+        _motivate(shown, taro, "1199/01/01", 3, f"並の思い{index}")
+    _motivate(shown, taro, "1199/01/01", 5, "強い昔の思い", end="1199/06/01")
+    _motivate(shown, taro, "1199/01/01", 1, "弱い思い")
+
+    me = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))["自分"]
+
+    texts = [row["内容"] for row in me["モチベーション(強い順)"] + me["昔のモチベーション(強い順)"]]
+    assert len(texts) == constants.KNOWLEDGE_MOTIVATION_LIMIT
+    assert "強い昔の思い" in texts and "弱い思い" not in texts
+
+
+def test_close_and_apply_change_the_actors_motivations(world, mock_ai, shown, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
+    taro, hanako = world.character_ids
+    shop = _motivate(shown, taro, "1199/01/01", 2, "市に店を持ちたい")
+    apology = _motivate(shown, taro, "1199/01/01", 3, "花子に謝りたい")
+    hanakos = _motivate(shown, hanako, "1199/01/01", 3, "花子の思い")
+    session = SessionStore(world.episode_id)
+    episode_session.stage(session)
+    [turn] = session.add({"witness_ids": [hanako], "turns": [{"character_id": taro, "request": "謝る"}]})
+    session.answer(turn.id, {"action": "頭を下げる", "speech": "悪かった"})
+    with pytest.raises(ValueError, match="知らない欄"):
+        session.close(taro, {"motivations": [{"motivation_id": shop, "strength": 4}]})
+    session.close(taro, {"histories": ["花子に謝った"], "motivations": [
+        {"id": shop, "strength": 4, "text": None}, {"id": apology, "strength": 0, "text": None},
+        {"id": None, "strength": 2, "text": "花子と市を歩きたい"},
+        # ほかの人物の行は指せないので捨てる
+        {"id": hanakos, "strength": 0, "text": None}]})
+
+    applied = episode_session.apply(session)
+
+    assert sorted(applied["motivations"]) == ["テスト太郎: 市に店を持ちたい(強さ 4)", "テスト太郎: 花子と市を歩きたい(強さ 2)"]
+    assert sorted(applied["ended_motivations"]) == ["テスト太郎: 市に店を持ちたい", "テスト太郎: 花子に謝りたい"]
+    time = Stamp.parse("1200/04/01 12:00:00")
+    with get_env_session() as s:
+        rows = {row.id: row for row in s.scalars(select(CharacterMotivation).where(
+            CharacterMotivation.character_id.in_([taro, hanako]))).all()}
+        assert rows[shop].end == time and rows[apology].end == time and rows[hanakos].end is None
+        added = [row for row in rows.values() if row.start == time]
+        assert sorted((row.text, row.strength, row.origin) for row in added) == [
+            ("市に店を持ちたい", 4, "ai"), ("花子と市を歩きたい", 2, "ai")]
 
 
 def test_add_one_turn_from_arguments():
