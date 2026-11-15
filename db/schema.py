@@ -354,6 +354,9 @@ class StyleScope(enum.StrEnum):
     NARRATOR = "語り部"
     # これまでの推敲で直したことと、その直し方をまとめた記録。本文の範囲の本文の行の後に足し、本文を書く・直すたびに見直す
     REVISION = "推敲"
+    # 作者が自分で書いた本文を講評して見つけた、作者の書く力の課題の記録(スキル `critique-episode`)。
+    # 作者が読み返すためのもので、AI に書かせる文にはどこにも足さない
+    CRITIQUE = "講評"
 
 
 STYLE_SCOPES = tuple(scope.value for scope in StyleScope)

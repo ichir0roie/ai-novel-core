@@ -91,6 +91,21 @@ def test_episode_scope_adds_all_then_stories_then_scope_then_revisions_then_epis
     assert in_other not in text
 
 
+def test_critique_record_is_read_only_in_its_own_scope(shown, world):
+    everywhere = _row(shown, "全体の好み", StyleScope.ALL)
+    critique = _row(shown, "講評の記録", StyleScope.CRITIQUE)
+
+    for scope in StyleScope:
+        if scope == StyleScope.CRITIQUE:
+            continue
+        text = shown(ReadWritingStyle(WritingStyleForm(
+            scope=scope, story_id=world.story_id, episode_id=world.episode_id)))["text"]
+        assert critique not in text, scope
+
+    text = shown(ReadWritingStyle(WritingStyleForm(scope=StyleScope.CRITIQUE)))["text"]
+    assert text.index(everywhere) < text.index(critique)
+
+
 def test_other_scopes_have_neither_story_nor_episode_instructions(shown, world):
     everywhere = _row(shown, "全体の好み", StyleScope.ALL)
     plot_only = _row(shown, "プロットの好み", StyleScope.PLOT)
