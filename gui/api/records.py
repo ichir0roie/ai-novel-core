@@ -21,6 +21,7 @@ from data_access_logic.label import clipped, label_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.story.record import StoryRecord
+from data_access_logic.story.story_characters import story_character_ids
 from db.child_lists import child_model
 from db.schema import Base, Character, Episode, Event, Story
 from gui.api.models import Labels, Option, RecordList, RecordResponse
@@ -75,8 +76,10 @@ class EpisodeRelated(Related):
     context: EpisodeContext | None
     # 話の画面が、行を読んでから別に引き直さずに済むよう一緒に返す(Lambda への往復を一回にする)
     neighbors: EpisodeNeighbors
-    # 話の場所か、その上位の場所に、話の開始の時刻にいる人物(登場人物の候補を絞る)。場所・時刻が無ければ None
+    # 話の場所か、その上位の場所に、話の開始の時刻にいる人物(視点の候補を絞る)。場所・時刻が無ければ None
     location_character_ids: list[int] | None
+    # 同じ作品の話・出来事に出てくる人物(登場人物の候補)。出てくる回数の多い順
+    story_character_ids: list[int]
 
 
 def _preview(spec: TableSpec, row: Base) -> str:
@@ -234,7 +237,8 @@ def related_of(s: Session, record: Material) -> Related:
             context=_episode_context(s, record) if record.start is not None else None,
             neighbors=neighbor_episodes(s, record.id),
             location_character_ids=location_character_ids(s, record.location_id, record.start)
-            if record.location_id is not None and record.start is not None else None)
+            if record.location_id is not None and record.start is not None else None,
+            story_character_ids=story_character_ids(s, record.story_id))
     return Related()
 
 

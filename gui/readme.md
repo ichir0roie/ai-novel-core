@@ -103,11 +103,12 @@ Windows は `netstat` で探す)。止められなければ終了コード 1 で
 | GET | `/api/timeline?story_id=` | 全期間の話(開始〜終了。終了が空なら開始の一点。開始の無い話は出さない)。`story_id` はその作品で絞る。画面 `/timeline` が描く |
 | GET | `/api/relations` | 人物相関図の元データ(人物・関係)。画面 `/relations` が描く |
 | GET | `/api/character_locations?time=` | 人物ごとの居場所(一番新しく始まった行)。`time` を渡せば、その時刻に効いている行だけから選び、その時刻に居場所の無い人物・没年を過ぎた人物は出さない。人物一覧のツリーが引く |
+| GET | `/api/story_characters?story_id=` | 作品(一番上の作品とその章・外伝をまとめる)の話の登場人物と出来事の当事者。出てくる回数(話と出来事の数)の多い順。話の登場人物を選ぶモーダルが、検索欄が空のときの候補に使う(話の行を読むときは `related.story_character_ids` で一緒に返る) |
 
 `table` は `story` `episode` `character` `character_relation` `event` `location` `idea` `meme` `oracle`。
 話(`episode`)はプロット(`plot_text`)と本文(`main_text`)を一緒に扱う。出来事は `character_ids`(当事者)、
 人物は足すときだけ `location_id`(出自)を受け取る。
-話を足す画面は、作品が決まるとその作品で開始(`start`)より前の一番後ろの話(`/api/previous_episode`。開始が空なら作品の最後の話)から場所・視点・登場人物を空の欄に写す。開始を変えると、写した値のうち手で直していない欄を写し直す。
+話を足す画面は、作品が決まるとその作品で開始(`start`)より前の一番後ろの話(`/api/previous_episode`。開始が空なら作品の最後の話)から場所・視点を空の欄に写す(登場人物は写さない)。開始を変えると、写した値のうち手で直していない欄を写し直す。
 人物の選択肢(`/api/tables/character/options`)はメインキャラクターを先に並べる。
 
 表・入口・API の型を変えたら、画面が持つもの(OpenAPI・表の情報 `gui/web/lib/tables.json`・入口の一覧 `gui/web/lib/entrances.json`)を

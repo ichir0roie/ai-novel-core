@@ -15,12 +15,11 @@ type EpisodeCharactersProps = {
   characterIds: number[];
   onChangeCharacterIds: (ids: number[]) => void;
   episodeStart: unknown;
-  episodeLocationId: unknown;
   episodeStoryId: unknown;
 };
 
 export default function Related({
-  related, owner, characterIds, onChangeCharacterIds, episodeStart, episodeLocationId, episodeStoryId,
+  related, owner, characterIds, onChangeCharacterIds, episodeStart, episodeStoryId,
 }: { related: Record<string, unknown>; owner?: Owner } & Partial<EpisodeCharactersProps>) {
   const episodes = related.episodes as EpisodeLink[] | undefined;
   const context = related.context as Parameters<typeof EpisodeContext>[0]["context"] | undefined;
@@ -67,7 +66,7 @@ export default function Related({
           characterIds={characterIds}
           onChangeCharacterIds={onChangeCharacterIds}
           episodeStart={episodeStart}
-          episodeLocationId={episodeLocationId}
+          episodeStoryId={episodeStoryId}
         />
       )}
     </>

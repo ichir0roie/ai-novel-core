@@ -160,7 +160,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                     characterIds={(value.character_ids as number[] | null) ?? []}
                     onChange={(ids) => set("character_ids", ids)}
                     episodeStart={value.start}
-                    episodeLocationId={value.location_id}
+                    episodeStoryId={value.story_id}
                   />
                 </div>
               ) : (

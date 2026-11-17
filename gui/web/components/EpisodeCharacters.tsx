@@ -5,7 +5,7 @@ import CharacterSheetModal from "@/components/CharacterSheetModal";
 import Modal from "@/components/Modal";
 import NameId from "@/components/NameId";
 import { useOptions } from "@/components/ReferenceSelect";
-import { useLocationCharacterIds } from "@/lib/locationCharacters";
+import { useStoryCharacterIds } from "@/lib/storyCharacters";
 import { ageAt } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -19,29 +19,36 @@ type Props = {
   characterIds: number[];
   onChange: (ids: number[]) => void;
   episodeStart: unknown;
-  episodeLocationId: unknown;
+  episodeStoryId: unknown;
   /** ボタンの横に名前を並べるか。話のページでは下に関係ごと並べる(`EpisodeCharacterRelations`)ので出さない */
   summary?: boolean;
 };
 
 /** 話の登場人物(`episode_character`)。「time & place」の行に並ぶボタンで、押すとモーダルで追加削除する。
  * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。
- * 候補は、検索欄が空ならフォームの場所(`location_id`)に時刻(`start`)にいる人物だけ、検索語を入れたら全人物から探す
- * (選んだ人物はいつも出す)。場所・時刻が空か読めないときは絞らない。
+ * 候補は、検索欄が空なら同じ作品(`story_id`)の話・出来事に出てくる人物だけを、出てくる回数の多い順に並べる
+ * (選んだ人物はいつも出し、作品に出てこなければ後ろに並べる)。検索語を入れたら全人物から探す。
+ * 作品が空か読めないとき、作品にまだ誰も出てこないときは絞らない。
  * 並んだ名前(`summary`)を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
-export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeLocationId, summary = true }: Props) {
+export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeStoryId, summary = true }: Props) {
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const [viewing, setViewing] = useState<number | null>(null);
-  const locationCharacterIds = useLocationCharacterIds(episodeLocationId, episodeStart, open);
+  const storyCharacterIds = useStoryCharacterIds(episodeStoryId, open);
 
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const selected = characterIds.map((id) => byId.get(id)).filter((o): o is NonNullable<typeof o> => o != null);
 
   const q = filter.trim();
-  const shown = options.filter((o) =>
-    characterIds.includes(o.id) || (q ? o.label.includes(q) || String(o.id) === q : locationCharacterIds === null || locationCharacterIds.includes(o.id)));
+  const shown = useMemo(() => {
+    if (q) return options.filter((o) => characterIds.includes(o.id) || o.label.includes(q) || String(o.id) === q);
+    if (storyCharacterIds === null || storyCharacterIds.length === 0) return options;
+    const rank = new Map(storyCharacterIds.map((id, i) => [id, i]));
+    // sort は安定なので、作品に出てこない選んだ人物は元の並びのまま後ろに残る
+    return options.filter((o) => characterIds.includes(o.id) || rank.has(o.id))
+      .sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity));
+  }, [options, characterIds, q, storyCharacterIds]);
   const toggle = (id: number) => onChange(characterIds.includes(id) ? characterIds.filter((v) => v !== id) : [...characterIds, id]);
 
   return (

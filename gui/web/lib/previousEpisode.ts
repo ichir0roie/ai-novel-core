@@ -1,14 +1,14 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { getPreviousEpisode, type Rec } from "./api";
 
-const COPIED_KEYS = ["location_id", "viewpoint_character_id", "character_ids"] as const;
+const COPIED_KEYS = ["location_id", "viewpoint_character_id"] as const;
 
 function isEmpty(v: unknown): boolean {
   return v == null || (Array.isArray(v) && v.length === 0);
 }
 
 /** 話を新しく足すとき、作品(`story_id`)が決まったら、同じ作品で開始(`start`)より前の一番後ろの話
- * (開始が空なら作品の最後の話)の場所・視点・登場人物を写す。
+ * (開始が空なら作品の最後の話)の場所・視点を写す。
  * 埋めるのは空の欄と、前に写したまま手で直していない欄だけなので、入れた値やクエリで渡した値は変えない。 */
 export function useCopyFromPreviousEpisode(
   storyId: unknown, start: unknown, setValue: Dispatch<SetStateAction<Rec | null>>, enabled: boolean,

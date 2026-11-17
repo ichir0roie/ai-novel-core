@@ -129,6 +129,11 @@ class LocationCharactersResponse(BaseModel):
     character_ids: list[int]
 
 
+class StoryCharactersResponse(BaseModel):
+    # 出てくる回数の多い順
+    character_ids: list[int]
+
+
 class TimelineResponse(BaseModel):
     # 一覧(`RecordList`)の一行と同じ形
     items: list[dict[str, Any]]

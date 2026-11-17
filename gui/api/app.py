@@ -32,8 +32,8 @@ from db.schema import engine, get_env_session
 from gui.api import interface
 from gui.api.models import (
     BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Health, LocationCharactersResponse, MapsResponse,
-    OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult, TableCounts,
-    TimelineResponse,
+    OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult,
+    StoryCharactersResponse, TableCounts, TimelineResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -325,6 +325,15 @@ def location_characters(location_id: int, time: str, s: Session = Depends(sessio
     return LocationCharactersResponse(character_ids=location_character_ids(s, location_id, at))
 
 
+@app.get("/api/story_characters", response_model=StoryCharactersResponse)
+def story_characters(story_id: int, s: Session = Depends(session_dep)) -> StoryCharactersResponse:
+    """`story_id` の作品(一番上の作品とその章・外伝)の話・出来事に出てくる人物。出てくる回数の多い順。
+    話の登場人物の候補に使う"""
+    from data_access_logic.story.story_characters import story_character_ids
+
+    return StoryCharactersResponse(character_ids=story_character_ids(s, story_id))
+
+
 @app.get("/api/timeline", response_model=TimelineResponse)
 def get_timeline(story_id: int | None = None, s: Session = Depends(session_dep)) -> TimelineResponse:
     """全期間の話。画面(`/timeline`)が時刻の軸に並べる"""
@@ -345,7 +354,7 @@ def get_overview(story_id: int, margin_days: int = 30, s: Session = Depends(sess
 def previous_episode(story_id: int, before: str | None = None,
                      s: Session = Depends(session_dep)) -> EpisodeRecord | None:
     """作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。
-    話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う"""
+    話を新しく足す画面が、場所・視点の初期値を写すのに使う"""
     from data_access_logic.episode.reading import previous_episode
 
     return previous_episode(s, story_id, before)

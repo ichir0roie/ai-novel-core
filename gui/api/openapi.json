@@ -777,6 +777,46 @@
         }
       }
     },
+    "/api/story_characters": {
+      "get": {
+        "summary": "Story Characters",
+        "description": "`story_id` の作品(一番上の作品とその章・外伝)の話・出来事に出てくる人物。出てくる回数の多い順。\n話の登場人物の候補に使う",
+        "operationId": "story_characters_api_story_characters_get",
+        "parameters": [
+          {
+            "name": "story_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Story Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryCharactersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/timeline": {
       "get": {
         "summary": "Get Timeline",
@@ -877,7 +917,7 @@
     "/api/previous_episode": {
       "get": {
         "summary": "Previous Episode",
-        "description": "作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。\n話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う",
+        "description": "作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。\n話を新しく足す画面が、場所・視点の初期値を写すのに使う",
         "operationId": "previous_episode_api_previous_episode_get",
         "parameters": [
           {
@@ -2463,6 +2503,22 @@
           "entrance"
         ],
         "title": "RunResult"
+      },
+      "StoryCharactersResponse": {
+        "properties": {
+          "character_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Character Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "character_ids"
+        ],
+        "title": "StoryCharactersResponse"
       },
       "StoryRoute": {
         "properties": {

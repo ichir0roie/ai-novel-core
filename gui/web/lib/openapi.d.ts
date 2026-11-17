@@ -312,6 +312,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/story_characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Story Characters
+         * @description `story_id` の作品(一番上の作品とその章・外伝)の話・出来事に出てくる人物。出てくる回数の多い順。
+         *     話の登場人物の候補に使う
+         */
+        get: operations["story_characters_api_story_characters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/timeline": {
         parameters: {
             query?: never;
@@ -362,7 +383,7 @@ export interface paths {
         /**
          * Previous Episode
          * @description 作品の中で `before`(時刻)より前の一番後ろの話。`before` が無ければ作品の最後の話。
-         *     話を新しく足す画面が、場所・視点・登場人物の初期値を写すのに使う
+         *     話を新しく足す画面が、場所・視点の初期値を写すのに使う
          */
         get: operations["previous_episode_api_previous_episode_get"];
         put?: never;
@@ -833,6 +854,11 @@ export interface components {
             entrance: string;
             /** Result */
             result?: unknown;
+        };
+        /** StoryCharactersResponse */
+        StoryCharactersResponse: {
+            /** Character Ids */
+            character_ids: number[];
         };
         /** StoryRoute */
         StoryRoute: {
@@ -1553,6 +1579,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationCharactersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    story_characters_api_story_characters_get: {
+        parameters: {
+            query: {
+                story_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryCharactersResponse"];
                 };
             };
             /** @description Validation Error */

@@ -10,9 +10,9 @@ import { T } from "@/lib/text";
 export type EpisodeDraft = { start: string | null; end: string | null; title?: string; plot: string };
 
 // 追加ページと同じく、同じ作品の前の話から写す欄(lib/previousEpisode.ts)
-const COPIED_KEYS = ["location_id", "viewpoint_character_id", "character_ids"] as const;
+const COPIED_KEYS = ["location_id", "viewpoint_character_id"] as const;
 
-/** 話を足す。`initial` に `story_id` が要る。同じ作品で開始より前の話から場所・視点・登場人物を写す */
+/** 話を足す。`initial` に `story_id` が要る。同じ作品で開始より前の話から場所・視点を写す */
 export async function addEpisode(initial: Rec, draft: EpisodeDraft) {
   const data: Rec = { ...initial, start: draft.start, end: draft.end, title: draft.title ?? "", plot_text: draft.plot };
   const previous = await getPreviousEpisode(initial.story_id as number, draft.start);

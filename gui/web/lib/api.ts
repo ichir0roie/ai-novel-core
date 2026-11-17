@@ -282,6 +282,11 @@ export type LocationCharactersResponse = components["schemas"]["LocationCharacte
 export const getLocationCharacters = (locationId: number, time: string) =>
   api<LocationCharactersResponse>(`/api/location_characters?${new URLSearchParams({ location_id: String(locationId), time })}`);
 
+export type StoryCharactersResponse = components["schemas"]["StoryCharactersResponse"];
+
+export const getStoryCharacters = (storyId: number) =>
+  api<StoryCharactersResponse>(`/api/story_characters?${new URLSearchParams({ story_id: String(storyId) })}`);
+
 export type EpisodeRecord = components["schemas"]["EpisodeRecord"];
 
 export const getPreviousEpisode = (storyId: number, before: string | null) => {

@@ -23,6 +23,7 @@ import {
   type RecordResponse,
 } from "@/lib/api";
 import { receiveLocationCharacterIds } from "@/lib/locationCharacters";
+import { receiveStoryCharacterIds } from "@/lib/storyCharacters";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
@@ -59,6 +60,8 @@ function sortChildListsByStart(table: string, record: Rec): Rec {
 function receiveRelated(table: string, result: RecordResponse) {
   const ids = result.related?.location_character_ids;
   if (table === "episode" && Array.isArray(ids)) receiveLocationCharacterIds(result.record.location_id, result.record.start, ids as number[]);
+  const storyIds = result.related?.story_character_ids;
+  if (table === "episode" && Array.isArray(storyIds)) receiveStoryCharacterIds(result.record.story_id, storyIds as number[]);
 }
 
 /** 記録のページから戻る一覧。話は同じ作品で、スキル・モチベーションは同じ人物で絞った一覧に戻す。 */
@@ -244,7 +247,6 @@ export default function RecordPage() {
                       characterIds: (value.character_ids as number[] | null) ?? [],
                       onChangeCharacterIds: (ids: number[]) => setValue({ ...value, character_ids: ids }),
                       episodeStart: value.start,
-                      episodeLocationId: value.location_id,
                       // 地図は保存した行から引くので、作品も保存した値で渡す
                       episodeStoryId: loaded.record.story_id,
                     }
