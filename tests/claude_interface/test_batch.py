@@ -69,11 +69,11 @@ def test_batch_updates_episodes_and_events_without_ai(shown, world, mock_ai):
         _request("episode.commit_episode.CommitEpisode",
                  episode={"id": world.episode_id, "start": "1200/04/02 12:00:00", "end": "1200/04/02 18:00:00"}),
         _request("event.update_event.UpdateEvent",
-                 event={"id": world.event_id, "time": "1200/05/01 12:00:00", "start": "1200/05/01", "end": "1200/05/02"}),
+                 event={"id": world.event_id, "time": "1200/05/01 12:00:00", "end": "1200/05/02"}),
         _request("event.update_event.UpdateEvent", event={"id": world.child_event_id, "parent_event_id": None}),
     ]))
 
-    assert result[0]["start"] == "1200/04/02 12:00:00" and result[1]["start"] == "1200/05/01 00:00:00"
+    assert result[0]["start"] == "1200/04/02 12:00:00" and result[1]["time"] == "1200/05/01 12:00:00"
     assert result[2]["parent_event_id"] is None
     with get_env_session() as s:
         assert s.get_one(Episode, world.episode_id).start == Stamp.parse("1200/04/02 12:00:00")

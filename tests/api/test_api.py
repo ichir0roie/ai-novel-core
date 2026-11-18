@@ -108,7 +108,7 @@ def test_update_record(client, world):
     response = client.patch(f"/api/tables/event/records/{world.child_event_id}", json={
         "name": "API で直した取引", "time": "1200/04/01 16:30:00", "text": "API で直した", "hidden": True,
         "parent_event_id": world.event_id, "location_id": world.neighbor_id,
-        "start": "1200/04/01 16:30:00", "end": "1200/04/01 18:00:00", "character_ids": world.character_ids})
+        "end": "1200/04/01 18:00:00", "character_ids": world.character_ids})
 
     assert response.status_code == 200
     record = response.json()["record"]

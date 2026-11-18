@@ -11,20 +11,21 @@ from data_access_logic.event.read_events import ReadEvents
 from data_access_logic.event.update_event import UpdateEvent
 from data_access_logic.event_seed.form import EventSeedUpdateForm
 from data_access_logic.event_seed.update_event_seed import UpdateEventSeed
-from db.schema import Event, get_env_session
+from data_access_logic.query.world_creation_query import busy_character_ids_select
+from db.schema import Event, EventCharacter, Stamp, get_env_session
 
 
 def test_commit_event(shown, world, mock_ai):
     result = shown(CommitEvent(EventCreateForm(
         name="テスト祭", time="1200/05/01 10:00:00", text="祭が開かれた", hidden=True,
         parent_event_id=world.event_id, location_id=world.location_id,
-        start="1200/05/01", end="1200/05/03", character_ids=world.character_ids)))
+        end="1200/05/03", character_ids=world.character_ids)))
 
     assert (result["name"], result["text"]) == ("テスト祭", "祭が開かれた")
     assert result["time"] == "1200/05/01 10:00:00"
     assert result["hidden"] is True
     assert (result["parent_event_id"], result["location_id"]) == (world.event_id, world.location_id)
-    assert (result["start"], result["end"]) == ("1200/05/01 00:00:00", "1200/05/03 00:00:00")
+    assert result["end"] == "1200/05/03 00:00:00"
     assert result["character_ids"] == world.character_ids
     assert mock_ai.calls
 
@@ -56,7 +57,7 @@ def test_delete_event_with_children(shown, world):
 def test_generate_event(shown, world, mock_ai):
     result = shown(GenerateEvent(
         event=EventForm(
-            name="生成の出来事", text="市で揉め事が起きる", time="1200/04/05 09:00:00", start="1200/04/05",
+            name="生成の出来事", text="市で揉め事が起きる", time="1200/04/05 09:00:00",
             end="1200/04/06", location_id=world.location_id, character_ids=world.character_ids, hidden=True,
             parent_event_id=world.event_id),
         seed=3))
@@ -85,15 +86,29 @@ def test_update_event(shown, world, mock_ai):
     result = shown(UpdateEvent(EventUpdateForm(
         id=world.child_event_id, name="テスト大取引", time="1200/04/01 16:00:00", text="大きな取引がまとまった",
         hidden=True, parent_event_id=world.event_id, location_id=world.neighbor_id,
-        start="1200/04/01 16:00:00", end="1200/04/01 17:00:00", character_ids=[world.character_ids[1]])))
+        end="1200/04/01 17:00:00", character_ids=[world.character_ids[1]])))
 
     assert (result["name"], result["text"]) == ("テスト大取引", "大きな取引がまとまった")
     assert result["time"] == "1200/04/01 16:00:00"
     assert result["hidden"] is True
     assert (result["parent_event_id"], result["location_id"]) == (world.event_id, world.neighbor_id)
-    assert (result["start"], result["end"]) == ("1200/04/01 16:00:00", "1200/04/01 17:00:00")
+    assert result["end"] == "1200/04/01 17:00:00"
     assert result["character_ids"] == [world.character_ids[1]]
     assert mock_ai.calls
+
+
+def test_busy_only_within_events_with_end(world):
+    """人物をふさぐのは終わりのある出来事の最中だけ。終わりの空いた出来事は一点で、後をふさがない。"""
+    point_id = world.character_ids[1]
+    with get_env_session() as s:
+        s.add(Event(name="テスト立ち話", text="", hidden=False, time="1200/06/01", location_id=world.location_id,
+                    event_characters=[EventCharacter(character_id=point_id)]))
+        s.commit()
+        during = set(s.scalars(busy_character_ids_select(Stamp(1200, 4, 1, 18))).all())
+        after_point = set(s.scalars(busy_character_ids_select(Stamp(1200, 7, 1))).all())
+
+    assert set(world.character_ids) <= during
+    assert point_id not in after_point
 
 
 def test_update_event_seed(shown, world):

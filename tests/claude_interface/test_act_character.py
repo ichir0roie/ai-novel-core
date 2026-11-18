@@ -349,7 +349,7 @@ def test_actor_acts_on_motivations_and_the_events_around(world):
         over = CharacterMotivation(character_id=actor_id, start="1198/01/01", end="1199/06/01", strength=3,
                                    text="もう終わった思い")
         future = CharacterMotivation(character_id=actor_id, start="1201/01/01", strength=5, text="まだ生まれていない思い")
-        festival = Event(name="テスト村祭り", text="都で祭りが開かれる", time="1200/08/01", start="1200/08/01",
+        festival = Event(name="テスト村祭り", text="都で祭りが開かれる", time="1200/08/01",
                          location_id=world.location_id, event_characters=[EventCharacter(character_id=actor_id)])
         s.add_all([cure, calm, over, future, festival])
         s.commit()

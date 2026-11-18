@@ -68,7 +68,7 @@ def _characters(event: Event) -> list[Character]:
 
 def _later_events_select(event: Event) -> Select[Event]:
     return common_query.events_after_select(
-        event.location_id, [character.id for character in _characters(event)], event.start or event.time,
+        event.location_id, [character.id for character in _characters(event)], event.time,
         limit=constants.LATER_EVENT_LIMIT)
 
 
@@ -82,7 +82,7 @@ def text_material(s: Session, event_id: int) -> EventTextMaterialSerialized:
     event = _event(s, event_id)
     return EventTextMaterialSerialized(
         event=TextlessEvent.model_validate(event),
-        participants=participants_at(s, _characters(event), event.start or event.time),
+        participants=participants_at(s, _characters(event), event.time),
         later_events=events_of(s, _later_events_select(event)),
     )
 

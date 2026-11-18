@@ -62,7 +62,7 @@ def open_arcs_select(character_id: int) -> Select:
 
 def last_appearance(s: Session, character_id: int) -> Stamp | None:
     """人物が最後に出た出来事・話の時刻。"""
-    event_time = s.scalar(select(func.max(func.coalesce(Event.start, Event.time)))
+    event_time = s.scalar(select(func.max(Event.time))
                           .where(Event.event_characters.any(EventCharacter.character_id == character_id)))
     episode_time = s.scalar(select(func.max(Episode.start))
                             .where(Episode.episode_characters.any(EpisodeCharacter.character_id == character_id)))

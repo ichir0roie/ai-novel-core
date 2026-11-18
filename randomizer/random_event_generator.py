@@ -18,7 +18,6 @@ class EventFactory(factory.Factory):
     location_id = None
     # class 属性の [] を使い回さないよう、ビルドごとに新しいリストを作る
     character_ids = factory.LazyFunction(list)
-    start = None
     end = None
 
 

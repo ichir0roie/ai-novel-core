@@ -14,7 +14,6 @@ class EventSummaryMaterial(Material):
 class EventBase(Material):
     name: str
     time: Stamp
-    start: Stamp | None = None
     end: Stamp | None = None
 
 
@@ -30,7 +29,7 @@ class EventSerialized(EventMaterial):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             "名前": self.name,
-            "時刻": str(self.start or self.time),
+            "時刻": str(self.time),
             "終わり": str(self.end) if self.end else None,
             "場所": self.location.name if self.location else None,
             # 本文は写させないよう要約だけを渡す
@@ -56,7 +55,7 @@ class EventSourceSerialized(EventSource):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             "名前": self.name,
-            "時刻": str(self.start) if self.start else None,
+            "時刻": str(self.time),
             "終わり": str(self.end) if self.end else None,
             "本文": self.text,
         }

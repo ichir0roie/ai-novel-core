@@ -287,7 +287,7 @@ def _arc_id(s: Session, form: ActSaveForm) -> int | None:
         return intent.arc_id
     if not (intent.new_arc_name or "").strip():
         return None
-    arc = Event(name=intent.new_arc_name, text=intent.aim, time=form.time, start=form.time, location_id=form.location_id,
+    arc = Event(name=intent.new_arc_name, text=intent.aim, time=form.time, location_id=form.location_id,
                 event_characters=[EventCharacter(character_id=form.actor_id)])
     s.add(arc)
     s.flush()

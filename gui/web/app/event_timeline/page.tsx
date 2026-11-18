@@ -104,14 +104,13 @@ type Change = { base: Item; days: number; parent?: number | null };
 type EventForm = { name: string; text: string };
 
 // 動かすと一緒にずらす時刻の欄
-const TIME_KEYS = ["time", "start", "end"] as const;
+const TIME_KEYS = ["time", "end"] as const;
 
 const byTime = (a: Item, b: Item) =>
   a.start - b.start || a.id - b.id;
 
 function itemOf(record: Rec): Item | null {
-  // 開始の無い出来事は、出来事の時刻(`time`)の一点に置く
-  const start = dayOf(record.start ?? record.time);
+  const start = dayOf(record.time);
   if (start === null) return null;
   return {
     key: `event-${record.id}`,
@@ -126,7 +125,7 @@ function itemOf(record: Rec): Item | null {
   };
 }
 
-/** 日付をずらしたときに直す欄。時刻・開始・終了を同じ日数だけ動かす */
+/** 日付をずらしたときに直す欄。時刻と終わりを同じ日数だけ動かす */
 function shifted(record: Rec, days: number): Rec {
   const changes: Rec = {};
   for (const key of TIME_KEYS)
@@ -778,7 +777,7 @@ export default function EventTimelinePage() {
     });
   };
 
-  const spanOf = (r: Rec) => T.span(r.start ?? r.time, r.end) || String(r.time);
+  const spanOf = (r: Rec) => T.span(r.time, r.end) || String(r.time);
 
   /** 吹き出しと押したときのモーダルに出す、時刻・親・隠しの行 */
   const detailLines = (item: Item) => {
@@ -1089,7 +1088,7 @@ export default function EventTimelinePage() {
                     onClick={() => {
                       if (!closeViewing()) return;
                       setAdding({
-                        start: String(viewingNow.record.start ?? viewingNow.record.time),
+                        start: String(viewingNow.record.time),
                         parent: { id: viewingNow.id, label: viewingNow.label },
                       });
                     }}

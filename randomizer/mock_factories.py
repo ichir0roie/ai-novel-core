@@ -208,8 +208,7 @@ class EventFactory(_ModelFactory):
     time = factory.LazyFunction(_random_stamp)
     parent_event_id = _pool(Event, p_none=0.3)
     location_id = _pool(Location, "LocationFactory", p_none=0.1)
-    start = _optional_stamp()
-    end = _end_after_start()
+    end = factory.LazyAttribute(lambda o: None if randgen.random() < 0.5 else _random_stamp(after=o.time))
 
 
 class EventCharacterFactory(_ModelFactory):

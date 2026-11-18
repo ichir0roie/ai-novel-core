@@ -142,7 +142,6 @@ def save_progress(
         text=draft.event_text,
         time=time,
         location_id=location_id,
-        start=time,
         end=end,
         event_characters=[EventCharacter(character_id=character_id) for character_id in involved_ids],
     )

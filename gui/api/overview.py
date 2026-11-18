@@ -53,7 +53,7 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
     chapter_ids = common_query.descendant_story_ids(s, story_id)
     chapter_episodes = s.scalars(select(Episode).where(Episode.story_id.in_(chapter_ids), Episode.start.is_not(None))
                                  .order_by(Episode.start, Episode.id)).all()
-    chapter_event_spans = s.execute(select(func.coalesce(Event.start, Event.time), func.coalesce(Event.end, Event.start))
+    chapter_event_spans = s.execute(select(Event.time, Event.end)
                                     .where(Event.story_id.in_(chapter_ids))).all()
     since, until = _window(
         [(episode.start, episode.end) for episode in chapter_episodes if episode.start is not None]
@@ -73,9 +73,8 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
 
     events = s.scalars(
         select(Event).options(selectinload(Event.event_characters), joinedload(Event.location))
-        .where(func.coalesce(Event.start, Event.time) <= until,
-               func.coalesce(Event.end, Event.start, Event.time) >= since)
-        .order_by(func.coalesce(Event.start, Event.time), Event.id)
+        .where(Event.time <= until, func.coalesce(Event.end, Event.time) >= since)
+        .order_by(Event.time, Event.id)
         .execution_options(populate_existing=True)).all()
     event_ids = [event.id for event in events]
 
@@ -120,9 +119,8 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
         counted = parts[expansion.id] if expansion is not None and act_event_of[expansion.id] == event.id else Counter()
         invited = [] if expansion is None else [
             id_ for id_ in ids if id_ != expansion.actor_id and names.get(id_) in _invited_names(expansion.prompt)]
-        start = event.start or event.time
         overview_events.append(OverviewEvent(
-            id=event.id, name=event.name, start=str(start), end=_text(event.end), parent_event_id=event.parent_event_id,
+            id=event.id, name=event.name, start=str(event.time), end=_text(event.end), parent_event_id=event.parent_event_id,
             in_story=event.story_id in chapter_ids,
             location_name=None if event.location is None else event.location.name, origin=event.origin,
             hidden=bool(event.hidden), text=event.text or "", character_ids=ids,

@@ -232,7 +232,8 @@ class Event(OriginMixin, TextBase):
         Boolean, default=False,
         comment="場所の断面(ReadBrief)に出さないか。true なら full で読むときだけ出す。分類は持たず、name・text の書き方で表す",
         sort_order=210)
-    time: Mapped[Stamp] = mapped_column(StampType, index=True, sort_order=220)
+    time: Mapped[Stamp] = mapped_column(
+        StampType, index=True, comment="起きた時刻。期間のある出来事なら始まりで、終わりは end", sort_order=220)
 
     parent_event_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("event.id"), comment="上位の出来事(この出来事を含む大きな出来事)", sort_order=230)
@@ -251,7 +252,6 @@ class Event(OriginMixin, TextBase):
     event_characters: Mapped[list["EventCharacter"]] = relationship(
         back_populates="event", lazy="noload", cascade="all, delete-orphan", order_by="EventCharacter.id")
 
-    start: Mapped[Stamp | None] = mapped_column(StampType, sort_order=250)
     end: Mapped[Stamp | None] = mapped_column(StampType, sort_order=260)
 
     parent_event: Mapped["Event | None"] = relationship(
@@ -536,7 +536,7 @@ class Character(OriginMixin, ContentBase):
     )
     events: Mapped[list[Event]] = relationship(
         secondary="event_character", viewonly=True, lazy="noload",
-        order_by="Event.start.desc().nulls_last()"
+        order_by="[Event.time.desc(), Event.id.desc()]"
     )
 
 

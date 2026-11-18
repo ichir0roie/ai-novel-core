@@ -57,7 +57,7 @@ def _members(s: Session, form: EventForm, time: Stamp) -> list[Character]:
 
 def plan_event(s: Session, form: EventForm) -> EventPlan:
     """時刻を省けば世界の最新の出来事の時刻、場所を省けば当事者の現在地、当事者を省けばその場所・時刻に居合わせるサブキャラクター。"""
-    time = form.time or form.start or s.scalar(common_query.latest_time_select())
+    time = form.time or s.scalar(common_query.latest_time_select())
     if time is None:
         raise ValueError("time(時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
     members = _members(s, form, time)

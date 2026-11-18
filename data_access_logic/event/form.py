@@ -13,7 +13,6 @@ class EventForm(Draft):
     name: str | None = None
     text: str | None = None
     time: Timestamp | None = None
-    start: Timestamp | None = None
     end: Timestamp | None = None
     location_id: int | None = None
     character_ids: list[int] | None = None
@@ -34,7 +33,6 @@ class EventCreateForm(Form):
     parent_event_id: int | None = None
     story_id: int | None = None
     location_id: int | None = None
-    start: Timestamp | None = None
     end: Timestamp | None = None
     character_ids: Annotated[list[int], References("character")] = Field(
         default=[], description="居合わせた人物の id")
@@ -49,7 +47,6 @@ class EventUpdateForm(Form):
     parent_event_id: int | None = None
     story_id: int | None = None
     location_id: int | None = None
-    start: Timestamp | None = None
     end: Timestamp | None = None
     # 渡すと当事者(`event_character`)をまるごと置き換える
     character_ids: list[int] | None = None

@@ -1577,7 +1577,7 @@
           "references": null,
           "readonly": false,
           "create_only": false,
-          "comment": null
+          "comment": "起きた時刻。期間のある出来事なら始まりで、終わりは end"
         },
         {
           "key": "parent_event_id",
@@ -1623,21 +1623,6 @@
           "readonly": false,
           "create_only": false,
           "comment": "起きた場所。場所の断面(ReadBrief)は、その場所と配下で起きた出来事を読む"
-        },
-        {
-          "key": "start",
-          "type": "stamp",
-          "nullable": true,
-          "required": false,
-          "section": false,
-          "markdown": true,
-          "side": false,
-          "choices": null,
-          "default": null,
-          "references": null,
-          "readonly": false,
-          "create_only": false,
-          "comment": null
         },
         {
           "key": "end",

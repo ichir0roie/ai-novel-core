@@ -48,11 +48,9 @@ export default function NewEventModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 出来事の時刻(`time`)は必須なので、開始と同じにする
   const data = (): Rec => ({
     name,
     time: start,
-    start,
     end,
     hidden,
     text,

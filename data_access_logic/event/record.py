@@ -17,7 +17,6 @@ class EventColumns(Material):
     parent_event_id: int | None = None
     story_id: int | None = None
     location_id: int | None = None
-    start: Timestamp | None = None
     end: Timestamp | None = None
 
 

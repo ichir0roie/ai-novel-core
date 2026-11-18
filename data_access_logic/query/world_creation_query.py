@@ -18,13 +18,11 @@ def siblings_area_sum_select(parent_id: int, exclude_id: int | None = None) -> S
 
 
 def busy_character_ids_select(time: Stamp) -> Select:
+    """その時刻に、終わりのある出来事の最中にいる人物。終わりの空いた出来事は一点の出来事として、人物をふさがない。"""
     return (
         select(EventCharacter.character_id).distinct()
         .join(Event, Event.id == EventCharacter.event_id)
-        .where(
-            Event.start.is_not(None),
-            Event.start <= time,
-            or_(Event.end.is_(None), Event.end > time))
+        .where(Event.time <= time, Event.end > time)
     )
 
 

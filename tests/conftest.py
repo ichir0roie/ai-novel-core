@@ -109,7 +109,7 @@ def world() -> Iterator[World]:
                                      relation="幼なじみ", text="同じ通りで育った", start="1175/01/01")
         s.add(relation)
         event = Event(name="テスト市", text="市が立った", hidden=False,
-                      time="1200/04/01 12:00:00", location_id=location.id, start="1200/04/01", end="1200/04/02",
+                      time="1200/04/01 12:00:00", location_id=location.id, end="1200/04/02",
                       event_characters=[EventCharacter(character_id=character.id) for character in characters])
         s.add(event)
         s.flush()

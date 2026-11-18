@@ -32,7 +32,7 @@ def stale_sources(s: Session, event_ids: list[int] | None) -> list[EventSummaryS
         digest = summary_source_hash(text)
         if text and (event.summary is None or event.summary.source_hash != digest):
             sources.append(EventSummarySource(
-                id=event.id, name=event.name, time=event.time, start=event.start, end=event.end, text=text,
+                id=event.id, name=event.name, time=event.time, end=event.end, text=text,
                 source_hash=digest))
     return sources
 
