@@ -20,10 +20,12 @@ from data_access_logic.event.record import EventRecord
 from data_access_logic.label import clipped, label_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
+from data_access_logic.story import scope
 from data_access_logic.story.record import StoryRecord
 from data_access_logic.story.story_characters import story_character_ids
 from db.child_lists import child_model
 from db.schema import Base, Character, Episode, Event, Story
+from db.stamp import using_calendar
 from gui.api.models import Labels, Option, RecordList, RecordResponse
 from gui.api.tables import TABLE_BY_NAME, TableSpec, spec_of, writer_of
 
@@ -178,7 +180,14 @@ def list_records(s: Session, spec: TableSpec, q: str | None, limit: int, offset:
                              .limit(limit).offset(offset), spec.record_model)).all()
     summaries, labels = summaries_of(s, spec, rows)
     return RecordList(total=total, limit=limit, offset=offset,
-                      items=[summary.model_dump(mode="json") for summary in summaries], labels=labels)
+                      items=[_dumped_in_own_calendar(s, spec, row, summary) for row, summary in zip(rows, summaries)],
+                      labels=labels)
+
+
+def _dumped_in_own_calendar(s: Session, spec: TableSpec, row: Base, summary: RecordSummary) -> dict[str, Any]:
+    """一覧の行は、行ごとにその行の暦で時刻を書く(暦の違う行が並んでも、行の画面と同じ表記にする)。"""
+    with using_calendar(scope.calendar_of(s, scope.custom_stamp_of_row(s, spec.model, row.id))):
+        return summary.model_dump(mode="json")
 
 
 def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[int] | None = None) -> list[Option]:

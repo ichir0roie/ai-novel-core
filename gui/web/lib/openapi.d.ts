@@ -68,8 +68,8 @@ export interface paths {
         };
         /**
          * Get Scope
-         * @description 時刻を数える作品と暦。`table` と `id` を渡せばその行の作品、無ければ `story_id`・`episode_id`・`location_id` の
-         *     引数か、画面が選んでいる作品(ヘッダ)。画面は時刻の選択・タイムラインの計算をこの暦でする
+         * @description 時刻を数える作品と暦。`table` と `id` を渡せばその行の作品と暦、無ければ `story_id`・`episode_id`・`location_id` の
+         *     引数か、画面が選んでいる作品(ヘッダ)と作品の暦(新しい行の既定)。画面は時刻の選択・タイムラインの計算をこの暦でする
          */
         get: operations["get_scope_api_scope_get"];
         put?: never;
@@ -458,7 +458,7 @@ export interface components {
         };
         /**
          * CalendarModel
-         * @description 作品の暦(`db/stamp.py` の `Calendar`)。`offset`(西暦)より前は西暦で数える
+         * @description 暦(`db/stamp.py` の `Calendar`)。西暦の `offset` が、この暦の 0 年 1 月 1 日 0 時
          */
         CalendarModel: {
             /** Name */
@@ -525,6 +525,8 @@ export interface components {
             origin: string;
             /** Story Id */
             story_id: number;
+            /** Custom Stamp Id */
+            custom_stamp_id?: number | null;
             /** Title */
             title: string;
             /** Start */
@@ -913,6 +915,8 @@ export interface components {
         ScopeResponse: {
             /** Story Id */
             story_id?: number | null;
+            /** Custom Stamp Id */
+            custom_stamp_id?: number | null;
             calendar?: components["schemas"]["CalendarModel"] | null;
         };
         /** StoryCharactersResponse */

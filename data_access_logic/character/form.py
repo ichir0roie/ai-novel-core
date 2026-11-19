@@ -71,6 +71,8 @@ class CharacterCreateForm(Form):
     kind: str = CHARACTER_KIND_PERSON
     main_character: bool = False
     story_id: Annotated[int | None, References("story")] = None
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     # `character_location` の行として、誕生から死亡までの期間で足す
     location_id: Annotated[int | None, References("location")] = Field(
         default=None, description="足すときの出自。CharacterLocation の一番古い行になる")
@@ -91,6 +93,8 @@ class CharacterUpdateForm(Form):
     kind: str | None = None
     main_character: bool | None = None
     story_id: Annotated[int | None, References("story")] = None
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     start: Timestamp | None = None
     end: Timestamp | None = None
     # 渡すと配列をまるごと置き換える
@@ -118,6 +122,8 @@ class CharacterRelationCreateForm(Form):
     character_1_id: int
     character_2_id: int
     relation: str = Field(min_length=1)
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     text: str = ""
     start: Timestamp | None = None
     end: Timestamp | None = None
@@ -136,6 +142,8 @@ class CharacterRelationUpdateForm(Form):
     character_1_id: int | None = None
     character_2_id: int | None = None
     relation: str | None = None
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     text: str | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None

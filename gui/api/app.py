@@ -71,7 +71,7 @@ _STORY_QUERY = ("story_id", "episode_id", "location_id")
 
 
 def _request_scope(path: str, query: dict[str, str], headers: Any) -> story_scope.Scope | None:
-    """開いた行・問い合わせの引数の作品か、画面が選んでいる作品(ヘッダ)。時刻はこの作品の暦で出し入れする。"""
+    """開いた行・問い合わせの引数の作品と暦か、画面が選んでいる作品(ヘッダ)と作品の暦。時刻はこの暦で出し入れする。"""
     from data_access_logic.story import scope
 
     fallback = story_scope.story_from_headers(headers)
@@ -80,14 +80,17 @@ def _request_scope(path: str, query: dict[str, str], headers: Any) -> story_scop
     if matched is None and not args and fallback is None:
         return None
     with get_env_session() as s:
-        story_id = None
+        story_id = custom_stamp_id = None
         if matched is not None:
             model = scope.model_of_table(matched.group(1))
             if model is not None:
                 story_id = scope.story_of_row(s, model, int(matched.group(2)))
+                custom_stamp_id = scope.custom_stamp_of_row(s, model, int(matched.group(2)))
         if story_id is None:
             story_id = scope.story_of_args(s, args)
-        return scope.scope_of(s, story_id if story_id is not None else fallback)
+        if custom_stamp_id is None:
+            custom_stamp_id = scope.custom_stamp_of_args(s, args)
+        return scope.scope_of(s, story_id if story_id is not None else fallback, custom_stamp_id)
 
 
 # `_require_api_key` より先に書くので、合言葉を確かめたあとに回る
@@ -195,8 +198,8 @@ def warm_up(s: Session = Depends(session_dep)) -> Response:
 
 @app.get("/api/scope", response_model=ScopeResponse)
 def get_scope(table: str | None = None, id: int | None = None) -> ScopeResponse:
-    """時刻を数える作品と暦。`table` と `id` を渡せばその行の作品、無ければ `story_id`・`episode_id`・`location_id` の
-    引数か、画面が選んでいる作品(ヘッダ)。画面は時刻の選択・タイムラインの計算をこの暦でする"""
+    """時刻を数える作品と暦。`table` と `id` を渡せばその行の作品と暦、無ければ `story_id`・`episode_id`・`location_id` の
+    引数か、画面が選んでいる作品(ヘッダ)と作品の暦(新しい行の既定)。画面は時刻の選択・タイムラインの計算をこの暦でする"""
     from data_access_logic.story import scope
     from gui.api.models import CalendarModel
 
@@ -207,11 +210,12 @@ def get_scope(table: str | None = None, id: int | None = None) -> ScopeResponse:
             raise UnknownRecordError(f"表が無い: {table}")
         with get_env_session() as s:
             story_id = scope.story_of_row(s, model, id)
-            found = scope.scope_of(s, story_id if story_id is not None else story_scope.current_story_id())
+            found = scope.scope_of(s, story_id if story_id is not None else story_scope.current_story_id(),
+                                   scope.custom_stamp_of_row(s, model, id))
     if found is None:
         return ScopeResponse()
     calendar = None if found.calendar is None else CalendarModel(**found.calendar.to_json())
-    return ScopeResponse(story_id=found.story_id, calendar=calendar)
+    return ScopeResponse(story_id=found.story_id, custom_stamp_id=found.custom_stamp_id, calendar=calendar)
 
 
 @app.get("/api/table_counts", response_model=TableCounts)
@@ -302,7 +306,8 @@ def run_step(step_id: str, http: Request, body: Any = Body(None)) -> Any:
 
     with writer.restored(_writing_of(http)):
         return step.run_json(step_id, body, story_scope.story_from_headers(http.headers),
-                             story_given=story_scope.scope_in_headers(http.headers))
+                             story_given=story_scope.scope_in_headers(http.headers),
+                             custom_stamp_id=story_scope.custom_stamp_from_headers(http.headers))
 
 
 @app.post("/api/batch", response_model=BatchResponse)

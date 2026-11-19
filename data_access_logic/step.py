@@ -86,17 +86,19 @@ def run[Out](step: Callable[..., Out], form: Any = None) -> Out:
         return step(s) if form_adapter(step) is None else step(s, form)
 
 
-def run_json(id_: str, body: Any, story_id: int | None = None, story_given: bool = False) -> Any:
+def run_json(id_: str, body: Any, story_id: int | None = None, story_given: bool = False,
+             custom_stamp_id: int | None = None) -> Any:
     """API から。JSON の入力を型注釈のモデルに読み、結果を JSON にして返す。入力と結果の時刻は暦に依らない西暦の表記で運ぶ
-    (`web_session/api.call`)。段そのものは、web のセッションが運んだ流れの作品(`story_given`。作品が無いことも含む)の文脈で
-    回す(手元の流れが段を流れの作品のまま回すのと揃える)。運ばれなければ、入力から決めた作品で回す。"""
+    (`web_session/api.call`)。段そのものは、web のセッションが運んだ流れの作品(`story_given`。作品が無いことも含む)と暦
+    (`custom_stamp_id`)の文脈で回す(手元の流れが段を流れの文脈のまま回すのと揃える)。運ばれなければ、入力から決めた作品と暦で回す。"""
     from data_access_logic.story.scope import args_scope, story_scope_of
 
     step = step_of(id_)
     given = form_adapter(step)
     with using_calendar(None):
         form = None if given is None else given.validate_python(body)
-    scope = story_scope_of(story_id) if story_given else args_scope(body if isinstance(body, dict) else {}, story_id)
+    scope = (story_scope_of(story_id, custom_stamp_id) if story_given
+             else args_scope(body if isinstance(body, dict) else {}, story_id))
     with scope:
         result = run(step, form)
     with using_calendar(None):

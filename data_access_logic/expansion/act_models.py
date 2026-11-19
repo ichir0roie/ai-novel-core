@@ -575,7 +575,7 @@ class ActRun(BaseModel):
         self._scopes[expansion_id] = scope
 
     def dumped(self) -> dict[str, Any]:
-        """手ごとに、その手の作品の暦で書き出す。"""
+        """手ごとに、その手の暦で書き出す。"""
         acted = []
         for item in self.acted:
             with story_scope.scoped(self._scopes.get(item.expansion_id, Scope())):

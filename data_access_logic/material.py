@@ -72,7 +72,7 @@ def _stamp(value: Any) -> Stamp:
     return stamp
 
 
-# 入口の引数(`"11579/03/02"` などの文字列)から読み、レスポンス(`model_dump(mode="json")`)では文字列に戻す。
+# 入口の引数(`"1579/03/02"` などの文字列)から読み、レスポンス(`model_dump(mode="json")`)では文字列に戻す。
 # python のまま dump すると Stamp のまま残るので、db へ書く値にそのまま使える
 Timestamp = Annotated[
     Stamp, PlainValidator(_stamp), PlainSerializer(str, return_type=str, when_used="json"),

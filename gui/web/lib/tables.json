@@ -82,7 +82,7 @@
         {
           "key": "custom_stamp_id",
           "type": "integer",
-          "nullable": true,
+          "nullable": false,
           "required": false,
           "section": false,
           "markdown": true,
@@ -92,7 +92,7 @@
           "references": "custom_stamp",
           "readonly": false,
           "create_only": false,
-          "comment": "この作品と子孫の作品の時刻を数える暦。空なら親の作品の暦、どこにも無ければ西暦"
+          "comment": "この作品で足す行(話・出来事・人物・アイデア・場所・関係)の暦の既定。行の時刻は行の暦で数える"
         },
         {
           "key": "origin",
@@ -177,6 +177,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "属する作品。章の話は章の作品に付け、書くときは親の作品の筋書きまでたどる"
+        },
+        {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この行と子の行の時刻を数える暦"
         },
         {
           "key": "title",
@@ -410,7 +425,22 @@
           "references": "story",
           "readonly": false,
           "create_only": false,
-          "comment": "この人物の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦"
+          "comment": "この人物の属する作品"
+        },
+        {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この行と子の行の時刻を数える暦"
         },
         {
           "key": "main_character",
@@ -1203,6 +1233,21 @@
           "comment": "この関係が終わる時。空なら続いている"
         },
         {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この行と子の行の時刻を数える暦"
+        },
+        {
           "key": "origin",
           "type": "string",
           "nullable": false,
@@ -1640,6 +1685,21 @@
           "comment": "この出来事を筋に置く作品(章)。空なら、どの章にも置かない世界の出来事"
         },
         {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この行と子の行の時刻を数える暦"
+        },
+        {
           "key": "location_id",
           "type": "integer",
           "nullable": true,
@@ -1811,7 +1871,22 @@
           "references": "story",
           "readonly": false,
           "create_only": false,
-          "comment": "この場所の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦"
+          "comment": "この場所の属する作品"
+        },
+        {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この行と子の行の時刻を数える暦"
         },
         {
           "key": "location_world",
@@ -2145,7 +2220,22 @@
           "references": "story",
           "readonly": false,
           "create_only": false,
-          "comment": "このアイデアの属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦"
+          "comment": "このアイデアの属する作品"
+        },
+        {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この行と子の行の時刻を数える暦"
         },
         {
           "key": "parent_idea_id",
@@ -2558,7 +2648,7 @@
           "references": null,
           "readonly": false,
           "create_only": false,
-          "comment": "この暦で数え始める西暦の時刻。この時刻の桁は両方の暦で同じで、年の数は西暦から続く"
+          "comment": "この暦の 0 年 1 月 1 日 0 時に当たる西暦の時刻(西暦の行では使わない)"
         },
         {
           "key": "hours_per_day",

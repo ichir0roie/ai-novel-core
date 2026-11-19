@@ -11,6 +11,8 @@ class EpisodeHead(Material):
     id: int
     origin: str = "user"
     story_id: int
+    # この行と子の行の時刻を数える暦
+    custom_stamp_id: int | None = None
     title: str
     start: Timestamp | None = None
     end: Timestamp | None = None

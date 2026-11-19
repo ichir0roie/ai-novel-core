@@ -33,4 +33,4 @@ class ScopeForm(BaseModel):
 def read_scope(s: Session, form: ScopeForm) -> ScopeRecord:
     """流れの中で決まった行(人物モードが引いた人物など)の作品と暦。流れはこれを立て直して、その先の時刻を読み書きする。"""
     found = args_scope_in(s, form.args)
-    return ScopeRecord(story_id=found.story_id, calendar=None if found.calendar is None else found.calendar.to_json())
+    return ScopeRecord.of(found)

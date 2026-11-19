@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import enum
+from typing import Any
 import hashlib
 import os
 from datetime import datetime
@@ -139,6 +140,16 @@ class OriginMixin:
 MANAGED_COLUMNS = TIMESTAMP_COLUMNS | {"origin"}
 
 
+# 西暦の暦の行(`custom_stamp` の名)。月を持たない暦の行は西暦で数える
+WESTERN_STAMP_NAME = "西暦"
+
+
+def _calendar_column(sort_order: int) -> Any:
+    """持ち主の行(話・出来事・人物・アイデア・場所・関係)の暦。子の行(来歴・知る相手・住まいなど)は持ち主の暦で数える。"""
+    return mapped_column(Integer, ForeignKey("custom_stamp.id"), nullable=False, index=True,
+                         comment="この行と子の行の時刻を数える暦", sort_order=sort_order)
+
+
 class Location(OriginMixin, TextBase):
 
     __tablename__ = "location"
@@ -150,7 +161,8 @@ class Location(OriginMixin, TextBase):
         comment="一つ上の場所。断面・知る相手・アイデアの効く場所は、この木をたどって配下の場所まで含む", sort_order=220)
     story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), index=True,
-        comment="この場所の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦", sort_order=225)
+        comment="この場所の属する作品", sort_order=225)
+    custom_stamp_id: Mapped[int] = _calendar_column(226)
 
     # 位置は経度・緯度・高度の一つの座標系だけで持つ。原点は星ごとに決めて、その星の text に書く
     location_world: Mapped[float | None] = mapped_column(DECIMAL, comment="世界線番号 W", sort_order=230)
@@ -244,6 +256,7 @@ class Event(OriginMixin, TextBase):
     story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), index=True,
         comment="この出来事を筋に置く作品(章)。空なら、どの章にも置かない世界の出来事", sort_order=235)
+    custom_stamp_id: Mapped[int] = _calendar_column(236)
 
     location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"), index=True,
@@ -498,7 +511,8 @@ class Character(OriginMixin, ContentBase):
         comment="種別。「人物」か、人物以外の対象(国・組織・商会・氏族・集団・物など)", sort_order=230)
     story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), index=True,
-        comment="この人物の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦", sort_order=235)
+        comment="この人物の属する作品", sort_order=235)
+    custom_stamp_id: Mapped[int] = _calendar_column(236)
 
     main_character: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
@@ -653,6 +667,7 @@ class CharacterRelation(OriginMixin, TextBase):
         StampType, comment="この関係が始まる時。空なら初めから", sort_order=130)
     end: Mapped[Stamp | None] = mapped_column(
         StampType, comment="この関係が終わる時。空なら続いている", sort_order=140)
+    custom_stamp_id: Mapped[int] = _calendar_column(145)
 
     character_1: Mapped["Character"] = relationship(
         foreign_keys="CharacterRelation.character_1_id", lazy="noload")
@@ -859,7 +874,8 @@ class Idea(OriginMixin, TextBase):
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
     story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), index=True,
-        comment="このアイデアの属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦", sort_order=220)
+        comment="このアイデアの属する作品", sort_order=220)
+    custom_stamp_id: Mapped[int] = _calendar_column(221)
 
     # 効く場所・時期は本体に持たず、履歴の行の場所・期間で持つ(`dictionary_query.idea_in_scope`)
     parent_idea_id: Mapped[int | None] = mapped_column(
@@ -969,20 +985,32 @@ def _date_new_knowers(s: Session, _flush_context, _instances) -> None:
             row.start = _knower_start(s, row)
 
 
+def western_stamp_id(s: Session) -> int:
+    """西暦の暦の行の id(同じ名の行があれば一番古い行)。"""
+    with s.no_autoflush:
+        found = s.scalar(select(func.min(CustomStamp.id)).where(CustomStamp.name == WESTERN_STAMP_NAME))
+    if found is None:
+        raise RuntimeError(f"暦の行「{WESTERN_STAMP_NAME}」が無い(`seed_master_rows` かマイグレーションで足す)")
+    return found
+
+
 @event.listens_for(Session, "before_flush")
 def _place_new_rows_in_story(s: Session, _flush_context, _instances) -> None:
-    """作品を渡さずに足した人物・アイデア・場所を、文脈の作品(`db/story_scope.py`)に置く。時刻はその作品の暦で数える。"""
-    story_id = story_scope.current_story_id()
-    if story_id is None:
-        return
+    """作品を渡さずに足した人物・アイデア・場所を文脈の作品に、暦を渡さずに足した持ち主の行と作品を文脈の暦
+    (`db/story_scope.py`。文脈が無ければ西暦)に置く。"""
+    scope = story_scope.current()
     for row in s.new:
-        if isinstance(row, (Character, Idea, Location)) and row.story_id is None:
-            row.story_id = story_id
+        if isinstance(row, (Character, Idea, Location)) and row.story_id is None and scope is not None:
+            row.story_id = scope.story_id
+        if isinstance(row, (*CALENDAR_OWNERS, Story)) and getattr(row, "custom_stamp_id") is None:
+            setattr(row, "custom_stamp_id", scope.custom_stamp_id if scope is not None and scope.custom_stamp_id is not None
+                    else western_stamp_id(s))
 
 
 class CustomStamp(ContentBase):
-    """西暦でない暦。作品(`Story.custom_stamp_id`)が持ち、その作品の時刻を数える。時刻は西暦(`Stamp`)のまま db に入れ、
-    表示と読み取りだけをこの暦で数える(`db/stamp.py` の `Calendar`)。`offset` より前の時刻は西暦で数える。"""
+    """暦。持ち主の行(話・出来事・人物・アイデア・場所・関係)が `custom_stamp_id` で持ち、その行と子の行の時刻を数える。
+    時刻は西暦(`Stamp`)のまま db に入れ、表示と読み取りだけをこの暦で数える(`db/stamp.py` の `Calendar`)。
+    月を持たない行は西暦(名は `WESTERN_STAMP_NAME`)。"""
 
     __tablename__ = "custom_stamp"
 
@@ -990,7 +1018,7 @@ class CustomStamp(ContentBase):
     name: Mapped[str] = mapped_column(String, nullable=False, comment="暦の名", sort_order=100)
     offset: Mapped[Stamp] = mapped_column(
         StampType, nullable=False,
-        comment="この暦で数え始める西暦の時刻。この時刻の桁は両方の暦で同じで、年の数は西暦から続く", sort_order=110)
+        comment="この暦の 0 年 1 月 1 日 0 時に当たる西暦の時刻(西暦の行では使わない)", sort_order=110)
     hours_per_day: Mapped[int] = mapped_column(
         Integer, nullable=False, default=24, server_default="24", comment="一日の時間の数", sort_order=120)
     minutes_per_hour: Mapped[int] = mapped_column(
@@ -1041,9 +1069,9 @@ class Story(OriginMixin, TextBase):
 
     parent_story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)
-    custom_stamp_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("custom_stamp.id"),
-        comment="この作品と子孫の作品の時刻を数える暦。空なら親の作品の暦、どこにも無ければ西暦", sort_order=280)
+    custom_stamp_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("custom_stamp.id"), nullable=False,
+        comment="この作品で足す行(話・出来事・人物・アイデア・場所・関係)の暦の既定。行の時刻は行の暦で数える", sort_order=280)
     # 章の話を書くとき、親の作品の筋書きまでたどって渡す。書き込みは常に parent_story_id を直に触る
     parent_story: Mapped["Story | None"] = relationship(remote_side="Story.id", viewonly=True)
 
@@ -1070,6 +1098,7 @@ class Episode(OriginMixin, ContentBase):
     story_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("story.id"), comment="属する作品。章の話は章の作品に付け、書くときは親の作品の筋書きまでたどる",
         sort_order=200)
+    custom_stamp_id: Mapped[int] = _calendar_column(205)
     story: Mapped[Story] = relationship(back_populates="episodes", lazy="noload")
     title: Mapped[str] = mapped_column(
         String,  comment="サブタイトル。本文の見出しから読む", sort_order=220)
@@ -1143,6 +1172,10 @@ class CharacterSpeech(Base):
         String, nullable=False, comment="拾った本文の sha256。本文と食い違ったら、その話の行を拾い直す", sort_order=160)
 
     episode: Mapped["Episode"] = relationship(lazy="noload")
+
+
+# 暦(`custom_stamp_id`)を持つ持ち主の行の表
+CALENDAR_OWNERS: tuple[type[Base], ...] = (Episode, Event, Character, Idea, Location, CharacterRelation)
 
 
 class NarouPart(Base):
@@ -1274,6 +1307,7 @@ def seed_master_rows(engine) -> None:
     with Session(engine) as s:
         s.add_all(PersonalityLevelOption(id=id_, name=name)
                   for name, id_ in _PERSONALITY_LEVEL_IDS.items())
+        s.add(CustomStamp(name=WESTERN_STAMP_NAME, offset=Stamp.western(1)))
         s.commit()
 
 

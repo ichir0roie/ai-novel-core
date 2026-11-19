@@ -23,9 +23,9 @@
 - 入口は `data_access_logic/<領域>/<動詞_対象>.py`。claude は `show()`、GUI の API は `execute(s)` を呼ぶ。引数は `str | dict` にせず、pydantic のモデル(`data_access_logic/<領域>/form.py`)で受ける
 - 入口のレスポンスもモデル(`data_access_logic/<領域>/record.py` など)で組み、`run()` が `model_dump(mode="json")` した結果を返す
 - すべての引数に型を書く(AI は `ai: AIClient`)。時刻だけは `Stamp | str | None` で文字列も受ける(呼ぶ側が import を足さずに書ける)
-- 呼ぶ側は時刻を `'11576/01/01'` のような文字列か `Stamp` で渡す。db の列の生の整数(`115760101000000`)は渡さない(年として読まれて止まる)
+- 呼ぶ側は時刻を `'1576/01/01'` のような文字列か `Stamp` で渡す。db の列の生の整数(`115760101000000` のような西暦の値)は渡さない(年として読まれて止まる)
 - 読み取りの入口では、時刻を `Stamp` に読み替えずそのまま渡す(文字列の精度が期間の幅になる。`"1200"` なら 1200 年の一年。`common_query.span`)
-- 時刻の文字列・桁は、文脈の作品の暦で数える。日数・隔たり(`plus_days` / `days_until` / `seconds_until`)は、暦に依らず西暦で数える(`data_access_logic/readme.md` の「時刻と作品の暦」)。暦の月の数・一日の時間を決め打ちしない(`23, 59, 59` で日の終わりを作らず `period_end` を使う)。人物に渡す今の時刻と隔たりは `character/time_sense.py` の `TimeSense` で作り、「年前」「日前」を自前で組まない。入口・段を足したら、作品を決める欄(`episode_id` など)を引数に持たせるか、来歴の入口なら `story/scope.py` の `HISTORY_MODELS` に足す
+- 時刻の文字列・桁は、文脈の暦(持ち主の行の暦。行が無ければ作品の暦)で数える。日数・隔たり(`plus_days` / `days_until` / `seconds_until`)は、暦に依らず西暦で数える(`data_access_logic/readme.md` の「時刻と暦」)。暦の月の数・一日の時間を決め打ちしない(`23, 59, 59` で日の終わりを作らず `period_end` を使う)。人物に渡す今の時刻と隔たりは `character/time_sense.py` の `TimeSense` で作り、「年前」「日前」を自前で組まない。入口・段を足したら、作品を決める欄(`episode_id` など)を引数に持たせるか、来歴の入口なら `story/scope.py` の `HISTORY_MODELS` に足す
 - 確定(commit)の境目:
   - AI を呼んで得た結果(要約・記録・本文・候補のアイデア・ミーム・種など)は、得たその場で commit する
   - 長い AI 呼び出しの前にも、それまでの保存分(話の枠など)を commit する

@@ -87,6 +87,8 @@ class CharacterHead(Material):
     kind: str
     main_character: bool
     story_id: int | None = None
+    # この行と子の行の時刻を数える暦
+    custom_stamp_id: int | None = None
     # 誕生は列を持たず、parameters の一番早く始まる行の start(`Character.start`)
     start: Timestamp | None = None
     # 没年
@@ -121,6 +123,8 @@ class CharacterRelationRecord(Material):
     character_1_id: int
     character_2_id: int
     relation: str
+    # この行と子の行の時刻を数える暦
+    custom_stamp_id: int | None = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     # 関係の芯(時期を限らない)

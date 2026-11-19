@@ -217,7 +217,7 @@ class OverviewResponse(BaseModel):
 
 
 class CalendarModel(BaseModel):
-    """作品の暦(`db/stamp.py` の `Calendar`)。`offset`(西暦)より前は西暦で数える"""
+    """暦(`db/stamp.py` の `Calendar`)。西暦の `offset` が、この暦の 0 年 1 月 1 日 0 時"""
 
     name: str
     offset: str
@@ -234,6 +234,7 @@ class CalendarModel(BaseModel):
 
 class ScopeResponse(BaseModel):
     story_id: int | None = None
+    custom_stamp_id: int | None = None
     # 空なら西暦
     calendar: CalendarModel | None = None
 
