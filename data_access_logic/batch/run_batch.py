@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 from data_access_logic.batch.form import BatchRequest
 from data_access_logic.entrance_args import built
 from data_access_logic.entrypoint import CommitEntrypoint, UnknownRecordError
+from data_access_logic.story.scope import HISTORY_MODELS, args_scope_in
+from db import story_scope
 from db.guard import ProtectedRowError
 
 # 呼べる入口。行を一つずつ足す・直す・消す入口だけにする。どれも db の書き込み(`execute`)だけを回し、話・出来事の確定のあとの
@@ -69,17 +71,35 @@ class RunBatch(CommitEntrypoint):
     """結果は、リクエストの順に、それぞれの入口が一件だけ呼ばれたときと同じもの。書いたあとの確かめ(親の付け替えの循環など)は、
     全部のリクエストを書いてからする。"""
 
+    # リクエストごとに引数から作品を決める(決まらなければ、呼んだ画面の作品)
+    STORY_FROM_ARGS = False
+
     def __init__(self, requests: list[BatchRequest]):
         self.requests = requests
+        self.scopes: list[story_scope.Scope] = []
+
+    def run(self) -> list[dict]:
+        """結果も、リクエストごとに引数を読んだ作品の暦で書き出す(書き出すときの文脈の暦で表記が決まるので)。"""
+        results = self.result()
+        assert isinstance(results, list)
+        dumped = []
+        for result, scope in zip(results, self.scopes):
+            with story_scope.scoped(scope):
+                dumped.append(result.model_dump(mode="json"))
+        return dumped
 
     def execute(self, s: Session) -> list[BaseModel]:
+        # 引数の時刻は、リクエストごとに引数から決めた作品の暦で読む
+        self.scopes = scopes = [
+            args_scope_in(s, request.args, history_model=HISTORY_MODELS.get(request.entrance.rpartition(".")[0]))
+            for request in self.requests]
         entrances = []
-        for index, request in enumerate(self.requests):
-            with _labelled(index, request):
+        for index, (request, scope) in enumerate(zip(self.requests, scopes)):
+            with _labelled(index, request), story_scope.scoped(scope):
                 entrances.append(_entrance(request))
         results = []
-        for index, (request, entrance) in enumerate(zip(self.requests, entrances)):
-            with _labelled(index, request):
+        for index, (request, entrance, scope) in enumerate(zip(self.requests, entrances, scopes)):
+            with _labelled(index, request), story_scope.scoped(scope):
                 results.append(entrance.execute(s))
                 # 書き手の守りは書き出すときに止めるので、どのリクエストで止まったかが分かるよう一件ずつ書き出す
                 s.flush()

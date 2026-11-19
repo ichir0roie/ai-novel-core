@@ -1,6 +1,7 @@
 import { fetchAuthSession } from "aws-amplify/auth";
 import { loginRequired } from "./auth";
 import { trackSaving } from "./saving";
+import { storyHeaders } from "./selectedStory";
 import { T } from "./text";
 import type { components } from "./openapi";
 
@@ -29,7 +30,7 @@ function detailOf(body: { detail?: unknown }): string {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...storyHeaders(), ...(init?.headers ?? {}) },
     cache: "no-store",
   });
   if (!response.ok) {
@@ -87,13 +88,23 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export async function warmUp(): Promise<void> {
   try {
     if (loginRequired) await fetchAuthSession();
-    await fetch("/api/warm_up", { cache: "no-store" });
+    await fetch("/api/warm_up", { cache: "no-store", headers: storyHeaders() });
   } catch {
     // 黙って次の回を待つ
   }
 }
 
 export const getTableCounts = () => api<components["schemas"]["TableCounts"]>("/api/table_counts");
+
+export type ScopeResponse = components["schemas"]["ScopeResponse"];
+
+/** 時刻を数える作品と暦。行(`table`・`id`)か作品(`story_id`)を渡す。空なら画面が選んでいる作品 */
+export const getScope = (query: Record<string, string | number>) =>
+  api<ScopeResponse>(`/api/scope?${new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]))}`);
+
+/** 入口・行の追加に渡す引数から API が決める作品と暦(`story.read_scope.ReadScope`)。追加の画面が、足す行の時刻を数える暦を知るのに使う */
+export const readScope = async (args: Rec) =>
+  (await readEntrance("story.read_scope.ReadScope", { args })).result as ScopeResponse;
 
 export const listRecords = (table: string, params: URLSearchParams) =>
   api<RecordList>(`/api/tables/${table}/records?${params.toString()}`);
@@ -279,8 +290,15 @@ export const getCharacterLocations = (time: string | null = null) =>
 
 export type LocationCharactersResponse = components["schemas"]["LocationCharactersResponse"];
 
-export const getLocationCharacters = (locationId: number, time: string) =>
-  api<LocationCharactersResponse>(`/api/location_characters?${new URLSearchParams({ location_id: String(locationId), time })}`);
+// 時刻は話の作品の暦で書いてあるので、作品(`storyId`)を添えて、場所の作品の暦で読まれないようにする
+export const getLocationCharacters = (locationId: number, time: string, storyId: number | null) =>
+  api<LocationCharactersResponse>(
+    `/api/location_characters?${new URLSearchParams({
+      location_id: String(locationId),
+      time,
+      ...(storyId !== null ? { story_id: String(storyId) } : {}),
+    })}`,
+  );
 
 export type StoryCharactersResponse = components["schemas"]["StoryCharactersResponse"];
 

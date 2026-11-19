@@ -10,9 +10,15 @@ export function receiveLocationCharacterIds(locationId: unknown, start: unknown,
 
 /** フォームの場所(`location_id`)か、その上位の場所に時刻(`start`)にいる人物の id。話の人物の候補を絞るのに使う。
  * `enabled` が偽のとき、場所・時刻が空か読めないときは null(絞らない)。 */
-export function useLocationCharacterIds(locationId: unknown, start: unknown, enabled: boolean): number[] | null {
+export function useLocationCharacterIds(
+  locationId: unknown,
+  start: unknown,
+  enabled: boolean,
+  storyId: unknown,
+): number[] | null {
   const [ids, setIds] = useState<number[] | null>(null);
   const location = typeof locationId === "number" ? locationId : null;
+  const story = typeof storyId === "number" ? storyId : null;
   const time = typeof start === "string" && start.trim() ? start : null;
   useEffect(() => {
     setIds(null);
@@ -23,12 +29,12 @@ export function useLocationCharacterIds(locationId: unknown, start: unknown, ena
       return;
     }
     let alive = true;
-    getLocationCharacters(location, time)
+    getLocationCharacters(location, time, story)
       .then((r) => alive && setIds(r.character_ids))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [enabled, location, time]);
+  }, [enabled, location, time, story]);
   return ids;
 }

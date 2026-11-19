@@ -19,7 +19,7 @@ from db.stamp import Stamp
 
 class GenerationTimeForm(BaseModel):
     location_id: int | None
-    time: str | None
+    time: Stamp | None
 
 
 class BirthSourcesForm(BaseModel):
@@ -48,7 +48,7 @@ def generation_time(s: Session, form: GenerationTimeForm) -> Stamp:
     """`time` を省けば世界の最新の出来事の時刻。`location_id` があれば、その場所があるかも確かめる。"""
     if form.location_id is not None:
         common_query.get_row(s, Location, form.location_id)
-    decided = Stamp.parse(form.time) or s.scalar(common_query.latest_time_select())
+    decided = form.time or s.scalar(common_query.latest_time_select())
     if decided is None:
         raise ValueError("time(現在の時刻)が空で、世界にまだ出来事が無いので時刻を決められない")
     return decided

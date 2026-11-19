@@ -229,7 +229,7 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
                            asked or ""])
     prompt = ActorSerialized(
         time=time, location_name=s.get_one(Location, pick.location_id).name,
-        knowledge=knowledge_of(s, character.id, time, mentioned, None, None),
+        knowledge=knowledge_of(s, character.id, time, mentioned, None, None, with_now=False),
         motives=motives_of(s, character, time),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, time)) for other in present],
@@ -265,7 +265,7 @@ def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
     known_ids = _related_ids(s, character, form.time)
     prompt = DialogueSerialized(
         time=form.time, location_name=s.get_one(Location, form.location_id).name,
-        knowledge=knowledge_of(s, character.id, form.time, form.mentioned, None, None),
+        knowledge=knowledge_of(s, character.id, form.time, form.mentioned, None, None, with_now=False),
         motives=motives_of(s, character, form.time),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, form.time)) for other in others],

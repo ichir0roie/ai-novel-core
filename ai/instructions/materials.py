@@ -2,9 +2,24 @@
 """材料の見出しの読み方と、どの生成にも効く禁止事項。書き方・作風は db の `style_preference` と作品・話の指示に任せ、ここには置かない。"""
 from __future__ import annotations
 
+from db.stamp import active_calendar
+
 # 年齢・来歴つきで人物を渡す材料
 TIME_NOTE = """\
 人物の年齢と来歴は、この時点のもの。人物像は時期を限らない説明で、この時点ではまだ手にしていない後年の立場を含むことがある。後年の立場を先取りしない。"""
+
+
+def calendar_note() -> str:
+    """文脈の作品が西暦でない暦を持つとき、その数え方(`db/stamp.py` の `Calendar`)。西暦なら空。"""
+    calendar = active_calendar()
+    if calendar is None:
+        return ""
+    from data_access_logic.character.time_sense import TimeSense
+
+    name = calendar.name or "この作品の暦"
+    return (f"時刻は{name}で書く。{calendar.offset[0]} 年 {calendar.offset[1]} 月 {calendar.offset[2]} 日から後は、"
+            f"{TimeSense.reckoning(calendar)}。それより前の時刻は西暦。年齢はこの暦の年で数える。")
+
 
 # `generate` がどの生成の system にも足す
 SAFETY_NOTE = """\

@@ -1,15 +1,16 @@
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import Field, field_validator
 
 from data_access_logic.knowers import KnowerRow
 from data_access_logic.location.record import LocationHistoryRow
-from data_access_logic.material import Form, Timestamp
+from data_access_logic.material import Form, References, Timestamp
 from db.polygon import parse_polygon
 
 
 class _LocationColumns(Form):
     parent_id: int | None = None
+    story_id: Annotated[int | None, References("story")] = None
     location_world: float | None = None
     location_planet: int | None = None
     location_longitude: float | None = None

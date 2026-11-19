@@ -70,6 +70,7 @@ class CharacterCreateForm(Form):
     plot: str | None = None
     kind: str = CHARACTER_KIND_PERSON
     main_character: bool = False
+    story_id: Annotated[int | None, References("story")] = None
     # `character_location` の行として、誕生から死亡までの期間で足す
     location_id: Annotated[int | None, References("location")] = Field(
         default=None, description="足すときの出自。CharacterLocation の一番古い行になる")
@@ -89,6 +90,7 @@ class CharacterUpdateForm(Form):
     plot: str | None = None
     kind: str | None = None
     main_character: bool | None = None
+    story_id: Annotated[int | None, References("story")] = None
     start: Timestamp | None = None
     end: Timestamp | None = None
     # 渡すと配列をまるごと置き換える

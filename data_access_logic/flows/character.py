@@ -75,7 +75,7 @@ def generate_character(
     if form.id is not None:
         return _complete_text(ai, rng, form.id)
     decided_time = call(character_steps.generation_time, character_steps.GenerationTimeForm(
-        location_id=form.location_id, time=None if time is None else str(time)))
+        location_id=form.location_id, time=Stamp.parse(time)))
     person = (form.kind or CHARACTER_KIND_PERSON) == CHARACTER_KIND_PERSON
     record = generate(ai, rng, form.location_id, decided_time, person, form, plot_text)
     if record is None:

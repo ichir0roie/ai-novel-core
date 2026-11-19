@@ -31,12 +31,14 @@ import {
 import { PageTitle } from "@/lib/meta";
 import { inNewTab, openInNewTab, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
+import { CalendarProvider, convertForWrite, useStoryScope } from "@/lib/scope";
 import {
   dayNumber,
   formatStamp,
   fromDayNumber,
   parseStamp,
   shiftDays,
+  type Calendar,
 } from "@/lib/stamp";
 import { T } from "@/lib/text";
 import {
@@ -54,6 +56,7 @@ import {
   savedView,
   scaleOf,
   SCROLL_SETTLE_MS,
+  skipUnits,
   snapDay,
   spanDays,
   timeSpan,
@@ -77,6 +80,9 @@ const MARKER_PX = 8;
 // 絞り込みの URL の引数と、それを覚えておく localStorage のキー
 const FILTER_KEYS = ["story_id"] as const;
 const FILTER_STORAGE_KEY = "timeline-filter";
+
+// 話の時刻の欄
+const TIME_KEYS = ["start", "end"] as const;
 
 // start・end は時刻の端数を含む通算日
 type Item = {
@@ -164,39 +170,39 @@ function pack(
 }
 
 /** 溜めた移しを当てた話。札はこの時刻・作品の所に描く */
-function changedItem({ base, days, story }: Change): Item {
+function changedItem({ base, days, story }: Change, calendar: Calendar | null): Item {
   const record: Rec = {
     ...base.record,
-    ...shifted(base, days),
+    ...shifted(base, days, calendar),
     ...(story !== null ? { story_id: story } : {}),
   };
   return {
     ...base,
     record,
-    ...timeSpan(dayOf(record.start)!, dayOf(record.end)),
+    ...timeSpan(dayOf(record.start, calendar)!, dayOf(record.end, calendar)),
   };
 }
 
 /** 保存する欄。動かした分だけを渡す */
-function changeForm({ base, days, story }: Change): Rec {
+function changeForm({ base, days, story }: Change, calendar: Calendar | null): Rec {
   return {
     id: base.id,
-    ...(days !== 0 ? shifted(base, days) : {}),
+    ...(days !== 0 ? shifted(base, days, calendar) : {}),
     ...(story !== null ? { story_id: story } : {}),
   };
 }
 
-function itemsOf(data: TimelineResponse): Item[] {
+function itemsOf(data: TimelineResponse, calendar: Calendar | null): Item[] {
   const items: Item[] = [];
   for (const record of data.items) {
-    const start = dayOf(record.start);
+    const start = dayOf(record.start, calendar);
     if (start === null) continue;
     items.push({
       key: `episode-${record.id}`,
       id: record.id as number,
       label: T.nameId(record.label, record.id),
       record,
-      ...timeSpan(start, dayOf(record.end)),
+      ...timeSpan(start, dayOf(record.end, calendar)),
     });
   }
   return items;
@@ -237,12 +243,20 @@ function savedFilter(): Record<string, string> | null {
 }
 
 /** 日付をずらしたときに直す欄。開始・終了を同じ日数だけ動かす。 */
-function shifted(item: Item, days: number): Rec {
+function shifted(item: Item, days: number, calendar: Calendar | null): Rec {
   const changes: Rec = {};
-  for (const key of ["start", "end"])
+  for (const key of TIME_KEYS)
     if (item.record[key] != null)
-      changes[key] = shiftDays(item.record[key], days);
+      changes[key] = shiftDays(item.record[key], days, calendar);
   return changes;
+}
+
+/**
+ * 話を書く欄を、話の作品(移すなら移す先)の暦の桁に直す。画面はどの話も画面の作品の暦で出すが、
+ * 入口は話ごとにその作品の暦で時刻を読む(作品で絞らずに、暦の違う作品の話を並べているとき)
+ */
+function toStoryCalendar(form: Rec, storyId: number, calendar: Calendar | null): Promise<Rec> {
+  return convertForWrite(form, TIME_KEYS, calendar, { story_id: storyId });
 }
 
 /**
@@ -392,16 +406,16 @@ function defaultCenter(data: TimelineResponse): string {
 }
 
 /** 話の全部が収まる期間(最初の話の始め〜最後の話の終わり)の真ん中。話が無ければ {@link defaultCenter} */
-function middleCenter(data: TimelineResponse): string {
+function middleCenter(data: TimelineResponse, calendar: Calendar | null): string {
   let [lo, hi] = [Infinity, -Infinity];
   for (const record of data.items) {
-    const start = dayOf(record.start);
+    const start = dayOf(record.start, calendar);
     if (start === null) continue;
     lo = Math.min(lo, start);
-    hi = Math.max(hi, dayOf(record.end) ?? start);
+    hi = Math.max(hi, dayOf(record.end, calendar) ?? start);
   }
   return lo <= hi
-    ? formatStamp(fromDayNumber((lo + hi) / 2))
+    ? formatStamp(fromDayNumber((lo + hi) / 2, calendar))
     : defaultCenter(data);
 }
 
@@ -412,8 +426,12 @@ export default function TimelinePage() {
   // 作品の画面から飛んできた印(`focus=story`)。話を引いたら、その作品の期間の真ん中を中心にして印を消す
   const focus = search.get("focus");
   const storyId = Number(search.get("story_id")) || null;
+  // 時刻は絞った作品の暦(絞らなければ、画面が選んでいる作品の暦)で数える。API も同じ暦で時刻を出す
+  const scope = useStoryScope(storyId);
+  const calendar = scope?.calendar ?? null;
   const centerParts = parseStamp(at);
-  const center = centerParts ? dayNumber(centerParts) : null;
+  // 暦が読めるまでは中心を決めない(西暦で数えた位置に軸を組んでしまう)
+  const center = centerParts && scope ? dayNumber(centerParts, calendar) : null;
 
   const [draft, setDraft] = useState<string | null>(at);
   const [data, setData] = useState<TimelineResponse | null>(null);
@@ -444,17 +462,23 @@ export default function TimelinePage() {
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // スクロールの位置を合わせ済みの中心(at)と軸(scale)。スクロールから URL へ書いた at はここに入れ、位置を合わせ直さない
-  const aligned = useRef<{ at: string | null; scale: Scale | null }>({
+  // スクロールの位置を合わせ済みの中心(at)と軸(scale)と暦。スクロールから URL へ書いた at はここに入れ、位置を合わせ直さない。
+  // 絞る作品を替えて暦が変わると、同じ at でも軸の上の位置が変わるので、合わせ直す
+  const aligned = useRef<{
+    at: string | null;
+    scale: Scale | null;
+    calendar: string | null;
+  }>({
     at: null,
     scale: null,
+    calendar: null,
   });
   const { isOpen, setOpen } = useTreeOpen("timeline");
   const { tip, show, hide } = useTooltip();
   // 縮尺と詰め方は URL に載せず、このブラウザに覚えておく。サーバで描いた初めの画面と合わせるため、読むのは描いたあと
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
-  const span = spanDays(view);
+  const span = spanDays(view, calendar);
   const zoomIn = zoomed(view, -1);
   const zoomOut = zoomed(view, 1);
 
@@ -510,13 +534,13 @@ export default function TimelinePage() {
   };
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !scope) return;
     if (focus === "story") {
       // 飛んできた先の絞り込みも、選び直したときと同じく次に開いたときのために覚えておく
       saveFilter({ story_id: storyId });
-      navigate({ at: middleCenter(data), focus: null });
+      navigate({ at: middleCenter(data, scope.calendar), focus: null });
     } else if (!at) navigate({ at: defaultCenter(data) });
-  }, [at, focus, data, storyId, navigate]);
+  }, [at, focus, data, scope, storyId, navigate]);
 
   // URL の中心が変わったら(スクロールしたときなど)入力欄も合わせる
   const [shownAt, setShownAt] = useState(at);
@@ -614,29 +638,33 @@ export default function TimelinePage() {
     [],
   );
 
-  const loaded = useMemo(() => (data ? itemsOf(data) : []), [data]);
+  const loaded = useMemo(
+    () => (data && scope ? itemsOf(data, scope.calendar) : []),
+    [data, scope],
+  );
   const items = useMemo(
     () =>
       loaded.map((item) => {
         const change = changes.get(item.id);
-        return change ? changedItem(change) : item;
+        return change ? changedItem(change, calendar) : item;
       }),
-    [loaded, changes],
+    [loaded, changes, calendar],
   );
 
   const scale = useMemo(
-    () => scaleOf(items, anchor, view, box.viewport),
-    [anchor, items, view, box.viewport],
+    () => scaleOf(items, anchor, view, box.viewport, calendar),
+    [anchor, items, view, box.viewport, calendar],
   );
   const pxPerDay = scale?.pxPerDay ?? 0;
   const toY = useCallback((day: number) => scale?.toY(day) ?? 0, [scale]);
   const fromY = useCallback((y: number) => scale?.fromY(y) ?? 0, [scale]);
 
   // 中心を飛ばしたとき・軸が組み直されたとき(縮尺を変えた、保存して読み直した)は、URL の中心が画面の真ん中に来るようスクロールする
+  const calendarKey = calendar?.key ?? null;
   useLayoutEffect(() => {
     if (center === null) return;
-    if (at !== aligned.current.at) {
-      aligned.current = { at, scale: null };
+    if (at !== aligned.current.at || calendarKey !== aligned.current.calendar) {
+      aligned.current = { at, scale: null, calendar: calendarKey };
       // 中心を含む軸に組み直してから合わせる。今の軸の外ならスクロールが端で止まってしまう
       if (anchor !== center) {
         setAnchor(center);
@@ -647,7 +675,7 @@ export default function TimelinePage() {
     if (!element || !scale || aligned.current.scale === scale) return;
     aligned.current.scale = scale;
     element.scrollTop = scale.toY(center) - box.viewport / 2;
-  }, [at, center, anchor, scale, box.viewport]);
+  }, [at, center, anchor, scale, box.viewport, calendarKey]);
 
   // スクロールが止まったときに読む今の値。待つあいだに軸が組み直されることがあるので、スクロールした時の値は使わない
   const latest = useRef({
@@ -656,9 +684,17 @@ export default function TimelinePage() {
     at,
     center,
     navigate,
+    calendar,
   });
   useLayoutEffect(() => {
-    latest.current = { scale, viewport: box.viewport, at, center, navigate };
+    latest.current = {
+      scale,
+      viewport: box.viewport,
+      at,
+      center,
+      navigate,
+      calendar,
+    };
   });
 
   const onScroll = () => {
@@ -676,7 +712,9 @@ export default function TimelinePage() {
         Math.abs(now.scale.toY(now.center) - middle) < 1
       )
         return;
-      const value = formatStamp(fromDayNumber(now.scale.fromY(middle)));
+      const value = formatStamp(
+        fromDayNumber(now.scale.fromY(middle), now.calendar),
+      );
       if (value === now.at) return;
       aligned.current.at = value;
       now.navigate({ at: value });
@@ -726,14 +764,21 @@ export default function TimelinePage() {
   const axisTicks = useMemo(
     () =>
       scale
-        ? axisTicksOf(scale, items, view.squeeze, screen, box.viewport)
+        ? axisTicksOf(
+            scale,
+            items,
+            view.squeeze,
+            screen,
+            box.viewport,
+            calendar,
+          )
         : [],
-    [scale, items, view.squeeze, screen, box.viewport],
+    [scale, items, view.squeeze, screen, box.viewport, calendar],
   );
 
   /** 縦に dy px 動かしたら何日ずれるか({@link dragSteps} の刻みに丸める)。詰めた帯の上では一気に日が進む */
   const daysAt = (item: Item, dy: number) => {
-    const steps = dragSteps(view);
+    const steps = dragSteps(view, calendar);
     return pxPerDay > 0
       ? Math.round((fromY(toY(item.start) + dy) - item.start) * steps) / steps
       : 0;
@@ -755,7 +800,7 @@ export default function TimelinePage() {
     const target = story ?? previous?.story ?? null;
     const change = {
       base,
-      days: roundHours((previous?.days ?? 0) + days),
+      days: roundHours((previous?.days ?? 0) + days, calendar),
       story: target === base.record.story_id ? null : target,
     };
     if (change.days === 0 && change.story === null) next.delete(item.id);
@@ -774,9 +819,17 @@ export default function TimelinePage() {
     setMessage(null);
     try {
       const result = await trackSaving(
-        updateEpisodes([...changes.values()].map(changeForm)).then(() =>
-          getTimeline({ story_id: storyId }),
-        ),
+        Promise.all(
+          [...changes.values()].map((change) =>
+            toStoryCalendar(
+              changeForm(change, calendar),
+              change.story ?? (change.base.record.story_id as number),
+              calendar,
+            ),
+          ),
+        )
+          .then(updateEpisodes)
+          .then(() => getTimeline({ story_id: storyId })),
       );
       // 読み直した話と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
       setData(result);
@@ -899,18 +952,24 @@ export default function TimelinePage() {
     setError(null);
     setMessage(null);
     try {
+      // 移しを溜めた話も、作品はまだ読み込んだときの作品
+      const story = (changes.get(item.id)?.base ?? item).record.story_id as number;
       const result = await trackSaving(
-        updateEpisodes([
+        toStoryCalendar(
           {
             id: item.id,
             ...(plotChanged ? { plot_text: edit.plot } : {}),
             ...(timeChanged ? { start: edit.start, end: edit.end } : {}),
           },
-        ]).then(() => getTimeline({ story_id: storyId })),
+          story,
+          calendar,
+        )
+          .then((form) => updateEpisodes([form]))
+          .then(() => getTimeline({ story_id: storyId })),
       );
       setData(result);
       // 移しを溜めた話は移しの元(読み込んだときの話)から描くので、元も読み直した話に替える。時刻を書いたら、溜めた時刻の移しは書いた時刻に含めたので外す
-      const base = itemsOf(result).find((fresh) => fresh.id === item.id);
+      const base = itemsOf(result, calendar).find((fresh) => fresh.id === item.id);
       setChanges((previous) => {
         const change = previous.get(item.id);
         if (!change || !base) return previous;
@@ -941,8 +1000,11 @@ export default function TimelinePage() {
     const snapped = snapDay(
       fromY(e.clientY - e.currentTarget.getBoundingClientRect().top),
       pxPerDay,
+      calendar,
     );
-    const initial: Rec = { start: formatStamp(fromDayNumber(snapped)) };
+    const initial: Rec = {
+      start: formatStamp(fromDayNumber(snapped, calendar)),
+    };
     const story = row.storyId ?? storyId;
     if (story !== null) initial.story_id = story;
     setAdding({
@@ -974,7 +1036,7 @@ export default function TimelinePage() {
 
   const gapLines = (g: Gap) => [
     T.timeline.gap,
-    `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`,
+    `${formatStamp(fromDayNumber(g.from, calendar))} – ${formatStamp(fromDayNumber(g.to, calendar))}`,
   ];
 
   /** 列の筋の数。開いた作品の列は、話を足す空の筋を右に一つ空ける */
@@ -1045,7 +1107,7 @@ export default function TimelinePage() {
             changes.has(item.id) ? "changed" : "",
             applying && changes.has(item.id) ? "saving" : "",
           ].join(" ");
-          const target = days !== 0 && shifted(item, days);
+          const target = days !== 0 && shifted(item, days, calendar);
           const offset = days ? toY(item.start + days) - item.y : 0;
           return (
             <div
@@ -1106,11 +1168,13 @@ export default function TimelinePage() {
       });
     else if (center !== null)
       navigate({
-        at: formatStamp(fromDayNumber(center + (direction * span) / 2)),
+        at: formatStamp(
+          fromDayNumber(center + (direction * span) / 2, calendar),
+        ),
       });
   };
 
-  return (
+  const content = (
     <div className="page-fill timeline-page">
       <PageTitle kind={T.timeline.title} record={at} />
       <div className="toolbar">
@@ -1216,7 +1280,7 @@ export default function TimelinePage() {
       {editing && <div className="status info">{T.timeline.editHint}</div>}
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}
-      {!data || !stories ? (
+      {!data || !stories || !scope ? (
         !error && <div className="status info">{T.loading}</div>
       ) : (
         <div
@@ -1271,7 +1335,7 @@ export default function TimelinePage() {
                     onMouseMove={(e) => show(e, gapLines(g))}
                     onMouseLeave={hide}
                   >
-                    {T.timeline.skipped(g.to - g.from)}
+                    {T.timeline.skipped(g.to - g.from, ...skipUnits(calendar))}
                   </div>
                 ))}
                 {axisTicks.map((tick) => (
@@ -1359,4 +1423,6 @@ export default function TimelinePage() {
       <Tooltip tip={tip} />
     </div>
   );
+  // 時刻の欄(中心・話のモーダル)も、軸と同じ暦で数える
+  return <CalendarProvider calendar={calendar}>{content}</CalendarProvider>;
 }

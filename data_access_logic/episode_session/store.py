@@ -7,11 +7,13 @@
 手番は id の順に回る。行動の入っていない一番古い人物の行が、いま動く番。語りの行は手番に数えない。
 同時に動く手番(`simultaneous`)は、すぐ前の手番と組になり、組のまだ動いていない行すべてに一度に番が開く。
 人物役は自分の番に、前の自分の番から後の、自分が見聞きする語りとほかの人物の一手を、要求といっしょに受け取る。
+番の行の時刻は、年を抜いた今の時刻(「いま」)と、前の自分の番からの隔たり(「前の番から」)にして渡す(`character/time_sense.py`)。
 同じ組のほかの人物の一手は、同時に動いたので受け取らない(次の自分の番で受け取る)。
 
 行のファイルは語り部だけが書き、一手はその行の人物役だけが行ごとのファイルに書く。同時に動く人物役が一つのファイルを
 書き合わないので、鍵が要らない。
 一手ごとに起こすコマンドなので、pydantic・sqlalchemy を読み込まない(読み込むだけで一回に 0.3〜0.5 秒かかる)。
+時刻を数える作品の暦は、`stage` で db から読んだときに写しておく。
 """
 from __future__ import annotations
 
@@ -20,6 +22,9 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+from data_access_logic.character.time_sense import TimeSense
+from db.stamp import Calendar, Stamp, StampError, using_calendar
 
 ROOT = Path(__file__).resolve().parents[2] / ".cache" / "episode_session"
 
@@ -58,6 +63,8 @@ class SessionState:
     cast: dict[int, str] = field(default_factory=dict)
     # 話の時刻に知り合いの二人の組
     acquaintances: list[list[int]] = field(default_factory=list)
+    # 話の作品の暦(`Calendar.to_json`)。`stage` で写す。空なら西暦
+    calendar: dict[str, Any] | None = None
     # 消した行の id を使い直さない(止めた人物役が古い行の id に一手を入れないように)
     next_id: int = 1
     records: list[Record] = field(default_factory=list)
@@ -81,8 +88,8 @@ class SessionStore:
             return SessionState(episode_id=self.episode_id)
         value = json.loads(self._session_path.read_text(encoding="utf-8"))
         session = SessionState(episode_id=value["episode_id"], cast={int(key): name for key, name in value["cast"].items()},
-                               acquaintances=value["acquaintances"], next_id=value["next_id"],
-                               records=[Record(**record) for record in value["records"]])
+                               acquaintances=value["acquaintances"], calendar=value.get("calendar"),
+                               next_id=value["next_id"], records=[Record(**record) for record in value["records"]])
         for record in session.records:
             path = self._answer_path(record.id)
             if record.kind == CHARACTER and path.exists():
@@ -95,11 +102,13 @@ class SessionStore:
         records = [{**asdict(record), **dict.fromkeys(ANSWER_FIELDS)} for record in session.records]
         _write(self._session_path, {**asdict(session), "records": records})
 
-    def set_stage(self, cast: dict[int, str], acquaintances: list[tuple[int, int]]) -> None:
-        """語り部が db から読んだ登場人物と知り合いの組を写す。行はそのまま残す。"""
+    def set_stage(self, cast: dict[int, str], acquaintances: list[tuple[int, int]],
+                  calendar: dict[str, Any] | None = None) -> None:
+        """語り部が db から読んだ登場人物と知り合いの組と、話の作品の暦を写す。行はそのまま残す。"""
         session = self.load()
         session.cast = cast
         session.acquaintances = [sorted(pair) for pair in acquaintances]
+        session.calendar = calendar
         self._save(session)
 
     def add(self, value: dict[str, Any] | list[dict[str, Any]]) -> list[Record]:
@@ -144,6 +153,10 @@ class SessionStore:
         for character_id in {*(witness_ids or []), *(id_ for turn in turns for id_ in turn.get("witness_ids") or [])}:
             if character_id not in session.cast:
                 raise ValueError(f"witness_ids の人物 id={character_id} は話 id={self.episode_id} の登場人物でない")
+        # 人物役は番の行の時刻を「いま」として受け取るので、話の作品の暦で読めない時刻は足す前に断る
+        for given in (time, *(turn.get("time") for turn in turns)):
+            if given:
+                _parsed(session, given)
         known = {frozenset(pair) for pair in session.acquaintances}
 
         added = []
@@ -177,7 +190,8 @@ class SessionStore:
                     if record.character_id == character_id and record.action is None), None)
         if own is None or own.id not in {record.id for record in _current_turns(session)}:
             return {"status": "waiting"}
-        return {"status": "turn", "record": {"id": own.id, "seen": _seen_lines(session, own), "request": own.request}}
+        return {"status": "turn", "record": {"id": own.id, **_when_lines(session, own), "seen": _seen_lines(session, own),
+                                             "request": own.request}}
 
     def answer(self, record_id: int, answer: dict[str, str | None]) -> Record:
         """人物役が、自分の番の要求の行に一手(内心・行動・セリフ・狙い)を入れる。"""
@@ -203,8 +217,8 @@ class SessionStore:
         """人物役が、自分がもう動いた手番(見聞きしたこと・要求と自分の一手)を、手番の順に読む。
         手番をある行から演じ直すとき、起こし直した人物役がそれまでの場面を掴み直すために読む。"""
         session = self.load()
-        return [{"id": record.id, "seen": _seen_lines(session, record), "request": record.request,
-                 **{name: getattr(record, name) for name in ANSWER_FIELDS}}
+        return [{"id": record.id, **_when_lines(session, record), "seen": _seen_lines(session, record),
+                 "request": record.request, **{name: getattr(record, name) for name in ANSWER_FIELDS}}
                 for record in session.records if record.character_id == character_id and record.action is not None]
 
     def text(self) -> str:
@@ -317,6 +331,46 @@ def _current_turns(session: SessionState) -> list[Record]:
     if first is None:
         return []
     return [record for record in _group_of(turns, first) if record.action is None]
+
+
+def _calendar(session: SessionState) -> Calendar | None:
+    return None if session.calendar is None else Calendar.from_json(session.calendar)
+
+
+def _parsed(session: SessionState, time: str) -> Stamp | None:
+    """手番の時刻を、話の作品の暦で読む。読めなければ、語り部に直させる。"""
+    try:
+        with using_calendar(_calendar(session)):
+            return Stamp.parse(time)
+    except StampError as error:
+        raise ValueError(f"time を話の作品の暦の時刻として読めない: {error}") from error
+
+
+def _quietly_parsed(session: SessionState, time: str) -> Stamp | None:
+    try:
+        return _parsed(session, time)
+    except ValueError:
+        return None
+
+
+def _when_lines(session: SessionState, record: Record) -> dict[str, Any]:
+    """番の行の時刻を、人物の感じ方で言う。今の時刻(年は抜く。暦の長さは knowledge で渡すので添えない)と、
+    前の自分の番から一時間を超えて経っていれば、その隔たり。時刻の無い行・読めない時刻の行には何も足さない
+    (読めないことは人物役に出さない。時刻の文には年が入るので)。"""
+    if not record.time:
+        return {}
+    sense = TimeSense(_calendar(session))
+    previous = next((row.time for row in reversed(session.records)
+                     if row.character_id == record.character_id and row.id < record.id and row.time), None)
+    now = _quietly_parsed(session, record.time)
+    if now is None:
+        return {}
+    before = None if previous is None else _quietly_parsed(session, previous)
+    told: dict[str, Any] = {"いま": sense.now_for_prompt(now, reckoning=False)}
+    span = None if before is None or before > now else sense.span(before, now)
+    if span is not None:
+        told["前の番から"] = span
+    return told
 
 
 def _seen_lines(session: SessionState, record: Record) -> list[str]:

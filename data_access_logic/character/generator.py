@@ -289,8 +289,9 @@ def character_creation(
         parameters.family_name = parameters.family_name or draft.family_name or None
 
     writing = _writing(fixed, material.memes, material.time, decided.age, name)
-    # 装いは列で持たず、生んだ時刻から始まる来歴の行を一つ持つ装いのスキルで持つ
-    outfit = (CharacterSkillHistoryRow(start=material.time, description=decided.content.outfit)
+    # 装いは列で持たず、来歴の行を一つ持つ装いのスキルで持つ。いつから身に着けているかは分からないので、生んだ年の年だけにする
+    # (生んだ時刻にすると、人物には「ついさっき」身に着けた物に見える。`character/time_sense.py`)
+    outfit = (CharacterSkillHistoryRow(start=Stamp(material.time.year), description=decided.content.outfit)
               if isinstance(decided.content, PersonContentDraft) and decided.content.outfit else None)
 
     location_label = (f"{material.born_location.name}(id={material.born_location.id})" if material.born_location else "不明")

@@ -51,10 +51,10 @@ def close() -> None:
 
 
 def _random_stamp(after: Stamp | None = None) -> Stamp:
-    low = after.year if after is not None else _YEAR_RANGE[0]
+    low = after.western_digits[0] if after is not None else _YEAR_RANGE[0]
     year = randgen.randint(low, max(low, _YEAR_RANGE[1]))
-    return Stamp(year, randgen.randint(1, 12), randgen.randint(1, 28),
-                 randgen.randint(0, 23), randgen.randint(0, 59), randgen.randint(0, 59))
+    return Stamp.western(year, randgen.randint(1, 12), randgen.randint(1, 28),
+                         randgen.randint(0, 23), randgen.randint(0, 59), randgen.randint(0, 59))
 
 
 def _pick_id(model: type[Base], factory_class: type[factory.Factory] | None = None, p_none: float = 0.0) -> int | None:

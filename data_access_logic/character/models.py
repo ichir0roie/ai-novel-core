@@ -92,7 +92,7 @@ class CharacterRelationLine(Material):
     relation: str
     # 関係の芯(時期を限らない)
     text: str
-    # その時刻の年までに起きた来歴(古い順。`cast.relations_at`)。先の時刻の行と、年の決まっていない行は入らない
+    # その時刻までに起きた来歴(古い順。`cast.relations_at`)。先の時刻の行と、時期の決まっていない行は入らない
     histories: list[CharacterRelationHistoryRow]
 
 

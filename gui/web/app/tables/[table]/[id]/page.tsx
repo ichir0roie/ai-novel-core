@@ -8,7 +8,7 @@ import KnowledgeModal from "@/components/KnowledgeModal";
 import RecordForm from "@/components/RecordForm";
 import { invalidateOptions, prefetchOptions } from "@/components/ReferenceSelect";
 import Related from "@/components/Related";
-import StoryEpisodes from "@/components/StoryEpisodes";
+import StoryEpisodes, { type EpisodeLink } from "@/components/StoryEpisodes";
 import {
   deleteCharacterMotivation,
   deleteCharacterSkill,
@@ -27,6 +27,7 @@ import { receiveStoryCharacterIds } from "@/lib/storyCharacters";
 import { PageTitle, referencedTables, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
+import { CalendarProvider, useRowScope } from "@/lib/scope";
 import { stampOrder } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
@@ -86,6 +87,8 @@ export default function RecordPage() {
   const [instructing, setInstructing] = useState(false);
   // 作品・話の AI への指示は、ふだんは欄に出さず、ボタンからモーダルで直す
   const hasInstruction = table === "story" || table === "episode";
+  // 行の時刻は、行の作品の暦で出し入れする。暦が読めるまで欄を出さない(ピッカーが西暦で開かないように)
+  const scope = useRowScope(table, id);
 
   const load = useCallback(async () => {
     setError(null);
@@ -194,11 +197,11 @@ export default function RecordPage() {
 
   if (!meta) return <div className="status info">{T.loading}</div>;
 
-  return (
+  const content = (
     <div className="page-fill">
       <PageTitle kind={meta.name} record={loaded && T.nameId(loaded.label, id)} />
       {!loaded && error && <div className="status error">{error}</div>}
-      {loaded && (
+      {loaded && scope && (
         <div className="panel fill">
           <RecordForm
             meta={meta}
@@ -253,7 +256,11 @@ export default function RecordPage() {
                   : {})}
               />
             }
-            aside={table === "story" ? <StoryEpisodes storyId={id} /> : undefined}
+            aside={
+              table === "story" ? (
+                <StoryEpisodes storyId={id} links={(loaded.related?.episodes as EpisodeLink[] | undefined) ?? []} />
+              ) : undefined
+            }
             actions={
               <div className="actionbar">
                 <div className="inner">
@@ -309,4 +316,5 @@ export default function RecordPage() {
       )}
     </div>
   );
+  return <CalendarProvider calendar={scope?.calendar ?? null}>{content}</CalendarProvider>;
 }

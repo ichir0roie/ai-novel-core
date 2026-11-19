@@ -26,7 +26,26 @@ def rows_at(skill: CharacterSkill, time: Stamp) -> list[CharacterSkillHistory]:
     return sorted((row for row in skill.histories if row.covers(time)), key=by_start)
 
 
+def worn_since(skill: CharacterSkill, rows: list[CharacterSkillHistory]) -> Stamp | None:
+    """身に着け始めた時刻。効いている一番古い行から、前の行の終わりがその行の始まりに続いている限りさかのぼる
+    (裾が焦げたなど、姿が移り変わっただけの行は同じ物の続き。一度外して着け直したなら、着け直した時から)。"""
+    since = rows[0].start
+    while since is not None:
+        previous = next((row for row in skill.histories
+                         if row.start is not None and row.start < since and row.end == since), None)
+        if previous is None:
+            break
+        since = previous.start
+    return since
+
+
+def worn_at(s: Session, character: Character, time: Stamp) -> list[tuple[CharacterSkill, list[CharacterSkillHistory]]]:
+    """時刻に身に着けている物ごとに、そのスキルと効いている来歴の行(始まりの古い順)。身に着けた順。"""
+    worn = [(skill, rows) for skill in skills_of(s, character.id)
+            if skill.kind == OUTFIT_KIND and (rows := rows_at(skill, time))]
+    return sorted(worn, key=lambda item: by_start(item[1][0]))
+
+
 def outfit_at(s: Session, character: Character, time: Stamp) -> list[str]:
     """時刻に身に着けている物ごとに、効いている来歴の行のうち一番新しい行の文。身に着けた順。"""
-    worn = [rows for skill in skills_of(s, character.id) if skill.kind == OUTFIT_KIND and (rows := rows_at(skill, time))]
-    return [rows[-1].description for rows in sorted(worn, key=lambda rows: by_start(rows[0]))]
+    return [rows[-1].description for _, rows in worn_at(s, character, time)]

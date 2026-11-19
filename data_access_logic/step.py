@@ -20,6 +20,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from data_access_logic.entrypoint import UnknownRecordError
 from db.schema import get_env_session
+from db.stamp import using_calendar
 
 _STEPS: dict[str, Callable[..., Any]] = {}
 
@@ -79,14 +80,24 @@ def output_adapter(step: Callable[..., Any]) -> TypeAdapter:
 
 
 def run[Out](step: Callable[..., Out], form: Any = None) -> Out:
-    """段を一つのトランザクションで回す(API と、手元の流れの `caller.call`)。"""
+    """段を一つのトランザクションで回す(API と、手元の流れの `caller.call`)。手元の流れは、流れを始めた入口の作品の文脈
+    (`db/story_scope.py`)のまま回る。"""
     with get_env_session() as s, s.begin():
         return step(s) if form_adapter(step) is None else step(s, form)
 
 
-def run_json(id_: str, body: Any) -> Any:
-    """API から。JSON の入力を型注釈のモデルに読み、結果を JSON にして返す。"""
+def run_json(id_: str, body: Any, story_id: int | None = None, story_given: bool = False) -> Any:
+    """API から。JSON の入力を型注釈のモデルに読み、結果を JSON にして返す。入力と結果の時刻は暦に依らない西暦の表記で運ぶ
+    (`web_session/api.call`)。段そのものは、web のセッションが運んだ流れの作品(`story_given`。作品が無いことも含む)の文脈で
+    回す(手元の流れが段を流れの作品のまま回すのと揃える)。運ばれなければ、入力から決めた作品で回す。"""
+    from data_access_logic.story.scope import args_scope, story_scope_of
+
     step = step_of(id_)
     given = form_adapter(step)
-    form = None if given is None else given.validate_python(body)
-    return output_adapter(step).dump_python(run(step, form), mode="json")
+    with using_calendar(None):
+        form = None if given is None else given.validate_python(body)
+    scope = story_scope_of(story_id) if story_given else args_scope(body if isinstance(body, dict) else {}, story_id)
+    with scope:
+        result = run(step, form)
+    with using_calendar(None):
+        return output_adapter(step).dump_python(result, mode="json")

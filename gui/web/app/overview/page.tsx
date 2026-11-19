@@ -31,7 +31,8 @@ import {
 import { PageTitle } from "@/lib/meta";
 import { inNewTab, openInNewTab, useOpenPage, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
-import { fromDayNumber, formatStamp, shiftDays } from "@/lib/stamp";
+import { CalendarProvider, convertForWrite, useStoryScope } from "@/lib/scope";
+import { fromDayNumber, formatStamp, shiftDays, type Calendar } from "@/lib/stamp";
 import { T } from "@/lib/text";
 import {
   DEFAULT_VIEW,
@@ -45,6 +46,7 @@ import {
   roundHours,
   savedView,
   scaleOf,
+  skipUnits,
   snapDay,
   timeSpan,
   zoomed,
@@ -104,11 +106,11 @@ type Drag = { episode: OverviewEpisode; from: string; startX: number; startY: nu
 type Change = { base: OverviewEpisode; days: number; story: number | null };
 
 /** 話の札を、重ならないよう筋に振り分ける(話のタイムラインと同じく、上から空いた筋に入れる) */
-function pack(episodes: OverviewEpisode[], scale: Scale): Packed {
+function pack(episodes: OverviewEpisode[], scale: Scale, calendar: Calendar | null): Packed {
   const laneEnds: number[] = [];
   const placed = episodes.map((episode) => {
-    const start = dayOf(episode.start) ?? 0;
-    const end = dayOf(episode.end);
+    const start = dayOf(episode.start, calendar) ?? 0;
+    const end = dayOf(episode.end, calendar);
     const y = scale.toY(start);
     const height = Math.max(ITEM_HEIGHT, end === null ? 0 : scale.toY(end) - y);
     let lane = laneEnds.findIndex((laneEnd) => laneEnd <= y);
@@ -120,14 +122,26 @@ function pack(episodes: OverviewEpisode[], scale: Scale): Packed {
 }
 
 /** 日付をずらしたときの開始・終了。開始・終了を同じ日数だけ動かす */
-const shifted = (episode: OverviewEpisode, days: number) => ({
-  start: shiftDays(episode.start, days) ?? episode.start,
-  end: episode.end === null ? null : shiftDays(episode.end, days),
+const shifted = (episode: OverviewEpisode, days: number, calendar: Calendar | null) => ({
+  start: shiftDays(episode.start, days, calendar) ?? episode.start,
+  end: episode.end === null ? null : shiftDays(episode.end, days, calendar),
 });
 
 /** 保存する欄。動かした分だけを渡す */
-function changeForm({ base, days, story }: Change): Rec {
-  return { id: base.id, ...(days !== 0 ? shifted(base, days) : {}), ...(story !== null ? { story_id: story } : {}) };
+function changeForm({ base, days, story }: Change, calendar: Calendar | null): Rec {
+  return {
+    id: base.id,
+    ...(days !== 0 ? shifted(base, days, calendar) : {}),
+    ...(story !== null ? { story_id: story } : {}),
+  };
+}
+
+/**
+ * 話を書く欄を、話の作品(移すなら移す先)の暦の桁に直す。見取り図はどの話も選んだ章の暦で出すが、
+ * 入口は話ごとにその作品の暦で時刻を読む(同じ時期の兄弟の作品が別の暦を持つとき)
+ */
+function toStoryCalendar(form: Rec, storyId: number, calendar: Calendar | null): Promise<Rec> {
+  return convertForWrite(form, ["start", "end"], calendar, { story_id: storyId });
 }
 
 const columnKeyOf = (episode: OverviewEpisode) => (episode.in_story ? CHAPTER_KEY : `story-${episode.story_id}`);
@@ -202,10 +216,10 @@ const draftOf = (record: Record<string, unknown>): EpisodeDraft => ({
 type Viewing = { episode: OverviewEpisode; loaded: { title: string; plot: string } | null };
 
 /** 話の期間(日)。一点の話と、日の途中に始まる・終わる話は、その日をまるごと含める */
-function periodOf(draft: EpisodeDraft | null): { from: number; to: number } | null {
-  const start = dayOf(draft?.start);
+function periodOf(draft: EpisodeDraft | null, calendar: Calendar | null): { from: number; to: number } | null {
+  const start = dayOf(draft?.start, calendar);
   if (start === null) return null;
-  const end = dayOf(draft?.end) ?? start;
+  const end = dayOf(draft?.end, calendar) ?? start;
   const from = Math.floor(start);
   return { from, to: Math.max(Math.ceil(end), from + 1) };
 }
@@ -214,6 +228,9 @@ export default function OverviewPage() {
   const router = useRouter();
   const search = useSearchParams();
   const storyId = Number(search.get("story_id")) || null;
+  // 時刻は選んだ章の暦で数える。API も同じ暦で時刻を出す
+  const scope = useStoryScope(storyId);
+  const calendar = scope?.calendar ?? null;
   const marginParam = Number(search.get("margin"));
   const margin = MARGINS.includes(marginParam) ? marginParam : 30;
 
@@ -328,7 +345,7 @@ export default function OverviewPage() {
       (data?.episodes ?? []).map((episode) => {
         const change = changes.get(episode.id);
         if (!change) return episode;
-        const moved = { ...episode, ...shifted(change.base, change.days) };
+        const moved = { ...episode, ...shifted(change.base, change.days, calendar) };
         if (change.story === null) return moved;
         return {
           ...moved,
@@ -337,7 +354,7 @@ export default function OverviewPage() {
           in_story: change.story === data?.story_id,
         };
       }),
-    [data, changes, storyNames],
+    [data, changes, storyNames, calendar],
   );
 
   // 絞り込んだ出来事と、列に出す人物
@@ -381,22 +398,26 @@ export default function OverviewPage() {
 
   const spans: Span[] = useMemo(() => {
     const all: Span[] = [];
+    if (!scope) return all;
     for (const item of [...episodes, ...events]) {
-      const start = dayOf(item.start);
-      if (start !== null) all.push(timeSpan(start, dayOf(item.end)));
+      const start = dayOf(item.start, scope.calendar);
+      if (start !== null) all.push(timeSpan(start, dayOf(item.end, scope.calendar)));
     }
     return all;
-  }, [episodes, events]);
-  const scale = useMemo(() => scaleOf(spans, null, view, box.viewport), [spans, view, box.viewport]);
+  }, [episodes, events, scope]);
+  const scale = useMemo(
+    () => scaleOf(spans, null, view, box.viewport, calendar),
+    [spans, view, box.viewport, calendar],
+  );
   const ticks = useMemo(
-    () => (scale ? axisTicksOf(scale, spans, view.squeeze, screen, box.viewport) : []),
-    [scale, spans, view.squeeze, screen, box.viewport],
+    () => (scale ? axisTicksOf(scale, spans, view.squeeze, screen, box.viewport, calendar) : []),
+    [scale, spans, view.squeeze, screen, box.viewport, calendar],
   );
   // 章の列と、兄弟の作品ごとの列。兄弟の列は、読み込んだ話を移したあとも、話を運び戻せるよう残す
   const episodeColumns = useMemo((): EpisodeColumn[] => {
     if (!scale || !data) return [];
     const byTime = (list: OverviewEpisode[]) =>
-      [...list].sort((a, b) => (dayOf(a.start) ?? 0) - (dayOf(b.start) ?? 0) || a.id - b.id);
+      [...list].sort((a, b) => (dayOf(a.start, calendar) ?? 0) - (dayOf(b.start, calendar) ?? 0) || a.id - b.id);
     const siblingIds = [
       ...new Set([...data.episodes, ...episodes].filter((episode) => !episode.in_story).map((episode) => episode.story_id)),
     ];
@@ -405,18 +426,22 @@ export default function OverviewPage() {
         key: CHAPTER_KEY,
         storyId: data.story_id,
         label: data.story_name ?? T.overview.episodes,
-        packed: pack(byTime(episodes.filter((episode) => episode.in_story)), scale),
+        packed: pack(byTime(episodes.filter((episode) => episode.in_story)), scale, calendar),
         faint: false,
       },
       ...siblingIds.map((id) => ({
         key: `story-${id}`,
         storyId: id,
         label: storyNames.get(id) ?? T.nameId(null, id),
-        packed: pack(byTime(episodes.filter((episode) => !episode.in_story && episode.story_id === id)), scale),
+        packed: pack(
+          byTime(episodes.filter((episode) => !episode.in_story && episode.story_id === id)),
+          scale,
+          calendar,
+        ),
         faint: true,
       })),
     ];
-  }, [scale, data, episodes, storyNames]);
+  }, [scale, data, episodes, storyNames, calendar]);
 
   // 読み込んだら、章の最初の話が画面の上の方に来るようにスクロールする
   useLayoutEffect(() => {
@@ -425,8 +450,8 @@ export default function OverviewPage() {
     const key = data ? `${data.story_id}:${margin}` : null;
     if (!element || !scale || !first || key === null || scrolledFor.current === key) return;
     scrolledFor.current = key;
-    element.scrollTop = Math.max(0, scale.toY(dayOf(first.start) ?? 0) - box.viewport / 4);
-  }, [data, scale, margin, box.viewport]);
+    element.scrollTop = Math.max(0, scale.toY(dayOf(first.start, calendar) ?? 0) - box.viewport / 4);
+  }, [data, scale, margin, box.viewport, calendar]);
 
   const onScroll = () => {
     const element = scrollRef.current;
@@ -507,12 +532,12 @@ export default function OverviewPage() {
   const onTrackClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!scale || storyId === null || !closeEpisode()) return;
     setMessage(null);
-    const day = snapDay(scale.fromY(e.clientY - e.currentTarget.getBoundingClientRect().top), scale.pxPerDay);
+    const day = snapDay(scale.fromY(e.clientY - e.currentTarget.getBoundingClientRect().top), scale.pxPerDay, calendar);
     setEpisodePanel({
       id: null,
       label: T.timeline.newEpisode,
       saved: null,
-      draft: { start: formatStamp(fromDayNumber(day)), end: null, title: "", plot: "" },
+      draft: { start: formatStamp(fromDayNumber(day, calendar)), end: null, title: "", plot: "" },
     });
   };
 
@@ -525,8 +550,8 @@ export default function OverviewPage() {
     if (character === undefined) return;
     hide();
     setMessage(null);
-    const day = snapDay(scale.fromY(e.clientY - rect.top), scale.pxPerDay);
-    setAddingEvent({ start: formatStamp(fromDayNumber(day)), character });
+    const day = snapDay(scale.fromY(e.clientY - rect.top), scale.pxPerDay, calendar);
+    setAddingEvent({ start: formatStamp(fromDayNumber(day, calendar)), character });
   };
 
   /** 別のページへ移る(Ctrl(⌘)を押しながらなら別タブで開き、書きかけ・溜めた移しは残る) */
@@ -537,6 +562,10 @@ export default function OverviewPage() {
     }
     openPage(url, e);
   };
+
+  /** 話の db の作品(移しを溜めた話も、適用するまでは読み込んだときの作品) */
+  const storyOf = (id: number) =>
+    changes.get(id)?.base.story_id ?? data?.episodes.find((episode) => episode.id === id)?.story_id ?? storyId!;
 
   /** 書き終えたあと、読み直した話で溜めた移しの元を替える。時刻を書いた話は、溜めた時刻の移しを書いた時刻に含めたので外す */
   const rebase = (fresh: OverviewResponse, id: number, wroteTime: boolean) =>
@@ -561,7 +590,7 @@ export default function OverviewPage() {
     try {
       if (episodePanel.id === null) {
         const [created, fresh] = await trackSaving(
-          addEpisode({ story_id: storyId }, sent).then(async (created) => [created, await reread()] as const),
+          addEpisode({ story_id: storyId }, sent, calendar).then(async (created) => [created, await reread()] as const),
         );
         invalidateOptions("episode");
         setData(fresh);
@@ -574,14 +603,18 @@ export default function OverviewPage() {
       } else {
         const id = episodePanel.id;
         const fresh = await trackSaving(
-          updateEpisodes([
+          toStoryCalendar(
             {
               id,
               ...(titleChanged ? { title: sent.title } : {}),
               ...(plotChanged ? { plot_text: sent.plot } : {}),
               ...(timeChanged ? { start: sent.start, end: sent.end } : {}),
             },
-          ]).then(reread),
+            storyOf(id),
+            calendar,
+          )
+            .then((form) => updateEpisodes([form]))
+            .then(reread),
         );
         if (titleChanged) invalidateOptions("episode");
         setData(fresh);
@@ -608,14 +641,18 @@ export default function OverviewPage() {
     setMessage(null);
     try {
       const fresh = await trackSaving(
-        updateEpisodes([
+        toStoryCalendar(
           {
             id,
             ...(editTitleChanged ? { title: sent.title } : {}),
             ...(editPlotChanged ? { plot_text: sent.plot } : {}),
             ...(editTimeChanged ? { start: sent.start, end: sent.end } : {}),
           },
-        ]).then(reread),
+          storyOf(id),
+          calendar,
+        )
+          .then((form) => updateEpisodes([form]))
+          .then(reread),
       );
       if (editTitleChanged) invalidateOptions("episode");
       setData(fresh);
@@ -641,7 +678,15 @@ export default function OverviewPage() {
     setError(null);
     setMessage(null);
     try {
-      const fresh = await trackSaving(updateEpisodes([...changes.values()].map(changeForm)).then(reread));
+      const fresh = await trackSaving(
+        Promise.all(
+          [...changes.values()].map((change) =>
+            toStoryCalendar(changeForm(change, calendar), change.story ?? change.base.story_id, calendar),
+          ),
+        )
+          .then(updateEpisodes)
+          .then(reread),
+      );
       // 読み直した話と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
       setData(fresh);
       setMessage(T.timeline.applied(changes.size));
@@ -664,8 +709,8 @@ export default function OverviewPage() {
   /** 縦に dy px 動かしたら何日ずれるか(話のタイムラインと同じ刻みに丸める)。詰めた帯の上では一気に日が進む */
   const daysAt = (episode: OverviewEpisode, dy: number) => {
     if (!scale || scale.pxPerDay === 0) return 0;
-    const start = dayOf(episode.start) ?? 0;
-    const steps = dragSteps(view);
+    const start = dayOf(episode.start, calendar) ?? 0;
+    const steps = dragSteps(view, calendar);
     return Math.round((scale.fromY(scale.toY(start) + dy) - start) * steps) / steps;
   };
   const dragDays = (episode: OverviewEpisode) =>
@@ -679,7 +724,7 @@ export default function OverviewPage() {
     const target = story ?? previous?.story ?? null;
     // 章の列は章の子の作品の話も並べるので、章の話を章の列へ戻したら元の作品のまま
     const back = target === base.story_id || (target === storyId && base.in_story);
-    const change = { base, days: roundHours((previous?.days ?? 0) + days), story: back ? null : target };
+    const change = { base, days: roundHours((previous?.days ?? 0) + days, calendar), story: back ? null : target };
     if (change.days === 0 && change.story === null) next.delete(episode.id);
     else next.set(episode.id, change);
     setChanges(next);
@@ -734,12 +779,12 @@ export default function OverviewPage() {
   };
 
   // 左の枠の話の期間と、その期間に重なる出来事(絞り込みは出来事の点と同じ)
-  const period = periodOf(draft);
+  const period = periodOf(draft, calendar);
   const periodEvents = period
     ? events.filter((event) => {
-        const start = dayOf(event.start);
+        const start = dayOf(event.start, calendar);
         if (start === null) return false;
-        return start < period.to && (dayOf(event.end) ?? start) >= period.from;
+        return start < period.to && (dayOf(event.end, calendar) ?? start) >= period.from;
       })
     : [];
 
@@ -752,7 +797,7 @@ export default function OverviewPage() {
   ];
   const gapLines = (g: Gap) => [
     T.overview.gap,
-    `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`,
+    `${formatStamp(fromDayNumber(g.from, calendar))} – ${formatStamp(fromDayNumber(g.to, calendar))}`,
   ];
   /** 吹き出しと押したときのモーダルに出す、時刻・作品と、移しを溜めた話は移す前の行 */
   const detailLines = (episode: OverviewEpisode) => {
@@ -780,8 +825,8 @@ export default function OverviewPage() {
         {col.packed.placed.map(({ episode, y, height, lane }) => {
           const days = dragDays(episode);
           const dragging = drag?.episode.id === episode.id;
-          const target = days !== 0 && shifted(episode, days);
-          const offset = days && scale ? scale.toY((dayOf(episode.start) ?? 0) + days) - y : 0;
+          const target = days !== 0 && shifted(episode, days, calendar);
+          const offset = days && scale ? scale.toY((dayOf(episode.start, calendar) ?? 0) + days) - y : 0;
           const className = [
             "timeline-item",
             episode.end ? "" : "point",
@@ -831,12 +876,12 @@ export default function OverviewPage() {
     for (const event of events) {
       if (!parentIds.has(event.id)) continue;
       const owner = [event.actor_id, ...event.character_ids, OTHERS].find((id) => id !== null && column.has(id));
-      const start = dayOf(event.start);
+      const start = dayOf(event.start, calendar);
       if (owner == null || start === null) continue;
-      arcs.push({ id: event.id, owner, start, end: dayOf(event.end) ?? Infinity });
+      arcs.push({ id: event.id, owner, start, end: dayOf(event.end, calendar) ?? Infinity });
     }
     return arcSlotsOf(arcs);
-  }, [events, parentIds, column]);
+  }, [events, parentIds, column, calendar]);
 
   const renderEvents = () => {
     if (!scale) return null;
@@ -849,7 +894,7 @@ export default function OverviewPage() {
     };
     const marks: Mark[] = [];
     for (const event of events) {
-      const start = dayOf(event.start);
+      const start = dayOf(event.start, calendar);
       if (start === null) continue;
       const xs = lanesOf(event).map(x);
       marks.push({ id: event.id, name: event.name, left: Math.min(...xs), right: Math.max(...xs), y: scale.toY(start), r: radius(event) });
@@ -896,7 +941,7 @@ export default function OverviewPage() {
               );
             })}
           {events.map((event) => {
-            const start = dayOf(event.start);
+            const start = dayOf(event.start, calendar);
             const label = labels.get(event.id);
             if (start === null || !label) return null;
             const ids = lanesOf(event);
@@ -1141,7 +1186,7 @@ export default function OverviewPage() {
     );
   };
 
-  return (
+  const content = (
     <div className="page-fill timeline-page overview-page">
       <PageTitle kind={T.overview.title} record={data?.story_name ?? null} />
       <div className="toolbar">
@@ -1249,7 +1294,7 @@ export default function OverviewPage() {
       {message && !error && <div className="status ok">{message}</div>}
       {storyId === null ? (
         <div className="status info">{T.overview.pickStory}</div>
-      ) : !data ? (
+      ) : !data || !scope ? (
         !error && <div className="status info">{T.loading}</div>
       ) : (
         <div className="overview-split">
@@ -1308,7 +1353,7 @@ export default function OverviewPage() {
                     onMouseMove={(e) => show(e, gapLines(g))}
                     onMouseLeave={hide}
                   >
-                    {T.timeline.skipped(g.to - g.from)}
+                    {T.timeline.skipped(g.to - g.from, ...skipUnits(calendar))}
                   </div>
                 ))}
                 {ticks.map((tick) => (
@@ -1372,8 +1417,9 @@ export default function OverviewPage() {
           onAdded={() => {
             if (storyId === null) return;
             // 軸は画面の高さまで伸びるので、章の期間の外も押せる。外に足した出来事は読み直しても出ないので、そう知らせる
-            const day = dayOf(addingEvent.start) ?? 0;
-            const outside = day < (dayOf(data?.since) ?? -Infinity) || day > (dayOf(data?.until) ?? Infinity);
+            const day = dayOf(addingEvent.start, calendar) ?? 0;
+            const outside =
+              day < (dayOf(data?.since, calendar) ?? -Infinity) || day > (dayOf(data?.until, calendar) ?? Infinity);
             setMessage(outside && data ? T.overview.addedEventOutside(data.since, data.until) : T.overview.addedEvent);
             reread()
               .then(setData)
@@ -1412,4 +1458,6 @@ export default function OverviewPage() {
       <Tooltip tip={tip} />
     </div>
   );
+  // 時刻の欄(左の枠・話のモーダル・出来事を足すモーダル)も、軸と同じ暦で数える
+  return <CalendarProvider calendar={calendar}>{content}</CalendarProvider>;
 }

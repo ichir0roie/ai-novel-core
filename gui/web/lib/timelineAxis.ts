@@ -1,14 +1,20 @@
-// 話のタイムライン(/timeline)と出来事のタイムライン(/event_timeline)が共有する、時刻の縦の軸
+// 話のタイムライン(/timeline)と出来事のタイムライン(/event_timeline)が共有する、時刻の縦の軸。
+// 作品が暦を持てば、軸の日・目盛りの年・月・日・時はその暦で数える(`lib/stamp.ts` の `dayNumber`)
 import {
   dayNumber,
   daysInMonth,
   fromDayNumber,
+  hoursInDay,
+  monthsInYear,
   pad2,
   parseStamp,
+  type Calendar,
 } from "@/lib/stamp";
 
 // 画面の高さに見せる期間(縮尺)。全期間はこの縮尺で縦に並べ、スクロールで見て回る
 const DAYS_PER_YEAR = 365.2425;
+const MONTHS_PER_YEAR = 12;
+const HOURS_PER_DAY = 24;
 // 年より細かい縮尺の段。年からは 1 年ずつ広げる
 const FINE_ZOOMS: Zoom[] = [
   { unit: "day", count: 1 },
@@ -83,15 +89,33 @@ export function zoomed(view: View, direction: -1 | 1): View | null {
   return { ...view, ...zoom };
 }
 
-/** 画面の高さに見せる日数。月は 1 年の 12 分の 1 にならす */
-export function spanDays({ unit, count }: Zoom): number {
-  if (unit === "day") return count;
-  return (count * DAYS_PER_YEAR) / (unit === "month" ? 12 : 1);
+/** 一年の日数・一年の月の数・一日の時間。暦があれば暦のもの(暦の始まりより前の西暦の年は見ない) */
+export function yearDays(calendar: Calendar | null = null): number {
+  return calendar ? calendar.yearDays : DAYS_PER_YEAR;
 }
 
-export function dayOf(value: unknown): number | null {
+function monthsPerYear(calendar: Calendar | null): number {
+  return calendar ? calendar.monthDays.length : MONTHS_PER_YEAR;
+}
+
+function hoursPerDay(calendar: Calendar | null): number {
+  return calendar ? calendar.hoursPerDay : HOURS_PER_DAY;
+}
+
+/** 詰めた帯の文字(`T.timeline.skipped`)に渡す、一年・一月の日数。西暦なら既定のまま */
+export function skipUnits(calendar: Calendar | null = null): [number, number] | [] {
+  return calendar ? [calendar.yearDays, calendar.yearDays / calendar.monthDays.length] : [];
+}
+
+/** 画面の高さに見せる日数。月は 1 年の月の数で割ってならす */
+export function spanDays({ unit, count }: Zoom, calendar: Calendar | null = null): number {
+  if (unit === "day") return count;
+  return (count * yearDays(calendar)) / (unit === "month" ? monthsPerYear(calendar) : 1);
+}
+
+export function dayOf(value: unknown, calendar: Calendar | null = null): number | null {
   const parts = parseStamp(value);
-  return parts ? dayNumber(parts) : null;
+  return parts ? dayNumber(parts, calendar) : null;
 }
 
 /** 開始〜終了の期間。終了が開始より前なら開始の一点まで縮める */
@@ -103,37 +127,41 @@ export function timeSpan(start: number, end: number | null): Span {
  * 等間隔の軸の目盛りの細かさ。年の刻み、月の境目を置くか、日・時の刻み(置かないなら undefined)と、
  * 置く一番細かい目盛り(finest。0 年・1 月・2 日・3 時)
  */
-function levelsOf(pxPerDay: number) {
-  const pxPerYear = pxPerDay * DAYS_PER_YEAR;
+function levelsOf(pxPerDay: number, calendar: Calendar | null) {
+  const pxPerYear = pxPerDay * yearDays(calendar);
   let yearStep = 1;
   for (let k = 1; yearStep * pxPerYear < YEAR_TICK_PX; k++)
     yearStep = [1, 2, 5][k % 3] * 10 ** Math.floor(k / 3);
-  const months = pxPerYear / 12 >= MONTH_TICK_PX;
+  const months = pxPerYear / monthsPerYear(calendar) >= MONTH_TICK_PX;
   const dayStep = months
     ? DAY_STEPS.find((step) => step * pxPerDay >= FINE_TICK_PX)
     : undefined;
   const hourStep =
     dayStep === 1
-      ? HOUR_STEPS.find((step) => (step * pxPerDay) / 24 >= FINE_TICK_PX)
+      ? HOUR_STEPS.find(
+          (step) => (step * pxPerDay) / hoursPerDay(calendar) >= FINE_TICK_PX,
+        )
       : undefined;
   const finest = hourStep ? 3 : dayStep ? 2 : months ? 1 : 0;
   return { yearStep, months, dayStep, hourStep, finest };
 }
 
 /** 縦のドラッグで時刻を送る刻みの、1 日あたりの数。1 日の縮尺では 1 時間、ほかの縮尺では 1 日 */
-export function dragSteps({ unit }: Zoom): number {
-  return unit === "day" ? 24 : 1;
+export function dragSteps({ unit }: Zoom, calendar: Calendar | null = null): number {
+  return unit === "day" ? hoursPerDay(calendar) : 1;
 }
 
 /** 日数を 1 時間の刻みに丸める。時間の刻みの移しを足し合わせたときの浮動小数の誤差を消す */
-export function roundHours(days: number): number {
-  return Math.round(days * 24) / 24;
+export function roundHours(days: number, calendar: Calendar | null = null): number {
+  const hours = hoursPerDay(calendar);
+  return Math.round(days * hours) / hours;
 }
 
 /** 押した所の時刻を目盛りの細かさに丸める。時の目盛りを置く縮尺では時に、それより粗ければ日に丸める */
-export function snapDay(day: number, pxPerDay: number): number {
-  return levelsOf(pxPerDay).hourStep
-    ? Math.floor(day * 24) / 24
+export function snapDay(day: number, pxPerDay: number, calendar: Calendar | null = null): number {
+  const hours = hoursPerDay(calendar);
+  return levelsOf(pxPerDay, calendar).hourStep
+    ? Math.floor(day * hours) / hours
     : Math.floor(day);
 }
 
@@ -262,8 +290,9 @@ export function scaleOf(
   anchor: number | null,
   view: View,
   viewport: number,
+  calendar: Calendar | null = null,
 ): Scale | null {
-  const span = spanDays(view);
+  const span = spanDays(view, calendar);
   let lo = anchor ?? Infinity;
   let hi = anchor ?? -Infinity;
   for (const item of items) {
@@ -286,13 +315,13 @@ export function scaleOf(
 /**
  * 札の開始ごとの目盛り。開始は {@link snapDay} で丸める。文字は縮尺に合わせて年・年/月・月/日にし、文字が変わる所を太くする
  */
-function startTicks(items: Span[], pxPerDay: number): Tick[] {
-  const { finest } = levelsOf(pxPerDay);
+function startTicks(items: Span[], pxPerDay: number, calendar: Calendar | null): Tick[] {
+  const { finest } = levelsOf(pxPerDay, calendar);
   let previous: string | null = null;
-  return [...new Set(items.map((item) => snapDay(item.start, pxPerDay)))]
+  return [...new Set(items.map((item) => snapDay(item.start, pxPerDay, calendar)))]
     .sort((a, b) => a - b)
     .map((at) => {
-      const { year, month, day } = fromDayNumber(at);
+      const { year, month, day } = fromDayNumber(at, calendar);
       const label =
         finest === 3
           ? `${pad2(month)}/${pad2(day)}`
@@ -310,14 +339,23 @@ function startTicks(items: Span[], pxPerDay: number): Tick[] {
  * 1 年が広ければ月の境目、1 月が広ければ日、1 日が広ければ時の目盛りも置く。
  * 一番細かい目盛りより粗い目盛りは太くし、文字に上の位を添える(日を置くなら月は「年/月」、時を置くなら日は「月/日」)
  */
-function calendarTicks(scale: Scale, from: number, to: number): Tick[] {
+function calendarTicks(
+  scale: Scale,
+  from: number,
+  to: number,
+  calendar: Calendar | null,
+): Tick[] {
   const { yearStep, months, dayStep, hourStep, finest } = levelsOf(
     scale.pxPerDay,
+    calendar,
   );
   const [lo, hi] = [Math.max(from, scale.since), Math.min(to, scale.until)];
-  const [first, last] = [fromDayNumber(lo).year, fromDayNumber(hi).year];
-  const start = (year: number, month: number) =>
-    dayNumber({ year, month, day: 1, hour: 0, minute: 0, second: 0 });
+  const [first, last] = [
+    fromDayNumber(lo, calendar).year,
+    fromDayNumber(hi, calendar).year,
+  ];
+  const start = (year: number, month: number, day = 1, hour = 0) =>
+    dayNumber({ year, month, day, hour, minute: 0, second: 0 }, calendar);
   const ticks: Tick[] = [];
   // level は目盛りの位(0 年・1 月・2 日・3 時)
   const push = (at: number, level: number, label: string) => {
@@ -332,7 +370,7 @@ function calendarTicks(scale: Scale, from: number, to: number): Tick[] {
     push(start(year, 1), 0, String(year));
   if (months)
     for (let year = first; year <= last; year++)
-      for (let month = 2; month <= 12; month++)
+      for (let month = 2; month <= monthsInYear(year, calendar); month++)
         push(
           start(year, month),
           1,
@@ -342,20 +380,31 @@ function calendarTicks(scale: Scale, from: number, to: number): Tick[] {
               ? `${year}/${pad2(month)}`
               : `${pad2(month)}/01`,
         );
-  if (dayStep)
-    for (let at = Math.floor(lo); at <= hi; at++) {
-      const { year, month, day } = fromDayNumber(at);
+  // 日は桁で一日ずつ送る(暦の始まりの前後で一日の長さが違うので、通算日の整数を日の境目とみなさない)
+  if (dayStep) {
+    let { year, month, day } = fromDayNumber(lo, calendar);
+    for (let at = start(year, month, day); at <= hi; at = start(year, month, day)) {
       // 月の終わりの刻みは、次の月の始めに近すぎれば置かない
       if (
         day > 1 &&
         (day - 1) % dayStep === 0 &&
-        day - 1 + dayStep / 2 <= daysInMonth(year, month)
+        day - 1 + dayStep / 2 <= daysInMonth(year, month, calendar)
       )
         push(at, 2, hourStep ? `${pad2(month)}/${pad2(day)}` : pad2(day));
       if (hourStep)
-        for (let hour = hourStep; hour < 24; hour += hourStep)
-          push(at + hour / 24, 3, `${pad2(hour)}:00`);
+        for (let hour = hourStep; hour < hoursInDay(year, month, day, calendar); hour += hourStep)
+          push(start(year, month, day, hour), 3, `${pad2(hour)}:00`);
+      day += 1;
+      if (day > daysInMonth(year, month, calendar)) {
+        day = 1;
+        month += 1;
+        if (month > monthsInYear(year, calendar)) {
+          month = 1;
+          year += 1;
+        }
+      }
     }
+  }
   return ticks.sort((a, b) => a.at - b.at);
 }
 
@@ -370,15 +419,17 @@ export function axisTicksOf(
   squeeze: boolean,
   screen: number,
   viewport: number,
+  calendar: Calendar | null = null,
 ): Tick[] {
   let labelEnd = -Infinity;
   let shownLabel: string | null = null;
   const ticks = squeeze
-    ? startTicks(items, scale.pxPerDay)
+    ? startTicks(items, scale.pxPerDay, calendar)
     : calendarTicks(
         scale,
         scale.fromY((screen - 1) * viewport),
         scale.fromY((screen + 2) * viewport),
+        calendar,
       );
   return ticks.map((tick) => {
     const y = scale.toY(tick.at);

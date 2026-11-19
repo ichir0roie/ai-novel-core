@@ -44,6 +44,9 @@ export const T = {
     search: "Jump to a page (type a table or page name)",
     noMatch: "No matching page",
     searchHint: "Ctrl+K: search pages",
+    story: "Story",
+    storyTitle: "Story you are working on",
+    storyHint: "Times are shown in this story's calendar, and new characters, ideas and places go into it. The page reloads when you change it.",
   },
 
   home: {
@@ -76,6 +79,9 @@ export const T = {
     originAll: "All",
     originUser: "Mine",
     originAi: "AI",
+    // 暦のある作品の話の一覧で、時刻の列に暦の名を添え、同じ時刻を西暦で並べる
+    inCalendar: (column: string, calendar: string) => `${column} (${calendar})`,
+    western: (column: string) => `${column} (Western)`,
   },
 
   expansions: {
@@ -400,8 +406,13 @@ export const T = {
     confirmDiscard: (n: number) => `Discard ${n} unsaved changes?`,
     was: (start: string, story: string) => `before: ${start} / ${story}`,
     gap: "No episodes (squeezed)",
-    skipped: (days: number) =>
-      days >= 365 ? `${Math.round(days / 365.2)}y` : days >= 61 ? `${Math.round(days / 30.4)}mo` : `${Math.round(days)}d`,
+    // 暦の作品では、一年・一月を暦の日数(yearDays・monthDays)で数える
+    skipped: (days: number, yearDays = 365.2, monthDays = 30.4) =>
+      days >= Math.floor(yearDays)
+        ? `${Math.round(days / yearDays)}y`
+        : days >= 2 * monthDays
+          ? `${Math.round(days / monthDays)}mo`
+          : `${Math.round(days)}d`,
     openForm: "Open the full form",
     newEpisode: "New episode",
     newEpisodeIn: (story: string) => `Story: ${story}`,
@@ -519,6 +530,9 @@ export const T = {
     minute: "M",
     second: "S",
     month: (m: number) => `${m}`,
+    outsideWeek: "Outside the week",
+    weekday: (n: number) => `day ${n} of the week`,
+    calendar: (name: string) => `Calendar: ${name} (Western before its start)`,
   },
 
   relations: {

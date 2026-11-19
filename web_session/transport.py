@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from db import writer
+from db import story_scope, writer
 
 # `gui/api/app.py` の `API_KEY_HEADER` と同じ名前
 _API_KEY_HEADER = "x-novel-api-key"
@@ -37,9 +37,10 @@ def post(path: str, body: Any) -> Any:
     global _client
     if _client is None:
         _client = httpx.Client(timeout=_TIMEOUT)
-    # 書き手(`db/writer.py`)は、流れの中で立てた値を API へ運ぶ
+    # 書き手(`db/writer.py`)と作品(`db/story_scope.py`)は、流れの中で立てた値を API へ運ぶ
     response = _client.post(f"{_base_url()}{path}", json=body,
-                            headers={_API_KEY_HEADER: os.environ.get("NOVEL_API_KEY", ""), **writer.headers()})
+                            headers={_API_KEY_HEADER: os.environ.get("NOVEL_API_KEY", ""), **writer.headers(),
+                                     **story_scope.headers()})
     if response.is_error:
         raise ApiError(f"{path} が {response.status_code} を返した: {response.text[-2000:]}")
     return response.json()

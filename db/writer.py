@@ -81,6 +81,14 @@ def restoring() -> Iterator[Writing]:
 
 
 @contextmanager
+def rewriting() -> Iterator[Writing]:
+    """画面に出る中身を変えない書き直し(暦の読み替え、行を作品に置くこと)。出自を変えず、展開にも記録しない
+    (守りは取り消しで値を戻すのと同じに扱う)。書き出し(flush)までこの中で行う。"""
+    with restoring() as state:
+        yield state
+
+
+@contextmanager
 def restored(state: Writing) -> Iterator[Writing]:
     token = _writing.set(state)
     try:

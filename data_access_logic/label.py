@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from db.schema import (
-    Base, Character, CharacterMotivation, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle,
-    Story, StylePreference,
+    Base, Character, CharacterMotivation, CharacterRelation, CharacterSkill, CustomStamp, Episode, Event, Idea, Location,
+    Meme, Oracle, Story, StylePreference,
 )
 
 PREVIEW_LENGTH = 80
@@ -13,7 +13,7 @@ PREVIEW_LENGTH = 80
 LABEL_COLUMNS: dict[type, str | None] = {
     Story: "name", Episode: "title", Character: "name", CharacterRelation: "relation", CharacterSkill: "name",
     CharacterMotivation: None, Event: "name",
-    Location: "name", Idea: "name", Meme: None, Oracle: "title", StylePreference: None,
+    Location: "name", Idea: "name", Meme: None, Oracle: "title", StylePreference: None, CustomStamp: "name",
 }
 
 

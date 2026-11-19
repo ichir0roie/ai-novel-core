@@ -57,6 +57,69 @@
         }
       }
     },
+    "/api/scope": {
+      "get": {
+        "summary": "Get Scope",
+        "description": "時刻を数える作品と暦。`table` と `id` を渡せばその行の作品、無ければ `story_id`・`episode_id`・`location_id` の\n引数か、画面が選んでいる作品(ヘッダ)。画面は時刻の選択・タイムラインの計算をこの暦でする",
+        "operationId": "get_scope_api_scope_get",
+        "parameters": [
+          {
+            "name": "table",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Table"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/table_counts": {
       "get": {
         "summary": "Table Counts",
@@ -1070,6 +1133,69 @@
           "responses"
         ],
         "title": "BatchResponse"
+      },
+      "CalendarModel": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "offset": {
+            "type": "string",
+            "title": "Offset"
+          },
+          "month_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Month Days"
+          },
+          "month_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Month Names"
+          },
+          "hours_per_day": {
+            "type": "integer",
+            "title": "Hours Per Day"
+          },
+          "days_per_week": {
+            "type": "integer",
+            "title": "Days Per Week"
+          },
+          "minutes_per_hour": {
+            "type": "integer",
+            "title": "Minutes Per Hour",
+            "default": 60
+          },
+          "seconds_per_minute": {
+            "type": "integer",
+            "title": "Seconds Per Minute",
+            "default": 60
+          },
+          "outside_week_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Outside Week Days",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "offset",
+          "month_days",
+          "month_names",
+          "hours_per_day",
+          "days_per_week"
+        ],
+        "title": "CalendarModel",
+        "description": "作品の暦(`db/stamp.py` の `Calendar`)。`offset`(西暦)より前は西暦で数える"
       },
       "CharacterLocationsResponse": {
         "properties": {
@@ -2503,6 +2629,33 @@
           "entrance"
         ],
         "title": "RunResult"
+      },
+      "ScopeResponse": {
+        "properties": {
+          "story_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Id"
+          },
+          "calendar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalendarModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "ScopeResponse"
       },
       "StoryCharactersResponse": {
         "properties": {

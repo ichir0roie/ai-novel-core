@@ -13,6 +13,7 @@ import asyncio
 import hmac
 import logging
 import os
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -26,13 +27,13 @@ from data_access_logic.episode.reading import EpisodeNeighbors
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.logs import configure_logging
 from data_access_logic.map.story_route import StoryRoute
-from db import writer
+from db import story_scope, writer
 from db.guard import ProtectedRowError
 from db.schema import engine, get_env_session
 from gui.api import interface
 from gui.api.models import (
     BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Health, LocationCharactersResponse, MapsResponse,
-    OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult,
+    OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult, ScopeResponse,
     StoryCharactersResponse, TableCounts, TimelineResponse,
 )
 
@@ -62,6 +63,43 @@ def _parse_api_keys(raw: str) -> dict[str, str]:
 _API_KEYS = _parse_api_keys(os.environ.get("NOVEL_API_KEYS", ""))
 # 合言葉なしで通すパス。Lambda Web Adapter の起動確認が叩く
 _PUBLIC_PATHS = {"/api/ping"}
+
+
+_RECORD_PATH = re.compile(r"\A/api/tables/(\w+)/records/(\d+)\Z")
+# 問い合わせの引数で、作品を決める行を指すもの。上ほど確か
+_STORY_QUERY = ("story_id", "episode_id", "location_id")
+
+
+def _request_scope(path: str, query: dict[str, str], headers: Any) -> story_scope.Scope | None:
+    """開いた行・問い合わせの引数の作品か、画面が選んでいる作品(ヘッダ)。時刻はこの作品の暦で出し入れする。"""
+    from data_access_logic.story import scope
+
+    fallback = story_scope.story_from_headers(headers)
+    matched = _RECORD_PATH.match(path)
+    args = {key: int(query[key]) for key in _STORY_QUERY if query.get(key, "").isdigit()}
+    if matched is None and not args and fallback is None:
+        return None
+    with get_env_session() as s:
+        story_id = None
+        if matched is not None:
+            model = scope.model_of_table(matched.group(1))
+            if model is not None:
+                story_id = scope.story_of_row(s, model, int(matched.group(2)))
+        if story_id is None:
+            story_id = scope.story_of_args(s, args)
+        return scope.scope_of(s, story_id if story_id is not None else fallback)
+
+
+# `_require_api_key` より先に書くので、合言葉を確かめたあとに回る
+@app.middleware("http")
+async def _story_scope(request: Request, call_next):
+    from starlette.concurrency import run_in_threadpool
+
+    found = await run_in_threadpool(_request_scope, request.url.path, dict(request.query_params), request.headers)
+    if found is None:
+        return await call_next(request)
+    with story_scope.scoped(found):
+        return await call_next(request)
 
 
 @app.middleware("http")
@@ -155,6 +193,27 @@ def warm_up(s: Session = Depends(session_dep)) -> Response:
     return Response(status_code=204)
 
 
+@app.get("/api/scope", response_model=ScopeResponse)
+def get_scope(table: str | None = None, id: int | None = None) -> ScopeResponse:
+    """時刻を数える作品と暦。`table` と `id` を渡せばその行の作品、無ければ `story_id`・`episode_id`・`location_id` の
+    引数か、画面が選んでいる作品(ヘッダ)。画面は時刻の選択・タイムラインの計算をこの暦でする"""
+    from data_access_logic.story import scope
+    from gui.api.models import CalendarModel
+
+    found = story_scope.current()
+    if table is not None and id is not None:
+        model = scope.model_of_table(table)
+        if model is None:
+            raise UnknownRecordError(f"表が無い: {table}")
+        with get_env_session() as s:
+            story_id = scope.story_of_row(s, model, id)
+            found = scope.scope_of(s, story_id if story_id is not None else story_scope.current_story_id())
+    if found is None:
+        return ScopeResponse()
+    calendar = None if found.calendar is None else CalendarModel(**found.calendar.to_json())
+    return ScopeResponse(story_id=found.story_id, calendar=calendar)
+
+
 @app.get("/api/table_counts", response_model=TableCounts)
 def table_counts(s: Session = Depends(session_dep)) -> TableCounts:
     """表ごとの行の数。トップページが出す(表の列などの情報は、画面が `gui/web/lib/tables.json` に持つ)"""
@@ -196,10 +255,14 @@ def create_record(table: str, data: dict[str, Any], http: Request,
     from gui.api import records
     from gui.api.tables import spec_of
 
+    from data_access_logic.story.scope import args_scope
+
     spec = spec_of(table)
-    with writer.restored(_writing_of(http)), s.begin():
-        record = records.create_record(s, spec, data)
-    return records.response_of(s, spec, record)
+    # 足す行の作品(`story_id`・`episode_id` などの欄)の暦で、欄の時刻を読む
+    with args_scope(data, story_scope.story_from_headers(http.headers)):
+        with writer.restored(_writing_of(http)), s.begin():
+            record = records.create_record(s, spec, data)
+        return records.response_of(s, spec, record)
 
 
 @app.get("/api/tables/{table}/records/{record_id}", response_model=RecordResponse)
@@ -227,7 +290,8 @@ def run_entrance(entrance_id: str, request: RunRequest, http: Request) -> RunRes
     """db だけの入口を呼ぶ(入口の一覧は、画面が `gui/web/lib/entrances.json` に持つ)"""
     with writer.restored(_writing_of(http)):
         return RunResult(entrance=entrance_id,
-                         result=interface.call(interface.db_entrance_class(entrance_id), request.args))
+                         result=interface.call(interface.db_entrance_class(entrance_id), request.args,
+                                               story_scope.story_from_headers(http.headers)))
 
 
 @app.post("/api/steps/{step_id}")
@@ -237,7 +301,8 @@ def run_step(step_id: str, http: Request, body: Any = Body(None)) -> Any:
     from data_access_logic import step
 
     with writer.restored(_writing_of(http)):
-        return step.run_json(step_id, body)
+        return step.run_json(step_id, body, story_scope.story_from_headers(http.headers),
+                             story_given=story_scope.scope_in_headers(http.headers))
 
 
 @app.post("/api/batch", response_model=BatchResponse)
@@ -251,9 +316,10 @@ async def batch(body: BatchRequest, request: Request) -> BatchResponse:
             raise ValueError(f"まとめて回せないパス: {path}")
     # 一つずつの要求も合言葉の確かめとログを通るよう、受けた鍵をそのまま付ける
     key = request.headers.get(API_KEY_HEADER)
+    story = request.headers.get(story_scope.STORY_HEADER)
+    forwarded = {name: value for name, value in ((API_KEY_HEADER, key), (story_scope.STORY_HEADER, story)) if value}
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://batch",
-                                 headers={API_KEY_HEADER: key} if key else None) as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://batch", headers=forwarded or None) as client:
         responses = await asyncio.gather(*(client.get(path) for path in body.paths))
     return BatchResponse(responses=[
         BatchItem(status=response.status_code,

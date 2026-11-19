@@ -216,6 +216,28 @@ class OverviewResponse(BaseModel):
     relations: list[OverviewRelation]
 
 
+class CalendarModel(BaseModel):
+    """作品の暦(`db/stamp.py` の `Calendar`)。`offset`(西暦)より前は西暦で数える"""
+
+    name: str
+    offset: str
+    month_days: list[int]
+    month_names: list[str]
+    hours_per_day: int
+    days_per_week: int
+    minutes_per_hour: int = 60
+    # 秒は地球の秒のまま。一分の秒の数
+    seconds_per_minute: int = 60
+    # 月ごとの、月の終わりの週に数えない日の数(空なら、どの日も週に数える)
+    outside_week_days: list[int] = []
+
+
+class ScopeResponse(BaseModel):
+    story_id: int | None = None
+    # 空なら西暦
+    calendar: CalendarModel | None = None
+
+
 class Health(BaseModel):
     dialect: str
 

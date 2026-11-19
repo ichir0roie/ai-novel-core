@@ -33,7 +33,8 @@ from data_access_logic.material import Material, Timestamp
 from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import Episode, Event, Location
-from db.stamp import Stamp
+from data_access_logic.character.time_sense import TimeSense
+from db.stamp import Stamp, period_end
 
 
 class StageEpisode(Material):
@@ -72,7 +73,10 @@ class StageSerialized(Stage):
     def _for_narrator(self) -> dict[str, Any]:
         episode = self.main_episode
         return {
-            "この話": {"話id": episode.id, "時刻": str(episode.start), "プロット": episode.plot_text},
+            # 時間帯は人物役が「いま」で受け取るのと同じ区切り(一日の長さが違う暦では、時の数と昼夜がずれる)
+            "この話": {"話id": episode.id, "時刻": str(episode.start),
+                     "時間帯": None if episode.start is None else TimeSense.current().part_of(episode.start),
+                     "プロット": episode.plot_text},
             "場所(広い順)": [location.name for location in self.locations],
             "場所の説明": None if self.location is None else self.location.text,
             "場所の来歴(古い順)": [] if self.location is None else [
@@ -102,7 +106,7 @@ def _last_moment(episode_start: Stamp, episode_end: Stamp | None) -> Stamp:
     """話のあいだの終わり。終わりが空なら、話の日のうち。"""
     if episode_end is not None:
         return episode_end
-    return Stamp(episode_start.year, episode_start.month, episode_start.day, 23, 59, 59)
+    return period_end(episode_start.digits[:3])
 
 
 def _events_around(s: Session, episode: Episode) -> tuple[list[EventRow], list[EventRow], list[EventRow]]:

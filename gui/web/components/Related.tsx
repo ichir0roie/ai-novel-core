@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import EpisodeContext from "@/components/EpisodeContext";
 import SkillsModal from "@/components/SkillsModal";
+import type { EpisodeLink } from "@/components/StoryEpisodes";
 import { T } from "@/lib/text";
-
-type EpisodeLink = { table: string; id: number; label: string; letters: number };
 
 /** label は見出しに出す名前(スキルのモーダルの題に使う) */
 type Owner = { table: string; id: number | string; label?: string };

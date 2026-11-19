@@ -4,8 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CommandPalette, { type Destination } from "@/components/CommandPalette";
+import { PickerModal, PickerToggle } from "@/components/Picker";
+import { useOptions } from "@/components/ReferenceSelect";
 import { HIDDEN_TABLES } from "@/lib/hidden";
 import { TABLES } from "@/lib/meta";
+import { selectStory, useSelectedStoryId } from "@/lib/selectedStory";
 import { T } from "@/lib/text";
 
 /** 画面の隅に小さな丸いメニューボタンを常に浮かべ(デスクトップは左上、スマホは親指の届く右下)、クリックしたときだけ
@@ -15,6 +18,11 @@ export default function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // 作品を選ぶモーダルは、メニューの外のクリックで閉じたメニューと一緒に消えないよう、メニューの外に開く
+  const [pickingStory, setPickingStory] = useState(false);
+  const storyId = useSelectedStoryId();
+  const stories = useOptions(open || pickingStory ? "story" : null);
+  const storyChoices = stories.map((o) => ({ value: o.id, label: T.nameId(o.label, o.id) }));
   const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -103,7 +111,29 @@ export default function Nav() {
             <Link href="/interface" className={isActive("/interface") ? "active" : ""}>{T.nav.endpoints}</Link>
             <span className="hint">{T.nav.searchHint}</span>
           </span>
+          <span className="group nav-story">
+            <span>{T.nav.story}</span>
+            <PickerToggle
+              label={storyChoices.find((c) => c.value === storyId)?.label ?? (storyId === null ? T.none : T.idMark(storyId))}
+              empty={storyId === null}
+              onClick={() => {
+                setOpen(false);
+                setPickingStory(true);
+              }}
+            />
+            <span className="hint">{T.nav.storyHint}</span>
+          </span>
         </div>
+      )}
+      {pickingStory && (
+        <PickerModal
+          title={T.nav.storyTitle}
+          choices={storyChoices}
+          value={storyId}
+          emptyLabel={T.none}
+          onPick={(id) => id !== storyId && selectStory(id)}
+          onClose={() => setPickingStory(false)}
+        />
       )}
       {paletteOpen && <CommandPalette destinations={destinations} onClose={() => setPaletteOpen(false)} />}
     </nav>

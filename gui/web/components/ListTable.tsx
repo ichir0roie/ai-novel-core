@@ -1,6 +1,7 @@
 "use client";
 
-import type { RecordList, TableMeta } from "@/lib/api";
+import { Fragment, type ReactNode } from "react";
+import type { Rec, RecordList, TableMeta } from "@/lib/api";
 import type { OpenModifiers } from "@/lib/openPage";
 import { Spec } from "./Hint";
 import { columnHint } from "@/lib/hint";
@@ -15,6 +16,9 @@ type Selection = {
   onToggleAll: () => void;
 };
 
+/** 表の列の右に挿む、行から出すだけの列(暦の作品の話の、同じ時刻を西暦で数えたものなど)。after の列の右に置く */
+export type ExtraListColumn = { key: string; label: string; after: string; render: (item: Rec) => ReactNode };
+
 type Props = {
   meta: TableMeta;
   data: RecordList | null;
@@ -27,6 +31,9 @@ type Props = {
   onFilter?: (key: string, value: string) => void;
   /** 渡すと行を選べる一覧にする(行のクリックは選ぶだけ) */
   selection?: Selection;
+  extraColumns?: ExtraListColumn[];
+  /** 列の見出しを列名から替える(時刻の列に暦の名を添えるなど) */
+  headers?: Record<string, string>;
 };
 
 /** 見出しをクリックした列で並べるときの次の並び。同じ列なら向きを返し、別の列なら昇順から(既定の列は既定の向きから) */
@@ -36,9 +43,10 @@ export function nextSort(meta: TableMeta, sort: string, order: SortOrder, key: s
 }
 
 /** 一覧の表(id・名前・`listColumns` の列・本文のプレビュー)。 */
-export default function ListTable({ meta, data, sort, order, onSort, onOpen, onFilter, selection }: Props) {
+export default function ListTable({ meta, data, sort, order, onSort, onOpen, onFilter, selection, extraColumns, headers }: Props) {
   const table = meta.name;
   const columns = listColumns(meta);
+  const extrasAfter = (key: string) => (extraColumns ?? []).filter((extra) => extra.after === key);
   const pageIds = (data?.items ?? []).map((item) => Number(item.id));
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selection?.selected.has(id));
 
@@ -59,7 +67,14 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
           <tr>
             {sortHeader("id", "id")}
             {meta.label_column ? sortHeader(meta.label_column, T.list.name) : <th>{T.list.name}</th>}
-            {columns.map((c) => sortHeader(c.key, c.key))}
+            {columns.map((c) => (
+              <Fragment key={c.key}>
+                {sortHeader(c.key, headers?.[c.key] ?? c.key)}
+                {extrasAfter(c.key).map((extra) => (
+                  <th key={extra.key}>{extra.label}</th>
+                ))}
+              </Fragment>
+            ))}
             {!NO_PREVIEW.has(table) && <th>{T.list.text}</th>}
             {selection && (
               <th className="check">
@@ -98,23 +113,28 @@ export default function ListTable({ meta, data, sort, order, onSort, onOpen, onF
                 )}
               </td>
               {columns.map((c) => (
-                <td key={c.key}>
-                  {onFilter && c.references && item[c.key] != null ? (
-                    // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
-                    <span
-                      className="ref"
-                      title={T.list.filterBy(c.key)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onFilter(c.key, String(item[c.key]));
-                      }}
-                    >
-                      {cellText(c, item, data.labels)}
-                    </span>
-                  ) : (
-                    cellText(c, item, data.labels)
-                  )}
-                </td>
+                <Fragment key={c.key}>
+                  <td>
+                    {onFilter && c.references && item[c.key] != null ? (
+                      // 参照列は、その値で一覧を絞り込む(作品の欄なら、その作品の話だけを並べる)
+                      <span
+                        className="ref"
+                        title={T.list.filterBy(c.key)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFilter(c.key, String(item[c.key]));
+                        }}
+                      >
+                        {cellText(c, item, data.labels)}
+                      </span>
+                    ) : (
+                      cellText(c, item, data.labels)
+                    )}
+                  </td>
+                  {extrasAfter(c.key).map((extra) => (
+                    <td key={extra.key}>{extra.render(item)}</td>
+                  ))}
+                </Fragment>
               ))}
               {!NO_PREVIEW.has(table) && <td className="preview">{String(item.preview ?? "")}</td>}
               {selection && (

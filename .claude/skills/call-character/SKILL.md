@@ -18,7 +18,7 @@ description: 登場人物を一人呼び出し、その人物が出た一番新�
    - 手元: `select e.id, e.title, e.start, e.story_id from episode e join episode_character ec on ec.episode_id = e.id where ec.character_id = <人物id> and not ec.mentioned and e.main_text <> '' order by e.start desc limit 1`
    - ユーザが話を名指ししたら(「call ep61 イルウェン」「ep61 のイルウェンを呼んで」)、その話を使う
    - 本文のある話が一つも無ければ始めず、そう伝え、「call <人物名> <歳>」なら呼べると添える
-3. **その話で人物の身に起きたことをまとめる**: `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[<話id>]}` で本文(`main_text`)を読み、その人物が見た・聞いた・したことだけを、その人物の目から数行にまとめる(ほかの人物の内心、その人物のいない場面は入れない)。時刻は書かない(人物役には暦を渡さない)
+3. **その話で人物の身に起きたことをまとめる**: `episode.read_episode_texts.ReadEpisodeTexts` `{"episode_ids":[<話id>]}` で本文(`main_text`)を読み、その人物が見た・聞いた・したことだけを、その人物の目から数行にまとめる(ほかの人物の内心、その人物のいない場面は入れない)。年の数は書かない(人物役は `knowledge` の「いま」で月日・時間帯を受け取る)
 4. **話し相手を決める**: ユーザが「ノアとして」などと言っていれば、その人物(id を引く)。言っていなければ、その場に現れた名前を知らない相手とする
 
 ### 歳で呼ぶ
@@ -30,7 +30,7 @@ description: 登場人物を一人呼び出し、その人物が出た一番新�
    - web: 結ばれた話は `episode` の行の `character_ids`、名前の出る話は `curl -sS -G -H "$h" "$api/api/tables/episode/options" --data-urlencode 'q=<人物名>'`。手元: `episode_character` と `episode.plot_text like '%<人物名>%'`
    - ユーザが話や月を言っていれば(「call ep145 ネフェリア 17」「17歳の冬の〜」)、それに合う話を使う
    - 幅の中に話が無ければ、話を使わず、歳になった日を時刻にする(時刻で呼ぶ)
-3. **その時点までの人物を整理する**: 次を、その人物の目から数行にまとめる。時刻は書かない(人物役には暦を渡さない)
+3. **その時点までの人物を整理する**: 次を、その人物の目から数行にまとめる。年の数は書かない(人物役は `knowledge` の「いま」で月日・時間帯を受け取る)
    - 時点までの来歴(時刻を渡さない `ReadCharacter` の `histories` のうち、`start` が時点以前の行)と、関係の来歴(`ListCharacterRelations` の、時点に続いている関係の、時点までの行)
    - 時点までの話のうち、その人物が出る(結ばれている・プロットに名前が出る)もの: 本文があれば本文、無ければプロット(`ReadEpisodeTexts` の `plot_text`)から、その人物が見た・聞いた・したことだけ。使う話はそのすぐ前の時点で終えたところまで
    - 時点より後のこと(後の来歴・後の話のプロット・筋書き `plot`)は入れない

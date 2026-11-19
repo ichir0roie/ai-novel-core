@@ -27,6 +27,7 @@ class IdeaRecord(Material):
     name: str
     kind: str
     parent_idea_id: int | None = None
+    story_id: int | None = None
     histories: list[IdeaHistoryRow]
     text: str
 

@@ -1,7 +1,9 @@
 """人物がある時刻に知ることのできるデータ(人物役が自分で読む材料)と、会った相手から見て分かること。
 
-人物役には時刻・年を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
-来歴・履歴の行は、その時刻から何年前かと本文をつないだ一文(「10年前、〜」「今年、〜」)で渡す。
+人物役には年の数を渡さない(作中の暦は db の年と桁が違い、年の数そのものが筋の外の手がかりになる)。
+今の時刻は月日・時間帯・時で(「いま」)、物事の古さは、その時刻からの隔たりを人物の暦の単位一つで渡す(`time_sense.py`)。
+来歴・履歴の行は隔たりと本文をつないだ一文(「3日前、〜」「2週間前、〜」「5年前、〜」)にし、持ち物・記憶・隠し事のような
+今も続いている種別付きの行は「3年前から、持ち物: 〜」と言う。
 
 - 人物の来歴(持ち物・記憶・隠し事も種別付きの行)・スキルの来歴・アイデアの履歴・場所の来歴は、知る相手(`KnowerMixin`)に
   当たる行だけ。知る相手が場所なら、その時刻にその場所(配下も含む)に住む人物が、知った時刻から知る。
@@ -11,12 +13,14 @@
   受け止め方)、スキルの名前と来歴の行だけ。
 - アイデアはすべて渡すと多すぎるので、はじめはプロットに名前(本質の名前か知っている呼び名)が出るものだけ。手番の要求に出た語は、
   人物役が `known_ideas_by_words` で引く。
-- 装いは種別「装い」のスキルで持ち、見た人にそのまま知れるので、見た目(`skills.outfit_at`)に入れ、スキルの一覧には入れない。
+- 装いは種別「装い」のスキルで持ち、見た人にそのまま知れるので、見た目(`skills.worn_at`)に入れ、スキルの一覧には入れない。
+  物ごとに、物の名前(スキルの名前)・今の姿(効いている一番新しい行)・いつから身に着けているか(`skills.worn_since`)を渡す。
 - 人物の範囲は本人と、その時刻に関係(`character_relation`)のある人物。本人には外見・芯・ミーム・行動原理・性格を、関係のある人物には
   外見と芯を渡し、plot はだれにも渡さない。話を渡したときは、関係のある人物の外見・芯・来歴をその話の登場人物・名前だけ出る人物の分だけ
   渡す(場にいない人物は関係の行の名前と間柄で足りる)。初対面の相手は、語り部が見た目(`appearance_of`)を差分で伝える。
-- 本人が前の話の手番で言ったセリフ(`character_speech`)は、その時刻までに始まった話のもの(演じている話は除く)を、言ってからの日数で
-  原文(数日)・鮮明(一年)・あやふや(それより後)のどれか一つにして、話ごとに渡す。
+- 本人が前の話の手番で言ったセリフ(`character_speech`)は、その時刻までに始まった話のもの(演じている話は除く)を、言ってからの
+  人物の暦の日数で原文(`constants.SPEECH_VERBATIM_DAYS` 日まで)・鮮明(`SPEECH_VIVID_DAYS` 日まで)・あやふや(それより後)の
+  どれか一つにして、話ごとに渡す。
 - 本人が居合わせた出来事(`event_character` に本人がいる行)は、その時刻までのものを新しいほうから
   `constants.KNOWLEDGE_EVENT_LIMIT` 件、古い順に渡す。新しい `constants.KNOWLEDGE_EVENT_TEXT_COUNT` 件は本文で、それより前は要約で。
   話の外で人物が交わした会話(スキル `character-scenes`)を、話の中の人物役が覚えているようにするため。居合わせたので知る相手では絞らない。
@@ -30,7 +34,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import model_serializer
+from pydantic import Field, model_serializer
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -39,6 +43,7 @@ from data_access_logic.character import skills
 from data_access_logic.character.cast import age_at, relations_at
 from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, personality_for_prompt
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character.time_sense import TimeSense
 from data_access_logic.history_start import by_start
 from data_access_logic.idea.models import normalized
 from data_access_logic.material import Material, Timestamp
@@ -48,7 +53,7 @@ from db.schema import (
     Character, CharacterHistory, CharacterMotivation, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode,
     Event, IdeaHistory, IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
 )
-from db.stamp import Stamp
+from db.stamp import Calendar, Stamp, active_calendar
 
 
 @dataclass(frozen=True)
@@ -118,33 +123,42 @@ def known_histories(
     return [KnownHistory.model_validate(row) for row in sorted(known, key=by_start)]
 
 
-def _ago(start: Stamp | None, year: int) -> str | None:
-    """起きた時刻を、その時刻の年から何年前かで言う(人物の覚えは年で足りる)。"""
+def _history_line(sense: TimeSense, now: Stamp, start: Stamp | None, description: str, kind: str | None = None) -> str:
+    """隔たりと本文を一文につなぐ(「3日前、〜」)。種別付きの行は今も続いている物事なので、いつからかで言い、種別を本文の頭に付ける
+    (「3年前から、持ち物: 〜」)。"""
     if start is None:
-        return None
-    return "今年" if start.year == year else f"{year - start.year}年前"
+        return description if kind is None else f"{kind}: {description}"
+    if kind is None:
+        return f"{sense.ago(start, now)}、{description}"
+    return f"{sense.since(start, now)}、{kind}: {description}"
 
 
-def _history_line(start: Stamp | None, description: str, year: int, kind: str | None = None) -> str:
-    """何年前かと本文を一文につなぐ(「10年前、〜」)。種別があれば本文の頭に付ける(「今年、装い: 〜」)。"""
-    return f"{_ago(start, year)}、{description}" if kind is None else f"{_ago(start, year)}、{kind}: {description}"
+def _histories_for_prompt(histories: list[KnownHistory], sense: TimeSense, now: Stamp) -> list[str]:
+    return [_history_line(sense, now, history.start, history.description, history.kind) for history in histories]
 
 
-def _histories_for_prompt(histories: list[KnownHistory], year: int) -> list[str]:
-    return [_history_line(history.start, history.description, year, history.kind) for history in histories]
+def _skills_for_prompt(known: list[KnownSkill], sense: TimeSense, now: Stamp) -> list[dict[str, Any]]:
+    return [{"名前": skill.name, "来歴(古い順)": _histories_for_prompt(skill.histories, sense, now)} for skill in known]
 
 
-def _skills_for_prompt(known: list[KnownSkill], year: int) -> list[dict[str, Any]]:
-    return [{"名前": skill.name, "来歴(古い順)": _histories_for_prompt(skill.histories, year)} for skill in known]
-
-
-def _relations_for_prompt(relations: list[CharacterRelationLine], year: int) -> list[dict[str, Any]]:
+def _relations_for_prompt(relations: list[CharacterRelationLine], sense: TimeSense, now: Stamp) -> list[dict[str, Any]]:
     return [
         {"誰から": relation.character_1.name, "誰へ": relation.character_2.name, "関係": relation.relation,
          "説明": relation.text,
-         "来歴(古い順)": [_history_line(history.start, history.description, year) for history in relation.histories]}
+         "来歴(古い順)": [_history_line(sense, now, history.start, history.description) for history in relation.histories]}
         for relation in relations
     ]
+
+
+class WornItem(Material):
+    """身に着けている物一つ。"""
+
+    # 物の名前(装いのスキルの名前)
+    name: str
+    # 今の姿(効いている一番新しい来歴の行の文)
+    description: str
+    # 身に着け始めた時刻(`skills.worn_since`)
+    start: Timestamp | None = None
 
 
 class AppearanceSerialized(Material):
@@ -153,21 +167,30 @@ class AppearanceSerialized(Material):
     kind: str
     age: int | None = None
     parameters: CharacterParameterValues
-    # その時刻に効いている装いの行(身に着けている物ごと)
-    outfit: list[str] = []
+    # その時刻に身に着けている物(身に着けた順)
+    outfit: list[WornItem] = []
     appearance: str | None = None
+    # 見た時刻と、隔たりを数える暦(組み立てたときの文脈の暦。dump するときの文脈に左右されない)
+    time: Stamp
+    calendar: Calendar | None = Field(default_factory=active_calendar)
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        parameters = self.parameters
+        parameters, sense = self.parameters, TimeSense(self.calendar)
         return {"種別": self.kind, "年齢": self.age, "性別": parameters.sex, "背丈": parameters.height,
-                "体格": parameters.build, "装い": self.outfit, "外見": self.appearance}
+                "体格": parameters.build,
+                "装い": [{"物": item.name, "姿": item.description,
+                          "いつから": None if item.start is None else sense.ago(item.start, self.time)}
+                         for item in self.outfit],
+                "外見": self.appearance}
 
 
 def appearance_of(s: Session, character: Character, time: Stamp) -> AppearanceSerialized:
+    outfit = [WornItem(name=skill.name, description=rows[-1].description, start=skills.worn_since(skill, rows))
+              for skill, rows in skills.worn_at(s, character, time)]
     return AppearanceSerialized(kind=character.kind, age=age_at(character, time),
-                                parameters=parameters_at(character, time), outfit=skills.outfit_at(s, character, time),
-                                appearance=character.appearance)
+                                parameters=parameters_at(character, time), outfit=outfit,
+                                appearance=character.appearance, time=time)
 
 
 class KnownSelf(Material):
@@ -230,52 +253,44 @@ def _strength(strength: int) -> str:
     return f"{strength}({constants.MOTIVATION_STRENGTHS.get(strength, '')})"
 
 
-def _motivations_for_prompt(motivations: list[KnownMotivation], time: Stamp) -> dict[str, list[dict[str, Any]]]:
+def _motivations_for_prompt(motivations: list[KnownMotivation], sense: TimeSense, now: Stamp,
+                            ) -> dict[str, list[dict[str, Any]]]:
     """効いている行は、話の差分で指せるように id を付ける。終わった行は指して変えられないので id を付けない。"""
     return {
         "モチベーション(強い順)": [
             {"モチベーションid": motivation.id, "強さ": _strength(motivation.strength), "内容": motivation.text,
-             "いつから": _when(motivation.start, time)}
+             "いつから": sense.ago(motivation.start, now)}
             for motivation in motivations if motivation.end is None],
         "昔のモチベーション(強い順)": [
-            {"強さ": _strength(motivation.strength), "内容": motivation.text, "いつから": _when(motivation.start, time),
-             "いつ終わった": _when(motivation.end, time)}
+            {"強さ": _strength(motivation.strength), "内容": motivation.text, "いつから": sense.ago(motivation.start, now),
+             "いつ終わった": sense.ago(motivation.end, now)}
             for motivation in motivations if motivation.end is not None],
     }
 
 
-def _when(start: Stamp, time: Stamp) -> str:
-    """出来事は会話の中身まで覚えているので、近いものは日で言う。一月より前は年で言う。"""
-    days = start.days_until(time)
-    if days <= 0:
-        return "今日"
-    if days <= 30:
-        return f"{days}日前"
-    return _ago(start, time.year) or ""
-
-
-def _events_for_prompt(events: list[KnownEvent], time: Stamp) -> list[dict[str, Any]]:
-    return [{"いつ": _when(event.time, time), "名前": event.name, "場所": event.location_name,
+def _events_for_prompt(events: list[KnownEvent], sense: TimeSense, now: Stamp) -> list[dict[str, Any]]:
+    return [{"いつ": sense.ago(event.time, now), "名前": event.name, "場所": event.location_name,
              "居合わせた人物": event.characters,
              **({"本文": event.text} if event.text is not None else {"要約": event.summary})}
             for event in events]
 
 
-def _speeches_for_prompt(speeches: list[KnownSpeech], time: Stamp) -> list[dict[str, Any]]:
-    """話ごとに、言ってからの日数で原文・鮮明・あやふやのどれか一つを渡す。"""
+def _speeches_for_prompt(speeches: list[KnownSpeech], sense: TimeSense, now: Stamp) -> list[dict[str, Any]]:
+    """話ごとに、言ってからの人物の暦の日数で原文・鮮明・あやふやのどれか一つを渡す。"""
     by_episode: dict[int, list[KnownSpeech]] = {}
     for speech in speeches:
         by_episode.setdefault(speech.episode.id, []).append(speech)
     recalled: list[dict[str, Any]] = []
     for lines in by_episode.values():
         start = lines[0].episode.start
-        if start.plus_days(constants.SPEECH_VERBATIM_DAYS) >= time:
-            when, recall, texts = "この数日", "言ったとおりに覚えている", [line.verbatim for line in lines]
-        elif start.plus_days(constants.SPEECH_VIVID_DAYS) >= time:
-            when, recall, texts = _ago(start, time.year), "中身ははっきり覚えている", [line.vivid for line in lines]
+        days = sense.days(start, now)
+        if days <= constants.SPEECH_VERBATIM_DAYS:
+            recall, texts = "言ったとおりに覚えている", [line.verbatim for line in lines]
+        elif days <= constants.SPEECH_VIVID_DAYS:
+            recall, texts = "中身ははっきり覚えている", [line.vivid for line in lines]
         else:
-            when, recall, texts = _ago(start, time.year), "おぼろげに覚えている", [line.vague for line in lines]
-        recalled.append({"いつ": when, "覚え": recall, "セリフ": texts})
+            recall, texts = "おぼろげに覚えている", [line.vague for line in lines]
+        recalled.append({"いつ": sense.ago(start, now), "覚え": recall, "セリフ": texts})
     return recalled
 
 
@@ -296,33 +311,38 @@ class KnowledgeSerialized(Material):
     events: list[KnownEvent] | None = None
     # 本人のモチベーション(強い順。終わった行は `end` を持つ)。人物モードは別に渡すので None にして、見出しごと出さない
     motivations: list[KnownMotivation] | None = None
+    # 今の時刻(「いま」)を出すか。人物モードは自分の材料の頭に出すので外す
+    with_now: bool = True
+    # 隔たりを数える暦(組み立てたときの文脈の暦。dump するときの文脈に左右されない)
+    calendar: Calendar | None = Field(default_factory=active_calendar)
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        me, parameters, year = self.me, self.parameters, self.time.year
+        me, parameters, now, sense = self.me, self.parameters, self.time, TimeSense(self.calendar)
         events = {} if self.events is None else {
-            "居合わせた出来事(古い順)": _events_for_prompt(self.events, self.time)}
-        motivations = {} if self.motivations is None else _motivations_for_prompt(self.motivations, self.time)
+            "居合わせた出来事(古い順)": _events_for_prompt(self.events, sense, now)}
+        motivations = {} if self.motivations is None else _motivations_for_prompt(self.motivations, sense, now)
         return {
+            **({"いま": sense.now_for_prompt(now)} if self.with_now else {}),
             "自分": {
                 "名前": me.name, **me.looks.model_dump(), "名字": parameters.family_name,
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
                 "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
                 "行動原理": me.principle, "性格": personality_for_prompt(parameters),
-                "来歴(古い順)": _histories_for_prompt(me.histories, year),
-                "スキル": _skills_for_prompt(me.skills, year),
-                "言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, self.time),
+                "来歴(古い順)": _histories_for_prompt(me.histories, sense, now),
+                "スキル": _skills_for_prompt(me.skills, sense, now),
+                "言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, sense, now),
                 **events,
                 **motivations,
             },
-            "関係": _relations_for_prompt(self.relations, year),
+            "関係": _relations_for_prompt(self.relations, sense, now),
             "知っている人物": [
                 {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
-                 "来歴(古い順)": _histories_for_prompt(character.histories, year),
-                 "スキル": _skills_for_prompt(character.skills, year)}
+                 "来歴(古い順)": _histories_for_prompt(character.histories, sense, now),
+                 "スキル": _skills_for_prompt(character.skills, sense, now)}
                 for character in self.characters],
             "知っているアイデア": [_idea_for_prompt(idea) for idea in self.ideas],
-            "知っている場所": [{"名前": place.name, "来歴(古い順)": _histories_for_prompt(place.histories, year)}
+            "知っている場所": [{"名前": place.name, "来歴(古い順)": _histories_for_prompt(place.histories, sense, now)}
                          for place in self.places],
         }
 
@@ -477,13 +497,14 @@ def _motivations(s: Session, character_id: int, time: Stamp) -> list[KnownMotiva
 
 def knowledge_of(
     s: Session, character_id: int, time: Stamp, plot_text: str, scene_ids: set[int] | None,
-    acting_episode_id: int | None, with_events: bool = False, with_motivations: bool = False,
+    acting_episode_id: int | None, with_events: bool = False, with_motivations: bool = False, with_now: bool = True,
 ) -> KnowledgeSerialized:
     """アイデアは、`plot_text` に名前の出るものだけを入れる。
     知っている人物(外見・芯・来歴)は、関係のある人物のうち `scene_ids`(話の登場人物・名前だけ出る人物)にいる人物だけ。
     ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。
     言ったセリフは、`acting_episode_id`(演じている話)のものを除く。
-    居合わせた出来事は `with_events`、本人のモチベーションは `with_motivations` のときだけ入れる(人物モードはどちらも別に渡す)。"""
+    居合わせた出来事は `with_events`、本人のモチベーションは `with_motivations`、今の時刻は `with_now` のときだけ入れる
+    (人物モードはどれも別に渡す)。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)
@@ -504,6 +525,7 @@ def knowledge_of(
         speeches=_speeches(s, character_id, time, acting_episode_id),
         events=_events(s, character_id, time) if with_events else None,
         motivations=_motivations(s, character_id, time) if with_motivations else None,
+        with_now=with_now,
     )
 
 

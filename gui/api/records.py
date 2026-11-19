@@ -51,6 +51,9 @@ class EpisodeLink(BaseModel):
     id: int
     label: str
     letters: int
+    # 作品の暦で数えた始まりと、同じ時刻を西暦で数えたもの(作品の画面が並べて出す)。暦の無い作品では同じ
+    start: str | None = None
+    western_start: str | None = None
 
 
 class ContextBlock(BaseModel):
@@ -230,7 +233,8 @@ def related_of(s: Session, record: Material) -> Related:
         episodes = s.scalars(common_query.story_episodes_select(record.id)).all()
         return StoryRelated(episodes=[
             EpisodeLink(table=Episode.__tablename__, id=episode.id, label=label_of(Episode, episode),
-                        letters=episode.letters)
+                        letters=episode.letters, start=None if episode.start is None else str(episode.start),
+                        western_start=None if episode.start is None else episode.start.western_text())
             for episode in episodes])
     if isinstance(record, EpisodeRecord):
         return EpisodeRelated(

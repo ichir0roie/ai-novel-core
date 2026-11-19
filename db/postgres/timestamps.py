@@ -11,11 +11,18 @@ from collections.abc import Iterable
 from sqlalchemy import Connection, text
 
 FUNCTION = "set_updated_at"
+# 立てた取引の中では直した時刻を進めない(`SET LOCAL novel.keep_updated_at = 'on'`)。時刻の暦の読み替えのように、
+# 画面に出る中身を変えない書き直しが、話を直したことにならないようにする(なろうの書き換え・自動推敲の順は直した時刻を見る)
+KEEP_SETTING = "novel.keep_updated_at"
 
 CREATE_FUNCTION = f"""
 CREATE OR REPLACE FUNCTION {FUNCTION}() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    NEW.updated_at := now();
+    IF coalesce(current_setting('{KEEP_SETTING}', true), '') = 'on' THEN
+        NEW.updated_at := OLD.updated_at;
+    ELSE
+        NEW.updated_at := now();
+    END IF;
     RETURN NEW;
 END
 $$
@@ -33,3 +40,8 @@ def install_updated_at(conn: Connection, tables: Iterable[str]) -> None:
     conn.execute(text(CREATE_FUNCTION))
     for table in tables:
         conn.execute(text(trigger_sql(table)))
+
+
+def keep_updated_at(conn: Connection) -> None:
+    """この取引の中の書き直しで、直した時刻を進めない。"""
+    conn.execute(text(f"SET LOCAL {KEEP_SETTING} = 'on'"))

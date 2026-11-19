@@ -74,7 +74,7 @@ def character_sheet(s: Session, character_id: int, until: Stamp | str | None = N
         principle=character.principle if text else None,
         plot=character.plot if text else None,
         histories=histories_at(character, time) if text else [],
-        location=_location_at(s, character_id, time if time is not None else Stamp(99999, 12, 31, 23, 59, 59)),
+        location=_location_at(s, character_id, time if time is not None else Stamp.western(99999, 12, 31, 23, 59, 59)),
         recent_events=events_of(
             s, common_query.events_of_character_select, character_id, until=time, limit=count, text=text),
     )

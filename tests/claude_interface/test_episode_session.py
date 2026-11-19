@@ -169,7 +169,7 @@ def test_read_knowledge(shown, world):
     assert "テスト用の技術" not in str(result["知っているアイデア"])
 
 
-def test_read_knowledge_tells_years_ago_instead_of_years(shown, world):
+def test_read_knowledge_tells_how_long_ago_instead_of_years(shown, world):
     taro, _ = world.character_ids
     shown(UpdateCharacter(CharacterUpdateForm(id=taro, histories=[
         CharacterHistoryRow(start=1190, description="市に越してくる", knowers=[KnowerRow(knower_id=taro)]),
@@ -179,7 +179,9 @@ def test_read_knowledge_tells_years_ago_instead_of_years(shown, world):
 
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
-    assert "時刻" not in result
+    # 年の数は渡さず、今の時刻は月日・時間帯・時で、来歴は今からの隔たりで渡す(年だけ決めた行は年でだけ言う)
+    assert "1200" not in json.dumps(result, ensure_ascii=False)
+    assert result["いま"] == {"日付": "4月1日", "時間帯": "昼", "時刻": "12時ごろ"}
     assert result["自分"]["来歴(古い順)"] == ["10年前、市に越してくる", "今年、店を継ぐ"]
     relation = next(relation for relation in result["関係"] if relation["関係"] == "幼なじみ")
     assert relation["来歴(古い順)"] == ["5年前、市で再会する"]
@@ -196,7 +198,7 @@ def test_read_knowledge_at_the_latest_turn(shown, world, monkeypatch: pytest.Mon
     session.add({"witness_ids": [], "turns": [{"character_id": taro, "time": "1203/05/01", "request": "三年が過ぎた"},
                                               {"character_id": hanako, "request": "太郎が来た"}]})
 
-    # 人物役には時刻を渡さないので、手番のファイルにあるその人物の一番新しい手番の時刻で読む
+    # 人物役には年の数を渡さないので、手番のファイルにあるその人物の一番新しい手番の時刻で読む
     moment = episode_session._knowing(world.episode_id, taro, None)
     assert moment == {"episode_id": world.episode_id, "time": "1203/05/01"}
     result = shown(ReadKnowledge(character_id=taro, **moment))
@@ -218,7 +220,7 @@ def test_read_knowledge_events_the_character_was_at(shown, world, add_events, mo
 
     events = result["自分"]["居合わせた出来事(古い順)"]
     assert [(event["いつ"], event["名前"]) for event in events] == [
-        ("1年前", "去年の会話"), ("7日前", "先週の会話"), ("今日", "テスト市")]
+        ("1年前", "去年の会話"), ("1週間前", "先週の会話"), ("ついさっき", "テスト市")]
     # 新しいほうの出来事は本文で、それより前は要約で
     assert "本文" not in events[0] and events[0]["要約"] is None
     assert events[1]["本文"] == "先週の会話の本文"
@@ -442,11 +444,17 @@ def test_read_appearance(shown, world):
     later = shown(ReadAppearance(character_id=world.character_ids[1], time="1220/01/01"))
     before = shown(ReadAppearance(character_id=world.character_ids[1], time="1180/01/01"))
 
-    # 体格は、その時刻までに始まった一番新しい行の値。装いは、身に着けている物ごとに、その時刻に効いている来歴の行の文
+    # 体格は、その時刻までに始まった一番新しい行の値。装いは、身に着けている物ごとに、物の名前と、その時刻に効いている
+    # 来歴の行の文と、いつから身に着けているか
     assert result == {"種別": "人物", "年齢": 30, "性別": "女", "背丈": 170.5, "体格": "細身",
-                      "装い": ["腰に木剣", "灰色の外套"], "外見": "髪が赤い"}
-    # 終わり(`end`)の時刻からは、その来歴の行は効かない(物を手放した・移り変わった)
-    assert (later["体格"], later["装い"]) == ("肩の厚い体", ["裾の焦げた灰色の外套", "背に大剣"])
+                      "装い": [{"物": "木剣", "姿": "腰に木剣", "いつから": "9年前"},
+                               {"物": "外套", "姿": "灰色の外套", "いつから": "8年前"}],
+                      "外見": "髪が赤い"}
+    # 終わり(`end`)の時刻からは、その来歴の行は効かない(物を手放した・移り変わった)。姿が移り変わっただけの外套は、
+    # 前の行から続いているので、初めに身に着けた時から数える
+    assert later["体格"] == "肩の厚い体"
+    assert later["装い"] == [{"物": "外套", "姿": "裾の焦げた灰色の外套", "いつから": "28年前"},
+                            {"物": "大剣", "姿": "背に大剣", "いつから": "10年前"}]
     assert before["装い"] == []
 
 
@@ -458,13 +466,15 @@ def test_read_knowledge_tells_kind_of_histories(shown, world):
     result = shown(ReadKnowledge(episode_id=world.episode_id, character_id=hanako))
     others = shown(ReadKnowledge(episode_id=world.episode_id, character_id=taro))
 
-    # 種別の行は種別を頭に付けて渡し、隠し事は知る相手(本人)だけが知る。装いは見た目にだけ入れ、スキルには入れない
-    assert result["自分"]["来歴(古い順)"] == ["5年前、隠し事: 袋に短刀"]
-    assert result["自分"]["装い"] == ["腰に木剣", "灰色の外套"]
+    # 種別の行は今も続いている物事なので、いつからかと種別を頭に付けて渡し、隠し事は知る相手(本人)だけが知る。
+    # 装いは見た目にだけ入れ、スキルには入れない
+    assert result["自分"]["来歴(古い順)"] == ["5年前から、隠し事: 袋に短刀"]
+    outfit = [{"物": "木剣", "姿": "腰に木剣", "いつから": "9年前"}, {"物": "外套", "姿": "灰色の外套", "いつから": "8年前"}]
+    assert result["自分"]["装い"] == outfit
     assert result["自分"]["スキル"] == []
     known = _known_person(others, "テスト花子")
-    assert "5年前、隠し事: 袋に短刀" not in known["来歴(古い順)"]
-    assert known["装い"] == ["腰に木剣", "灰色の外套"]
+    assert "5年前から、隠し事: 袋に短刀" not in known["来歴(古い順)"]
+    assert known["装い"] == outfit
 
 
 def test_read_knowledge_skips_unrelated_cast(shown, world):
@@ -690,8 +700,9 @@ def test_session_turns():
         {"character_id": HANAKO, "request": "太郎が手を振った"}]}))
 
     assert session.turn(HANAKO)["status"] == "waiting"
-    # 人物役には番の行の時刻を渡さない
-    assert session.turn(TARO)["record"] == {"id": taro_turn, "seen": [], "request": "市で花子を見かけた"}
+    # 人物役には番の行の時刻を、年を抜いた今の時刻で渡す。時刻の無い行には何も足さない
+    assert session.turn(TARO)["record"] == {"id": taro_turn, "いま": {"日付": "4月1日", "時間帯": "昼", "時刻": "12時ごろ"},
+                                            "seen": [], "request": "市で花子を見かけた"}
     with pytest.raises(ValueError, match="まだ番が来ていない"):
         session.answer(hanako_turn, {"action": "手を振り返す"})
 
@@ -730,7 +741,8 @@ def test_narration_and_moves_reach_the_witnesses_once():
         {"character_id": TARO, "time": "1200/04/01 12:00", "request": "鐘を聞いての一手"}]}))
 
     # 語りの行は手番に数えず、見聞きする人物の番に届く
-    assert session.turn(TARO)["record"] == {"id": taro_turn, "seen": ["市に鐘が鳴った"], "request": "鐘を聞いての一手"}
+    assert session.turn(TARO)["record"] == {"id": taro_turn, "いま": {"日付": "4月1日", "時間帯": "昼", "時刻": "12時ごろ"},
+                                            "seen": ["市に鐘が鳴った"], "request": "鐘を聞いての一手"}
     session.answer(taro_turn, {"thought": "花子だ", "action": "手を振る", "speech": "よう", "aim": "気づかせる"})
     [hanako_turn] = _ids(session.add({"witness_ids": [TARO], "turns": [{"character_id": HANAKO, "request": "返事"}]}))
     # ほかの人物の一手は行動とセリフだけが名前付きで届き、内心・狙いは届かない
