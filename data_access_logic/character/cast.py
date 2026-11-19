@@ -31,7 +31,7 @@ def relations_at(
     s: Session, characters: list[Character], time: Stamp,
     period: Callable[[Period, Stamp], ColumnElement[bool]] = alive_at,
 ) -> list[CharacterRelationLine]:
-    """`characters` のどれかが片側にいて、`time` に続いている(`period` に当たる)関係を、`time` の年までに起きた来歴だけを
+    """`characters` のどれかが片側にいて、`time` に続いている(`period` に当たる)関係を、`time` までに起きた来歴だけを
     付けて返す。
 
     関係の芯(`text`)は時期を限らないので、先のことは来歴の行に書けば、それより前の話・人物役には渡らない。

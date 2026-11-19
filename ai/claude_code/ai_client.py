@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from ai.instructions.materials import SAFETY_NOTE
+from ai.instructions.materials import SAFETY_NOTE, calendar_note
 from data_access_logic.caller import call
 from data_access_logic.style_preference import steps as style_steps
 from data_access_logic.style_preference.form import WritingStyleForm
@@ -99,8 +99,10 @@ def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
     return reply
 
 
-def styled_system(system: str | None, writing_style: str) -> str:
-    return "\n\n".join(part for part in (system, SAFETY_NOTE, writing_style and f"書く文の書き方:\n{writing_style}") if part)
+def styled_system(system: str | None, writing_style: str, with_calendar: bool = True) -> str:
+    """`with_calendar` は暦の数え方(年を含む表記の決まり)を足すか。人物の目の生成には年を渡さないので足さない。"""
+    return "\n\n".join(part for part in (system, SAFETY_NOTE, calendar_note() if with_calendar else "",
+                                          writing_style and f"書く文の書き方:\n{writing_style}") if part)
 
 
 def generate[Output: BaseModel](
@@ -120,7 +122,8 @@ def generate[Output: BaseModel](
     load_env()
     # 世界ごとの書き方なので、そのつど db の段で読む
     writing_style = "" if style_scope is None else call(style_steps.writing_style, WritingStyleForm(scope=style_scope))
-    args = _build_args(styled_system(system, writing_style), output.model_json_schema(), tools, model, effort)
+    system_text = styled_system(system, writing_style, with_calendar=style_scope is not StyleScope.ACTING)
+    args = _build_args(system_text, output.model_json_schema(), tools, model, effort)
     try:
         reply = _reply(prompt, args, timeout)
         if reply.structured_output is not None:

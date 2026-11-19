@@ -2,33 +2,81 @@
 
 import { useState } from "react";
 import Modal from "./Modal";
+import { useCalendar } from "@/lib/scope";
 import { T } from "@/lib/text";
-import { clampDay, daysInMonth, formatStamp, parseStamp, pad2, weekdayOf, type StampParts } from "@/lib/stamp";
+import {
+  clampDay,
+  daysInMonth,
+  daysInWeek,
+  formatStamp,
+  hoursInDay,
+  minutesInHour,
+  monthName,
+  monthsInYear,
+  parseStamp,
+  pad2,
+  secondsInMinute,
+  weekday,
+  weekdayOf,
+  type Calendar,
+  type StampParts,
+} from "@/lib/stamp";
 
 type Props = {
   value: string | null;
   onChange: (value: string | null) => void;
   disabled?: boolean;
+  /** 数える暦。省けば画面の暦(`CalendarProvider`)。null なら西暦 */
+  calendar?: Calendar | null;
 };
 
-function defaultParts(): StampParts {
+function defaultParts(calendar: Calendar | null): StampParts {
+  // 暦の作品では、今日の日付(西暦)は暦の桁として読めないことがあるので、暦の始まりから選ばせる
+  if (calendar) return { ...calendar.offset };
   const d = new Date();
   return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate(), hour: 0, minute: 0, second: 0 };
 }
 
-/** stamp 欄(年月日時分秒の文字列)向けの、カレンダー形式のポップアップ選択。 */
-export default function StampInput({ value, onChange, disabled }: Props) {
+/** stamp 欄(年月日時分秒の文字列)向けの、カレンダー形式のポップアップ選択。暦のある作品では、暦の始まりから先を暦の月・日・時間で数える */
+export default function StampInput({ value, onChange, disabled, calendar: given }: Props) {
+  const context = useCalendar();
+  const calendar = given === undefined ? context : given;
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<StampParts>(() => parseStamp(value) ?? defaultParts());
+  const [draft, setDraft] = useState<StampParts>(() => parseStamp(value) ?? defaultParts(calendar));
 
   const openPicker = () => {
-    setDraft(parseStamp(value) ?? defaultParts());
+    setDraft(parseStamp(value) ?? defaultParts(calendar));
     setOpen(true);
   };
 
-  const max = daysInMonth(draft.year, draft.month);
-  const lead = weekdayOf(draft.year, draft.month, 1);
-  const cells: (number | null)[] = [...Array(lead).fill(null), ...Array.from({ length: max }, (_, i) => i + 1)];
+  // 年・月・日を変えたら、その月の日数・その日の時間に収める(暦の始まりの前後で数え方が変わる)
+  const update = (change: (d: StampParts) => Partial<StampParts>) =>
+    setDraft((d) => clampDay({ ...d, ...change(d) }, calendar));
+
+  const max = daysInMonth(draft.year, draft.month, calendar);
+  const week = daysInWeek(draft.year, draft.month, calendar);
+  const days = Array.from({ length: max }, (_, i) => i + 1);
+  // 週に数える日は月の頭から続くので、1 日の列から詰めて並べる。週に数えない日(月の終わり)は格子の外に並べる
+  const inWeek = days.filter((day) => weekdayOf(draft.year, draft.month, day, calendar) !== null);
+  const outside = days.filter((day) => weekdayOf(draft.year, draft.month, day, calendar) === null);
+  const lead = weekdayOf(draft.year, draft.month, 1, calendar) ?? 0;
+  const cells: (number | null)[] = [...Array(lead).fill(null), ...inWeek];
+  const months = monthsInYear(draft.year, calendar);
+  const hours = hoursInDay(draft.year, draft.month, draft.day, calendar);
+  const minutes = minutesInHour(draft.year, draft.month, draft.day, calendar);
+  const seconds = secondsInMinute(draft.year, draft.month, draft.day, calendar);
+  const dayOfWeek = weekday(draft, calendar);
+  const dayButton = (day: number) => (
+    <button
+      key={day}
+      type="button"
+      className={`stamp-day ${day === draft.day ? "on" : ""}`}
+      onClick={() => update(() => ({ day }))}
+    >
+      {day}
+    </button>
+  );
+  const named = Array.from({ length: months }, (_, i) => monthName(draft.year, i + 1, calendar));
 
   const apply = () => {
     onChange(formatStamp(draft));
@@ -75,53 +123,51 @@ export default function StampInput({ value, onChange, disabled }: Props) {
           }
         >
           <div className="stamp-picker">
+            {calendar && <div className="stamp-calendar">{T.stamp.calendar(calendar.name)}</div>}
             <div className="stamp-year-row">
-              <button type="button" className="ghost" onClick={() => setDraft((d) => clampDay({ ...d, year: d.year - 1 }))}>
+              <button type="button" className="ghost" onClick={() => update((d) => ({ year: d.year - 1 }))}>
                 ‹
               </button>
               <input
                 type="number"
                 className="stamp-year"
                 value={draft.year}
-                onChange={(e) => setDraft((d) => clampDay({ ...d, year: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const year = Number(e.target.value);
+                  update(() => ({ year }));
+                }}
               />
-              <button type="button" className="ghost" onClick={() => setDraft((d) => clampDay({ ...d, year: d.year + 1 }))}>
+              <button type="button" className="ghost" onClick={() => update((d) => ({ year: d.year + 1 }))}>
                 ›
               </button>
             </div>
-            <div className="stamp-monthgrid">
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <div className={`stamp-monthgrid ${named.some(Boolean) ? "named" : ""}`}>
+              {named.map((name, i) => (
                 <button
-                  key={m}
+                  key={i}
                   type="button"
-                  className={`stamp-month ${m === draft.month ? "on" : ""}`}
-                  onClick={() => setDraft((d) => clampDay({ ...d, month: m }))}
+                  className={`stamp-month ${i + 1 === draft.month ? "on" : ""}`}
+                  title={name ?? undefined}
+                  onClick={() => update(() => ({ month: i + 1 }))}
                 >
-                  {T.stamp.month(m)}
+                  {name ?? T.stamp.month(i + 1)}
                 </button>
               ))}
             </div>
-            <div className="stamp-grid">
-              {cells.map((day, i) =>
-                day == null ? (
-                  <span key={i} />
-                ) : (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`stamp-day ${day === draft.day ? "on" : ""}`}
-                    onClick={() => setDraft((d) => ({ ...d, day }))}
-                  >
-                    {day}
-                  </button>
-                ),
-              )}
+            <div className="stamp-grid" style={{ gridTemplateColumns: `repeat(${week}, 1fr)` }}>
+              {cells.map((day, i) => (day == null ? <span key={`lead-${i}`} /> : dayButton(day)))}
             </div>
+            {outside.length > 0 && (
+              <div className="stamp-outside">
+                <span className="stamp-outside-label">{T.stamp.outsideWeek}</span>
+                {outside.map(dayButton)}
+              </div>
+            )}
             <div className="stamp-time">
               <label>
                 {T.stamp.hour}
-                <select value={draft.hour} onChange={(e) => setDraft((d) => ({ ...d, hour: Number(e.target.value) }))}>
-                  {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                <select value={draft.hour} onChange={(e) => update(() => ({ hour: Number(e.target.value) }))}>
+                  {Array.from({ length: hours }, (_, i) => i).map((h) => (
                     <option key={h} value={h}>
                       {pad2(h)}
                     </option>
@@ -130,8 +176,8 @@ export default function StampInput({ value, onChange, disabled }: Props) {
               </label>
               <label>
                 {T.stamp.minute}
-                <select value={draft.minute} onChange={(e) => setDraft((d) => ({ ...d, minute: Number(e.target.value) }))}>
-                  {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                <select value={draft.minute} onChange={(e) => update(() => ({ minute: Number(e.target.value) }))}>
+                  {Array.from({ length: minutes }, (_, i) => i).map((m) => (
                     <option key={m} value={m}>
                       {pad2(m)}
                     </option>
@@ -140,8 +186,8 @@ export default function StampInput({ value, onChange, disabled }: Props) {
               </label>
               <label>
                 {T.stamp.second}
-                <select value={draft.second} onChange={(e) => setDraft((d) => ({ ...d, second: Number(e.target.value) }))}>
-                  {Array.from({ length: 60 }, (_, i) => i).map((s) => (
+                <select value={draft.second} onChange={(e) => update(() => ({ second: Number(e.target.value) }))}>
+                  {Array.from({ length: seconds }, (_, i) => i).map((s) => (
                     <option key={s} value={s}>
                       {pad2(s)}
                     </option>
@@ -149,7 +195,10 @@ export default function StampInput({ value, onChange, disabled }: Props) {
                 </select>
               </label>
             </div>
-            <div className="stamp-preview">{formatStamp(draft)}</div>
+            <div className="stamp-preview">
+              {formatStamp(draft)}
+              {calendar && dayOfWeek !== null && <span className="stamp-weekday">{T.stamp.weekday(dayOfWeek)}</span>}
+            </div>
           </div>
         </Modal>
       )}

@@ -90,7 +90,8 @@ def brief(s: Session, location_id: int, when: Stamp | str | None = None, reach: 
                     .options(*common_query.EVENT_LOAD_OPTIONS)
                     .where(Event.location_id.in_(location_ids),
                            Event.time <= until,
-                           Event.time >= Stamp(max(1, since.year - reach)))
+                           # 窓はロジックなので、暦に依らず西暦の年で数える
+                           Event.time >= Stamp.western(max(1, since.western_digits[0] - reach)))
                     .order_by(Event.time.desc(), Event.id.desc()))
 
     character_ids = residents(s, location_ids, until)

@@ -102,6 +102,9 @@ def test_act_character_adds_rows_and_records_the_expansion(world):
     # 人物の目には、作者だけが読む筋書きを渡さない
     intent_call = ai.calls_of(IntentDraft)[0]
     assert "あなたが知っていること" in intent_call["prompt"]
+    # 人物の目には年の数を渡さず、今の時刻は月日・時間帯・時で、思い・出来事のいつは今からの隔たりで渡す
+    assert '"いま"' in intent_call["prompt"] and "いまの時刻" not in intent_call["prompt"]
+    assert "1200/" not in intent_call["prompt"]
     # 人物の目の段は一番安いモデル、裁く段は強いモデル
     assert (intent_call["model"], intent_call["effort"]) == (constants.ACT_MODEL, constants.ACT_EFFORT)
     judge_call = ai.calls_of(BatchOutcomeDraft)[0]

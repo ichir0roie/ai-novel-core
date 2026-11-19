@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 from sqlalchemy import Select, select
@@ -55,6 +55,10 @@ def record_of[M: Material](s: Session, record_model: type[M], row: Base) -> M:
 
 
 class Entrypoint:
+    # 呼ぶ口(`gui/api/interface.call`)が、引数から作品を決めて暦を立てるか。いろいろな作品の行をまとめて扱う入口は、
+    # 自分で行ごとに決めるので False にする
+    STORY_FROM_ARGS: ClassVar[bool] = True
+
     def run(self) -> dict | list[dict]:
         return dumped(self.result())
 

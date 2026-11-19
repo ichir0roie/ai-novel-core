@@ -15,7 +15,7 @@ from db.schema import (
     Base, Character, CharacterLocation, CharacterRelation, CharacterSkill, Episode, Event, EventCharacter, Idea,
     Location, Story,
 )
-from db.stamp import Stamp, StampError
+from db.stamp import Stamp, StampError, period_end
 
 # 当事者は名前と id しか使わないので、人物の selectin の子の表(パラメータ・居場所・来歴・知る相手)は読まない
 EVENT_LOAD_OPTIONS = (
@@ -27,17 +27,16 @@ EVENT_LOAD_OPTIONS = (
 # ---------------------------------------------------------------- 時刻
 
 def span(when: Stamp | str | int) -> tuple[Stamp, Stamp]:
+    """表記で指した期間の始まりと最後の時刻(`"11592"` なら暦の一年)。時刻そのものなら、その時刻だけ。"""
+    if isinstance(when, Stamp):
+        return when, when
     text = str(when).strip()
     at = Stamp.parse(text)
     if at is None:
         raise StampError("時刻が空")
     depth = 1 if text.isdigit() else len(
         [part for part in re.split(r"[-/ :T]", text) if part])
-    parts = [at.year, at.month, at.day, at.hour, at.minute, at.second]
-    largest = [None, 12, 31, 23, 59, 59]
-    for index in range(min(depth, 6), 6):
-        parts[index] = largest[index]
-    return at, Stamp(*parts)
+    return at, period_end(at.digits[:max(1, min(depth, 6))])
 
 
 def resolve_time(s: Session, when: Stamp | str | None, story: Story | None) -> tuple[Stamp, Stamp]:

@@ -8,6 +8,7 @@ import StampInput from "@/components/StampInput";
 import { createRecord, type Rec } from "@/lib/api";
 import type { OpenModifiers } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
+import { convertForWrite, useCalendar } from "@/lib/scope";
 import { T } from "@/lib/text";
 
 type Props = {
@@ -47,6 +48,7 @@ export default function NewEventModal({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const calendar = useCalendar();
 
   const data = (): Rec => ({
     name,
@@ -73,7 +75,9 @@ export default function NewEventModal({
     setBusy(true);
     setError(null);
     try {
-      await createRecord("event", data());
+      // 足す出来事の時刻は、API が欄(作品・場所・当事者)から決める作品の暦で読むので、画面の暦の桁から直す
+      const form = data();
+      await createRecord("event", await convertForWrite(form, ["time", "end"], calendar, { args: form }));
       invalidateOptions("event");
       onAdded();
       onClose();

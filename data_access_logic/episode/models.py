@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import model_serializer
 
-from ai.instructions.materials import EPISODE_BRIEF_NOTES
+from ai.instructions.materials import EPISODE_BRIEF_NOTES, calendar_note
 from data_access_logic.character.models import (
     CastCandidate, CastCandidateSerialized, CastingCandidate, CastingCandidateSerialized, CastMaterial, CastSerialized,
     CharacterMaterial, CharacterSecrets, MentionedMaterial, MentionedSerialized, secrets_for_prompt,
@@ -143,7 +143,7 @@ class EpisodeBriefSerialized(EpisodeBrief):
     def _for_claude(self) -> dict[str, Any]:
         episode = self.main_episode
         return {
-            "材料の読み方": EPISODE_BRIEF_NOTES,
+            "材料の読み方": "\n\n".join(part for part in (EPISODE_BRIEF_NOTES, calendar_note()) if part),
             "書き方": self.guide,
             "作品": _story(self.story),
             "この話": {

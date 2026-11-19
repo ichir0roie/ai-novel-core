@@ -7,6 +7,7 @@ import { invalidateOptions } from "@/components/ReferenceSelect";
 import type { Rec } from "@/lib/api";
 import type { OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
+import { useCalendar } from "@/lib/scope";
 import { T } from "@/lib/text";
 
 type Props = {
@@ -42,6 +43,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const calendar = useCalendar();
   const storyId = typeof initial.story_id === "number" ? initial.story_id : null;
 
   const add = async () => {
@@ -50,7 +52,7 @@ export default function NewEpisodeModal({ initial, storyLabel, onClose, onAdded,
     setError(null);
     try {
       // 前の話を引くあいだからロックする(引いているうちに欄を直されても、足す行には入らない)
-      await trackSaving(addEpisode(initial, draft));
+      await trackSaving(addEpisode(initial, draft, calendar));
       invalidateOptions("episode");
       onAdded();
       onClose();

@@ -10,8 +10,11 @@ import logging
 from data_access_logic.ai_client import AIClient
 from data_access_logic.event import steps as event_steps
 from data_access_logic.event.summary import summary_draft as event_summary_draft
+from data_access_logic.story import steps as story_steps
+from data_access_logic.story.steps import ScopeForm
 from data_access_logic.summary_targets import SummaryTargets
 from data_access_logic.caller import call
+from db import story_scope
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,10 @@ def rewrite_event_summaries(ai: AIClient, event_ids: list[int] | None) -> int:
     """`event_ids` を省けばすべての出来事。要約が本文と食い違っている出来事だけを作り直し、作り直した件数を返す。"""
     written = 0
     for source in call(event_steps.stale_summary_sources, event_steps.SummaryScope(event_ids=event_ids)):
-        draft = event_summary_draft(ai, source)
+        # 出来事の時刻は、その出来事の作品の暦で AI に見せる(作品をまたいで一度に作り直すことがあるので)
+        scope = call(story_steps.read_scope, ScopeForm(args={"event_id": source.id})).scope()
+        with story_scope.scoped(scope):
+            draft = event_summary_draft(ai, source)
         if draft is None:
             logger.warning(f"出来事 id={source.id} の要約を作れなかった(AI が答えなかった)")
             continue

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """人物モード。人物が自分から一手を打ち、その結果を世界に足す(`.docs/world-expansion.md` の「人物モード」)。
 
-    ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1).show()
+    ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1, story_id=None).show()
 
 一回の実行で `act_count` 手(`constants.ACT_RUN_LIMIT` まで)を、手ごとに順に組み、最後にまとめて一度だけ裁く。
 `character_id` は一手目の人物で、省けば(二手目からも)世界の最新の時刻に生きて居場所があり、気力と手数の残るサブキャラクターから、
@@ -15,6 +15,7 @@
 足すのは、出来事(大きな企ては親の出来事にし、一手ごとの出来事をその子にする)、当事者の来歴、事柄(アイデアと呼び名。知った人物を知る相手に)、
 現れた人物・対象と、動いた人物との関係、居場所の移動(今の行に end を入れ、移動先の行を足す)。既にある行は消さず、end のほかは直さない。
 一手ごとに展開(mode=character)を一つ立てて記録するので、`RevertExpansion` で一手ずつ取り消せる。`nudge` は作者からの軽い方向づけ。
+`story_id` は `time` を読む暦の作品(人物を渡さずに `time` を渡すとき)。一手ごとの時刻は、引いた人物の作品の暦で数える。
 """
 from __future__ import annotations
 
@@ -26,7 +27,9 @@ from db.stamp import Stamp
 
 class ActCharacter(Entrypoint):
     def __init__(self, character_id: int | None = None, time: Stamp | str | None = None, nudge: str | None = None,
-                 seed: int | None = None, act_count: int = 1):
+                 seed: int | None = None, act_count: int = 1, story_id: int | None = None):
+        # 引数の時刻を読む暦を決めるだけ(`gui/api/interface.call` が引数から作品を立てる)
+        self.story_id = story_id
         self.character_id = character_id
         self.time = time
         self.nudge = nudge
@@ -35,3 +38,7 @@ class ActCharacter(Entrypoint):
 
     def result(self) -> ActRun:
         return act.act_character(self.character_id, self.time, self.nudge, self.seed, self.act_count)
+
+    def run(self) -> dict:
+        # 手ごとに引いた人物の作品が違いうるので、手の時刻はその手の作品の暦で書き出す
+        return self.result().dumped()

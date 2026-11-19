@@ -80,6 +80,21 @@
           "comment": "親の作品。章・外伝は親の作品の子にする"
         },
         {
+          "key": "custom_stamp_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "custom_stamp",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この作品と子孫の作品の時刻を数える暦。空なら親の作品の暦、どこにも無ければ西暦"
+        },
+        {
           "key": "origin",
           "type": "string",
           "nullable": false,
@@ -381,6 +396,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "種別。「人物」か、人物以外の対象(国・組織・商会・氏族・集団・物など)"
+        },
+        {
+          "key": "story_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "story",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この人物の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦"
         },
         {
           "key": "main_character",
@@ -1769,6 +1799,21 @@
           "comment": "一つ上の場所。断面・知る相手・アイデアの効く場所は、この木をたどって配下の場所まで含む"
         },
         {
+          "key": "story_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "story",
+          "readonly": false,
+          "create_only": false,
+          "comment": "この場所の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦"
+        },
+        {
           "key": "location_world",
           "type": "number",
           "nullable": true,
@@ -2086,6 +2131,21 @@
           "readonly": false,
           "create_only": false,
           "comment": "種別(技術・制度・概念など)"
+        },
+        {
+          "key": "story_id",
+          "type": "integer",
+          "nullable": true,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": "story",
+          "readonly": false,
+          "create_only": false,
+          "comment": "このアイデアの属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦"
         },
         {
           "key": "parent_idea_id",
@@ -2448,6 +2508,190 @@
         }
       ],
       "child_lists": [],
+      "sort": "id",
+      "order": "asc"
+    },
+    {
+      "name": "custom_stamp",
+      "label_column": "name",
+      "columns": [
+        {
+          "key": "id",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": true,
+          "create_only": false,
+          "comment": null
+        },
+        {
+          "key": "name",
+          "type": "string",
+          "nullable": false,
+          "required": true,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "暦の名"
+        },
+        {
+          "key": "offset",
+          "type": "stamp",
+          "nullable": false,
+          "required": true,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "この暦で数え始める西暦の時刻。この時刻の桁は両方の暦で同じで、年の数は西暦から続く"
+        },
+        {
+          "key": "hours_per_day",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "一日の時間の数"
+        },
+        {
+          "key": "minutes_per_hour",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "一時間の分の数"
+        },
+        {
+          "key": "seconds_per_minute",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "一分の秒の数。秒は地球の秒のまま(一日の長さは 時間×分×秒)"
+        },
+        {
+          "key": "days_per_week",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "一週の日数"
+        }
+      ],
+      "child_lists": [
+        {
+          "name": "months",
+          "table": "custom_stamp_month",
+          "columns": [
+            {
+              "key": "number",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": null,
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "何月か(1 から)"
+            },
+            {
+              "key": "days",
+              "type": "integer",
+              "nullable": false,
+              "required": true,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": null,
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "この月の日数"
+            },
+            {
+              "key": "name",
+              "type": "string",
+              "nullable": true,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": null,
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "月の呼び名。空なら数で呼ぶ"
+            },
+            {
+              "key": "outside_week_days",
+              "type": "integer",
+              "nullable": false,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": null,
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "月の終わりの、週に数えない日の数(祭日など)。週は週に数える日だけで続く"
+            }
+          ],
+          "comment": "一年の月を、月の順に一行ずつ持つ。日数の合計が一年の日数",
+          "display": "table",
+          "knowers": false
+        }
+      ],
       "sort": "id",
       "order": "asc"
     }

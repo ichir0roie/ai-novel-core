@@ -55,6 +55,9 @@ DB_ENTRANCES = frozenset({
     "character.update_knowledge.UpdateKnowledge",
     "character.update_relation_history.UpdateRelationHistory",
     "character.update_skill_history.UpdateSkillHistory",
+    "custom_stamp.commit_custom_stamp.CommitCustomStamp",
+    "custom_stamp.shift_into_custom_stamp.ShiftIntoCustomStamp",
+    "custom_stamp.update_custom_stamp.UpdateCustomStamp",
     "episode.apply_outcomes.ApplyOutcomes",
     "episode.cast_episode.CastEpisode",
     "episode.commit_episode.CommitEpisode",
@@ -108,6 +111,8 @@ DB_ENTRANCES = frozenset({
     "story.commit_story.CommitStory",
     "story.delete_story.DeleteStory",
     "story.list_stories.ListStories",
+    "story.place_in_story.PlaceInStory",
+    "story.read_scope.ReadScope",
     "story.read_brief.ReadBrief",
     "story.read_cast.ReadCast",
     "story.start_story.StartStory",
@@ -155,6 +160,11 @@ def db_entrance_class(entrance_id: str) -> type[Entrypoint]:
     return entrance_class(entrance_id)
 
 
-def call(cls: type[Entrypoint], args: dict[str, Any]) -> Any:
-    """JSON で来た引数で入口を組み立てて `run()` を呼ぶ(dump 済みの結果)。"""
-    return built(cls, args).run()
+def call(cls: type[Entrypoint], args: dict[str, Any], fallback_story_id: int | None = None) -> Any:
+    """JSON で来た引数で入口を組み立てて `run()` を呼ぶ(dump 済みの結果)。引数の時刻は、引数から決めた作品の暦で読む
+    (`data_access_logic/story/scope.py`)。"""
+    from data_access_logic.story.scope import HISTORY_MODELS, args_scope
+
+    module = cls.__module__.removeprefix("data_access_logic.")
+    with args_scope(args if cls.STORY_FROM_ARGS else {}, fallback_story_id, HISTORY_MODELS.get(module)):
+        return built(cls, args).run()

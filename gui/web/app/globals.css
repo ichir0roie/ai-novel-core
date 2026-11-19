@@ -64,6 +64,7 @@ code { font-family: var(--mono); font-size: 0.9em; }
 .nav a.active { color: var(--accent); font-weight: 600; }
 .nav .group { display: flex; flex-direction: column; gap: 0.8rem; }
 .nav .hint { color: var(--muted); font-size: 0.8rem; }
+.nav .nav-story { max-width: 16rem; }
 
 /* Ctrl+K の検索付きメニュー */
 .palette-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / 0.3); display: flex; justify-content: center; align-items: flex-start; padding-top: 15vh; }
@@ -370,13 +371,22 @@ a.button-link:hover { border-color: var(--accent); }
 .stamp-picker { display: flex; flex-direction: column; gap: 0.6rem; min-width: 16rem; }
 .stamp-year-row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; }
 .stamp-year-row button.ghost { padding: 0.3rem 0.6rem; flex-shrink: 0; }
-.stamp-year { width: 7rem; flex-shrink: 0; text-align: center; }
+/* input[type="number"] の width: 100% より強くして、年の両脇の送りボタンをはみ出させない */
+.stamp-year-row .stamp-year { width: 7rem; flex-shrink: 0; text-align: center; }
 .stamp-monthgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.25rem; }
+/* 暦の月の呼び名は数より長いので、列を減らして収まらなければ切る */
+.stamp-monthgrid.named { grid-template-columns: repeat(4, 1fr); }
+.stamp-monthgrid.named .stamp-month { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 0.2rem; padding-right: 0.2rem; }
+.stamp-calendar { font-size: 0.8rem; color: var(--muted); text-align: center; }
 .stamp-month { padding: 0.35rem 0; border-radius: 6px; text-align: center; }
 .stamp-month.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .stamp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; }
 .stamp-day { padding: 0.35rem 0; border-radius: 6px; text-align: center; }
 .stamp-day.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stamp-outside { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+.stamp-outside-label { font-size: 0.8rem; color: var(--muted); margin-right: 0.3rem; }
+.stamp-outside .stamp-day { min-width: 2.4rem; }
+.stamp-weekday { margin-left: 0.6rem; font-family: var(--font); font-size: 0.8rem; }
 .stamp-time { display: flex; gap: 0.6rem; }
 .stamp-time label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); flex: 1; }
 .stamp-preview { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); text-align: center; }

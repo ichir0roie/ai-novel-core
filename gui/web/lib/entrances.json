@@ -375,6 +375,12 @@
           "required": true,
           "default": null,
           "annotation": "Stamp | str"
+        },
+        {
+          "name": "episode_id",
+          "required": false,
+          "default": null,
+          "annotation": "int | None"
         }
       ],
       "writes": false
@@ -684,6 +690,57 @@
           "required": true,
           "default": null,
           "annotation": "CharacterSkillHistoryChange"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "custom_stamp.commit_custom_stamp.CommitCustomStamp",
+      "area": "custom_stamp",
+      "name": "CommitCustomStamp",
+      "doc": "暦を足す入口。作品の `custom_stamp_id` に付けると、その作品と子孫の作品の時刻をこの暦で数える。",
+      "params": [
+        {
+          "name": "custom_stamp",
+          "required": true,
+          "default": null,
+          "annotation": "CustomStampCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "custom_stamp.shift_into_custom_stamp.ShiftIntoCustomStamp",
+      "area": "custom_stamp",
+      "name": "ShiftIntoCustomStamp",
+      "doc": "西暦で入れてきた時刻を、暦の桁として読み替えて移す入口。作品に暦を付けた直後に一度だけ回す。",
+      "params": [
+        {
+          "name": "custom_stamp_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "dry_run",
+          "required": false,
+          "default": true,
+          "annotation": "bool"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "custom_stamp.update_custom_stamp.UpdateCustomStamp",
+      "area": "custom_stamp",
+      "name": "UpdateCustomStamp",
+      "doc": "暦を直す入口。時刻は西暦のまま db にあるので、直すと、この暦の作品の時刻の見え方(桁)が変わる。",
+      "params": [
+        {
+          "name": "custom_stamp",
+          "required": true,
+          "default": null,
+          "annotation": "CustomStampUpdateForm"
         }
       ],
       "writes": true
@@ -1653,6 +1710,33 @@
       "writes": false
     },
     {
+      "id": "story.place_in_story.PlaceInStory",
+      "area": "story",
+      "name": "PlaceInStory",
+      "doc": "人物・アイデア・場所を作品に置く入口。時刻はその作品の暦で数える。作品の無い行を一度に振り分けるのに使い、",
+      "params": [
+        {
+          "name": "story_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "table",
+          "required": true,
+          "default": null,
+          "annotation": "Literal['character', 'idea', 'location']"
+        },
+        {
+          "name": "ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "story.read_brief.ReadBrief",
       "area": "story",
       "name": "ReadBrief",
@@ -1714,6 +1798,21 @@
           "required": false,
           "default": 1,
           "annotation": "int"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "story.read_scope.ReadScope",
+      "area": "story",
+      "name": "ReadScope",
+      "doc": "入口の引数から決まる作品と、その作品の暦。web のセッション(`web_session/flows.py`)は db に繋がないので、流れを回す前に",
+      "params": [
+        {
+          "name": "args",
+          "required": true,
+          "default": null,
+          "annotation": "dict[str, Any]"
         }
       ],
       "writes": false

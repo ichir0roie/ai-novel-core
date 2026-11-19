@@ -21,6 +21,7 @@ from data_access_logic.character.record import (
     CharacterMotivationRecord, CharacterRecord, CharacterRelationRecord, CharacterSkillRecord,
 )
 from data_access_logic.entrypoint import UnknownRecordError
+from data_access_logic.custom_stamp.record import CustomStampRecord
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.record import EventRecord
 from data_access_logic.idea.record import IdeaRecord
@@ -31,8 +32,8 @@ from data_access_logic.oracle.record import OracleRecord
 from data_access_logic.story.record import StoryRecord
 from data_access_logic.style_preference.record import StylePreferenceRecord
 from db.schema import (
-    Character, CharacterMotivation, CharacterRelation, CharacterSkill, Episode, Event, Idea, Location, Meme, Oracle, Story,
-    StylePreference,
+    Character, CharacterMotivation, CharacterRelation, CharacterSkill, CustomStamp, Episode, Event, Idea, Location, Meme,
+    Oracle, Story, StylePreference,
 )
 
 
@@ -75,6 +76,7 @@ TABLES: tuple[TableSpec, ...] = (
     TableSpec("meme", Meme, MemeRecord, ("text",)),
     TableSpec("oracle", Oracle, OracleRecord, ("title", "text")),
     TableSpec("style_preference", StylePreference, StylePreferenceRecord, ("text",), order="asc"),
+    TableSpec("custom_stamp", CustomStamp, CustomStampRecord, ("name",), order="asc"),
 )
 
 TABLE_BY_NAME: dict[str, TableSpec] = {spec.name: spec for spec in TABLES}
@@ -172,10 +174,17 @@ def _style_preference() -> TableWriter:
     return TableWriter(CommitStylePreference, UpdateStylePreference, StylePreferenceCreateForm, StylePreferenceUpdateForm)
 
 
+def _custom_stamp() -> TableWriter:
+    from data_access_logic.custom_stamp.commit_custom_stamp import CommitCustomStamp
+    from data_access_logic.custom_stamp.form import CustomStampCreateForm, CustomStampUpdateForm
+    from data_access_logic.custom_stamp.update_custom_stamp import UpdateCustomStamp
+    return TableWriter(CommitCustomStamp, UpdateCustomStamp, CustomStampCreateForm, CustomStampUpdateForm)
+
+
 _WRITERS: dict[str, Callable[[], TableWriter]] = {
     "story": _story, "episode": _episode, "character": _character, "character_relation": _character_relation,
     "character_skill": _character_skill, "character_motivation": _character_motivation, "event": _event, "location": _location, "idea": _idea, "meme": _meme,
-    "oracle": _oracle, "style_preference": _style_preference,
+    "oracle": _oracle, "style_preference": _style_preference, "custom_stamp": _custom_stamp,
 }
 
 

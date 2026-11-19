@@ -14,7 +14,7 @@ description: 人物モード(自走)。サブキャラクターが自分の知�
 
 | すること | 入口 | 引数 |
 | --- | --- | --- |
-| 何手か動かす | `expansion.act_character.ActCharacter`(claude を叩く入口) | `{'character_id': <一手目の人物。省けば入口が引く>, 'time': <省けば前に出た時から日を空け、気力が戻るまで待たせる>, 'nudge': <作者からの方向づけ。省いてよい>, 'act_count': <この実行で回す手の数。1〜8。人物を名指ししないなら 3〜5>}` |
+| 何手か動かす | `expansion.act_character.ActCharacter`(claude を叩く入口) | `{'character_id': <一手目の人物。省けば入口が引く>, 'time': <省けば前に出た時から日を空け、気力が戻るまで待たせる>, 'nudge': <作者からの方向づけ。省いてよい>, 'act_count': <この実行で回す手の数。1〜8。人物を名指ししないなら 3〜5>, 'story_id': <人物を名指しせずに time を渡すとき、その時刻を数える暦の作品>}` |
 | 展開を読む | `expansion.read_expansion.ReadExpansion` | `{'expansion_id': …}` |
 | 人物モードの展開の一覧 | `expansion.list_expansions.ListExpansions` | `{'mode': 'character', 'limit': 50}`(`actor_id` で人物に絞れる) |
 | 一手を取り消す | `expansion.revert_expansion.RevertExpansion` | `{'expansion_id': …}` |

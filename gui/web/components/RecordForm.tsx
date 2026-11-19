@@ -107,7 +107,12 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
   const sideChildLists = meta.child_lists.filter((c) => c.display !== "flow");
   const flowChildLists = meta.child_lists.filter((c) => c.display === "flow");
   // episode の視点の人物は、絞り込み欄が空ならフォームの場所・時刻にいる人物だけを候補に出す
-  const locationCharacterIds = useLocationCharacterIds(value.location_id, value.start, meta.name === "episode");
+  const locationCharacterIds = useLocationCharacterIds(
+    value.location_id,
+    value.start,
+    meta.name === "episode",
+    value.story_id,
+  );
   // 人物の本文は欄が多く長いので、初めは枠に収まる行数だけ出して畳む
   const collapsible = meta.name === "character";
 

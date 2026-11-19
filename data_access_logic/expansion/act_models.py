@@ -1,15 +1,17 @@
 """人物モード(`ActCharacter`)の材料と、AI の出力の形。
 
-人物の目(狙う段)には、その人物が知ることのできるデータ(`character/knowledge.py`)と、目の前の様子だけを渡す。
+人物の目(狙う段)には、その人物が知ることのできるデータ(`character/knowledge.py`)と、目の前の様子だけを渡す。年の数は渡さず、
+今の時刻は月日・時間帯・時で、思い・出来事のいつは今からの隔たりで渡す(`character/time_sense.py`)。
 語り部(狙う段の前)には、一手の前後の話のプロットを渡し、プロットに逆らわないための動機と、人物の目の前で起こす状況を決めさせる。
 作者の目(裁く段)には、場所の状況(出来事の生成と同じ `LocationSituationSerialized`)と、人物の狙いと、語り部の動機を渡す。
 """
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_serializer
 
 from data_access_logic import constants
 from data_access_logic.character.knowledge import AppearanceSerialized, KnowledgeSerialized
+from data_access_logic.character.time_sense import TimeSense
 from data_access_logic.character.record import (
     CharacterMotivationRecord, CharacterMove, GeneratedCharacter, MotivationChange,
 )
@@ -20,7 +22,9 @@ from data_access_logic.event.progress_models import (
 from data_access_logic.event.record import EventRecord
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material, Timestamp
-from db.stamp import Stamp
+from db import story_scope
+from db.stamp import Calendar, Stamp, active_calendar
+from db.story_scope import Scope
 
 
 class ActorPick(BaseModel):
@@ -83,9 +87,15 @@ class MotivationLine(Material):
     text: str
 
     def for_prompt(self) -> dict[str, Any]:
-        return {"モチベーションid": self.id,
-                "強さ": f"{self.strength}({constants.MOTIVATION_STRENGTHS.get(self.strength, '')})",
-                "内容": self.text, "いつから": str(self.start)}
+        """作者の目(裁く段)に渡す形。いつからを暦の時刻で言う。"""
+        return {"モチベーションid": self.id, "強さ": self._strength(), "内容": self.text, "いつから": str(self.start)}
+
+    def for_character(self, sense: TimeSense, now: Stamp) -> dict[str, Any]:
+        """人物の目に渡す形。いつからを今からの隔たりで言う。"""
+        return {"モチベーションid": self.id, "強さ": self._strength(), "内容": self.text, "いつから": sense.ago(self.start, now)}
+
+    def _strength(self) -> str:
+        return f"{self.strength}({constants.MOTIVATION_STRENGTHS.get(self.strength, '')})"
 
 
 class Motives(Material):
@@ -98,12 +108,20 @@ class Motives(Material):
     # 本人か居る場所に掛かる、この時刻より後に既に決まっている出来事(古い順)。本人はまだ知らない
     later_events: list[EventSerialized]
 
-    def for_prompt(self) -> dict[str, Any]:
+    def for_prompt(self, sense: TimeSense, now: Stamp) -> dict[str, Any]:
+        """人物の目に渡す形。出来事のいつは今からの隔たり(この先の出来事は「5日後」)で言う。"""
         return {
-            "あなたのモチベーション(強い順)": [motivation.for_prompt() for motivation in self.motivations],
-            "あなたが関わったこれまでの出来事(新しい順)": [event.model_dump() for event in self.past_events],
-            "この先に決まっている出来事(あなたはまだ知らない)": [event.model_dump() for event in self.later_events],
+            "あなたのモチベーション(強い順)": [motivation.for_character(sense, now) for motivation in self.motivations],
+            "あなたが関わったこれまでの出来事(新しい順)": [_event_for_character(event, sense, now) for event in self.past_events],
+            "この先に決まっている出来事(あなたはまだ知らない)": [
+                _event_for_character(event, sense, now) for event in self.later_events],
         }
+
+
+def _event_for_character(event: EventSerialized, sense: TimeSense, now: Stamp) -> dict[str, Any]:
+    return {"いつ": sense.ago(event.time, now), "名前": event.name,
+            "場所": event.location.name if event.location else None,
+            "要約": event.summary.text if event.summary else None}
 
 
 class ParticipantMotivations(Material):
@@ -147,6 +165,8 @@ class NarratorSerialized(Material):
     def _for_prompt(self) -> dict[str, Any]:
         return {
             "一手の時刻": str(self.time),
+            # 人物が「いま」で受け取るのと同じ時間帯(一日の長さが違う暦では、時の数と昼夜がずれる)
+            "一手の時間帯": TimeSense.current().part_of(self.time),
             "場所": self.location_name,
             "動く人物": self.actor_name,
             "居合わせる人物": self.present_names,
@@ -215,14 +235,17 @@ class ActorSerialized(Material):
     # 語り部が目の前で起こしたことと、求めること(プロットは渡さない)
     narration: str | None = None
     request: str | None = None
+    # 隔たりを数える暦(組み立てたときの文脈の暦)
+    calendar: Calendar | None = Field(default_factory=active_calendar)
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
+        sense = TimeSense(self.calendar)
         return {
-            "いまの時刻": str(self.time),
+            "いま": sense.now_for_prompt(self.time),
             "いる場所": self.location_name,
             "あなたが知っていること": self.knowledge.model_dump(),
-            **self.motives.for_prompt(),
+            **self.motives.for_prompt(sense, self.time),
             "目の前にいる人物": [
                 {"人物id": person.character_id, "名前": person.name or "(名を知らない)", **person.looks.model_dump()}
                 for person in self.present],
@@ -316,14 +339,17 @@ class DialogueSerialized(Material):
     motives: Motives
     present: list[PresentPerson]
     narration: str | None = None
+    # 隔たりを数える暦(組み立てたときの文脈の暦)
+    calendar: Calendar | None = Field(default_factory=active_calendar)
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
+        sense = TimeSense(self.calendar)
         return {
-            "いまの時刻": str(self.time),
+            "いま": sense.now_for_prompt(self.time),
             "いる場所": self.location_name,
             "あなたが知っていること": self.knowledge.model_dump(),
-            **self.motives.for_prompt(),
+            **self.motives.for_prompt(sense, self.time),
             "目の前にいる人物": [
                 {"名前": person.name or "(名を知らない)", **person.looks.model_dump()} for person in self.present],
             "語り部の語り(いま目の前で起きたこと)": self.narration,
@@ -542,3 +568,16 @@ class ActRun(BaseModel):
 
     acted: list[ActedCharacter] = []
     failed: list[ActFailure] = []
+    # 手(展開の id)ごとの、引いた人物の作品と暦。手の時刻はこの暦で書き出す(`ActCharacter.run`)
+    _scopes: dict[int, Scope] = PrivateAttr(default_factory=dict)
+
+    def keep_scope(self, expansion_id: int, scope: Scope) -> None:
+        self._scopes[expansion_id] = scope
+
+    def dumped(self) -> dict[str, Any]:
+        """手ごとに、その手の作品の暦で書き出す。"""
+        acted = []
+        for item in self.acted:
+            with story_scope.scoped(self._scopes.get(item.expansion_id, Scope())):
+                acted.append(item.model_dump(mode="json"))
+        return {"acted": acted, "failed": [failure.model_dump(mode="json") for failure in self.failed]}

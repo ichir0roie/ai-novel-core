@@ -149,7 +149,8 @@ ACT_MOTIVATION_LIMIT = 5
 ACT_MOTIVATION_CHANGE_LIMIT = 6
 
 # data_access_logic/character/knowledge.py(人物役が読む、自分が言ったセリフ)
-# 言ってからこの日数までは原文、ここから鮮明の日数までは鮮明、それより後はあやふやを渡す
+# 言ってからこの日数までは原文、ここから鮮明の日数までは鮮明、それより後はあやふやを渡す。日は人物の暦の一日で数える
+# (`character/time_sense.py`。一日 27 時間の暦なら 27 時間)
 SPEECH_VERBATIM_DAYS = 3
 SPEECH_VIVID_DAYS = 365
 

@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -123,8 +124,10 @@ def wait(store: SessionStore, record_ids: list[int], timeout_seconds: int) -> di
 def stage(store: SessionStore) -> Any:
     """語り部の材料を db から読み、登場人物と知り合いの組を手番のファイルに写す(行は残す)。"""
     result = call("episode_session.read_stage.ReadStage", {"episode_id": store.episode_id})
+    # 手番の行の時刻を、人物役に話の作品の暦で言うため(`SessionStore.turn`)
+    scope = call("story.read_scope.ReadScope", {"args": {"episode_id": store.episode_id}})
     store.set_stage({member["人物id"]: member["名前"] for member in result["登場人物"]},
-                    [tuple(relation["人物id"]) for relation in result["知り合い"]])
+                    [tuple(relation["人物id"]) for relation in result["知り合い"]], scope["calendar"])
     return result
 
 
@@ -158,8 +161,9 @@ def _out_name(args: argparse.Namespace) -> str:
     """書き出すファイルの名。人物役は何人も同時に動くので、コマンドと話・人物・行で分ける。"""
     parts = [args.command] + [f"{key[0]}{getattr(args, key)}" for key in ("episode", "character", "record", "after")
                               if getattr(args, key, None) is not None]
+    # 人物役はこの名のパスを読むので、時刻の桁(年の数)をそのまま名に入れない
     if getattr(args, "time", None):
-        parts.append("t" + "".join(char for char in args.time if char.isdigit()))
+        parts.append("t" + hashlib.sha256(args.time.encode("utf-8")).hexdigest()[:10])
     return "-".join(parts)
 
 
@@ -222,6 +226,8 @@ def main() -> None:
     appearance = commands.add_parser("appearance", help="初対面の相手から見て分かること(名前なし)を読む")
     appearance.add_argument("--character", type=int, required=True)
     appearance.add_argument("--time", required=True)
+    # 時刻を話の作品の暦で読むため(相手の人物が別の作品・作品の無い人物でも)
+    appearance.add_argument("--episode", type=int, required=True)
 
     knower_gaps = commands.add_parser(
         "knower-gaps", help="登場人物の来歴のうち、ほかの登場人物の名前が出るのに、その人物が知る相手に入っていない行を挙げる")
@@ -309,7 +315,8 @@ def run(args: argparse.Namespace) -> Any:
                                                 "aim": args.aim})
             return _answer(record, store.load().cast)
         case "appearance":
-            return call("character.read_appearance.ReadAppearance", {"character_id": args.character, "time": args.time})
+            return call("character.read_appearance.ReadAppearance",
+                        {"character_id": args.character, "time": args.time, "episode_id": args.episode})
         case "knower-gaps":
             return call("episode_session.read_knower_gaps.ReadKnowerGaps", {"episode_id": args.episode})
         case "stage":

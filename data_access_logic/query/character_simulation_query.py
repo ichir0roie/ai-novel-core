@@ -32,7 +32,8 @@ def character_around_event(
             CharacterLocation.location_id.in_(location_ids),
             alive_at(CharacterLocation, time)))
     ).all()
-    since = Stamp(max(1, time.year - reach))
+    # 窓はロジックなので、暦に依らず西暦の年で数える
+    since = Stamp.western(max(1, time.western_digits[0] - reach))
     events = s.scalars(
         select(Event)
         .options(*common_query.EVENT_LOAD_OPTIONS)

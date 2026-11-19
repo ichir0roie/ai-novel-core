@@ -30,12 +30,14 @@ import {
 import { PageTitle } from "@/lib/meta";
 import { inNewTab, openInNewTab, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
+import { convertForWrite, useSelectedScope } from "@/lib/scope";
 import {
   dayNumber,
   formatStamp,
   fromDayNumber,
   parseStamp,
   shiftDays,
+  type Calendar,
 } from "@/lib/stamp";
 import { T } from "@/lib/text";
 import {
@@ -52,6 +54,7 @@ import {
   savedView,
   scaleOf,
   SCROLL_SETTLE_MS,
+  skipUnits,
   snapDay,
   spanDays,
   timeSpan,
@@ -109,8 +112,8 @@ const TIME_KEYS = ["time", "end"] as const;
 const byTime = (a: Item, b: Item) =>
   a.start - b.start || a.id - b.id;
 
-function itemOf(record: Rec): Item | null {
-  const start = dayOf(record.time);
+function itemOf(record: Rec, calendar: Calendar | null): Item | null {
+  const start = dayOf(record.time, calendar);
   if (start === null) return null;
   return {
     key: `event-${record.id}`,
@@ -121,35 +124,39 @@ function itemOf(record: Rec): Item | null {
       typeof record.parent_event_id === "number"
         ? record.parent_event_id
         : null,
-    ...timeSpan(start, dayOf(record.end)),
+    ...timeSpan(start, dayOf(record.end, calendar)),
   };
 }
 
 /** 日付をずらしたときに直す欄。時刻と終わりを同じ日数だけ動かす */
-function shifted(record: Rec, days: number): Rec {
+function shifted(record: Rec, days: number, calendar: Calendar | null): Rec {
   const changes: Rec = {};
   for (const key of TIME_KEYS)
-    if (record[key] != null) changes[key] = shiftDays(record[key], days);
+    if (record[key] != null) changes[key] = shiftDays(record[key], days, calendar);
   return changes;
 }
 
 /** 溜めた移しを当てた出来事。札はこの時刻・親の所に描く */
-function changedItem({ base, days, parent }: Change): Item {
+function changedItem({ base, days, parent }: Change, calendar: Calendar | null): Item {
   const record: Rec = {
     ...base.record,
-    ...shifted(base.record, days),
+    ...shifted(base.record, days, calendar),
     ...(parent !== undefined ? { parent_event_id: parent } : {}),
   };
-  return itemOf(record) ?? base;
+  return itemOf(record, calendar) ?? base;
 }
 
-/** 保存する欄。動かした分だけを渡す */
-function changeForm({ base, days, parent }: Change): Rec {
-  return {
+/**
+ * 保存する欄。動かした分だけを渡す。時刻は出来事の作品の暦の桁に直す(画面はどの出来事も画面が選んでいる作品の暦で出すが、
+ * 入口は出来事ごとにその作品の暦で時刻を読む)
+ */
+function changeForm({ base, days, parent }: Change, calendar: Calendar | null): Promise<Rec> {
+  const form = {
     id: base.id,
-    ...(days !== 0 ? shifted(base.record, days) : {}),
+    ...(days !== 0 ? shifted(base.record, days, calendar) : {}),
     ...(parent !== undefined ? { parent_event_id: parent } : {}),
   };
+  return convertForWrite(form, TIME_KEYS, calendar, { table: "event", id: base.id });
 }
 
 /** 親の id ごとの子(時刻の順)。親が読めた出来事に無い出来事は根(キーは null)に入れる */
@@ -269,11 +276,11 @@ function layout(
 }
 
 /** 中心の時刻を省いて開いたら、最後の出来事の時刻を中心にする。無ければ 1 年 */
-function defaultCenter(items: Item[]): string {
+function defaultCenter(items: Item[], calendar: Calendar | null): string {
   const last = [...items].sort(byTime).at(-1);
   return formatStamp(
     last
-      ? fromDayNumber(last.start)
+      ? fromDayNumber(last.start, calendar)
       : { year: 1, month: 1, day: 1, hour: 0, minute: 0, second: 0 },
   );
 }
@@ -283,8 +290,12 @@ export default function EventTimelinePage() {
   const search = useSearchParams();
   const at = search.get("at");
   const locationId = Number(search.get("location_id")) || null;
+  // 出来事は作品で絞らないので、時刻は画面が選んでいる作品の暦で数える。API も同じ暦で時刻を出す
+  const scope = useSelectedScope();
+  const calendar = scope?.calendar ?? null;
   const centerParts = parseStamp(at);
-  const center = centerParts ? dayNumber(centerParts) : null;
+  // 暦が読めるまでは中心を決めない(西暦で数えた位置に軸を組んでしまう)
+  const center = centerParts && scope ? dayNumber(centerParts, calendar) : null;
 
   const [draft, setDraft] = useState<string | null>(at);
   const [records, setRecords] = useState<Rec[] | null>(null);
@@ -320,7 +331,7 @@ export default function EventTimelinePage() {
   const { tip, show, hide } = useTooltip();
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
-  const span = spanDays(view);
+  const span = spanDays(view, calendar);
   const zoomIn = zoomed(view, -1);
   const zoomOut = zoomed(view, 1);
 
@@ -455,16 +466,21 @@ export default function EventTimelinePage() {
   );
 
   const loaded = useMemo(
-    () => (records ?? []).map(itemOf).filter((item) => item !== null),
-    [records],
+    () =>
+      scope
+        ? (records ?? [])
+            .map((record) => itemOf(record, scope.calendar))
+            .filter((item) => item !== null)
+        : [],
+    [records, scope],
   );
   const items = useMemo(
     () =>
       loaded.map((item) => {
         const change = changes.get(item.id);
-        return change ? changedItem(change) : item;
+        return change ? changedItem(change, calendar) : item;
       }),
-    [loaded, changes],
+    [loaded, changes, calendar],
   );
   // 動かす・消すときの子孫は、絞り込みで隠れた出来事も含めてたどる
   const children = useMemo(() => childrenOf(items), [items]);
@@ -483,12 +499,13 @@ export default function EventTimelinePage() {
   );
 
   useEffect(() => {
-    if (records && !restoring && !at) navigate({ at: defaultCenter(shown) });
-  }, [records, restoring, at, shown, navigate]);
+    if (records && scope && !restoring && !at)
+      navigate({ at: defaultCenter(shown, scope.calendar) });
+  }, [records, scope, restoring, at, shown, navigate]);
 
   const scale = useMemo(
-    () => scaleOf(shown, anchor, view, box.viewport),
-    [anchor, shown, view, box.viewport],
+    () => scaleOf(shown, anchor, view, box.viewport, calendar),
+    [anchor, shown, view, box.viewport, calendar],
   );
   const pxPerDay = scale?.pxPerDay ?? 0;
   const toY = useCallback((day: number) => scale?.toY(day) ?? 0, [scale]);
@@ -511,9 +528,9 @@ export default function EventTimelinePage() {
   }, [at, center, anchor, scale, box.viewport]);
 
   // スクロールが止まったときに読む今の値
-  const latest = useRef({ scale, viewport: box.viewport, at, center, navigate });
+  const latest = useRef({ scale, viewport: box.viewport, at, center, navigate, calendar });
   useLayoutEffect(() => {
-    latest.current = { scale, viewport: box.viewport, at, center, navigate };
+    latest.current = { scale, viewport: box.viewport, at, center, navigate, calendar };
   });
 
   const onScroll = () => {
@@ -530,7 +547,7 @@ export default function EventTimelinePage() {
         Math.abs(now.scale.toY(now.center) - middle) < 1
       )
         return;
-      const value = formatStamp(fromDayNumber(now.scale.fromY(middle)));
+      const value = formatStamp(fromDayNumber(now.scale.fromY(middle), now.calendar));
       if (value === now.at) return;
       aligned.current.at = value;
       now.navigate({ at: value });
@@ -551,9 +568,9 @@ export default function EventTimelinePage() {
   const axisTicks = useMemo(
     () =>
       scale
-        ? axisTicksOf(scale, shown, view.squeeze, screen, box.viewport)
+        ? axisTicksOf(scale, shown, view.squeeze, screen, box.viewport, calendar)
         : [],
-    [scale, shown, view.squeeze, screen, box.viewport],
+    [scale, shown, view.squeeze, screen, box.viewport, calendar],
   );
 
   const labelOfEvent = (id: number | null) =>
@@ -561,7 +578,7 @@ export default function EventTimelinePage() {
 
   /** 縦に dy px 動かしたら何日ずれるか({@link dragSteps} の刻みに丸める)。詰めた帯の上では一気に日が進む */
   const daysAt = (item: Item, dy: number) => {
-    const steps = dragSteps(view);
+    const steps = dragSteps(view, calendar);
     return pxPerDay > 0
       ? Math.round((fromY(toY(item.start) + dy) - item.start) * steps) / steps
       : 0;
@@ -593,7 +610,7 @@ export default function EventTimelinePage() {
     const target = parent !== undefined ? parent : previous?.parent;
     const change: Change = {
       base,
-      days: roundHours((previous?.days ?? 0) + days),
+      days: roundHours((previous?.days ?? 0) + days, calendar),
       ...(target !== undefined && target !== base.parent ? { parent: target } : {}),
     };
     if (change.days === 0 && change.parent === undefined) next.delete(item.id);
@@ -627,7 +644,11 @@ export default function EventTimelinePage() {
     setMessage(null);
     try {
       // 読み直した出来事と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
-      await trackSaving(updateEvents([...changes.values()].map(changeForm)).then(reload));
+      await trackSaving(
+        Promise.all([...changes.values()].map((change) => changeForm(change, calendar)))
+          .then(updateEvents)
+          .then(reload),
+      );
       setMessage(T.eventTimeline.applied(changes.size));
       leaveEditing();
     } catch (e) {
@@ -690,7 +711,7 @@ export default function EventTimelinePage() {
       setForm(next);
       setRecords(fresh);
       // 移しを溜めた出来事の札は移しの元(読み込んだときの行)から描くので、元も読み直した行に替えて直した名前を出す
-      const base = itemOf(fresh.find((r) => r.id === item.id) ?? {});
+      const base = itemOf(fresh.find((r) => r.id === item.id) ?? {}, calendar);
       setChanges((previous) => {
         const change = previous.get(item.id);
         return change && base ? new Map(previous).set(item.id, { ...change, base }) : previous;
@@ -772,7 +793,7 @@ export default function EventTimelinePage() {
       .filter((item) => item.layer < layer && item.y <= y && y <= item.y + item.height)
       .reduce<Placed | null>((nearest, item) => (nearest && nearest.layer >= item.layer ? nearest : item), null);
     setAdding({
-      start: formatStamp(fromDayNumber(snapDay(fromY(y), pxPerDay))),
+      start: formatStamp(fromDayNumber(snapDay(fromY(y), pxPerDay, calendar), calendar)),
       parent: parent && { id: parent.id, label: parent.label },
     });
   };
@@ -797,7 +818,7 @@ export default function EventTimelinePage() {
   ];
   const gapLines = (g: Gap) => [
     T.eventTimeline.gap,
-    `${formatStamp(fromDayNumber(g.from))} – ${formatStamp(fromDayNumber(g.to))}`,
+    `${formatStamp(fromDayNumber(g.from, calendar))} – ${formatStamp(fromDayNumber(g.to, calendar))}`,
   ];
 
   const left = (layer: number) => layer * LAYER_WIDTH + LAYER_PAD;
@@ -825,7 +846,7 @@ export default function EventTimelinePage() {
     if (element && element.scrollHeight > element.clientHeight)
       element.scrollBy({ top: (direction * box.viewport) / 2, behavior: "smooth" });
     else if (center !== null)
-      navigate({ at: formatStamp(fromDayNumber(center + (direction * span) / 2)) });
+      navigate({ at: formatStamp(fromDayNumber(center + (direction * span) / 2, calendar)) });
   };
 
   const viewingNow = viewing ? (byId.get(viewing.id) ?? viewing) : null;
@@ -931,7 +952,7 @@ export default function EventTimelinePage() {
       {editing && <div className="status info">{T.eventTimeline.editHint}</div>}
       {error && <div className="status error">{error}</div>}
       {message && !error && <div className="status ok">{message}</div>}
-      {!records ? (
+      {!records || !scope ? (
         !error && <div className="status info">{T.loading}</div>
       ) : (
         <div
@@ -975,7 +996,7 @@ export default function EventTimelinePage() {
                     onMouseMove={(e) => show(e, gapLines(g))}
                     onMouseLeave={hide}
                   >
-                    {T.timeline.skipped(g.to - g.from)}
+                    {T.timeline.skipped(g.to - g.from, ...skipUnits(calendar))}
                   </div>
                 ))}
                 {axisTicks.map((tick) => (
@@ -1043,7 +1064,7 @@ export default function EventTimelinePage() {
                         {item.label}
                         {isDragged && dragDays !== 0 && (
                           <span className="timeline-target">
-                            {" "}→ {String(shifted(item.record, dragDays).time ?? "")}
+                            {" "}→ {String(shifted(item.record, dragDays, calendar).time ?? "")}
                           </span>
                         )}
                         {isDragged && drag.over !== null && (

@@ -4,6 +4,8 @@ import { AutoGrowTextarea } from "@/components/FieldInput";
 import OpenableText from "@/components/OpenableText";
 import StampInput from "@/components/StampInput";
 import { createRecord, getPreviousEpisode, type Rec } from "@/lib/api";
+import { convertForWrite } from "@/lib/scope";
+import type { Calendar } from "@/lib/stamp";
 import { T } from "@/lib/text";
 
 /** 話の時刻・タイトル・プロットの書きかけ。時刻は空なら null。title を省けばタイトルの欄を出さない */
@@ -12,10 +14,13 @@ export type EpisodeDraft = { start: string | null; end: string | null; title?: s
 // 追加ページと同じく、同じ作品の前の話から写す欄(lib/previousEpisode.ts)
 const COPIED_KEYS = ["location_id", "viewpoint_character_id"] as const;
 
-/** 話を足す。`initial` に `story_id` が要る。同じ作品で開始より前の話から場所・視点を写す */
-export async function addEpisode(initial: Rec, draft: EpisodeDraft) {
-  const data: Rec = { ...initial, start: draft.start, end: draft.end, title: draft.title ?? "", plot_text: draft.plot };
-  const previous = await getPreviousEpisode(initial.story_id as number, draft.start);
+/** 話を足す。`initial` に `story_id` が要る。同じ作品で開始より前の話から場所・視点を写す。
+ * 時刻は画面の暦(`calendar`)で数えたもので、足す先の作品の暦の桁に直して渡す(作品を絞らないタイムラインでは暦が違うことがある) */
+export async function addEpisode(initial: Rec, draft: EpisodeDraft, calendar: Calendar | null) {
+  const storyId = initial.story_id as number;
+  const times = await convertForWrite({ start: draft.start, end: draft.end }, ["start", "end"], calendar, { story_id: storyId });
+  const data: Rec = { ...initial, start: times.start, end: times.end, title: draft.title ?? "", plot_text: draft.plot };
+  const previous = await getPreviousEpisode(storyId, (times.start as string | null) ?? null);
   for (const key of COPIED_KEYS) {
     const v = previous?.[key];
     if (v != null && !(Array.isArray(v) && v.length === 0)) data[key] = v;

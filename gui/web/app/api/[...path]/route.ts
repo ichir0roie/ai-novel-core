@@ -20,7 +20,8 @@ const API_KEY_HEADER = "x-novel-api-key";
 // クッキーのトークンは、adapter-nextjs が Cognito の公開鍵で署名を確かめてから読む
 const { runWithAmplifyServerContext } = createServerRunner({ config: amplifyConfig });
 
-const REQUEST_HEADERS = ["content-type", "accept"];
+// x-novel-story は画面が選んでいる作品(時刻をその作品の暦で出し入れする。`db/story_scope.py`)
+const REQUEST_HEADERS = ["content-type", "accept", "x-novel-story"];
 // web のセッションの流れが運ぶ書き手(`db/writer.py`)。画面からの書き込みは API がいつも作者として扱うので、web のときだけ流す
 const WRITER_HEADERS = ["x-novel-writer", "x-novel-expansion", "x-novel-generated"];
 const RESPONSE_HEADERS = ["content-type", "cache-control", "location"];

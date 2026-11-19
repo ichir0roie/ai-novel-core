@@ -34,6 +34,9 @@ from data_access_logic.expansion.act_models import (
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
 from data_access_logic.flows import character as character_flow
 from data_access_logic.flows.summary import refresh
+from data_access_logic.story import steps as story_steps
+from data_access_logic.story.steps import ScopeForm
+from db import story_scope
 from db.schema import ExpansionMode
 from db.stamp import Stamp
 from db.writer import Writer, writing
@@ -210,6 +213,7 @@ def act_character(
     rng = random.Random(seed)
     run = ActRun()
     plans: list[ActPlan] = []
+    scopes: dict[int, story_scope.Scope] = {}
     used_ids: list[int] = []
     for index in range(act_count):
         try:
@@ -219,23 +223,29 @@ def act_character(
         except ValueError as error:
             _failed(run, None, None, error)
             continue
-        expansion = call(expansion_steps.start_expansion, ExpansionCreateForm(
-            mode=ExpansionMode.CHARACTER, actor_id=pick.character_id, time=Stamp.parse(pick.time),
-            location_id=pick.location_id))
+        scope = call(story_steps.read_scope, ScopeForm(args={"character_id": pick.character_id})).scope()
+        with story_scope.scoped(scope):
+            expansion = call(expansion_steps.start_expansion, ExpansionCreateForm(
+                mode=ExpansionMode.CHARACTER, actor_id=pick.character_id, time=Stamp.parse(pick.time),
+                location_id=pick.location_id))
         try:
-            with writing(Writer.AI_APPEND, expansion.id):
+            # 引いた人物の作品の暦で、この手の時刻を数える
+            with writing(Writer.AI_APPEND, expansion.id), story_scope.scoped(scope):
                 plan = _plan(ai, rng, pick, expansion.id, nudge, used_ids)
         except Exception as error:
             logger.exception(f"{pick.name}(id={pick.character_id})の一手を組めなかった")
             _failed(run, expansion.id, pick, error)
             continue
         plans.append(plan)
+        scopes[expansion.id] = scope
         used_ids += [pick.character_id, *plan.invited_ids]
     if not plans:
         return run
 
-    plans.sort(key=lambda plan: Stamp.parse(plan.pick.time) or Stamp(1))
-    judged = actor.judge_draft(ai, [plan.request for plan in plans])
+    plans.sort(key=lambda plan: plan.pick.time)
+    # 裁く段の材料(前後の話の時刻・思いのいつから)は、手の作品の暦で表記する。手はふつう同じ作品なので、一手目の作品で裁く
+    with story_scope.scoped(scopes[plans[0].expansion_id]):
+        judged = actor.judge_draft(ai, [plan.request for plan in plans])
     outcomes = {} if judged is None else {item.act_number: item.outcome() for item in judged.outcomes}
     for number, plan in enumerate(plans, start=1):
         outcome = outcomes.get(number)
@@ -243,12 +253,14 @@ def act_character(
             _failed(run, plan.expansion_id, plan.pick, ValueError("裁いた記録が得られなかった"))
             continue
         try:
-            with writing(Writer.AI_APPEND, plan.expansion_id):
+            with writing(Writer.AI_APPEND, plan.expansion_id), story_scope.scoped(scopes[plan.expansion_id]):
                 acted = _save(ai, rng, plan, outcome)
         except Exception as error:
             logger.exception(f"{plan.pick.name}(id={plan.pick.character_id})の一手を足せなかった")
             _failed(run, plan.expansion_id, plan.pick, error)
             continue
-        call(expansion_steps.finish_expansion, ExpansionFinishForm(id=plan.expansion_id, summary=_summary(acted)))
+        with story_scope.scoped(scopes[plan.expansion_id]):
+            call(expansion_steps.finish_expansion, ExpansionFinishForm(id=plan.expansion_id, summary=_summary(acted)))
         run.acted.append(acted)
+        run.keep_scope(plan.expansion_id, scopes[plan.expansion_id])
     return run

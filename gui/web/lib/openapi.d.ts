@@ -59,6 +59,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Scope
+         * @description 時刻を数える作品と暦。`table` と `id` を渡せばその行の作品、無ければ `story_id`・`episode_id`・`location_id` の
+         *     引数か、画面が選んでいる作品(ヘッダ)。画面は時刻の選択・タイムラインの計算をこの暦でする
+         */
+        get: operations["get_scope_api_scope_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/table_counts": {
         parameters: {
             query?: never;
@@ -434,6 +455,39 @@ export interface components {
         BatchResponse: {
             /** Responses */
             responses: components["schemas"]["BatchItem"][];
+        };
+        /**
+         * CalendarModel
+         * @description 作品の暦(`db/stamp.py` の `Calendar`)。`offset`(西暦)より前は西暦で数える
+         */
+        CalendarModel: {
+            /** Name */
+            name: string;
+            /** Offset */
+            offset: string;
+            /** Month Days */
+            month_days: number[];
+            /** Month Names */
+            month_names: string[];
+            /** Hours Per Day */
+            hours_per_day: number;
+            /** Days Per Week */
+            days_per_week: number;
+            /**
+             * Minutes Per Hour
+             * @default 60
+             */
+            minutes_per_hour: number;
+            /**
+             * Seconds Per Minute
+             * @default 60
+             */
+            seconds_per_minute: number;
+            /**
+             * Outside Week Days
+             * @default []
+             */
+            outside_week_days: number[];
         };
         /** CharacterLocationsResponse */
         CharacterLocationsResponse: {
@@ -855,6 +909,12 @@ export interface components {
             /** Result */
             result?: unknown;
         };
+        /** ScopeResponse */
+        ScopeResponse: {
+            /** Story Id */
+            story_id?: number | null;
+            calendar?: components["schemas"]["CalendarModel"] | null;
+        };
         /** StoryCharactersResponse */
         StoryCharactersResponse: {
             /** Character Ids */
@@ -1122,6 +1182,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_scope_api_scope_get: {
+        parameters: {
+            query?: {
+                table?: string | null;
+                id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

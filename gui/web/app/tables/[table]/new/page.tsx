@@ -9,11 +9,23 @@ import { useCopyFromPreviousEpisode } from "@/lib/previousEpisode";
 import { PageTitle, tableMeta } from "@/lib/meta";
 import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
+import { CalendarProvider, useArgsScope } from "@/lib/scope";
+import { selectedStoryId } from "@/lib/selectedStory";
 import { T } from "@/lib/text";
+
+// 作品に属する行。足すときの作品は、画面が選んでいる作品から始める
+const STORY_TABLES = new Set(["character", "idea", "location"]);
+
+/** 時刻の欄を持つ表か(子の一覧の欄も見る)。暦の表(`custom_stamp`)の始まりは西暦で数えるので、暦を読まない */
+function hasStamps(meta: TableMeta): boolean {
+  if (meta.name === "custom_stamp") return false;
+  return [...meta.columns, ...meta.child_lists.flatMap((child) => child.columns)].some((column) => column.type === "stamp");
+}
 
 /** クエリの中で、その列の型に読める値だけを初期値に取り込む(例: `?parent_idea_id=66` で子を足す)。id の並びはカンマで区切る。 */
 function initialValue(meta: TableMeta, searchParams: URLSearchParams): Rec {
   const record = emptyRecord(meta);
+  if (STORY_TABLES.has(meta.name) && "story_id" in record) record.story_id = selectedStoryId();
   for (const column of meta.columns) {
     const raw = searchParams.get(column.key);
     if (raw === null || raw === "") continue;
@@ -47,6 +59,8 @@ export default function NewRecordPage() {
   }, [meta, value, searchParams]);
 
   useCopyFromPreviousEpisode(value?.story_id, value?.start, setValue, table === "episode");
+  // 足す行の時刻は、API が行の欄(作品・人物など)から決める作品の暦で読む。暦が読めるまで欄を出さない
+  const scope = useArgsScope(meta && hasStamps(meta) ? value : null);
 
   const submit = async () => {
     if (value === null) return;
@@ -69,9 +83,9 @@ export default function NewRecordPage() {
 
   useSaveShortcut(() => void submit(), meta !== undefined && value !== null && !busy);
 
-  if (!meta || value === null) return <div className="status info">{T.loading}</div>;
+  if (!meta || value === null || scope === undefined) return <div className="status info">{T.loading}</div>;
 
-  return (
+  const content = (
     <div className="page-fill">
       <PageTitle kind={meta.name} />
       <div className="panel fill">
@@ -99,4 +113,5 @@ export default function NewRecordPage() {
       </div>
     </div>
   );
+  return <CalendarProvider calendar={scope.calendar}>{content}</CalendarProvider>;
 }

@@ -38,6 +38,7 @@ from sqlalchemy.engine import make_url
 
 from db.polygon import parse_polygon
 from db.postgres.timestamps import install_updated_at
+from db import story_scope
 from db.stamp import Stamp
 
 
@@ -147,6 +148,9 @@ class Location(OriginMixin, TextBase):
     parent_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("location.id"),
         comment="一つ上の場所。断面・知る相手・アイデアの効く場所は、この木をたどって配下の場所まで含む", sort_order=220)
+    story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id"), index=True,
+        comment="この場所の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦", sort_order=225)
 
     # 位置は経度・緯度・高度の一つの座標系だけで持つ。原点は星ごとに決めて、その星の text に書く
     location_world: Mapped[float | None] = mapped_column(DECIMAL, comment="世界線番号 W", sort_order=230)
@@ -492,6 +496,9 @@ class Character(OriginMixin, ContentBase):
     kind: Mapped[str] = mapped_column(
         String, default=CHARACTER_KIND_PERSON, nullable=False,
         comment="種別。「人物」か、人物以外の対象(国・組織・商会・氏族・集団・物など)", sort_order=230)
+    story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id"), index=True,
+        comment="この人物の属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦", sort_order=235)
 
     main_character: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False,
@@ -850,6 +857,9 @@ class Idea(OriginMixin, TextBase):
 
     name: Mapped[str] = mapped_column(String, sort_order=200)
     kind: Mapped[str] = mapped_column(String, comment="種別(技術・制度・概念など)", sort_order=210)
+    story_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("story.id"), index=True,
+        comment="このアイデアの属する作品。時刻はこの作品の暦(`Story.custom_stamp_id`)で数える。空なら西暦", sort_order=220)
 
     # 効く場所・時期は本体に持たず、履歴の行の場所・期間で持つ(`dictionary_query.idea_in_scope`)
     parent_idea_id: Mapped[int | None] = mapped_column(
@@ -959,6 +969,61 @@ def _date_new_knowers(s: Session, _flush_context, _instances) -> None:
             row.start = _knower_start(s, row)
 
 
+@event.listens_for(Session, "before_flush")
+def _place_new_rows_in_story(s: Session, _flush_context, _instances) -> None:
+    """作品を渡さずに足した人物・アイデア・場所を、文脈の作品(`db/story_scope.py`)に置く。時刻はその作品の暦で数える。"""
+    story_id = story_scope.current_story_id()
+    if story_id is None:
+        return
+    for row in s.new:
+        if isinstance(row, (Character, Idea, Location)) and row.story_id is None:
+            row.story_id = story_id
+
+
+class CustomStamp(ContentBase):
+    """西暦でない暦。作品(`Story.custom_stamp_id`)が持ち、その作品の時刻を数える。時刻は西暦(`Stamp`)のまま db に入れ、
+    表示と読み取りだけをこの暦で数える(`db/stamp.py` の `Calendar`)。`offset` より前の時刻は西暦で数える。"""
+
+    __tablename__ = "custom_stamp"
+
+    TEXT_COLUMNS = ()
+    name: Mapped[str] = mapped_column(String, nullable=False, comment="暦の名", sort_order=100)
+    offset: Mapped[Stamp] = mapped_column(
+        StampType, nullable=False,
+        comment="この暦で数え始める西暦の時刻。この時刻の桁は両方の暦で同じで、年の数は西暦から続く", sort_order=110)
+    hours_per_day: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=24, server_default="24", comment="一日の時間の数", sort_order=120)
+    minutes_per_hour: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60, server_default="60", comment="一時間の分の数", sort_order=122)
+    seconds_per_minute: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60, server_default="60",
+        comment="一分の秒の数。秒は地球の秒のまま(一日の長さは 時間×分×秒)", sort_order=124)
+    days_per_week: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=7, server_default="7", comment="一週の日数", sort_order=130)
+
+    CHILD_LISTS = ("months",)
+
+    months: Mapped[list["CustomStampMonth"]] = relationship(
+        back_populates="custom_stamp", lazy="selectin", cascade="all, delete-orphan",
+        order_by="CustomStampMonth.number", doc="一年の月を、月の順に一行ずつ持つ。日数の合計が一年の日数")
+
+
+class CustomStampMonth(Base):
+    __tablename__ = "custom_stamp_month"
+    __table_args__ = (UniqueConstraint("custom_stamp_id", "number"),)
+
+    custom_stamp_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("custom_stamp.id"), nullable=False, index=True, sort_order=100)
+    number: Mapped[int] = mapped_column(Integer, nullable=False, comment="何月か(1 から)", sort_order=110)
+    days: Mapped[int] = mapped_column(Integer, nullable=False, comment="この月の日数", sort_order=120)
+    name: Mapped[str | None] = mapped_column(String, comment="月の呼び名。空なら数で呼ぶ", sort_order=130)
+    outside_week_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="月の終わりの、週に数えない日の数(祭日など)。週は週に数える日だけで続く", sort_order=140)
+
+    custom_stamp: Mapped[CustomStamp] = relationship(back_populates="months", lazy="noload")
+
+
 class Story(OriginMixin, TextBase):
 
     __tablename__ = "story"
@@ -976,6 +1041,9 @@ class Story(OriginMixin, TextBase):
 
     parent_story_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("story.id"), comment="親の作品。章・外伝は親の作品の子にする", sort_order=270)
+    custom_stamp_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("custom_stamp.id"),
+        comment="この作品と子孫の作品の時刻を数える暦。空なら親の作品の暦、どこにも無ければ西暦", sort_order=280)
     # 章の話を書くとき、親の作品の筋書きまでたどって渡す。書き込みは常に parent_story_id を直に触る
     parent_story: Mapped["Story | None"] = relationship(remote_side="Story.id", viewonly=True)
 
