@@ -23,6 +23,9 @@ python -m alembic -c db/alembic/alembic.ini upgrade head
 python -m alembic -c db/alembic/alembic.ini downgrade -1
 ```
 
+2026-11-19 までのマイグレーションは、基点の版(`e6effee9826b`)一つにまとめてある。空の db は `db.postgres.init_db` で表を作って
+この版を付け、そこから上げる。マイグレーションには表の変更と一律の既定だけを書く(`CLAUDE.md` の「マイグレーションと本番のデータの直し」)。
+
 `versions/` は `versions/{yyyy}/{mm}/{dd}/{hhmmss}_{rev}_{slug}.py` の形で
 日付ディレクトリに振り分けられる(`alembic.ini` の `file_template` /
 `recursive_version_locations`)。同じ日に複数のリビジョンを切ることがあるので、
