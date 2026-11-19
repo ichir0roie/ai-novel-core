@@ -15,7 +15,7 @@ from collections import Counter
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload
 
 from data_access_logic.custom_stamp.record import ShiftResult, ShiftSample
 from data_access_logic.entrypoint import CommitEntrypoint
@@ -114,9 +114,11 @@ class _Shift:
 
 
 class ShiftIntoCustomStamp(CommitEntrypoint):
-    def __init__(self, custom_stamp_id: int, dry_run: bool = True):
+    def __init__(self, custom_stamp_id: int, dry_run: bool = True, include_unplaced: bool = False):
         self.custom_stamp_id = custom_stamp_id
         self.dry_run = dry_run
+        # 作品の決まらない行・控え(作品の欄の無いころに消えた行など)も、暦の始まりより後なら移す。ほかの作品の行は移さない
+        self.include_unplaced = include_unplaced
 
     def execute(self, s: Session) -> ShiftResult:
         with writer.rewriting():
@@ -128,9 +130,10 @@ class ShiftIntoCustomStamp(CommitEntrypoint):
         story_ids = calendar_story_ids(s, self.custom_stamp_id)
         if not story_ids:
             raise ValueError(f"custom_stamp_id={self.custom_stamp_id} の暦で数える作品が無い。先に作品の custom_stamp_id に付ける")
-        # 行の作品は親の行をたどって決めるので、表をまとめて読んでおき、たどるたびに問い合わせない
-        for mapper in Base.registry.mappers:
-            s.scalars(select(mapper.class_)).all()
+        # 行の作品は親の行をたどって決めるので、表をまとめて読んでおき、たどるたびに問い合わせない。たどるのは列の値だけなので、
+        # 関連(来歴・知る相手など)は読まない(行ごとに読むと、転送越しの db では問い合わせが行の数だけ増える)
+        # セッションは行を弱く持つので、読んだ行をここで持ち続けないと、たどるたびに読み直す
+        loaded = [s.scalars(select(mapper.class_).options(lazyload("*"))).all() for mapper in Base.registry.mappers]
         if not self.dry_run:
             keep_updated_at(s.connection())
 
@@ -140,14 +143,14 @@ class ShiftIntoCustomStamp(CommitEntrypoint):
             columns = _stamp_columns(model)
             if model is CustomStamp or not columns:
                 continue
-            for record in s.scalars(select(model)):
+            for record in s.scalars(select(model).options(lazyload("*"))):
                 late = {key: value for key in columns if shift.late(value := getattr(record, key))}
                 if not late:
                     continue
                 key = (model, record.id)
                 if key not in stories:
                     stories[key] = scope.story_of_row(s, model, record.id)
-                if stories[key] not in story_ids:
+                if not self._inside(stories[key], story_ids):
                     shift.outside[model.__tablename__] += len(late)
                     continue
                 for column, value in late.items():
@@ -162,9 +165,13 @@ class ShiftIntoCustomStamp(CommitEntrypoint):
             self._shift_snapshot(s, shift, change, story_ids, deleted)
         if not self.dry_run:
             s.flush()
+        del loaded
         return ShiftResult(dry_run=self.dry_run, story_ids=sorted(story_ids), shifted=dict(shift.shifted),
                            outside=dict(shift.outside), invalid=dict(shift.invalid), samples=shift.samples,
                            invalid_samples=shift.invalid_samples)
+
+    def _inside(self, story_id: int | None, story_ids: set[int]) -> bool:
+        return story_id in story_ids or (story_id is None and self.include_unplaced)
 
     def _shift_snapshot(self, s: Session, shift: _Shift, change: ExpansionChange, story_ids: set[int],
                         deleted: Deleted) -> None:
@@ -183,7 +190,7 @@ class ShiftIntoCustomStamp(CommitEntrypoint):
         if not late:
             return
         table = f"{ExpansionChange.__tablename__}.{change.table_name}"
-        if _snapshot_story(s, model, change.row_id, change.before, deleted) not in story_ids:
+        if not self._inside(_snapshot_story(s, model, change.row_id, change.before, deleted), story_ids):
             shift.outside[table] += len(late)
             return
         for column, value in late.items():
