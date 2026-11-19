@@ -15,4 +15,6 @@ tmp
 # gui.dev のブラウザのプロファイル、tool.aws.rds --serve のログ、Claude Code の手元だけの設定
 .brave-profile/
 .cache/
+# 運用スクリプト(本番のデータの直しなど)。git に残さない(CLAUDE.md の「データの直し」)
+ops/
 .claude/settings.local.json
