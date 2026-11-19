@@ -10,7 +10,7 @@ from data_access_logic.character.delete_history import DeleteCharacterHistory
 from data_access_logic.character.delete_relation_history import DeleteRelationHistory
 from data_access_logic.character.form import (
     CharacterHistoryChange, CharacterRelationHistoryChange, CharacterSkillCreateForm, CharacterSkillHistoryChange,
-    CharacterUpdateForm,
+    CharacterSpeechChange, CharacterUpdateForm,
 )
 from data_access_logic.character.read_character import ReadCharacter
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow, CharacterSkillHistoryRow
@@ -29,10 +29,11 @@ from data_access_logic.location.record import LocationHistoryRow
 from data_access_logic.location.update_history import UpdateLocationHistory
 from db.guard import ProtectedRowError
 from db.schema import (
-    Character, CharacterHistory, CharacterHistoryKnower, CharacterRelationHistory, IdeaHistory, LocationHistory,
-    get_env_session,
+    Character, CharacterHistory, CharacterHistoryKnower, CharacterRelationHistory, CharacterSpeech, IdeaHistory,
+    LocationHistory, get_env_session,
 )
 from db.writer import writing
+from gui.api import interface
 
 
 def _histories(shown, character_id: int) -> list[dict]:
@@ -147,3 +148,34 @@ def test_append_writer_cannot_rewrite_an_author_row(world):
         UpdateCharacterHistory(history_id=row_id, history=CharacterHistoryChange(description="書き換え")).run()
     with get_env_session() as s:
         assert s.get_one(CharacterHistory, row_id).description != "書き換え"
+
+
+def _speeches(world) -> list[int]:
+    with get_env_session() as s:
+        rows = [CharacterSpeech(episode_id=world.episode_id, character_id=world.character_ids[0], position=position,
+                                verbatim=f"原文{position}", vivid=f"鮮明{position}", vague=f"あやふや{position}",
+                                source_hash="") for position in range(2)]
+        s.add_all(rows)
+        s.commit()
+        return [row.id for row in rows]
+
+
+def test_update_character_speech_changes_only_the_given_fields_of_one_row(world):
+    target_id, other_id = _speeches(world)
+
+    # 画面・web と同じく id と dict で呼ぶ(行の作品はセリフの話からたどる)
+    changed = interface.call(interface.entrance_class("character.update_speech.UpdateCharacterSpeech"),
+                             {"character_speech_id": target_id, "speech": {"verbatim": "直した原文"}})
+
+    assert changed == {"id": target_id, "episode_id": world.episode_id, "character_id": world.character_ids[0],
+                       "position": 0, "verbatim": "直した原文", "vivid": "鮮明0", "vague": "あやふや0"}
+    with get_env_session() as s:
+        other = s.get_one(CharacterSpeech, other_id)
+        assert (other.verbatim, other.vivid, other.vague) == ("原文1", "鮮明1", "あやふや1")
+
+
+def test_speech_changes_cannot_empty_a_field():
+    with pytest.raises(ValidationError):
+        CharacterSpeechChange.model_validate({"vivid": ""})
+    with pytest.raises(ValidationError):
+        CharacterSpeechChange.model_validate({"vague": None})

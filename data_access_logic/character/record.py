@@ -277,3 +277,16 @@ class KnownRows(Material):
     character_skill_histories: list[KnownCharacterSkillHistory]
     idea_histories: list[KnownIdeaHistory]
     location_histories: list[KnownLocationHistory]
+
+
+class CharacterSpeechRow(Material):
+    """人物が話で言ったセリフの行。原文・鮮明・あやふやは、人物役が言ってからの日数でどれか一つを読む。"""
+
+    id: int
+    episode_id: int
+    character_id: int
+    # 話の本文の中で何番目のセリフか(0 から)
+    position: int
+    verbatim: str
+    vivid: str
+    vague: str

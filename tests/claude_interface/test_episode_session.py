@@ -80,10 +80,14 @@ def _member(members: list[dict], character_id: int) -> dict:
     return next(member for member in members if member["人物id"] == character_id)
 
 
+# 前の話の本文にだけある言い回し。書き方の行(本番の写し)に出てくる語と重ならないものにする
+PREVIOUS_LINE = "おっすテスト見本"
+
+
 def _previous_episode(world) -> Episode:
     """太郎の台詞が一つある、話の一月前の話。"""
-    return Episode(story_id=world.story_id, title="前の話", plot_text="前", main_text="「よう」と太郎が笑った。",
-                   start="1200/03/01 12:00:00")
+    return Episode(story_id=world.story_id, title="前の話", plot_text="前",
+                   main_text=f"「{PREVIOUS_LINE}」と太郎が笑った。", start="1200/03/01 12:00:00")
 
 
 def test_new_character_knows_its_history(shown):
@@ -661,7 +665,7 @@ def test_read_episode_brief_gives_no_style_samples(shown, world, mock_ai):
 
     # 前の話の本文は、言い回しの見本として渡さない(言い回しは書き方と口調の行で決める)
     assert "文体の見本(古い順)" not in brief
-    assert all("よう" not in str(value) for key, value in brief.items() if key != "この話")
+    assert PREVIOUS_LINE not in json.dumps(brief, ensure_ascii=False)
 
 
 TARO, HANAKO, STRANGER = 1, 2, 3
