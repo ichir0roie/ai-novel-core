@@ -55,6 +55,7 @@ DB_ENTRANCES = frozenset({
     "character.update_knowledge.UpdateKnowledge",
     "character.update_relation_history.UpdateRelationHistory",
     "character.update_skill_history.UpdateSkillHistory",
+    "character.update_speech.UpdateCharacterSpeech",
     "custom_stamp.commit_custom_stamp.CommitCustomStamp",
     "custom_stamp.shift_into_custom_stamp.ShiftIntoCustomStamp",
     "custom_stamp.update_custom_stamp.UpdateCustomStamp",

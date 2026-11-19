@@ -695,6 +695,27 @@
       "writes": true
     },
     {
+      "id": "character.update_speech.UpdateCharacterSpeech",
+      "area": "character",
+      "name": "UpdateCharacterSpeech",
+      "doc": "人物が話で言ったセリフの行を一つ、id で指して直す。渡した欄(原文・鮮明・あやふや)だけを直す。",
+      "params": [
+        {
+          "name": "character_speech_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "speech",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterSpeechChange"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "custom_stamp.commit_custom_stamp.CommitCustomStamp",
       "area": "custom_stamp",
       "name": "CommitCustomStamp",
@@ -725,6 +746,12 @@
           "name": "dry_run",
           "required": false,
           "default": true,
+          "annotation": "bool"
+        },
+        {
+          "name": "include_unplaced",
+          "required": false,
+          "default": false,
           "annotation": "bool"
         }
       ],

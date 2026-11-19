@@ -215,6 +215,14 @@ class CharacterSkillHistoryChange(Form):
     knowers: list[KnowerRow] | None = None
 
 
+class CharacterSpeechChange(Form):
+    """セリフの行一つの直し。渡した欄だけを直す(どれも空にはできない)。"""
+
+    verbatim: str = Field(default=None, min_length=1)
+    vivid: str = Field(default=None, min_length=1)
+    vague: str = Field(default=None, min_length=1)
+
+
 class CharacterRelationHistoryChange(Form):
     """関係の来歴の行一つの直し。渡した欄だけを直す(空にする欄は null を渡す)。"""
 
