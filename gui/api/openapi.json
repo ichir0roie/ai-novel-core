@@ -60,7 +60,7 @@
     "/api/scope": {
       "get": {
         "summary": "Get Scope",
-        "description": "時刻を数える作品と暦。`table` と `id` を渡せばその行の作品、無ければ `story_id`・`episode_id`・`location_id` の\n引数か、画面が選んでいる作品(ヘッダ)。画面は時刻の選択・タイムラインの計算をこの暦でする",
+        "description": "時刻を数える作品と暦。`table` と `id` を渡せばその行の作品と暦、無ければ `story_id`・`episode_id`・`location_id` の\n引数か、画面が選んでいる作品(ヘッダ)と作品の暦(新しい行の既定)。画面は時刻の選択・タイムラインの計算をこの暦でする",
         "operationId": "get_scope_api_scope_get",
         "parameters": [
           {
@@ -1195,7 +1195,7 @@
           "days_per_week"
         ],
         "title": "CalendarModel",
-        "description": "作品の暦(`db/stamp.py` の `Calendar`)。`offset`(西暦)より前は西暦で数える"
+        "description": "暦(`db/stamp.py` の `Calendar`)。西暦の `offset` が、この暦の 0 年 1 月 1 日 0 時"
       },
       "CharacterLocationsResponse": {
         "properties": {
@@ -1272,6 +1272,17 @@
           "story_id": {
             "type": "integer",
             "title": "Story Id"
+          },
+          "custom_stamp_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Stamp Id"
           },
           "title": {
             "type": "string",
@@ -2642,6 +2653,17 @@
               }
             ],
             "title": "Story Id"
+          },
+          "custom_stamp_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Stamp Id"
           },
           "calendar": {
             "anyOf": [

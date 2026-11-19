@@ -14,6 +14,8 @@ class IdeaCreateForm(Form):
     # 渡さなければ、kind の分類アイデアを履歴の行の場所から探して親にする
     parent_idea_id: int | None = None
     story_id: Annotated[int | None, References("story")] = None
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     # 効く場所・時期はこの行で持つ。始まり(`start`)の空いた行しか無いと、時期未定として時刻のある引き方から外れる
     histories: list[IdeaHistoryRow] = []
 
@@ -25,6 +27,8 @@ class IdeaUpdateForm(Form):
     text: str | None = None
     parent_idea_id: int | None = None
     story_id: Annotated[int | None, References("story")] = None
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     # 渡すと配列をまるごと置き換える
     histories: list[IdeaHistoryRow] | None = None
 

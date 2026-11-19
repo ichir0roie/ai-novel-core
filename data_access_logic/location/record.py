@@ -26,6 +26,8 @@ class LocationRecord(Material):
     kind: str | None = None
     parent_id: int | None = None
     story_id: int | None = None
+    # この行と子の行の時刻を数える暦
+    custom_stamp_id: int | None = None
     location_world: float | None = None
     location_planet: int | None = None
     location_longitude: float | None = None

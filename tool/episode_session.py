@@ -124,7 +124,7 @@ def wait(store: SessionStore, record_ids: list[int], timeout_seconds: int) -> di
 def stage(store: SessionStore) -> Any:
     """語り部の材料を db から読み、登場人物と知り合いの組を手番のファイルに写す(行は残す)。"""
     result = call("episode_session.read_stage.ReadStage", {"episode_id": store.episode_id})
-    # 手番の行の時刻を、人物役に話の作品の暦で言うため(`SessionStore.turn`)
+    # 手番の行の時刻を、人物役に話の暦で言うため(`SessionStore.turn`)
     scope = call("story.read_scope.ReadScope", {"args": {"episode_id": store.episode_id}})
     store.set_stage({member["人物id"]: member["名前"] for member in result["登場人物"]},
                     [tuple(relation["人物id"]) for relation in result["知り合い"]], scope["calendar"])
@@ -226,7 +226,7 @@ def main() -> None:
     appearance = commands.add_parser("appearance", help="初対面の相手から見て分かること(名前なし)を読む")
     appearance.add_argument("--character", type=int, required=True)
     appearance.add_argument("--time", required=True)
-    # 時刻を話の作品の暦で読むため(相手の人物が別の作品・作品の無い人物でも)
+    # 時刻を話の暦で読むため(相手の人物が別の作品・作品の無い人物でも)
     appearance.add_argument("--episode", type=int, required=True)
 
     knower_gaps = commands.add_parser(

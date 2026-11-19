@@ -20,7 +20,7 @@ class CustomStampMonthRow(Form):
 
 
 def _western(value: Any) -> Any:
-    # 暦の始まりは、どの作品の暦でもなく西暦で出し入れする
+    # 暦の 0 年 1 月 1 日に当たる時刻(offset)は、どの暦でもなく西暦で出し入れする
     return value.western_text() if isinstance(value, Stamp) else value
 
 
@@ -44,26 +44,3 @@ class CustomStampRecord(Material):
 class DeletedCustomStamp(Material):
     id: int
     name: str
-
-
-class ShiftSample(Material):
-    table: str
-    id: int
-    column: str
-    # 西暦
-    before: str
-    after: str
-
-
-class ShiftResult(Material):
-    dry_run: bool
-    # この暦で数える作品
-    story_ids: list[int]
-    # 表ごとの、移した(dry_run なら移す)時刻の数
-    shifted: dict[str, int]
-    # 暦の始まりより後の時刻なのに、この暦の作品に属さないので移さない数(作品の振り忘れを見つける)
-    outside: dict[str, int]
-    # 桁が暦に無い(一日の時間を超える時・月の日数を超える日)ので移さない数。直してから回し直す
-    invalid: dict[str, int]
-    samples: list[ShiftSample]
-    invalid_samples: list[ShiftSample]

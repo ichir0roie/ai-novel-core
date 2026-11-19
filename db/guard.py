@@ -46,7 +46,7 @@ def _label(target: Base) -> str:
 
 
 def _jsonable(value: Any) -> Any:
-    # 控えは作品の暦が付く・変わる・読み替わっても同じ時刻を指すよう、暦に依らない西暦の表記で書く
+    # 控えは行の暦が変わっても同じ時刻を指すよう、暦に依らない西暦の表記で書く
     if isinstance(value, Stamp):
         return value.western_text()
     if isinstance(value, Decimal):

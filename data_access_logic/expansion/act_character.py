@@ -15,7 +15,7 @@
 足すのは、出来事(大きな企ては親の出来事にし、一手ごとの出来事をその子にする)、当事者の来歴、事柄(アイデアと呼び名。知った人物を知る相手に)、
 現れた人物・対象と、動いた人物との関係、居場所の移動(今の行に end を入れ、移動先の行を足す)。既にある行は消さず、end のほかは直さない。
 一手ごとに展開(mode=character)を一つ立てて記録するので、`RevertExpansion` で一手ずつ取り消せる。`nudge` は作者からの軽い方向づけ。
-`story_id` は `time` を読む暦の作品(人物を渡さずに `time` を渡すとき)。一手ごとの時刻は、引いた人物の作品の暦で数える。
+`story_id` は `time` を読む暦の作品(人物を渡さずに `time` を渡すとき)。一手ごとの時刻は、引いた人物の暦で数える。
 """
 from __future__ import annotations
 
@@ -40,5 +40,5 @@ class ActCharacter(Entrypoint):
         return act.act_character(self.character_id, self.time, self.nudge, self.seed, self.act_count)
 
     def run(self) -> dict:
-        # 手ごとに引いた人物の作品が違いうるので、手の時刻はその手の作品の暦で書き出す
+        # 手ごとに引いた人物の暦が違いうるので、手の時刻はその手の暦で書き出す
         return self.result().dumped()

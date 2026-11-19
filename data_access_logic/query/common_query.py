@@ -27,7 +27,7 @@ EVENT_LOAD_OPTIONS = (
 # ---------------------------------------------------------------- 時刻
 
 def span(when: Stamp | str | int) -> tuple[Stamp, Stamp]:
-    """表記で指した期間の始まりと最後の時刻(`"11592"` なら暦の一年)。時刻そのものなら、その時刻だけ。"""
+    """表記で指した期間の始まりと最後の時刻(`"1592"` なら暦の一年)。時刻そのものなら、その時刻だけ。"""
     if isinstance(when, Stamp):
         return when, when
     text = str(when).strip()

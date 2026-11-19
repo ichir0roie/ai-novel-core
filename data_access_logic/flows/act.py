@@ -229,7 +229,7 @@ def act_character(
                 mode=ExpansionMode.CHARACTER, actor_id=pick.character_id, time=Stamp.parse(pick.time),
                 location_id=pick.location_id))
         try:
-            # 引いた人物の作品の暦で、この手の時刻を数える
+            # 引いた人物の暦で、この手の時刻を数える
             with writing(Writer.AI_APPEND, expansion.id), story_scope.scoped(scope):
                 plan = _plan(ai, rng, pick, expansion.id, nudge, used_ids)
         except Exception as error:
@@ -243,7 +243,7 @@ def act_character(
         return run
 
     plans.sort(key=lambda plan: plan.pick.time)
-    # 裁く段の材料(前後の話の時刻・思いのいつから)は、手の作品の暦で表記する。手はふつう同じ作品なので、一手目の作品で裁く
+    # 裁く段の材料(前後の話の時刻・思いのいつから)は、手の暦で表記する。手はふつう同じ暦なので、一手目の文脈で裁く
     with story_scope.scoped(scopes[plans[0].expansion_id]):
         judged = actor.judge_draft(ai, [plan.request for plan in plans])
     outcomes = {} if judged is None else {item.act_number: item.outcome() for item in judged.outcomes}

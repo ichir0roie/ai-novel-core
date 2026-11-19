@@ -10,15 +10,14 @@ TIME_NOTE = """\
 
 
 def calendar_note() -> str:
-    """文脈の作品が西暦でない暦を持つとき、その数え方(`db/stamp.py` の `Calendar`)。西暦なら空。"""
+    """文脈の暦が西暦でないとき、その数え方(`db/stamp.py` の `Calendar`)。西暦なら空。"""
     calendar = active_calendar()
     if calendar is None:
         return ""
     from data_access_logic.character.time_sense import TimeSense
 
-    name = calendar.name or "この作品の暦"
-    return (f"時刻は{name}で書く。{calendar.offset[0]} 年 {calendar.offset[1]} 月 {calendar.offset[2]} 日から後は、"
-            f"{TimeSense.reckoning(calendar)}。それより前の時刻は西暦。年齢はこの暦の年で数える。")
+    name = calendar.name or "この暦"
+    return f"時刻は{name}で書く。{TimeSense.reckoning(calendar)}。年齢はこの暦の年で数える。"
 
 
 # `generate` がどの生成の system にも足す

@@ -57,7 +57,6 @@ DB_ENTRANCES = frozenset({
     "character.update_skill_history.UpdateSkillHistory",
     "character.update_speech.UpdateCharacterSpeech",
     "custom_stamp.commit_custom_stamp.CommitCustomStamp",
-    "custom_stamp.shift_into_custom_stamp.ShiftIntoCustomStamp",
     "custom_stamp.update_custom_stamp.UpdateCustomStamp",
     "episode.apply_outcomes.ApplyOutcomes",
     "episode.cast_episode.CastEpisode",
@@ -162,7 +161,7 @@ def db_entrance_class(entrance_id: str) -> type[Entrypoint]:
 
 
 def call(cls: type[Entrypoint], args: dict[str, Any], fallback_story_id: int | None = None) -> Any:
-    """JSON で来た引数で入口を組み立てて `run()` を呼ぶ(dump 済みの結果)。引数の時刻は、引数から決めた作品の暦で読む
+    """JSON で来た引数で入口を組み立てて `run()` を呼ぶ(dump 済みの結果)。引数の時刻は、引数から決めた暦(持ち主の行の暦か、作品の暦)で読む
     (`data_access_logic/story/scope.py`)。"""
     from data_access_logic.story.scope import HISTORY_MODELS, args_scope
 

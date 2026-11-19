@@ -13,7 +13,7 @@
 行のファイルは語り部だけが書き、一手はその行の人物役だけが行ごとのファイルに書く。同時に動く人物役が一つのファイルを
 書き合わないので、鍵が要らない。
 一手ごとに起こすコマンドなので、pydantic・sqlalchemy を読み込まない(読み込むだけで一回に 0.3〜0.5 秒かかる)。
-時刻を数える作品の暦は、`stage` で db から読んだときに写しておく。
+時刻を数える話の暦は、`stage` で db から読んだときに写しておく。
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ class SessionState:
     cast: dict[int, str] = field(default_factory=dict)
     # 話の時刻に知り合いの二人の組
     acquaintances: list[list[int]] = field(default_factory=list)
-    # 話の作品の暦(`Calendar.to_json`)。`stage` で写す。空なら西暦
+    # 話の暦(`Calendar.to_json`)。`stage` で写す。空なら西暦
     calendar: dict[str, Any] | None = None
     # 消した行の id を使い直さない(止めた人物役が古い行の id に一手を入れないように)
     next_id: int = 1
@@ -104,7 +104,7 @@ class SessionStore:
 
     def set_stage(self, cast: dict[int, str], acquaintances: list[tuple[int, int]],
                   calendar: dict[str, Any] | None = None) -> None:
-        """語り部が db から読んだ登場人物と知り合いの組と、話の作品の暦を写す。行はそのまま残す。"""
+        """語り部が db から読んだ登場人物と知り合いの組と、話の暦を写す。行はそのまま残す。"""
         session = self.load()
         session.cast = cast
         session.acquaintances = [sorted(pair) for pair in acquaintances]
@@ -153,7 +153,7 @@ class SessionStore:
         for character_id in {*(witness_ids or []), *(id_ for turn in turns for id_ in turn.get("witness_ids") or [])}:
             if character_id not in session.cast:
                 raise ValueError(f"witness_ids の人物 id={character_id} は話 id={self.episode_id} の登場人物でない")
-        # 人物役は番の行の時刻を「いま」として受け取るので、話の作品の暦で読めない時刻は足す前に断る
+        # 人物役は番の行の時刻を「いま」として受け取るので、話の暦で読めない時刻は足す前に断る
         for given in (time, *(turn.get("time") for turn in turns)):
             if given:
                 _parsed(session, given)
@@ -338,12 +338,12 @@ def _calendar(session: SessionState) -> Calendar | None:
 
 
 def _parsed(session: SessionState, time: str) -> Stamp | None:
-    """手番の時刻を、話の作品の暦で読む。読めなければ、語り部に直させる。"""
+    """手番の時刻を、話の暦で読む。読めなければ、語り部に直させる。"""
     try:
         with using_calendar(_calendar(session)):
             return Stamp.parse(time)
     except StampError as error:
-        raise ValueError(f"time を話の作品の暦の時刻として読めない: {error}") from error
+        raise ValueError(f"time を話の暦の時刻として読めない: {error}") from error
 
 
 def _quietly_parsed(session: SessionState, time: str) -> Stamp | None:

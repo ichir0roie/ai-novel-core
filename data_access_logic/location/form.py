@@ -11,6 +11,8 @@ from db.polygon import parse_polygon
 class _LocationColumns(Form):
     parent_id: int | None = None
     story_id: Annotated[int | None, References("story")] = None
+    custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
+        default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     location_world: float | None = None
     location_planet: int | None = None
     location_longitude: float | None = None

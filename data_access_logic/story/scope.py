@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""呼び出しの作品を決めて、その作品の暦と一緒に文脈に立てる(`db/story_scope.py`)。
+"""呼び出しの作品と暦を決めて、文脈に立てる(`db/story_scope.py`)。
 
-作品は、入口・段の引数(`story_id`・`episode_id` など、行を指す欄)か、画面で開いた行から決める。引数では、書く行そのもの
+作品と暦は、入口・段の引数(`story_id`・`episode_id` など、行を指す欄)か、画面で開いた行から決める。引数では、書く行そのもの
 (来歴の `history_id`、`table` と `row_id`、行をまるごと渡す欄の `id`)を先に見て、そのあと浅い欄から深い欄へ、行を指す欄を見る
 (来歴の知る相手のような入れ子の欄で、書く行と別の作品に決まらないように)。人物・アイデア・場所は自分の作品を持ち、
 来歴などの子の行は親の行の作品、出来事は作品が空なら場所・当事者の作品に従う。
-暦は作品から親の作品へたどって、最初に見つかった `custom_stamp_id` の暦。どこにも無ければ西暦。
+暦は、持ち主の行(話・出来事・人物・アイデア・場所・関係)の `custom_stamp_id` の暦で、来歴などの子の行は持ち主の暦。
+引数から行が決まらなければ、作品の `custom_stamp_id`(新しい行の既定)の暦。
 """
 from __future__ import annotations
 
@@ -33,8 +34,9 @@ _KEY_MODELS: dict[str, type[Base]] = {
     "viewpoint_character_id": Character,
 }
 _KEY_PATTERN = re.compile(r"\A(\w+?)_ids?\Z")
-# 同じ深さに行を指す欄がいくつもあるとき、先に見る表(小さいほど作品を確かに決める。無い表は 4)
-_MODEL_RANKS: dict[type[Base], int] = {Story: 0, Episode: 1, Expansion: 2, Event: 3, Character: 5, Idea: 6, Location: 7}
+# 同じ深さに行を指す欄がいくつもあるとき、先に見る表(小さいほど作品・暦を確かに決める。無い表は 4)
+_MODEL_RANKS: dict[type[Base], int] = {
+    CustomStamp: -1, Story: 0, Episode: 1, Expansion: 2, Event: 3, Character: 5, Idea: 6, Location: 7}
 # 入口の引数で、行をまるごと渡す欄(`{"character": {"id": 3, ...}}`)
 _FORM_MODELS: dict[str, type[Base]] = {
     "story": Story, "episode": Episode, "event": Event, "character": Character, "idea": Idea, "location": Location,
@@ -56,7 +58,7 @@ _OWNER_MODELS: frozenset[type[Base]] = frozenset({
     Idea, IdeaHistory, Location, LocationHistory,
 })
 _MAX_DEPTH = 12
-# 暦は滅多に変わらないので、画面の一回の操作で何度も読まないよう少しだけ控える。作品・暦の行を書いたら、その場で捨てる
+# 暦は滅多に変わらないので、画面の一回の操作で何度も読まないよう少しだけ控える。暦の行を書いたら、その場で捨てる
 # (`_forget_calendars`。ほかのプロセスの控えは、この長さのうちに切れる)
 _CALENDAR_SECONDS = 10.0
 _calendars: dict[int, tuple[float, Calendar | None]] = {}
@@ -64,41 +66,53 @@ _calendars: dict[int, tuple[float, Calendar | None]] = {}
 
 @event.listens_for(Session, "after_flush")
 def _forget_calendars(s: Session, _flush_context) -> None:
-    if any(isinstance(row, (Story, CustomStamp, CustomStampMonth)) for row in (*s.new, *s.dirty, *s.deleted)):
+    if any(isinstance(row, (CustomStamp, CustomStampMonth)) for row in (*s.new, *s.dirty, *s.deleted)):
         _calendars.clear()
 
 
-def calendar_of(s: Session, story_id: int | None) -> Calendar | None:
-    if story_id is None:
+def calendar_of(s: Session, custom_stamp_id: int | None) -> Calendar | None:
+    """暦の行の暦。西暦の行・空なら None。"""
+    if custom_stamp_id is None:
         return None
-    cached = _calendars.get(story_id)
+    cached = _calendars.get(custom_stamp_id)
     if cached is not None and time.monotonic() - cached[0] < _CALENDAR_SECONDS:
         return cached[1]
-    calendar = _read_calendar(s, story_id)
-    _calendars[story_id] = (time.monotonic(), calendar)
+    calendar = calendar_of_row(s.get_one(CustomStamp, custom_stamp_id))
+    _calendars[custom_stamp_id] = (time.monotonic(), calendar)
     return calendar
 
 
-def _read_calendar(s: Session, story_id: int) -> Calendar | None:
-    seen: set[int] = set()
-    current: int | None = story_id
-    while current is not None and current not in seen:
-        seen.add(current)
-        story = s.get(Story, current)
-        if story is None:
-            return None
-        if story.custom_stamp_id is not None:
-            return calendar_of_row(s.get_one(CustomStamp, story.custom_stamp_id))
-        current = story.parent_story_id
-    return None
-
-
-def calendar_of_row(row: CustomStamp) -> Calendar:
+def calendar_of_row(row: CustomStamp) -> Calendar | None:
+    """暦の行の暦。月を持たない行(西暦)は None。"""
+    if not row.months:
+        return None
     return Calendar(offset=row.offset.western_digits, month_days=tuple(month.days for month in row.months),
                     hours_per_day=row.hours_per_day, days_per_week=row.days_per_week, name=row.name,
                     month_names=tuple(month.name or "" for month in row.months),
                     minutes_per_hour=row.minutes_per_hour, seconds_per_minute=row.seconds_per_minute,
                     outside_week_days=tuple(month.outside_week_days for month in row.months))
+
+
+def custom_stamp_of_row(s: Session, model: type[Base], row_id: int | None, depth: int = 0) -> int | None:
+    """行の暦の行の id。暦を持たない子の行は、持ち主の行(外部キーの先)の暦。"""
+    if row_id is None or depth > _MAX_DEPTH:
+        return None
+    if model is CustomStamp:
+        return row_id
+    row = s.get(model, row_id)
+    if row is None:
+        return None
+    if "custom_stamp_id" in model.__table__.columns:
+        return getattr(row, "custom_stamp_id")
+    for column in model.__table__.columns:
+        for foreign_key in column.foreign_keys:
+            target = model_of_table(foreign_key.column.table.name)
+            if target not in _OWNER_MODELS:
+                continue
+            found = custom_stamp_of_row(s, target, getattr(row, column.key), depth + 1)
+            if found is not None:
+                return found
+    return None
 
 
 def story_of_row(s: Session, model: type[Base], row_id: int | None, depth: int = 0) -> int | None:
@@ -179,54 +193,71 @@ def _ids(value: Any) -> list[int]:
     return [item for item in (value if isinstance(value, list) else [value]) if isinstance(item, int)]
 
 
-def story_of_args(s: Session, args: Mapping[str, Any], history_model: type[Base] | None = None) -> int | None:
-    """入口・段の引数から作品を決める。決まらなければ None。"""
+def _rows_of_args(args: Mapping[str, Any], history_model: type[Base] | None) -> Iterator[tuple[type[Base], int]]:
+    """引数が指す行を、作品・暦を決める順に。"""
     if history_model is not None and isinstance(args.get("history_id"), int):
-        found = story_of_row(s, history_model, args["history_id"])
-        if found is not None:
-            return found
+        yield history_model, args["history_id"]
     table, row_id = args.get("table"), args.get("row_id")
     if isinstance(table, str) and isinstance(row_id, int) and (model := model_of_table(table)) is not None:
-        found = story_of_row(s, model, row_id)
-        if found is not None:
-            return found
+        yield model, row_id
     for level in _levels(args):
         for key, value in level:
             model = _FORM_MODELS.get(key)
             if model is not None and isinstance(value, Mapping) and isinstance(value.get("id"), int):
-                found = story_of_row(s, model, value["id"])
-                if found is not None:
-                    return found
+                yield model, value["id"]
         references: list[tuple[type[Base], Any]] = [
             (model, value) for key, value in level if (model := model_of_key(key)) is not None]
         references.sort(key=_rank)
         for model, value in references:
             for referred in _ids(value):
-                found = story_of_row(s, model, referred)
-                if found is not None:
-                    return found
+                yield model, referred
+
+
+def story_of_args(s: Session, args: Mapping[str, Any], history_model: type[Base] | None = None) -> int | None:
+    """入口・段の引数から作品を決める。決まらなければ None。"""
+    for model, row_id in _rows_of_args(args, history_model):
+        found = story_of_row(s, model, row_id)
+        if found is not None:
+            return found
     return None
 
 
-def scope_of(s: Session, story_id: int | None) -> Scope:
-    return Scope(story_id=story_id, calendar=calendar_of(s, story_id))
+def custom_stamp_of_args(s: Session, args: Mapping[str, Any], history_model: type[Base] | None = None) -> int | None:
+    """入口・段の引数が指す行の暦の行の id。作品は暦の既定なので見ない(`scope_of` が埋める)。決まらなければ None。"""
+    for model, row_id in _rows_of_args(args, history_model):
+        if model is Story:
+            continue
+        found = custom_stamp_of_row(s, model, row_id)
+        if found is not None:
+            return found
+    return None
+
+
+def scope_of(s: Session, story_id: int | None, custom_stamp_id: int | None = None) -> Scope:
+    """作品と暦の文脈。暦が決まっていなければ作品の暦(新しい行の既定)。"""
+    if custom_stamp_id is None and story_id is not None:
+        story = s.get(Story, story_id)
+        custom_stamp_id = None if story is None else story.custom_stamp_id
+    return Scope(story_id=story_id, custom_stamp_id=custom_stamp_id, calendar=calendar_of(s, custom_stamp_id))
 
 
 @contextmanager
-def story_scope_of(story_id: int | None) -> Iterator[Scope]:
+def story_scope_of(story_id: int | None, custom_stamp_id: int | None = None) -> Iterator[Scope]:
     with get_env_session() as s:
-        scope = scope_of(s, story_id)
+        scope = scope_of(s, story_id, custom_stamp_id)
     with story_scope.scoped(scope):
         yield scope
 
 
 def args_scope_in(s: Session, args: Mapping[str, Any], fallback_story_id: int | None = None,
                   history_model: type[Base] | None = None) -> Scope:
-    """引数から作品を決める。引数から決まらなければ `fallback_story_id`、それも無ければ今の文脈の作品のまま。"""
+    """引数から作品と暦を決める。作品が引数から決まらなければ `fallback_story_id`、それも無ければ今の文脈の作品と暦のまま。"""
     story_id = story_of_args(s, args, history_model)
-    if story_id is None:
-        story_id = fallback_story_id if fallback_story_id is not None else story_scope.current_story_id()
-    return scope_of(s, story_id)
+    custom_stamp_id = custom_stamp_of_args(s, args, history_model)
+    current = story_scope.current()
+    if story_id is None and fallback_story_id is None and current is not None:
+        return current if custom_stamp_id is None else scope_of(s, current.story_id, custom_stamp_id)
+    return scope_of(s, story_id if story_id is not None else fallback_story_id, custom_stamp_id)
 
 
 @contextmanager
@@ -242,6 +273,7 @@ def args_scope(args: Mapping[str, Any], fallback_story_id: int | None = None,
 def row_scope(model: type[Base], row_id: int, fallback_story_id: int | None = None) -> Iterator[Scope]:
     with get_env_session() as s:
         story_id = story_of_row(s, model, row_id)
-        scope = scope_of(s, story_id if story_id is not None else fallback_story_id)
+        scope = scope_of(s, story_id if story_id is not None else fallback_story_id,
+                         custom_stamp_of_row(s, model, row_id))
     with story_scope.scoped(scope):
         yield scope

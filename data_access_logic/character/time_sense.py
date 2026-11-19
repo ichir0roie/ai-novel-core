@@ -2,13 +2,13 @@
 """人物の時間の感じ方。人物役・人物モードの人物の目に、今の時刻と物事(来歴・装い・持ち物・出来事・セリフ・思い)の古さを、
 人物が数える単位で渡す。
 
-隔たりは時刻(`Stamp`)どうしで数え、人物の暦(文脈の作品の暦。無ければ西暦)の単位に直して、大きさに合う一つの単位で言う
+隔たりは時刻(`Stamp`)どうしで数え、人物の暦(文脈の暦。無ければ西暦)の単位に直して、大きさに合う一つの単位で言う
 (「5時間前」「3日前」「2週間前」「5か月前」「3年前」)。時間は隔たりの長さで、日は暦の日付が何度変わったかで、か月・年は
-暦の上で同じ日付が何度巡ったか(去年の同じ日なら「1年前」)で数える。暦の始まりより前は、西暦の日・週・月で数える。
+暦の上で同じ日付が何度巡ったか(去年の同じ日なら「1年前」)で数える。
 年の数そのもの(西暦・暦の年)は渡さない(`character/knowledge.py` の冒頭)。
 
-時刻は精度を持たないので、桁で見分ける。1 月 1 日 0 時ちょうどは年だけ決めた時刻(`11590`)、0 時ちょうどは日付だけ決めた時刻
-(`11592/03/15`)とみなし、それより細かくは言わない(年だけなら「今年」「3年前」、日付だけなら「今日」「昨日」「3日前」)。
+時刻は精度を持たないので、桁で見分ける。1 月 1 日 0 時ちょうどは年だけ決めた時刻(`1590`)、0 時ちょうどは日付だけ決めた時刻
+(`1592/03/15`)とみなし、それより細かくは言わない(年だけなら「今年」「3年前」、日付だけなら「今日」「昨日」「3日前」)。
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class TimeSense:
 
     @classmethod
     def current(cls) -> TimeSense:
-        """文脈の作品の暦で数える感じ方。"""
+        """文脈の暦で数える感じ方。"""
         return cls(active_calendar())
 
     @property
@@ -68,17 +68,13 @@ class TimeSense:
     def _month_number(self, digits: Digits) -> int:
         return western_month_number(digits) if self.calendar is None else self.calendar.month_number(digits)
 
-    def _hour_seconds_at(self, digits: Digits) -> int:
-        return _HOUR_SECONDS if self.calendar is None else self.calendar.hour_seconds_at(digits)
+    @property
+    def _hour_seconds(self) -> int:
+        return _HOUR_SECONDS if self.calendar is None else self.calendar.hour_seconds
 
-    def _minutes_at(self, digits: Digits) -> int:
-        return 60 if self.calendar is None else self.calendar.minutes_at(digits)
-
-    def _hours_at(self, digits: Digits) -> int:
-        return 24 if self.calendar is None else self.calendar.hours_at(digits)
-
-    def _week_at(self, digits: Digits) -> int:
-        return 7 if self.calendar is None or digits < self.calendar.offset else self.calendar.days_per_week
+    @property
+    def _minutes_per_hour(self) -> int:
+        return 60 if self.calendar is None else self.calendar.minutes_per_hour
 
     @staticmethod
     def _borrow(start: Digits, end: Digits, first: int, last: int) -> int:
@@ -104,14 +100,14 @@ class TimeSense:
         days = self._days(start, end, compared)
         if precision == _CLOCK:
             seconds = earlier.seconds_until(later)
-            hour = self._hour_seconds_at(end)
+            hour = self._hour_seconds
             if seconds < hour:
                 return precision, None
             if days < 1:
                 return precision, f"{seconds // hour}時間"
         elif days < 1:
             return precision, None
-        week = self._week_at(end)
+        week = self.days_per_week
         if days < week:
             return precision, f"{days}日"
         years = end[0] - start[0] - self._borrow(start, end, 1, compared)
@@ -148,25 +144,25 @@ class TimeSense:
         return self._part_of_day(digits)
 
     def _part_of_day(self, digits: Digits) -> str:
-        position = (digits[3] + digits[4] / self._minutes_at(digits)) * 24 / self._hours_at(digits)
+        position = (digits[3] + digits[4] / self._minutes_per_hour) * 24 / self.hours_per_day
         return next(name for end, name in _DAY_PARTS if position < end)
 
     def now_for_prompt(self, now: Stamp, reckoning: bool = True) -> dict[str, Any]:
-        """今の時刻を、年を抜いて月日・時間帯・時で言う(日付だけの時刻なら月日だけ、年だけの時刻なら言わない)。暦の始まりから後で暦が西暦でなければ、
-        一日・一年の長さを添える(`reckoning`)。"""
+        """今の時刻を、年を抜いて月日・時間帯・時で言う(日付だけの時刻なら月日だけ、年だけの時刻なら言わない)。暦が西暦でなければ、
+        週の何日目かと、一日・一年の長さを添える(`reckoning`)。"""
         digits = self._digits(now)
         _, month, day, hour, _, _ = digits
-        names = () if self.calendar is None or digits < self.calendar.offset else self.calendar.month_names
+        names = () if self.calendar is None else self.calendar.month_names
         named = names[month - 1] if month <= len(names) else ""
         # 年だけ決めた時刻(1 月 1 日 0 時ちょうど)は、月日も言わない
         told: dict[str, Any] = {} if _precision(digits) == _YEAR else {"日付": f"{named or f'{month}月'}{day}日"}
-        if self.calendar is not None and digits >= self.calendar.offset and _precision(digits) != _YEAR:
+        if self.calendar is not None and _precision(digits) != _YEAR:
             weekday = self.calendar.weekday(digits)
             told["週"] = "週に数えない日" if weekday is None else f"週の{weekday}日目"
         if _precision(digits) == _CLOCK:
             told["時間帯"] = self._part_of_day(digits)
             told["時刻"] = f"{hour}時ごろ"
-        if reckoning and self.calendar is not None and digits >= self.calendar.offset:
+        if reckoning and self.calendar is not None:
             told["暦"] = self.reckoning(self.calendar)
         return told
 

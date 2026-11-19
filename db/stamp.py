@@ -4,7 +4,7 @@
 
 db には西暦の桁を並べた整数(`年*10^10 + 月*10^8 + … + 秒`)で入れるので、大小がそのまま時の前後になる。
 
-作品が西暦でない暦(`custom_stamp`)を持つときは、その暦を文脈(`using_calendar`)に立てる。暦は表記だけに効く:
+行が西暦でない暦(`custom_stamp`)を持つときは、その暦を文脈(`using_calendar`)に立てる。暦は表記だけに効く:
 桁(`year` など)・文字列での出し入れ(`str` / `parse`)・桁からの組み立て(`Stamp(年, 月, …)`)・表記で指した期間の終わり
 (`period_end`)を文脈の暦で数える。前後・隔たり・日数の足し引き(`days_until` / `plus_days` / `seconds_until`)は暦に依らず
 西暦の時刻で数える。人物が隔たりをどう感じるかは `data_access_logic/character/time_sense.py`。
@@ -107,11 +107,11 @@ def _text(digits: Digits) -> str:
 
 @dataclass(frozen=True)
 class Calendar:
-    """西暦でない暦(`db/schema.py` の `CustomStamp`)。`offset` より前は西暦で数え、`offset` から先はこの暦で数える。
+    """西暦でない暦(`db/schema.py` の `CustomStamp`)。西暦の時刻 `offset` を、この暦の 0 年 1 月 1 日 0 時として数える。
 
-    `offset` の時刻の桁は、西暦でもこの暦でも同じ(年の数は西暦から続く)。秒は地球の秒のままで、一分の秒の数・一時間の分の数・
-    一日の時間の数は暦ごとに決める(一日 30 時間・一時間 60 分・一分 54 秒なら、一日は地球の 27 時間)。
-    月の終わりの何日か(`outside_week_days`)は週に数えない日にできる(週は月の頭から数え直さず、週に数える日だけで続く)。
+    秒は地球の秒のままで、一分の秒の数・一時間の分の数・一日の時間の数は暦ごとに決める(一日 30 時間・一時間 60 分・
+    一分 54 秒なら、一日は地球の 27 時間)。月の終わりの何日か(`outside_week_days`)は週に数えない日にできる
+    (週は月の頭から数え直さず、週に数える日だけで続く)。暦の 0 年 1 月 1 日が、週の 1 日目。
     """
 
     offset: Digits
@@ -141,7 +141,7 @@ class Calendar:
         object.__setattr__(self, "year_days", sum(self.month_days))
         object.__setattr__(self, "hour_seconds", self.minutes_per_hour * self.seconds_per_minute)
         object.__setattr__(self, "day_seconds", self.hours_per_day * self.hour_seconds)
-        self.check(self.offset)
+        _check_western(self.offset)
 
     def check(self, digits: Digits) -> Digits:
         """この暦の桁として正しいか。"""
@@ -178,48 +178,21 @@ class Calendar:
         return year, month, day + 1, hour, minute, second
 
     def to_western(self, digits: Digits) -> Digits:
-        """この暦の桁を、西暦の桁に。`offset` より前の桁は西暦のまま読む。"""
-        if digits < self.offset:
-            return _check_western(digits)
+        """この暦の桁を、西暦の桁に。"""
         self.check(digits)
-        seconds = _western_seconds(self.offset) + self._seconds(digits) - self._seconds(self.offset)
-        return _western_digits(seconds)
+        return _western_digits(_western_seconds(self.offset) + self._seconds(digits))
 
     def to_local(self, western: Digits) -> Digits:
-        """西暦の桁を、この暦の桁に。`offset` より前は西暦のまま。"""
-        if western < self.offset:
-            return western
-        return self._digits(self._seconds(self.offset) + _western_seconds(western) - _western_seconds(self.offset))
-
-    def from_western_clock(self, digits: Digits) -> Digits:
-        """西暦の一日(24 時間)のつもりで書いた桁を、日付を保ち、一日のうちの割合を保ってこの暦の桁にする
-        (西暦の 12 時は、一日 30 時間の暦の 15 時)。分に丸め、0 時ちょうどは 0 時ちょうどのまま。"""
-        minutes = round(_clock_seconds(digits) / _WESTERN_DAY_SECONDS * self.day_seconds / self.seconds_per_minute)
-        minutes = min(minutes, self.hours_per_day * self.minutes_per_hour - 1)
-        hour, minute = divmod(minutes, self.minutes_per_hour)
-        return (*digits[:3], hour, minute, 0)
+        """西暦の桁を、この暦の桁に。"""
+        return self._digits(_western_seconds(western) - _western_seconds(self.offset))
 
     def date_number(self, local: Digits) -> int:
-        """`offset` の日を 0 とする日付の通し番号(時刻は見ない)。始まりより前は西暦の日で数える。"""
-        if local < self.offset:
-            return _ordinal(*local[:3]) - _ordinal(*self.offset[:3])
-        return self._day_number(local) - self._day_number(self.offset)
+        """暦の 0 年 1 月 1 日を 0 とする日付の通し番号(時刻は見ない)。"""
+        return self._day_number(local)
 
     def month_number(self, local: Digits) -> int:
-        """`offset` の月を 0 とする月の通し番号。始まりより前は西暦の 12 か月で数える。"""
-        months = _WESTERN_MONTHS if local < self.offset else len(self.month_days)
-        return (local[0] - self.offset[0]) * months + local[1] - self.offset[1]
-
-    def hours_at(self, local: Digits) -> int:
-        """その時刻の一日の時間の数。始まりより前は西暦の 24 時間。"""
-        return 24 if local < self.offset else self.hours_per_day
-
-    def hour_seconds_at(self, local: Digits) -> int:
-        """その時刻の一時間の秒の数。始まりより前は西暦の 3600 秒。"""
-        return 3600 if local < self.offset else self.hour_seconds
-
-    def minutes_at(self, local: Digits) -> int:
-        return 60 if local < self.offset else self.minutes_per_hour
+        """暦の 0 年 1 月を 0 とする月の通し番号。"""
+        return local[0] * len(self.month_days) + local[1] - 1
 
     def _week_days_of(self, month: int) -> int:
         """その月の週に数える日の数。"""
@@ -233,10 +206,10 @@ class Calendar:
         return year * per_year + before + min(day - 1, self._week_days_of(month))
 
     def weekday(self, local: Digits) -> int | None:
-        """週の何日目か(暦の始まりの日を 1 日目とする)。週に数えない日・始まりより前なら None。"""
-        if local < self.offset or local[2] > self._week_days_of(local[1]):
+        """週の何日目か(暦の 0 年 1 月 1 日を 1 日目とする)。週に数えない日なら None。"""
+        if local[2] > self._week_days_of(local[1]):
             return None
-        return (self._week_count(local) - self._week_count(self.offset)) % self.days_per_week + 1
+        return self._week_count(local) % self.days_per_week + 1
 
     def to_json(self) -> dict:
         return {"name": self.name, "offset": _text(self.offset), "month_days": list(self.month_days),
@@ -272,15 +245,11 @@ def _filled(prefix: Sequence[int], last_month: int, last_day: Callable[[int], in
 def period_end(prefix: Sequence[int]) -> "Stamp":
     """桁の頭(年だけ・年月・年月日…)で指した期間の、最後の時刻。文脈の暦の月の数・月の日数・一日の時間・一時間の分・一分の秒で数える。"""
     calendar = active_calendar()
-    # 始まりより前の期間と、暦に無い月は西暦で埋める(暦の月の数が西暦より少ないこともある)
-    if (calendar is not None and tuple(prefix) >= calendar.offset[:len(prefix)]
-            and (len(prefix) < 2 or 1 <= prefix[1] <= len(calendar.month_days))):
-        months = calendar.month_days
-        local = _filled(prefix, len(months), lambda month: months[month - 1],
-                        (calendar.hours_per_day - 1, calendar.minutes_per_hour - 1, calendar.seconds_per_minute - 1))
-        if local >= calendar.offset:
-            return Stamp(*local)
-    return Stamp(*_filled(prefix, _WESTERN_MONTHS, lambda month: _days_in_month(prefix[0], month), (23, 59, 59)))
+    if calendar is None:
+        return Stamp(*_filled(prefix, _WESTERN_MONTHS, lambda month: _days_in_month(prefix[0], month), (23, 59, 59)))
+    months = calendar.month_days
+    return Stamp(*_filled(prefix, len(months), lambda month: months[month - 1],
+                          (calendar.hours_per_day - 1, calendar.minutes_per_hour - 1, calendar.seconds_per_minute - 1)))
 
 
 def _western_plus_days(western: Digits, days: int) -> Digits:

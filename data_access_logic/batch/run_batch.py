@@ -79,7 +79,7 @@ class RunBatch(CommitEntrypoint):
         self.scopes: list[story_scope.Scope] = []
 
     def run(self) -> list[dict]:
-        """結果も、リクエストごとに引数を読んだ作品の暦で書き出す(書き出すときの文脈の暦で表記が決まるので)。"""
+        """結果も、リクエストごとに引数を読んだ暦で書き出す(書き出すときの文脈の暦で表記が決まるので)。"""
         results = self.result()
         assert isinstance(results, list)
         dumped = []
@@ -89,7 +89,7 @@ class RunBatch(CommitEntrypoint):
         return dumped
 
     def execute(self, s: Session) -> list[BaseModel]:
-        # 引数の時刻は、リクエストごとに引数から決めた作品の暦で読む
+        # 引数の時刻は、リクエストごとに引数から決めた暦で読む
         self.scopes = scopes = [
             args_scope_in(s, request.args, history_model=HISTORY_MODELS.get(request.entrance.rpartition(".")[0]))
             for request in self.requests]

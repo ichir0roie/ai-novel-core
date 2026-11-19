@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""入口の引数から決まる作品と、その作品の暦。web のセッション(`web_session/flows.py`)は db に繋がないので、流れを回す前に
+"""入口の引数から決まる作品と暦。web のセッション(`web_session/flows.py`)は db に繋がないので、流れを回す前に
 これで作品と暦を受け取り、流れの中の時刻をその暦で読み書きする。"""
 from __future__ import annotations
 
@@ -21,4 +21,4 @@ class ReadScope(SessionEntrypoint):
         found = story_scope.current()
         if found is None:
             return ScopeRecord()
-        return ScopeRecord(story_id=found.story_id, calendar=None if found.calendar is None else found.calendar.to_json())
+        return ScopeRecord.of(found)

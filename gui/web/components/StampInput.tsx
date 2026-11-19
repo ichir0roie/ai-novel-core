@@ -87,7 +87,7 @@ export default function StampInput({ value, onChange, disabled, calendar: given 
     <div style={{ display: "flex", gap: "0.3rem" }}>
       <input
         type="text"
-        placeholder="11579/03/02 10:00:00"
+        placeholder="1579/03/02 10:00:00"
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
         disabled={disabled}

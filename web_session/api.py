@@ -21,7 +21,7 @@ def call[Out](step: Callable[..., Out], form: BaseModel | None = None) -> Out:
     """db の段(`data_access_logic/<領域>/steps.py`)を API で回し、出力の型注釈のモデルで受ける。
 
     入力は渡した欄だけを送る(修正のフォームは、渡した欄だけを直す。省いた欄は API の側で同じ既定値になる)。
-    時刻は、両端で作品の暦が食い違っても同じ時刻を指すよう、暦に依らない西暦の表記で運ぶ(`data_access_logic/step.run_json`)。"""
+    時刻は、両端で暦が食い違っても同じ時刻を指すよう、暦に依らない西暦の表記で運ぶ(`data_access_logic/step.run_json`)。"""
     with using_calendar(None):
         body = None if form is None else form.model_dump(mode="json", exclude_unset=True)
     returned = post(f"/api/steps/{step_id(step)}", body)

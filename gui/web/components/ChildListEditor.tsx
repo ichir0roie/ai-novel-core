@@ -38,7 +38,7 @@ function ReadValue({ column, value }: { column: ColumnMeta; value: unknown }) {
   return <>{String(value)}</>;
 }
 
-/** 空なら "—"、あれば stamp の日付部分だけ("11579/03/02 10:00:00" → "11579/03/02")。 */
+/** 空なら "—"、あれば stamp の日付部分だけ("1579/03/02 10:00:00" → "1579/03/02")。 */
 function formatDateOnly(value: unknown): string {
   if (value == null || value === "") return "—";
   // 人物の来歴の始まりは年だけの整数

@@ -731,33 +731,6 @@
       "writes": true
     },
     {
-      "id": "custom_stamp.shift_into_custom_stamp.ShiftIntoCustomStamp",
-      "area": "custom_stamp",
-      "name": "ShiftIntoCustomStamp",
-      "doc": "西暦で入れてきた時刻を、暦の桁として読み替えて移す入口。作品に暦を付けた直後に一度だけ回す。",
-      "params": [
-        {
-          "name": "custom_stamp_id",
-          "required": true,
-          "default": null,
-          "annotation": "int"
-        },
-        {
-          "name": "dry_run",
-          "required": false,
-          "default": true,
-          "annotation": "bool"
-        },
-        {
-          "name": "include_unplaced",
-          "required": false,
-          "default": false,
-          "annotation": "bool"
-        }
-      ],
-      "writes": true
-    },
-    {
       "id": "custom_stamp.update_custom_stamp.UpdateCustomStamp",
       "area": "custom_stamp",
       "name": "UpdateCustomStamp",
@@ -1740,7 +1713,7 @@
       "id": "story.place_in_story.PlaceInStory",
       "area": "story",
       "name": "PlaceInStory",
-      "doc": "人物・アイデア・場所を作品に置く入口。時刻はその作品の暦で数える。作品の無い行を一度に振り分けるのに使い、",
+      "doc": "人物・アイデア・場所を作品に置く入口。行の暦は変えない。作品の無い行を一度に振り分けるのに使い、",
       "params": [
         {
           "name": "story_id",
@@ -1833,7 +1806,7 @@
       "id": "story.read_scope.ReadScope",
       "area": "story",
       "name": "ReadScope",
-      "doc": "入口の引数から決まる作品と、その作品の暦。web のセッション(`web_session/flows.py`)は db に繋がないので、流れを回す前に",
+      "doc": "入口の引数から決まる作品と暦。web のセッション(`web_session/flows.py`)は db に繋がないので、流れを回す前に",
       "params": [
         {
           "name": "args",
