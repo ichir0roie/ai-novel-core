@@ -451,6 +451,9 @@ export const T = {
     start: "Start",
     end: "End (empty for a point in time)",
     text: "text",
+    importance: "importance",
+    importanceHint: "1–10 (default 5). More important events are placed further left.",
+    importanceLine: (n: number) => `importance: ${n}`,
     add: "Add",
     addChild: "Add child event",
     detach: "Detach from parent",
@@ -461,7 +464,7 @@ export const T = {
         : `Delete ${label}?`,
     deleted: (label: string) => `Deleted ${label}`,
     saved: (label: string) => `Saved ${label}`,
-    confirmDiscardEdit: "Discard the unsaved name / text?",
+    confirmDiscardEdit: "Discard the unsaved name / text / importance?",
   },
 
   overview: {
@@ -881,7 +884,7 @@ export const T = {
     },
 
     eventTimeline: {
-      intro: "出来事を時間軸に並べ、どの出来事がどれを含むかで配置する。根の出来事は一番左の層に置き、子の出来事は親の右に置いて線で結ぶ。時期の重なる出来事は、遅い方が一つ右の層へずれる。",
+      intro: "出来事を時間軸に並べ、どの出来事がどれを含むかで配置する。根の出来事は一番左の層に置き、子の出来事は親の右に置いて線で結ぶ。時期の重なる出来事は、重視度(1〜10、既定 5)の小さい方が右の層へずれ、重視度が同じなら遅い方がずれる。",
       sections: [
         {
           heading: "見る範囲を変える",
@@ -893,7 +896,7 @@ export const T = {
         {
           heading: "直す",
           points: [
-            "札を押すと、名前と本文を直す・子の出来事を足す・親から外す・(子ごと)消す・行のページを開く ができる。",
+            "札を押すと、重視度・名前・本文を直す・子の出来事を足す・親から外す・(子ごと)消す・行のページを開く ができる。",
             "空いた所を押すと、その時刻に出来事を足す。出来事の右の所を押したら、その子になる。",
             "Edit: 札を上下に動かすと時刻が変わる(子も一緒に動く)。別の札に落とすと、その子になる。Apply を押すまで保存しない。",
           ],

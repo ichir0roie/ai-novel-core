@@ -75,6 +75,10 @@ const SPARE_LAYERS = 1;
 // 場所の絞り込みを覚えておく localStorage のキー。絞り込みを付けずに開いたら、前に選んだ場所へ移す
 const FILTER_STORAGE_KEY = "event-timeline-filter";
 
+// 重視度の既定。行に値が無いとき(古い API など)はこれとみなす
+const DEFAULT_IMPORTANCE = 5;
+const IMPORTANCE_CHOICES = Array.from({ length: 10 }, (_, i) => i + 1);
+
 // 出来事一つ。parent は親の出来事の id(親が読めた出来事に無ければ根として置く)
 type Item = {
   key: string;
@@ -84,6 +88,7 @@ type Item = {
   parent: number | null;
   start: number;
   end: number | null;
+  importance: number;
 };
 type Placed = Item & {
   y: number;
@@ -105,7 +110,19 @@ type Drag = {
 type Change = { base: Item; days: number; parent?: number | null };
 
 // 押した出来事のモーダルで直せる欄
-type EventForm = { name: string; text: string };
+type EventForm = { name: string; text: string; importance: number };
+
+function importanceOf(record: Rec): number {
+  return typeof record.importance === "number" ? record.importance : DEFAULT_IMPORTANCE;
+}
+
+function eventFormOf(record: Rec): EventForm {
+  return {
+    name: String(record.name ?? ""),
+    text: String(record.text ?? ""),
+    importance: importanceOf(record),
+  };
+}
 
 // 動かすと一緒にずらす時刻の欄
 const TIME_KEYS = ["time", "end"] as const;
@@ -126,6 +143,7 @@ function itemOf(record: Rec, calendar: Calendar | null): Item | null {
         ? record.parent_event_id
         : null,
     ...timeSpan(start, dayOf(record.end, calendar)),
+    importance: importanceOf(record),
   };
 }
 
@@ -237,15 +255,32 @@ function inPlaces(
 }
 
 /**
- * 先に根を時刻の順に置き、そのあと根ごとに子孫を深さ優先でたどって置く。札は、親の層の右(根は一番左の層)から、
- * 上下で他の札と重ならない一番左の層に置く。根の期間が重なれば遅い方が 2 層目へ移り、子はその右へ重なっていく。
- * 札は名前が一行入る高さまで層を取る
+ * 根と、親を置き終えた子のうち、重視度の大きいものから一つずつ置く。重視度が同じなら、根を時刻の順に置いてから
+ * 根ごとに子孫を深さ優先でたどる順に置く。札は、親の層の右(根は一番左の層)から、上下で他の札と重ならない
+ * 一番左の層に置くので、先に置く重視度の大きい出来事ほど左に寄る。根の期間が重なれば後に置く方が 2 層目へ移り、
+ * 子はその右へ重なっていく。札は名前が一行入る高さまで層を取る
  */
 function layout(
   items: Item[],
   children: Map<number | null, Item[]>,
   toY: (day: number) => number,
 ): { placed: Placed[]; layers: number } {
+  // 重視度が同じときの順
+  const order = new Map<number, number>();
+  const visit = (item: Item) => {
+    if (order.has(item.id)) return;
+    order.set(item.id, order.size);
+    (children.get(item.id) ?? []).forEach(visit);
+  };
+  const roots = children.get(null) ?? [];
+  roots.forEach((root) => order.set(root.id, order.size));
+  roots.forEach((root) => (children.get(root.id) ?? []).forEach(visit));
+  // 親をたどると輪になる出来事は根から届かないので、残りを根として置く
+  const unreached = [...items].sort(byTime).filter((item) => !order.has(item.id));
+  unreached.forEach(visit);
+  const before = (a: Item, b: Item) =>
+    b.importance - a.importance || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0);
+
   // 層ごとに、札が取った上端・下端
   const taken: [number, number][][] = [];
   const free = (layer: number, top: number, bottom: number) =>
@@ -264,15 +299,24 @@ function layout(
     placed.push(one);
     return one;
   };
-  const descend = (parent: Placed) => {
-    for (const child of children.get(parent.id) ?? [])
-      if (!seen.has(child.id)) descend(put(child, parent.layer + 1));
+  // 置ける札と、その札を置き始める層
+  const ready = new Map<number, { item: Item; from: number }>();
+  // 輪の出来事は根としても待たせるので、親を置いて子として渡されたら、その親の右から置き直す
+  const offer = (item: Item, from: number) => {
+    if (!seen.has(item.id)) ready.set(item.id, { item, from });
   };
-  const roots = (children.get(null) ?? []).map((root) => put(root, 0));
-  roots.forEach(descend);
-  // 親をたどると輪になる出来事は根から届かないので、残りを根として置く
-  for (const item of [...items].sort(byTime))
-    if (!seen.has(item.id)) descend(put(item, 0));
+  roots.forEach((root) => offer(root, 0));
+  unreached.forEach((item) => offer(item, 0));
+  while (ready.size > 0) {
+    let next: { item: Item; from: number } | null = null;
+    for (const candidate of ready.values())
+      if (!next || before(candidate.item, next.item) < 0) next = candidate;
+    if (!next) break;
+    ready.delete(next.item.id);
+    if (seen.has(next.item.id)) continue;
+    const one = put(next.item, next.from);
+    for (const child of children.get(one.id) ?? []) offer(child, one.layer + 1);
+  }
   return { placed, layers: Math.max(1, taken.length) };
 }
 
@@ -434,7 +478,7 @@ export default function EventTimelinePage() {
     getRecord("event", viewing.id)
       .then((r) => {
         if (!alive) return;
-        const loaded = { name: String(r.record.name ?? ""), text: String(r.record.text ?? "") };
+        const loaded = eventFormOf(r.record);
         setSaved(loaded);
         setForm(loaded);
       })
@@ -674,7 +718,9 @@ export default function EventTimelinePage() {
   };
 
   const dirty =
-    saved !== null && form !== null && (form.name !== saved.name || form.text !== saved.text);
+    saved !== null &&
+    form !== null &&
+    (form.name !== saved.name || form.text !== saved.text || form.importance !== saved.importance);
 
   /** 押した出来事のモーダルを閉じる。書きかけの名前・本文があれば捨ててよいかを尋ね、捨てないなら false */
   const closeViewing = () => {
@@ -704,10 +750,11 @@ export default function EventTimelinePage() {
         updateRecord("event", item.id, {
           ...(form.name !== saved.name ? { name: form.name } : {}),
           ...(form.text !== saved.text ? { text: form.text } : {}),
+          ...(form.importance !== saved.importance ? { importance: form.importance } : {}),
         }).then(async (response) => [response, await listAllRecords("event")] as const),
       );
       invalidateOptions("event");
-      const next = { name: String(response.record.name ?? ""), text: String(response.record.text ?? "") };
+      const next = eventFormOf(response.record);
       setSaved(next);
       setForm(next);
       setRecords(fresh);
@@ -807,6 +854,7 @@ export default function EventTimelinePage() {
     return [
       spanOf(item.record),
       T.eventTimeline.parent(labelOfEvent(item.parent)),
+      T.eventTimeline.importanceLine(item.importance),
       item.record.hidden === true && T.eventTimeline.hidden,
       context.has(item.id) && T.eventTimeline.outsideFilter,
       base && T.eventTimeline.was(spanOf(base.record), labelOfEvent(base.parent)),
@@ -1151,6 +1199,21 @@ export default function EventTimelinePage() {
             <div className="status info">{T.loading}</div>
           ) : (
             <>
+              <div className="field">
+                <label>{T.eventTimeline.importance}</label>
+                <select
+                  value={form.importance}
+                  onChange={(e) => setForm({ ...form, importance: Number(e.target.value) })}
+                  disabled={saving}
+                >
+                  {IMPORTANCE_CHOICES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <div className="hint">{T.eventTimeline.importanceHint}</div>
+              </div>
               <div className="field">
                 <label>{T.eventTimeline.name}</label>
                 <input

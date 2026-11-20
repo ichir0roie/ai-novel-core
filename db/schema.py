@@ -248,6 +248,9 @@ class Event(OriginMixin, TextBase):
         Boolean, default=False,
         comment="場所の断面(ReadBrief)に出さないか。true なら full で読むときだけ出す。分類は持たず、name・text の書き方で表す",
         sort_order=210)
+    importance: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5, server_default="5",
+        comment="重視度(1〜10)。大きいほど出来事の年表で左の層に置く", sort_order=215)
     time: Mapped[Stamp] = mapped_column(
         StampType, index=True, comment="起きた時刻。期間のある出来事なら始まりで、終わりは end", sort_order=220)
 
