@@ -28,6 +28,8 @@ class EventCharacterLink(Material):
 class EventRecord(EventColumns):
     LOAD_OPTIONS: ClassVar[tuple] = (selectinload(Event.event_characters),)
 
+    # 画面の行にだけ出し、AI へ渡す出来事の行(`EventColumns`)には入れない
+    importance: int = 5
     text: str
     event_characters: list[EventCharacterLink] = Field(exclude=True)
 

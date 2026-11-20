@@ -1640,6 +1640,21 @@
           "comment": "場所の断面(ReadBrief)に出さないか。true なら full で読むときだけ出す。分類は持たず、name・text の書き方で表す"
         },
         {
+          "key": "importance",
+          "type": "integer",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "重視度(1〜10)。大きいほど出来事の年表で左の層に置く"
+        },
+        {
           "key": "time",
           "type": "stamp",
           "nullable": false,
