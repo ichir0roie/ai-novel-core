@@ -74,7 +74,7 @@ def ensure_test_db() -> None:
 def _test_db_has_rows() -> bool:
     from sqlalchemy import inspect, text
 
-    from db.schema import Base, engine
+    from db.schema import SEEDED_TABLES, Base, engine
 
     admin = admin_engine(make_url(TEST_DATABASE_URL))
     with admin.connect() as conn:
@@ -84,9 +84,9 @@ def _test_db_has_rows() -> bool:
         return False
     with engine.connect() as conn:
         names = set(inspect(conn).get_table_names())
-        # personality_level は init_db が入れるマスターなので、写し終えたかの目安にならない
+        # init_db が入れるマスターの表は、写し終えたかの目安にならない
         return any(conn.scalar(text(f'SELECT 1 FROM "{table.name}" LIMIT 1'))
-                   for table in Base.metadata.sorted_tables if table.name in names and table.name != "personality_level")
+                   for table in Base.metadata.sorted_tables if table.name in names and table.name not in SEEDED_TABLES)
 
 
 def copy_production_db() -> dict[str, int]:

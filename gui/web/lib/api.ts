@@ -328,9 +328,14 @@ export type OverviewEvent = components["schemas"]["OverviewEvent"];
 export type OverviewCharacter = components["schemas"]["OverviewCharacter"];
 export type OverviewEpisode = components["schemas"]["OverviewEpisode"];
 
-export const getOverview = (params: { story_id: number; margin_days: number }) =>
+/** `since`〜`until`(章の暦)に掛かる話と出来事。省けば章の期間 */
+export const getOverview = (params: { story_id: number; since?: string; until?: string }) =>
   api<OverviewResponse>(
-    `/api/overview?${new URLSearchParams({ story_id: String(params.story_id), margin_days: String(params.margin_days) })}`,
+    `/api/overview?${new URLSearchParams({
+      story_id: String(params.story_id),
+      ...(params.since ? { since: params.since } : {}),
+      ...(params.until ? { until: params.until } : {}),
+    })}`,
   );
 
 /** 一覧を末尾まで全部引く(`limit` の上限 500 ごとに繰り返す)。 */

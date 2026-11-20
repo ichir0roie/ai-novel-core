@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { runEntrance, type EntranceList, type EntranceMeta, type Rec } from "@/lib/api";
 import entrancesJson from "@/lib/entrances.json";
 import { PageTitle } from "@/lib/meta";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 // 入口の一覧は API に聞かず、書き出した JSON(`gui/api/dump_static.py`)を画面に持つ
@@ -103,7 +104,10 @@ export default function InterfacePage() {
   return (
     <>
       <PageTitle kind={T.endpoints.title} />
-      <h1>{T.endpoints.title}</h1>
+      <div className="page-heading">
+        <h1>{T.endpoints.title}</h1>
+        <PageHelp page={T.endpoints.title} help={T.help.endpoints} />
+      </div>
       <div className="toolbar">
         <input type="search" placeholder={T.endpoints.searchPlaceholder} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>

@@ -60,15 +60,38 @@ def open_arcs_select(character_id: int) -> Select:
             .order_by(Event.time))
 
 
+def latest_written_episode(s: Session, character_id: int | None = None) -> Episode | None:
+    """本文のある話のうち、時刻(終わりがあれば終わり)が一番遅いもの。`character_id` を渡せば、その人物が登場した(名前だけでない)話に絞る。"""
+    query = (select(Episode).where(Episode.start.is_not(None), Episode.main_text != "")
+             .order_by(func.coalesce(Episode.end, Episode.start).desc(), Episode.id.desc()).limit(1))
+    if character_id is not None:
+        query = query.where(Episode.episode_characters.any(
+            (EpisodeCharacter.character_id == character_id) & EpisodeCharacter.mentioned.is_(False)))
+    return s.scalars(query).first()
+
+
+def episode_time(episode: Episode) -> Stamp:
+    """話の時刻。終わりがあれば終わり。"""
+    time = episode.end or episode.start
+    assert time is not None
+    return time
+
+
+def _stamp(value: Stamp | int | None) -> Stamp | None:
+    return Stamp.from_int(value) if isinstance(value, int) else value
+
+
 def last_appearance(s: Session, character_id: int) -> Stamp | None:
-    """人物が最後に出た出来事・話の時刻。"""
-    event_time = s.scalar(select(func.max(Event.time))
-                          .where(Event.event_characters.any(EventCharacter.character_id == character_id)))
-    episode_time = s.scalar(select(func.max(Episode.start))
-                            .where(Episode.episode_characters.any(EpisodeCharacter.character_id == character_id)))
-    times = [Stamp.from_int(value) if isinstance(value, int) else value for value in (event_time, episode_time)]
-    dated = [time for time in times if time is not None]
-    return max(dated) if dated else None
+    """人物が最後に出た時刻。本文のある話に登場していれば、その話の時刻と、それより後に AI が足した当事者の出来事のうち遅い方。
+    作者の出来事とプロットだけの話は、先の筋として置かれていることがあるので数えない(数えると、人物がその先へ飛ぶ)。
+    登場した話が無ければ、当事者の出来事の一番遅い時刻。"""
+    events = select(func.max(Event.time)).where(Event.event_characters.any(EventCharacter.character_id == character_id))
+    episode = latest_written_episode(s, character_id)
+    if episode is None:
+        return _stamp(s.scalar(events))
+    since = episode_time(episode)
+    later = _stamp(s.scalar(events.where(Event.origin == Origin.AI, Event.time > since)))
+    return later or since
 
 
 def last_change_times(s: Session, expansion_id: int) -> dict[tuple[str, int], datetime]:

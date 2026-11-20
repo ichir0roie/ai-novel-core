@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
 
 def copy_database(source, engine, truncate: bool = False) -> dict[str, int]:
     """source の全表の行を engine(PostgreSQL)へ写し、表ごとの行数を返す。"""
-    from db.schema import Base
+    from db.schema import SEEDED_TABLES, Base
 
     if engine.dialect.name != "postgresql":
         sys.exit("写し先が PostgreSQL ではない")
@@ -90,7 +90,8 @@ def copy_database(source, engine, truncate: bool = False) -> dict[str, int]:
         else:
             _check_empty(dst, target_meta, tables)
             # init_db が入れたマスターは写し元にもあるので、写し元の値で入れ直す
-            dst.execute(text('TRUNCATE "personality_level" RESTART IDENTITY CASCADE'))
+            names = ", ".join(f'"{name}"' for name in sorted(SEEDED_TABLES))
+            dst.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
 
         counts: dict[str, int] = {}
         for table in tables:
@@ -122,7 +123,9 @@ def _check_revision(src, dst) -> None:
 
 
 def _check_empty(dst, target_meta, tables) -> None:
-    filled = [table.name for table in tables if table.name != "personality_level"
+    from db.schema import SEEDED_TABLES
+
+    filled = [table.name for table in tables if table.name not in SEEDED_TABLES
               and dst.scalar(select(func.count()).select_from(target_meta.tables[table.name]))]
     if filled:
         sys.exit(f"写し先に行がある({', '.join(filled)})。空の db に写すか、--truncate を付ける")

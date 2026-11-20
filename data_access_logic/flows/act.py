@@ -219,7 +219,7 @@ def act_character(
         try:
             pick = call(expansion_steps.pick_actor, expansion_steps.PickForm(
                 character_id=character_id if index == 0 else None, time=Stamp.parse(time),
-                seed=rng.randrange(2**31), exclude_ids=used_ids))
+                seed=rng.randrange(2**31), exclude_ids=used_ids, cast_of=character_id))
         except ValueError as error:
             _failed(run, None, None, error)
             continue

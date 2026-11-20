@@ -8,7 +8,7 @@ export function receiveStoryCharacterIds(storyId: unknown, ids: number[]) {
   if (typeof storyId === "number") received.set(storyId, ids);
 }
 
-/** 作品(`story_id`。一番上の作品とその章・外伝をまとめる)の話・出来事に出てくる人物の id。出てくる回数の多い順。
+/** 作品(`story_id`。一番上の作品とその章・外伝をまとめる)の話と、話の期間の出来事に出てくる人物の id。出てくる回数の多い順。
  * 話の人物の候補に使う。`enabled` が偽のとき、作品が空か読めないときは null(絞らない)。 */
 export function useStoryCharacterIds(storyId: unknown, enabled: boolean): number[] | null {
   const [ids, setIds] = useState<number[] | null>(null);

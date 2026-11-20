@@ -95,6 +95,19 @@ main > :first-child:not(.page-fill),
 .card .sub { color: var(--muted); font-size: 0.85rem; }
 
 .toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
+/* 見出しと、その右の「?」(PageHelp)。見出しだけの画面は、この行で見出しと「?」を並べる */
+.page-heading { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.page-heading h1 { margin: 0; }
+.page-help {
+  width: 1.5rem; height: 1.5rem; padding: 0; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 600; line-height: 1; color: var(--muted);
+}
+.page-help:hover { color: var(--accent); }
+.page-help-body p { margin: 0 0 0.75rem; }
+.page-help-body h3 { margin: 1rem 0 0.35rem; font-size: 0.95rem; }
+.page-help-body ul { margin: 0; padding-left: 1.2rem; line-height: 1.6; }
+.page-help-body li + li { margin-top: 0.25rem; }
 .toolbar input[type="search"] { flex: 1; min-width: 200px; }
 
 table.list { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -697,49 +710,30 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
   .timeline-page > .status { margin: 0 8px 6px; }
   .timeline { --timeline-axis: 52px; }
 }
-/* 動きの見取り図(/overview)。時間の軸・話の列はタイムラインと同じ骨組みに、人物ごとの列と出来事の点を重ねる */
+/* 動きの見取り図(/overview)。時間の軸・話の列はタイムラインと同じ骨組みに、出来事の列を並べる。出来事は親の札の右に子の札を置き、線で結ぶ */
 .overview-status { font-size: 0.8rem; }
-.overview-head { align-items: stretch; }
-.overview-people-head { display: grid; }
-.overview-person {
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; padding: 4px 0; min-height: 7.5rem;
-  border-top: 0; border-left: 0; border-radius: 0; cursor: pointer; color: var(--muted); font: inherit;
+/* 札は掴んで動かし、上端・下端の帯を掴むと期間を変える。押すと開く */
+.timeline.overview .timeline-item { cursor: grab; }
+/* 出来事の札は上下に 2px ずつ空けて描くので、最小の高さもその分だけ低くする */
+.overview-events .timeline-item { min-height: 18px; line-height: 16px; }
+.overview-edge { position: absolute; left: 0; right: 0; height: 6px; cursor: ns-resize; z-index: 1; }
+.overview-edge.start { top: -2px; }
+.overview-edge.end { bottom: -2px; }
+.overview .timeline-item.drop-target { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 親子の線。押すと親子を外すボタンを出す */
+.overview-links { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.overview-links path { fill: none; pointer-events: stroke; cursor: pointer; }
+.overview-link { stroke: color-mix(in srgb, var(--accent) 55%, var(--muted)); stroke-width: 1.5; }
+.overview-link-hit { stroke: transparent; stroke-width: 10; }
+.overview-links g:hover .overview-link, .overview-links g.picked .overview-link { stroke: var(--danger); stroke-width: 2.5; }
+.overview-link-menu {
+  position: absolute; z-index: 4; display: flex; gap: 0.4rem; align-items: center; padding: 0.3rem 0.5rem; transform: translate(8px, 8px);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.2); white-space: nowrap; cursor: default;
 }
-.overview-person.cast { color: var(--ink); font-weight: 600; }
-.overview-person.focused { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
-.overview-name { writing-mode: vertical-rl; max-height: 6rem; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; }
-.overview-influence { font-size: 0.7rem; color: var(--muted); font-weight: 400; }
-.overview-people { position: relative; }
-.overview-lane { position: absolute; top: 0; bottom: 0; border-right: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
-.overview-lane.focused { background: color-mix(in srgb, var(--accent) 7%, transparent); }
-.overview-svg { position: absolute; left: 0; top: 0; overflow: visible; }
-.overview-event { cursor: pointer; }
-.overview-event line { stroke: var(--muted); }
-.overview-event.ai line { stroke: var(--accent); }
-.overview-dot { fill: var(--muted); }
-.overview-event.ai .overview-dot { fill: var(--accent); }
-.overview-invited { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
-.overview-actor { fill: var(--danger); }
-.overview-invite { fill: none; stroke: var(--accent); stroke-width: 1.2; }
-#overview-arrow path { fill: var(--accent); }
-.overview-label { font-size: 11px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; pointer-events: none; }
-/* 重なって置けない名前は、指したときと選んだときだけ出す */
-.overview-label.spare { visibility: hidden; }
-.overview-event:hover .overview-label.spare { visibility: visible; }
-/* 章の筋に置いていない、同じ期間のほかの出来事 */
-.overview-event.outside, .overview-arc.outside { opacity: 0.45; }
-.overview-event.dimmed, .overview-arc.dimmed { opacity: 0.15; }
-.overview-lane.others { background: color-mix(in srgb, var(--muted) 6%, transparent); }
-.overview-others { cursor: default; font-style: italic; }
-.overview-event.selected .overview-dot, .overview-event.selected .overview-actor { stroke: var(--ink); stroke-width: 2; }
-.overview-event:hover .overview-label { font-weight: 600; }
-.overview-arc { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: color-mix(in srgb, var(--accent) 45%, transparent); cursor: pointer; }
-.timeline-item.overview-faint { opacity: 0.55; border-style: dashed; color: inherit; text-decoration: none; }
+/* 選んだ章の外の話 */
+.timeline-item.overview-other { background: color-mix(in srgb, var(--muted) 14%, var(--panel)); border-color: var(--muted); color: var(--muted); }
 .overview .timeline-item { color: inherit; text-decoration: none; }
-/* 人物の列の空いた所を押すと、その人物の出来事を足す(話の列の空いた所と同じ形) */
-.overview-people { cursor: cell; }
-.overview-relations { margin: 0; padding-left: 1.2rem; line-height: 1.8; }
-/* 話を直す・足す左の枠。モーダルにせず表の左に並べ、話の列のすぐ右から出来事の列が見えたまま残るようにする */
+/* 話を直す・足す左の枠。モーダルにせず表の左に並べ、話の列のすぐ右から出来事の列が見えたまま残るようにする。押した出来事の詳細はモーダルで出す */
 .overview-split { flex: 1; min-height: 0; display: flex; }
 .overview-split > .timeline { min-width: 0; border-width: 1px 0 0; border-radius: 0; }
 .overview-panel {
@@ -761,8 +755,6 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .overview .timeline-item.selected { box-shadow: 0 0 0 2px var(--accent); z-index: 2; }
-/* 兄弟の作品の列は押しても話を足さない */
-.overview .timeline-track.overview-readonly { cursor: default; }
 @media (max-width: 640px) {
   .overview-split { flex-direction: column; }
   .overview-panel { flex: 0 0 auto; max-height: 50dvh; border-right: 0; }

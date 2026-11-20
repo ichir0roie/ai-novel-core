@@ -398,7 +398,7 @@ def location_characters(location_id: int, time: str, s: Session = Depends(sessio
 
 @app.get("/api/story_characters", response_model=StoryCharactersResponse)
 def story_characters(story_id: int, s: Session = Depends(session_dep)) -> StoryCharactersResponse:
-    """`story_id` の作品(一番上の作品とその章・外伝)の話・出来事に出てくる人物。出てくる回数の多い順。
+    """`story_id` の作品(一番上の作品とその章・外伝)の話と、話の期間の出来事に出てくる人物。出てくる回数の多い順。
     話の登場人物の候補に使う"""
     from data_access_logic.story.story_characters import story_character_ids
 
@@ -414,11 +414,13 @@ def get_timeline(story_id: int | None = None, s: Session = Depends(session_dep))
 
 
 @app.get("/api/overview", response_model=OverviewResponse)
-def get_overview(story_id: int, margin_days: int = 30, s: Session = Depends(session_dep)) -> OverviewResponse:
-    """選んだ章の期間(前後に `margin_days` 日の余白)の話・出来事・人物・関係。画面(`/overview`)が人物ごとの列に並べる"""
+def get_overview(story_id: int, since: str | None = None, until: str | None = None,
+                 s: Session = Depends(session_dep)) -> OverviewResponse:
+    """`since`〜`until`(章の暦。省けば章の期間)に掛かる話と出来事。画面(`/overview`)が話の列と出来事の列に並べ、スクロールした先を足して読む"""
+    from db.stamp import Stamp
     from gui.api import overview
 
-    return overview.overview(s, story_id, max(0, margin_days))
+    return overview.overview(s, story_id, Stamp.parse(since), Stamp.parse(until))
 
 
 @app.get("/api/previous_episode", response_model=EpisodeRecord | None)

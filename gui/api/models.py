@@ -148,7 +148,7 @@ class OverviewEpisode(BaseModel):
     end: str | None
     story_id: int
     story_name: str | None
-    # 選んだ章(とその子孫)の話か。false は同じ期間の兄弟の作品(外伝など)の話
+    # 選んだ章(とその子孫)の話か。false は同じ期間のほかの作品の話
     in_story: bool
 
 
@@ -169,8 +169,6 @@ class OverviewEvent(BaseModel):
     start: str
     end: str | None
     parent_event_id: int | None
-    # 選んだ章(とその子孫)の筋に置いた出来事か。false は同じ期間のほかの出来事
-    in_story: bool
     location_name: str | None
     origin: str
     hidden: bool
@@ -186,34 +184,24 @@ class OverviewEvent(BaseModel):
 
 
 class OverviewCharacter(BaseModel):
+    """出来事の当事者の名前"""
+
     id: int
     name: str | None
-    main_character: bool
-    # 選んだ章の話の登場人物(名前だけ出る人物は含めない)か、章の出来事の当事者か
-    in_cast: bool
-    # 期間の終わりの影響力(主要人物は下限をかけた値)
-    influence: str
-
-
-class OverviewRelation(BaseModel):
-    id: int
-    character_1_id: int
-    character_2_id: int
-    relation: str
-    start: str | None
-    end: str | None
 
 
 class OverviewResponse(BaseModel):
     story_id: int
     story_name: str | None
-    # 章の話と出来事の始まりから終わりまでに、前後の余白を足した期間
+    # 章の話の始まりから終わりまで
+    chapter_since: str
+    chapter_until: str
+    # この応答に入れた期間
     since: str
     until: str
     episodes: list[OverviewEpisode]
     events: list[OverviewEvent]
     characters: list[OverviewCharacter]
-    relations: list[OverviewRelation]
 
 
 class CalendarModel(BaseModel):

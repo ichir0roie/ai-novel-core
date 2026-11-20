@@ -342,7 +342,7 @@ export interface paths {
         };
         /**
          * Story Characters
-         * @description `story_id` の作品(一番上の作品とその章・外伝)の話・出来事に出てくる人物。出てくる回数の多い順。
+         * @description `story_id` の作品(一番上の作品とその章・外伝)の話と、話の期間の出来事に出てくる人物。出てくる回数の多い順。
          *     話の登場人物の候補に使う
          */
         get: operations["story_characters_api_story_characters_get"];
@@ -383,7 +383,7 @@ export interface paths {
         };
         /**
          * Get Overview
-         * @description 選んだ章の期間(前後に `margin_days` 日の余白)の話・出来事・人物・関係。画面(`/overview`)が人物ごとの列に並べる
+         * @description `since`〜`until`(章の暦。省けば章の期間)に掛かる話と出来事。画面(`/overview`)が話の列と出来事の列に並べ、スクロールした先を足して読む
          */
         get: operations["get_overview_api_overview_get"];
         put?: never;
@@ -654,18 +654,15 @@ export interface components {
             /** Items */
             items: components["schemas"]["Option"][];
         };
-        /** OverviewCharacter */
+        /**
+         * OverviewCharacter
+         * @description 出来事の当事者の名前
+         */
         OverviewCharacter: {
             /** Id */
             id: number;
             /** Name */
             name: string | null;
-            /** Main Character */
-            main_character: boolean;
-            /** In Cast */
-            in_cast: boolean;
-            /** Influence */
-            influence: string;
         };
         /** OverviewEpisode */
         OverviewEpisode: {
@@ -696,8 +693,6 @@ export interface components {
             end: string | null;
             /** Parent Event Id */
             parent_event_id: number | null;
-            /** In Story */
-            in_story: boolean;
             /** Location Name */
             location_name: string | null;
             /** Origin */
@@ -720,27 +715,16 @@ export interface components {
             expansion_prompt: string | null;
             size: components["schemas"]["OverviewSize"];
         };
-        /** OverviewRelation */
-        OverviewRelation: {
-            /** Id */
-            id: number;
-            /** Character 1 Id */
-            character_1_id: number;
-            /** Character 2 Id */
-            character_2_id: number;
-            /** Relation */
-            relation: string;
-            /** Start */
-            start: string | null;
-            /** End */
-            end: string | null;
-        };
         /** OverviewResponse */
         OverviewResponse: {
             /** Story Id */
             story_id: number;
             /** Story Name */
             story_name: string | null;
+            /** Chapter Since */
+            chapter_since: string;
+            /** Chapter Until */
+            chapter_until: string;
             /** Since */
             since: string;
             /** Until */
@@ -751,8 +735,6 @@ export interface components {
             events: components["schemas"]["OverviewEvent"][];
             /** Characters */
             characters: components["schemas"]["OverviewCharacter"][];
-            /** Relations */
-            relations: components["schemas"]["OverviewRelation"][];
         };
         /**
          * OverviewSize
@@ -1754,7 +1736,8 @@ export interface operations {
         parameters: {
             query: {
                 story_id: number;
-                margin_days?: number;
+                since?: string | null;
+                until?: string | null;
             };
             header?: never;
             path?: never;
