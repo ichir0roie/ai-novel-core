@@ -6,6 +6,7 @@ import {
   listExpansions, readExpansion, resolveConflict, revertExpansion, type ExpansionDetail, type ExpansionListItem,
 } from "@/lib/api";
 import { TABLES, PageTitle } from "@/lib/meta";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 // 行のページを持つ表(来歴・知る相手などの子の行は、表と id だけを出す)
@@ -133,7 +134,10 @@ export default function ExpansionsPage() {
   return (
     <>
       <PageTitle kind={T.expansions.title} />
-      <h1>{T.expansions.title}</h1>
+      <div className="page-heading">
+        <h1>{T.expansions.title}</h1>
+        <PageHelp page={T.expansions.title} help={T.help.expansions} />
+      </div>
       <div className="hint">{T.expansions.intro}</div>
       <div className="toolbar">
         <span className="segment">

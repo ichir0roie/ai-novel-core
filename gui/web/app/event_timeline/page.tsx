@@ -39,6 +39,7 @@ import {
   shiftDays,
   type Calendar,
 } from "@/lib/stamp";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 import {
   axisTicksOf,
@@ -863,6 +864,7 @@ export default function EventTimelinePage() {
       <PageTitle kind={T.eventTimeline.title} record={at} />
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>{T.eventTimeline.title}</h1>
+        <PageHelp page={T.eventTimeline.title} help={T.help.eventTimeline} />
         <button type="button" onClick={() => page(-1)} disabled={center === null}>
           {T.timeline.earlier}
         </button>

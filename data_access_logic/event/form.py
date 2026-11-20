@@ -31,7 +31,6 @@ class EventCreateForm(Form):
     text: str = ""
     hidden: bool = False
     parent_event_id: int | None = None
-    story_id: int | None = None
     custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
         default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     location_id: int | None = None
@@ -47,7 +46,6 @@ class EventUpdateForm(Form):
     text: str | None = None
     hidden: bool | None = None
     parent_event_id: int | None = None
-    story_id: int | None = None
     custom_stamp_id: Annotated[int | None, References("custom_stamp")] = Field(
         default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     location_id: int | None = None

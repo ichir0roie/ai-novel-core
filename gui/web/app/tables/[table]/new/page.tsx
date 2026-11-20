@@ -11,6 +11,7 @@ import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
 import { CalendarProvider, useArgsScope } from "@/lib/scope";
 import { selectedStoryId } from "@/lib/selectedStory";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 // 作品に属する行。足すときの作品は、画面が選んでいる作品から始める
@@ -94,6 +95,7 @@ export default function NewRecordPage() {
           value={value}
           onChange={setValue}
           mode="create"
+          titleHelp={<PageHelp page={meta.name} help={T.help.create} extra={T.help.tables[table] ? [T.help.tables[table]] : []} />}
           titleNote={T.create.title(meta.name)}
           header={error && <div className="status error">{error}</div>}
           actions={

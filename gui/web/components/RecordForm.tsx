@@ -48,6 +48,8 @@ type Props = {
   mode: "create" | "edit";
   /** 見出しの名前(label_column の欄。クリックで直せる)の右に添えるもの(テーブル名・id など) */
   titleNote?: ReactNode;
+  /** 見出しの名前のすぐ右に置くもの(画面の解説の「?」) */
+  titleHelp?: ReactNode;
   /** 見出しの下に置くもの(保存の結果・エラーなど) */
   header?: ReactNode;
   /** 左の欄の末尾に置くもの(関連の一覧など) */
@@ -90,7 +92,7 @@ function EditableTitle({ value, placeholder, onChange }: { value: string; placeh
 
 /** スキーマの列の情報(`/api/tables`)から組み立てるフォーム。値は親が持つ。
  * 本文(section の列)は右半分で、他の欄と side は左半分に並べる。左右それぞれが独立にスクロールする。狭い画面では縦に積む。 */
-export default function RecordForm({ meta, value, onChange, mode, titleNote, header, side, actions, aside, hidden, onSave }: Props) {
+export default function RecordForm({ meta, value, onChange, mode, titleNote, titleHelp, header, side, actions, aside, hidden, onSave }: Props) {
   const set = (key: string, v: unknown) => onChange({ ...value, [key]: v });
   const columns = meta.columns.filter((column) => (mode === "create" ? column.key !== "id" && !column.readonly : !column.create_only)
     && !hidden?.includes(column.key));
@@ -147,6 +149,7 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 onChange={(v) => set(titleColumn.key, v === "" && titleColumn.nullable ? null : v)}
               />
             )}
+            {titleHelp}
             {titleNote && <span className="hint">{titleNote}</span>}
           </div>
           {header}
@@ -158,14 +161,16 @@ export default function RecordForm({ meta, value, onChange, mode, titleNote, hea
                 <Spec hint={columnHint(column)}>{column.key}</Spec>
                 {column.required && <span className="hint">{T.required}</span>}
               </label>
-              {meta.name === "episode" && column.key === "character_ids" ? (
-                // 全人物のチェック欄は縦に長く、下のプロットを押し縮めるので、ボタンからモーダルで選ぶ
+              {(meta.name === "episode" || meta.name === "event") && column.key === "character_ids" ? (
+                // 全人物のチェック欄は縦に長く、下のプロットを押し縮めるので、ボタンからモーダルで選ぶ。
+                // 並んだ名前を押すと、その人物を話・出来事の時刻の時点で見るモーダルを開く
                 <div className="episode-characters-field">
                   <EpisodeCharacters
                     characterIds={(value.character_ids as number[] | null) ?? []}
                     onChange={(ids) => set("character_ids", ids)}
-                    episodeStart={value.start}
+                    episodeStart={meta.name === "event" ? value.time : value.start}
                     episodeStoryId={value.story_id}
+                    modalTitle={meta.name === "event" ? T.episodeCharacters.eventModalTitle : undefined}
                   />
                 </div>
               ) : (

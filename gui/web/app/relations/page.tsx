@@ -8,6 +8,7 @@ import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getRelations, type Relation, type RelationCharacter, type RelationsResponse } from "@/lib/api";
 import { PageTitle } from "@/lib/meta";
 import { useOpenPage } from "@/lib/openPage";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 const R_NODE = 18;
@@ -290,6 +291,7 @@ export default function RelationsPage() {
       <PageTitle kind={T.relations.title} record={focusName} />
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>{focus == null ? T.relations.title : T.relations.of(focusName ?? "")}</h1>
+        <PageHelp page={T.relations.title} help={T.help.relations} />
         {focus != null && (
           <Link href="/relations" className="hint">
             {T.relations.fullGraph}

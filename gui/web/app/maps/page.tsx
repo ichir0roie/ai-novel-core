@@ -13,6 +13,7 @@ import {
   locationLabels, polygonCenter, textWidth, type Box, type Polygon,
 } from "@/lib/map";
 import { badgeText, legPath, ROUTE_COLOR, routeLegs, routeVisits, type Visit } from "@/lib/storyRoute";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 type Point = MapLocation & { lon: number; lat: number };
@@ -213,6 +214,7 @@ export default function MapsPage() {
             ? T.maps.routeOf(T.nameId(route.story_name, route.story_id))
             : focusLocation ? T.maps.centeredOn(T.nameId(focusLocation.name, focusLocation.id)) : T.maps.title}
         </h1>
+        <PageHelp page={T.maps.title} help={T.help.maps} />
         {route && (
           <Link href="/maps" className="hint">
             {T.maps.fullMap}

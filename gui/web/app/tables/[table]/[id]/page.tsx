@@ -29,6 +29,7 @@ import { useOpenPage } from "@/lib/openPage";
 import { useSaveShortcut } from "@/lib/saving";
 import { CalendarProvider, useRowScope } from "@/lib/scope";
 import { stampOrder } from "@/lib/stamp";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 /** start が空の行を最後に並べる子リスト。人物・関係・スキルの来歴の空の start は「年未定」(`db/schema.py` の CharacterHistory.start)。
@@ -208,6 +209,7 @@ export default function RecordPage() {
             value={value}
             onChange={setValue}
             mode="edit"
+          titleHelp={<PageHelp page={meta.name} help={T.help.record} extra={T.help.tables[table] ? [T.help.tables[table]] : []} />}
             hidden={hasInstruction ? ["instruction"] : undefined}
             onSave={() => void save(false)}
             titleNote={

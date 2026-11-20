@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getTableCounts } from "@/lib/api";
 import { HIDDEN_TABLES } from "@/lib/hidden";
 import { PageTitle, TABLES } from "@/lib/meta";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 
 export default function Home() {
@@ -20,7 +21,10 @@ export default function Home() {
   return (
     <>
       <PageTitle kind={T.home.title} />
-      <h1>{T.home.title}</h1>
+      <div className="page-heading">
+        <h1>{T.home.title}</h1>
+        <PageHelp page={T.home.title} help={T.help.home} />
+      </div>
       {error && <div className="status error">{error}</div>}
       <div className="cards">
         {TABLES.filter((table) => !HIDDEN_TABLES.has(table.name)).map((table) => (

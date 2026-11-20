@@ -253,9 +253,6 @@ class Event(OriginMixin, TextBase):
 
     parent_event_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("event.id"), comment="上位の出来事(この出来事を含む大きな出来事)", sort_order=230)
-    story_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("story.id"), index=True,
-        comment="この出来事を筋に置く作品(章)。空なら、どの章にも置かない世界の出来事", sort_order=235)
     custom_stamp_id: Mapped[int] = _calendar_column(236)
 
     location_id: Mapped[int | None] = mapped_column(
@@ -1301,6 +1298,10 @@ DATABASE_IAM_AUTH = os.environ.get("DEM_DATABASE_IAM_AUTH") == "1"
 # 手元の転送(127.0.0.1)越しに IAM 認証で繋ぐとき、トークンは RDS の本来のエンドポイントに宛てて作る。その在りかの SSM パラメータ
 _RDS_ENDPOINT_PARAMETERS = ("/novel/db/endpoint", "/novel/db/port")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+# `seed_master_rows` が行を入れる表。作ったばかりの db でも行があるので、db が空かを見るときは数えない
+SEEDED_TABLES = frozenset({"personality_level", "custom_stamp"})
 
 
 def seed_master_rows(engine) -> None:

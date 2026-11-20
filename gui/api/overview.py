@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""動きの見取り図(`/overview`)の元データ。選んだ章の期間の前後の出来事を、人物ごとの関わりと大きさで俯瞰する。"""
+"""動きの見取り図(`/overview`)の元データ。選んだ章の話の期間を軸に、その期間の話(どの作品のものも)と出来事を俯瞰する。
+
+出来事は作品に結ばないので、章に関わらず期間の重なるものをすべて出す。
+"""
 from __future__ import annotations
 
 from collections import Counter, defaultdict
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from data_access_logic.expansion import budget
 from data_access_logic.query import common_query
 from db.schema import (
-    ChangeOp, Character, CharacterLocation, CharacterRelation, Episode, EpisodeCharacter, Event, Expansion,
-    ExpansionChange, IdeaHistory, Location, Story,
+    ChangeOp, Character, CharacterLocation, Episode, Event, Expansion, ExpansionChange, IdeaHistory, Location, Story,
 )
 from db.stamp import Stamp
-from gui.api.models import (
-    OverviewCharacter, OverviewEpisode, OverviewEvent, OverviewRelation, OverviewResponse, OverviewSize,
-)
+from gui.api.models import OverviewCharacter, OverviewEpisode, OverviewEvent, OverviewResponse, OverviewSize
 
 # 展開が足した行のうち、行の数をそのまま出来事の大きさに数える表。事柄は、候補のアイデアを足すと呼び名の行が二つ増えるので、
 # 足した呼び名の行が指すアイデアの数で数える
@@ -33,12 +32,10 @@ def _text(value: Stamp | None) -> str | None:
     return None if value is None else str(value)
 
 
-def _window(spans: list[tuple[Stamp, Stamp | None]], margin_days: int) -> tuple[Stamp, Stamp]:
+def _window(spans: list[tuple[Stamp, Stamp | None]]) -> tuple[Stamp, Stamp]:
     if not spans:
-        raise ValueError("この章には時刻のある話も出来事も無いので、期間を決められない")
-    since = min(start for start, _ in spans)
-    until = max(end or start for start, end in spans)
-    return since.plus_days(-margin_days), until.plus_days(margin_days)
+        raise ValueError("この章には時刻のある話が無いので、期間を決められない")
+    return min(start for start, _ in spans), max(end or start for start, end in spans)
 
 
 def _invited_names(prompt: str) -> list[str]:
@@ -48,28 +45,25 @@ def _invited_names(prompt: str) -> list[str]:
     return [line[2:].split(":", 1)[0] for line in lines if line.startswith("- ") and ":" in line]
 
 
-def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
+def overview(s: Session, story_id: int, since: Stamp | None = None, until: Stamp | None = None) -> OverviewResponse:
+    """`since`〜`until` に掛かる話と出来事。省いた端は章の話の始まり・終わり。画面はスクロールした先の期間を足して読む"""
     story = common_query.get_row(s, Story, story_id)
     chapter_ids = common_query.descendant_story_ids(s, story_id)
-    chapter_episodes = s.scalars(select(Episode).where(Episode.story_id.in_(chapter_ids), Episode.start.is_not(None))
-                                 .order_by(Episode.start, Episode.id)).all()
-    chapter_event_spans = s.execute(select(Event.time, Event.end)
-                                    .where(Event.story_id.in_(chapter_ids))).all()
-    since, until = _window(
-        [(episode.start, episode.end) for episode in chapter_episodes if episode.start is not None]
-        + [(start, end) for start, end in chapter_event_spans], margin_days)
+    episode_spans = s.execute(select(Episode.start, Episode.end)
+                              .where(Episode.story_id.in_(chapter_ids), Episode.start.is_not(None))).all()
+    chapter_since, chapter_until = _window([(start, end) for start, end in episode_spans if start is not None])
+    since = since or chapter_since
+    until = until or chapter_until
 
-    sibling_ids = ([] if story.parent_story_id is None else
-                   [id_ for id_ in common_query.descendant_story_ids(s, story.parent_story_id)
-                    if id_ not in chapter_ids and id_ != story.parent_story_id])
-    siblings = s.scalars(select(Episode).where(
-        Episode.story_id.in_(sibling_ids), Episode.start.is_not(None), Episode.start <= until,
+    found = s.scalars(select(Episode).where(
+        Episode.start.is_not(None), Episode.start <= until,
         func.coalesce(Episode.end, Episode.start) >= since).order_by(Episode.start, Episode.id)).all()
-    story_names = dict(s.execute(select(Story.id, Story.name).where(Story.id.in_([*chapter_ids, *sibling_ids]))).all())
+    story_names = dict(s.execute(select(Story.id, Story.name)
+                                 .where(Story.id.in_({episode.story_id for episode in found}))).all())
     episodes = [OverviewEpisode(id=episode.id, title=episode.title, start=str(episode.start), end=_text(episode.end),
                                 story_id=episode.story_id, story_name=story_names.get(episode.story_id),
                                 in_story=episode.story_id in chapter_ids)
-                for episode in [*chapter_episodes, *siblings] if episode.start is not None]
+                for episode in found if episode.start is not None]
 
     events = s.scalars(
         select(Event).options(selectinload(Event.event_characters), joinedload(Event.location))
@@ -103,14 +97,8 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
             .group_by(ExpansionChange.expansion_id)).all():
         parts[expansion_id]["ideas"] += count
 
-    episode_counts = Counter(s.scalars(select(EpisodeCharacter.character_id).where(
-        EpisodeCharacter.episode_id.in_([episode.id for episode in chapter_episodes]),
-        EpisodeCharacter.mentioned.is_(False))).all())
-    cast_ids = set(episode_counts) | {link.character_id for event in events if event.story_id in chapter_ids
-                                      for link in event.event_characters}
     participant_ids = {link.character_id for event in events for link in event.event_characters}
-    characters = s.scalars(select(Character).where(Character.id.in_(cast_ids | participant_ids))).all()
-    names = {character.id: character.name for character in characters}
+    names = dict(s.execute(select(Character.id, Character.name).where(Character.id.in_(participant_ids))).all())
 
     overview_events = []
     for event in events:
@@ -121,7 +109,6 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
             id_ for id_ in ids if id_ != expansion.actor_id and names.get(id_) in _invited_names(expansion.prompt)]
         overview_events.append(OverviewEvent(
             id=event.id, name=event.name, start=str(event.time), end=_text(event.end), parent_event_id=event.parent_event_id,
-            in_story=event.story_id in chapter_ids,
             location_name=None if event.location is None else event.location.name, origin=event.origin,
             hidden=bool(event.hidden), text=event.text or "", character_ids=ids,
             expansion_id=None if expansion is None else expansion.id,
@@ -132,22 +119,7 @@ def overview(s: Session, story_id: int, margin_days: int) -> OverviewResponse:
                               new_characters=counted["new_characters"], ideas=counted["ideas"],
                               total=len(ids) + sum(counted.values()))))
 
-    appearances = Counter(id_ for event in overview_events for id_ in event.character_ids)
-    influences = {character.id: budget.influence_of(character, until) for character in characters}
-    ordered = sorted(characters, key=lambda character: (
-        -budget.rank(influences[character.id]), -episode_counts[character.id], -appearances[character.id],
-        character.id))
-    relations = s.scalars(select(CharacterRelation).where(
-        CharacterRelation.character_1_id.in_(names), CharacterRelation.character_2_id.in_(names),
-        or_(CharacterRelation.start.is_(None), CharacterRelation.start <= until),
-        or_(CharacterRelation.end.is_(None), CharacterRelation.end >= since)).order_by(CharacterRelation.id)).all()
     return OverviewResponse(
-        story_id=story.id, story_name=story.name, since=str(since), until=str(until), episodes=episodes,
-        events=overview_events,
-        characters=[OverviewCharacter(id=character.id, name=character.name, main_character=character.main_character,
-                                      in_cast=character.id in cast_ids,
-                                      influence=influences[character.id])
-                    for character in ordered],
-        relations=[OverviewRelation(id=relation.id, character_1_id=relation.character_1_id,
-                                    character_2_id=relation.character_2_id, relation=relation.relation,
-                                    start=_text(relation.start), end=_text(relation.end)) for relation in relations])
+        story_id=story.id, story_name=story.name, chapter_since=str(chapter_since), chapter_until=str(chapter_until),
+        since=str(since), until=str(until), episodes=episodes, events=overview_events,
+        characters=[OverviewCharacter(id=id_, name=name) for id_, name in sorted(names.items())])

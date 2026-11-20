@@ -203,8 +203,16 @@ def options(s: Session, spec: TableSpec, q: str | None, limit: int, ids: list[in
     parent_column = spec.tree_parent_column
     return [Option(id=row.id, label=label_of(model, row),
                    parent_id=getattr(row, parent_column) if parent_column else None,
-                   born=str(row.start) if model is Character and row.start is not None else None)
+                   born=_born_in_own_calendar(s, row) if isinstance(row, Character) else None)
             for row in rows]
+
+
+def _born_in_own_calendar(s: Session, character: Character) -> str | None:
+    """人物の生まれは、人物の暦で書く(画面は、話の時刻と同じ暦の桁どうしで歳を数える。選んでいる作品の暦に依らない)。"""
+    if character.start is None:
+        return None
+    with using_calendar(scope.calendar_of(s, character.custom_stamp_id)):
+        return str(character.start)
 
 
 def _context_block(s: Session, table: str, rows: Sequence[Base]) -> ContextBlock:

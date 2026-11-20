@@ -11,7 +11,7 @@ from gui.api.app import app
 from data_access_logic.story import scope
 from db import writer
 from db.schema import (
-    Character, CharacterHistory, CharacterSkill, CustomStamp, Episode, Event, Idea, IdeaHistory, Location, Story,
+    Character, CharacterHistory, CharacterSkill, CustomStamp, Episode, Event, EventCharacter, Idea, IdeaHistory, Location, Story,
     get_env_session, western_stamp_id,
 )
 
@@ -154,8 +154,8 @@ def test_story_comes_from_the_row_written_before_nested_references(saga):
         s.flush()
         history = CharacterHistory(character_id=own.id, start="1200", description="鍛冶場を開く")
         skill = CharacterSkill(character_id=own.id, name="鎚", kind="技", text="")
-        happening = Event(name="テスト長日の祭り", text="", hidden=False, time="1200", story_id=saga.story_id,
-                          location_id=place.id)
+        happening = Event(name="テスト長日の祭り", text="", hidden=False, time="1200",
+                          event_characters=[EventCharacter(character_id=own.id)])
         s.add_all([history, skill, happening])
         s.commit()
 
@@ -163,7 +163,7 @@ def test_story_comes_from_the_row_written_before_nested_references(saga):
         assert scope.story_of_args(s, {"relation": {"character_1_id": own.id, "character_2_id": stranger.id}}) == saga.story_id
         assert scope.story_of_args(s, {"character_skill_id": skill.id, "history": {"description": "x"}}) == saga.story_id
         assert scope.story_of_args(s, {"location_ids": [place.id], "time": "1200"}) == other.id
-        # 書く行(来歴・出来事)の作品が、入れ子の参照(知る相手・場所)より先に効く
+        # 書く行(来歴・出来事)の作品が、入れ子の参照(知る相手・場所)より先に効く。出来事の作品は当事者の作品
         assert scope.story_of_args(s, {"history_id": history.id, "history": {"knowers": [{"knower_id": stranger.id}]}},
                                    CharacterHistory) == saga.story_id
         assert scope.story_of_args(s, {"event": {"id": happening.id, "location_id": place.id}}) == saga.story_id
@@ -203,3 +203,14 @@ def test_batch_results_are_written_in_each_request_calendar(saga):
          "args": {"history_id": history_id, "history": {"start": "1590/12/31 26:00", "description": "写字を習う"}}}]})
 
     assert changed["start"] == "1590/12/31 26:00:00"
+
+
+def test_character_options_give_the_birth_in_the_character_calendar(saga):
+    character = _call("character.commit_character.CommitCharacter",
+                      {"character": {"name": "テスト長日の少年", "story_id": saga.story_id, "start": "1574/01/01"}})
+    with TestClient(app) as client:
+        # 西暦で数える作品を選んでいても、選択肢の生まれは人物の暦で書く(画面は話の時刻から歳を数える)
+        options = client.get("/api/tables/character/options", params={"ids": character["id"]},
+                             headers={"x-novel-story": "none"}).json()
+
+    assert [option["born"] for option in options["items"]] == ["1574/01/01 00:00:00"]

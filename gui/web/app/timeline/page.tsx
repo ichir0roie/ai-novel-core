@@ -40,6 +40,7 @@ import {
   shiftDays,
   type Calendar,
 } from "@/lib/stamp";
+import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 import {
   axisTicksOf,
@@ -1179,6 +1180,7 @@ export default function TimelinePage() {
       <PageTitle kind={T.timeline.title} record={at} />
       <div className="toolbar">
         <h1 style={{ margin: 0 }}>{T.timeline.title}</h1>
+        <PageHelp page={T.timeline.title} help={T.help.timeline} />
         <button
           type="button"
           onClick={() => shift(-1)}

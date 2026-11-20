@@ -32,8 +32,8 @@ from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import (
-    CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Episode, Event, EventCharacter, IdeaHistory,
-    IdeaHistoryKnower, Location,
+    CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter,
+    IdeaHistory, IdeaHistoryKnower, Location,
 )
 from db.stamp import Stamp
 
@@ -70,8 +70,24 @@ def _choose_actor(s: Session, rng: random.Random, time: Stamp, exclude_ids: list
     return rng.choices(candidates, weights=weights)[0]
 
 
+def _choose_from_cast(s: Session, rng: random.Random, episode: Episode, exclude_ids: list[int]) -> Character:
+    """話に登場した(名前だけでない)人物から、行動力の重みで引く。作者の頼み(最新の話の登場人物を動かす)なので、主要人物も含める。"""
+    time = expansion_query.episode_time(episode)
+    candidates = [character for character in s.scalars(
+        select(Character).join(EpisodeCharacter, EpisodeCharacter.character_id == Character.id)
+        .where(EpisodeCharacter.episode_id == episode.id, EpisodeCharacter.mentioned.is_(False),
+               Character.kind == CHARACTER_KIND_PERSON)
+        .order_by(Character.id)).all()
+        if character.id not in exclude_ids and (character.end is None or character.end > time)]
+    weights = [_weight(character, time) for character in candidates]
+    if not candidates or not any(weights):
+        raise ValueError(f"話「{episode.title}」(id={episode.id})の登場人物に、まだ動いていない行動力のある人物がいない")
+    return rng.choices(candidates, weights=weights)[0]
+
+
 def _next_time(s: Session, rng: random.Random, character: Character) -> Stamp:
-    """人物が最後に出た出来事・話から、`constants.ACT_INTERVAL_DAYS` の範囲で日を空けた時刻。出たことが無ければ世界の最新の時刻。"""
+    """人物が最後に出た時刻(`expansion_query.last_appearance`)から、`constants.ACT_INTERVAL_DAYS` の範囲で日を空けた時刻。
+    出たことが無ければ世界の最新の時刻。"""
     last = expansion_query.last_appearance(s, character.id)
     if last is not None:
         return last.plus_days(rng.randint(*constants.ACT_INTERVAL_DAYS))
@@ -96,11 +112,21 @@ def _ready(s: Session, character: Character, at: Stamp, fixed: bool) -> Stamp:
 
 def pick_actor(
     s: Session, character_id: int | None, time: Stamp | None, seed: int | None, exclude_ids: list[int],
+    cast_of: int | None = None,
 ) -> ActorPick:
+    """人物も時刻も渡されなければ、本文のある最新の話(`cast_of` を渡せば、その人物が登場した最新の話)の登場人物から引き、
+    その話より後(`_next_time`)に動かす。本文のある話が無ければ、世界の最新の時刻のサブキャラクターから引く。"""
     rng = random.Random(seed)
+    episode = None
+    if character_id is None and time is None:
+        episode = ((cast_of is not None and expansion_query.latest_written_episode(s, cast_of))
+                   or expansion_query.latest_written_episode(s))
     if character_id is not None:
         character = common_query.get_row(s, Character, character_id)
         at = _ready(s, character, time or _next_time(s, rng, character), time is not None)
+    elif episode is not None:
+        character = _choose_from_cast(s, rng, episode, exclude_ids)
+        at = _ready(s, character, _next_time(s, rng, character), False)
     else:
         latest = time or s.scalar(common_query.latest_time_select())
         if latest is None:

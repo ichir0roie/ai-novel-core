@@ -12,7 +12,8 @@ import CharacterTree from "@/components/CharacterTree";
 import StylePreferenceEditor from "@/components/StylePreferenceEditor";
 import ListTable, { nextSort, Pager } from "@/components/ListTable";
 import NameId from "@/components/NameId";
-import { T } from "@/lib/text";
+import PageHelp from "@/components/PageHelp";
+import { T, type Help } from "@/lib/text";
 
 const PAGE = 50;
 // 列名の query として扱わない(絞り込みのチップに出さない)もの
@@ -87,6 +88,13 @@ export default function TablePage() {
   // 作品(story)は場所の木、アイデア(idea)は parent_idea_id の木、人物(character)は居場所の木でツリー表示を持つ。
   // 既定はどれもツリー(`?view=list` で表)
   const hasTree = table === "story" || table === "idea" || table === "character";
+  const tableHelp = T.help.tables[table];
+  const heading = (text: string, help: Help) => (
+    <div className="page-heading">
+      <h1>{text}</h1>
+      <PageHelp page={text} help={help} extra={tableHelp ? [tableHelp] : []} />
+    </div>
+  );
   const tree = hasTree && (search.get("view") ?? "tree") === "tree";
   const viewSwitch = hasTree && (
     <span className="segment">
@@ -102,7 +110,7 @@ export default function TablePage() {
     return (
       <>
         <PageTitle kind={table} record={recordName} />
-        <h1>{table}</h1>
+        {heading(table, T.help.tableList)}
         <div className="toolbar">
           {viewSwitch}
           <Link href={`/tables/${table}/new`}>
@@ -121,7 +129,7 @@ export default function TablePage() {
     return (
       <>
         <PageTitle kind={table} record={null} />
-        <h1>{table}</h1>
+        {heading(table, T.help.styleEditor)}
         <StylePreferenceEditor />
       </>
     );
@@ -172,7 +180,7 @@ export default function TablePage() {
           </Link>
         </div>
       )}
-      <h1>{title}</h1>
+      {heading(title, T.help.tableList)}
       <div className="toolbar">
         {viewSwitch}
         <form

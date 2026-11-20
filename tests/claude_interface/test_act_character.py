@@ -7,7 +7,7 @@ from sqlalchemy import select
 from data_access_logic import constants
 from data_access_logic.character.record import CharacterMove, MotivationChange
 from data_access_logic.event.progress_models import CharacterUpdateDraft
-from data_access_logic.expansion import budget
+from data_access_logic.expansion import acting, budget
 from data_access_logic.expansion.act_character import ActCharacter
 from data_access_logic.expansion.act_models import (
     ActIdeaDraft, ActOutcomeDraft, BatchOutcomeDraft, BatchOutcomeItem, DialogueTurnDraft, ImpactFrame, IntentDraft,
@@ -164,6 +164,48 @@ def test_act_character_picks_a_sub_character(world):
     run = act.act_character(time="1200/05/01", seed=3, ai=ScriptedAI(actor_id, world.neighbor_id))
     with get_env_session() as s:
         assert s.get_one(Character, _one(run).actor.character_id).main_character is False
+
+
+def _stamp(value) -> Stamp:
+    stamp = Stamp.parse(value)
+    assert stamp is not None
+    return stamp
+
+
+def test_pick_without_time_takes_the_cast_of_the_latest_written_episode(world):
+    """人物も時刻も渡さなければ、本文のある最新の話の登場人物(主要人物も)から引き、その話の翌日以降に動かす。
+    プロットだけの話と、名前だけ出る人物は数えない。"""
+    actor_id, main_id = world.character_ids[1], world.character_ids[0]
+    with get_env_session() as s:
+        stranger = Character(name="テスト三郎", text="テスト三郎の説明", kind="人物", main_character=False, end="1260/01/01",
+                             parameters=[CharacterParameter(start="1170/01/01", sex="男", proactivity="必")])
+        s.add(stranger)
+        s.flush()
+        s.add(CharacterLocation(character_id=stranger.id, location_id=world.location_id, start="1170/01/01"))
+        s.add(EpisodeCharacter(episode_id=world.episode_id, character_id=stranger.id, mentioned=True))
+        s.commit()
+        stranger_id = stranger.id
+    _plotted_episode(world.story_id, [stranger_id], "1200/04/20", "三郎が港に着く")
+
+    with get_env_session() as s:
+        picked = {acting.pick_actor(s, None, None, seed, [], cast_of=actor_id).character_id for seed in range(20)}
+        later = acting.pick_actor(s, None, None, 0, [main_id], cast_of=actor_id)
+    assert picked == {actor_id, main_id}
+    assert later.character_id == actor_id
+    assert later.time >= _stamp("1200/04/02 18:00:00")
+
+
+def test_next_time_follows_the_written_episode_not_a_later_author_event(world):
+    """作者が先の筋として置いた出来事があっても、人物は本文のある最新の話の翌日以降に動く。"""
+    actor_id = world.character_ids[1]
+    with get_env_session() as s:
+        s.add(Event(name="テスト先の筋", text="ずっと先の出来事", time="1250/01/01", location_id=world.location_id,
+                    event_characters=[EventCharacter(character_id=actor_id)]))
+        s.commit()
+
+    acted = _one(act.act_character(character_id=actor_id, seed=1, ai=ScriptedAI(actor_id, world.neighbor_id)))
+
+    assert _stamp("1200/04/02 18:00:00") <= _stamp(acted.actor.time) <= _stamp("1200/05/02 18:00:00")
 
 
 def test_act_character_entrance_is_registered():

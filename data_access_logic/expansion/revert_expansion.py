@@ -27,6 +27,11 @@ def _touched_later(s: Session, expansion_id: int) -> list[str]:
     return touched
 
 
+def _restorable(change: ExpansionChange, columns) -> list[tuple[str, object]]:
+    """直す前の行のうち、今の表にある列だけ。記録のあとで外した列は戻す先が無い。"""
+    return [(key, value) for key, value in (change.before or {}).items() if key in columns]
+
+
 def _undo(s: Session, change: ExpansionChange) -> None:
     model = model_of(change.table_name)
     columns = model.__table__.columns
@@ -37,12 +42,12 @@ def _undo(s: Session, change: ExpansionChange) -> None:
     elif change.op == ChangeOp.UPDATE:
         # 展開のあとで消された行は戻せない(直したことを戻す先が無い)
         if row is not None:
-            for key, value in (change.before or {}).items():
+            for key, value in _restorable(change, columns):
                 if key != "id":
                     setattr(row, key, restored_value(columns[key], value))
     elif row is None:
         restored = model()
-        for key, value in (change.before or {}).items():
+        for key, value in _restorable(change, columns):
             setattr(restored, key, restored_value(columns[key], value))
         s.add(restored)
     # 親子の行は一つずつ書き戻す(親を戻してから子を戻す・子を消してから親を消す順を、記録の逆順のまま守る)

@@ -22,15 +22,24 @@ type Props = {
   episodeStoryId: unknown;
   /** ボタンの横に名前を並べるか。話のページでは下に関係ごと並べる(`EpisodeCharacterRelations`)ので出さない */
   summary?: boolean;
+  /** 選ぶモーダルの見出し。出来事の当事者を選ぶときに替える */
+  modalTitle?: string;
 };
 
-/** 話の登場人物(`episode_character`)。「time & place」の行に並ぶボタンで、押すとモーダルで追加削除する。
+/** 話の登場人物(`episode_character`)と、出来事の当事者(`event_character`)。ボタンで、押すとモーダルで追加削除する。
  * その場で API へは保存せず、ページの編集中の値(`value.character_ids`)を更新するだけ(Save でまとめて保存)。
- * 候補は、検索欄が空なら同じ作品(`story_id`)の話・出来事に出てくる人物だけを、出てくる回数の多い順に並べる
+ * 候補は、検索欄が空なら同じ作品(`story_id`)の話と、話の期間の出来事に出てくる人物だけを、出てくる回数の多い順に並べる
  * (選んだ人物はいつも出し、作品に出てこなければ後ろに並べる)。検索語を入れたら全人物から探す。
  * 作品が空か読めないとき、作品にまだ誰も出てこないときは絞らない。
  * 並んだ名前(`summary`)を押すと、その人物を話の開始の時点で見るモーダル(`CharacterSheetModal`)を開く。 */
-export default function EpisodeCharacters({ characterIds, onChange, episodeStart, episodeStoryId, summary = true }: Props) {
+export default function EpisodeCharacters({
+  characterIds,
+  onChange,
+  episodeStart,
+  episodeStoryId,
+  summary = true,
+  modalTitle = T.episodeCharacters.modalTitle,
+}: Props) {
   const options = useOptions("character");
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -73,7 +82,7 @@ export default function EpisodeCharacters({ characterIds, onChange, episodeStart
       {viewing !== null && <CharacterSheetModal characterId={viewing} time={episodeStart} onClose={() => setViewing(null)} />}
       {open && (
         <Modal
-          title={T.episodeCharacters.modalTitle}
+          title={modalTitle}
           onClose={() => setOpen(false)}
           wide
           actions={
