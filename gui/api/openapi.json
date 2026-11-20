@@ -1926,6 +1926,10 @@
             "type": "boolean",
             "title": "Hidden"
           },
+          "importance": {
+            "type": "integer",
+            "title": "Importance"
+          },
           "text": {
             "type": "string",
             "title": "Text"
@@ -2002,6 +2006,7 @@
           "location_name",
           "origin",
           "hidden",
+          "importance",
           "text",
           "character_ids",
           "expansion_id",

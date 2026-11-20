@@ -13,6 +13,7 @@ import {
   type PointerEvent,
 } from "react";
 import EpisodeFields, { addEpisode, type EpisodeDraft } from "@/components/EpisodeFields";
+import ImportanceField from "@/components/ImportanceField";
 import Modal from "@/components/Modal";
 import NewEventModal from "@/components/NewEventModal";
 import OpenableText from "@/components/OpenableText";
@@ -157,7 +158,8 @@ const shiftCells = (cells: Cell[], by: number) => cells.map((cell) => ({ ...cell
 /**
  * 出来事の札を筋に振り分ける。親子のある出来事は家族(根と子孫)を一かたまりで組み、子は親のすぐ右の筋に置く。
  * 子の筋がすでに埋まっていれば、子の下の家族ごと右へずらし、親子が必ず隣り合うようにする。
- * 家族と親子の無い出来事(札一枚の家族)を、根の時刻の早い順に、空いた一番左の筋から置く。家族の札が並んでいるあいだは、
+ * 家族と親子の無い出来事(札一枚の家族)を、根の重視度の大きい順(同じなら時刻の早い順)に、空いた一番左の筋から置く。
+ * 家族の中の子も同じ順に組むので、重視度の大きい出来事ほど左に寄る。家族の札が並んでいるあいだは、
  * その左端から右端までの筋を家族のものとし、ほかの家族・出来事を間に挟まない。時期が重ならなければ左端の筋に戻る
  */
 function packEvents(
@@ -168,7 +170,7 @@ function packEvents(
   const startOf = (event: OverviewEvent) => dayOf(event.start, calendar) ?? 0;
   const timed = events
     .filter((event) => dayOf(event.start, calendar) !== null)
-    .sort((a, b) => startOf(a) - startOf(b) || a.id - b.id);
+    .sort((a, b) => b.importance - a.importance || startOf(a) - startOf(b) || a.id - b.id);
   const ids = new Set(timed.map((event) => event.id));
   const children = new Map<number, OverviewEvent[]>();
   for (const event of timed)
@@ -259,7 +261,7 @@ export default function OverviewPage() {
   const [screen, setScreen] = useState(0);
   // 押した出来事のモーダルと、書きかけの名前・本文(開いたときの値が saved)
   const [selected, setSelected] = useState<OverviewEvent | null>(null);
-  const [eventForm, setEventForm] = useState<{ name: string; text: string } | null>(null);
+  const [eventForm, setEventForm] = useState<{ name: string; text: string; importance: number } | null>(null);
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventError, setEventError] = useState<string | null>(null);
   const [episodePanel, setEpisodePanel] = useState<EpisodePanel | null>(null);
@@ -489,7 +491,12 @@ export default function OverviewPage() {
   const editDirty = editTimeChanged || editTitleChanged || editPlotChanged;
   const canSaveEdit = editDirty && !savingEdit && !!edit?.start;
 
-  const eventDirty = !!selected && !!eventForm && (eventForm.name !== selected.name || eventForm.text !== selected.text);
+  const eventDirty =
+    !!selected &&
+    !!eventForm &&
+    (eventForm.name !== selected.name ||
+      eventForm.text !== selected.text ||
+      eventForm.importance !== selected.importance);
   const canSaveEvent = eventDirty && !savingEvent && !!eventForm?.name.trim();
 
   useEffect(() => {
@@ -524,7 +531,7 @@ export default function OverviewPage() {
   /** 押した出来事をモーダルで開く(出来事のタイムラインと同じく、名前と本文を直せる) */
   const openEvent = (event: OverviewEvent) => {
     setSelected(event);
-    setEventForm({ name: event.name, text: event.text });
+    setEventForm({ name: event.name, text: event.text, importance: event.importance });
     setEventError(null);
   };
 
@@ -680,6 +687,7 @@ export default function OverviewPage() {
         updateRecord("event", selected.id, {
           ...(sent.name !== selected.name ? { name: sent.name } : {}),
           ...(sent.text !== selected.text ? { text: sent.text } : {}),
+          ...(sent.importance !== selected.importance ? { importance: sent.importance } : {}),
         }).then(async (response) => [response, await reread()] as const),
       );
       invalidateOptions("event");
@@ -687,7 +695,7 @@ export default function OverviewPage() {
       const shown = fresh.events.find((event) => event.id === selected.id);
       if (shown) {
         setSelected(shown);
-        setEventForm({ name: shown.name, text: shown.text });
+        setEventForm({ name: shown.name, text: shown.text, importance: shown.importance });
       }
       setMessage(T.eventTimeline.saved(response.label));
     } catch (e) {
@@ -1100,6 +1108,7 @@ export default function OverviewPage() {
               T.nameId(data?.events.find((one) => one.id === event.parent_event_id)?.name, event.parent_event_id),
             ),
           event.location_name,
+          T.eventTimeline.importanceLine(event.importance),
           event.character_ids.length > 0 &&
             `${T.overview.participants}: ${event.character_ids.map((id) => names.get(id)).join(", ")}`,
           event.hidden && T.overview.hidden,
@@ -1110,6 +1119,11 @@ export default function OverviewPage() {
       {eventError && <div className="status error">{eventError}</div>}
       {eventForm && (
         <>
+          <ImportanceField
+            value={eventForm.importance}
+            onChange={(importance) => setEventForm({ ...eventForm, importance })}
+            disabled={savingEvent}
+          />
           <div className="field">
             <label>{T.eventTimeline.name}</label>
             <input

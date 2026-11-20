@@ -172,6 +172,7 @@ class OverviewEvent(BaseModel):
     location_name: str | None
     origin: str
     hidden: bool
+    importance: int
     text: str
     character_ids: list[int]
     # 人物モードの一手で足した出来事なら、その展開と動いた人物・巻きこんだ相手
