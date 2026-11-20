@@ -699,6 +699,8 @@ export interface components {
             origin: string;
             /** Hidden */
             hidden: boolean;
+            /** Importance */
+            importance: number;
             /** Text */
             text: string;
             /** Character Ids */

@@ -110,7 +110,7 @@ def overview(s: Session, story_id: int, since: Stamp | None = None, until: Stamp
         overview_events.append(OverviewEvent(
             id=event.id, name=event.name, start=str(event.time), end=_text(event.end), parent_event_id=event.parent_event_id,
             location_name=None if event.location is None else event.location.name, origin=event.origin,
-            hidden=bool(event.hidden), text=event.text or "", character_ids=ids,
+            hidden=bool(event.hidden), importance=event.importance, text=event.text or "", character_ids=ids,
             expansion_id=None if expansion is None else expansion.id,
             actor_id=None if expansion is None else expansion.actor_id, invited_ids=invited,
             expansion_summary=None if expansion is None else expansion.summary,

@@ -12,6 +12,7 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
+import ImportanceField, { DEFAULT_IMPORTANCE } from "@/components/ImportanceField";
 import Modal from "@/components/Modal";
 import NewEventModal from "@/components/NewEventModal";
 import OpenableText from "@/components/OpenableText";
@@ -74,10 +75,6 @@ const LAYER_PAD = 12;
 const SPARE_LAYERS = 1;
 // 場所の絞り込みを覚えておく localStorage のキー。絞り込みを付けずに開いたら、前に選んだ場所へ移す
 const FILTER_STORAGE_KEY = "event-timeline-filter";
-
-// 重視度の既定。行に値が無いとき(古い API など)はこれとみなす
-const DEFAULT_IMPORTANCE = 5;
-const IMPORTANCE_CHOICES = Array.from({ length: 10 }, (_, i) => i + 1);
 
 // 出来事一つ。parent は親の出来事の id(親が読めた出来事に無ければ根として置く)
 type Item = {
@@ -1199,21 +1196,11 @@ export default function EventTimelinePage() {
             <div className="status info">{T.loading}</div>
           ) : (
             <>
-              <div className="field">
-                <label>{T.eventTimeline.importance}</label>
-                <select
-                  value={form.importance}
-                  onChange={(e) => setForm({ ...form, importance: Number(e.target.value) })}
-                  disabled={saving}
-                >
-                  {IMPORTANCE_CHOICES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-                <div className="hint">{T.eventTimeline.importanceHint}</div>
-              </div>
+              <ImportanceField
+                value={form.importance}
+                onChange={(importance) => setForm({ ...form, importance })}
+                disabled={saving}
+              />
               <div className="field">
                 <label>{T.eventTimeline.name}</label>
                 <input
