@@ -484,7 +484,7 @@ export const T = {
     size: (total: number) => `size ${total}`,
     participants: "Participants",
     arc: "Ongoing aim (parent event)",
-    legend: "card height = duration · grey episode = another story · line = parent → child (children to the right) · scroll up or down to load more · drag a card to move it, its top or bottom edge to change the period, or an event onto another event to make it a child · click a line to remove the link",
+    legend: "card height = duration · grey episode = another story · line = parent → child (children to the right) · the shown period follows the scroll · drag a card to move it, its top or bottom edge to change the period, or an event onto another event to make it a child · click a line to remove the link",
     childOf: (parent: string) => `child of ${parent}`,
     linkOf: (parent: string, child: string) => `${parent} → ${child}`,
     unlink: "Remove link",
@@ -905,7 +905,7 @@ export const T = {
     },
 
     overview: {
-      intro: "章を一つ選び、その章の話の時期に重なる話と出来事を一本の時間軸に並べて見渡す。上下にスクロールして端に近づくと、その先の期間を読み足す。",
+      intro: "章を一つ選び、その章の話の時期に重なる話と出来事を一本の時間軸に並べて見渡す。話の時期の外でも、画面に見えている期間の出来事は出す(スクロールや縮尺の変更に合わせて読み足す)。",
       sections: [
         {
           heading: "列",

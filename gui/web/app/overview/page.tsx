@@ -70,8 +70,8 @@ const EVENT_LANE_WIDTH = 150;
 const EVENT_LANE_PAD = 8;
 // 出来事の札を描くとき上下に空ける幅(px)。続けて置いた札どうしが接して見えないようにし、その間に親子の線を通せるようにする
 const EVENT_MARGIN = 2;
-// スクロールで端からこの画面数より近づいたら、その先を読み足す。読み足すのは今の縮尺の画面この数ぶんの期間
-const LOAD_EDGE_SCREENS = 0.5;
+// 画面に見えている期間の前後この画面数ぶんまでは、読んである状態を保つ。足りなければ、前後この画面数ぶんまでを読み足す
+const KEEP_SCREENS = 1;
 const LOAD_SCREENS = 2;
 
 type Filter = { origin: "all" | "ai" | "user"; minSize: number };
@@ -435,18 +435,23 @@ export default function OverviewPage() {
     keepDay.current = null;
   }, [scale]);
 
-  /** 読んだ期間の上(direction が -1)か下(1)へ、今の縮尺の画面 LOAD_SCREENS 枚ぶんを読み足す */
-  const loadMore = (direction: -1 | 1) => {
+  /**
+   * 画面に見えている期間(前後に KEEP_SCREENS 枚の余白)が読んであるようにする。話の期間に関わらず、見えている所の出来事を出すため。
+   * 足りない端だけを、前後 LOAD_SCREENS 枚ぶんまで読み足す(両端とも足りなければ、その全体を読む)
+   */
+  const loadVisible = () => {
     const element = scrollRef.current;
-    if (!element || !scale || !data || storyId === null || loadingMore.current) return;
+    if (!element || !scale || !data || storyId === null || loadingMore.current || box.viewport === 0) return;
     const since = dayOf(data.since, calendar);
     const until = dayOf(data.until, calendar);
     if (since === null || until === null) return;
-    const days = spanDays(view, calendar) * LOAD_SCREENS;
-    const range =
-      direction < 0
-        ? { since: formatStamp(fromDayNumber(since - days, calendar)), until: data.since }
-        : { since: data.until, until: formatStamp(fromDayNumber(until + days, calendar)) };
+    const screen = spanDays(view, calendar);
+    const top = scale.fromY(element.scrollTop);
+    const bottom = scale.fromY(element.scrollTop + box.viewport);
+    if (top - screen * KEEP_SCREENS >= since && bottom + screen * KEEP_SCREENS <= until) return;
+    const [lo, hi] = [top - screen * LOAD_SCREENS, bottom + screen * LOAD_SCREENS];
+    const stamp = (day: number) => formatStamp(fromDayNumber(day, calendar));
+    const range = { since: lo < since ? stamp(lo) : data.until, until: hi > until ? stamp(hi) : data.since };
     loadingMore.current = true;
     getOverview({ story_id: storyId, ...range })
       .then((more) => {
@@ -465,10 +470,11 @@ export default function OverviewPage() {
     const element = scrollRef.current;
     if (!element || box.viewport === 0) return;
     setScreen(Math.floor(element.scrollTop / box.viewport));
-    const edge = box.viewport * LOAD_EDGE_SCREENS;
-    if (element.scrollTop < edge) loadMore(-1);
-    else if (element.scrollTop + element.clientHeight > element.scrollHeight - edge) loadMore(1);
+    loadVisible();
   };
+  // 開いたとき・縮尺や画面の高さを変えたとき・読み足して軸が伸びたときも、スクロールを待たずに見えている所を読む。
+  // 描くたびに確かめるが、読んであれば何もしない
+  useEffect(loadVisible);
 
   const draft = episodePanel?.draft ?? null;
   const saved = episodePanel?.saved ?? null;
