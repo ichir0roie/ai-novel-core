@@ -17,7 +17,6 @@ class EpisodeCommitForm(Form):
         default=None, description="この行の時刻を数える暦。足すとき省けば作品の暦")
     title: str | None = None
     plot_text: str | None = None
-    # 改行を整えてから入れる(`layout_novel_text`)
     main_text: str | None = None
     # この話の本文・プロットを書くときに足す指示
     instruction: str | None = None
@@ -40,7 +39,6 @@ class EpisodeReviseForm(Form):
     """本文のある話の本文を直す(推敲)。時刻・登場人物・場所は変えない。"""
 
     id: int
-    # 改行を整えてから入れる(`layout_novel_text`)
     main_text: str
     # 推敲の覚えを足したプロット。渡さなければそのまま
     plot_text: str | None = None
