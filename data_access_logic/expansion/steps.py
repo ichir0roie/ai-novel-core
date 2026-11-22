@@ -30,6 +30,9 @@ class PickForm(BaseModel):
     exclude_ids: list[int] = []
     # 人物を渡さないとき、この人物が登場した最新の話の登場人物から引く(省けば本文のある最新の話)
     cast_of: int | None = None
+    # 作者が置いた親の出来事と、居合わせさせる人物(`ActorPick`)
+    parent_event_id: int | None = None
+    partner_ids: list[int] = []
 
 
 class NarratorBriefForm(BaseModel):
@@ -51,7 +54,8 @@ class PromptForm(BaseModel):
 
 @db_step
 def pick_actor(s: Session, form: PickForm) -> ActorPick:
-    return acting.pick_actor(s, form.character_id, form.time, form.seed, form.exclude_ids, form.cast_of)
+    return acting.pick_actor(s, form.character_id, form.time, form.seed, form.exclude_ids, form.cast_of,
+                             form.parent_event_id, form.partner_ids)
 
 
 @db_step

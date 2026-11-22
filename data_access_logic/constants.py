@@ -110,6 +110,9 @@ ACT_RUN_LIMIT = 8
 # 近い話から上限まで、そのプロットを語り部の動機にする。語り部は一手ごとに一度だけ呼ぶ
 ACT_NARRATOR_EPISODE_DAYS = 30
 ACT_NARRATOR_EPISODE_LIMIT = 3
+# 作者が親の出来事を置いた手で、語り部と裁く段に渡す筋。親から上へたどる先祖の数と、親の子のうち一手の前・後それぞれに渡す数
+ACT_ARC_DEPTH_LIMIT = 12
+ACT_ARC_SIBLING_LIMIT = 3
 ACT_NARRATOR_MODEL = "claude-opus-5-5"
 ACT_NARRATOR_EFFORT = "high"
 # 段(無/低/並/高/必)の並び。影響力・行動力を数で比べるのに使う
