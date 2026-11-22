@@ -32,9 +32,9 @@ from db.guard import ProtectedRowError
 from db.schema import engine, get_env_session
 from gui.api import interface
 from gui.api.models import (
-    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, Health, LocationCharactersResponse, MapsResponse,
-    OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse, RunRequest, RunResult, ScopeResponse,
-    StoryCharactersResponse, TableCounts, TimelineResponse,
+    BatchItem, BatchRequest, BatchResponse, CharacterLocationsResponse, DetailMapResponse, Health,
+    LocationCharactersResponse, MapsResponse, OptionList, OverviewResponse, RecordList, RecordResponse, RelationsResponse,
+    RunRequest, RunResult, ScopeResponse, StoryCharactersResponse, TableCounts, TimelineResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -343,6 +343,18 @@ def maps(s: Session = Depends(session_dep)) -> MapsResponse:
     return MapsResponse(planets=planet_maps(s), categories=list(CATEGORIES),
                         category_colors=dict(CATEGORY_COLORS), shape_opacity=dict(SHAPE_OPACITY),
                         bearings=list(BEARINGS))
+
+
+@app.get("/api/maps/detail", response_model=DetailMapResponse)
+def detail_map(location_id: int, s: Session = Depends(session_dep)) -> DetailMapResponse:
+    """場所の詳細マップの元データ。画面(`/maps/detail`)が、その場所の配下の詳細の場所を描く"""
+    from data_access_logic.map.category import CATEGORIES, CATEGORY_COLORS, SHAPE_OPACITY
+    from data_access_logic.map.detail import detail_map as collect_detail_map
+    from data_access_logic.map.geometry import BEARINGS
+
+    return DetailMapResponse(**dict(collect_detail_map(s, location_id)), categories=list(CATEGORIES),
+                             category_colors=dict(CATEGORY_COLORS), shape_opacity=dict(SHAPE_OPACITY),
+                             bearings=list(BEARINGS))
 
 
 @app.get("/api/maps/{planet_id}.svg")

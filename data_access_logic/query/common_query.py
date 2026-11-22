@@ -136,21 +136,24 @@ def planets_select() -> Select:
     return select(Location).where(Location.kind == "星").order_by(Location.id.asc())
 
 
-def locations_on_planet_select(planet_id: int) -> Select:
-    return (
+def locations_on_planet_select(planet_id: int, include_detail: bool) -> Select:
+    query = (
         select(Location)
         .where(Location.location_planet == planet_id)
         .where(Location.location_longitude.is_not(None))
         .where(Location.location_latitude.is_not(None))
-        .order_by(Location.id.asc())
     )
+    if not include_detail:
+        query = query.where(Location.map_detail.is_(False))
+    return query.order_by(Location.id.asc())
 
 
 def mapped_locations_select() -> Select:
-    """星の上にあって、経緯度か輪郭(polygon)を持つ場所。全部の星の分を一度に引く"""
+    """星の上にあって、経緯度か輪郭(polygon)を持つ、詳細でない場所。全部の星の分を一度に引く"""
     return (
         select(Location)
         .where(Location.location_planet.is_not(None))
+        .where(Location.map_detail.is_(False))
         .where(or_(Location.location_longitude.is_not(None) & Location.location_latitude.is_not(None),
                    Location.polygon.is_not(None)))
         .order_by(Location.id.asc())

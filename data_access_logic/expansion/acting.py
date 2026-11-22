@@ -23,9 +23,9 @@ from data_access_logic.event.record import EventRecord
 from data_access_logic.event.summary import events_of
 from data_access_logic.expansion import budget
 from data_access_logic.expansion.act_models import (
-    ActFrameForm, ActorBrief, ActorPick, ActorSerialized, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm,
+    ActFrameForm, ActorBrief, ActorPick, ActorSerialized, ActSaved, ActSaveForm, ArcEvent, DialogueBrief, DialogueBriefForm,
     DialogueSerialized, ImpactFrame, InviteForm, MotivationLine, Motives, NarratedEpisode, Narration, NarratorBrief,
-    NarratorSerialized, NewCharacterLink, OpenArc, ParticipantMotivations, PresentPerson,
+    NarratorSerialized, NewCharacterLink, OpenArc, ParentArc, ParticipantMotivations, PresentPerson,
 )
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
@@ -50,6 +50,21 @@ def _people_here(s: Session, location_id: int, time: Stamp) -> list[Character]:
         .order_by(Character.id)).all()
     return [character for character in characters
             if character.id not in busy_ids and _current_location_id(character, time) == location_id]
+
+
+def _partners(s: Session, partner_ids: list[int], exclude_id: int, time: Stamp) -> list[Character]:
+    """作者が居合わせさせた人物のうち、その時刻に生きている人物(渡した順)。"""
+    partners = [s.get_one(Character, id_) for id_ in dict.fromkeys(partner_ids) if id_ != exclude_id]
+    return [partner for partner in partners
+            if (partner.start is None or partner.start <= time) and (partner.end is None or partner.end > time)]
+
+
+def _present(s: Session, pick: ActorPick, exclude_id: int, time: Stamp) -> list[Character]:
+    """目の前にいる人物。作者が居合わせさせた人物を先に、同じ場所に居合わせて手の空いた人物を続ける(上限まで)。"""
+    partners = _partners(s, pick.partner_ids, exclude_id, time)
+    seen_ids = {partner.id for partner in partners}
+    here = [other for other in _people_here(s, pick.location_id, time) if other.id != exclude_id and other.id not in seen_ids]
+    return [*partners, *here][:constants.ACT_PRESENT_LIMIT]
 
 
 def _weight(character: Character, time: Stamp) -> int:
@@ -112,11 +127,16 @@ def _ready(s: Session, character: Character, at: Stamp, fixed: bool) -> Stamp:
 
 def pick_actor(
     s: Session, character_id: int | None, time: Stamp | None, seed: int | None, exclude_ids: list[int],
-    cast_of: int | None = None,
+    cast_of: int | None = None, parent_event_id: int | None = None, partner_ids: list[int] | None = None,
 ) -> ActorPick:
     """人物も時刻も渡されなければ、本文のある最新の話(`cast_of` を渡せば、その人物が登場した最新の話)の登場人物から引き、
-    その話より後(`_next_time`)に動かす。本文のある話が無ければ、世界の最新の時刻のサブキャラクターから引く。"""
+    その話より後(`_next_time`)に動かす。本文のある話が無ければ、世界の最新の時刻のサブキャラクターから引く。
+    親の出来事を渡したら、人物を渡させ、時刻を親の期間に収める(`_in_parent`)。"""
     rng = random.Random(seed)
+    if parent_event_id is not None:
+        if character_id is None:
+            raise ValueError("親の出来事を渡すときは、動く人物を渡す")
+        return _in_parent(s, rng, character_id, time, parent_event_id, partner_ids or [])
     episode = None
     if character_id is None and time is None:
         episode = ((cast_of is not None and expansion_query.latest_written_episode(s, cast_of))
@@ -135,11 +155,42 @@ def pick_actor(
         at = time or _ready(s, character, _next_time(s, rng, character), False)
     if character.end is not None and character.end <= at:
         raise ValueError(f"{character.name}(id={character.id})は {at} にはもういない(没年 {character.end})")
+    return _pick(s, character, at)
+
+
+def _pick(s: Session, character: Character, at: Stamp, parent_event_id: int | None = None,
+          partner_ids: list[int] | None = None) -> ActorPick:
     location_id = _current_location_id(character, at)
     if location_id is None:
         raise ValueError(f"{character.name}(id={character.id})の {at} の居場所が分からない")
     return ActorPick(character_id=character.id, name=character.name, time=at, location_id=location_id,
-                     energy=round(budget.energy_at(s, character, at), 1), influence=budget.influence_of(character, at))
+                     energy=round(budget.energy_at(s, character, at), 1), influence=budget.influence_of(character, at),
+                     parent_event_id=parent_event_id, partner_ids=partner_ids or [])
+
+
+def _in_parent(s: Session, rng: random.Random, character_id: int, time: Stamp | None, parent_event_id: int,
+               partner_ids: list[int]) -> ActorPick:
+    """作者が置いた親の出来事の期間(終わりが空なら始まりから先)で動かす。時刻を省けば、人物が最後に出た時刻から日を空けた時刻を
+    親の始まりより後に寄せ、気力と手数の戻るまで待たせる。期間を出るなら止める。"""
+    parent = common_query.get_row(s, Event, parent_event_id)
+    character = common_query.get_row(s, Character, character_id)
+    if time is None:
+        at = _ready(s, character, max(_next_time(s, rng, character), parent.time), False)
+    else:
+        at = _ready(s, character, time, True)
+    if at < parent.time or (parent.end is not None and at >= parent.end):
+        raise ValueError(f"{character.name}(id={character.id})が動ける {at} は、親の出来事「{parent.name}」(id={parent.id})の"
+                         f"期間({parent.time}〜{parent.end or ''})の外")
+    if character.end is not None and character.end <= at:
+        raise ValueError(f"{character.name}(id={character.id})は {at} にはもういない(没年 {character.end})")
+    for partner_id in partner_ids:
+        common_query.get_row(s, Character, partner_id)
+    alive_ids = {partner.id for partner in _partners(s, partner_ids, character.id, at)}
+    absent = [partner_id for partner_id in dict.fromkeys(partner_ids)
+              if partner_id != character.id and partner_id not in alive_ids]
+    if absent:
+        raise ValueError(f"居合わせさせる人物 id={absent} は {at} に生きていない")
+    return _pick(s, character, at, parent.id, partner_ids)
 
 
 def _past_events_select(character_id: int, time: Stamp) -> Select[Event]:
@@ -214,25 +265,43 @@ def related_episodes(s: Session, characters: list[Character], time: Stamp) -> li
                             plot_text=episode.plot_text, written=bool(episode.main_text.strip())) for episode in chosen]
 
 
+def _arc_event(event: Event) -> ArcEvent:
+    return ArcEvent(id=event.id, name=event.name, time=event.time, end=event.end, text=event.text)
+
+
+def parent_arc(s: Session, parent_event_id: int, time: Stamp) -> ParentArc:
+    """親の出来事と、その先祖(一番上まで)と、親の子のうち一手の時刻の前・後に近いものを上限まで。"""
+    chain: list[ArcEvent] = []
+    event: Event | None = common_query.get_row(s, Event, parent_event_id)
+    while event is not None and len(chain) < constants.ACT_ARC_DEPTH_LIMIT:
+        chain.insert(0, _arc_event(event))
+        event = None if event.parent_event_id is None else s.get(Event, event.parent_event_id)
+    children = s.scalars(select(Event).where(Event.parent_event_id == parent_event_id)
+                         .order_by(Event.time, Event.id)).all()
+    limit = constants.ACT_ARC_SIBLING_LIMIT
+    return ParentArc(chain=chain, before=[_arc_event(child) for child in children if child.time < time][-limit:],
+                     after=[_arc_event(child) for child in children if child.time >= time][:limit])
+
+
 def narrator_brief(s: Session, pick: ActorPick, nudge: str | None) -> NarratorBrief:
-    """語り部の材料。動く人物と居合わせる人物が出る前後の話のプロットと、場所・時刻・居合わせる人物・近ごろの出来事。
-    人物の来歴・筋書きは読まない(語り部が動かすのは人物の外のことだけ)。"""
+    """語り部の材料。作者が置いた親の出来事の筋と、動く人物と居合わせる人物が出る前後の話のプロットと、場所・時刻・居合わせる人物・
+    近ごろの出来事。人物の来歴・筋書きは読まない(語り部が動かすのは人物の外のことだけ)。"""
     character = s.get_one(Character, pick.character_id)
     time = Stamp.parse(pick.time)
     assert time is not None
-    present = [other for other in _people_here(s, pick.location_id, time)
-               if other.id != character.id][:constants.ACT_PRESENT_LIMIT]
+    present = _present(s, pick, character.id, time)
     episodes = related_episodes(s, [character, *present], time)
-    if not episodes:
+    parent = None if pick.parent_event_id is None else parent_arc(s, pick.parent_event_id, time)
+    if not episodes and parent is None:
         return NarratorBrief(prompt={}, episodes=[])
     recent = s.scalars(common_query.events_of_location_select(
         pick.location_id, until=time, limit=constants.RECENT_EVENT_LIMIT)).all()
     prompt = NarratorSerialized(
         time=time, location_name=s.get_one(Location, pick.location_id).name, actor_name=character.name,
         present_names=[other.name for other in present], recent_events=[event.name for event in recent],
-        arcs=open_arcs(s, character.id), episodes=episodes, nudge=nudge,
+        arcs=open_arcs(s, character.id), episodes=episodes, parent=parent, nudge=nudge,
     ).model_dump()
-    return NarratorBrief(prompt=prompt, episodes=episodes)
+    return NarratorBrief(prompt=prompt, episodes=episodes, parent=parent)
 
 
 def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None,
@@ -242,8 +311,7 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
     character = s.get_one(Character, pick.character_id)
     time = Stamp.parse(pick.time)
     assert time is not None
-    present = [other for other in _people_here(s, pick.location_id, time)
-               if other.id != character.id][:constants.ACT_PRESENT_LIMIT]
+    present = _present(s, pick, character.id, time)
     known_ids = set(_related_ids(s, character, time))
     recent = s.scalars(common_query.events_of_location_select(
         pick.location_id, until=time, limit=constants.RECENT_EVENT_LIMIT)).all()
@@ -268,7 +336,8 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
 def invitable(s: Session, form: InviteForm) -> list[int]:
     """狙う段が巻きこみたいと挙げた相手のうち、目の前にいて、動いた人物が名前を知り、気力の残る人物(挙げた順、上限まで)。"""
     actor = s.get_one(Character, form.actor_id)
-    present_ids = {other.id for other in _people_here(s, form.location_id, form.time)}
+    present_ids = {other.id for other in [*_partners(s, form.partner_ids, actor.id, form.time),
+                                          *_people_here(s, form.location_id, form.time)]}
     known_ids = set(_related_ids(s, actor, form.time))
     chosen = []
     for character_id in dict.fromkeys(form.candidate_ids):
@@ -345,11 +414,12 @@ def save_act(s: Session, form: ActSaveForm) -> ActSaved:
     企ての親に結び、事柄の呼び名と、居場所の移動(今の行に end を入れて移動先の行を足す)を足す。"""
     participant_ids = [form.actor_id, *(id_ for id_ in form.participant_ids if id_ != form.actor_id)]
     characters = [s.get_one(Character, id_) for id_ in participant_ids]
-    arc_id = _arc_id(s, form)
+    # 作者が親を置いた手は、企てに結ばず親の子にする(出来事の親は一つなので)
+    arc_id = None if form.parent_event_id is not None else _arc_id(s, form)
     record = progress.save_progress(s, form.location_id, characters, form.time, form.destinations, form.outcome)
     if form.actor_id not in [link.character_id for link in record.event_characters]:
         record.event_characters.append(EventCharacter(character_id=form.actor_id))
-    record.parent_event_id = arc_id
+    record.parent_event_id = form.parent_event_id if form.parent_event_id is not None else arc_id
     s.flush()
     idea_ids = _add_ideas(s, form, set(participant_ids))
     moves = allowed_moves(form.outcome.character_moves, participant_ids,

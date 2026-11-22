@@ -18,6 +18,8 @@ from data_access_logic.episode.reading import EpisodeNeighbors, neighbor_episode
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.event.record import EventRecord
 from data_access_logic.label import clipped, label_of
+from data_access_logic.location.record import LocationRecord
+from data_access_logic.map.collect import detail_children_of
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from data_access_logic.story import scope
@@ -85,6 +87,13 @@ class EpisodeRelated(Related):
     location_character_ids: list[int] | None
     # 同じ作品の話・出来事に出てくる人物(登場人物の候補)。出てくる回数の多い順
     story_character_ids: list[int]
+
+
+class LocationRelated(Related):
+    # 詳細の子の数。1 以上なら、この場所の詳細マップへ飛べる
+    detail_children: int
+    # 詳細の場所なら、この場所を出す詳細マップの場所(親)。全体の地図には出ないので、地図へはそこから飛ぶ
+    detail_map_id: int | None
 
 
 def _preview(spec: TableSpec, row: Base) -> str:
@@ -260,6 +269,9 @@ def related_of(s: Session, record: Material) -> Related:
             location_character_ids=location_character_ids(s, record.location_id, record.start)
             if record.location_id is not None and record.start is not None else None,
             story_character_ids=story_character_ids(s, record.story_id))
+    if isinstance(record, LocationRecord):
+        return LocationRelated(detail_children=detail_children_of(s, [record.id]).get(record.id, 0),
+                               detail_map_id=record.parent_id if record.map_detail else None)
     return Related()
 
 

@@ -235,6 +235,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/maps/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detail Map
+         * @description 場所の詳細マップの元データ。画面(`/maps/detail`)が、その場所の配下の詳細の場所を描く
+         */
+        get: operations["detail_map_api_maps_detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/maps/{planet_id}.svg": {
         parameters: {
             query?: never;
@@ -496,6 +516,27 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** DetailMapResponse */
+        DetailMapResponse: {
+            location: components["schemas"]["MapLocation"];
+            planet: components["schemas"]["Planet"] | null;
+            /** Overall Id */
+            overall_id: number | null;
+            /** Places */
+            places: components["schemas"]["MapLocation"][];
+            /** Categories */
+            categories: string[];
+            /** Category Colors */
+            category_colors: {
+                [key: string]: string;
+            };
+            /** Shape Opacity */
+            shape_opacity: {
+                [key: string]: number;
+            };
+            /** Bearings */
+            bearings: string[];
+        };
         /** EpisodeCharacterLink */
         EpisodeCharacterLink: {
             /** Character Id */
@@ -620,6 +661,10 @@ export interface components {
             end: string | null;
             /** Link */
             link: string;
+            /** Detail */
+            detail: boolean;
+            /** Detail Children */
+            detail_children: number;
         };
         /** MapsResponse */
         MapsResponse: {
@@ -1523,6 +1568,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MapsResponse"];
+                };
+            };
+        };
+    };
+    detail_map_api_maps_detail_get: {
+        parameters: {
+            query: {
+                location_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailMapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

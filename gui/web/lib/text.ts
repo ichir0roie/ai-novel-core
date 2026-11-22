@@ -196,6 +196,8 @@ export const T = {
     relationGraph: { title: "Relation graph", sub: "Only relations involving this character" },
     skills: { title: "Skills", sub: "Skills this character has" },
     mapCentered: { title: "Map centered here", sub: "Map centered on this location" },
+    detailMapHere: { title: "Detail map", sub: "The detail map of the parent location, with this one selected" },
+    detailMap: { sub: "Locations inside this one (map_detail), which the full map leaves out" },
     storyRoute: { title: "Route map", sub: "Locations of the episodes, in story order" },
     episodeRoute: { title: "Route map", sub: "Locations of this story's episodes, with this one selected" },
     storyTimeline: { title: "Timeline", sub: "This story's episodes, centered on its period" },
@@ -385,6 +387,29 @@ export const T = {
     routeNone: "No episode of this story has a location on the map.",
   },
 
+  detailMap: {
+    title: "Detail map",
+    of: (name: string) => `Detail map of ${name}`,
+    up: (name: string) => `Up to ${name}`,
+    detailMap: (n: number) => `Detail map (${n})`,
+    detailMapSub: "Locations inside this one (map_detail), drawn on a map of their own",
+    noLocation: "Open this page from a location (?location=<id>).",
+    nonePlaced: "No detail location here has coordinates or a polygon. They are listed on the right.",
+    noneAtAll: "This location has no detail locations (map_detail) under it.",
+    counts: (points: number, shapes: number, unplaced: number) =>
+      `${points} with coordinates, ${shapes} with a polygon, ${unplaced} without either.`,
+    hintClick: "Click a point to show its details and the distance to the others. Double-click to open its record.",
+    places: "Detail locations",
+    noCoordinates: "no coordinates",
+    scaleUnknown: "radius unknown (no area): scale in degrees",
+    scaleM: (m: number) => `${m.toLocaleString()} m`,
+    scaleKm: (km: number) => `${km.toLocaleString()} km`,
+    scaleDeg: (deg: number) => `${deg}°`,
+    aboutM: (m: number) => `≈ ${m.toLocaleString()} m`,
+    aboutDegrees: (deg: number) => `≈ ${deg.toFixed(4)}°`,
+    sample: "Sample",
+  },
+
   timeline: {
     title: "Timeline",
     centeredOn: (at: string) => `Timeline around ${at}`,
@@ -484,12 +509,15 @@ export const T = {
     size: (total: number) => `size ${total}`,
     participants: "Participants",
     arc: "Ongoing aim (parent event)",
-    legend: "card height = duration · grey episode = another story · line = parent → child (children to the right) · the shown period follows the scroll · drag a card to move it, its top or bottom edge to change the period, or an event onto another event to make it a child · click a line to remove the link",
+    legend: "card height = duration · grey episode = another story · line = parent → child (children to the right) · the shown period follows the scroll · drag a card to move it, its top or bottom edge to change the period, or an event onto another event to make it a child · drag from an event's right dot onto another event to make that one its child, or from its left dot to make that one its parent · click a line to remove the link · changes are kept until you press Save at the bottom",
     childOf: (parent: string) => `child of ${parent}`,
+    parentOf: (child: string) => `parent of ${child}`,
     linkOf: (parent: string, child: string) => `${parent} → ${child}`,
     unlink: "Remove link",
-    linked: (child: string, parent: string) => `Made ${child} a child of ${parent}`,
-    unlinked: (child: string) => `Removed the parent of ${child}`,
+    pending: (n: number) => `${n} unsaved change${n === 1 ? "" : "s"}`,
+    save: (n: number) => `Save (${n})`,
+    discard: "Discard",
+    applied: (n: number) => `Saved ${n} change${n === 1 ? "" : "s"}`,
     counts: (events: number) => `${events} event${events === 1 ? "" : "s"}`,
     hidden: "hidden",
     confirmDiscardEpisode: "Discard the unsaved time / title / plot_text?",
@@ -926,8 +954,10 @@ export const T = {
         {
           heading: "操作",
           points: [
-            "札を掴んで上下に動かすと時刻が変わり、離したときにすぐ保存する。上端・下端を掴むと期間を変える。",
+            "札を掴んで上下に動かすと時刻が変わる。上端・下端を掴むと期間を変える。",
+            "札を動かす・親子を結ぶ・外すのは、すぐには保存しない。変えた札は赤い破線で出し、画面の下の真ん中に出る Save でまとめて保存する(Ctrl+S でも)。Discard で捨てる。保存せずに章を変える・画面を離れるときは確かめる。",
             "出来事の札を別の出来事の札に重ねて離すと、その子にする(時刻は動かさない)。親子の線を押して Remove link を押すと、親を外す。",
+            "出来事の札の左右の丸点(マウスでは札に乗せると出る)から線を引き、別の出来事の札で離すと親子を結ぶ。右の点からなら離した札を子に、左の点からなら離した札を親にする。親子が輪になる札とは結べない。",
             "話の札を押すと、時刻・タイトル・プロットを直せる。話の列の空いた所を押すと、その時刻に足す話を左の枠に出す。左の枠には、その話の期間に重なる出来事も出る。",
             "出来事の札を押すと詳細(当事者・動いた人物・巻きこまれた人物・狙いとやり取り・作った展開)が出て、重視度・名前・本文を直せる。そこから出来事や Expansions を開ける。",
             "出来事の列の空いた所を押すと、その時刻に出来事を足す。章の時期の外に足した出来事は、読み直すとこの画面には出ない。",
@@ -946,6 +976,7 @@ export const T = {
             "Fit locations は置いた場所に合わせて寄せ、Whole planet は惑星全体を出す。",
             "点を押すと、ほかの場所までの距離・方角・高さの差を一覧で出す。ダブルクリックでその行を開く。",
             "場所の行の「Map centered here」から開くと、その場所を真ん中に出す。Full map で全体に戻る。",
+            "詳細の場所(map_detail。町の中の場所・周りのエリア・人物の家など)は全体の地図に出さない。詳細の子を持つ場所を押すと、横の欄の「Detail map」から詳細マップへ移る。",
           ],
         },
         {
@@ -953,6 +984,22 @@ export const T = {
           points: [
             "作品か話から開くと、作品の話の場所を作品の順に番号を振って出す。続けて同じ場所の話は同じ番号にまとめる。",
             "別の惑星の話と、地図に置けない場所の話は、地図の下に一覧で出す。",
+          ],
+        },
+      ],
+    },
+
+    detailMap: {
+      intro: "場所の配下の詳細の場所(map_detail)を、その場所の狭い範囲の地図に置く。全体の地図には出さない場所を、ここで見る。",
+      sections: [
+        {
+          heading: "地図",
+          points: [
+            "開いた場所から、詳細の場所だけをたどって届く子孫を出す。詳細でない子(全体の地図に出る場所)より下は、その子の詳細マップに出す。",
+            "破線の面と灰色の印は、開いた場所そのもの。左下の物差しは、惑星の半径(area)から出す。半径が分からなければ度で出す。",
+            "点を押すと横に詳細と、ほかの場所までの距離・方角を出す。ダブルクリックでその行を開く。",
+            "詳細の子を持つ場所は「Detail map」で、その場所の詳細マップへ一段降りる。Up to で一段上がり、Full map で全体の地図へ戻る。",
+            "経緯度も輪郭も持たない詳細の場所は、横の一覧に親子の木で出す。",
           ],
         },
       ],

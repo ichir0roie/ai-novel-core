@@ -18,7 +18,7 @@ class RouteStop(BaseModel):
     story_id: int
     location_id: int | None
     location_name: str | None
-    # 地図に置いた場所。話の場所が経緯度も輪郭も持たなければ、持っている一番近い上位の場所
+    # 地図に置いた場所。話の場所が経緯度も輪郭も持たないか詳細の場所なら、全体の地図に出る一番近い上位の場所
     placed_id: int | None
     placed_name: str | None
     planet_id: int | None
@@ -45,7 +45,7 @@ def _placed(location: Location, locations: dict[int, Location]) -> Location | No
     current: Location | None = location
     seen: set[int] = set()
     while current is not None and current.id not in seen:
-        if current.location_planet is not None and _position(current) is not None:
+        if current.location_planet is not None and not current.map_detail and _position(current) is not None:
             return current
         seen.add(current.id)
         current = locations.get(current.parent_id) if current.parent_id is not None else None

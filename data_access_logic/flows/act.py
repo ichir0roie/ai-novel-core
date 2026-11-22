@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """人物モードの流れ(`ActCharacter`)。人物が自分の知ることから一手を決め、巻きこみたい相手がいれば言葉を交わし、
 実行の中の手をまとめて作者の目で裁いて世界に足す。
-一手の前後に、動く人物か居合わせる人物が出るプロットつきの話があれば、狙う段の前に語り部が入り、そのプロットを動機にして
-人物の外の状況を整え、裁く段にプロットと動機を渡して、プロットに逆らう記録にさせない。
+一手の前後に、動く人物か居合わせる人物が出るプロットつきの話があるか、作者が親の出来事を置いたら、狙う段の前に語り部が入り、
+親の筋とプロットを動機にして人物の外の状況を整え、裁く段に筋・プロットと動機を渡して、それに逆らう記録にさせない。
+親を置いた手の出来事は、企てでなく親の子にする。
 
 db の段は `data_access_logic/expansion/steps.py`、AI の段は `data_access_logic/expansion/actor.py`。
 狙う段と対話の手番は手ごとに順に(並列にしない)一番安いモデルで回し、裁く段は実行ごとに一度だけ強いモデルで回す。
@@ -66,7 +67,7 @@ def _summary(acted: ActedCharacter) -> str:
     if acted.frame is not None:
         lines.append(f"影響力: {acted.frame.influence} 気力: {pick.energy}")
     if acted.narration is not None:
-        lines.append(f"語り部: {', '.join(f'ep{episode.id}' for episode in acted.narration.episodes)} のプロットを動機にした")
+        lines.append(f"語り部: {acted.narration.sources()} を動機にした")
     return "\n".join(lines)
 
 
@@ -80,16 +81,16 @@ def _prompt_text(intent: IntentDraft, dialogue: list[DialogueTurn], narration: N
 
 
 def _narration(ai: AIClient, pick: ActorPick, nudge: str | None) -> Narration | None:
-    """一手の前後に関わる話があれば、語り部にプロットを動機にして場を整えさせる。語り部の答えが得られなくても、
-    前後の話のプロットは裁く段に渡す(プロットに逆らわせない守りは外さない)。"""
+    """作者が置いた親の出来事か、一手の前後に関わる話があれば、語り部に筋とプロットを動機にして場を整えさせる。
+    語り部の答えが得られなくても、筋とプロットは裁く段に渡す(逆らわせない守りは外さない)。"""
     brief = call(expansion_steps.narrator_brief, expansion_steps.NarratorBriefForm(pick=pick, nudge=nudge))
-    if not brief.episodes:
+    if not brief.episodes and brief.parent is None:
         return None
     draft = actor.narration_draft(ai, brief)
     if draft is None:
-        return Narration(episodes=brief.episodes)
-    return Narration(episodes=brief.episodes, motivation=draft.motivation, narration=draft.narration,
-                     request=draft.request)
+        return Narration(episodes=brief.episodes, parent=brief.parent)
+    return Narration(episodes=brief.episodes, parent=brief.parent, motivation=draft.motivation,
+                     narration=draft.narration, request=draft.request)
 
 
 def _dialogue(ai: AIClient, pick: ActorPick, intent: IntentDraft, invited_ids: list[int],
@@ -140,7 +141,8 @@ def _plan(ai: AIClient, rng: random.Random, pick: ActorPick, expansion_id: int, 
         raise ValueError("人物の一手が得られなかった")
     invited_ids = call(expansion_steps.invitable, InviteForm(
         actor_id=pick.character_id, time=time, location_id=pick.location_id,
-        candidate_ids=[invite.character_id for invite in intent.invites], exclude_ids=used_ids)) if intent.invites else []
+        candidate_ids=[invite.character_id for invite in intent.invites], exclude_ids=used_ids,
+        partner_ids=pick.partner_ids)) if intent.invites else []
     dialogue = _dialogue(ai, pick, intent, invited_ids, narration) if invited_ids else []
     call(expansion_steps.note_prompt, expansion_steps.PromptForm(
         expansion_id=expansion_id, prompt=_prompt_text(intent, dialogue, narration)))
@@ -175,7 +177,7 @@ def _save(ai: AIClient, rng: random.Random, plan: ActPlan, outcome: ActOutcomeDr
     outcome = budget.clamp(outcome, request.frame, pick.character_id)
     saved = call(expansion_steps.save_act, ActSaveForm(
         actor_id=pick.character_id, time=time, location_id=pick.location_id, participant_ids=plan.present_ids,
-        destinations=request.destinations, intent=plan.intent, outcome=outcome))
+        destinations=request.destinations, intent=plan.intent, outcome=outcome, parent_event_id=pick.parent_event_id))
     created = []
     for draft in outcome.new_characters:
         record = character_flow.generate(ai, rng, pick.location_id, time, draft.person, CharacterForm(text=draft.description))
@@ -205,9 +207,11 @@ def _failed(run: ActRun, expansion_id: int | None, pick: ActorPick | None, error
 def act_character(
     character_id: int | None = None, time: Stamp | str | None = None, nudge: str | None = None,
     seed: int | None = None, act_count: int = 1, ai: AIClient = ai_client,
+    parent_event_id: int | None = None, partner_ids: list[int] | None = None,
 ) -> ActRun:
     """`ActCharacter` に当たる。`character_id` は一手目の人物で、二手目からは入口が引く(同じ実行で同じ人物は二度動かない)。
-    手ごとに失敗を記録して次へ進む(失敗した手の展開は failed で残り、足せた行は展開ごと取り消せる)。"""
+    手ごとに失敗を記録して次へ進む(失敗した手の展開は failed で残り、足せた行は展開ごと取り消せる)。
+    `parent_event_id`・`partner_ids` は一手目にだけ効く(二手目からは人物を引くので、作者の指定の外になる)。"""
     if not 1 <= act_count <= constants.ACT_RUN_LIMIT:
         raise ValueError(f"act_count は 1〜{constants.ACT_RUN_LIMIT}")
     rng = random.Random(seed)
@@ -219,7 +223,9 @@ def act_character(
         try:
             pick = call(expansion_steps.pick_actor, expansion_steps.PickForm(
                 character_id=character_id if index == 0 else None, time=Stamp.parse(time),
-                seed=rng.randrange(2**31), exclude_ids=used_ids, cast_of=character_id))
+                seed=rng.randrange(2**31), exclude_ids=used_ids, cast_of=character_id,
+                parent_event_id=parent_event_id if index == 0 else None,
+                partner_ids=(partner_ids or []) if index == 0 else []))
         except ValueError as error:
             _failed(run, None, None, error)
             continue

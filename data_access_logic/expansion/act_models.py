@@ -36,6 +36,10 @@ class ActorPick(BaseModel):
     location_id: int
     energy: float = 0
     influence: str = "並"
+    # 作者が置いた親の出来事。渡せば、一手の出来事をその子にし、語り部が親の筋をもとに場を整える
+    parent_event_id: int | None = None
+    # 作者が居合わせさせる人物。住まいを問わず、動く人物の目の前にいる
+    partner_ids: list[int] = []
 
 
 class ImpactFrame(BaseModel):
@@ -148,6 +152,36 @@ def _episodes_for_prompt(episodes: list[NarratedEpisode]) -> list[dict[str, Any]
              "本文": "あり" if episode.written else "まだ無い", "プロット": episode.plot_text} for episode in episodes]
 
 
+class ArcEvent(Material):
+    id: int
+    name: str
+    time: Timestamp
+    end: Timestamp | None = None
+    text: str
+
+
+class ParentArc(BaseModel):
+    """作者が置いた親の出来事の筋。語り部が動機にし、裁く段が逆らわないように読む。"""
+
+    # 一番上の先祖から親までの順
+    chain: list[ArcEvent]
+    # 同じ親の子のうち、一手の時刻より前・後に置かれた出来事(時刻の順)
+    before: list[ArcEvent] = []
+    after: list[ArcEvent] = []
+
+    @property
+    def parent(self) -> ArcEvent:
+        return self.chain[-1]
+
+    def for_prompt(self) -> dict[str, Any]:
+        def rows(events: list[ArcEvent]) -> list[dict[str, Any]]:
+            return [{"名前": event.name, "時刻": str(event.time), "終わり": None if event.end is None else str(event.end),
+                     "本文": event.text} for event in events]
+        return {"親の出来事と、その上の出来事(大きい順)": rows(self.chain),
+                "同じ親の下で、一手より前に置かれた出来事": rows(self.before),
+                "同じ親の下で、一手より後に置かれた出来事": rows(self.after)}
+
+
 class NarratorSerialized(Material):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。語り部は作者の側なので、居合わせる人物を名前で読む。
     人物の来歴・筋書きは渡さない(人物の外のことだけを動かす)。"""
@@ -159,11 +193,13 @@ class NarratorSerialized(Material):
     recent_events: list[str]
     arcs: list[OpenArc]
     episodes: list[NarratedEpisode]
+    parent: ParentArc | None = None
     nudge: str | None = None
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
+            "作者が置いた筋": None if self.parent is None else self.parent.for_prompt(),
             "一手の時刻": str(self.time),
             # 人物が「いま」で受け取るのと同じ時間帯(一日の長さが違う暦では、時の数と昼夜がずれる)
             "一手の時間帯": TimeSense.current().part_of(self.time),
@@ -178,10 +214,11 @@ class NarratorSerialized(Material):
 
 
 class NarratorBrief(BaseModel):
-    """語り部の材料(段の出力)。関わる話が無ければ `episodes` は空で、語り部は呼ばない。"""
+    """語り部の材料(段の出力)。関わる話も親の出来事も無ければ、語り部は呼ばない。"""
 
     prompt: dict[str, Any]
     episodes: list[NarratedEpisode]
+    parent: ParentArc | None = None
 
 
 class NarrationDraft(BaseModel):
@@ -189,8 +226,8 @@ class NarrationDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     motivation: str = Field(
-        description="語り部の動機。前後の話のプロットに逆らわないために、この一手のあいだに起きてほしいこと・起きてはならないこと。"
-                    "人物には渡らず、一手を裁く作者だけが読む")
+        description="語り部の動機。作者が置いた筋と前後の話のプロットに沿わせるために、この一手のあいだに起きてほしいこと・"
+                    "起きてはならないこと。人物には渡らず、一手を裁く作者だけが読む")
     narration: str | None = Field(
         description="動く人物の目の前で起こすこと(人の出入り・用事・知らせ・天気・道・物の在り処)。人物が見聞きできることだけを三人称で。"
                     "起こさないなら null")
@@ -199,16 +236,20 @@ class NarrationDraft(BaseModel):
 
 
 class Narration(BaseModel):
-    """語り部が一手に添えたもの。語り部の答えが得られなければ、動機は空のまま前後の話のプロットだけを裁く段に渡す。"""
+    """語り部が一手に添えたもの。語り部の答えが得られなければ、動機は空のまま、作者が置いた筋と前後の話のプロットだけを裁く段に渡す。"""
 
     episodes: list[NarratedEpisode]
+    parent: ParentArc | None = None
     motivation: str | None = None
     narration: str | None = None
     request: str | None = None
 
+    def sources(self) -> str:
+        return "・".join([*([] if self.parent is None else [f"ev{self.parent.parent.id}「{self.parent.parent.name}」"]),
+                          *(f"ep{episode.id}「{episode.title}」" for episode in self.episodes)])
+
     def as_text(self) -> str:
-        episodes = "・".join(f"ep{episode.id}「{episode.title}」" for episode in self.episodes)
-        lines = [f"語り部の動機({episodes}): {self.motivation or '(得られなかった。プロットだけを裁く段に渡した)'}"]
+        lines = [f"語り部の動機({self.sources()}): {self.motivation or '(得られなかった。筋とプロットだけを裁く段に渡した)'}"]
         if self.narration:
             lines.append(f"語り部の語り: {self.narration}")
         if self.request:
@@ -363,6 +404,8 @@ class InviteForm(BaseModel):
     candidate_ids: list[int]
     # この実行でもう動いた・巻きこまれた人物(同じ実行の中では、まだ記録に無いので気力で数えられない)
     exclude_ids: list[int] = []
+    # 作者が居合わせさせた人物(`ActorPick.partner_ids`)
+    partner_ids: list[int] = []
 
 
 class DialogueTurnDraft(BaseModel):
@@ -465,6 +508,7 @@ class OutcomeRequestSerialized(OutcomeRequest):
         narration = self.narration
         return {
             "語り部の動機": None if narration is None else {
+                "作者が置いた筋": None if narration.parent is None else narration.parent.for_prompt(),
                 "前後の話(時刻の順)": _episodes_for_prompt(narration.episodes),
                 "動機": narration.motivation,
                 "人物の目の前で起こしたこと": narration.narration,
@@ -514,6 +558,8 @@ class ActSaveForm(BaseModel):
     destinations: list[LocationMaterial]
     intent: IntentDraft
     outcome: ActOutcomeDraft
+    # 作者が置いた親の出来事。渡せば、一手の出来事を企てでなくその子にする
+    parent_event_id: int | None = None
 
 
 class ActSaved(BaseModel):

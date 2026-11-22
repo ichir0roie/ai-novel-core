@@ -129,7 +129,8 @@ export const distanceKm = (radiusKm: number | null | undefined, deg: number) => 
 export const bearingName = (bearings: string[], d: number) => bearings[Math.floor((d + 11.25) / 22.5) % 16];
 
 export function distanceText(km: number | null, deg: number): string {
-  if (km == null) return T.maps.aboutDegrees(deg);
+  if (km == null) return deg >= 0.1 ? T.maps.aboutDegrees(deg) : T.detailMap.aboutDegrees(deg);
+  if (km < 1) return T.detailMap.aboutM(Math.round(km * 1000));
   return T.maps.aboutKm(km < 100 ? Math.round(km) : Math.round(km / 10) * 10);
 }
 export const altText = (alt: number | null | undefined) => (alt == null ? "" : ` (${alt >= 0 ? "+" : ""}${Math.round(alt).toLocaleString()} m)`);
@@ -137,4 +138,61 @@ export function altDiffText(d: number | null): string {
   if (d == null) return T.maps.altDiffUnknown;
   if (Math.abs(d) < 1) return T.maps.sameAltitude;
   return T.maps.altDiff(d > 0, Math.round(Math.abs(d)));
+}
+
+const DETAIL_MIN_SPAN = 0.002;
+const DETAIL_PAD = 0.25;
+const DETAIL_WIDTH = 1000;
+const DETAIL_HEIGHT = 700;
+
+export type DetailFrame = {
+  lonMin: number;
+  lonMax: number;
+  latMin: number;
+  latMax: number;
+  /** 緯度 1 度の画素数 */
+  scale: number;
+  width: number;
+  height: number;
+  x: (lon: number) => number;
+  y: (lat: number) => number;
+};
+
+/** 詳細マップの枠。町の中ほどの狭い範囲なので、度の格子に揃えず、経度を真ん中の緯度の cos で縮めて形と物差しを保つ。 */
+export function detailFrame(items: LonLat[], zoom: number): DetailFrame | null {
+  if (!items.length) return null;
+  const lons = items.map((p) => p.lon);
+  const lats = items.map((p) => p.lat);
+  const kx = Math.cos(rad((Math.min(...lats) + Math.max(...lats)) / 2));
+  const half = (min: number, max: number) => (Math.max(max - min, DETAIL_MIN_SPAN) * (1 + 2 * DETAIL_PAD)) / 2;
+  const midLon = (Math.min(...lons) + Math.max(...lons)) / 2, midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const halfLat = half(Math.min(...lats), Math.max(...lats));
+  const halfLon = half(Math.min(...lons) * kx, Math.max(...lons) * kx) / kx;
+  const box = { lonMin: midLon - halfLon, lonMax: midLon + halfLon, latMin: midLat - halfLat, latMax: midLat + halfLat };
+  const scale = Math.min(DETAIL_WIDTH / ((box.lonMax - box.lonMin) * kx), DETAIL_HEIGHT / (box.latMax - box.latMin)) * zoom;
+  return {
+    ...box,
+    scale,
+    width: (box.lonMax - box.lonMin) * kx * scale,
+    height: (box.latMax - box.latMin) * scale,
+    x: (lon) => ML + (lon - box.lonMin) * kx * scale,
+    y: (lat) => MT + (box.latMax - lat) * scale,
+  };
+}
+
+/** 1・2・5 の刻みで、`target` を超えない一番大きい値 */
+function niceStep(target: number): number {
+  const base = 10 ** Math.floor(Math.log10(target));
+  return [5, 2, 1].map((k) => k * base).find((v) => v <= target) ?? base;
+}
+
+/** 物差しの長さ(画素)と、その長さが表す m。星の半径が分からなければ度で返す。 */
+export function scaleBar(frame: DetailFrame, radiusKm: number | null | undefined, targetPx = 200): { px: number; meters: number | null; degrees: number } {
+  if (radiusKm == null) {
+    const degrees = niceStep(targetPx / frame.scale);
+    return { px: degrees * frame.scale, meters: null, degrees };
+  }
+  const metersPerDegree = rad(1) * radiusKm * 1000;
+  const meters = niceStep((targetPx / frame.scale) * metersPerDegree);
+  return { px: (meters / metersPerDegree) * frame.scale, meters, degrees: meters / metersPerDegree };
 }

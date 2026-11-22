@@ -39,6 +39,7 @@ class LocationCreateForm(_LocationColumns):
     kind: str = Field(min_length=1)
     text: str = ""
     active_random_generation: bool = False
+    map_detail: bool = False
     # 来歴(起きた年ごとの行)
     histories: list[LocationHistoryRow] = []
 
@@ -49,6 +50,7 @@ class LocationUpdateForm(_LocationColumns):
     kind: str | None = None
     text: str | None = None
     active_random_generation: bool | None = None
+    map_detail: bool | None = None
     # 渡せば来歴の行をまるごと置き換える
     histories: list[LocationHistoryRow] | None = None
 

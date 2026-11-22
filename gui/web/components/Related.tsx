@@ -22,7 +22,12 @@ export default function Related({
 }: { related: Record<string, unknown>; owner?: Owner } & Partial<EpisodeCharactersProps>) {
   const episodes = related.episodes as EpisodeLink[] | undefined;
   const context = related.context as Parameters<typeof EpisodeContext>[0]["context"] | undefined;
+  // 詳細の場所は全体の地図に出ないので、親の詳細マップで選んだ形で開く
+  const detailMapId = related.detail_map_id as number | null | undefined;
+  const detailChildren = (related.detail_children as number | undefined) ?? 0;
   const graph = owner?.table === "character" ? { href: `/relations?character=${owner.id}`, ...T.related.relationGraph }
+    : owner?.table === "location" && detailMapId != null
+      ? { href: `/maps/detail?location=${detailMapId}&focus=${owner.id}`, ...T.related.detailMapHere }
     : owner?.table === "location" ? { href: `/maps?location=${owner.id}`, ...T.related.mapCentered }
     : owner?.table === "story" ? { href: `/maps?story=${owner.id}`, ...T.related.storyRoute }
     : owner?.table === "episode" && episodeStoryId != null
@@ -38,6 +43,11 @@ export default function Related({
       {(episodes || graph) && (
         <div className="panel related jumps">
           {graph && <Link href={graph.href} className="button-link" title={graph.sub}>{graph.title}</Link>}
+          {owner?.table === "location" && detailChildren > 0 && (
+            <Link href={`/maps/detail?location=${owner.id}`} className="button-link" title={T.related.detailMap.sub}>
+              {T.detailMap.detailMap(detailChildren)}
+            </Link>
+          )}
           {skills && (
             <button type="button" title={T.related.skills.sub} onClick={() => setSkillsOpen(true)}>{T.related.skills.title}</button>
           )}

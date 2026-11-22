@@ -5,7 +5,6 @@ from __future__ import annotations
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ai.instructions.style import layout_novel_text
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
 from data_access_logic.episode import brief, outcomes
 from data_access_logic.episode.outcomes import AppliedOutcomes, OutcomesForm, ReflectMaterial
@@ -49,8 +48,6 @@ def commit_episode(s: Session, form: EpisodeCommitForm) -> EpisodeRecord:
     else:
         record = common_query.get_row(s, Episode, form.id)
     form.write_changes_to(record)
-    if form.main_text is not None:
-        record.main_text = layout_novel_text(form.main_text)
     CommitEntrypoint.finalize(s, record)
     # 渡されなければ既存の登場人物はそのまま
     if form.character_ids is not None:

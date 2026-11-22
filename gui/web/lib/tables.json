@@ -1979,6 +1979,21 @@
           "comment": "輪郭。GeoJSON の Polygon(`coordinates` は [経度, 緯度] の環の並び、先頭が外周で以降は穴)。地図では面として描く。経緯度が無くても持てる"
         },
         {
+          "key": "map_detail",
+          "type": "boolean",
+          "nullable": false,
+          "required": false,
+          "section": false,
+          "markdown": true,
+          "side": false,
+          "choices": null,
+          "default": null,
+          "references": null,
+          "readonly": false,
+          "create_only": false,
+          "comment": "詳細の場所か。町の中の場所・周りのエリア・人物の家など。全体の地図に出さず、詳細マップ(親の場所から開く)にだけ出す"
+        },
+        {
           "key": "area",
           "type": "number",
           "nullable": true,

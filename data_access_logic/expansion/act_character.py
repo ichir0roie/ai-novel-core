@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """人物モード。人物が自分から一手を打ち、その結果を世界に足す(`.docs/world-expansion.md` の「人物モード」)。
 
-    ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1, story_id=None).show()
+    ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1, story_id=None,
+                 parent_event_id=None, partner_ids=None).show()
 
 一回の実行で `act_count` 手(`constants.ACT_RUN_LIMIT` まで)を、手ごとに順に組み、最後にまとめて一度だけ裁く。
 `character_id` は一手目の人物。省けば(二手目からも)、本文のある最新の話(一手目を名指ししたら、その人物が登場した最新の話)の
@@ -18,6 +19,10 @@
 現れた人物・対象と、動いた人物との関係、居場所の移動(今の行に end を入れ、移動先の行を足す)。既にある行は消さず、end のほかは直さない。
 一手ごとに展開(mode=character)を一つ立てて記録するので、`RevertExpansion` で一手ずつ取り消せる。`nudge` は作者からの軽い方向づけ。
 `story_id` は `time` を読む暦の作品(人物を渡さずに `time` を渡すとき)。一手ごとの時刻は、引いた人物の暦で数える。
+`parent_event_id` は作者が置いた親の出来事で、渡すと一手目の人物(`character_id` 必須)を親の期間の中で動かし、`time` を省けば
+人物が最後に出た時刻から日を空けた時刻を親の始まりより後に寄せる。語り部が親とその先祖の本文、親の子のうち一手の前後に置かれた
+出来事をもとに場を整え、裁く段はそれに逆らわない記録にし、一手の出来事を企てでなく親の子にする。`partner_ids` は一手目の人物の
+目の前に居合わせさせる人物で、住まいを問わず居合わせる人物の頭に入り、巻きこめる相手になる。
 """
 from __future__ import annotations
 
@@ -29,7 +34,8 @@ from db.stamp import Stamp
 
 class ActCharacter(Entrypoint):
     def __init__(self, character_id: int | None = None, time: Stamp | str | None = None, nudge: str | None = None,
-                 seed: int | None = None, act_count: int = 1, story_id: int | None = None):
+                 seed: int | None = None, act_count: int = 1, story_id: int | None = None,
+                 parent_event_id: int | None = None, partner_ids: list[int] | None = None):
         # 引数の時刻を読む暦を決めるだけ(`gui/api/interface.call` が引数から作品を立てる)
         self.story_id = story_id
         self.character_id = character_id
@@ -37,9 +43,12 @@ class ActCharacter(Entrypoint):
         self.nudge = nudge
         self.seed = seed
         self.act_count = act_count
+        self.parent_event_id = parent_event_id
+        self.partner_ids = partner_ids
 
     def result(self) -> ActRun:
-        return act.act_character(self.character_id, self.time, self.nudge, self.seed, self.act_count)
+        return act.act_character(self.character_id, self.time, self.nudge, self.seed, self.act_count,
+                                 parent_event_id=self.parent_event_id, partner_ids=self.partner_ids)
 
     def run(self) -> dict:
         # 手ごとに引いた人物の暦が違いうるので、手の時刻はその手の暦で書き出す

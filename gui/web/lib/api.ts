@@ -174,13 +174,19 @@ export const runBatch = (requests: { entrance: string; args: Rec }[]) =>
 export const updateStories = (stories: Rec[]) =>
   runBatch(stories.map((story) => ({ entrance: "story.update_story.UpdateStory", args: { story } })));
 
+const episodeRequests = (episodes: Rec[]) =>
+  episodes.map((episode) => ({ entrance: "episode.commit_episode.CommitEpisode", args: { episode } }));
+const eventRequests = (events: Rec[]) => events.map((event) => ({ entrance: "event.update_event.UpdateEvent", args: { event } }));
+
 /** 話の時刻・作品をまとめて直す。一件ずつは `episode.commit_episode.CommitEpisode`(確定のあとの AI は回さない)。 */
-export const updateEpisodes = (episodes: Rec[]) =>
-  runBatch(episodes.map((episode) => ({ entrance: "episode.commit_episode.CommitEpisode", args: { episode } })));
+export const updateEpisodes = (episodes: Rec[]) => runBatch(episodeRequests(episodes));
 
 /** 出来事の時刻・親をまとめて直す。一件ずつは `event.update_event.UpdateEvent`(要約・ミームの AI は回さない)。 */
-export const updateEvents = (events: Rec[]) =>
-  runBatch(events.map((event) => ({ entrance: "event.update_event.UpdateEvent", args: { event } })));
+export const updateEvents = (events: Rec[]) => runBatch(eventRequests(events));
+
+/** 話と出来事を、一つのトランザクションでまとめて直す(`updateEpisodes`・`updateEvents` と同じ入口) */
+export const updateEpisodesAndEvents = (episodes: Rec[], events: Rec[]) =>
+  runBatch([...episodeRequests(episodes), ...eventRequests(events)]);
 
 /** 出来事を子孫の出来事ごと消す。`event.delete_event.DeleteEvent` を呼ぶ。 */
 export const deleteEventWithChildren = (eventId: number) =>
@@ -273,6 +279,7 @@ export const updateKnowledge = async (knowledge: {
 export type MapsResponse = components["schemas"]["MapsResponse"];
 export type PlanetMap = components["schemas"]["PlanetMap"];
 export type MapLocation = components["schemas"]["MapLocation"];
+export type DetailMapResponse = components["schemas"]["DetailMapResponse"];
 export type StoryRoute = components["schemas"]["StoryRoute"];
 export type RouteStop = components["schemas"]["RouteStop"];
 export type RelationsResponse = components["schemas"]["RelationsResponse"];
@@ -280,6 +287,7 @@ export type RelationCharacter = components["schemas"]["RelationCharacter"];
 export type Relation = components["schemas"]["Relation"];
 
 export const getMaps = () => api<MapsResponse>("/api/maps");
+export const getDetailMap = (locationId: number) => api<DetailMapResponse>(`/api/maps/detail?location_id=${locationId}`);
 export const getStoryRoute = (storyId: number) => api<StoryRoute>(`/api/story_route?story_id=${storyId}`);
 export const getRelations = () => api<RelationsResponse>("/api/relations");
 

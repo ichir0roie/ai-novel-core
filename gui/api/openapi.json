@@ -648,6 +648,46 @@
         }
       }
     },
+    "/api/maps/detail": {
+      "get": {
+        "summary": "Detail Map",
+        "description": "場所の詳細マップの元データ。画面(`/maps/detail`)が、その場所の配下の詳細の場所を描く",
+        "operationId": "detail_map_api_maps_detail_get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailMapResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/maps/{planet_id}.svg": {
       "get": {
         "summary": "Map Svg",
@@ -1235,6 +1275,81 @@
         ],
         "title": "CharacterLocationsResponse"
       },
+      "DetailMapResponse": {
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/MapLocation"
+          },
+          "planet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Planet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overall_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall Id"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/MapLocation"
+            },
+            "type": "array",
+            "title": "Places"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "category_colors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Category Colors"
+          },
+          "shape_opacity": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Shape Opacity"
+          },
+          "bearings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bearings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "location",
+          "planet",
+          "overall_id",
+          "places",
+          "categories",
+          "category_colors",
+          "shape_opacity",
+          "bearings"
+        ],
+        "title": "DetailMapResponse"
+      },
       "EpisodeCharacterLink": {
         "properties": {
           "character_id": {
@@ -1652,6 +1767,14 @@
           "link": {
             "type": "string",
             "title": "Link"
+          },
+          "detail": {
+            "type": "boolean",
+            "title": "Detail"
+          },
+          "detail_children": {
+            "type": "integer",
+            "title": "Detail Children"
           }
         },
         "type": "object",
@@ -1673,7 +1796,9 @@
           "sample_era",
           "start",
           "end",
-          "link"
+          "link",
+          "detail",
+          "detail_children"
         ],
         "title": "MapLocation"
       },
