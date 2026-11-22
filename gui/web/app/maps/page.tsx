@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Marker from "@/components/MapMarker";
 import NameId from "@/components/NameId";
 import Tooltip, { useTooltip } from "@/components/Tooltip";
 import { getMaps, getStoryRoute, type MapLocation, type MapsResponse, type StoryRoute } from "@/lib/api";
@@ -19,14 +20,6 @@ import { T } from "@/lib/text";
 type Point = MapLocation & { lon: number; lat: number };
 type Shape = MapLocation & { polygon: Polygon };
 type PlacedVisit = Visit & { lon: number; lat: number };
-
-function Marker({ category, x, y, r, color, strokeWidth = 1 }: { category: string; x: number; y: number; r: number; color: string; strokeWidth?: number }) {
-  const common = { fill: color, stroke: "#fff", strokeWidth };
-  if (category === "国") return <circle cx={x} cy={y} r={r} {...common} />;
-  if (category === "都市") return <rect x={x - r} y={y - r} width={2 * r} height={2 * r} {...common} />;
-  if (category === "自然") return <path d={`M${x},${y - r * 1.2} L${x + r * 1.1},${y + r * 0.8} L${x - r * 1.1},${y + r * 0.8} Z`} {...common} />;
-  return <path d={`M${x},${y - r} L${x + r},${y} L${x},${y + r} L${x - r},${y} Z`} {...common} />;
-}
 
 export default function MapsPage() {
   const openPage = useOpenPage();
@@ -488,6 +481,13 @@ export default function MapsPage() {
                     {T.openRecord}
                   </button>
                 </div>
+                {originPoint.detail_children > 0 && (
+                  <p className="viz-jump">
+                    <Link href={`/maps/detail?location=${originPoint.id}`} className="button-link" title={T.detailMap.detailMapSub}>
+                      {T.detailMap.detailMap(originPoint.detail_children)}
+                    </Link>
+                  </p>
+                )}
                 <dl>
                   <dt>{T.maps.coordinates}</dt>
                   <dd>{T.maps.lonLatAlt(originPoint.lon, originPoint.lat, originPoint.alt)}</dd>

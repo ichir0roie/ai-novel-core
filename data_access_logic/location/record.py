@@ -42,6 +42,7 @@ class LocationRecord(Material):
     start: Timestamp | None = None
     end: Timestamp | None = None
     active_random_generation: bool
+    map_detail: bool = False
     histories: list[LocationHistoryRow]
     text: str
 

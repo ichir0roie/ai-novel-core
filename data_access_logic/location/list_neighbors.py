@@ -53,7 +53,10 @@ class ListNeighbors(SessionEntrypoint):
             raise ValueError(f"{origin.name}(id={origin.id})は星(location_planet)が決まっていない")
 
         planet = planet_of(planet_row)
-        locations = [location for location in s.scalars(common_query.locations_on_planet_select(planet.id)).all()
+        # 詳細の場所(町の中の場所・人物の家など)は、詳細の場所から見るときだけ数える。町から見ると、町の中の場所が
+        # 近い順の頭を埋め、隣の町が limit から落ちる
+        select_on_planet = common_query.locations_on_planet_select(planet.id, include_detail=origin.map_detail)
+        locations = [location for location in s.scalars(select_on_planet).all()
                      if location.id != origin.id and (self.kind is None or location.kind == self.kind)]
         parents = parents_of(s, [origin, *locations])
         neighbors = [self._neighbor(origin, location, planet.radius_km, parents) for location in locations]
@@ -73,7 +76,8 @@ class ListNeighbors(SessionEntrypoint):
         diff = (float(location.location_altitude) - float(origin.location_altitude)
                 if location.location_altitude is not None and origin.location_altitude is not None else None)
         point = map_location_of(location, parents)
-        same_place = deg < 0.01
+        # 詳細の場所どうしは 0.001〜0.02 度ほどしか離れないので、全体の地図の「同じ経緯度」の幅では皆が重なる
+        same_place = deg < (1e-5 if origin.map_detail else 0.01)
         direction = "同じ経緯度" if same_place else bearing_name(bearing)
         parent = f"・{point.parent_name}" if point.parent_name else ""
         where = direction if same_place else f"{direction} {distance_text(km, deg)}"

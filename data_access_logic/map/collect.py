@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""星ごとの地図の元データ。GUI の地図(`/maps`)と、場所の近く(`ListNeighbors`)が使う。"""
+"""星ごとの地図の元データ。GUI の地図(`/maps`)と、場所の近く(`ListNeighbors`)が使う。
+詳細の場所(`Location.map_detail`)は全体の地図に出さず、親の場所の詳細マップ(`data_access_logic/map/detail.py`)に出す。"""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -7,7 +8,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from data_access_logic.map.category import category_of
@@ -43,6 +44,9 @@ class MapLocation(BaseModel):
     start: str | None
     end: str | None
     link: str
+    detail: bool
+    # 詳細の子の数。1 以上なら、この場所の詳細マップを開ける
+    detail_children: int
 
 
 class PlanetMap(BaseModel):
@@ -69,7 +73,20 @@ def parents_of(s: Session, locations: Iterable[Location]) -> dict[int, Location]
     return {parent.id: parent for parent in s.scalars(select(Location).where(Location.id.in_(ids)))}
 
 
-def map_location_of(location: Location, parents: dict[int, Location]) -> MapLocation:
+def detail_children_of(s: Session, location_ids: Iterable[int]) -> dict[int, int]:
+    """場所ごとの詳細の子の数。子の無い場所は入らない"""
+    ids = list(set(location_ids))
+    if not ids:
+        return {}
+    rows = s.execute(
+        select(Location.parent_id, func.count())
+        .where(Location.parent_id.in_(ids), Location.map_detail.is_(True))
+        .group_by(Location.parent_id)).all()
+    return {parent_id: count for parent_id, count in rows if parent_id is not None}
+
+
+def map_location_of(location: Location, parents: dict[int, Location],
+                    detail_children: dict[int, int] | None = None) -> MapLocation:
     parent = parents.get(location.parent_id) if location.parent_id is not None else None
     return MapLocation(
         id=location.id, name=location.name, kind=location.kind, category=category_of(location.kind),
@@ -85,6 +102,8 @@ def map_location_of(location: Location, parents: dict[int, Location]) -> MapLoca
         start=str(location.start) if location.start else None,
         end=str(location.end) if location.end else None,
         link=f"/tables/location/{location.id}",
+        detail=location.map_detail,
+        detail_children=(detail_children or {}).get(location.id, 0),
     )
 
 
@@ -95,12 +114,14 @@ def planet_maps(s: Session) -> list[PlanetMap]:
     for location in mapped:
         on_planet[location.location_planet].append(location)
     parents = parents_of(s, mapped)
+    detail_children = detail_children_of(s, (location.id for location in mapped))
     result = []
     for planet in s.scalars(common_query.planets_select()).all():
         locations = on_planet.get(planet.id, [])
-        points = [map_location_of(location, parents) for location in locations
+        points = [map_location_of(location, parents, detail_children) for location in locations
                   if location.location_longitude is not None and location.location_latitude is not None]
-        shapes = [map_location_of(location, parents) for location in locations if location.polygon is not None]
+        shapes = [map_location_of(location, parents, detail_children) for location in locations
+                  if location.polygon is not None]
         if not points and not shapes:
             continue
         result.append(PlanetMap(planet=planet_of(planet), points=points, shapes=shapes))

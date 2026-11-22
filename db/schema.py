@@ -173,6 +173,10 @@ class Location(OriginMixin, TextBase):
     polygon: Mapped[dict | None] = mapped_column(
         PolygonType, comment="輪郭。GeoJSON の Polygon(`coordinates` は [経度, 緯度] の環の並び、"
         "先頭が外周で以降は穴)。地図では面として描く。経緯度が無くても持てる", sort_order=280)
+    map_detail: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+        comment="詳細の場所か。町の中の場所・周りのエリア・人物の家など。全体の地図に出さず、"
+        "詳細マップ(親の場所から開く)にだけ出す", sort_order=285)
 
     area: Mapped[float | None] = mapped_column(
         DECIMAL, comment="広さ。単位は決めていないが、親と子で揃える。"

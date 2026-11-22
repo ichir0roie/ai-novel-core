@@ -46,7 +46,9 @@ def bearing_name(degrees: float) -> str:
 
 def distance_text(km: float | None, deg: float) -> str:
     if km is None:
-        return f"約{deg:.1f}度"
+        return f"約{deg:.1f}度" if deg >= 0.1 else f"約{deg:.4f}度"
+    if km < 1:
+        return f"約{round(km * 1000):,} m"
     if km < 100:
         return f"約{round(km):,} km"
     return f"約{round(km, -1):,.0f} km"

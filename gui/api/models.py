@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from data_access_logic.character.relation_graph import RelationGraph
 from data_access_logic.map.collect import PlanetMap
+from data_access_logic.map.detail import DetailMap
 
 ColumnType = Literal["integer", "number", "boolean", "string", "stamp", "json", "id_list"]
 # 参照先の名前。{列名: {id: 名前}}
@@ -112,6 +113,13 @@ class MapsResponse(BaseModel):
     category_colors: dict[str, str]
     shape_opacity: dict[str, float]
     # 方角の名(北から時計回りに 16 方位)
+    bearings: list[str]
+
+
+class DetailMapResponse(DetailMap):
+    categories: list[str]
+    category_colors: dict[str, str]
+    shape_opacity: dict[str, float]
     bearings: list[str]
 
 

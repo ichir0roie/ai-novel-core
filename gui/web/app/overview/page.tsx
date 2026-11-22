@@ -24,7 +24,7 @@ import {
   getOverview,
   getRecord,
   updateEpisodes,
-  updateEvents,
+  updateEpisodesAndEvents,
   updateRecord,
   type OverviewEpisode,
   type OverviewEvent,
@@ -93,8 +93,9 @@ type Placed = { episode: OverviewEpisode; y: number; height: number; lane: numbe
 type Packed = { placed: Placed[]; lanes: number };
 type TimeRange = { start: string; end: string | null };
 // 掴んだ札。mode は、move が札ごと動かす、start・end が上端・下端を動かして期間を変える。
-// over は重ねた先の出来事(落とすとその子にする)、blocked は重ねても親にできない出来事(掴んだ出来事とその子孫)
-type DragMode = "move" | "start" | "end";
+// out・in は出来事の札の右・左の丸点から線を引く(out は落とした先を子に、in は落とした先を親にする。札は動かさない)。
+// over は重ねた先の出来事、blocked は重ねても結べない出来事(結ぶと親子が輪になる)
+type DragMode = "move" | "start" | "end" | "out" | "in";
 type Drag = {
   kind: "episode" | "event";
   id: number;
@@ -106,8 +107,15 @@ type Drag = {
   over: number | null;
   blocked: Set<number>;
 };
+const isWire = (mode: DragMode) => mode === "out" || mode === "in";
 // 押した親子の線と、押した所(出来事の列の中の位置)
 type PickedLink = { parent: number; child: number; x: number; y: number };
+// 溜めた変更。札を動かす・親子を結ぶ・外すたびには書かず、ここに溜めて保存のボタンでまとめて書く。
+// 値は変えたあとの値で、db の値に戻したら外す。parent は undefined なら親を変えていない、null なら親を外す
+type EventChange = { range?: TimeRange; parent?: number | null };
+type Pending = { episodes: Map<number, TimeRange>; events: Map<number, EventChange> };
+const NO_PENDING: Pending = { episodes: new Map(), events: new Map() };
+const sameRange = (a: TimeRange, b: TimeRange) => a.start === b.start && a.end === b.end;
 
 /** 話の札を、重ならないよう筋に振り分ける(話のタイムラインと同じく、上から空いた筋に入れる) */
 function pack(episodes: OverviewEpisode[], scale: Scale, calendar: Calendar | null): Packed {
@@ -268,8 +276,10 @@ export default function OverviewPage() {
   const [savingEpisode, setSavingEpisode] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  // 札は掴んで動かしたら、離したときにすぐ書く
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [pending, setPending] = useState<Pending>(NO_PENDING);
+  const [applying, setApplying] = useState(false);
+  const pendingCount = pending.episodes.size + pending.events.size;
   const [link, setLink] = useState<PickedLink | null>(null);
   // 押した話のモーダルと、書きかけの時刻・タイトル・プロット
   const [viewing, setViewing] = useState<Viewing | null>(null);
@@ -322,6 +332,7 @@ export default function OverviewPage() {
     if (storyId === null) return;
     let alive = true;
     setData(null);
+    setPending(NO_PENDING);
     getOverview({ story_id: storyId })
       .then((result) => {
         if (!alive) return;
@@ -359,18 +370,30 @@ export default function OverviewPage() {
   }, [data]);
   const storyLabel = (id: number) => storyNames.get(id) ?? T.nameId(null, id);
 
-  const episodes = useMemo(() => data?.episodes ?? [], [data]);
+  // 溜めた変更を当てた話と出来事。札の置き場所も、親子・子孫のたどり方も、この値で決める
+  const shown = useMemo(() => {
+    if (!data) return null;
+    return {
+      episodes: data.episodes.map((episode) => ({ ...episode, ...pending.episodes.get(episode.id) })),
+      events: data.events.map((event) => {
+        const change = pending.events.get(event.id);
+        if (!change) return event;
+        return { ...event, ...change.range, ...(change.parent !== undefined ? { parent_event_id: change.parent } : {}) };
+      }),
+    };
+  }, [data, pending]);
+  const episodes = useMemo(() => shown?.episodes ?? [], [shown]);
 
   // 絞り込んだ出来事
   const events = useMemo(
     () =>
-      (data?.events ?? []).filter(
+      (shown?.events ?? []).filter(
         (event) =>
           event.size.total >= filter.minSize &&
           (filter.origin === "all" ||
             (filter.origin === "ai" ? event.expansion_id !== null : event.expansion_id === null)),
       ),
-    [data, filter],
+    [shown, filter],
   );
   const names = useMemo(
     () => new Map((data?.characters ?? []).map((character) => [character.id, character.name ?? `#${character.id}`])),
@@ -378,8 +401,8 @@ export default function OverviewPage() {
   );
   // 子を持つ出来事(企て)
   const parentIds = useMemo(
-    () => new Set((data?.events ?? []).map((event) => event.parent_event_id).filter((id) => id != null)),
-    [data],
+    () => new Set((shown?.events ?? []).map((event) => event.parent_event_id).filter((id) => id != null)),
+    [shown],
   );
 
   const spans: Span[] = useMemo(() => {
@@ -506,11 +529,18 @@ export default function OverviewPage() {
   const canSaveEvent = eventDirty && !savingEvent && !!eventForm?.name.trim();
 
   useEffect(() => {
-    if (!dirty && !editDirty && !eventDirty) return;
+    if (!dirty && !editDirty && !eventDirty && pendingCount === 0) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty, editDirty, eventDirty]);
+  }, [dirty, editDirty, eventDirty, pendingCount]);
+
+  /** 溜めた変更を捨てる。捨ててよいかを尋ね、捨てないなら false */
+  const discardPending = () => {
+    if (pendingCount > 0 && !window.confirm(T.timeline.confirmDiscard(pendingCount))) return false;
+    setPending(NO_PENDING);
+    return true;
+  };
 
   /** 左の枠の話を閉じる。書きかけがあれば捨ててよいかを尋ね、捨てないなら false */
   const closeEpisode = () => {
@@ -585,6 +615,7 @@ export default function OverviewPage() {
     if (!inNewTab(e)) {
       if ((dirty || editDirty) && !window.confirm(T.overview.confirmDiscardEpisode)) return;
       if (eventDirty && !window.confirm(T.eventTimeline.confirmDiscardEdit)) return;
+      if (pendingCount > 0 && !window.confirm(T.timeline.confirmDiscard(pendingCount))) return;
     }
     openPage(url, e);
   };
@@ -667,10 +698,17 @@ export default function OverviewPage() {
       );
       if (editTitleChanged) invalidateOptions("episode");
       setData(fresh);
-      const shown = fresh.episodes.find((episode) => episode.id === id);
+      // 書いた時刻が db の値になったので、溜めてあった同じ話の時刻は外す
+      if (editTimeChanged)
+        setPending((p) => {
+          const episodes = new Map(p.episodes);
+          episodes.delete(id);
+          return { ...p, episodes };
+        });
+      const written = fresh.episodes.find((episode) => episode.id === id);
       setViewing((v) =>
         v?.episode.id === id
-          ? { episode: shown ?? v.episode, loaded: { title: sent.title ?? "", plot: sent.plot } }
+          ? { episode: written ?? v.episode, loaded: { title: sent.title ?? "", plot: sent.plot } }
           : v,
       );
       setMessage(T.timeline.saved(T.nameId(sent.title, id)));
@@ -711,51 +749,89 @@ export default function OverviewPage() {
     }
   };
 
-  /** 札を掴んで動かした結果を書き、読んである期間を読み直す */
-  const write = async (task: Promise<unknown>, done: string) => {
+  /** 話の時刻の変更を溜める */
+  const stageEpisode = (id: number, range: TimeRange) =>
+    setPending((p) => {
+      const original = data?.episodes.find((one) => one.id === id);
+      const episodes = new Map(p.episodes);
+      if (original && sameRange(original, range)) episodes.delete(id);
+      else episodes.set(id, range);
+      return { ...p, episodes };
+    });
+
+  /** 出来事の時刻・親の変更を溜める(前に溜めた分に重ねる) */
+  const stageEvent = (id: number, change: EventChange) =>
+    setPending((p) => {
+      const original = data?.events.find((one) => one.id === id);
+      const next = { ...p.events.get(id), ...change };
+      if (original && next.range && sameRange(original, next.range)) delete next.range;
+      if (original && next.parent !== undefined && next.parent === original.parent_event_id) delete next.parent;
+      const events = new Map(p.events);
+      if (next.range === undefined && next.parent === undefined) events.delete(id);
+      else events.set(id, next);
+      return { ...p, events };
+    });
+
+  /** 溜めた変更を一つのトランザクションでまとめて書き、読んである期間を読み直す。時刻は行ごとにその作品の暦の桁に直す */
+  const applyPending = async () => {
+    if (pendingCount === 0 || applying) return;
+    const sent = pending;
+    setApplying(true);
     setError(null);
     setMessage(null);
     try {
-      setData(await trackSaving(task.then(reread)));
-      setMessage(done);
+      const fresh = await trackSaving(
+        Promise.all([
+          Promise.all(
+            [...sent.episodes].map(([id, range]) =>
+              toStoryCalendar({ id, start: range.start, end: range.end }, storyOf(id), calendar),
+            ),
+          ),
+          Promise.all(
+            [...sent.events].map(([id, change]) =>
+              convertForWrite(
+                {
+                  id,
+                  ...(change.range ? { time: change.range.start, end: change.range.end } : {}),
+                  ...(change.parent !== undefined ? { parent_event_id: change.parent } : {}),
+                },
+                ["time", "end"],
+                calendar,
+                { table: "event", id },
+              ),
+            ),
+          ),
+        ])
+          .then(([episodeForms, eventForms]) => updateEpisodesAndEvents(episodeForms, eventForms))
+          .then(reread),
+      );
+      // 読み直した値と溜めた分を外すのを同じ描画で替え、札が元の所へ一度戻って見えないようにする
+      setData(fresh);
+      setPending(NO_PENDING);
+      setMessage(T.overview.applied(sent.episodes.size + sent.events.size));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(T.timeline.applyFailed(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setApplying(false);
     }
   };
 
-  const saveEpisodeRange = (episode: OverviewEpisode, range: TimeRange) =>
-    write(
-      toStoryCalendar({ id: episode.id, start: range.start, end: range.end }, episode.story_id, calendar).then((form) =>
-        updateEpisodes([form]),
-      ),
-      T.timeline.saved(T.nameId(episode.title, episode.id)),
-    );
-
-  const saveEventRange = (event: OverviewEvent, range: TimeRange) =>
-    write(
-      convertForWrite({ id: event.id, time: range.start, end: range.end }, ["time", "end"], calendar, {
-        table: "event",
-        id: event.id,
-      }).then((form) => updateEvents([form])),
-      T.timeline.saved(T.nameId(event.name, event.id)),
-    );
-
-  /** 出来事の親を付け替える(null なら親を外す) */
-  const saveParent = (event: OverviewEvent, parent: number | null) => {
-    const name = (id: number) => T.nameId(data?.events.find((one) => one.id === id)?.name, id);
-    return write(
-      updateEvents([{ id: event.id, parent_event_id: parent }]),
-      parent === null ? T.overview.unlinked(name(event.id)) : T.overview.linked(name(event.id), name(parent)),
-    );
+  /** 丸点から引いた線を落とした先と結ぶ。右の点(out)からなら落とした先を子に、左の点(in)からなら落とした先を親にする */
+  const stageWire = (event: OverviewEvent, mode: DragMode, over: number) => {
+    const [child, parent] = mode === "out" ? [over, event.id] : [event.id, over];
+    stageEvent(child, { parent });
   };
 
-  // 出来事・話のモーダルを開いていればその行を、左の枠に書きかけがあればその話を保存する
+  // 出来事・話のモーダルを開いていればその行を、左の枠に書きかけがあればその話を、溜めた変更があればそれを保存する
   useSaveShortcut(() => {
     if (selected) {
       if (canSaveEvent) void saveEvent();
     } else if (viewingNow) {
       if (canSaveEdit) void saveEdit();
-    } else if (canSave) void saveEpisode();
+    } else {
+      if (canSave) void saveEpisode();
+      if (pendingCount > 0) void applyPending();
+    }
   });
 
   /** 縦に dy px 動かしたら、時刻 stamp が何日ずれるか(話のタイムラインと同じ刻みに丸める)。詰めた帯の上では一気に日が進む */
@@ -768,7 +844,7 @@ export default function OverviewPage() {
 
   /** 掴んで動かしている札の、動かしたあとの時刻。動かしていない・別の出来事に重ねているなら null */
   const draggedRange = (range: TimeRange, d: Drag | null): TimeRange | null => {
-    if (!d || d.over !== null || Math.abs(d.dy) <= DRAG_THRESHOLD) return null;
+    if (!d || isWire(d.mode) || d.over !== null || Math.abs(d.dy) <= DRAG_THRESHOLD) return null;
     const at = (stamp: string) => dayOf(stamp, calendar) ?? 0;
     const shift = (stamp: string, days: number) => shiftDays(stamp, days, calendar) ?? stamp;
     if (d.mode === "move") {
@@ -791,7 +867,7 @@ export default function OverviewPage() {
   const descendantsOf = (id: number) => {
     const found = new Set<number>();
     const walk = (at: number) => {
-      for (const event of data?.events ?? [])
+      for (const event of shown?.events ?? [])
         if (event.parent_event_id === at && !found.has(event.id)) {
           found.add(event.id);
           walk(event.id);
@@ -801,7 +877,17 @@ export default function OverviewPage() {
     return found;
   };
 
-  /** 指の下の出来事の札。掴んだ出来事とその子孫は親にできない(親子が輪になる)ので除く */
+  /** 出来事の祖先(読んである分) */
+  const ancestorsOf = (id: number) => {
+    const found = new Set<number>();
+    for (let at = shown?.events.find((one) => one.id === id); at?.parent_event_id != null && !found.has(at.parent_event_id); ) {
+      found.add(at.parent_event_id);
+      at = shown?.events.find((one) => one.id === at!.parent_event_id);
+    }
+    return found;
+  };
+
+  /** 指の下の出来事の札。blocked(結ぶと親子が輪になる出来事)は除く */
   const eventUnder = (x: number, y: number, blocked: Set<number>): number | null => {
     const card = document
       .elementsFromPoint(x, y)
@@ -810,16 +896,27 @@ export default function OverviewPage() {
     return card ? Number(card.dataset.id) : null;
   };
 
-  /** 札を掴む。上端・下端の帯(data-edge)を掴んだら期間を、それ以外は札ごと時刻を動かす */
+  /**
+   * 札を掴む。上端・下端の帯(data-edge)を掴んだら期間を、出来事の左右の丸点(data-port)を掴んだら親子の線を、
+   * それ以外は札ごと時刻を動かす。子にする出来事に、その子孫は親として結べない
+   */
   const onItemDown = (e: PointerEvent<HTMLDivElement>, kind: Drag["kind"], id: number) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || applying) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     hide();
     setLink(null);
-    const edge = (e.target as HTMLElement).dataset.edge;
-    const mode: DragMode = edge === "start" || edge === "end" ? edge : "move";
-    const blocked = kind === "event" && mode === "move" ? new Set([id, ...descendantsOf(id)]) : new Set<number>();
+    const { edge, port } = (e.target as HTMLElement).dataset;
+    const mode: DragMode =
+      edge === "start" || edge === "end" ? edge : port === "out" || port === "in" ? port : "move";
+    const blocked =
+      kind !== "event"
+        ? new Set<number>()
+        : mode === "move" || mode === "in"
+          ? new Set([id, ...descendantsOf(id)])
+          : mode === "out"
+            ? new Set([id, ...ancestorsOf(id)])
+            : new Set<number>();
     setDrag({ kind, id, mode, startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, over: null, blocked });
   };
 
@@ -830,17 +927,27 @@ export default function OverviewPage() {
       ...drag,
       dx: e.clientX - drag.startX,
       dy: e.clientY - drag.startY,
-      over: drag.kind === "event" && drag.mode === "move" && moved ? eventUnder(e.clientX, e.clientY, drag.blocked) : null,
+      over:
+        drag.kind === "event" && (drag.mode === "move" || isWire(drag.mode)) && moved
+          ? eventUnder(e.clientX, e.clientY, drag.blocked)
+          : null,
     });
   };
 
-  /** 札を離す。動かさずに離したら開き、出来事の札に重ねたらその子にし(時刻は動かさない)、それ以外は動かした時刻を書く */
+  /**
+   * 札を離す。動かさずに離したら開き、出来事の札に重ねたらその子にし(時刻は動かさない)、それ以外は動かした時刻にする。
+   * 丸点から引いた線は、出来事の札の上で離したときだけ結ぶ。どれも溜めるだけで、書くのは保存のボタンを押したとき
+   */
   const onItemUp = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag) return;
     const d = { ...drag, dx: e.clientX - drag.startX, dy: e.clientY - drag.startY };
     setDrag(null);
-    const episode = d.kind === "episode" ? data?.episodes.find((one) => one.id === d.id) : undefined;
-    const event = d.kind === "event" ? data?.events.find((one) => one.id === d.id) : undefined;
+    const episode = d.kind === "episode" ? shown?.episodes.find((one) => one.id === d.id) : undefined;
+    const event = d.kind === "event" ? shown?.events.find((one) => one.id === d.id) : undefined;
+    if (isWire(d.mode)) {
+      if (event && d.over !== null) stageWire(event, d.mode, d.over);
+      return;
+    }
     if (Math.abs(d.dx) <= DRAG_THRESHOLD && Math.abs(d.dy) <= DRAG_THRESHOLD) {
       // Ctrl(⌘)を押しながらなら、行のページを別タブで開く
       if (episode) {
@@ -853,14 +960,14 @@ export default function OverviewPage() {
       return;
     }
     if (event && d.over !== null) {
-      if (d.over !== event.parent_event_id) void saveParent(event, d.over);
+      stageEvent(event.id, { parent: d.over });
       return;
     }
     const item = episode ?? event;
     const range = item && draggedRange({ start: item.start, end: item.end }, d);
-    if (!range || (range.start === item?.start && range.end === item?.end)) return;
-    if (episode) void saveEpisodeRange(episode, range);
-    else if (event) void saveEventRange(event, range);
+    if (!range || sameRange(range, item)) return;
+    if (episode) stageEpisode(episode.id, range);
+    else if (event) stageEvent(event.id, { range });
   };
 
   /** 札を掴んでいるあいだ、札を動かしたあとの時刻の所に描く。返すのは上端・高さと、動かしたあとの時刻 */
@@ -892,7 +999,7 @@ export default function OverviewPage() {
     : [];
 
   const eventLines = (event: OverviewEvent) => [
-    event.name,
+    T.nameId(event.name, event.id),
     T.span(event.start, event.end) || event.start,
     event.location_name ?? "",
     T.overview.size(event.size.total),
@@ -918,6 +1025,8 @@ export default function OverviewPage() {
           episode.in_story ? "" : "overview-other",
           viewing?.episode.id === episode.id || episodePanel?.id === episode.id ? "selected" : "",
           drag?.kind === "episode" && drag.id === episode.id ? "dragging" : "",
+          pending.episodes.has(episode.id) ? "changed" : "",
+          applying && pending.episodes.has(episode.id) ? "saving" : "",
         ].join(" ");
         return (
           <div
@@ -986,9 +1095,30 @@ export default function OverviewPage() {
           : `M ${x1} ${out} H ${x1 + EVENT_LANE_PAD} V ${across} H ${xm} V ${y2} H ${x2}`;
       return [{ key: `${parent.event.id}-${child.event.id}`, parent: parent.event.id, child: child.event.id, d }];
     });
+    // 丸点から引いている線。重ねた札があれば、結んだときに線が付く側の丸点まで引く
+    const wiring = drag?.kind === "event" && isWire(drag.mode) ? drag : null;
+    const wireFrom = wiring ? byId.get(wiring.id) : undefined;
+    const wire = (() => {
+      if (!wiring || !wireFrom || Math.hypot(wiring.dx, wiring.dy) <= DRAG_THRESHOLD) return null;
+      const out = wiring.mode === "out";
+      const [x1, y1] = [out ? right(wireFrom.lane) : left(wireFrom.lane), wireFrom.y + ITEM_HEIGHT / 2];
+      const target = wiring.over === null ? undefined : byId.get(wiring.over);
+      const [x2, y2] = target
+        ? [out ? left(target.lane) : right(target.lane), target.y + ITEM_HEIGHT / 2]
+        : [x1 + wiring.dx, y1 + wiring.dy];
+      return { d: `M ${x1} ${y1} L ${x2} ${y2}`, target };
+    })();
+    // 左右の丸点。札の上から ITEM_HEIGHT / 2 の高さ(親子の線が付く高さ)に置く
+    const portTop = ITEM_HEIGHT / 2 - EVENT_MARGIN - 1;
+    const ports = (
+      <>
+        <span className="overview-port in" data-port="in" style={{ top: portTop }} />
+        <span className="overview-port out" data-port="out" style={{ top: portTop }} />
+      </>
+    );
     return (
       <div
-        className="timeline-track overview-events"
+        className={`timeline-track overview-events ${wiring ? "wiring" : ""}`}
         style={{ width: lanes * EVENT_LANE_WIDTH, height: scale?.height }}
         onClick={onEventTrackClick}
       >
@@ -1009,6 +1139,7 @@ export default function OverviewPage() {
               <path className="overview-link" d={one.d} />
             </g>
           ))}
+          {wire && <path className={`overview-wire ${wire.target ? "ready" : ""}`} d={wire.d} />}
         </svg>
         {link && (
           <div className="overview-link-menu" style={{ left: link.x, top: link.y }} onClick={(e) => e.stopPropagation()}>
@@ -1022,9 +1153,8 @@ export default function OverviewPage() {
               type="button"
               className="danger"
               onClick={() => {
-                const child = byId.get(link.child)?.event;
                 setLink(null);
-                if (child) void saveParent(child, null);
+                stageEvent(link.child, { parent: null });
               }}
             >
               {T.overview.unlink}
@@ -1047,6 +1177,8 @@ export default function OverviewPage() {
                 selected?.id === event.id ? "selected" : "",
                 dragging ? "dragging" : "",
                 drag?.over === event.id ? "drop-target" : "",
+                pending.events.has(event.id) ? "changed" : "",
+                applying && pending.events.has(event.id) ? "saving" : "",
               ].join(" ")}
               style={{
                 left: left(lane),
@@ -1066,11 +1198,18 @@ export default function OverviewPage() {
               onMouseLeave={hide}
             >
               {edges}
+              {ports}
               <span className="timeline-text">
                 {event.name}
                 {preview && <span className="timeline-target"> → {T.span(preview.range.start, preview.range.end) || preview.range.start}</span>}
                 {dragging && drag.over !== null && (
-                  <span className="timeline-target"> → {T.overview.childOf(byId.get(drag.over)?.event.name ?? `#${drag.over}`)}</span>
+                  <span className="timeline-target">
+                    {" "}
+                    →{" "}
+                    {(drag.mode === "out" ? T.overview.parentOf : T.overview.childOf)(
+                      byId.get(drag.over)?.event.name ?? `#${drag.over}`,
+                    )}
+                  </span>
                 )}
               </span>
             </div>
@@ -1111,7 +1250,7 @@ export default function OverviewPage() {
           T.span(event.start, event.end) || event.start,
           event.parent_event_id !== null &&
             T.eventTimeline.parent(
-              T.nameId(data?.events.find((one) => one.id === event.parent_event_id)?.name, event.parent_event_id),
+              T.nameId(shown?.events.find((one) => one.id === event.parent_event_id)?.name, event.parent_event_id),
             ),
           event.location_name,
           T.eventTimeline.importanceLine(event.importance),
@@ -1251,7 +1390,7 @@ export default function OverviewPage() {
             value={storyId}
             nullable
             onChange={(value) => {
-              if (!closeEpisode() || !closeEvent()) return;
+              if (!closeEpisode() || !closeEvent() || !discardPending()) return;
               setMessage(null);
               navigate({ story_id: value });
             }}
@@ -1393,6 +1532,18 @@ export default function OverviewPage() {
             !editError && <div className="status info">{T.loading}</div>
           )}
         </Modal>
+      )}
+      {/* 溜めた変更があるあいだだけ、画面の下の真ん中に浮かべる。表の並びを押し下げず、スクロールしても見えたままにする */}
+      {pendingCount > 0 && (
+        <div className="overview-pending" role="status">
+          <span>{T.overview.pending(pendingCount)}</span>
+          <button type="button" disabled={applying} onClick={discardPending}>
+            {T.overview.discard}
+          </button>
+          <button type="button" className="primary" disabled={applying} onClick={() => void applyPending()}>
+            {T.overview.save(pendingCount)}
+          </button>
+        </div>
       )}
       {selected && renderEvent(selected)}
       {addingEvent && (
