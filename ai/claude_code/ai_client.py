@@ -62,6 +62,10 @@ def _build_args(system: str, schema: dict, tools: tuple[str, ...], model: str, e
         "--output-format", "json",
         "--tools", ",".join(builtin),
         "--no-session-persistence",
+        # 使う人の設定(グローバルの CLAUDE.md・接続した MCP・スキル)を読ませない。読むと、MCP の道具の定義だけで毎回 10 万トークン
+        # ほど載り、CLAUDE.md の口調(一人称など)が生成した文に移る。MCP の道具は下の `--mcp-config` で渡すものだけにする
+        "--strict-mcp-config",
+        "--setting-sources", "",
     ]
     if tools:
         # -p では許可を尋ねられないので、渡した道具は先に許しておく(許さないと拒まれて使えない)。

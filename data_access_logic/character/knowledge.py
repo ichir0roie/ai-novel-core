@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import Field, model_serializer
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 
 from data_access_logic import constants
 from data_access_logic.character import skills
@@ -451,7 +451,8 @@ def _speeches(s: Session, character_id: int, time: Stamp, acting_episode_id: int
     """`time` までに始まった話で言ったセリフ。演じている話のセリフは、本文を書き直すときに先回りになるので入れない。"""
     query = (select(CharacterSpeech).join(Episode, CharacterSpeech.episode_id == Episode.id)
              .where(CharacterSpeech.character_id == character_id, Episode.start.is_not(None), Episode.start <= time)
-             .options(joinedload(CharacterSpeech.episode))
+             # 話は id と時刻だけを使う。本文ごと引くと、セリフの数だけ本文を運んで遅い
+             .options(contains_eager(CharacterSpeech.episode).load_only(Episode.id, Episode.start))
              .order_by(Episode.start, Episode.id, CharacterSpeech.position)
              .execution_options(populate_existing=True))
     if acting_episode_id is not None:
@@ -507,8 +508,11 @@ def knowledge_of(
     (人物モードはどれも別に渡す)。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
-    others = [common_query.get_row(s, Character, id_) for id_ in _related_ids(s, character, time)
-              if scene_ids is None or id_ in scene_ids]
+    other_ids = [id_ for id_ in _related_ids(s, character, time) if scene_ids is None or id_ in scene_ids]
+    # 一人ずつ引くと、関係のある人物の数だけ db を往復する
+    by_id = {other.id: other for other in s.scalars(
+        select(Character).where(Character.id.in_(other_ids)).options(selectinload(Character.histories))).all()}
+    others = [by_id[id_] for id_ in other_ids]
     return KnowledgeSerialized(
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(s, character, time),

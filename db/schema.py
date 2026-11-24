@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import enum
+from functools import cache
 from typing import Any
 import hashlib
 import os
@@ -34,13 +35,14 @@ from sqlalchemy.orm import (
 )
 
 from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import make_url
 
 from db.polygon import parse_polygon
 from db.postgres.timestamps import install_updated_at
 from db import story_scope
-from db.stamp import Stamp
+from db.stamp import Stamp, StampError, active_calendar, misread_western
 
 
 class StampType(TypeDecorator):
@@ -1180,6 +1182,40 @@ class CharacterSpeech(Base):
 
 # 暦(`custom_stamp_id`)を持つ持ち主の行の表
 CALENDAR_OWNERS: tuple[type[Base], ...] = (Episode, Event, Character, Idea, Location, CharacterRelation)
+
+
+@cache
+def _stamp_keys(model: type) -> tuple[str, ...]:
+    return tuple(attr.key for attr in sa_inspect(model).column_attrs if isinstance(attr.columns[0].type, StampType))
+
+
+def _calendar_range(s: Session, custom_stamp_id: int) -> tuple[Stamp, Stamp] | None:
+    """その暦の話・出来事の時刻の範囲(db にある値)。"""
+    found: list[Stamp] = []
+    with s.no_autoflush:
+        for column, owner_stamp in ((Episode.start, Episode.custom_stamp_id), (Event.time, Event.custom_stamp_id)):
+            ends = s.execute(select(func.min(column), func.max(column)).where(owner_stamp == custom_stamp_id)).one()
+            found += [value for value in ends if value is not None]
+    return (min(found), max(found)) if found else None
+
+
+@event.listens_for(Session, "before_flush")
+def _refuse_misread_times(s: Session, _flush_context, _instances) -> None:
+    """西暦の表記を暦の表記として渡した時刻を書かない(暦を立てずに読んだ時刻を写すと、遠い先に入るので)。"""
+    scope = story_scope.current()
+    if active_calendar() is None or scope is None or scope.custom_stamp_id is None:
+        return
+    written = [(row, key, value) for row in [*s.new, *s.dirty] for key in _stamp_keys(type(row))
+               for value in sa_inspect(row).attrs[key].history.added if isinstance(value, Stamp)]
+    window = _calendar_range(s, scope.custom_stamp_id) if written else None
+    if window is None:
+        return
+    for row, key, value in written:
+        western = misread_western(value, *window)
+        if western is not None:
+            raise StampError(
+                f"{row.__tablename__}.{key} の {value} は、この暦の話・出来事({window[0]}〜{window[1]})から遠く外れる。"
+                f"西暦の表記を渡したなら、{western} か {western.to_int()} で渡す")
 
 
 class NarouPart(Base):

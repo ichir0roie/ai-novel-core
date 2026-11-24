@@ -312,7 +312,7 @@ class ActorBrief(BaseModel):
 class InviteDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    character_id: int = Field(description="直に話しかけて巻きこみたい相手の人物id。目の前にいて名前を知っている人物からだけ選ぶ")
+    character_id: int = Field(description="直に話しかけて巻きこみたい相手の人物id。目の前にいる人物からだけ選ぶ(名を知らない相手も選べる)")
     reason: str = Field(description="その相手を巻きこみたいわけ")
 
 

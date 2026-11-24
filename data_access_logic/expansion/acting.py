@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Sequence
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
@@ -15,6 +16,7 @@ from data_access_logic.character.knowledge import _related_ids, appearance_of, k
 from data_access_logic.character.motivations import apply_changes, motivations_at
 from data_access_logic.character.moves import allowed_moves, update_locations
 from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character.time_sense import TimeSense
 from data_access_logic.character.record import CharacterMotivationRecord
 from data_access_logic.entrypoint import record_of
 from data_access_logic.event import progress
@@ -30,12 +32,13 @@ from data_access_logic.expansion.act_models import (
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
+from data_access_logic.story.scope import args_scope_in
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import (
     CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Episode, EpisodeCharacter, Event, EventCharacter,
     IdeaHistory, IdeaHistoryKnower, Location,
 )
-from db.stamp import Stamp
+from db.stamp import Calendar, Stamp
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +103,24 @@ def _choose_from_cast(s: Session, rng: random.Random, episode: Episode, exclude_
     return rng.choices(candidates, weights=weights)[0]
 
 
+def _awake_clock(rng: random.Random, at: Stamp, calendar: Calendar | None) -> Stamp:
+    """日付はそのままに、時刻を人物の暦の一日のうち起きている時間帯(`ACT_AWAKE_HOURS`。一日を 24 に割った刻み)に置き直す。
+    最後に出た時刻から日を足しただけだと時刻がそのまま残り、夜更けの一手が続いて、眠れずに起きている場面ばかりになる。"""
+    digits = at.western_digits if calendar is None else calendar.to_local(at.western_digits)
+    hours = 24 if calendar is None else calendar.hours_per_day
+    minutes = 60 if calendar is None else calendar.minutes_per_hour
+    start, end = (hours * part // 24 for part in constants.ACT_AWAKE_HOURS)
+    clock = (*digits[:3], rng.randrange(start, end), rng.randrange(0, minutes, 10), 0)
+    return Stamp.western(*(clock if calendar is None else calendar.to_western(clock)))
+
+
 def _next_time(s: Session, rng: random.Random, character: Character) -> Stamp:
     """人物が最後に出た時刻(`expansion_query.last_appearance`)から、`constants.ACT_INTERVAL_DAYS` の範囲で日を空けた時刻。
     出たことが無ければ世界の最新の時刻。"""
     last = expansion_query.last_appearance(s, character.id)
     if last is not None:
-        return last.plus_days(rng.randint(*constants.ACT_INTERVAL_DAYS))
+        calendar = args_scope_in(s, {"character_id": character.id}).calendar
+        return _awake_clock(rng, last.plus_days(rng.randint(*constants.ACT_INTERVAL_DAYS)), calendar)
     latest = s.scalar(common_query.latest_time_select())
     if latest is None:
         raise ValueError("世界にまだ出来事が無いので、動く時刻を決められない。time を渡す")
@@ -283,6 +298,12 @@ def parent_arc(s: Session, parent_event_id: int, time: Stamp) -> ParentArc:
                      after=[_arc_event(child) for child in children if child.time >= time][:limit])
 
 
+def _recent_lines(events: Sequence[Event], time: Stamp) -> list[str]:
+    """場所の近ごろの出来事を、いつのことかを添えて。名前だけだと、何日も前のことを今朝のことと読む。"""
+    sense = TimeSense.current()
+    return [f"{sense.ago(event.time, time)}: {event.name}" for event in events]
+
+
 def narrator_brief(s: Session, pick: ActorPick, nudge: str | None) -> NarratorBrief:
     """語り部の材料。作者が置いた親の出来事の筋と、動く人物と居合わせる人物が出る前後の話のプロットと、場所・時刻・居合わせる人物・
     近ごろの出来事。人物の来歴・筋書きは読まない(語り部が動かすのは人物の外のことだけ)。"""
@@ -298,7 +319,7 @@ def narrator_brief(s: Session, pick: ActorPick, nudge: str | None) -> NarratorBr
         pick.location_id, until=time, limit=constants.RECENT_EVENT_LIMIT)).all()
     prompt = NarratorSerialized(
         time=time, location_name=s.get_one(Location, pick.location_id).name, actor_name=character.name,
-        present_names=[other.name for other in present], recent_events=[event.name for event in recent],
+        present_names=[other.name for other in present], recent_events=_recent_lines(recent, time),
         arcs=open_arcs(s, character.id), episodes=episodes, parent=parent, nudge=nudge,
     ).model_dump()
     return NarratorBrief(prompt=prompt, episodes=episodes, parent=parent)
@@ -327,22 +348,21 @@ def actor_brief(s: Session, pick: ActorPick, seeds: list[str], nudge: str | None
         motives=motives_of(s, character, time),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, time)) for other in present],
-        recent_events=[event.name for event in recent], arcs=arcs, seeds=seeds, nudge=nudge,
+        recent_events=_recent_lines(recent, time), arcs=arcs, seeds=seeds, nudge=nudge,
         narration=told, request=asked,
     ).model_dump()
     return ActorBrief(prompt=prompt, present_ids=[other.id for other in present], arcs=arcs)
 
 
 def invitable(s: Session, form: InviteForm) -> list[int]:
-    """狙う段が巻きこみたいと挙げた相手のうち、目の前にいて、動いた人物が名前を知り、気力の残る人物(挙げた順、上限まで)。"""
+    """狙う段が巻きこみたいと挙げた相手のうち、目の前にいて、気力の残る人物(挙げた順、上限まで)。
+    名を知らない相手も巻きこめる(見知らぬ相手に話しかけたとき、相手の返事を裁く段に作らせない)。"""
     actor = s.get_one(Character, form.actor_id)
     present_ids = {other.id for other in [*_partners(s, form.partner_ids, actor.id, form.time),
                                           *_people_here(s, form.location_id, form.time)]}
-    known_ids = set(_related_ids(s, actor, form.time))
     chosen = []
     for character_id in dict.fromkeys(form.candidate_ids):
-        if (character_id == actor.id or character_id in form.exclude_ids or character_id not in present_ids
-                or character_id not in known_ids):
+        if character_id == actor.id or character_id in form.exclude_ids or character_id not in present_ids:
             continue
         if budget.can_be_involved(s, s.get_one(Character, character_id), form.time):
             chosen.append(character_id)
@@ -360,7 +380,9 @@ def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
     known_ids = _related_ids(s, character, form.time)
     prompt = DialogueSerialized(
         time=form.time, location_name=s.get_one(Location, form.location_id).name,
-        knowledge=knowledge_of(s, character.id, form.time, form.mentioned, None, None, with_now=False),
+        # 知っている人物は、目の前にいる人物だけ(ほかの知り合いは関係の名前と間柄で足りる。全員の来歴を渡すと手番ごとに重い)
+        knowledge=knowledge_of(s, character.id, form.time, form.mentioned, {other.id for other in others}, None,
+                               with_now=False),
         motives=motives_of(s, character, form.time),
         present=[PresentPerson(character_id=other.id, name=other.name if other.id in known_ids else None,
                                looks=appearance_of(s, other, form.time)) for other in others],
