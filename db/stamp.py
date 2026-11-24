@@ -278,15 +278,27 @@ def using_calendar(calendar: Calendar | None) -> Iterator[Calendar | None]:
         _calendar.reset(token)
 
 
+# 年は 6 桁まで。db の列の整数は西暦 1 年 1 月 1 日でも 11 桁
+_YEAR_DIGITS = 6
+_STORED_DIGITS = 11
+_MISREAD_SLACK_DAYS = 100 * 365
+
+
+def is_stored_text(value) -> bool:
+    """db の列の整数をそのまま書いた表記か。"""
+    text = str(value).strip()
+    return bool(_DIGITS.match(text)) and len(text) >= _STORED_DIGITS
+
+
 def _parse_digits(value: str) -> Digits | None:
     text = value.strip()
     if not text:
         return None
     if _DIGITS.match(text):
-        if len(text) > 6:
+        if len(text) > _YEAR_DIGITS:
             raise StampError(
                 f"年として長すぎる: {text}。"
-                f"日付まで書くなら y/mm/dd hh:mm:ss の形にする")
+                f"日付まで書くなら y/mm/dd hh:mm:ss の形にする(db の列の整数なら {_STORED_DIGITS} 桁以上のまま渡す)")
         return int(text), 1, 1, 0, 0, 0
     parts = [p for p in re.split(r"[-/ :T]", text) if p != ""]
     if not parts or not all(p.isdigit() for p in parts):
@@ -359,7 +371,7 @@ class Stamp:
 
     @classmethod
     def parse(cls, value) -> "Stamp | None":
-        """文字列は文脈の暦の桁として読む。"""
+        """文字列は文脈の暦の桁として読む。db の列の整数(`is_stored_text`)は暦に依らず読む。"""
         if value is None:
             return None
         if isinstance(value, Stamp):
@@ -368,6 +380,8 @@ class Stamp:
             return cls.western(value.year, value.month, value.day, value.hour, value.minute, value.second)
         if isinstance(value, _datetime.date):
             return cls.western(value.year, value.month, value.day)
+        if is_stored_text(value):
+            return cls.from_int(int(str(value).strip()))
         digits = _parse_digits(str(value))
         return None if digits is None else cls(*digits)
 
@@ -441,3 +455,19 @@ class Stamp:
 
     def __hash__(self) -> int:
         return hash(self._western)
+
+
+def misread_western(value: Stamp, low: Stamp, high: Stamp) -> Stamp | None:
+    """`value` が、西暦の表記を文脈の暦の表記として読んだ値なら、本来の時刻。`low`〜`high` は同じ暦の行の時刻の範囲。
+    暦の作りだけでは二つの表記を見分けられないので、`value` が範囲から遠く外れ、西暦として読み直すと範囲に入るかで見る。"""
+    if active_calendar() is None:
+        return None
+    try:
+        western = Stamp.western(*value.digits)
+    except StampError:
+        return None
+
+    def near(stamp: Stamp) -> bool:
+        return low.plus_days(-_MISREAD_SLACK_DAYS) <= stamp <= high.plus_days(_MISREAD_SLACK_DAYS)
+
+    return western if near(western) and not near(value) else None

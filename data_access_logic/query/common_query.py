@@ -15,7 +15,7 @@ from db.schema import (
     Base, Character, CharacterLocation, CharacterRelation, CharacterSkill, Episode, Event, EventCharacter, Idea,
     Location, Story,
 )
-from db.stamp import Stamp, StampError, period_end
+from db.stamp import Stamp, StampError, is_stored_text, period_end
 
 # 当事者は名前と id しか使わないので、人物の selectin の子の表(パラメータ・居場所・来歴・知る相手)は読まない
 EVENT_LOAD_OPTIONS = (
@@ -27,13 +27,15 @@ EVENT_LOAD_OPTIONS = (
 # ---------------------------------------------------------------- 時刻
 
 def span(when: Stamp | str | int) -> tuple[Stamp, Stamp]:
-    """表記で指した期間の始まりと最後の時刻(`"1592"` なら暦の一年)。時刻そのものなら、その時刻だけ。"""
+    """表記で指した期間の始まりと最後の時刻(`"1592"` なら暦の一年)。時刻そのもの(`Stamp` か db の列の整数)なら、その時刻だけ。"""
     if isinstance(when, Stamp):
         return when, when
     text = str(when).strip()
     at = Stamp.parse(text)
     if at is None:
         raise StampError("時刻が空")
+    if is_stored_text(text):
+        return at, at
     depth = 1 if text.isdigit() else len(
         [part for part in re.split(r"[-/ :T]", text) if part])
     return at, period_end(at.digits[:max(1, min(depth, 6))])
@@ -312,7 +314,9 @@ def character_relations_at_select(
 ) -> Select[CharacterRelation]:
     """`character_ids` のどれかが片側にいて、`time` に続いている(`period` に当たる)関係を、両側の人物と来歴ごと読む。"""
     return (select(CharacterRelation)
-            .options(selectinload(CharacterRelation.character_1), selectinload(CharacterRelation.character_2))
+            # 両側の人物は id と名前しか使わない。人物ごと読むと、来歴と知る相手まで引いて遅い
+            .options(selectinload(CharacterRelation.character_1).load_only(Character.id, Character.name).lazyload("*"),
+                     selectinload(CharacterRelation.character_2).load_only(Character.id, Character.name).lazyload("*"))
             .where(or_(CharacterRelation.character_1_id.in_(character_ids),
                        CharacterRelation.character_2_id.in_(character_ids)),
                    period(CharacterRelation, time))

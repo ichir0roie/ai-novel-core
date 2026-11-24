@@ -2,7 +2,7 @@
 import pytest
 
 from data_access_logic.query.common_query import span
-from db.stamp import Calendar, Stamp, StampError, using_calendar
+from db.stamp import Calendar, Stamp, StampError, misread_western, using_calendar
 
 LONG_DAY = Calendar(offset=(5000, 1, 1, 0, 0, 0), month_days=(31,) * 12, hours_per_day=27, days_per_week=7, name="長日暦")
 
@@ -62,3 +62,27 @@ def test_span_ends_with_the_calendar():
 
 def test_calendar_survives_json():
     assert Calendar.from_json(LONG_DAY.to_json()) == LONG_DAY
+
+
+def test_stored_integer_is_read_as_that_time_whatever_the_calendar():
+    stored = Stamp.western(6592, 3, 15, 10, 30).to_int()
+    with using_calendar(LONG_DAY):
+        assert Stamp.parse(stored) == Stamp.parse(str(stored)) == Stamp.western(6592, 3, 15, 10, 30)
+        assert span(stored) == (Stamp.western(6592, 3, 15, 10, 30),) * 2
+        # 年は 6 桁まで。それより長く db の列の整数に足りない数字は、どちらとも読まない
+        with pytest.raises(StampError):
+            Stamp.parse("15920315")
+
+
+def test_western_text_read_in_the_calendar_is_told_apart_by_the_rows():
+    with using_calendar(LONG_DAY):
+        low, high = Stamp(1592, 1, 1), Stamp(1593, 12, 31)
+        # 1592 年のどこかの行を、暦を立てずに読んだ西暦の表記で渡すと、暦の 6000 年台として読まれる
+        western = high.western_text().split(" ")[0]
+        misread = Stamp.parse(western)
+        assert misread is not None
+        assert misread_western(misread, low, high) == Stamp.western(*misread.digits)
+        assert misread_western(Stamp(1594, 6, 1), low, high) is None
+        # 範囲から遠い行でも、暦の表記を西暦として読んで範囲に入らなければ、取り違えとみない
+        assert misread_western(Stamp(40, 1, 1), low, high) is None
+    assert misread_western(Stamp.western(9000, 1, 1), Stamp.western(6000, 1, 1), Stamp.western(6100, 1, 1)) is None

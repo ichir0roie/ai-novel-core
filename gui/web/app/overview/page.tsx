@@ -26,6 +26,8 @@ import {
   updateEpisodes,
   updateEpisodesAndEvents,
   updateRecord,
+  deleteEventWithChildren,
+  listAllRecords,
   type OverviewEpisode,
   type OverviewEvent,
   type OverviewResponse,
@@ -749,6 +751,46 @@ export default function OverviewPage() {
     }
   };
 
+  /** 出来事を子孫の出来事ごと消す。画面は読んだ期間の出来事しか持たないので、子孫は db から辿って数えて尋ねる */
+  const removeEvent = async (event: OverviewEvent) => {
+    setEventError(null);
+    setMessage(null);
+    try {
+      const descendants: number[] = [];
+      const walk = async (id: number) => {
+        for (const child of await listAllRecords("event", { parent_event_id: String(id) })) {
+          descendants.push(Number(child.id));
+          await walk(Number(child.id));
+        }
+      };
+      await walk(event.id);
+      const label = T.nameId(event.name, event.id);
+      if (!window.confirm(T.eventTimeline.confirmDelete(label, descendants.length))) return;
+      setSavingEvent(true);
+      const fresh = await trackSaving(deleteEventWithChildren(event.id).then(reread));
+      invalidateOptions("event");
+      setData(fresh);
+      // 消した出来事に溜めてあった移しと、消した出来事を親にする溜めた結び直しは当てられないので外す
+      const gone = new Set([event.id, ...descendants]);
+      setPending((p) => {
+        const events = new Map<number, EventChange>();
+        for (const [id, change] of p.events) {
+          if (gone.has(id)) continue;
+          if (change.parent == null || !gone.has(change.parent)) events.set(id, change);
+          else if (change.range) events.set(id, { range: change.range });
+        }
+        return { ...p, events };
+      });
+      setSelected(null);
+      setEventForm(null);
+      setMessage(T.eventTimeline.deleted(label));
+    } catch (e) {
+      setEventError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingEvent(false);
+    }
+  };
+
   /** 話の時刻の変更を溜める */
   const stageEpisode = (id: number, range: TimeRange) =>
     setPending((p) => {
@@ -1232,6 +1274,9 @@ export default function OverviewPage() {
       onClose={closeEvent}
       actions={
         <>
+          <button type="button" className="danger" disabled={savingEvent} onClick={() => void removeEvent(event)}>
+            {T.eventTimeline.delete}
+          </button>
           <span className="spacer" />
           <button type="button" onClick={closeEvent}>
             {T.close}

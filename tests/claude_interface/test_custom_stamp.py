@@ -10,6 +10,7 @@ from gui.api import interface
 from gui.api.app import app
 from data_access_logic.story import scope
 from db import writer
+from db.stamp import StampError
 from db.schema import (
     Character, CharacterHistory, CharacterSkill, CustomStamp, Episode, Event, EventCharacter, Idea, IdeaHistory, Location, Story,
     get_env_session, western_stamp_id,
@@ -65,6 +66,23 @@ def test_new_episode_takes_the_calendar_of_its_story(saga):
         stored = s.get_one(Episode, record["id"]).start
     # 暦の 0 年 1 月 1 日が西暦 5000 年 1 月 1 日。一日は地球の 27 時間なので、1592 年は西暦の 6000 年台
     assert stored is not None and stored.western_digits[0] > 6000
+
+
+def test_episode_refuses_a_western_text_given_as_the_calendar_time(saga):
+    first = _call("episode.commit_episode.CommitEpisode",
+                  {"episode": {"story_id": saga.chapter_id, "title": "長い夜", "start": "1592/03/15 26:00:00"}})
+    with get_env_session() as s:
+        stored = s.get_one(Episode, first["id"]).start
+    assert stored is not None
+
+    # 素の SQL・ORM で読んだ西暦の表記をそのまま渡すと、暦の表記として読まれて遠い先に飛ぶので、書かずに止める
+    with pytest.raises(StampError, match=str(stored.to_int())):
+        _call("episode.commit_episode.CommitEpisode",
+              {"episode": {"story_id": saga.chapter_id, "title": "次の夜", "start": stored.western_text()}})
+    # db の列の整数はそのまま受け、暦で書き出す
+    copied = _call("episode.commit_episode.CommitEpisode",
+                   {"episode": {"story_id": saga.chapter_id, "title": "次の夜", "start": stored.to_int()}})
+    assert copied["start"] == "1592/03/15 26:00:00"
 
 
 def test_new_character_is_placed_in_the_story_of_its_scope(saga):

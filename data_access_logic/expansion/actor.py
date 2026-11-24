@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import logging
 
+from pydantic import BaseModel
+
 from ai.instructions.materials import EVENT_PARTICIPANT_NOTE, LATER_EVENTS_NOTE, TIME_NOTE
 from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic import constants
@@ -56,7 +58,7 @@ _INTENT_SYSTEM = f"""\
 語り部の語りは、いま目の前で起きたこととして受ける。語り部の要求は、あなたが自分で決めたこととして演じ、言い回しと理由を自分で埋める。
 あなたのミーム・行動原理・性格とぶつかるときだけ断ってよい(断るなら、内心にその理由を書く)。
 一手は、一日から数日で片の付く大きさにする。大きな企ては、その最初の一手だけを決め、企ての名前を付ける。
-目の前の相手と言葉を交わして決めたいことがあれば、その相手を invites に挙げる。挙げてよいのは、目の前にいて名前を知っている人物だけ。
+目の前の相手と言葉を交わして決めたいことがあれば、その相手を invites に挙げる。挙げてよいのは、目の前にいる人物だけ(名を知らない相手も、人物idで挙げてよい)。
 
 {_MOTIVES_NOTE}"""
 
@@ -66,6 +68,8 @@ _TURN_SYSTEM = f"""\
 あなたのミーム・行動原理・性格・来歴・関係とモチベーションから、この場であなたが本当にしそうなことを決める。相手の言いなりにならなくてよく、断ってもよい。
 欠点・弱さ・悪意も、性格・来歴のとおりに丸めずに演じる。
 ほかの人物がどう応じるか、あなたの行動の結果どうなったかは書かない。言いたいことを言い、動き、相手の返事を待つところで止める。
+ここまでに自分か相手が言ったことを、言い方を変えて繰り返さない。話がまとまった・同じことの言い合いや譲り合いになった・もう言うことが無いなら、
+次の行動に移って done を true にする(人の会話は、用が済めば数言で終わる)。
 内心と狙いに、物語の外のこと(作者・手番・要求)を書かない。言葉と内心は「自分」の口調・一人称・方言で書く。
 
 {_MOTIVES_NOTE}"""
@@ -115,10 +119,20 @@ def narration_draft(ai: AIClient, brief: NarratorBrief) -> NarrationDraft | None
     return draft
 
 
+def _acting[Output: BaseModel](ai: AIClient, prompt: str, output: type[Output], system: str) -> Output | None:
+    """人物の目の段。返せなければ控えのモデルで一度だけやり直す(モデルの安全装置が、ふつうの人物のやり取りを止めることがある)。"""
+    for model in dict.fromkeys([constants.ACT_MODEL, constants.ACT_FALLBACK_MODEL]):
+        draft = ai.generate(prompt, output, system=system, style_scope=StyleScope.ACTING, model=model,
+                            effort=constants.ACT_EFFORT)
+        if draft is not None:
+            return draft
+        logger.warning(f"{model} で人物の目の段({output.__name__})が返らなかった")
+    return None
+
+
 def intent_draft(ai: AIClient, brief: ActorBrief) -> IntentDraft | None:
     prompt = "\n".join([json.dumps(brief.prompt, ensure_ascii=False, indent=2), "あなたの次の一手を決める。"])
-    intent = ai.generate(prompt, IntentDraft, system=_INTENT_SYSTEM, style_scope=StyleScope.ACTING,
-                         model=constants.ACT_MODEL, effort=constants.ACT_EFFORT)
+    intent = _acting(ai, prompt, IntentDraft, _INTENT_SYSTEM)
     if intent is None:
         logger.warning("人物の一手が得られなかった")
     return intent
@@ -131,10 +145,10 @@ def turn_draft(ai: AIClient, brief: DialogueBrief, seen: list[DialogueTurn], req
                     "ここまでに見聞きしたこと(起きた順)": [turn.seen_by(brief.character_id, brief.known_ids)
                                                     for turn in seen],
                     "求められていること": request}, ensure_ascii=False, indent=2),
-        "あなたの一手を返す。",
+        # 相手の言葉を読んだすぐあとに書くので、相手の一人称・口調が移りやすい
+        f"あなた({brief.name})の一手を返す。一人称・口調は自分の話し方のとおりにし、相手の話し方を移さない。",
     ])
-    draft = ai.generate(prompt, DialogueTurnDraft, system=_TURN_SYSTEM, style_scope=StyleScope.ACTING,
-                        model=constants.ACT_MODEL, effort=constants.ACT_EFFORT)
+    draft = _acting(ai, prompt, DialogueTurnDraft, _TURN_SYSTEM)
     if draft is None:
         logger.warning(f"{brief.name}(id={brief.character_id})の手番が得られなかった")
         return None

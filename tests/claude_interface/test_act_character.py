@@ -16,6 +16,7 @@ from data_access_logic.expansion.act_models import (
 from data_access_logic.expansion.read_expansion import ReadExpansion
 from data_access_logic.expansion.revert_expansion import RevertExpansion
 from data_access_logic.flows import act
+from data_access_logic.query import expansion_query
 from db.schema import (
     Character, CharacterHistory, CharacterLocation, CharacterMotivation, CharacterParameter, CharacterRelation, Episode,
     EpisodeCharacter, Event, EventCharacter, Expansion, IdeaHistory, get_env_session,
@@ -440,3 +441,51 @@ def test_actor_acts_on_motivations_and_the_events_around(world):
         assert s.get_one(CharacterMotivation, calm_id).end is None
         assert not s.scalars(select(CharacterMotivation).where(
             CharacterMotivation.character_id == actor_id, CharacterMotivation.start == time)).all()
+
+
+def test_a_left_behind_character_moves_to_the_present_of_its_own_story(world):
+    """作品の世界の今(本文のある最新の話)から ACT_STALE_DAYS 日より前に取り残された人物は、世界の今に寄せる。
+    作品の無い人物は寄せない(ほかの作品の今に引っぱられない)。"""
+    actor_id, other_id = world.character_ids[1], world.character_ids[0]
+    with get_env_session() as s:
+        s.get_one(Character, actor_id).story_id = world.story_id
+        s.add(Episode(story_id=world.story_id, title="テスト後の話", plot_text="ずっと後", main_text="ずっと後の本文。",
+                      start="1200/12/01 09:00:00", location_id=world.location_id,
+                      episode_characters=[EpisodeCharacter(character_id=other_id)]))
+        s.commit()
+
+    with get_env_session() as s:
+        assert expansion_query.last_appearance(s, actor_id) == _stamp("1200/12/01 09:00:00")
+        s.get_one(Character, actor_id).story_id = None
+        s.flush()
+        assert expansion_query.last_appearance(s, actor_id) == _stamp("1200/04/01 18:00:00")
+        s.rollback()
+
+
+def test_a_stranger_in_front_can_be_invited(world):
+    """目の前にいれば、名を知らない相手も巻きこめる。相手には、動いた人物の名前は伏せて見せる。"""
+    actor_id = world.character_ids[1]
+    with get_env_session() as s:
+        stranger = Character(name="テスト旅人", text="テスト旅人の説明", kind="人物", main_character=False, end="1260/01/01",
+                             parameters=[CharacterParameter(start="1170/01/01", sex="男", proactivity="並")])
+        s.add(stranger)
+        s.flush()
+        s.add(CharacterLocation(character_id=stranger.id, location_id=world.location_id, start="1170/01/01"))
+        s.commit()
+        stranger_id = stranger.id
+    ai = ScriptedAI(actor_id, world.neighbor_id, invite_ids=[stranger_id])
+
+    acted = _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1, ai=ai))
+
+    assert acted.invited_ids == [stranger_id]
+    assert "名を知らない人: 村へ移って診療所を開く「ここで診ます」" in ai.calls_of(DialogueTurnDraft)[0]["prompt"]
+
+
+def test_recent_events_of_the_place_say_how_long_ago(world):
+    """場所の近ごろの出来事は、いつのことかを添えて渡す(名前だけだと、何日も前のことを今のことと読む)。"""
+    actor_id = world.character_ids[1]
+    ai = ScriptedAI(actor_id, world.neighbor_id)
+
+    _one(act.act_character(character_id=actor_id, time="1200/05/01", seed=1, ai=ai))
+
+    assert "前: テスト市" in ai.calls_of(IntentDraft)[0]["prompt"]
