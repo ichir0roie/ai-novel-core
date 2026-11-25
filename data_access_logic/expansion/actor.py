@@ -59,10 +59,12 @@ def _ask[Output: BaseModel](session: AISession, payload: dict[str, Any], request
     return None
 
 
-def hour_draft(session: AISession, brief: DayBrief, scene: HourScene, first: list[DayPlace] | None = None,
-               schedule: list[str] | None = None) -> HourDraft | None:
-    """これからの一時間。`first` を渡したら一度目の問いとして、一日のあいだ変わらない材料と行ける場所・今日の予定を添える。"""
-    payload = scene.for_prompt(brief.known_ids)
+def hour_draft(session: AISession, brief: DayBrief, scene: HourScene, seen_ids: set[int],
+               first: list[DayPlace] | None = None, schedule: list[str] | None = None) -> HourDraft | None:
+    """これからの一時間。`first` を渡したら一度目の問いとして、一日のあいだ変わらない材料と行ける場所・今日の予定を添える。
+    `seen_ids` は会話の中で見た目を渡した人物(渡したあとに、今回渡す人物を足す)。"""
+    payload = scene.for_prompt(brief.known_ids, seen_ids)
+    seen_ids.update(person.character_id for person in scene.present)
     if first is not None:
         payload = {**brief.prompt, "行ける場所": [place.for_prompt() for place in first],
                    "今日決まっている予定": schedule or [], **payload}

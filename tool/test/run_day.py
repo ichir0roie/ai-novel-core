@@ -88,7 +88,8 @@ def _step_report() -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: -row["seconds"])[:8]
 
 
-def _character_report(character_id: int, day_start: Stamp, day_end: Stamp, expansion_id: int | None) -> dict[str, Any]:
+def _character_report(character_id: int, day_start: Stamp, day_end: Stamp, expansion_id: int | None,
+                      event_id: int | None) -> dict[str, Any]:
     with get_env_session() as s:
         actions = s.scalars(select(EventAction).where(
             EventAction.character_id == character_id, EventAction.time >= day_start, EventAction.time < day_end)
@@ -101,10 +102,7 @@ def _character_report(character_id: int, day_start: Stamp, day_end: Stamp, expan
             CharacterMotivation.character_id == character_id, CharacterMotivation.start <= day_start,
             (CharacterMotivation.end.is_(None)) | (CharacterMotivation.end > day_start))).all()
         expansion = None if expansion_id is None else s.get(Expansion, expansion_id)
-        event = None
-        if expansion is not None:
-            event = s.scalars(select(Event).where(Event.time >= day_start, Event.time < day_end, Event.origin == "ai",
-                                                  Event.event_characters.any(character_id=character_id))).first()
+        event = None if event_id is None else s.get(Event, event_id)
         hours = [f"{action.time.digits[3]:>2}時 {action.kind:<4} {names.get(action.location_id, '')} "
                  f"L{action.load} 空{action.hunger} 人{action.desire} 眠{action.sleepiness} | "
                  f"{action.text.replace(chr(10), ' / ')[:90]}" for action in actions]
@@ -134,14 +132,15 @@ def run_days(pattern: str, days: int, seed: int, out: Path) -> list[dict[str, An
         day_start = Stamp.parse(run.date)
         assert day_start is not None
         day_end = day_start.plus_days(1)
-        expansions = {acted.character_id: acted.expansion_id for acted in run.acted}
+        acted = {item.character_id: item for item in run.acted}
         report = {
             "pattern": pattern, "day": index + 1, "date": str(run.date), "seconds": round(elapsed),
             "failed": [failure.model_dump(mode="json") for failure in run.failed],
             "ai": _ai_report(), "steps": _step_report(),
-            "characters": {str(character_id): _character_report(character_id, day_start, day_end,
-                                                                 expansions.get(character_id))
-                           for character_id in world.character_ids},
+            "characters": {str(character_id): _character_report(
+                character_id, day_start, day_end, acted[character_id].expansion_id if character_id in acted else None,
+                acted[character_id].event.id if character_id in acted else None)
+                for character_id in world.character_ids},
         }
         reports.append(report)
         (out / f"{pattern}-day{index + 1}.json").write_text(json.dumps(report, ensure_ascii=False, indent=2),

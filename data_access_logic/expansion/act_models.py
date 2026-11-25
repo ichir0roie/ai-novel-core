@@ -345,7 +345,8 @@ class HourScene(BaseModel):
     seen: list[str]
     calendar: Calendar | None = Field(default_factory=active_calendar)
 
-    def for_prompt(self, known_ids: list[int]) -> dict[str, Any]:
+    def for_prompt(self, known_ids: list[int], seen_ids: set[int]) -> dict[str, Any]:
+        """`seen_ids` は会話の中で見た目を渡した人物。二度目からは見た目を渡さない(会話が覚えている)。"""
         sense = TimeSense(self.calendar)
         return {
             "いま": sense.now_for_prompt(self.time),
@@ -355,13 +356,14 @@ class HourScene(BaseModel):
             "目の前にいる人物": [
                 {"人物id": person.character_id,
                  "名前": person.name if person.character_id in known_ids and person.name else "(名を知らない)",
-                 **person.looks.model_dump()} for person in self.present],
+                 **({} if person.character_id in seen_ids else person.looks.model_dump())} for person in self.present],
             "目の前の人物が、さっきしていたこと": self.seen,
         }
 
 
 def _deeds_field() -> Any:
-    return Field(description=f"この一時間にした行い。{'・'.join(constants.DAY_DEED_WEIGHTS)} から当てはまるものすべて。無ければ空")
+    notes = "・".join(f"{deed}({note})" for deed, note in constants.DAY_DEED_NOTES.items())
+    return Field(description=f"この一時間にした行い。{notes} から当てはまるものすべて。無ければ空")
 
 
 def _known_deeds(values: list[str]) -> list[str]:

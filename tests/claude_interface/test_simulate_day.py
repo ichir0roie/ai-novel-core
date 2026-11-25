@@ -250,10 +250,10 @@ def test_sleep_plan_follows_the_drive_the_shortage_and_eagerness():
     assert needs.sleep_plan(24, "並", 0, 0, 0) == (8, 8, 24)
     # 前の夜に 22 時に眠れば 6 時に起きる。睡眠欲が高ければ、長く眠り早く寝る
     assert needs.sleep_plan(24, "並", 0, -2, 0) == (8, 6, 24)
-    assert needs.sleep_plan(24, "高", 0, 0, 0) == (10, 10, 22)
-    # 眠りが 4 時間足りなければ、並は 2 時間(遅く起き・早く寝る)、低い睡眠欲は 1 時間だけ取り戻す
-    assert needs.sleep_plan(24, "並", 4, 0, 0) == (8, 10, 22)
-    assert needs.sleep_plan(24, "低", 4, 0, 0) == (6, 7, 25)
+    assert needs.sleep_plan(24, "高", 0, 0, 0) == (9, 9, 23)
+    # 眠りが 4 時間足りなければ、並は 2 時間(朝に 1 時間・夜に 1 時間)、低い睡眠欲は 1 時間(朝)だけ取り戻す
+    assert needs.sleep_plan(24, "並", 4, 0, 0) == (8, 9, 23)
+    assert needs.sleep_plan(24, "低", 4, 0, 0) == (6, 7, 26)
     # 強いモチベーション・行動量の余裕があれば、早く起きて遅く寝る
     assert needs.sleep_plan(24, "並", 0, 0, 2) == (8, 6, 26)
     # 一日 30 時間の暦では、同じ割合(一日の三分の一を眠る)にそろえる
@@ -263,17 +263,18 @@ def test_sleep_plan_follows_the_drive_the_shortage_and_eagerness():
 def test_needs_grow_with_the_drive_and_yesterday_shortage():
     profile = _profile()
     awake = needs.next_needs(Needs(hunger=50, desire=50), "働く", 12, 24, profile)
-    assert (awake.hunger, awake.desire, awake.sleepiness) == (62, 53, 31)
+    # 眠気は寝る時刻の間際に強まる(8 時に起きて 24 時に寝る人の 13 時は、まだ眠くない)
+    assert (awake.hunger, awake.desire, awake.sleepiness) == (60, 53, 3)
     assert needs.next_needs(Needs(hunger=90, desire=50), "食べる", 12, 24, profile).hunger == 0
     assert needs.next_needs(Needs(hunger=50, desire=90), "触れ合う", 12, 24, profile).desire == 0
     # 眠っているあいだは、空腹がゆっくり増える
-    assert needs.next_needs(Needs(hunger=50, desire=0), "眠る", 2, 24, profile).hunger == 54
+    assert needs.next_needs(Needs(hunger=50, desire=0), "眠る", 2, 24, profile).hunger == 52
     # 前の日に食べ足りなかったぶん強く増え、性欲が無ければ増えない
     hungry = _profile(food_pressure=needs.pressure(50), libido="無")
     grown = needs.next_needs(Needs(hunger=0, desire=0), "働く", 12, 24, hungry)
-    assert (grown.hunger, grown.desire) == (18, 0)
+    assert (grown.hunger, grown.desire) == (15, 0)
     # 一日 30 時間の暦では、一時間の増え方を減らして一日あたりの量をそろえる
-    assert needs.next_needs(Needs(hunger=0, desire=0), "働く", 12, 30, profile).hunger == round(12 * 24 / 30)
+    assert needs.next_needs(Needs(hunger=0, desire=0), "働く", 12, 30, profile).hunger == round(10 * 24 / 30)
 
 
 def test_need_levels_come_from_the_age_unless_set():
@@ -324,9 +325,9 @@ def test_a_week_of_short_sleep_makes_a_motivation_and_a_tired_one_rests(world):
         wanted = s.scalars(select(CharacterMotivation).where(
             CharacterMotivation.character_id == actor_id, CharacterMotivation.text == "ゆっくり眠りたい")).one()
         assert (wanted.strength, wanted.start, wanted.origin) == (4, _stamp(_DAY), "ai")
-    # 前の日に 5 時間足りなかったので、3 時間ぶん遅く 11 時に起きる(行動量に余裕が無いので早起きはしない)
+    # 前の日に 5 時間足りなかったので 3 時間を取り戻し、朝は 2 時間遅く 10 時に起きる(行動量に余裕が無いので早起きはしない)
     actions = _actions(actor_id)
-    assert [action.kind for action in actions[:11]] == ["眠る"] * 11 and actions[11].kind != "眠る"
+    assert [action.kind for action in actions[:10]] == ["眠る"] * 10 and actions[10].kind != "眠る"
     # 七日の行動量が上限(七日 × 低の 12)にいるので、休む時間が出る
     assert any(action.kind == "休む" for action in actions)
     assert acted.actions == 24

@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from ai.claude_code import ai_client
+from data_access_logic import constants
 from data_access_logic.ai_client import AIClient, AISession
 from data_access_logic.caller import call
 from data_access_logic.character.form import CharacterForm
@@ -118,6 +119,8 @@ class _Walker:
     # 前に聞いてから、会話に聞かずに過ぎた時間(次に聞くときに渡す)
     unseen: list[_Entry] = field(default_factory=list)
     asked: bool = False
+    # 会話の中で見た目を渡した人物
+    looked_ids: set[int] = field(default_factory=set)
     # 目の前の人物が、さっきの一時間にしたこと(見る人の目で)
     seen: list[str] = field(default_factory=list)
     # 居合わせた人物(人物id と名前)。起きているあいだに同じ場所にいた人物
@@ -203,11 +206,13 @@ def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None
         # 夜に眠るときは寝床(その日の始まりの場所)へ戻る
         location_id = walker.location_id if index < profile.wake else walker.plan.home_id
         return _Choice(location_id=location_id, kind=_SLEEP, text="眠っていた")
-    if walker.rng.random() < needs.rest_chance(needs.fatigue(profile, walker.load)):
+    hungry = walker.needs.hunger >= constants.DAY_NEED_COMFORT
+    if not hungry and walker.rng.random() < needs.rest_chance(needs.fatigue(profile, walker.load)):
         return _Choice(location_id=walker.location_id, kind=_REST, text="疲れがたまっていて、その場で休んだ")
     scene = _scene(walker, index, plan, here)
     first = None if walker.asked else walker.places
-    draft = actor.hour_draft(walker.session, walker.brief, scene, first, _schedule(walker, plan) if first else None)
+    draft = actor.hour_draft(walker.session, walker.brief, scene, walker.looked_ids, first,
+                             _schedule(walker, plan) if first else None)
     walker.asked = True
     walker.unseen = []
     if draft is None:
@@ -330,7 +335,7 @@ def _satisfied(walker: _Walker) -> tuple[int, int, int]:
                               walker.plan.profile)
 
 
-def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan) -> DayActed:
+def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan, walker_ids: set[int]) -> DayActed:
     """人物の一日の欲の満ち足り方と行動量を記録し、一日を作者の目で記録して、出来事一件と、来歴・事柄・住まいの移動・思いの増減として足す。"""
     expansion_id = walker.plan.expansion_id
     assert expansion_id is not None
@@ -350,6 +355,11 @@ def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan) ->
     outcome = actor.judge_draft(ai, request)
     if outcome is None:
         raise ValueError("一日の記録が得られなかった")
+    # 一緒に動かした人物の人となりと思いは、その人物の一日の記録が書く(両方の記録が書くと、同じ思いがだぶる)
+    others = walker_ids - {walker.id}
+    outcome = outcome.model_copy(update={
+        "character_updates": [row for row in outcome.character_updates if row.character_id not in others],
+        "motivation_changes": [row for row in outcome.motivation_changes if row.character_id not in others]})
     outcome = budget.clamp(outcome, material.frame, walker.id)
     time = walker.first_awake or date
     location_id = walker.awake_places.most_common(1)[0][0] if walker.awake_places else walker.plan.home_id
@@ -446,7 +456,7 @@ def simulate_day(
 
         def record(walker: _Walker) -> DayActed | Exception:
             try:
-                return _record(ai, random.Random(seeds[walker.id]), walker, plan)
+                return _record(ai, random.Random(seeds[walker.id]), walker, plan, {other.id for other in walkers})
             except Exception as error:
                 return error
 

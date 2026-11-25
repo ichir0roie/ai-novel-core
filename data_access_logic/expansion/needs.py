@@ -39,9 +39,11 @@ def sleep_plan(hours_per_day: int, sleep_drive: str, debt: int, prev_bed: int, e
                             * constants.DAY_SLEEP_RATES[sleep_drive]))
     recover = min(_scaled(hours_per_day, constants.DAY_SLEEP_RECOVERY_MAX),
                   round(debt * constants.DAY_SLEEP_RECOVERY[sleep_drive]))
-    wake = min(hours_per_day - 1, max(0, prev_bed + required + recover - eager))
+    # 取り戻す時間は、朝を遅らせる分と夜を早める分に半分ずつ(朝の分を多めに)
+    late_wake, early_bed = recover - recover // 2, recover // 2
+    wake = min(hours_per_day - 1, max(0, prev_bed + required + late_wake - eager))
     base_wake = _scaled(hours_per_day, constants.DAY_BASE_WAKE)
-    bed = base_wake + hours_per_day - required - recover + eager
+    bed = base_wake + hours_per_day - required - early_bed + eager
     return required, wake, max(wake + 1, bed)
 
 
@@ -51,10 +53,11 @@ def asleep_at(hour: int, profile: NeedProfile) -> bool:
 
 
 def sleepiness_at(hour: int, profile: NeedProfile) -> int:
-    """起きてから寝るまでの、どこまで来たか(0〜100)。眠っている時間は 0。"""
+    """起きてから寝るまでの、どこまで来たか(0〜100)。寝る時刻の間際に強まるよう三乗する(一様に増やすと、寝る二時間前から
+    ひどく眠いと伝わり、人物が段取りより早く眠ってしまう)。眠っている時間は 0。"""
     if asleep_at(hour, profile) or hour < profile.wake:
         return 0
-    return min(100, round(100 * (hour - profile.wake) / max(1, profile.bed - profile.wake)))
+    return min(100, round(100 * ((hour - profile.wake) / max(1, profile.bed - profile.wake)) ** 3))
 
 
 def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: NeedProfile) -> Needs:
@@ -63,9 +66,8 @@ def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: 
     scale = 24 / hours_per_day
     food = constants.DAY_HUNGER_PER_HOUR * constants.DAY_NEED_RATES[profile.appetite] * profile.food_pressure
     touch = constants.DAY_DESIRE_PER_HOUR * constants.DAY_NEED_RATES[profile.libido] * profile.touch_pressure
-    # 眠っているあいだは、空腹もゆっくり増える
     if kind == _SLEEP:
-        food /= 3
+        food *= constants.DAY_SLEEP_HUNGER_SHARE
     hunger = 0 if kind == "食べる" else min(100, needs.hunger + round(food * scale))
     desire = 0 if kind == "触れ合う" else min(100, needs.desire + round(touch * scale))
     return Needs(hunger=hunger, desire=desire, sleepiness=sleepiness_at(hour + 1, profile))
