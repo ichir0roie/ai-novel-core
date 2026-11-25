@@ -1,23 +1,26 @@
-"""人物モード(`SimulateDay`)。人物たちの一日を一時間ずつ動かし、行動の表に残して、人物ごとの一日を出来事一件にまとめること。
-詳細の場所にいない人物は動かさないこと、作者の予定の時間は予定で埋めること、眠気・空腹の規則、取り消し。"""
+"""人物モード(`SimulateDay`)。人物たちの一日を一時間ずつ、人物ごとの会話一つで動かし、行動の表に残して、人物ごとの一日を出来事一件に
+まとめること。詳細の場所にいない人物は動かさないこと、作者の予定の時間は予定で埋めること、眠り・欲・行動量の決まりと日ごとの記録、取り消し。"""
 import json
+
+import pytest
 
 from sqlalchemy import select
 
 from data_access_logic import constants
 from data_access_logic.character.record import MotivationChange
 from data_access_logic.event.progress_models import CharacterUpdateDraft
-from data_access_logic.expansion import budget
+from data_access_logic.character.models import CharacterParameterValues
+from data_access_logic.expansion import budget, needs
 from data_access_logic.expansion.act_models import (
-    ActIdeaDraft, DayOutcomeDraft, HourDraft, ImpactFrame, Needs, ReactionDraft,
+    ActIdeaDraft, DayOutcomeDraft, HourDraft, ImpactFrame, NeedProfile, Needs, ReactionDraft,
 )
 from data_access_logic.expansion.revert_expansion import RevertExpansion
 from data_access_logic.expansion.simulate_day import SimulateDay
 from data_access_logic.flows import act
 from data_access_logic.query import expansion_query
 from db.schema import (
-    Character, CharacterLocation, CharacterMotivation, Episode, EpisodeCharacter, Event, EventAction, EventCharacter,
-    Expansion, IdeaHistory, Location, get_env_session,
+    Character, CharacterDay, CharacterLocation, CharacterMotivation, CharacterParameter, Episode, EpisodeCharacter, Event,
+    EventAction, EventCharacter, Expansion, IdeaHistory, Location, get_env_session,
 )
 from db.stamp import Stamp
 from tool.test.mock_ai_client import MockAIClient
@@ -61,12 +64,13 @@ class ScriptedAI(MockAIClient):
         if output is HourDraft:
             self.calls.append(call)
             hungry = "おなかがすいた" in prompt
-            return HourDraft(kind="食べる" if hungry else "用事", location_id=self.market_id,
+            return HourDraft(kind="食べる" if hungry else "働く", location_id=self.market_id,
                              action="市場でパンを買って食べる" if hungry else "市場で野菜を並べる",
-                             speech="いい天気だね", thought="今日も忙しい")
+                             speech="いい天気だね", thought="今日も忙しい",
+                             deeds=["外に出た"] if hungry else ["外に出た", "働いた", "空を飛んだ"])
         if output is ReactionDraft:
             self.calls.append(call)
-            return ReactionDraft(action="隣の人にうなずき返す", speech="そうだね", thought="顔見知りだ")
+            return ReactionDraft(action="隣の人にうなずき返す", speech="そうだね", thought="顔見知りだ", deeds=[])
         if output is DayOutcomeDraft:
             self.calls.append(call)
             request = json.loads(prompt.rsplit("\n", 1)[0])
@@ -103,8 +107,9 @@ def test_two_people_spend_a_day_hour_by_hour_and_meet_at_the_market(world):
         # 一日 24 時間を一時間ずつ残す
         assert len(actions) == 24 == acted.actions
         assert actions[0].time == _stamp(_DAY) and actions[-1].time == _stamp(f"{_DAY} 23:00:00")
-        # 夜中は眠っているので、人物の目には聞かずに眠る
-        assert actions[0].kind == "眠る" and actions[0].location_id == home_id
+        # 夜中は眠っているので、人物の会話には聞かずに眠る。行動量に余裕があるので、8 時より一時間早く 7 時に起きる
+        assert [action.kind for action in actions[:7]] == ["眠る"] * 7 and actions[7].kind != "眠る"
+        assert actions[0].location_id == home_id
         assert {action.expansion_id for action in actions} == {acted.expansion_id}
         assert {action.origin for action in actions} == {"ai"}
         # 起きてからは市場へ出て、もう一人と居合わせて応じ合う
@@ -112,6 +117,13 @@ def test_two_people_spend_a_day_hour_by_hour_and_meet_at_the_market(world):
         assert awake and all(action.location_id == market_id for action in awake)
         assert any("隣の人にうなずき返す" in action.text for action in awake)
         assert any(action.kind == "食べる" for action in awake)
+        # 行動量は、その一時間の行いのうち一番重いもの(知らない行いは数えない)
+        assert {action.load for action in awake} == {1, 3}
+        with get_env_session() as s:
+            day = s.scalars(select(CharacterDay).where(CharacterDay.character_id == acted.character_id)).one()
+            assert (day.expansion_id, day.date, day.load) == (acted.expansion_id, _stamp(_DAY), sum(a.load for a in awake))
+            # 7 時間しか眠れなかった(要る眠りは 8 時間)。日付が変わってから眠る
+            assert (day.sleep, day.bedtime) == (88, 25)
         other_id = next(id_ for id_ in world.character_ids if id_ != acted.character_id)
         assert acted.met_ids == [other_id]
         with get_env_session() as s:
@@ -123,14 +135,19 @@ def test_two_people_spend_a_day_hour_by_hour_and_meet_at_the_market(world):
             expansion = s.get_one(Expansion, acted.expansion_id)
             assert (expansion.mode, expansion.status, expansion.actor_id) == ("character", "done", acted.character_id)
             assert act.MET_HEAD in expansion.prompt
-    # 眠っている時間は人物の目に聞かないので、一人につき一日の時間より少ない
-    assert 0 < len(ai.calls_of(HourDraft)) < 2 * 24
+    # 人物一人に会話一つ。眠っている時間は会話に聞かないので、一人につき一日の時間より少ない
+    # (起きている 17 時間の手と、居合わせた相手への応じが 17 回。どちらも同じ会話で問う)
+    assert [session.asked for session in ai.sessions] == [34, 34]
+    assert len(ai.calls_of(HourDraft)) == 2 * 17
     assert ai.calls_of(ReactionDraft)
-    hour_call = ai.calls_of(HourDraft)[0]
-    # 人物の目には年の数を渡さず、知っていることと行ける場所を渡す
-    assert "1200/" not in hour_call["prompt"] and "あなたが知っていること" in hour_call["prompt"]
-    assert "テストの市場" in hour_call["prompt"] and "体の具合" in hour_call["prompt"]
-    assert (hour_call["model"], hour_call["effort"]) == (constants.ACT_MODEL, constants.ACT_EFFORT)
+    # 一時間ずつ二人が並んで問うので、三つ目の問いは二度目の問い
+    first, second = ai.calls_of(HourDraft)[0], ai.calls_of(HourDraft)[2]
+    # 一度目の問いには知っていることと行ける場所を渡し、二度目からは一時間の様子の差分だけを渡す。どちらにも年の数を渡さない
+    assert "1200/" not in first["prompt"] and "あなたが知っていること" in first["prompt"]
+    assert "テストの市場" in first["prompt"] and "体の具合" in first["prompt"]
+    assert "過ぎた時間にしていたこと" in first["prompt"] and "眠っていた" in first["prompt"]
+    assert "あなたが知っていること" not in second["prompt"] and "体の具合" in second["prompt"]
+    assert (first["model"], first["effort"]) == (constants.ACT_MODEL, constants.ACT_EFFORT)
     judge_call = ai.calls_of(DayOutcomeDraft)[0]
     assert (judge_call["model"], judge_call["effort"]) == (constants.ACT_JUDGE_MODEL, constants.ACT_JUDGE_EFFORT)
     assert "その日の行動(起きた順)" in judge_call["prompt"]
@@ -183,8 +200,9 @@ def test_a_day_is_moved_only_once_and_can_be_reverted(world):
         assert s.get(Event, acted.event.id) is None
 
 
-def test_the_next_day_carries_over_the_needs(world):
-    """前の日の最後の一時間の眠気・空腹を引き継ぐ。日を省けば、人物が最後に出た日の翌日を動かす。"""
+def test_the_next_day_follows_the_night_and_the_shortage(world):
+    """前の日に日付が変わってから眠った人物は、その時刻まで起きていて、要る眠りと、前の日の不足の一部を眠ってから起きる。
+    前の日の最後の一時間の空腹を引き継ぐ。日を省けば、人物が最後に出た日の翌日を動かす。"""
     _home_id, market_id = _detail_places(world)
     actor_id = world.character_ids[1]
     act.simulate_day([actor_id], _DAY, seed=1, ai=ScriptedAI(market_id))
@@ -193,10 +211,12 @@ def test_the_next_day_carries_over_the_needs(world):
     run = act.simulate_day([actor_id], None, seed=2, ai=ScriptedAI(market_id))
 
     assert run.date is not None and _stamp(str(run.date)) == _stamp("1200/05/02")
-    first = [action for action in _actions(actor_id) if action.time >= _stamp("1200/05/02")][0]
-    carried = Needs(sleepiness=last.sleepiness, hunger=last.hunger, asleep=last.kind == "眠る")
-    expected = act.next_needs(carried, first.kind, 24)
-    assert (first.sleepiness, first.hunger) == (expected.sleepiness, expected.hunger)
+    second = [action for action in _actions(actor_id) if action.time >= _stamp("1200/05/02")]
+    # 前の夜は 1 時に眠り、要る 8 時間と不足の取り戻し 1 時間を眠って 10 時に起きる
+    # (行動力が低なので、一日目の行動量で余裕が無くなり、早起きしない)
+    assert second[0].kind != "眠る" and [action.kind for action in second[1:10]] == ["眠る"] * 9
+    assert second[10].kind != "眠る"
+    assert second[0].hunger == 0 if second[0].kind == "食べる" else second[0].hunger > last.hunger
 
 
 def test_motivations_move_with_the_day_and_a_stronger_one_is_not_moved(world):
@@ -220,15 +240,87 @@ def test_motivations_move_with_the_day_and_a_stronger_one_is_not_moved(world):
         assert not s.scalars(select(CharacterMotivation).where(CharacterMotivation.character_id == main_id)).all()
 
 
-def test_next_needs_follow_sleep_and_meals():
-    awake = act.next_needs(Needs(sleepiness=50, hunger=50), "用事", 24)
-    assert (awake.sleepiness, awake.hunger, awake.asleep) == (56, 62, False)
-    asleep = act.next_needs(Needs(sleepiness=50, hunger=50), "眠る", 24)
-    assert (asleep.sleepiness, asleep.asleep) == (38, True)
-    assert act.next_needs(Needs(sleepiness=50, hunger=90), "食べる", 24).hunger == 0
+def _profile(**values) -> NeedProfile:
+    base = dict(appetite="並", sleep_drive="並", libido="並", required_sleep=8, prev_bed=0, wake=8, bed=24)
+    return NeedProfile(**{**base, **values})
+
+
+def test_sleep_plan_follows_the_drive_the_shortage_and_eagerness():
+    # 並の睡眠欲なら、24 時に寝て 8 時に起きる
+    assert needs.sleep_plan(24, "並", 0, 0, 0) == (8, 8, 24)
+    # 前の夜に 22 時に眠れば 6 時に起きる。睡眠欲が高ければ、長く眠り早く寝る
+    assert needs.sleep_plan(24, "並", 0, -2, 0) == (8, 6, 24)
+    assert needs.sleep_plan(24, "高", 0, 0, 0) == (10, 10, 22)
+    # 眠りが 4 時間足りなければ、並は 2 時間(遅く起き・早く寝る)、低い睡眠欲は 1 時間だけ取り戻す
+    assert needs.sleep_plan(24, "並", 4, 0, 0) == (8, 10, 22)
+    assert needs.sleep_plan(24, "低", 4, 0, 0) == (6, 7, 25)
+    # 強いモチベーション・行動量の余裕があれば、早く起きて遅く寝る
+    assert needs.sleep_plan(24, "並", 0, 0, 2) == (8, 6, 26)
+    # 一日 30 時間の暦では、同じ割合(一日の三分の一を眠る)にそろえる
+    assert needs.sleep_plan(30, "並", 0, 0, 0) == (10, 10, 30)
+
+
+def test_needs_grow_with_the_drive_and_yesterday_shortage():
+    profile = _profile()
+    awake = needs.next_needs(Needs(hunger=50, desire=50), "働く", 12, 24, profile)
+    assert (awake.hunger, awake.desire, awake.sleepiness) == (62, 53, 31)
+    assert needs.next_needs(Needs(hunger=90, desire=50), "食べる", 12, 24, profile).hunger == 0
+    assert needs.next_needs(Needs(hunger=50, desire=90), "触れ合う", 12, 24, profile).desire == 0
+    # 眠っているあいだは、空腹がゆっくり増える
+    assert needs.next_needs(Needs(hunger=50, desire=0), "眠る", 2, 24, profile).hunger == 54
+    # 前の日に食べ足りなかったぶん強く増え、性欲が無ければ増えない
+    hungry = _profile(food_pressure=needs.pressure(50), libido="無")
+    grown = needs.next_needs(Needs(hunger=0, desire=0), "働く", 12, 24, hungry)
+    assert (grown.hunger, grown.desire) == (18, 0)
     # 一日 30 時間の暦では、一時間の増え方を減らして一日あたりの量をそろえる
-    assert act.next_needs(Needs(sleepiness=0, hunger=0), "用事", 30).hunger == round(12 * 24 / 30)
-    assert act.next_needs(Needs(sleepiness=99, hunger=99), "用事", 24).sleepiness == 100
+    assert needs.next_needs(Needs(hunger=0, desire=0), "働く", 12, 30, profile).hunger == round(12 * 24 / 30)
+
+
+def test_need_levels_come_from_the_age_unless_set():
+    unset = CharacterParameterValues()
+    assert needs.levels_of(unset, 10) == ("高", "高", "無")
+    assert needs.levels_of(unset, 30) == ("並", "並", "並")
+    assert needs.levels_of(unset, 70) == ("低", "低", "低")
+    assert needs.levels_of(CharacterParameterValues(libido="必"), 10) == ("高", "高", "必")
+
+
+def test_satisfaction_fatigue_and_motivation_steps():
+    profile = _profile(load_before=60, load_max=140)
+    assert needs.satisfaction([40, 60, 100], [0, 0, 0], 6, profile) == (60, 75, 100)
+    assert needs.fatigue(profile, 10) == 50 and needs.rest_chance(50) == 0
+    assert needs.rest_chance(80) == pytest.approx(0.5) and needs.rest_chance(120) == constants.DAY_REST_MAX_CHANCE
+    assert [needs.motivation_strength(total) for total in (100, 120, 300, 600)] == [0, 2, 3, 5]
+    assert needs.hour_load(["外に出た", "何かを傷つけた"]) == 4 and needs.hour_load([]) == 0
+
+
+def test_a_week_of_short_sleep_makes_a_motivation_and_a_tired_one_rests(world):
+    """さかのぼった七日の眠りの不足で、眠りたいモチベーションを持つ。行動量が上限にいる人物は、会話に聞かずに休みがちになる。"""
+    _home_id, market_id = _detail_places(world)
+    actor_id = world.character_ids[1]
+    with get_env_session() as s:
+        s.add(CharacterParameter(character_id=actor_id, start="1199/01/01", proactivity="低"))
+        for days in range(1, 7):
+            s.add(CharacterDay(character_id=actor_id, date=_stamp(_DAY).plus_days(-days), food=100, sleep=40, touch=100,
+                               load=14, bedtime=24))
+        s.commit()
+    ai = ScriptedAI(market_id)
+
+    run = act.simulate_day([actor_id], _DAY, seed=1, ai=ai)
+
+    acted = run.acted[0]
+    with get_env_session() as s:
+        wanted = s.scalars(select(CharacterMotivation).where(
+            CharacterMotivation.character_id == actor_id, CharacterMotivation.text == "ゆっくり眠りたい")).one()
+        assert (wanted.strength, wanted.start, wanted.origin) == (4, _stamp(_DAY), "ai")
+    # 前の日に 5 時間足りなかったので、3 時間ぶん遅く 11 時に起きる(行動量に余裕が無いので早起きはしない)
+    actions = _actions(actor_id)
+    assert [action.kind for action in actions[:11]] == ["眠る"] * 11 and actions[11].kind != "眠る"
+    # 七日の行動量が上限(七日 × 低の 12)にいるので、休む時間が出る
+    assert any(action.kind == "休む" for action in actions)
+    assert acted.actions == 24
+    RevertExpansion(expansion_id=acted.expansion_id).run()
+    with get_env_session() as s:
+        assert s.get(CharacterMotivation, wanted.id) is None
 
 
 def test_clamp_keeps_the_actor_first_and_cuts_the_rest():

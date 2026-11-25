@@ -1,57 +1,79 @@
 """人物モード(`SimulateDay`)の AI だけの段。db に触らない。
 
-一時間ごとの手と居合わせた相手への応じは人物の目(人物役と同じ書き方の範囲)で、人物が知ることと目の前の様子だけから決める。
-数が多いので中くらいのモデルで回す。一日の記録は作者の目(出来事の書き方の範囲)で、人物ごとに一度だけ強いモデルで回す。
+人物一人に会話(エージェント)を一つ持たせ、その人物の一日を一つの会話で回す(`AIClient.session`)。一度目の問いに、一日のあいだ変わらない材料
+(知っていること・思い・行ける場所・今日の予定)を渡し、二度目からは、その一時間の様子の差分だけを渡す(前の問いと答えは会話が覚えている)。
+人物の目(人物役と同じ書き方の範囲)は中くらいのモデルで回す。一日の記録は作者の目(出来事の書き方の範囲)で、人物ごとに一度だけ強いモデルで回す。
 """
 from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from pydantic import BaseModel
 
 from ai.instructions.materials import EVENT_PARTICIPANT_NOTE, LATER_EVENTS_NOTE, TIME_NOTE
 from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic import constants
-from data_access_logic.ai_client import AIClient
+from data_access_logic.ai_client import AIClient, AISession
 from data_access_logic.expansion.act_models import (
-    DayBrief, DayOutcomeDraft, DayRequest, HourDraft, HourScene, ReactionDraft,
+    DayBrief, DayOutcomeDraft, DayPlace, DayRequest, HourDraft, HourScene, ReactionDraft,
 )
 from db.schema import StyleScope
 
 logger = logging.getLogger(__name__)
 
-# 人物の目の材料のうち、本人のモチベーションと前後の出来事(`act_models.Motives`)と体の具合の読み方
-_MOTIVES_NOTE = """\
-「あなたのモチベーション」は、いまあなたが何をしたがっているかで、強さは 1(気にかかる程度)〜5(何を捨てても果たしたい)。
-「あなたが関わったこれまでの出来事」は、あなたが居合わせて覚えていること。
-「この先に決まっている出来事」は、この先に起きると決まっていることで、あなたはまだ知らない。
-「いつ」「いつから」は、いまからの隔たり(「3日前」「5日後」)。「いま」は今日の日付・時間帯で、年は渡さない。
-あなたの言葉・内心に出さず、そこへ食い違わずにつながるように動き、それを先回りして起こさない。
-「体の具合」の眠気・空腹は、人の体のとおりに効かせる。眠ければ休むか眠り、おなかがすけば食べる。"""
-
-_HOUR_SYSTEM = f"""\
-あなたは物語の中の人物の一人として、これからの一時間にすることを一つ決める。渡すのは、あなたが知っていることと、いま目の前にあることだけ。
-知らないこと(名を知らない人物の名前・素性、知らない出来事や事柄)を前提にしない。
-あなたのミーム・行動原理・性格・来歴・関係とモチベーション、今日これまでにしたこと、体の具合から、いまこの時間にあなたが本当にしそうなことを決める。
+_AGENT_SYSTEM = """\
+あなたは物語の中の人物の一人として、一日を一時間ずつ過ごす。一時間ごとに、これからの一時間にすることを一つ決めて返す。
+同じ場所に居合わせた人物のしたことを渡されたら、それを受けてどう応じるかを返す。
+渡すのは、あなたが知っていることと、いま目の前にあることだけ。知らないこと(名を知らない人物の名前・素性、知らない出来事や事柄)を前提にしない。
+あなたのミーム・行動原理・性格・来歴・関係とモチベーション、これまでにしたこと、体の具合から、いまこの時間にあなたが本当にしそうなことを決める。
 人の一日は、眠る・食べる・働く・用事・人と話す・休むの積み重ねで、大きなことは一日にそう何度も起きない。ふだんの暮らしの一時間を、ふだんのとおりに過ごしてよい。
-仕事や暮らしの決まった時間があれば、それに沿う。今日このあと決まっている予定があれば、それに間に合うように動き、先回りしない。
-場所を移るなら、行ける場所の中から選ぶ。目の前の人物に話しかけてよい。
+仕事や暮らしの決まった時間があれば、それに沿う。今日決まっている予定には間に合うように動き、先回りしない。
+場所を移るなら、行ける場所の中から選ぶ。目の前の人物に話しかけてよい。応じるときは相手の言いなりにならなくてよく、気に留めずに自分のことを続けてもよい。
+欠点・弱さ・悪意も、性格・来歴のとおりに丸めずに演じる。ほかの人物がどう応じるか、あなたの行動の結果どうなったかは書かない。
+「体の具合」の空腹・眠気・人恋しさ・疲れは、人の体のとおりに効かせる。おなかがすけば食べ、眠ければ休み、疲れがたまっていれば大きなことを控える。
+人恋しさは、親しい相手と寄り添う・手を取る・抱きしめるような触れ合いで満たす。相手の気持ちと間柄に沿う範囲だけで、書くのは見える仕草まで。
 思いつきの元は、ほかの場面の筋の型。使うなら、あなたの立場と場所に合わせて形を変える。作者からの方向づけがあれば、言いなりにはならず、あなたらしい形で踏まえる。
-内心と言葉に、物語の外のこと(作者・手番・時間の区切り)を書かない。言葉と内心は自分の口調・一人称・方言で書く。
+「あなたのモチベーション」は、いまあなたが何をしたがっているかで、強さは 1(気にかかる程度)〜5(何を捨てても果たしたい)。
+「あなたが関わったこれまでの出来事」は、あなたが居合わせて覚えていること。「この先に決まっている出来事」は、この先に起きると決まっていることで、
+あなたはまだ知らない。あなたの言葉・内心に出さず、そこへ食い違わずにつながるように動き、それを先回りして起こさない。
+「いつ」「いつから」は、いまからの隔たり(「3日前」「5日後」)。「いま」は今日の日付・時間帯で、年は渡さない。
+内心と言葉に、物語の外のこと(作者・手番・時間の区切り)を書かない。言葉と内心は自分の口調・一人称・方言で書き、相手の話し方を移さない。"""
 
-{_MOTIVES_NOTE}"""
 
-_REACTION_SYSTEM = f"""\
-あなたは物語の中の人物の一人として、この一時間に同じ場所に居合わせた人物のしたこと・言ったことを受けて、どう応じるかを決める。
-渡すのは、あなたが知っていることと、目の前の様子と、あなたが決めていたこの一時間の過ごし方と、居合わせた人物がしたことだけ。
-知らないこと(名を知らない人物の名前・素性、知らない出来事や事柄)を前提にしない。
-あなたのミーム・行動原理・性格・来歴・関係とモチベーションから、この場であなたが本当にしそうな応じ方を決める。相手の言いなりにならなくてよく、
-気に留めずに自分のことを続けてもよい。欠点・弱さ・悪意も、性格・来歴のとおりに丸めずに演じる。
-ほかの人物がどう応じるか、あなたの行動の結果どうなったかは書かない。
-内心に物語の外のこと(作者・手番)を書かない。言葉と内心は自分の口調・一人称・方言で書き、相手の話し方を移さない。
+def agent(ai: AIClient) -> AISession:
+    """人物一人の一日を回す会話。"""
+    return ai.session(_AGENT_SYSTEM, StyleScope.ACTING, constants.ACT_MODEL, constants.ACT_EFFORT)
 
-{_MOTIVES_NOTE}"""
+
+def _ask[Output: BaseModel](session: AISession, payload: dict[str, Any], request: str, output: type[Output],
+                            name: str | None) -> Output | None:
+    """返せなければ控えのモデルで一度だけやり直す(モデルの安全装置が、ふつうの人物のやり取りを止めることがある)。"""
+    prompt = "\n".join([json.dumps(payload, ensure_ascii=False, indent=2), request])
+    for model in dict.fromkeys([constants.ACT_MODEL, constants.ACT_FALLBACK_MODEL]):
+        draft = session.ask(prompt, output, model=model)
+        if draft is not None:
+            return draft
+        logger.warning(f"{name} の{output.__name__}が {model} で返らなかった")
+    return None
+
+
+def hour_draft(session: AISession, brief: DayBrief, scene: HourScene, first: list[DayPlace] | None = None,
+               schedule: list[str] | None = None) -> HourDraft | None:
+    """これからの一時間。`first` を渡したら一度目の問いとして、一日のあいだ変わらない材料と行ける場所・今日の予定を添える。"""
+    payload = scene.for_prompt(brief.known_ids)
+    if first is not None:
+        payload = {**brief.prompt, "行ける場所": [place.for_prompt() for place in first],
+                   "今日決まっている予定": schedule or [], **payload}
+    return _ask(session, payload, f"あなた({brief.name})の、これからの一時間を決める。", HourDraft, brief.name)
+
+
+def reaction_draft(session: AISession, brief: DayBrief, others: list[str]) -> ReactionDraft | None:
+    """`others` は居合わせた人物がこの一時間にしたこと(見る人の目で、名を知らない相手は伏せる)。決めていた一時間は会話が覚えている。"""
+    return _ask(session, {"居合わせた人物がこの一時間にしたこと": others},
+                f"あなた({brief.name})が決めていたこの一時間のうちに、居合わせた人物にどう応じるかを返す。", ReactionDraft, brief.name)
+
 
 _JUDGE_SYSTEM = f"""\
 物語の人物の一人が、一日を一時間ずつ過ごした。その日の行動(どこで何をし、誰と居合わせて何を言い合ったか)を渡すので、
@@ -79,44 +101,6 @@ motivation_changes は、この一日のあとの、居合わせた人物の思�
 {LATER_EVENTS_NOTE}
 
 {TIME_NOTE}"""
-
-
-def _acting[Output: BaseModel](ai: AIClient, prompt: str, output: type[Output], system: str) -> Output | None:
-    """人物の目の段。返せなければ控えのモデルで一度だけやり直す(モデルの安全装置が、ふつうの人物のやり取りを止めることがある)。"""
-    for model in dict.fromkeys([constants.ACT_MODEL, constants.ACT_FALLBACK_MODEL]):
-        draft = ai.generate(prompt, output, system=system, style_scope=StyleScope.ACTING, model=model,
-                            effort=constants.ACT_EFFORT)
-        if draft is not None:
-            return draft
-        logger.warning(f"{model} で人物の目の段({output.__name__})が返らなかった")
-    return None
-
-
-def _material(brief: DayBrief, scene: HourScene) -> dict:
-    return {**brief.prompt, **scene.for_prompt(brief.known_ids)}
-
-
-def hour_draft(ai: AIClient, brief: DayBrief, scene: HourScene) -> HourDraft | None:
-    prompt = "\n".join([json.dumps(_material(brief, scene), ensure_ascii=False, indent=2),
-                        f"あなた({brief.name})の、これからの一時間を決める。"])
-    draft = _acting(ai, prompt, HourDraft, _HOUR_SYSTEM)
-    if draft is None:
-        logger.warning(f"{brief.name}(id={brief.character_id})の一時間が得られなかった")
-    return draft
-
-
-def reaction_draft(ai: AIClient, brief: DayBrief, scene: HourScene, planned: str, others: list[str]) -> ReactionDraft | None:
-    """`planned` は本人が決めていたこの一時間、`others` は居合わせた人物がこの一時間にしたこと(見る人の目で、名を知らない相手は伏せる)。"""
-    prompt = "\n".join([
-        json.dumps({**_material(brief, scene), "あなたが決めていたこの一時間": planned,
-                    "居合わせた人物がこの一時間にしたこと": others}, ensure_ascii=False, indent=2),
-        # 相手の言葉を読んだすぐあとに書くので、相手の一人称・口調が移りやすい
-        f"あなた({brief.name})の応じ方を返す。一人称・口調は自分の話し方のとおりにし、相手の話し方を移さない。",
-    ])
-    draft = _acting(ai, prompt, ReactionDraft, _REACTION_SYSTEM)
-    if draft is None:
-        logger.warning(f"{brief.name}(id={brief.character_id})の応じ方が得られなかった")
-    return draft
 
 
 def judge_draft(ai: AIClient, request: DayRequest) -> DayOutcomeDraft | None:

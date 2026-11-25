@@ -185,15 +185,37 @@ class FixedSlot(BaseModel):
 
 
 class Needs(BaseModel):
-    """眠気と空腹(0〜100)。一時間ごとに規則で動かす(`flows/act.py` の `next_needs`)。"""
+    """空腹と、人と触れ合いたい欲と眠気(0〜100)。一時間ごとに規則で動かす(`expansion/needs.py`)。"""
 
-    sleepiness: int
     hunger: int
-    asleep: bool = False
+    desire: int
+    sleepiness: int = 0
 
-    def for_prompt(self) -> dict[str, str]:
-        return {"眠気": _need_word(self.sleepiness, constants.DAY_NEED_WORDS["眠気"]),
-                "空腹": _need_word(self.hunger, constants.DAY_NEED_WORDS["空腹"])}
+    def for_prompt(self, fatigue: int) -> dict[str, str]:
+        words = constants.DAY_NEED_WORDS
+        return {"眠気": _need_word(self.sleepiness, words["眠気"]), "空腹": _need_word(self.hunger, words["空腹"]),
+                "人恋しさ": _need_word(self.desire, words["人恋しさ"]), "疲れ": _need_word(fatigue, words["疲れ"])}
+
+
+class NeedProfile(BaseModel):
+    """人物のその日の欲の段と、眠りの段取りと、行動量。時刻はその日の一時間の番号(0 が 0 時)で持つ。"""
+
+    appetite: str
+    sleep_drive: str
+    libido: str
+    # 前の日に満ち足りなかったぶん、その日に強く働く割合(1 で前の日と同じ)
+    food_pressure: float = 1.0
+    touch_pressure: float = 1.0
+    # 一晩に要る眠りの時間
+    required_sleep: int
+    # 前の夜に眠った時刻。0 以下は前の日のうち(-2 なら前の日の 22 時)、正なら日付が変わってから起きていた
+    prev_bed: int
+    # その朝に起きる時刻と、その夜に眠る時刻(一日の時間の数以上なら、日付が変わってから眠る)
+    wake: int
+    bed: int
+    # その日より前の `DAY_LOOKBACK_DAYS - 1` 日の行動量の和と、七日の上限
+    load_before: int = 0
+    load_max: int = 0
 
 
 def _need_word(value: int, words: tuple[tuple[int, str], ...]) -> str:
@@ -212,6 +234,9 @@ class DayCharacter(BaseModel):
     influence: str = "並"
     fixed: list[FixedSlot] = []
     needs: Needs
+    profile: NeedProfile
+    # さかのぼった不足から決めた、欲(food・sleep・touch)を満たしたいモチベーションの強さ(0 なら持たない)
+    need_strengths: dict[str, int] = {}
     # この人物の一日を記録する展開
     expansion_id: int | None = None
 
@@ -305,37 +330,42 @@ class PlacePeople(BaseModel):
 
 
 class HourScene(BaseModel):
-    """人物の目に渡す、この一時間の目の前の様子。"""
+    """人物の目に渡す、この一時間の目の前の様子。会話の中で前に渡したもの(知っていること・行ける場所)は渡し直さない。"""
 
     time: Timestamp
     location_id: int
     location_name: str | None = None
     needs: Needs
-    # 今日これまでにしたこと(起きた順)
-    log: list[str]
+    # 七日の行動量の、上限に対する割合(百分率)
+    fatigue: int
+    # 前に聞いてから、人物の目に聞かずに過ぎた時間(眠っていた・予定・休んだ。起きた順)
+    meanwhile: list[str]
     present: list[PresentPerson]
     # 目の前の人物が、さっきの一時間にしたこと
     seen: list[str]
-    # 今日このあと決まっている予定
-    upcoming: list[str]
-    places: list[DayPlace]
     calendar: Calendar | None = Field(default_factory=active_calendar)
 
     def for_prompt(self, known_ids: list[int]) -> dict[str, Any]:
         sense = TimeSense(self.calendar)
         return {
             "いま": sense.now_for_prompt(self.time),
+            "前に決めてから、過ぎた時間にしていたこと": self.meanwhile,
             "いる場所": {"場所id": self.location_id, "名前": self.location_name},
-            "体の具合": self.needs.for_prompt(),
-            "今日これまでにしたこと(起きた順)": self.log,
+            "体の具合": self.needs.for_prompt(self.fatigue),
             "目の前にいる人物": [
                 {"人物id": person.character_id,
                  "名前": person.name if person.character_id in known_ids and person.name else "(名を知らない)",
                  **person.looks.model_dump()} for person in self.present],
             "目の前の人物が、さっきしていたこと": self.seen,
-            "今日このあと決まっている予定": self.upcoming,
-            "行ける場所": [place.for_prompt() for place in self.places],
         }
+
+
+def _deeds_field() -> Any:
+    return Field(description=f"この一時間にした行い。{'・'.join(constants.DAY_DEED_WEIGHTS)} から当てはまるものすべて。無ければ空")
+
+
+def _known_deeds(values: list[str]) -> list[str]:
+    return [value for value in dict.fromkeys(value.strip() for value in values) if value in constants.DAY_DEED_WEIGHTS]
 
 
 class HourDraft(BaseModel):
@@ -347,6 +377,12 @@ class HourDraft(BaseModel):
     action: str = Field(description="この一時間にすること。どこで・誰に・何をするか")
     speech: str | None = Field(description="口にする言葉。黙っているなら null")
     thought: str = Field(description="いまの内心")
+    deeds: list[str] = _deeds_field()
+
+    @field_validator("deeds")
+    @classmethod
+    def _deeds(cls, values: list[str]) -> list[str]:
+        return _known_deeds(values)
 
     @field_validator("kind")
     @classmethod
@@ -370,6 +406,12 @@ class ReactionDraft(BaseModel):
     action: str = Field(description="目の前の人物のしたこと・言ったことを受けて、この一時間のうちにすること。気に留めないなら、そのまま続けること")
     speech: str | None = Field(description="口にする言葉。黙っているなら null")
     thought: str = Field(description="いまの内心")
+    deeds: list[str] = _deeds_field()
+
+    @field_validator("deeds")
+    @classmethod
+    def _deeds(cls, values: list[str]) -> list[str]:
+        return _known_deeds(values)
 
 
 class HourAction(BaseModel):
@@ -384,8 +426,32 @@ class HourAction(BaseModel):
     thought: str | None = None
     sleepiness: int
     hunger: int
+    desire: int
+    load: int
     fixed_event_id: int | None = None
     fixed_episode_id: int | None = None
+
+
+class CharacterDayForm(BaseModel):
+    """人物の一日の、欲の満ち足り方(0〜100)と行動量。`bedtime` はその夜に眠った時刻(その日の一時間の番号)。"""
+
+    character_id: int
+    expansion_id: int
+    date: Stamp
+    food: int
+    sleep: int
+    touch: int
+    load: int
+    bedtime: int
+
+
+class NeedMotivationForm(BaseModel):
+    """さかのぼった不足から決めた、欲を満たしたいモチベーションの強さ(0 なら持たない)。"""
+
+    character_id: int
+    time: Stamp
+    # 欲(food・sleep・touch)ごとの強さ
+    strengths: dict[str, int]
 
 
 class ActionsForm(BaseModel):

@@ -28,6 +28,7 @@ def mock_ai(monkeypatch: pytest.MonkeyPatch) -> MockAIClient:
     from ai.claude_code import ai_client
     mock = MockAIClient(seed=0)
     monkeypatch.setattr(ai_client, "generate", mock.generate)
+    monkeypatch.setattr(ai_client, "session", mock.session)
     return mock
 
 

@@ -2,12 +2,16 @@
 """人物モードの流れ(`SimulateDay`)。渡した人物たちの一日を、0 時から暦の一時間ずつ動かし、行動の表(`event_action`)に残して、
 一日の終わりに人物ごとの一日を出来事一件にまとめる。
 
-- 一時間ごとに、人物ごとの手を並べて決める(人物どうしは並列)。作者の出来事・話の予定がある時間は予定で埋め、眠っている時間と
-  眠気に負けた時間は規則で埋めて、人物の目(AI)には聞かない(`next_needs`)
+- 人物一人に会話(エージェント)を一つ持たせ、その人物の一日を一つの会話で回す。一度目の問いに一日のあいだ変わらない材料を渡し、
+  二度目からはその一時間の様子の差分だけを渡す(`expansion/actor.py`)。人物どうしの一時間は並べて(並列に)回す
+- 作者の出来事・話の予定がある時間は予定で埋め、眠っている時間(起きる・寝る時刻は計算で決める)と、疲れて休む時間は規則で埋めて、
+  人物の会話には聞かない(`expansion/needs.py`)。聞かずに過ぎた時間は、次に聞くときに「過ぎた時間にしていたこと」として渡す
 - 手を決めたら、同じ場所に居合わせた人物どうしに、相手がこの一時間にしたことを見せて応じさせる(一往復)。次の一時間の材料には、
   目の前の人物がさっきしたことを渡す
 - 動けるのは、人物のいるエリア(詳細の場所の一番近い、詳細でない上の場所)の詳細の場所のあいだだけ。詳細の場所にいない人物は動かさない
-- 人物ごとに展開(`expansion`、mode=character)を一つ立て、書き手 `ai_append` で書くので、その一日の行動・出来事・来歴などは
+- 一日の終わりに、欲の満ち足り方と行動量を人物の一日の記録(`character_day`)に足す。次の日の欲の強さ・眠り・休みがちさと、
+  欲を満たしたいモチベーションは、この記録から決まる
+- 人物ごとに展開(`expansion`、mode=character)を一つ立て、書き手 `ai_append` で書くので、その一日の行動・記録・出来事・来歴などは
   `RevertExpansion` で人物の一日ごとに取り消せる
 
 db の段は `data_access_logic/expansion/steps.py`、AI の段は `data_access_logic/expansion/actor.py`。
@@ -23,19 +27,18 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from ai.claude_code import ai_client
-from data_access_logic import constants
-from data_access_logic.ai_client import AIClient
+from data_access_logic.ai_client import AIClient, AISession
 from data_access_logic.caller import call
 from data_access_logic.character.form import CharacterForm
 from data_access_logic.character.record import GeneratedCharacter
 from data_access_logic.event_seed import steps as seed_steps
 from data_access_logic.event_seed.extractor import draw_from
-from data_access_logic.expansion import actor, budget
+from data_access_logic.expansion import actor, budget, needs
 from data_access_logic.expansion import steps as expansion_steps
 from data_access_logic.expansion.act_models import (
-    ActFailure, ActionsForm, DayActed, DayBrief, DayBriefForm, DayCharacter, DayForm, DayMaterialForm, DayPlace,
-    DayPlan, DayRequest, DayRun, DaySaveForm, HourAction, HourScene, MotivesForm, Needs, NewCharacterLink, PeopleForm,
-    PlacePeople,
+    ActFailure, ActionsForm, CharacterDayForm, DayActed, DayBrief, DayBriefForm, DayCharacter, DayForm,
+    DayMaterialForm, DayPlace, DayPlan, DayRequest, DayRun, DaySaveForm, HourAction, HourScene, MotivesForm,
+    NeedMotivationForm, Needs, NewCharacterLink, PeopleForm, PlacePeople,
 )
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
 from data_access_logic.flows import character as character_flow
@@ -54,17 +57,7 @@ logger = logging.getLogger(__name__)
 MET_HEAD = "居合わせた相手とのやり取り:"
 _SLEEP = "眠る"
 _FIXED = "予定"
-
-
-def next_needs(needs: Needs, kind: str, hours_per_day: int) -> Needs:
-    """一時間を過ごしたあとの眠気と空腹。眠ると眠気が減り、起きていると増える。食べると空腹が 0 に戻る。
-    増え方は一日 24 時間の暦の量で、一日の長さが違う暦では、一日あたりの量がそろうように割合を直す。"""
-    scale = 24 / hours_per_day
-    asleep = kind == _SLEEP
-    change = constants.DAY_SLEEPINESS_ASLEEP_PER_HOUR if asleep else constants.DAY_SLEEPINESS_AWAKE_PER_HOUR
-    sleepiness = min(100, max(0, needs.sleepiness + round(change * scale)))
-    hunger = 0 if kind == "食べる" else min(100, needs.hunger + round(constants.DAY_HUNGER_PER_HOUR * scale))
-    return Needs(sleepiness=sleepiness, hunger=hunger, asleep=asleep)
+_REST = "休む"
 
 
 def _parallel[In, Out](work: Callable[[In], Out], items: Sequence[In]) -> list[Out]:
@@ -82,7 +75,7 @@ def _clock(hour: Stamp) -> str:
 
 @dataclass
 class _Entry:
-    """人物の一日の一行(続けて眠った時間は一行にまとめる)。"""
+    """人物の一日の一行(続けて眠った・休んだ時間は一行にまとめる)。"""
 
     start: str
     end: str
@@ -101,16 +94,30 @@ class _Entry:
         return "\n".join([self.for_character(), *(f"  - {line}" for line in self.others)])
 
 
+def _merged(entries: list[_Entry], entry: _Entry) -> None:
+    last = entries[-1] if entries else None
+    if (last is not None and entry.kind in (_SLEEP, _REST) and last.kind == entry.kind and last.place == entry.place
+            and last.text == entry.text and not entry.others and not last.others):
+        last.end = entry.end
+        return
+    entries.append(entry)
+
+
 @dataclass
 class _Walker:
     """一日を動いている人物の、流れの中の様子。"""
 
     plan: DayCharacter
     brief: DayBrief
+    session: AISession
     places: list[DayPlace]
     location_id: int
     needs: Needs
+    rng: random.Random
     entries: list[_Entry] = field(default_factory=list)
+    # 前に聞いてから、会話に聞かずに過ぎた時間(次に聞くときに渡す)
+    unseen: list[_Entry] = field(default_factory=list)
+    asked: bool = False
     # 目の前の人物が、さっきの一時間にしたこと(見る人の目で)
     seen: list[str] = field(default_factory=list)
     # 居合わせた人物(人物id と名前)。起きているあいだに同じ場所にいた人物
@@ -119,6 +126,10 @@ class _Walker:
     met_walkers: dict[int, str] = field(default_factory=dict)
     awake_places: Counter[int] = field(default_factory=Counter)
     first_awake: Stamp | None = None
+    hungers: list[int] = field(default_factory=list)
+    desires: list[int] = field(default_factory=list)
+    slept: int = 0
+    load: int = 0
     actions: int = 0
     failed: str | None = None
 
@@ -130,24 +141,22 @@ class _Walker:
     def name(self) -> str:
         return self.plan.name or ""
 
-    def append(self, entry: _Entry) -> None:
-        last = self.entries[-1] if self.entries else None
-        if (last is not None and entry.kind == _SLEEP and last.kind == _SLEEP and last.place == entry.place
-                and not entry.others and not last.others):
-            last.end = entry.end
-            return
-        self.entries.append(entry)
+    def append(self, entry: _Entry, asked: bool) -> None:
+        _merged(self.entries, entry)
+        if not asked:
+            _merged(self.unseen, entry)
 
 
 @dataclass
 class _Choice:
-    """一時間の手。人物の目に聞いた手か、予定・規則で埋めた手。"""
+    """一時間の手。人物の会話に聞いた手か、予定・規則で埋めた手。"""
 
     location_id: int
     kind: str
     text: str
     speech: str | None = None
     thought: str | None = None
+    deeds: list[str] = field(default_factory=list)
     asked: bool = False
     fixed_event_id: int | None = None
     fixed_episode_id: int | None = None
@@ -157,60 +166,82 @@ def _seen_name(viewer: _Walker, character_id: int, name: str | None) -> str:
     return name if character_id in viewer.brief.known_ids and name else "名を知らない人"
 
 
+def _schedule(walker: _Walker, plan: DayPlan) -> list[str]:
+    """一度目の問いに渡す、今日決まっている予定(予定ごとに始まりの時刻)と、眠る時刻の目安。"""
+    lines: list[str] = []
+    last_label = None
+    for slot in walker.plan.fixed:
+        if slot.label != last_label:
+            lines.append(f"{_clock(plan.hours[slot.hour])}から: {slot.label}")
+        last_label = slot.label
+    bed = walker.plan.profile.bed
+    if bed < len(plan.hours):
+        lines.append(f"{_clock(plan.hours[bed])}ごろ: 眠る")
+    return lines
+
+
 def _scene(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None) -> HourScene:
-    hour = plan.hours[index]
-    upcoming = [f"{_clock(plan.hours[slot.hour])}から: {slot.label}" for slot in walker.plan.fixed if slot.hour > index]
     return HourScene(
-        time=hour, location_id=walker.location_id, location_name=None if here is None else here.location_name,
-        needs=walker.needs, log=[entry.for_character() for entry in walker.entries[-constants.DAY_LOG_LIMIT:]],
+        time=plan.hours[index], location_id=walker.location_id,
+        location_name=None if here is None else here.location_name, needs=walker.needs,
+        fatigue=needs.fatigue(walker.plan.profile, walker.load),
+        meanwhile=[entry.for_character() for entry in walker.unseen],
         present=[] if here is None else [person for person in here.people if person.character_id != walker.id],
-        seen=walker.seen, upcoming=upcoming, places=walker.places)
+        seen=walker.seen)
 
 
-def _choose(ai: AIClient, walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None) -> _Choice:
-    """予定があれば予定、眠っているか眠気に負けたら眠る。どれでもなければ人物の目に聞く。"""
+def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None) -> _Choice:
+    """予定があれば予定、眠る時間なら眠る、疲れて休む見込みに当たれば休む。どれでもなければ人物の会話に聞く。"""
     slot = walker.plan.fixed_at(index)
     if slot is not None:
-        return _Choice(location_id=slot.location_id, kind=_FIXED, text=slot.label,
+        went_out = slot.location_id != walker.plan.home_id
+        return _Choice(location_id=slot.location_id, kind=_FIXED, text=slot.label, deeds=["外に出た"] if went_out else [],
                        fixed_event_id=slot.event_id, fixed_episode_id=slot.episode_id)
-    needs = walker.needs
-    if needs.asleep and needs.sleepiness > constants.DAY_WAKE_BELOW:
-        return _Choice(location_id=walker.location_id, kind=_SLEEP, text="眠っていた")
-    if not needs.asleep and needs.sleepiness >= constants.DAY_SLEEP_FORCE:
-        return _Choice(location_id=walker.plan.home_id, kind=_SLEEP, text="眠気に勝てず、寝床で眠った")
-    draft = actor.hour_draft(ai, walker.brief, _scene(walker, index, plan, here))
+    profile = walker.plan.profile
+    if needs.asleep_at(index, profile):
+        # 夜に眠るときは寝床(その日の始まりの場所)へ戻る
+        location_id = walker.location_id if index < profile.wake else walker.plan.home_id
+        return _Choice(location_id=location_id, kind=_SLEEP, text="眠っていた")
+    if walker.rng.random() < needs.rest_chance(needs.fatigue(profile, walker.load)):
+        return _Choice(location_id=walker.location_id, kind=_REST, text="疲れがたまっていて、その場で休んだ")
+    scene = _scene(walker, index, plan, here)
+    first = None if walker.asked else walker.places
+    draft = actor.hour_draft(walker.session, walker.brief, scene, first, _schedule(walker, plan) if first else None)
+    walker.asked = True
+    walker.unseen = []
     if draft is None:
-        return _Choice(location_id=walker.location_id, kind="休む", text="その場でしばらく過ごした")
+        return _Choice(location_id=walker.location_id, kind=_REST, text="その場でしばらく過ごした")
     place_ids = {place.id for place in walker.places}
     location_id = draft.location_id if draft.location_id in place_ids else walker.location_id
     return _Choice(location_id=location_id, kind=draft.kind, text=draft.action, speech=draft.speech,
-                   thought=draft.thought, asked=True)
+                   thought=draft.thought, deeds=draft.deeds, asked=True)
 
 
 def _deed(choice: _Choice) -> str:
     return choice.text + (f"「{choice.speech}」" if choice.speech else "")
 
 
-def _react(ai: AIClient, walker: _Walker, choice: _Choice, others: list[tuple[_Walker, _Choice]], index: int,
-           plan: DayPlan, here: PlacePeople | None) -> _Choice:
+def _react(walker: _Walker, choice: _Choice, others: list[tuple[_Walker, _Choice]]) -> _Choice:
     """同じ場所に居合わせた人物がこの一時間にしたことを見せて、応じさせる。応じた分を一時間の手に書き足す。"""
     seen = [f"{_seen_name(walker, other.id, other.name)}: "
             + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice)) for other, other_choice in others]
-    draft = actor.reaction_draft(ai, walker.brief, _scene(walker, index, plan, here), _deed(choice), seen)
+    draft = actor.reaction_draft(walker.session, walker.brief, seen)
     if draft is None:
         return choice
     speeches = [speech for speech in (choice.speech, draft.speech) if speech]
     thoughts = [thought for thought in (choice.thought, draft.thought) if thought]
     return _Choice(location_id=choice.location_id, kind=choice.kind, text=f"{choice.text}\n{draft.action}",
-                   speech="\n".join(speeches) or None, thought="\n".join(thoughts) or None, asked=True)
+                   speech="\n".join(speeches) or None, thought="\n".join(thoughts) or None,
+                   deeds=list(dict.fromkeys([*choice.deeds, *draft.deeds])), asked=True)
 
 
-def _hour(ai: AIClient, walkers: list[_Walker], index: int, plan: DayPlan) -> None:
+def _hour(walkers: list[_Walker], index: int, plan: DayPlan) -> None:
     """全員の一時間を決めて、居合わせた人物どうしを応じさせ、行動の表に足す。"""
     hour = plan.hours[index]
+    hours_per_day = len(plan.hours)
     before = {place.location_id: place for place in call(expansion_steps.people_at, PeopleForm(
         time=hour, positions={walker.id: walker.location_id for walker in walkers}))}
-    choices = _parallel(lambda walker: _choose(ai, walker, index, plan, before.get(walker.location_id)), walkers)
+    choices = _parallel(lambda walker: _choose(walker, index, plan, before.get(walker.location_id)), walkers)
     decided = dict(zip([walker.id for walker in walkers], choices))
     after = {place.location_id: place for place in call(expansion_steps.people_at, PeopleForm(
         time=hour, positions={walker.id: choice.location_id for walker, choice in zip(walkers, choices)}))}
@@ -223,7 +254,7 @@ def _hour(ai: AIClient, walkers: list[_Walker], index: int, plan: DayPlan) -> No
         others = [(other, decided[other.id]) for other in groups[choice.location_id] if other.id != walker.id]
         if not choice.asked or not any(other_choice.kind != _SLEEP for _, other_choice in others):
             return choice
-        return _react(ai, walker, choice, others, index, plan, after.get(choice.location_id))
+        return _react(walker, choice, others)
 
     reacted = dict(zip([walker.id for walker in walkers], _parallel(react, walkers)))
     for walker in walkers:
@@ -238,20 +269,27 @@ def _hour(ai: AIClient, walkers: list[_Walker], index: int, plan: DayPlan) -> No
             walker.met.update({person.character_id: person.name for person in companions})
             walker.met_walkers.update({other.id: other.name for other, other_choice in others
                                        if other_choice.kind != _SLEEP})
+        else:
+            walker.slept += 1
         walker.seen = [f"{_seen_name(walker, other.id, other.name)}: "
                        + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice))
                        for other, other_choice in others] if awake else []
+        load = needs.hour_load(choice.deeds)
+        walker.load += load
         walker.location_id = choice.location_id
-        walker.needs = next_needs(walker.needs, choice.kind, len(plan.hours))
+        walker.needs = needs.next_needs(walker.needs, choice.kind, index, hours_per_day, walker.plan.profile)
+        walker.hungers.append(walker.needs.hunger)
+        walker.desires.append(walker.needs.desire)
         walker.append(_Entry(
             start=_clock(hour), end=_clock(hour), place=(here.location_name if here else None) or "",
             kind=choice.kind, text=choice.text, speech=choice.speech,
             others=[f"{other.name}: " + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice))
-                    for other, other_choice in others]))
+                    for other, other_choice in others]), choice.asked)
         action = HourAction(
             character_id=walker.id, time=hour, location_id=choice.location_id, kind=choice.kind, text=choice.text,
             speech=choice.speech, thought=choice.thought, sleepiness=walker.needs.sleepiness, hunger=walker.needs.hunger,
-            fixed_event_id=choice.fixed_event_id, fixed_episode_id=choice.fixed_episode_id)
+            desire=walker.needs.desire, load=load, fixed_event_id=choice.fixed_event_id,
+            fixed_episode_id=choice.fixed_episode_id)
         assert walker.plan.expansion_id is not None
         with writing(Writer.AI_APPEND, walker.plan.expansion_id):
             call(expansion_steps.save_actions, ActionsForm(expansion_id=walker.plan.expansion_id, actions=[action]))
@@ -266,8 +304,10 @@ def _prompt_text(walker: _Walker) -> str:
     return "\n".join(lines)
 
 
-def _summary(acted: DayActed, walker: _Walker) -> str:
-    lines = [f"{acted.name}(id={acted.character_id}) の一日: 行動 {acted.actions} 件",
+def _summary(acted: DayActed, walker: _Walker, satisfied: tuple[int, int, int]) -> str:
+    food, sleep, touch = satisfied
+    lines = [f"{acted.name}(id={acted.character_id}) の一日: 行動 {acted.actions} 件・行動量 {walker.load}",
+             f"満ち足り方: 食欲 {food}・睡眠欲 {sleep}・性欲 {touch}",
              f"出来事: {acted.event.name}(id={acted.event.id})"]
     if walker.met_walkers:
         lines.append(f"居合わせた相手: {', '.join(walker.met_walkers.values())}")
@@ -285,13 +325,22 @@ def _summary(acted: DayActed, walker: _Walker) -> str:
     return "\n".join(lines)
 
 
+def _satisfied(walker: _Walker) -> tuple[int, int, int]:
+    return needs.satisfaction(walker.hungers, walker.desires, walker.slept, walker.plan.profile)
+
+
 def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan) -> DayActed:
-    """人物の一日を作者の目で記録し、出来事一件と、来歴・事柄・住まいの移動・思いの増減として足す。"""
+    """人物の一日の欲の満ち足り方と行動量を記録し、一日を作者の目で記録して、出来事一件と、来歴・事柄・住まいの移動・思いの増減として足す。"""
     expansion_id = walker.plan.expansion_id
     assert expansion_id is not None
     date = Stamp.parse(plan.date)
     day_end = Stamp.parse(plan.day_end)
     assert date is not None and day_end is not None
+    food, sleep, touch = _satisfied(walker)
+    with writing(Writer.AI_APPEND, expansion_id):
+        call(expansion_steps.save_character_day, CharacterDayForm(
+            character_id=walker.id, expansion_id=expansion_id, date=date, food=food, sleep=sleep, touch=touch,
+            load=walker.load, bedtime=walker.plan.profile.bed))
     material = call(expansion_steps.day_material, DayMaterialForm(
         actor_id=walker.id, participant_ids=list(walker.met), date=date, day_end=day_end,
         home_id=walker.plan.home_id, parent_event_id=plan.parent_event_id))
@@ -334,7 +383,7 @@ def _fail(run: DayRun, walker: _Walker, error: Exception) -> None:
 
 
 def _walkers(ai: AIClient, rng: random.Random, plan: DayPlan, nudge: str | None) -> list[_Walker]:
-    """人物ごとに一日の展開を立て、一日のあいだ変わらない人物の目の材料を読む。"""
+    """人物ごとに一日の展開を立て、さかのぼった不足から欲を満たしたいモチベーションをそろえてから、一日のあいだ変わらない材料を読む。"""
     date = Stamp.parse(plan.date)
     assert date is not None
     refresh(ai, call(expansion_steps.motive_targets, MotivesForm(
@@ -345,10 +394,14 @@ def _walkers(ai: AIClient, rng: random.Random, plan: DayPlan, nudge: str | None)
         expansion = call(expansion_steps.start_expansion, ExpansionCreateForm(
             mode=ExpansionMode.CHARACTER, actor_id=character.character_id, time=date, location_id=character.home_id))
         character.expansion_id = expansion.id
+        with writing(Writer.AI_APPEND, expansion.id):
+            call(expansion_steps.need_motivations, NeedMotivationForm(
+                character_id=character.character_id, time=date, strengths=character.need_strengths))
         brief = call(expansion_steps.day_brief, DayBriefForm(
             character_id=character.character_id, time=date, seeds=draw_from(rng, pool), nudge=nudge))
-        walkers.append(_Walker(plan=character, brief=brief, places=plan.places[character.area_id],
-                               location_id=character.home_id, needs=character.needs))
+        walkers.append(_Walker(plan=character, brief=brief, session=actor.agent(ai),
+                               places=plan.places[character.area_id], location_id=character.home_id,
+                               needs=character.needs, rng=random.Random(rng.randrange(2**31))))
     return walkers
 
 
@@ -382,7 +435,7 @@ def simulate_day(
             if not active:
                 break
             try:
-                _hour(ai, active, index, plan)
+                _hour(active, index, plan)
             except Exception as error:
                 for walker in active:
                     _fail(run, walker, error)
@@ -404,6 +457,6 @@ def simulate_day(
             call(expansion_steps.note_prompt, expansion_steps.PromptForm(
                 expansion_id=walker.plan.expansion_id, prompt=_prompt_text(walker)))
             call(expansion_steps.finish_expansion, ExpansionFinishForm(
-                id=walker.plan.expansion_id, summary=_summary(result, walker)))
+                id=walker.plan.expansion_id, summary=_summary(result, walker, _satisfied(walker))))
             run.acted.append(result)
     return run

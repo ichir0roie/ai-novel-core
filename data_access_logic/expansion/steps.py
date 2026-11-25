@@ -7,9 +7,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.expansion import acting
+from data_access_logic.character.record import CharacterMotivationRecord
 from data_access_logic.expansion.act_models import (
-    ActionsForm, DayBrief, DayBriefForm, DayForm, DayMaterial, DayMaterialForm, DayPlan, DaySaved, DaySaveForm,
-    MotivesForm, NewCharacterLink, PeopleForm, PlacePeople,
+    ActionsForm, CharacterDayForm, DayBrief, DayBriefForm, DayForm, DayMaterial, DayMaterialForm, DayPlan, DaySaved,
+    DaySaveForm, MotivesForm, NeedMotivationForm, NewCharacterLink, PeopleForm, PlacePeople,
 )
 from data_access_logic.expansion.finish_expansion import finish
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
@@ -44,6 +45,16 @@ def people_at(s: Session, form: PeopleForm) -> list[PlacePeople]:
 @db_step
 def save_actions(s: Session, form: ActionsForm) -> None:
     acting.save_actions(s, form)
+
+
+@db_step
+def save_character_day(s: Session, form: CharacterDayForm) -> None:
+    acting.save_character_day(s, form)
+
+
+@db_step
+def need_motivations(s: Session, form: NeedMotivationForm) -> list[CharacterMotivationRecord]:
+    return acting.need_motivations(s, form)
 
 
 @db_step

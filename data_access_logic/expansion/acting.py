@@ -13,28 +13,31 @@ from sqlalchemy.orm import Session, selectinload
 
 from ai.instructions.naming import fill_name_placeholder
 from data_access_logic import constants
+from data_access_logic.character.cast import age_at
 from data_access_logic.character.histories import add_history
 from data_access_logic.character.knowledge import _related_ids, appearance_of, knowledge_of
 from data_access_logic.character.motivations import apply_changes, motivations_at
 from data_access_logic.character.moves import allowed_moves, move_destinations, update_locations
-from data_access_logic.character.record import CharacterMotivationRecord
+from data_access_logic.character.parameters import parameters_at
+from data_access_logic.character.record import CharacterMotivationRecord, MotivationChange
 from data_access_logic.entrypoint import record_of
 from data_access_logic.event.plan import _current_location_id
 from data_access_logic.event.record import EventRecord
 from data_access_logic.event.summary import events_of
-from data_access_logic.expansion import budget
+from data_access_logic.expansion import budget, needs
 from data_access_logic.expansion.act_models import (
-    ActFailure, ActionsForm, ArcEvent, AuthorPlan, DayBrief, DayBriefForm, DayCharacter, DayForm, DayMaterial,
-    DayMaterialForm, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, MotivationLine, Motives,
-    NarratedEpisode, Needs, NewCharacterLink, ParentArc, ParticipantMotivations, PeopleForm, PlacePeople, PresentPerson,
+    ActFailure, ActionsForm, ArcEvent, AuthorPlan, CharacterDayForm, DayBrief, DayBriefForm, DayCharacter, DayForm,
+    DayMaterial, DayMaterialForm, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, MotivationLine,
+    Motives, NarratedEpisode, NeedMotivationForm, NeedProfile, Needs, NewCharacterLink, ParentArc, ParticipantMotivations,
+    PeopleForm, PlacePeople, PresentPerson,
 )
 from data_access_logic.idea.context import resolve_ideas
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import (
-    CHARACTER_KIND_PERSON, Character, CharacterLocation, CharacterRelation, Episode, EpisodeCharacter, Event, EventAction,
-    EventCharacter, IdeaHistory, IdeaHistoryKnower, Location, Origin,
+    CHARACTER_KIND_PERSON, Character, CharacterDay, CharacterLocation, CharacterMotivation, CharacterRelation, Episode,
+    EpisodeCharacter, Event, EventAction, EventCharacter, IdeaHistory, IdeaHistoryKnower, Location, Origin,
 )
 from db.stamp import Stamp, active_calendar
 
@@ -156,14 +159,64 @@ def _fixed_slots(s: Session, character_id: int, home_id: int, hours: list[Stamp]
 
 
 def _start_needs(s: Session, character_id: int, day_start: Stamp) -> Needs:
-    """前の日の最後の一時間の様子を引き継ぐ。前の日に動いていなければ、夜中の様子から始める。"""
+    """前の日の最後の一時間の欲を引き継ぐ。前の日に動いていなければ、夜中の様子から始める。"""
     last = s.scalars(
         select(EventAction).where(EventAction.character_id == character_id, EventAction.time < day_start,
-                                  EventAction.time >= day_start.plus_days(-1))
+                                  EventAction.time >= day_start.plus_days(-2))
         .order_by(EventAction.time.desc(), EventAction.id.desc()).limit(1)).first()
     if last is None:
-        return Needs(sleepiness=constants.DAY_INITIAL_SLEEPINESS, hunger=constants.DAY_INITIAL_HUNGER, asleep=True)
-    return Needs(sleepiness=last.sleepiness, hunger=last.hunger, asleep=last.kind == "眠る")
+        return Needs(hunger=constants.DAY_INITIAL_HUNGER, desire=constants.DAY_INITIAL_DESIRE)
+    return Needs(hunger=last.hunger, desire=last.desire)
+
+
+def _previous_date(day_start: Stamp) -> Stamp:
+    """暦の前の日の 0 時。"""
+    calendar = active_calendar()
+    if calendar is None:
+        return day_start.plus_days(-1)
+    year, month, day = day_start.digits[:3]
+    if day > 1:
+        return Stamp(year, month, day - 1)
+    if month > 1:
+        return Stamp(year, month - 1, calendar.month_days[month - 2])
+    return Stamp(year - 1, len(calendar.month_days), calendar.month_days[-1])
+
+
+def _recent_days(s: Session, character_id: int, day_start: Stamp) -> list[CharacterDay]:
+    """その日より前の `DAY_LOOKBACK_DAYS - 1` 日の記録(新しい順)。暦の日付をさかのぼって数える。"""
+    dates = [day_start]
+    for _ in range(constants.DAY_LOOKBACK_DAYS - 1):
+        dates.append(_previous_date(dates[-1]))
+    return list(s.scalars(select(CharacterDay).where(
+        CharacterDay.character_id == character_id, CharacterDay.date.in_(dates[1:]))
+        .order_by(CharacterDay.date.desc())).all())
+
+
+def _profile(s: Session, character: Character, day_start: Stamp, hours_per_day: int,
+             days: list[CharacterDay]) -> tuple[NeedProfile, dict[str, int]]:
+    """欲の段と、前の日の不足から決めるその日の欲の強さ・眠りの段取り・行動量と、さかのぼった不足から決める欲のモチベーションの強さ。"""
+    values = parameters_at(character, day_start)
+    appetite, sleep_drive, libido = needs.levels_of(values, age_at(character, day_start))
+    previous_date = _previous_date(day_start)
+    previous = next((day for day in days if day.date == previous_date), None)
+    required = needs.sleep_plan(hours_per_day, sleep_drive, 0, 0, 0)[0]
+    load_before = sum(day.load for day in days)
+    maximum = needs.load_max(str(values.proactivity))
+    strongest = max((row.strength for row in motivations_at(s, character.id, day_start)), default=0)
+    spare = maximum > 0 and load_before < constants.DAY_SPARE_LOAD_RATIO * maximum
+    eager = round((int(strongest >= constants.DAY_EAGER_STRENGTH) + int(spare)) * hours_per_day / 24)
+    _, wake, bed = needs.sleep_plan(
+        hours_per_day, sleep_drive, needs.sleep_debt(None if previous is None else previous.sleep, required),
+        0 if previous is None else previous.bedtime - hours_per_day, eager)
+    profile = NeedProfile(
+        appetite=appetite, sleep_drive=sleep_drive, libido=libido,
+        food_pressure=needs.pressure(None if previous is None else previous.food),
+        touch_pressure=needs.pressure(None if previous is None else previous.touch),
+        required_sleep=required, prev_bed=0 if previous is None else previous.bedtime - hours_per_day,
+        wake=wake, bed=bed, load_before=load_before, load_max=maximum)
+    shortages = {"food": sum(100 - day.food for day in days), "sleep": sum(100 - day.sleep for day in days),
+                 "touch": sum(100 - day.touch for day in days)}
+    return profile, {key: needs.motivation_strength(total) for key, total in shortages.items()}
 
 
 def _day_character(s: Session, character: Character, hours: list[Stamp], day_end: Stamp) -> DayCharacter:
@@ -184,10 +237,11 @@ def _day_character(s: Session, character: Character, hours: list[Stamp], day_end
         EventAction.character_id == character.id, EventAction.time >= day_start, EventAction.time < day_end))
     if done:
         raise ValueError(f"{label}の {day_start} の一日は、もう動かしてある(行動 {done} 件)。動かし直すなら、その展開を取り消す")
+    profile, strengths = _profile(s, character, day_start, len(hours), _recent_days(s, character.id, day_start))
     return DayCharacter(character_id=character.id, name=character.name, area_id=area.id, home_id=location.id,
                         influence=budget.influence_of(character, day_start),
                         fixed=_fixed_slots(s, character.id, location.id, hours, day_end),
-                        needs=_start_needs(s, character.id, day_start))
+                        needs=_start_needs(s, character.id, day_start), profile=profile, need_strengths=strengths)
 
 
 def plan_day(s: Session, form: DayForm) -> DayPlan:
@@ -304,9 +358,36 @@ def save_actions(s: Session, form: ActionsForm) -> None:
         s.add(EventAction(
             character_id=action.character_id, expansion_id=form.expansion_id, time=action.time, location_id=action.location_id,
             kind=action.kind, text=action.text, speech=action.speech, thought=action.thought,
-            sleepiness=action.sleepiness, hunger=action.hunger, fixed_event_id=action.fixed_event_id,
+            sleepiness=action.sleepiness, hunger=action.hunger, desire=action.desire, load=action.load,
+            fixed_event_id=action.fixed_event_id,
             fixed_episode_id=action.fixed_episode_id))
     s.flush()
+
+
+def save_character_day(s: Session, form: CharacterDayForm) -> None:
+    s.add(CharacterDay(character_id=form.character_id, expansion_id=form.expansion_id, date=form.date, food=form.food,
+                       sleep=form.sleep, touch=form.touch, load=form.load, bedtime=form.bedtime))
+    s.flush()
+
+
+def need_motivations(s: Session, form: NeedMotivationForm) -> list[CharacterMotivationRecord]:
+    """欲を満たしたいモチベーションを、さかのぼった不足で決めた強さにそろえる(足す・強さを変える・終える)。足した行を返す。"""
+    changes = []
+    for key, strength in form.strengths.items():
+        text = constants.DAY_NEED_MOTIVATIONS[key]
+        current = s.scalars(select(CharacterMotivation).where(
+            CharacterMotivation.character_id == form.character_id, CharacterMotivation.text == text,
+            CharacterMotivation.start <= form.time,
+            (CharacterMotivation.end.is_(None)) | (CharacterMotivation.end > form.time))
+            .order_by(CharacterMotivation.start.desc())).first()
+        if current is None and strength:
+            changes.append(MotivationChange(character_id=form.character_id, motivation_id=None, strength=strength,
+                                            text=text))
+        elif current is not None and current.strength != strength:
+            changes.append(MotivationChange(character_id=form.character_id, motivation_id=current.id, strength=strength,
+                                            text=None))
+    added = apply_changes(s, changes, [form.character_id], form.time)
+    return [CharacterMotivationRecord.model_validate(row) for row in added]
 
 
 def _distance_days(episode: Episode, time: Stamp) -> int:
