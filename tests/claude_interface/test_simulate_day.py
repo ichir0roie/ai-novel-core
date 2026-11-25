@@ -372,3 +372,29 @@ def test_a_left_behind_character_moves_to_the_present_of_its_own_story(world):
         s.flush()
         assert expansion_query.last_appearance(s, actor_id) == _stamp("1200/04/01 18:00:00")
         s.rollback()
+
+
+class BedtimeAI(ScriptedAI):
+    """十五回は市場で働き、そのあと市場で眠ると答える。"""
+
+    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
+        if output is HourDraft and len(self.calls_of(HourDraft)) >= 15:
+            self.calls.append({"output": output, "prompt": prompt})
+            return HourDraft(kind="眠る", location_id=self.market_id, action="眠くなったので横になる", speech=None,
+                             thought="もう寝よう", deeds=[])
+        return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
+                                effort=effort, style_scope=style_scope)
+
+
+def test_going_to_bed_late_keeps_the_character_asleep_at_home(world):
+    """寝る時刻の三時間前より後に自分から眠ったら、寝床(住まい)で朝まで眠り、もう会話には聞かない。"""
+    home_id, market_id = _detail_places(world)
+    actor_id = world.character_ids[1]
+    ai = BedtimeAI(market_id)
+
+    act.simulate_day([actor_id], _DAY, seed=1, ai=ai)
+
+    actions = _actions(actor_id)
+    # 7 時に起きて 15 時間働き、22 時(寝る 25 時の三時間前)に眠ると答えたので、そこから先は寝床で眠る
+    assert [(action.kind, action.location_id) for action in actions[22:]] == [("眠る", home_id)] * 2
+    assert len(ai.calls_of(HourDraft)) == 16

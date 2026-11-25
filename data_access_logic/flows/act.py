@@ -121,6 +121,8 @@ class _Walker:
     asked: bool = False
     # 会話の中で見た目を渡した人物
     looked_ids: set[int] = field(default_factory=set)
+    # その夜、自分から床に就いたか(朝まで会話に聞かずに眠る)
+    bedded: bool = False
     # 目の前の人物が、さっきの一時間にしたこと(見る人の目で)
     seen: list[str] = field(default_factory=list)
     # 居合わせた人物(人物id と名前)。起きているあいだに同じ場所にいた人物
@@ -202,7 +204,7 @@ def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None
         return _Choice(location_id=slot.location_id, kind=_FIXED, text=slot.label, deeds=["外に出た"] if went_out else [],
                        fixed_event_id=slot.event_id, fixed_episode_id=slot.episode_id)
     profile = walker.plan.profile
-    if needs.asleep_at(index, profile):
+    if walker.bedded or needs.asleep_at(index, profile):
         # 夜に眠るときは寝床(その日の始まりの場所)へ戻る
         location_id = walker.location_id if index < profile.wake else walker.plan.home_id
         return _Choice(location_id=location_id, kind=_SLEEP, text="眠っていた")
@@ -219,6 +221,9 @@ def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None
         return _Choice(location_id=walker.location_id, kind=_REST, text="その場でしばらく過ごした")
     place_ids = {place.id for place in walker.places}
     location_id = draft.location_id if draft.location_id in place_ids else walker.location_id
+    if draft.kind == _SLEEP and index >= profile.bed - round(constants.DAY_EARLY_BED_HOURS * len(plan.hours) / 24):
+        walker.bedded = True
+        location_id = walker.plan.home_id
     return _Choice(location_id=location_id, kind=draft.kind, text=draft.action, speech=draft.speech,
                    thought=draft.thought, deeds=draft.deeds, asked=True)
 
