@@ -71,6 +71,27 @@ def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: 
     return Needs(hunger=hunger, desire=desire, sleepiness=sleepiness_at(hour + 1, profile))
 
 
+def last_night(sleeping: Sequence[bool], profile: NeedProfile) -> int:
+    """前の夜に眠った時間。前の日のうちに眠った分(`prev_bed` が負)と、その日の、眠り始めた時刻から続けて眠った時間を足す
+    (段取りより長く眠り続けた分も数える)。"""
+    start = max(profile.prev_bed, 0)
+    run = 0
+    while start + run < len(sleeping) and sleeping[start + run]:
+        run += 1
+    return run + max(0, -profile.prev_bed)
+
+
+def bedtime(sleeping: Sequence[bool], profile: NeedProfile) -> int:
+    """その夜に眠った時刻(その日の一時間の番号)。日の終わりまで眠り続けていれば、その眠りの始まり(段取りより早く眠った分も数える)。
+    日の終わりに起きていれば、日付が変わってから眠る段取りの時刻(段取りが日のうちなら、日付が変わったとき)。"""
+    if not sleeping or not sleeping[-1]:
+        return max(profile.bed, len(sleeping))
+    start = len(sleeping) - 1
+    while start > 0 and sleeping[start - 1]:
+        start -= 1
+    return start
+
+
 def _discomfort(values: Sequence[int]) -> int:
     """欲が心地よい値を超えていた度合い(0〜100)。"""
     if not values:
@@ -80,7 +101,7 @@ def _discomfort(values: Sequence[int]) -> int:
 
 
 def satisfaction(hungers: Sequence[int], desires: Sequence[int], slept: int, profile: NeedProfile) -> tuple[int, int, int]:
-    """その日の食欲・睡眠欲・性欲の満ち足り方(0〜100)。`slept` はその日に眠った時間の数。性欲が無の人物は、いつも満ち足りている。"""
+    """その日の食欲・睡眠欲・性欲の満ち足り方(0〜100)。`slept` は前の夜に眠った時間(`last_night`)。性欲が無の人物は、いつも満ち足りている。"""
     food = 100 - _discomfort(hungers)
     sleep = min(100, round(100 * slept / max(1, profile.required_sleep)))
     touch = 100 if constants.DAY_NEED_RATES[profile.libido] == 0 else 100 - _discomfort(desires)

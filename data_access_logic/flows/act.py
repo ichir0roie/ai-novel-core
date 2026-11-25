@@ -128,7 +128,8 @@ class _Walker:
     first_awake: Stamp | None = None
     hungers: list[int] = field(default_factory=list)
     desires: list[int] = field(default_factory=list)
-    slept: int = 0
+    # 一時間ごとに眠っていたか(起きた順)
+    sleeping: list[bool] = field(default_factory=list)
     load: int = 0
     actions: int = 0
     failed: str | None = None
@@ -269,8 +270,7 @@ def _hour(walkers: list[_Walker], index: int, plan: DayPlan) -> None:
             walker.met.update({person.character_id: person.name for person in companions})
             walker.met_walkers.update({other.id: other.name for other, other_choice in others
                                        if other_choice.kind != _SLEEP})
-        else:
-            walker.slept += 1
+        walker.sleeping.append(not awake)
         walker.seen = [f"{_seen_name(walker, other.id, other.name)}: "
                        + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice))
                        for other, other_choice in others] if awake else []
@@ -326,7 +326,8 @@ def _summary(acted: DayActed, walker: _Walker, satisfied: tuple[int, int, int]) 
 
 
 def _satisfied(walker: _Walker) -> tuple[int, int, int]:
-    return needs.satisfaction(walker.hungers, walker.desires, walker.slept, walker.plan.profile)
+    return needs.satisfaction(walker.hungers, walker.desires, needs.last_night(walker.sleeping, walker.plan.profile),
+                              walker.plan.profile)
 
 
 def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan) -> DayActed:
@@ -340,7 +341,7 @@ def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan) ->
     with writing(Writer.AI_APPEND, expansion_id):
         call(expansion_steps.save_character_day, CharacterDayForm(
             character_id=walker.id, expansion_id=expansion_id, date=date, food=food, sleep=sleep, touch=touch,
-            load=walker.load, bedtime=walker.plan.profile.bed))
+            load=walker.load, bedtime=needs.bedtime(walker.sleeping, walker.plan.profile)))
     material = call(expansion_steps.day_material, DayMaterialForm(
         actor_id=walker.id, participant_ids=list(walker.met), date=date, day_end=day_end,
         home_id=walker.plan.home_id, parent_event_id=plan.parent_event_id))

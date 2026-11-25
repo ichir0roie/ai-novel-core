@@ -293,6 +293,18 @@ def test_satisfaction_fatigue_and_motivation_steps():
     assert needs.hour_load(["外に出た", "何かを傷つけた"]) == 4 and needs.hour_load([]) == 0
 
 
+def test_last_night_and_bedtime_count_what_was_slept():
+    # 前の日の 22 時に眠り、7 時まで眠った(段取りより長く眠った分も数える)。20 時に自分から眠り、そのまま日を終えた
+    profile = _profile(prev_bed=-2, wake=6, bed=24)
+    sleeping = [True] * 7 + [False] * 13 + [True] * 4
+    assert needs.last_night(sleeping, profile) == 9
+    assert needs.bedtime(sleeping, profile) == 20
+    # 日付が変わってから眠る段取りで、日の終わりに起きていれば、段取りの時刻
+    assert needs.bedtime([True] * 7 + [False] * 17, _profile(bed=25)) == 25
+    # 日付が変わってから 1 時に眠った前の夜は、1 時から続けて眠った時間
+    assert needs.last_night([False] + [True] * 8 + [False] * 15, _profile(prev_bed=1)) == 8
+
+
 def test_a_week_of_short_sleep_makes_a_motivation_and_a_tired_one_rests(world):
     """さかのぼった七日の眠りの不足で、眠りたいモチベーションを持つ。行動量が上限にいる人物は、会話に聞かずに休みがちになる。"""
     _home_id, market_id = _detail_places(world)
