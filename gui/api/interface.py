@@ -132,7 +132,7 @@ CLAUDE_ENTRANCES = frozenset({
     "event.generate_event.GenerateEvent",
     "event.update_event.UpdateEvent",
     "event_seed.extract_event_seeds.ExtractEventSeeds",
-    "expansion.act_character.ActCharacter",
+    "expansion.simulate_day.SimulateDay",
     "fact_check.check_facts.CheckFacts",
     "meme.refresh_generated_content.RefreshGeneratedContent",
     "oracle.commit_oracle.CommitOracle",

@@ -57,6 +57,10 @@ class CharacterParameterValues(Material):
     sensitivity: PersonalityLevel = PersonalityLevel.NORMAL
     imagination: PersonalityLevel = PersonalityLevel.NORMAL
     influence: PersonalityLevel = PersonalityLevel.NORMAL
+    # 体の欲。どの行でも決めていなければ空で、人物モードが年齢から決める(`expansion/needs.py`)
+    appetite: PersonalityLevel | None = None
+    sleep_drive: PersonalityLevel | None = None
+    libido: PersonalityLevel | None = None
 
 
 PERSONALITY_LABELS = {

@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import uuid
 from functools import cache
 from pathlib import Path
 
@@ -54,14 +55,16 @@ def _command() -> str:
     return shutil.which(name) or name
 
 
-def _build_args(system: str, schema: dict, tools: tuple[str, ...], model: str, effort: str) -> list[str]:
+def _build_args(system: str, schema: dict, tools: tuple[str, ...], model: str, effort: str,
+                persist: bool = False) -> list[str]:
+    """`persist` は会話を残すか(`ClaudeSession` が続きから呼ぶときだけ残す)。"""
     # `--tools` は組み込みの道具だけを絞る。MCP の道具(`mcp__…`)は MCP サーバーから来るので、許可だけ渡す。
     builtin = [tool for tool in tools if not tool.startswith("mcp__")]
     args = [
         _command(), "-p",
         "--output-format", "json",
         "--tools", ",".join(builtin),
-        "--no-session-persistence",
+        *([] if persist else ["--no-session-persistence"]),
         # 使う人の設定(グローバルの CLAUDE.md・接続した MCP・スキル)を読ませない。読むと、MCP の道具の定義だけで毎回 10 万トークン
         # ほど載り、CLAUDE.md の口調(一人称など)が生成した文に移る。MCP の道具は下の `--mcp-config` で渡すものだけにする
         "--strict-mcp-config",
@@ -103,6 +106,14 @@ def _reply(prompt: str, args: list[str], timeout: float | None) -> _Reply:
     return reply
 
 
+def _parsed[Output: BaseModel](reply: _Reply, output: type[Output]) -> Output:
+    if reply.structured_output is not None:
+        return output.model_validate(reply.structured_output)
+    if reply.result is None:
+        raise ClaudeAIError("Claude Code の応答に 'result' が無い")
+    return output.model_validate_json(reply.result)
+
+
 def styled_system(system: str | None, writing_style: str, with_calendar: bool = True) -> str:
     """`with_calendar` は暦の数え方(年を含む表記の決まり)を足すか。人物の目の生成には年を渡さないので足さない。"""
     return "\n\n".join(part for part in (system, SAFETY_NOTE, calendar_note() if with_calendar else "",
@@ -124,17 +135,49 @@ def generate[Output: BaseModel](
     `style_scope` は書く文の範囲(プロット・人物など)で、文を書かない仕事(id・番号だけを返す)は None にして書き方を足さない。
     作品・話の指示は本文だけに効き、本文は AI の生成では書かないので、ここでは足さない。"""
     load_env()
-    # 世界ごとの書き方なので、そのつど db の段で読む
-    writing_style = "" if style_scope is None else call(style_steps.writing_style, WritingStyleForm(scope=style_scope))
-    system_text = styled_system(system, writing_style, with_calendar=style_scope is not StyleScope.ACTING)
-    args = _build_args(system_text, output.model_json_schema(), tools, model, effort)
+    args = _build_args(_system_text(system, style_scope), output.model_json_schema(), tools, model, effort)
     try:
-        reply = _reply(prompt, args, timeout)
-        if reply.structured_output is not None:
-            return output.model_validate(reply.structured_output)
-        if reply.result is None:
-            raise ClaudeAIError("Claude Code の応答に 'result' が無い")
-        return output.model_validate_json(reply.result)
+        return _parsed(_reply(prompt, args, timeout), output)
     except (ClaudeAIError, ValidationError) as error:
         logger.warning(f"Claude Code の応答が使えなかった: {error}")
         return None
+
+
+def _system_text(system: str | None, style_scope: StyleScope | None) -> str:
+    # 世界ごとの書き方なので、そのつど db の段で読む
+    writing_style = "" if style_scope is None else call(style_steps.writing_style, WritingStyleForm(scope=style_scope))
+    return styled_system(system, writing_style, with_calendar=style_scope is not StyleScope.ACTING)
+
+
+class ClaudeSession:
+    """一つの会話を `claude -p` の続き(`--resume`)で回す。二度目からは前の問いと答えをキャッシュから読むので、毎回の材料は差分だけでよい。
+    一度目の呼び出しが失敗したら、会話を作り直す(id を使い直すと、作りかけの会話とぶつかる)。"""
+
+    def __init__(self, system: str, style_scope: StyleScope | None, model: str, effort: str):
+        load_env()
+        self.system = _system_text(system, style_scope)
+        self.model = model
+        self.effort = effort
+        self.id = str(uuid.uuid4())
+        self.started = False
+
+    def ask[Output: BaseModel](self, prompt: str, output: type[Output], model: str | None = None) -> Output | None:
+        args = _build_args(self.system, output.model_json_schema(), (), model or self.model, self.effort, persist=True)
+        args += ["--resume", self.id] if self.started else ["--session-id", self.id]
+        try:
+            reply = _reply(prompt, args, None)
+        except ClaudeAIError as error:
+            logger.warning(f"Claude Code の会話({self.id})の応答が使えなかった: {error}")
+            if not self.started:
+                self.id = str(uuid.uuid4())
+            return None
+        self.started = True
+        try:
+            return _parsed(reply, output)
+        except (ClaudeAIError, ValidationError) as error:
+            logger.warning(f"Claude Code の会話({self.id})の応答が使えなかった: {error}")
+            return None
+
+
+def session(system: str, style_scope: StyleScope | None, model: str = MODEL, effort: str = EFFORT) -> ClaudeSession:
+    return ClaudeSession(system, style_scope, model, effort)

@@ -8,8 +8,9 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 
 from db.schema import (
     CHARACTER_KIND_PERSON,
-    Base, Character, CharacterHistory, CharacterParameter, CharacterLocation, CharacterSkill, CharacterSkillHistory,
-    Episode, Event, EventCharacter, Idea, IdeaHistory, Location, Story,
+    Base, Character, CharacterDay, CharacterHistory, CharacterMotivation, CharacterParameter, CharacterLocation,
+    CharacterRelation, CharacterSkill, CharacterSkillHistory, Episode, Event, EventAction, EventCharacter, Idea,
+    IdeaHistory, Location, Story,
 )
 from db.stamp import Stamp
 from randomizer.random_character_generator import _personality
@@ -36,6 +37,10 @@ _SAMPLE_ERAS = ("古代", "中世", "近世", "産業革命期", "近代", "現�
 _CHARACTER_KINDS = (CHARACTER_KIND_PERSON,) * 7 + ("国", "組織", "商会", "氏族", "集団", "物")
 _SKILL_NAMES = ("剣術", "弓術", "火の魔法", "治癒の術", "鍛冶", "交渉", "読み書き", "薬草の見分け", "操船", "隠密")
 _IDEA_KINDS = ("地名", "人名", "組織", "技術", "魔法", "制度", "道具", "生物", "慣習")
+_RELATIONS = ("幼なじみ", "友人", "兄弟", "師弟", "商売仲間", "隣人", "恋人", "親子")
+_MOTIVATIONS = ("一人前と認められたい", "店を大きくしたい", "あの人ともっと話したい", "町を出て旅をしたい", "家族を楽にさせたい",
+                "昔の約束を果たしたい", "静かに暮らしたい")
+_ACTION_KINDS = ("眠る", "食べる", "働く", "用事", "話す", "休む", "移動")
 
 
 def bind(engine) -> None:
@@ -264,6 +269,58 @@ class EpisodeFactory(_ModelFactory):
     location_id = _pool(Location, "LocationFactory", p_none=0.1)
 
 
+class CharacterRelationFactory(_ModelFactory):
+    class Meta:
+        model = CharacterRelation
+
+    character_1_id = _pool(Character, "CharacterFactory")
+    character_2_id = _pool(Character, "CharacterFactory")
+    relation = factory.Faker("random_element", elements=_RELATIONS)
+    text = _text()
+    start = _optional_stamp()
+
+
+class CharacterMotivationFactory(_ModelFactory):
+    class Meta:
+        model = CharacterMotivation
+
+    character_id = _pool(Character, "CharacterFactory")
+    start = factory.LazyFunction(_random_stamp)
+    end = _end_after_start()
+    strength = factory.Faker("random_int", min=1, max=5)
+    text = factory.Faker("random_element", elements=_MOTIVATIONS)
+
+
+class CharacterDayFactory(_ModelFactory):
+    """人物の一日の記録。日付は 0 時(`date`)で、満ち足り方は 0〜100。"""
+
+    class Meta:
+        model = CharacterDay
+
+    character_id = _pool(Character, "CharacterFactory")
+    date = factory.LazyFunction(lambda: Stamp.western(*_random_stamp().western_digits[:3]))
+    food = factory.Faker("random_int", min=40, max=100)
+    sleep = factory.Faker("random_int", min=40, max=100)
+    touch = factory.Faker("random_int", min=40, max=100)
+    load = factory.Faker("random_int", min=0, max=30)
+    bedtime = factory.Faker("random_int", min=20, max=26)
+
+
+class EventActionFactory(_ModelFactory):
+    class Meta:
+        model = EventAction
+
+    character_id = _pool(Character, "CharacterFactory")
+    time = factory.LazyFunction(_random_stamp)
+    location_id = _pool(Location, "LocationFactory")
+    kind = factory.Faker("random_element", elements=_ACTION_KINDS)
+    text = factory.Faker("sentence", nb_words=6, locale=_LOCALE)
+    sleepiness = factory.Faker("random_int", min=0, max=100)
+    hunger = factory.Faker("random_int", min=0, max=100)
+    desire = factory.Faker("random_int", min=0, max=100)
+    load = factory.Faker("random_int", min=0, max=5)
+
+
 # 外部キーの参照先が先に埋まる順
 ALL_FACTORIES = (
     LocationFactory,
@@ -278,4 +335,8 @@ ALL_FACTORIES = (
     IdeaFactory,
     StoryFactory,
     EpisodeFactory,
+    CharacterRelationFactory,
+    CharacterMotivationFactory,
+    CharacterDayFactory,
+    EventActionFactory,
 )

@@ -18,10 +18,33 @@ _CHARACTER_ID_IN_PROMPT = re.compile(r"\"人物id\": (\d+)")
 _ARRAY_SIZES = {"candidates": 3, "seeds": 2}
 
 
+class MockSession:
+    """続く会話のモック。問いごとに、作った client の `generate` を同じ指示で呼ぶ(差し替えた `generate` もそのまま効く)。"""
+
+    def __init__(self, client: "MockAIClient", system: str, style_scope: StyleScope | None, model: str, effort: str):
+        self.client = client
+        self.system = system
+        self.style_scope = style_scope
+        self.model = model
+        self.effort = effort
+        self.asked = 0
+
+    def ask[Output: BaseModel](self, prompt: str, output: type[Output], model: str | None = None) -> Output | None:
+        self.asked += 1
+        return self.client.generate(prompt, output, system=self.system, model=model or self.model, effort=self.effort,
+                                    style_scope=self.style_scope)
+
+
 class MockAIClient:
     def __init__(self, seed: int | None = None):
         self.rng = random.Random(seed)
         self.calls: list[dict] = []
+        self.sessions: list[MockSession] = []
+
+    def session(self, system: str, style_scope: StyleScope | None, model: str = "", effort: str = "") -> MockSession:
+        made = MockSession(self, system, style_scope, model, effort)
+        self.sessions.append(made)
+        return made
 
     def generate[Output: BaseModel](
         self, prompt: str, output: type[Output], system: str | None = None, timeout: float | None = None,

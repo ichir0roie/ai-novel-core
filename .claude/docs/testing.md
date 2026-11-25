@@ -37,6 +37,11 @@
 - 一行目で `import tool.test` を読む(`db.schema` より先。`db.schema` は import した時に db を固定するので、先に読まれると `db.schema がテスト用の db 以外で先に読み込まれている` で止まる)。pytest のプラグインも同じ
 - 向け先は `DEM_DEV_DATABASE_URL=$dev` で渡す(`tool.test` がそこから `novel_test` を組む)。`DEM_DATABASE_URL` に `novel_test` の URL を入れない(`テスト用の db が手元の PostGIS を指していない` で止まる)
 - 行は `randomizer.mock_factories` か `seed_mock_db` で足す。手で `insert` や ORM の行を組むと、既定値の無い NOT NULL の列(`episode.letters` など)で落ちる
+
+## 人物モード(`SimulateDay`)を試す
+
+- 試す世界は `tool.test.day_world` が factory_boy で一回で作る(町・詳細の場所・住む人物・関係・モチベーション・前の日までの記録・作者の予定)。パターンは `PATTERNS`(`--list` で一覧)。pytest からは `build_day_world(WorldSpec(...))`
+- 本物の AI で回して確かめるのは `.venv/bin/python -m tool.test.run_day --pattern <名> --days <日数> --out <スクラッチパッドの dir>`。日ごとに、かかった時間・AI の呼び出し(モデルごとの回数・待ち時間・トークン・問いの字数)・db の段・人物ごとの一時間ごとの行動と満ち足り方を JSON に書く。AI を本当に呼ぶので使用量を使う。ロジックを直したら、パターンを何日か回して一時間ずつ読み、問題が無くなるまで繰り返す
 - ORM の関連は `lazy="noload"` のものが多く、`s.get_one(Episode, id).characters` は空になる。入口と同じ読み方(`data_access_logic.episode.material.load_episode(s, id)` など)で読む
 - AI の差し替え: 引数 `ai` を持つ入口・関数にだけ `MockAIClient()` を渡す。持たない入口(`CommitIdea` など)は `mock.patch("ai.claude_code.ai_client.generate", MockAIClient().generate)` の中で呼ぶ
 

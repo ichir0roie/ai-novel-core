@@ -35,6 +35,9 @@ class CharacterParameterRow(_ChildRow):
     sensitivity: PersonalityLevel | None = None
     imagination: PersonalityLevel | None = None
     influence: PersonalityLevel | None = None
+    appetite: PersonalityLevel | None = None
+    sleep_drive: PersonalityLevel | None = None
+    libido: PersonalityLevel | None = None
 
 
 class CharacterLocationRow(_ChildRow):

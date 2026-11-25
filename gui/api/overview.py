@@ -24,8 +24,8 @@ _SIZE_TABLES = {
     Location.__tablename__: "locations",
     Character.__tablename__: "new_characters",
 }
-# 人物モードが展開に残す、巻きこんだ相手との手番の見出し(`flows/act.py` の `_prompt_text`)
-_DIALOGUE_HEAD = "巻きこんだ相手とのやり取り:"
+# 人物モードが展開に残す、居合わせて互いに応じた相手の見出し(`flows/act.py` の `MET_HEAD`)
+_DIALOGUE_HEAD = "居合わせた相手とのやり取り:"
 
 
 def _text(value: Stamp | None) -> str | None:

@@ -1,106 +1,107 @@
-"""人物モード(`ActCharacter`)の AI だけの段。db に触らない。
+"""人物モード(`SimulateDay`)の AI だけの段。db に触らない。
 
-語り部の段は、一手の前後に関わる話があるときだけ、狙う段の前に一手ごとに一度回す(語り部の書き方の範囲)。
-前後の話のプロットを動機にし、プロットに逆らわないよう人物の外の状況を整え、裁く段に動機を残す。
-狙う段と対話の手番は人物の目(人物役と同じ書き方の範囲)で、人物が知ることだけから一手を決める。数が多いので一番安いモデルで回す。
-裁く段は作者の目(出来事の書き方の範囲)で、実行の中の手をまとめて一度だけ、サイコロの成り行きと影響の枠に沿って記録する。
+人物一人に会話(エージェント)を一つ持たせ、その人物の一日を一つの会話で回す(`AIClient.session`)。一度目の問いに、一日のあいだ変わらない材料
+(知っていること・思い・行ける場所・今日の予定)を渡し、二度目からは、その一時間の様子の差分だけを渡す(前の問いと答えは会話が覚えている)。
+人物の目(人物役と同じ書き方の範囲)は中くらいのモデルで回す。一日の記録は作者の目(出来事の書き方の範囲)で、人物ごとに一度だけ強いモデルで回す。
 """
 from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from pydantic import BaseModel
 
 from ai.instructions.materials import EVENT_PARTICIPANT_NOTE, LATER_EVENTS_NOTE, TIME_NOTE
 from ai.instructions.naming import NAME_PLACEHOLDER
 from data_access_logic import constants
-from data_access_logic.ai_client import AIClient
-from data_access_logic.event.writer import EVENT_TEXT_FORMAT
+from data_access_logic.ai_client import AIClient, AISession
 from data_access_logic.expansion.act_models import (
-    ActorBrief, BatchOutcomeDraft, DialogueBrief, DialogueTurn, DialogueTurnDraft, IntentDraft, NarrationDraft,
-    NarratorBrief, OutcomeRequest, OutcomeRequestSerialized,
+    DayBrief, DayOutcomeDraft, DayPlace, DayRequest, HourDraft, HourScene, ReactionDraft,
 )
 from db.schema import StyleScope
 
 logger = logging.getLogger(__name__)
 
-# 人物の目の材料のうち、本人のモチベーションと前後の出来事(`act_models.Motives`)の読み方
-_MOTIVES_NOTE = """\
+_AGENT_SYSTEM = """\
+あなたは物語の中の人物の一人として、一日を一時間ずつ過ごす。一時間ごとに、これからの一時間にすることを一つ決めて返す。
+同じ場所に居合わせた人物のしたことを渡されたら、それを受けてどう応じるかを返す。
+渡すのは、あなたが知っていることと、いま目の前にあることだけ。知らないこと(名を知らない人物の名前・素性、知らない出来事や事柄)を前提にしない。
+あなたのミーム・行動原理・性格・来歴・関係とモチベーション、これまでにしたこと、体の具合から、いまこの時間にあなたが本当にしそうなことを決める。
+人の一日は、眠る・食べる・働く・用事・人と話す・休むの積み重ねで、大きなことは一日にそう何度も起きない。ふだんの暮らしの一時間を、ふだんのとおりに過ごしてよい。
+仕事や暮らしの決まった時間があれば、それに沿う。今日決まっている予定には間に合うように動き、先回りしない。
+場所を移るなら、行ける場所の中から選ぶ。目の前の人物に話しかけてよい。応じるときは相手の言いなりにならなくてよく、気に留めずに自分のことを続けてもよい。
+目の前の人物のうち「この一日」が「ここで過ごしていて、ほかの場所へは一緒に行かない」の人物は、その場を離れない。連れ出す・一緒に出かけるつもりで動かず、その場でできることにする。
+欠点・弱さ・悪意も、性格・来歴のとおりに丸めずに演じる。ほかの人物がどう応じるか、あなたの行動の結果どうなったかは書かない。
+「体の具合」の空腹・眠気・人恋しさ・疲れは、人の体のとおりに効かせる。おなかがすけば食べ、眠ければ休み、疲れがたまっていれば大きなことを控える。
+人恋しさは、親しい相手と寄り添う・手を取る・抱きしめるような触れ合いで満たす。相手の気持ちと間柄に沿う範囲だけで、書くのは見える仕草まで。
+思いつきの元は、ほかの場面の筋の型。使うなら、あなたの立場と場所に合わせて形を変える。作者からの方向づけがあれば、言いなりにはならず、あなたらしい形で踏まえる。
 「あなたのモチベーション」は、いまあなたが何をしたがっているかで、強さは 1(気にかかる程度)〜5(何を捨てても果たしたい)。
-「あなたが関わったこれまでの出来事」は、あなたが居合わせて覚えていること。
-「この先に決まっている出来事」は、この先に起きると決まっていることで、あなたはまだ知らない。
+「あなたが関わったこれまでの出来事」は、あなたが居合わせて覚えていること。「この先に決まっている出来事」は、この先に起きると決まっていることで、
+あなたはまだ知らない。あなたの言葉・内心に出さず、そこへ食い違わずにつながるように動き、それを先回りして起こさない。
 「いつ」「いつから」は、いまからの隔たり(「3日前」「5日後」)。「いま」は今日の日付・時間帯で、年は渡さない。
-あなたの言葉・内心に出さず、そこへ食い違わずにつながるように動き、それを先回りして起こさない。"""
+内心と言葉に、物語の外のこと(作者・手番・時間の区切り)を書かない。言葉と内心は自分の口調・一人称・方言で書き、相手の話し方を移さない。"""
 
-_NARRATOR_SYSTEM = """\
-あなたは物語の語り部として、ある人物がこれから打つ一手の前に場を整える。
-渡すのは、一手の時刻・場所・動く人物・居合わせる人物・この場所で近ごろ起きたことと、作者が置いた筋か、その前後にある、この人物たちが出る話のプロット。
-作者が置いた筋は、この一手が起きる大きな出来事(親)とその上の出来事、同じ親の下で前後に置かれた出来事。一手は親の出来事の中の一場面になる。
-親の本文にある暮らし・争い・空気が、この時刻・場所で人物の目の前にどう現れるかを考え、その場面が起きる状況を整える。
-前後に置かれた出来事は先に起こさせず、すでに起きたことと食い違わせない。
-プロットは作者が決めた筋。この一手をプロットに逆らわせない。プロットの場面で起きることを先に起こさせず、
-プロットの前提(誰がどこにいて、何を持ち、誰と知り合いか)を崩させず、プロットに出る人物をその場面に出られなくさせない。
-本文のある話は、プロットのとおりに起きたこととして扱う。
-人物が何を思い、どう動くかは人物が決める。あなたが動かしてよいのは、人物の外のこと(人の出入り・用事・知らせ・天気・道・物の在り処)だけ。
-narration と request は人物に渡る。人物がその場で見聞きできることだけを書き、プロットそのもの・先の筋・人物の知らない人物の名前・素性・秘密を書かない。
-narration と request に年・日付(暦の時刻)を書かない。時の移りは時間帯や「翌朝」「三日後」のような隔たりで書く。"""
 
-_INTENT_SYSTEM = f"""\
-あなたは物語の中の人物の一人として、次の一手を決める。渡すのは、あなたが知っていることと、いま目の前にあることだけ。
-知らないこと(名を知らない人物の名前・素性、知らない出来事や事柄)を前提にしない。
-これまでの出来事の続きとして、モチベーションのどれを果たしに・近づきに動くかを、強さと目の前の様子から考える。
-強い思いほど先にするが、目の前の機会や危うさで、弱い思いを先にしてもよい。沿ったモチベーションの id を motivation_id に書く。
-あなたのミーム・行動原理・性格・来歴・関係から、いまこの場であなたが本当にしそうなことを一つ決める。
-企てを追っているなら、それを続けるか、別のことをするかを、あなた自身の考えで選ぶ。
-思いつきの元は、ほかの場面の筋の型。使うなら、あなたの立場と場所に合わせて形を変える。
-作者からの方向づけがあれば、それを踏まえる(言いなりにはならず、あなたらしい形で)。
-語り部の語りは、いま目の前で起きたこととして受ける。語り部の要求は、あなたが自分で決めたこととして演じ、言い回しと理由を自分で埋める。
-あなたのミーム・行動原理・性格とぶつかるときだけ断ってよい(断るなら、内心にその理由を書く)。
-一手は、一日から数日で片の付く大きさにする。大きな企ては、その最初の一手だけを決め、企ての名前を付ける。
-目の前の相手と言葉を交わして決めたいことがあれば、その相手を invites に挙げる。挙げてよいのは、目の前にいる人物だけ(名を知らない相手も、人物idで挙げてよい)。
+def agent(ai: AIClient) -> AISession:
+    """人物一人の一日を回す会話。"""
+    return ai.session(_AGENT_SYSTEM, StyleScope.ACTING, constants.ACT_MODEL, constants.ACT_EFFORT)
 
-{_MOTIVES_NOTE}"""
 
-_TURN_SYSTEM = f"""\
-あなたは物語の中の人物の一人として、目の前のやり取りに一手を返す。渡すのは、あなたが知っていることと、目の前の様子と、
-ここまでに見聞きしたことだけ。知らないこと(名を知らない人物の名前・素性、知らない出来事や事柄)を前提にしない。
-あなたのミーム・行動原理・性格・来歴・関係とモチベーションから、この場であなたが本当にしそうなことを決める。相手の言いなりにならなくてよく、断ってもよい。
-欠点・弱さ・悪意も、性格・来歴のとおりに丸めずに演じる。
-ほかの人物がどう応じるか、あなたの行動の結果どうなったかは書かない。言いたいことを言い、動き、相手の返事を待つところで止める。
-ここまでに自分か相手が言ったことを、言い方を変えて繰り返さない。話がまとまった・同じことの言い合いや譲り合いになった・もう言うことが無いなら、
-次の行動に移って done を true にする(人の会話は、用が済めば数言で終わる)。
-内心と狙いに、物語の外のこと(作者・手番・要求)を書かない。言葉と内心は「自分」の口調・一人称・方言で書く。
+def _ask[Output: BaseModel](session: AISession, payload: dict[str, Any], request: str, output: type[Output],
+                            name: str | None) -> Output | None:
+    """返せなければ控えのモデルで一度だけやり直す(モデルの安全装置が、ふつうの人物のやり取りを止めることがある)。"""
+    prompt = "\n".join([json.dumps(payload, ensure_ascii=False, indent=2), request])
+    for model in dict.fromkeys([constants.ACT_MODEL, constants.ACT_FALLBACK_MODEL]):
+        draft = session.ask(prompt, output, model=model)
+        if draft is not None:
+            return draft
+        logger.warning(f"{name} の{output.__name__}が {model} で返らなかった")
+    return None
 
-{_MOTIVES_NOTE}"""
+
+def hour_draft(session: AISession, brief: DayBrief, scene: HourScene, seen_ids: set[int],
+               first: list[DayPlace] | None = None, schedule: list[str] | None = None) -> HourDraft | None:
+    """これからの一時間。`first` を渡したら一度目の問いとして、一日のあいだ変わらない材料と行ける場所・今日の予定を添える。
+    `seen_ids` は会話の中で見た目を渡した人物(渡したあとに、今回渡す人物を足す)。"""
+    payload = scene.for_prompt(brief.known_ids, seen_ids)
+    seen_ids.update(person.character_id for person in scene.present)
+    if first is not None:
+        payload = {**brief.prompt, "行ける場所": [place.for_prompt() for place in first],
+                   "今日決まっている予定": schedule or [], **payload}
+    return _ask(session, payload, f"あなた({brief.name})の、これからの一時間を決める。", HourDraft, brief.name)
+
+
+def reaction_draft(session: AISession, brief: DayBrief, others: list[str]) -> ReactionDraft | None:
+    """`others` は居合わせた人物がこの一時間にしたこと(見る人の目で、名を知らない相手は伏せる)。決めていた一時間は会話が覚えている。"""
+    return _ask(session, {"居合わせた人物がこの一時間にしたこと": others},
+                f"あなた({brief.name})が決めていたこの一時間のうちに、居合わせた人物にどう応じるかを返す。", ReactionDraft, brief.name)
+
 
 _JUDGE_SYSTEM = f"""\
-物語の人物たちが、それぞれ一手を打った。手ごとに、場所の状況、人物の内心と狙い・行動、巻きこんだ相手とのやり取り、
-サイコロで決まった成り行き、影響の枠を渡すので、その手がその場所・時点で起こしたことを、手ごとに出来事として1件ずつ記録に起こす。
-手は時刻の順に並べてある。前の手で起きたことは、後の手の場所・人物の様子として扱い、食い違わせない。
-成り行きに沿わせる(狙いがいつも通るとは限らない)。巻きこんだ相手とのやり取りは、言葉どおりに起きたこととして記録に入れる。
+物語の人物の一人が、一日を一時間ずつ過ごした。その日の行動(どこで何をし、誰と居合わせて何を言い合ったか)を渡すので、
+その人物の一日を、出来事として一件の記録に起こす。
+行動は起きたこととして扱い、書き足しも書き替えもしない。眠る・食べるだけの時間はまとめて短く書き、人と居合わせた場面・用事・仕事で起きたことを中心に書く。
+記録に書くのは「その日の行動」にあることだけ。「作者が置いた筋」と「前後の話」は「その日」の前後に起きる・起きたことで、逆らわないために読むもの。
+その場面や、そこにある人物の習い(朝の過ごし方など)を、その日の記録に書き込まない。
+人と言い合ったことは、言葉どおりに記録に入れる。
 影響の枠に収める。character_updates の人数・character_moves の人数・new_characters・ideas は枠の数まで。
-「動かされにくい人物」の character_updates と character_moves は書かない。場所をなくす・作るのは、枠で「できる」ときだけ。
-event_text は、人物の行動と、居合わせた人物・対象の反応を起きた順に書く。id ではなく名前で書く。居合わせた人物みなが読むので、人物の内心・狙いは書かない(見えた行動と聞こえた言葉だけ)。
-居合わせた人物と来歴はそのまま人物に渡るので、event_text と character_updates に年・日付(暦の時刻)を書かない。時の移りは「翌朝」「三日後」のような隔たりで書く。
-character_ids は、関わった人物・対象の人物idを、その手の居合わせる人物・対象の中からだけ選ぶ。動いた人物も入れる。
-character_moves は、この出来事で住まい・拠点が変わった人物ごとの移動先。場所idはその手の移動先の候補からだけ選ぶ。一時の外出は入れない。
-location_abolished / location_founded は、この出来事が場所自身の消滅・新設に及ぶときだけ埋める。ほかは false / null。
-character_updates の text は、この出来事で新しく分かった、その人物の性格・信念(人物以外なら性質・方針)を一文で書く。この時刻の来歴に一文として足される。新しく分かったことの無い人物は含めない。その人物を指すときは名前を書かず「{NAME_PLACEHOLDER}」と書く。
-ideas は、この一手で新しく生まれた・広まった事柄(技術・制度・概念・呼び名・噂など)だけ。人名・地名は入れない。knower_ids は、それを知った人物をその手の居合わせる人物・対象の中から選ぶ。
-new_characters は、この一手で新しく世界に現れる人物・対象(生まれた子・雇った者・作った組織など)だけ。居合わせる人物・対象は入れない。
-arc_closed は、続けた企てがあり、この一手でそれが果たされたか潰えたときだけ true。
-motivation_changes は、この一手のあとの、居合わせる人物の思い(モチベーション)の動き。強さは 1(気にかかる程度)〜5(何を捨てても果たしたい)。
+「動かされにくい人物」の character_updates と character_moves は書かない。
+event_text は、人物の行動と、居合わせた人物・対象の反応を起きた順に書く。id ではなく名前で書く。居合わせた人物みなが読むので、人物の内心は書かない(見えた行動と聞こえた言葉だけ)。
+居合わせた人物と来歴はそのまま人物に渡るので、event_text と character_updates に年・日付(暦の時刻)を書かない。時の移りは「朝」「昼すぎ」「夜ふけ」のような時間帯で書く。
+character_ids は、その日に関わった人物・対象の人物idを、居合わせた人物の中からだけ選ぶ。動いた人物も入れる。
+event_name は、「動いた人物のこれまでの記録の名前」と同じにせず、その日にしかないことから付ける。
+行動の中の呼び方(「母さま」「日焼けした女」など)が誰かは、「居合わせた人物」の「動いた人物との間柄」と「居合わせた場所」で見分ける。見分けられない相手は、名前でなく行動の中の呼び方で書く。
+character_moves は、この一日で住まい・拠点が変わった人物ごとの移動先。場所idは移動先の候補からだけ選ぶ。一時の外出は入れない。
+character_updates の text は、この一日で新しく分かった、その人物の性格・信念(人物以外なら性質・方針)を一文で書く。その日の来歴に一文として足される。新しく分かったことの無い人物は含めない。その人物を指すときは名前を書かず「{NAME_PLACEHOLDER}」と書く。
+ideas は、この一日で新しく生まれた・広まった事柄(技術・制度・概念・呼び名・噂など)だけ。人名・地名は入れない。knower_ids は、それを知った人物を居合わせた人物の中から選ぶ。
+new_characters は、この一日で新しく世界に現れる人物・対象(雇った者・作った組織など)だけ。居合わせた人物は入れない。
+motivation_changes は、この一日のあとの、居合わせた人物の思い(モチベーション)の動き。強さは 1(気にかかる程度)〜5(何を捨てても果たしたい)。
 新しく生まれた思いは motivation_id を null にし、内容と強さを書く。強まった・弱まった思いは、そのモチベーションid と新しい強さを書き、text は null。
-果たした・消えた思いは、そのモチベーションid と強さ 0。モチベーションid は「居合わせる人物のモチベーション」のその人物の行からだけ選ぶ。
-動いた人物の、一手が沿った思いを先に見る(成り行きで果たした・弱まった・かえって強まった)。変わらない思いは入れない。
-「動かされにくい人物」の思いは書かない。
-「語り部の動機」に作者が置いた筋のある手は、親の出来事の中の一場面として記録し、親とその上の出来事の本文、前後に置かれた出来事と食い違わせない。
-「語り部の動機」のある手は、前後の話のプロットに逆らう記録にしない。プロットの場面で起きることを先に起こさず、プロットの前提
-(誰がどこにいて、何を持ち、誰と知り合いか)を崩さず、プロットに出る人物をその場面に出られなくしない。成り行きがプロットとぶつかるときは、
-プロットに逆らわない形で成り行きを起こす(しくじる・遅れる・別の困りごとが起きる)。語り部の語りは、その場で起きたこととして記録に入れる。
-
-{EVENT_TEXT_FORMAT}
+果たした・消えた思いは、そのモチベーションid と強さ 0。モチベーションid は「居合わせた人物のモチベーション」のその人物の行からだけ選ぶ。
+変わらない思いは入れない。「動かされにくい人物」の思いは書かない。
+「作者が置いた筋」と「前後の話」に逆らう記録にしない。話の場面で起きることを先に起こさず、話の前提(誰がどこにいて、何を持ち、誰と知り合いか)を崩さない。
+行動が筋とぶつかるときは、筋に逆らわない形で記録する(しくじる・遅れる・別の困りごとが起きる)。
 
 {EVENT_PARTICIPANT_NOTE}
 
@@ -109,61 +110,10 @@ motivation_changes は、この一手のあとの、居合わせる人物の思�
 {TIME_NOTE}"""
 
 
-def narration_draft(ai: AIClient, brief: NarratorBrief) -> NarrationDraft | None:
-    prompt = "\n".join([json.dumps(brief.prompt, ensure_ascii=False, indent=2),
-                        "作者が置いた筋と前後の話のプロットに沿うよう、この一手の前に場を整える。"])
-    draft = ai.generate(prompt, NarrationDraft, system=_NARRATOR_SYSTEM, style_scope=StyleScope.NARRATOR,
-                        model=constants.ACT_NARRATOR_MODEL, effort=constants.ACT_NARRATOR_EFFORT)
-    if draft is None:
-        logger.warning("語り部の動機が得られなかった")
-    return draft
-
-
-def _acting[Output: BaseModel](ai: AIClient, prompt: str, output: type[Output], system: str) -> Output | None:
-    """人物の目の段。返せなければ控えのモデルで一度だけやり直す(モデルの安全装置が、ふつうの人物のやり取りを止めることがある)。"""
-    for model in dict.fromkeys([constants.ACT_MODEL, constants.ACT_FALLBACK_MODEL]):
-        draft = ai.generate(prompt, output, system=system, style_scope=StyleScope.ACTING, model=model,
-                            effort=constants.ACT_EFFORT)
-        if draft is not None:
-            return draft
-        logger.warning(f"{model} で人物の目の段({output.__name__})が返らなかった")
-    return None
-
-
-def intent_draft(ai: AIClient, brief: ActorBrief) -> IntentDraft | None:
-    prompt = "\n".join([json.dumps(brief.prompt, ensure_ascii=False, indent=2), "あなたの次の一手を決める。"])
-    intent = _acting(ai, prompt, IntentDraft, _INTENT_SYSTEM)
-    if intent is None:
-        logger.warning("人物の一手が得られなかった")
-    return intent
-
-
-def turn_draft(ai: AIClient, brief: DialogueBrief, seen: list[DialogueTurn], request: str) -> DialogueTurn | None:
-    """対話の手番を一つ。`seen` は、この人物がここまでに見聞きした手番(起きた順)。"""
-    prompt = "\n".join([
-        json.dumps({**brief.prompt,
-                    "ここまでに見聞きしたこと(起きた順)": [turn.seen_by(brief.character_id, brief.known_ids)
-                                                    for turn in seen],
-                    "求められていること": request}, ensure_ascii=False, indent=2),
-        # 相手の言葉を読んだすぐあとに書くので、相手の一人称・口調が移りやすい
-        f"あなた({brief.name})の一手を返す。一人称・口調は自分の話し方のとおりにし、相手の話し方を移さない。",
-    ])
-    draft = _acting(ai, prompt, DialogueTurnDraft, _TURN_SYSTEM)
-    if draft is None:
-        logger.warning(f"{brief.name}(id={brief.character_id})の手番が得られなかった")
-        return None
-    return DialogueTurn(character_id=brief.character_id, name=brief.name, thought=draft.thought, action=draft.action,
-                        speech=draft.speech, aim=draft.aim, done=draft.done)
-
-
-def judge_draft(ai: AIClient, requests: list[OutcomeRequest]) -> BatchOutcomeDraft | None:
-    """実行の中の手をまとめて裁く。手の番号は `requests` の並び(1 始まり)。"""
-    acts = [{"手の番号": number, **OutcomeRequestSerialized.model_validate(request.model_dump()).model_dump()}
-            for number, request in enumerate(requests, start=1)]
-    prompt = "\n".join([json.dumps({"手": acts}, ensure_ascii=False, indent=2),
-                        "手ごとに、その手がその場所・時点で起こしたことを記録する。"])
-    outcome = ai.generate(prompt, BatchOutcomeDraft, system=_JUDGE_SYSTEM, style_scope=StyleScope.EVENT,
+def judge_draft(ai: AIClient, request: DayRequest) -> DayOutcomeDraft | None:
+    prompt = "\n".join([json.dumps(request.model_dump(), ensure_ascii=False, indent=2), "この人物の一日を記録する。"])
+    outcome = ai.generate(prompt, DayOutcomeDraft, system=_JUDGE_SYSTEM, style_scope=StyleScope.EVENT,
                           model=constants.ACT_JUDGE_MODEL, effort=constants.ACT_JUDGE_EFFORT)
     if outcome is None:
-        logger.warning("手の記録が得られなかった")
+        logger.warning(f"{request.actor_name}の一日の記録が得られなかった")
     return outcome

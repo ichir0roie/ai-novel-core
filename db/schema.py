@@ -625,8 +625,18 @@ class CharacterParameter(OriginMixin, Base):
     # 性格ではなく立場の重さなので PERSONALITY_COLUMNS に入れない(人物役の「性格」に出さない)
     influence: Mapped[str | None] = mapped_column(
         PersonalityLevelType, ForeignKey("personality_level.id"),
-        comment="影響力。町・組織での立場の重さ。人物モードで、一手が世界を動かせる幅と、ほかの人物の一手から受ける影響の受けにくさ",
+        comment="影響力。町・組織での立場の重さ。人物モードで、一日の記録が世界を動かせる幅と、ほかの人物の一日から受ける影響の受けにくさ",
         sort_order=510)
+    # 体の欲。性格でないので PERSONALITY_COLUMNS に入れない。どの行でも決めていなければ、年齢から決める(`expansion/needs.py`)
+    appetite: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="食欲。人物モードで、空腹の増え方", sort_order=520)
+    sleep_drive: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="睡眠欲。人物モードで、眠気の増え方と、眠りの長さ", sort_order=530)
+    libido: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="性欲。人物モードで、人と触れ合いたい欲の増え方", sort_order=540)
 
     character: Mapped[Character] = relationship(back_populates="parameters", lazy="noload")
 
@@ -843,7 +853,7 @@ class CharacterMotivation(OriginMixin, TextBase):
 
     `start` から効き、`end` が空のあいだ効いている。果たした・消えたら `end` を付ける。強さが変わったら、前の行を変わった時刻で終え、
     同じ内容で新しい強さの行を足す(人物モードは足すことと `end` を付けることしかできないので、行を直さずに積む)。
-    人物モード(`ActCharacter`)の人物の目がその時刻に効いている本人の行を読んで次の一手を決め、裁く段が一手のあとの増減を足す。
+    人物モード(`SimulateDay`)の人物の目がその時刻に効いている本人の行を読んで一時間ごとの手を決め、一日の記録が増減を足す。
     話の人物役も本人の行を読んで演じ、話を締めるときに増減を書く。本人の内心なので、ほかの人物には渡さない。
     """
 
@@ -1235,7 +1245,7 @@ class NarouPart(Base):
 class ExpansionMode(enum.StrEnum):
     # 作者の一言から AI が枝葉を広げる(スキル `expand`)
     AUTHOR = "author"
-    # 人物が自分から動く(`ActCharacter`)
+    # 人物が一日を一時間ずつ動く(`SimulateDay`)
     CHARACTER = "character"
 
 
@@ -1324,6 +1334,69 @@ class ExpansionConflict(Base):
         comment="open / accepted / dismissed", sort_order=150)
 
     expansion: Mapped[Expansion] = relationship(back_populates="conflicts", lazy="noload")
+
+
+class EventAction(OriginMixin, TextBase):
+    """人物の一日の行動(`SimulateDay`)を、暦の一時間ごとに一行で持つ。
+
+    人物モードが人物を一時間ずつ動かして足し、一日の終わりに、その日の行動から人物の一日の出来事を一件まとめる。
+    同じ時刻に同じ場所にいた人物の行は、互いの行動を受けて動いた結果になる。行は足すだけで、直さない。
+    """
+
+    __tablename__ = "event_action"
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="動いた人物", sort_order=100)
+    expansion_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("expansion.id"), index=True, comment="この行を足した展開(人物の一日)", sort_order=110)
+    time: Mapped[Stamp] = mapped_column(StampType, nullable=False, index=True, comment="その一時間の始まり", sort_order=120)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("location.id"), index=True, nullable=False, comment="その一時間を過ごした場所", sort_order=130)
+    kind: Mapped[str] = mapped_column(
+        String, nullable=False, comment="行動の種別(眠る・食べる・働く・用事・話す・休む・予定など)", sort_order=140)
+    speech: Mapped[str | None] = mapped_column(String, comment="口にした言葉", sort_order=150)
+    thought: Mapped[str | None] = mapped_column(String, comment="内心。本人にしか見えない", sort_order=160)
+    sleepiness: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="その一時間を終えたときの眠気(0〜100)", sort_order=170)
+    hunger: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="その一時間を終えたときの空腹(0〜100)", sort_order=180)
+    desire: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="その一時間を終えたときの、人と触れ合いたい欲(0〜100)", sort_order=183)
+    load: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="その一時間の行動量(外に出た・戦った・働いた・傷つけた・人を変えたの重みの和)",
+        sort_order=186)
+    fixed_event_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("event.id"), index=True,
+        comment="作者の出来事の予定で決まった一時間なら、その出来事", sort_order=190)
+    fixed_episode_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("episode.id"), index=True,
+        comment="作者の話の予定で決まった一時間なら、その話", sort_order=200)
+    text: Mapped[str] = mapped_column(String, nullable=False, comment="その一時間にしたこと", sort_order=10000)
+
+
+class CharacterDay(OriginMixin, Base):
+    """人物の一日ごとの、欲の満ち足り方と行動量(`SimulateDay`)。
+
+    満ち足りなかった欲は次の日に強く働き、`DAY_LOOKBACK_DAYS` 日さかのぼった不足の和で、欲を満たしたいモチベーションを足す・強める・終える。
+    行動量の `DAY_LOOKBACK_DAYS` 日の和が、行動力で決まる上限に近づくほど、人物は休みがちになる。行は足すだけで、直さない。
+    """
+
+    __tablename__ = "character_day"
+    __table_args__ = (UniqueConstraint("character_id", "date"),)
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="人物", sort_order=100)
+    expansion_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("expansion.id"), index=True, comment="この行を足した展開(人物の一日)", sort_order=110)
+    date: Mapped[Stamp] = mapped_column(StampType, nullable=False, index=True, comment="その日の 0 時", sort_order=120)
+    food: Mapped[int] = mapped_column(Integer, nullable=False, comment="食欲の満ち足り方(0〜100)", sort_order=130)
+    sleep: Mapped[int] = mapped_column(Integer, nullable=False, comment="睡眠欲の満ち足り方(0〜100)", sort_order=140)
+    touch: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="人と触れ合いたい欲(性欲)の満ち足り方(0〜100)", sort_order=150)
+    load: Mapped[int] = mapped_column(Integer, nullable=False, comment="その日の行動量", sort_order=160)
+    bedtime: Mapped[int] = mapped_column(
+        Integer, nullable=False,
+        comment="その夜に眠った時刻(その日の一時間の番号。一日の時間の数以上なら、日付が変わってから眠った)", sort_order=170)
 
 
 def _install_guard() -> None:
