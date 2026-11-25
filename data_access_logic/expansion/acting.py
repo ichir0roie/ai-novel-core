@@ -204,7 +204,10 @@ def _profile(s: Session, character: Character, day_start: Stamp, hours_per_day: 
     maximum = needs.load_max(str(values.proactivity))
     strongest = max((row.strength for row in motivations_at(s, character.id, day_start)), default=0)
     spare = maximum > 0 and load_before < constants.DAY_SPARE_LOAD_RATIO * maximum
-    eager = round((int(strongest >= constants.DAY_EAGER_STRENGTH) + int(spare)) * hours_per_day / 24)
+    # 疲れがたまっていれば(休みがちになる線を越えていれば)、強いモチベーションがあっても早起き・遅寝はしない
+    tired = maximum <= 0 or load_before >= constants.DAY_REST_FROM_RATIO * maximum
+    keen = strongest >= constants.DAY_EAGER_STRENGTH and not tired
+    eager = round((int(keen) + int(spare)) * hours_per_day / 24)
     _, wake, bed = needs.sleep_plan(
         hours_per_day, sleep_drive, needs.sleep_debt(None if previous is None else previous.sleep, required),
         0 if previous is None else previous.bedtime - hours_per_day, eager)

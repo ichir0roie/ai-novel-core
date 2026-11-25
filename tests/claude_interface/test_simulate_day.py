@@ -331,6 +331,12 @@ def test_a_week_of_short_sleep_makes_a_motivation_and_a_tired_one_rests(world):
     assert [action.kind for action in actions[:10]] == ["眠る"] * 10 and actions[10].kind != "眠る"
     # 七日の行動量が上限(七日 × 低の 18)の近くにいるので、休む時間が出る
     assert any(action.kind == "休む" for action in actions)
+    # 疲れているので、眠りたい思いが強くても遅寝はせず、取り戻す分だけ早い 23 時までに寝床で眠る
+    with get_env_session() as s:
+        day = s.scalars(select(CharacterDay).where(CharacterDay.character_id == actor_id)
+                        .order_by(CharacterDay.date.desc())).first()
+        assert day is not None and day.bedtime <= 23
+    assert (actions[-1].kind, actions[-1].location_id) == ("眠る", _home_id)
     assert acted.actions == 24
     RevertExpansion(expansion_id=acted.expansion_id).run()
     with get_env_session() as s:

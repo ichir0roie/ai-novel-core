@@ -209,7 +209,12 @@ def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None
         location_id = walker.location_id if index < profile.wake else walker.plan.home_id
         return _Choice(location_id=location_id, kind=_SLEEP, text="眠っていた")
     hungry = walker.needs.hunger >= constants.DAY_NEED_COMFORT
+    near_bed = index >= profile.bed - round(constants.DAY_EARLY_BED_HOURS * len(plan.hours) / 24)
     if not hungry and walker.rng.random() < needs.rest_chance(needs.fatigue(profile, walker.load)):
+        if near_bed:
+            # 疲れて寝る時刻が近ければ、そのまま床に就く
+            walker.bedded = True
+            return _Choice(location_id=walker.plan.home_id, kind=_SLEEP, text="疲れがたまっていて、早めに床に就いた")
         return _Choice(location_id=walker.location_id, kind=_REST, text="疲れがたまっていて、その場で休んだ")
     scene = _scene(walker, index, plan, here)
     first = None if walker.asked else walker.places
@@ -221,7 +226,7 @@ def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None
         return _Choice(location_id=walker.location_id, kind=_REST, text="その場でしばらく過ごした")
     place_ids = {place.id for place in walker.places}
     location_id = draft.location_id if draft.location_id in place_ids else walker.location_id
-    if draft.kind == _SLEEP and index >= profile.bed - round(constants.DAY_EARLY_BED_HOURS * len(plan.hours) / 24):
+    if draft.kind == _SLEEP and near_bed:
         walker.bedded = True
         location_id = walker.plan.home_id
     return _Choice(location_id=location_id, kind=draft.kind, text=draft.action, speech=draft.speech,
