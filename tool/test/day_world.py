@@ -113,8 +113,8 @@ PATTERNS: dict[str, WorldSpec] = {
     # 前の日の記録の無い、ふつうの二人
     "basic": WorldSpec(people=_pair()),
     # 一人は七日の眠りが足りず、もう一人は七日の行動量が上限に近い
-    "tired": WorldSpec(people=_pair(dict(past=PastDays(days=6, sleep=55, load=20)),
-                                    dict(proactivity="低", past=PastDays(days=6, load=13)))),
+    "tired": WorldSpec(people=_pair(dict(past=PastDays(days=6, sleep=55, load=30)),
+                                    dict(proactivity="低", past=PastDays(days=6, load=19)))),
     # 昼すぎに市場で二人が会う予定がある
     "meeting": WorldSpec(people=_pair(), fixed=[FixedSpec(
         name="市場での待ち合わせ", text="ミオとカイが市場で落ち合い、祭りの飾りを買う", hour=15, hours=2, place=3, people=[0, 1])]),

@@ -241,16 +241,19 @@ def _react(walker: _Walker, choice: _Choice, others: list[tuple[_Walker, _Choice
                    deeds=list(dict.fromkeys([*choice.deeds, *draft.deeds])), asked=True)
 
 
-def _hour(walkers: list[_Walker], index: int, plan: DayPlan) -> None:
-    """全員の一時間を決めて、居合わせた人物どうしを応じさせ、行動の表に足す。"""
+def _people(walkers: list[_Walker], time: Stamp, positions: list[int]) -> dict[int, PlacePeople]:
+    return {place.location_id: place for place in call(expansion_steps.people_at, PeopleForm(
+        time=time, positions={walker.id: location_id for walker, location_id in zip(walkers, positions)}))}
+
+
+def _hour(walkers: list[_Walker], index: int, plan: DayPlan, before: dict[int, PlacePeople]) -> dict[int, PlacePeople]:
+    """全員の一時間を決めて、同じ場所で言葉を交わした人物どうしを応じさせ、行動の表に足す。`before` は一時間の始まりに
+    目の前にいる人物(前の一時間の終わりの居場所)。この一時間の終わりの居場所で読んだ、目の前にいる人物を返す。"""
     hour = plan.hours[index]
     hours_per_day = len(plan.hours)
-    before = {place.location_id: place for place in call(expansion_steps.people_at, PeopleForm(
-        time=hour, positions={walker.id: walker.location_id for walker in walkers}))}
     choices = _parallel(lambda walker: _choose(walker, index, plan, before.get(walker.location_id)), walkers)
     decided = dict(zip([walker.id for walker in walkers], choices))
-    after = {place.location_id: place for place in call(expansion_steps.people_at, PeopleForm(
-        time=hour, positions={walker.id: choice.location_id for walker, choice in zip(walkers, choices)}))}
+    after = _people(walkers, hour, [choice.location_id for choice in choices])
     groups: dict[int, list[_Walker]] = {}
     for walker in walkers:
         groups.setdefault(decided[walker.id].location_id, []).append(walker)
@@ -258,7 +261,8 @@ def _hour(walkers: list[_Walker], index: int, plan: DayPlan) -> None:
     def react(walker: _Walker) -> _Choice:
         choice = decided[walker.id]
         others = [(other, decided[other.id]) for other in groups[choice.location_id] if other.id != walker.id]
-        if not choice.asked or not any(other_choice.kind != _SLEEP for _, other_choice in others):
+        # 誰かが言葉を口にした一時間だけ応じる(黙って同じ場所にいるだけなら、次の一時間に、さっきしていたこととして見える)
+        if not choice.asked or not any(other_choice.speech and other_choice.kind != _SLEEP for _, other_choice in others):
             return choice
         return _react(walker, choice, others)
 
@@ -278,7 +282,7 @@ def _hour(walkers: list[_Walker], index: int, plan: DayPlan) -> None:
         walker.sleeping.append(not awake)
         walker.seen = [f"{_seen_name(walker, other.id, other.name)}: "
                        + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice))
-                       for other, other_choice in others] if awake else []
+                       for other, other_choice in others]
         load = needs.hour_load(choice.deeds)
         walker.load += load
         walker.location_id = choice.location_id
@@ -299,6 +303,7 @@ def _hour(walkers: list[_Walker], index: int, plan: DayPlan) -> None:
         with writing(Writer.AI_APPEND, walker.plan.expansion_id):
             call(expansion_steps.save_actions, ActionsForm(expansion_id=walker.plan.expansion_id, actions=[action]))
         walker.actions += 1
+    return after
 
 
 def _prompt_text(walker: _Walker) -> str:
@@ -441,12 +446,15 @@ def simulate_day(
     with story_scope.scoped(scope):
         run.date = plan.date
         walkers = _walkers(ai, rng, plan, nudge)
+        first_hour = Stamp.parse(plan.hours[0])
+        assert first_hour is not None
+        present = _people(walkers, first_hour, [walker.location_id for walker in walkers])
         for index in range(len(plan.hours)):
             active = [walker for walker in walkers if walker.failed is None]
             if not active:
                 break
             try:
-                _hour(active, index, plan)
+                present = _hour(active, index, plan, present)
             except Exception as error:
                 for walker in active:
                     _fail(run, walker, error)

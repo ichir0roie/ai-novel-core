@@ -61,7 +61,8 @@ def sleepiness_at(hour: int, profile: NeedProfile) -> int:
 
 
 def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: NeedProfile) -> Needs:
-    """一時間を過ごしたあとの欲。空腹と人と触れ合いたい欲は段の強さ・前の日の不足で増え、食べる・触れ合うと 0 に戻る。
+    """一時間を過ごしたあとの欲。空腹と人と触れ合いたい欲は段の強さ・前の日の不足で増え、食べる・触れ合うと 0 に戻り、
+    人と話すと人と触れ合いたい欲が少し減る。
     増え方は一日 24 時間の暦の量で、一日の長さが違う暦では、一日あたりの量がそろうように割合を直す。"""
     scale = 24 / hours_per_day
     food = constants.DAY_HUNGER_PER_HOUR * constants.DAY_NEED_RATES[profile.appetite] * profile.food_pressure
@@ -69,7 +70,11 @@ def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: 
     if kind == _SLEEP:
         food *= constants.DAY_SLEEP_HUNGER_SHARE
     hunger = 0 if kind == "食べる" else min(100, needs.hunger + round(food * scale))
-    desire = 0 if kind == "触れ合う" else min(100, needs.desire + round(touch * scale))
+    desire = min(100, needs.desire + round(touch * scale))
+    if kind == "触れ合う":
+        desire = 0
+    elif kind == "話す":
+        desire = max(0, desire - constants.DAY_TALK_DESIRE_RELIEF)
     return Needs(hunger=hunger, desire=desire, sleepiness=sleepiness_at(hour + 1, profile))
 
 

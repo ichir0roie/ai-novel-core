@@ -212,10 +212,9 @@ def test_the_next_day_follows_the_night_and_the_shortage(world):
 
     assert run.date is not None and _stamp(str(run.date)) == _stamp("1200/05/02")
     second = [action for action in _actions(actor_id) if action.time >= _stamp("1200/05/02")]
-    # 前の夜は 1 時に眠り、要る 8 時間と不足の取り戻し 1 時間を眠って 10 時に起きる
-    # (行動力が低なので、一日目の行動量で余裕が無くなり、早起きしない)
-    assert second[0].kind != "眠る" and [action.kind for action in second[1:10]] == ["眠る"] * 9
-    assert second[10].kind != "眠る"
+    # 前の夜は 1 時に眠り、要る 8 時間と不足の取り戻し 1 時間から、行動量に余裕があって早起きする 1 時間を引いて 9 時に起きる
+    assert second[0].kind != "眠る" and [action.kind for action in second[1:9]] == ["眠る"] * 8
+    assert second[9].kind != "眠る"
     assert second[0].hunger == 0 if second[0].kind == "食べる" else second[0].hunger > last.hunger
 
 
@@ -267,6 +266,8 @@ def test_needs_grow_with_the_drive_and_yesterday_shortage():
     assert (awake.hunger, awake.desire, awake.sleepiness) == (60, 53, 3)
     assert needs.next_needs(Needs(hunger=90, desire=50), "食べる", 12, 24, profile).hunger == 0
     assert needs.next_needs(Needs(hunger=50, desire=90), "触れ合う", 12, 24, profile).desire == 0
+    # 人と話すと、人と触れ合いたい欲が少し減る
+    assert needs.next_needs(Needs(hunger=50, desire=90), "話す", 12, 24, profile).desire == 63
     # 眠っているあいだは、空腹がゆっくり増える
     assert needs.next_needs(Needs(hunger=50, desire=0), "眠る", 2, 24, profile).hunger == 52
     # 前の日に食べ足りなかったぶん強く増え、性欲が無ければ増えない
@@ -314,7 +315,7 @@ def test_a_week_of_short_sleep_makes_a_motivation_and_a_tired_one_rests(world):
         s.add(CharacterParameter(character_id=actor_id, start="1199/01/01", proactivity="低"))
         for days in range(1, 7):
             s.add(CharacterDay(character_id=actor_id, date=_stamp(_DAY).plus_days(-days), food=100, sleep=40, touch=100,
-                               load=14, bedtime=24))
+                               load=20, bedtime=24))
         s.commit()
     ai = ScriptedAI(market_id)
 
@@ -328,7 +329,7 @@ def test_a_week_of_short_sleep_makes_a_motivation_and_a_tired_one_rests(world):
     # 前の日に 5 時間足りなかったので 3 時間を取り戻し、朝は 2 時間遅く 10 時に起きる(行動量に余裕が無いので早起きはしない)
     actions = _actions(actor_id)
     assert [action.kind for action in actions[:10]] == ["眠る"] * 10 and actions[10].kind != "眠る"
-    # 七日の行動量が上限(七日 × 低の 12)にいるので、休む時間が出る
+    # 七日の行動量が上限(七日 × 低の 18)の近くにいるので、休む時間が出る
     assert any(action.kind == "休む" for action in actions)
     assert acted.actions == 24
     RevertExpansion(expansion_id=acted.expansion_id).run()
