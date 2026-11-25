@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from data_access_logic.expansion import acting
 from data_access_logic.expansion.act_models import (
-    ActFrameForm, ActorBrief, ActorPick, ActSaved, ActSaveForm, DialogueBrief, DialogueBriefForm, ImpactFrame, InviteForm,
-    MotivesForm, Narration, NarratorBrief, NewCharacterLink, ParticipantMotivations,
+    ActionsForm, DayBrief, DayBriefForm, DayForm, DayMaterial, DayMaterialForm, DayPlan, DaySaved, DaySaveForm,
+    MotivesForm, NewCharacterLink, PeopleForm, PlacePeople,
 )
 from data_access_logic.expansion.finish_expansion import finish
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
@@ -19,32 +19,6 @@ from data_access_logic.query import common_query
 from data_access_logic.step import db_step
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import Expansion
-from db.stamp import Stamp
-
-
-class PickForm(BaseModel):
-    character_id: int | None = None
-    time: Stamp | None = None
-    seed: int | None = None
-    # この実行でもう動いた・巻きこまれた人物。引く相手から外す
-    exclude_ids: list[int] = []
-    # 人物を渡さないとき、この人物が登場した最新の話の登場人物から引く(省けば本文のある最新の話)
-    cast_of: int | None = None
-    # 作者が置いた親の出来事と、居合わせさせる人物(`ActorPick`)
-    parent_event_id: int | None = None
-    partner_ids: list[int] = []
-
-
-class NarratorBriefForm(BaseModel):
-    pick: ActorPick
-    nudge: str | None = None
-
-
-class BriefForm(BaseModel):
-    pick: ActorPick
-    seeds: list[str]
-    nudge: str | None = None
-    narration: Narration | None = None
 
 
 class PromptForm(BaseModel):
@@ -53,19 +27,23 @@ class PromptForm(BaseModel):
 
 
 @db_step
-def pick_actor(s: Session, form: PickForm) -> ActorPick:
-    return acting.pick_actor(s, form.character_id, form.time, form.seed, form.exclude_ids, form.cast_of,
-                             form.parent_event_id, form.partner_ids)
+def plan_day(s: Session, form: DayForm) -> DayPlan:
+    return acting.plan_day(s, form)
 
 
 @db_step
-def invitable(s: Session, form: InviteForm) -> list[int]:
-    return acting.invitable(s, form)
+def day_brief(s: Session, form: DayBriefForm) -> DayBrief:
+    return acting.day_brief(s, form)
 
 
 @db_step
-def dialogue_brief(s: Session, form: DialogueBriefForm) -> DialogueBrief:
-    return acting.dialogue_brief(s, form)
+def people_at(s: Session, form: PeopleForm) -> list[PlacePeople]:
+    return acting.people_at(s, form)
+
+
+@db_step
+def save_actions(s: Session, form: ActionsForm) -> None:
+    acting.save_actions(s, form)
 
 
 @db_step
@@ -74,13 +52,8 @@ def motive_targets(s: Session, form: MotivesForm) -> SummaryTargets:
 
 
 @db_step
-def participant_motivations(s: Session, form: MotivesForm) -> list[ParticipantMotivations]:
-    return acting.participant_motivations(s, form.character_ids, form.time)
-
-
-@db_step
-def act_frame(s: Session, form: ActFrameForm) -> ImpactFrame:
-    return acting.act_frame(s, form)
+def day_material(s: Session, form: DayMaterialForm) -> DayMaterial:
+    return acting.day_material(s, form)
 
 
 @db_step
@@ -99,18 +72,8 @@ def finish_expansion(s: Session, form: ExpansionFinishForm) -> ExpansionRecord:
 
 
 @db_step
-def narrator_brief(s: Session, form: NarratorBriefForm) -> NarratorBrief:
-    return acting.narrator_brief(s, form.pick, form.nudge)
-
-
-@db_step
-def actor_brief(s: Session, form: BriefForm) -> ActorBrief:
-    return acting.actor_brief(s, form.pick, form.seeds, form.nudge, form.narration)
-
-
-@db_step
-def save_act(s: Session, form: ActSaveForm) -> ActSaved:
-    return acting.save_act(s, form)
+def save_day(s: Session, form: DaySaveForm) -> DaySaved:
+    return acting.save_day(s, form)
 
 
 @db_step

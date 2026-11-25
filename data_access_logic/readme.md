@@ -125,7 +125,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話か子の作品が残っていれば止まる |
 | 「プロットを書いて」「プロットを補完して」「プロットを直して」 | このセッションの Claude が書き、`CommitEpisode`(`{'episode': {'id': …, 'plot_text': …}}`)で入れる(下の「話のプロット」)。AI の流れ(`GenerateEvent` など)には書かせない |
 | 「作品全体を詰めたい」「全体の整合を見ながら筋を直したい」「この一言から世界を広げて」 | スキル `expand`(作者モード)。作者の一言ごとに展開を立て、関わるアイデア・ミーム・出来事(筋は出来事の親子)・人物・関係・来歴を AI の行として足し、関わる AI の行を直してつじつまを合わせる。作者の行は直さず、食い違いと作者の行を直す指示は案(`expansion_conflict`)にして作者の判断を待ち、認められたら作者の書き手で直す。話の本文(`main_text`)は書かない・直さない(下の「世界の展開」) |
-| 「auto」「人物を動かして」「自走」 | スキル `auto-act`(人物モード)。`expansion.act_character.ActCharacter(character_id=None, time=None, nudge=None, seed=None, act_count=1)` を繰り返す。人物も時刻も省けば、本文のある最新の話の登場人物(一手目を名指ししたら、その人物が登場した最新の話の登場人物)を、その話の翌日以降に動かす。一手の前後に動く人物か居合わせる人物が出るプロットつきの話があれば、先に語り部がそのプロットを動機にして、人物の目の前で起こす状況(語り)と人物への要求を整える(語り部の書き方の範囲。プロットと動機は人物に渡さず、裁く段にだけ渡してプロットに逆らう記録にさせない)。人物がその時刻に知ることのできるデータ・本人のモチベーション・前後の出来事(本人が関わったこれまでの出来事と、この先に決まっている出来事)と目の前の様子から一手(内心・狙い・沿ったモチベーション・行動・言葉)を決め、巻きこみたい相手がいれば同じ材料で相手にも手番を返させて言葉を交わし(人物の目の段は一番安いモデル)、実行の手をまとめて作者の目でサイコロの成り行きと影響の枠に沿って一度だけ裁き(強いモデル)、気力・手数・影響の枠(`expansion/budget.py`。`.docs/world-expansion.md` の「リソース制限」)で縛ったうえで、出来事(企ては親の出来事にし、一手をその子に)・当事者の来歴・事柄(アイデアと呼び名。知った人物を知る相手に)・現れた人物と関係・居場所の移動・モチベーションの増減を足す。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。一手ごとに展開(mode=character)を立てる(下の「世界の展開」)。作者が親の出来事を置くときは `parent_event_id`(人物 `character_id` 必須)と、目の前に居合わせさせる人物 `partner_ids` を渡す。一手目を親の期間の中で動かし、語り部が親とその先祖の本文、親の子のうち一手の前後に置かれた出来事(`constants.ACT_ARC_SIBLING_LIMIT` 件ずつ)をもとに場を整え、裁く段はそれと食い違わない記録にし、出来事を企てでなく親の子にする。居合わせさせた人物は住まいを問わず居合わせる人物の頭に入り、巻きこめる相手になる |
+| 「auto」「人物を動かして」「自走」「〇〇の一日を動かして」 | スキル `auto-act`(人物モード)。`expansion.simulate_day.SimulateDay(character_ids=None, date=None, nudge=None, seed=None, parent_event_id=None)` を日を進めて繰り返す。人物たち(`constants.DAY_CHARACTER_LIMIT` 人まで。省けば本文のある最新の話の登場人物)の一日(省けば人物が最後に出た日の翌日)を、0 時から暦の一時間ずつ動かす。動かせるのは詳細の場所(`map_detail`)にいる人物だけで、その日のあいだはエリア(詳細の場所の一番近い、詳細でない上の場所)の詳細の場所のあいだを動く。一時間ごとに、その日に始まる作者の話・出来事の時間は予定で埋め、眠っている時間は眠気の規則で埋め、ほかの時間は人物の目(中くらいのモデル)に、知ることのできるデータ・本人の思い・前後の出来事・体の具合(眠気・空腹)・今日これまでにしたこと・目の前の人物と、その人物がさっきしたことから、その一時間を決めさせる(人物どうしは並列)。同じ場所に居合わせた動かしている人物どうしは、相手のしたことに一往復ずつ応じる。一時間ごとの行動は行動の表(`event_action`)に残し、一日の終わりに人物ごとに一度だけ作者の目(強いモデル)で、人物の一日を出来事一件(作者が親を置けば、その子)と、当事者の来歴・事柄(アイデアと呼び名)・現れた人物と関係・住まいの移動・モチベーションの増減にまとめる。作者の筋と前後の話のプロットに逆らわせず、影響の枠(`expansion/budget.py`)ではみ出た分は切る。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。人物の一日ごとに展開(mode=character)を立てる(下の「世界の展開」)。詳しくは `.docs/world-expansion.md` の「人物モード」 |
 | 「この一言に関わる行を探して」「表をまたいで引いて」 | `world.search_world.SearchWorld(words, story_id=None, limit_per_table=10)`。語の部分一致で、人物(名前・外見・芯・筋書き・来歴)・出来事・アイデア(呼び名も)・場所(来歴も)・関係(来歴も)・スキル・ミーム・話(題・プロット)・作品を引き、当たった語・抜き書き・出自(`origin`)と、一段広げた関わる行(人物の関係の相手・当事者の出来事・居場所、出来事の当事者・場所・親、場所の親、関係の二人)を返す。`story_id` を渡すと話・作品をその作品と子孫に絞る |
 | 「来歴を一行だけ足して」「この行を知る人を足して」 | `character.append_history.AppendCharacterHistory(character_id, history)` / `character.append_skill_history.AppendSkillHistory(character_skill_id, history)` / `character.append_relation_history.AppendRelationHistory(character_relation_id, history)` / `location.append_history.AppendLocationHistory(location_id, history)` / `idea.append_history.AppendIdeaHistory(idea_id, history)`。来歴・呼び名の行を一つだけ足し、今ある行には触れない(行の形は `UpdateCharacter` などの `histories` の一行と同じ。知る相手の既定も同じ)。知る相手を一人足すのは `character.add_knower.AddKnower(table, row_id, knower)`(`table` は来歴・呼び名の表の名前)。どれも `{"table", "id"}` を返す |
 | 「来歴を一行だけ直して」「この呼び名の行の注釈を直して」 | `character.update_history.UpdateCharacterHistory(history_id, history)` / `character.update_skill_history.UpdateSkillHistory(history_id, history)` / `character.update_relation_history.UpdateRelationHistory(history_id, history)` / `location.update_history.UpdateLocationHistory(history_id, history)` / `idea.update_history.UpdateIdeaHistory(history_id, history)`。来歴・呼び名の行を一つ id で指し、`history` に渡した欄だけを直す(空にする欄は null を渡す。`description`・`name` は空にできない)。同じ親のほかの行には触れない。`knowers` を渡せば知る相手をまるごと置き換える。行の id は `ReadCharacter` と表の API の行の `histories` の各行の `id` で読む。直したあとの行を返す |
@@ -239,12 +239,12 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 人物を消すと(`DeleteCharacter`)、その人物のスキルと来歴も消える
 
 **人物のモチベーション(character_motivation)**: 人物がいま何をしたがっているかを、一つの思いごとに `character_motivation` の一行
-(`character_id` / `start` / `end` / `strength` / `text`)で持つ。人物モード(`ActCharacter`)と話の人物役が読んで書く。
+(`character_id` / `start` / `end` / `strength` / `text`)で持つ。人物モード(`SimulateDay`)と話の人物役が読んで書く。
 
 - `start` は思いが生まれた時刻(必須)。`end` が空のあいだ効いている。果たした・消えたら、その時刻を `end` に入れる
 - `strength` は 1〜5(1 気にかかる程度 / 2 機会があればしたい / 3 手間をかけてもしたい / 4 ほかを後回しにしてもしたい / 5 何を捨てても果たしたい。`constants.MOTIVATION_STRENGTHS`)
 - 強さが変わったら、行を直さず、前の行の `end` に変わった時刻を入れ、同じ内容で新しい強さの行を同じ時刻から足す(人物モードは足すことと `end` を付けることしかできないので、同じ形に揃える)
-- 人物モードの人物の目(狙う段・対話の手番)には、本人のその時刻に効いている行だけを強い順に `constants.ACT_MOTIVATION_LIMIT` 件まで渡す
+- 人物モードの人物の目(一時間ごとの手・居合わせた相手への応じ)には、本人のその時刻に効いている行だけを強い順に `constants.ACT_MOTIVATION_LIMIT` 件まで渡す
 - 話の人物役・対話役(`ReadKnowledge`)には、本人の行を、効いている行と終わった行を合わせて強い順に `constants.KNOWLEDGE_MOTIVATION_LIMIT` 件まで渡す(終わった行は「昔のモチベーション」。強さが変わっただけで終えた行は外す)。人物役は話を締めるときに、本人の行の増減を差分として書き(`tool.episode_session close` の `motivations`)、`ApplyOutcomes` が `apply_changes` で話の時刻の行として書く
 - 本人の内心なので、ほかの人物の材料・話の材料(`ReadEpisodeBrief`)・知っている人物には渡さない
 - 裁く段には居合わせる人物ごとの行を id つきで渡し、一手のあとの増減(生まれた・強まった・弱まった・果たした・消えた)を返させて、出来事の時刻の行として書く(`character/motivations.py` の `apply_changes`)。影響の枠の「動かされにくい人物」の思いは書かない
@@ -514,7 +514,7 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 | 場所 | 場所の説明と来歴を書く所(このセッションの Claude が `ReadWritingStyle` で読む。AI の生成には使わない) |
 | 筋書き | 作品・章の筋書きを書く所(このセッションの Claude が `ReadWritingStyle` で読む。AI の生成には使わない) |
 | 人物役 | 人物役・対話役のエージェントの一手・返事(`tool.episode_session style` で読む) |
-| 語り部 | 手番の語り・要求と、場面の運び方(スキル `episode`・`interactive-episode`・`fill-episode` の語り部が `ReadWritingStyle` で読む。人物モード(`ActCharacter`)の語り部の段にも足す) |
+| 語り部 | 手番の語り・要求と、場面の運び方(スキル `episode`・`interactive-episode`・`fill-episode` の語り部が `ReadWritingStyle` で読む。人物モードには使わない) |
 | 推敲 | これまでの推敲で直したことと、その直し方をまとめた記録。本文の範囲の本文の行の後に足す(本文を書く・直すときに見直す)。スキル `revise-episode` が推敲のたびに整理して書き直す |
 | 講評 | 作者が自分で書いた本文の講評で見つけた、作者の書く力の課題と、その移り変わりの記録。AI に書かせる文にはどこにも足さない(作者が読み返し、スキル `critique-episode` が次の講評で読む)。講評のたびに整理して書き直す |
 
@@ -593,7 +593,7 @@ Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_c
 - `idea/` — アイデア(検索・確定・修正・削除・統合)と中間段(下書きの語をアイデアと照らす)
 - `meme/` — ミーム(確定・修正・削除・引く・抜き出す段・要約の取りこぼし)
 - `oracle/` — 覚え書き(確定・修正)
-- `expansion/` — 世界の展開(始める・終える・一覧・読む・取り消す・食い違い)と人物モード(`ActCharacter`)
+- `expansion/` — 世界の展開(始める・終える・一覧・読む・取り消す・食い違い)と人物モード(`SimulateDay`)
 - `world/` — 表をまたいで行を引く(`SearchWorld`)
 - `review/` — ユーザの判断が要るものの一覧(読む専用)
 - `fact_check/` — oracle・ミームを AI に Dラボのナレッジとネット検索で検めさせ、妥当性と補足を書く(`ai/claude_code/fact_checker.py`)
@@ -633,7 +633,7 @@ Entrypoint(entrypoint.py)
 │   ├─ ListEntrypoint           select() の行を row() でモデルにして並べる → list_locations / list_characters / list_character_relations / list_events
 │   └─ read_*.py / list_*.py / start_story.py / search_ideas.py / list_pending_reviews.py / draw_memes.py
 ├─ AI を回す入口(generate_*.py / read_episode_brief.py / reflect_episode.py /
-│   refresh_generated_content.py / check_facts.py / act_character.py)  result() で流れ(flows/)を呼ぶだけ
+│   refresh_generated_content.py / check_facts.py / simulate_day.py)  result() で流れ(flows/)を呼ぶだけ
 └─ RandomDraft                  db に触れない下書き作成 → create_random_*.py
 ```
 
