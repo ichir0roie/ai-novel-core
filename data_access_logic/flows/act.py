@@ -74,6 +74,11 @@ def _clock(hour: Stamp) -> str:
     return f"{hour.digits[3]}時"
 
 
+def _quoted(speech: str | None) -> str:
+    """言葉を一言ずつかぎかっこに入れる(自分で決めた手と応じた手の言葉は改行でつないであり、一つにくくると一続きの言葉に読まれる)。"""
+    return "".join(f"「{line}」" for line in (speech or "").split("\n") if line.strip())
+
+
 @dataclass
 class _Entry:
     """人物の一日の一行(続けて眠った・休んだ時間は一行にまとめる)。"""
@@ -89,7 +94,7 @@ class _Entry:
 
     def for_character(self) -> str:
         span = self.start if self.start == self.end else f"{self.start}〜{self.end}"
-        return f"{span}: {self.place}で、{self.text}" + (f"「{self.speech}」" if self.speech else "")
+        return f"{span}: {self.place}で、{self.text}" + _quoted(self.speech)
 
     def for_author(self) -> str:
         return "\n".join([self.for_character(), *(f"  - {line}" for line in self.others)])
@@ -127,6 +132,8 @@ class _Walker:
     seen: list[str] = field(default_factory=list)
     # 居合わせた人物(人物id と名前)。起きているあいだに同じ場所にいた人物
     met: dict[int, str | None] = field(default_factory=dict)
+    # 居合わせた人物ごとの、居合わせた場所の名前
+    met_places: dict[int, list[str]] = field(default_factory=dict)
     # 居合わせて互いに応じた、動かしている相手
     met_walkers: dict[int, str] = field(default_factory=dict)
     awake_places: Counter[int] = field(default_factory=Counter)
@@ -166,6 +173,8 @@ class _Choice:
     asked: bool = False
     fixed_event_id: int | None = None
     fixed_episode_id: int | None = None
+    # この一時間に食べた量(`DAY_MEAL_AMOUNTS`)
+    ate: str = constants.DAY_MEAL_AMOUNTS[0]
 
 
 def _seen_name(viewer: _Walker, character_id: int, name: str | None) -> str:
@@ -181,8 +190,11 @@ def _schedule(walker: _Walker, plan: DayPlan) -> list[str]:
             lines.append(f"{_clock(plan.hours[slot.hour])}から: {slot.label}")
         last_label = slot.label
     bed = walker.plan.profile.bed
-    if bed < len(plan.hours):
+    hours = len(plan.hours)
+    if bed < hours:
         lines.append(f"{_clock(plan.hours[bed])}ごろ: 眠る")
+    else:
+        lines.append("日付が変わるころ: 眠る" if bed == hours else f"日付が変わって{bed - hours}時ごろ: 眠る")
     return lines
 
 
@@ -193,7 +205,7 @@ def _scene(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None)
         fatigue=needs.fatigue(walker.plan.profile, walker.load),
         meanwhile=[entry.for_character() for entry in walker.unseen],
         present=[] if here is None else [person for person in here.people if person.character_id != walker.id],
-        seen=walker.seen)
+        seen=walker.seen, until_bed=walker.plan.profile.bed - index)
 
 
 def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None) -> _Choice:
@@ -226,29 +238,44 @@ def _choose(walker: _Walker, index: int, plan: DayPlan, here: PlacePeople | None
         return _Choice(location_id=walker.location_id, kind=_REST, text="その場でしばらく過ごした")
     place_ids = {place.id for place in walker.places}
     location_id = draft.location_id if draft.location_id in place_ids else walker.location_id
-    if draft.kind == _SLEEP and near_bed:
+    night = index >= round(constants.DAY_NIGHT_START * len(plan.hours) / 24)
+    if draft.kind == _SLEEP and (near_bed or night):
         walker.bedded = True
         location_id = walker.plan.home_id
     return _Choice(location_id=location_id, kind=draft.kind, text=draft.action, speech=draft.speech,
-                   thought=draft.thought, deeds=draft.deeds, asked=True)
+                   thought=draft.thought, deeds=draft.deeds, asked=True, ate=draft.ate)
 
 
 def _deed(choice: _Choice) -> str:
-    return choice.text + (f"「{choice.speech}」" if choice.speech else "")
+    return choice.text + _quoted(choice.speech)
+
+
+def _seen_deed(viewer: _Walker, other: _Walker, other_choice: _Choice, origin_id: int) -> str:
+    """見る人の目で、相手がこの一時間にしたこと。一時間の始めの場所(`origin_id`)から移るなら、移る先を添える。"""
+    if other_choice.kind == _SLEEP:
+        return f"{_seen_name(viewer, other.id, other.name)}: 眠っている"
+    names = {place.id: place.name for place in viewer.places}
+    moving = (f"({names.get(other_choice.location_id) or 'ほかの場所'}へ移る)"
+              if other_choice.location_id != origin_id else "")
+    return f"{_seen_name(viewer, other.id, other.name)}: {_deed(other_choice)}{moving}"
 
 
 def _react(walker: _Walker, choice: _Choice, others: list[tuple[_Walker, _Choice]]) -> _Choice:
-    """同じ場所に居合わせた人物がこの一時間にしたことを見せて、応じさせる。応じた分を一時間の手に書き足す。"""
-    seen = [f"{_seen_name(walker, other.id, other.name)}: "
-            + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice)) for other, other_choice in others]
-    draft = actor.reaction_draft(walker.session, walker.brief, seen)
+    """居合わせた人物がこの一時間にしたことを見せて、応じさせる。応じた分を一時間の手に書き足し、応じて場所を移ったら
+    (場所を移る相手についていくなど)、過ごす場所も差し替える。"""
+    draft = actor.reaction_draft(walker.session, walker.brief, [_seen_deed(walker, other, other_choice, other.location_id)
+                                                                for other, other_choice in others])
     if draft is None:
         return choice
     speeches = [speech for speech in (choice.speech, draft.speech) if speech]
     thoughts = [thought for thought in (choice.thought, draft.thought) if thought]
-    return _Choice(location_id=choice.location_id, kind=choice.kind, text=f"{choice.text}\n{draft.action}",
+    place_ids = {place.id for place in walker.places}
+    location_id = draft.location_id if draft.location_id in place_ids else choice.location_id
+    # 応じて過ごし方が変わったら(誘われて一緒に食べたなど)、欲の動きもそちらで数える
+    return _Choice(location_id=location_id, kind=draft.kind or choice.kind, text=f"{choice.text}\n{draft.action}",
                    speech="\n".join(speeches) or None, thought="\n".join(thoughts) or None,
-                   deeds=list(dict.fromkeys([*choice.deeds, *draft.deeds])), asked=True)
+                   deeds=list(dict.fromkeys([*choice.deeds, *draft.deeds])), asked=True,
+                   ate=max(choice.ate, draft.ate, key=constants.DAY_MEAL_AMOUNTS.index))
 
 
 def _people(walkers: list[_Walker], time: Stamp, positions: list[int]) -> dict[int, PlacePeople]:
@@ -257,26 +284,35 @@ def _people(walkers: list[_Walker], time: Stamp, positions: list[int]) -> dict[i
 
 
 def _hour(walkers: list[_Walker], index: int, plan: DayPlan, before: dict[int, PlacePeople]) -> dict[int, PlacePeople]:
-    """全員の一時間を決めて、同じ場所で言葉を交わした人物どうしを応じさせ、行動の表に足す。`before` は一時間の始まりに
-    目の前にいる人物(前の一時間の終わりの居場所)。この一時間の終わりの居場所で読んだ、目の前にいる人物を返す。"""
+    """全員の一時間を決めて、言葉を交わした人物・一緒にいて場所を移る人物と居合わせた人物を応じさせ、行動の表に足す。
+    `before` は一時間の始まりに目の前にいる人物(前の一時間の終わりの居場所)。この一時間の終わりの居場所で読んだ、
+    目の前にいる人物を返す。"""
     hour = plan.hours[index]
     hours_per_day = len(plan.hours)
+    origins = {walker.id: walker.location_id for walker in walkers}
     choices = _parallel(lambda walker: _choose(walker, index, plan, before.get(walker.location_id)), walkers)
     decided = dict(zip([walker.id for walker in walkers], choices))
-    after = _people(walkers, hour, [choice.location_id for choice in choices])
-    groups: dict[int, list[_Walker]] = {}
-    for walker in walkers:
-        groups.setdefault(decided[walker.id].location_id, []).append(walker)
 
     def react(walker: _Walker) -> _Choice:
         choice = decided[walker.id]
-        others = [(other, decided[other.id]) for other in groups[choice.location_id] if other.id != walker.id]
-        # 誰かが言葉を口にした一時間だけ応じる(黙って同じ場所にいるだけなら、次の一時間に、さっきしていたこととして見える)
-        if not choice.asked or not any(other_choice.speech and other_choice.kind != _SLEEP for _, other_choice in others):
+        # 一時間の始めに同じ場所にいた人物と、同じ場所で過ごす人物(`location_id` はまだ一時間の始めの場所)
+        others = [(other, decided[other.id]) for other in walkers if other.id != walker.id
+                  and (other.location_id == walker.location_id or decided[other.id].location_id == choice.location_id)]
+        awake = [(other, other_choice) for other, other_choice in others if other_choice.kind != _SLEEP]
+        spoke = any(other_choice.speech for _, other_choice in awake)
+        left = any(other.location_id == walker.location_id and other_choice.location_id != other.location_id
+                   and other_choice.location_id != choice.location_id for other, other_choice in awake)
+        # 誰かが言葉を口にしたか、一緒にいた人物が別の場所へ移る一時間だけ応じる(黙って同じ場所にいるだけなら、
+        # 次の一時間に、さっきしていたこととして見える)
+        if not choice.asked or not (spoke or left):
             return choice
         return _react(walker, choice, others)
 
     reacted = dict(zip([walker.id for walker in walkers], _parallel(react, walkers)))
+    after = _people(walkers, hour, [reacted[walker.id].location_id for walker in walkers])
+    groups: dict[int, list[_Walker]] = {}
+    for walker in walkers:
+        groups.setdefault(reacted[walker.id].location_id, []).append(walker)
     for walker in walkers:
         choice = reacted[walker.id]
         here = after.get(choice.location_id)
@@ -287,16 +323,18 @@ def _hour(walkers: list[_Walker], index: int, plan: DayPlan, before: dict[int, P
             walker.awake_places[choice.location_id] += 1
             walker.first_awake = walker.first_awake or hour
             walker.met.update({person.character_id: person.name for person in companions})
+            for person in companions:
+                places = walker.met_places.setdefault(person.character_id, [])
+                if here is not None and here.location_name and here.location_name not in places:
+                    places.append(here.location_name)
             walker.met_walkers.update({other.id: other.name for other, other_choice in others
                                        if other_choice.kind != _SLEEP})
         walker.sleeping.append(not awake)
-        walker.seen = [f"{_seen_name(walker, other.id, other.name)}: "
-                       + ("眠っている" if other_choice.kind == _SLEEP else _deed(other_choice))
-                       for other, other_choice in others]
+        walker.seen = [_seen_deed(walker, other, other_choice, origins[other.id]) for other, other_choice in others]
         load = needs.hour_load(choice.deeds)
         walker.load += load
         walker.location_id = choice.location_id
-        walker.needs = needs.next_needs(walker.needs, choice.kind, index, hours_per_day, walker.plan.profile)
+        walker.needs = needs.next_needs(walker.needs, choice.kind, index, hours_per_day, walker.plan.profile, choice.ate)
         walker.hungers.append(walker.needs.hunger)
         walker.desires.append(walker.needs.desire)
         walker.append(_Entry(
@@ -366,7 +404,8 @@ def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan, wa
         actor_id=walker.id, participant_ids=list(walker.met), date=date, day_end=day_end,
         home_id=walker.plan.home_id, parent_event_id=plan.parent_event_id))
     request = DayRequest(actor_name=walker.name, log=[entry.for_author() for entry in walker.entries],
-                         present={walker.id: walker.name, **walker.met}, material=material)
+                         present={walker.id: walker.name, **walker.met}, met_places=walker.met_places,
+                         material=material, date=date)
     outcome = actor.judge_draft(ai, request)
     if outcome is None:
         raise ValueError("一日の記録が得られなかった")
@@ -384,14 +423,15 @@ def _record(ai: AIClient, rng: random.Random, walker: _Walker, plan: DayPlan, wa
             destinations=material.destinations, outcome=outcome, parent_event_id=plan.parent_event_id))
         created = []
         for draft in outcome.new_characters:
-            record = character_flow.generate(ai, rng, location_id, time, draft.person, CharacterForm(text=draft.description))
+            record = character_flow.generate(ai, rng, saved.newcomer_location_id, time, draft.person,
+                                             CharacterForm(text=draft.description))
             if record is None:
                 logger.warning(f"現れる人物「{draft.description[:30]}」を作れなかった")
                 continue
             call(expansion_steps.link_new_character, NewCharacterLink(
                 actor_id=walker.id, character_id=record.id, event_id=saved.event.id,
                 relation=draft.relation or "知り合い", time=time))
-            created.append(GeneratedCharacter(id=record.id, name=record.name, location_id=location_id))
+            created.append(GeneratedCharacter(id=record.id, name=record.name, location_id=saved.newcomer_location_id))
     return DayActed(expansion_id=expansion_id, character_id=walker.id, name=walker.name, event=saved.event,
                     actions=walker.actions, idea_ids=saved.idea_ids, characters=created, moves=saved.moves,
                     motivations=saved.motivations, met_ids=list(walker.met_walkers), frame=material.frame)
@@ -455,6 +495,7 @@ def simulate_day(
     run.keep_scope(scope)
     with story_scope.scoped(scope):
         run.date = plan.date
+        run.day_end = plan.day_end
         walkers = _walkers(ai, rng, plan, nudge)
         first_hour = Stamp.parse(plan.hours[0])
         assert first_hour is not None

@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ai.instructions.naming import fill_name_placeholder
@@ -25,6 +25,7 @@ from data_access_logic.event.plan import _current_location_id
 from data_access_logic.event.record import EventRecord
 from data_access_logic.event.summary import events_of
 from data_access_logic.expansion import budget, needs
+from data_access_logic.query.period import dated_alive_at
 from data_access_logic.expansion.act_models import (
     ActFailure, ActionsForm, ArcEvent, AuthorPlan, CharacterDayForm, DayBrief, DayBriefForm, DayCharacter, DayForm,
     DayMaterial, DayMaterialForm, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, MotivationLine,
@@ -63,9 +64,17 @@ def _day_start(s: Session, date: Stamp | None, characters: Sequence[Character]) 
                  if last is not None]
         if not lasts:
             raise ValueError("人物が出た話・出来事が無いので、動かす日を決められない。date を渡す")
-        date = max(lasts).plus_days(1)
+        year, month, day = max(lasts).digits[:3]
+        return next_day_start(Stamp(year, month, day))
     year, month, day = date.digits[:3]
     return Stamp(year, month, day)
+
+
+def next_day_start(day_start: Stamp) -> Stamp:
+    """暦の次の日の 0 時。`Stamp.plus_days` は西暦の日(24 時間)で数えるので、一日の長さが違う暦では次の日にならない。"""
+    if active_calendar() is None:
+        return day_start.plus_days(1)
+    return Stamp(*_next_date(day_start))
 
 
 def _hours_of(day_start: Stamp) -> list[Stamp]:
@@ -259,7 +268,7 @@ def plan_day(s: Session, form: DayForm) -> DayPlan:
         common_query.get_row(s, Event, form.parent_event_id)
     day_start = _day_start(s, form.date, characters)
     hours = _hours_of(day_start)
-    day_end = day_start.plus_days(1) if active_calendar() is None else Stamp(*_next_date(day_start))
+    day_end = next_day_start(day_start)
     plan = DayPlan(date=day_start, hours=hours, day_end=day_end, parent_event_id=form.parent_event_id)
     for character in characters:
         try:
@@ -324,11 +333,34 @@ def day_brief(s: Session, form: DayBriefForm) -> DayBrief:
         motives=motives_of(s, character, form.time), seeds=form.seeds, nudge=form.nudge,
     ).model_dump()
     return DayBrief(character_id=character.id, name=character.name, prompt=prompt,
-                    known_ids=_related_ids(s, character, form.time))
+                    known_ids=list(dict.fromkeys([*_related_ids(s, character, form.time),
+                                                  *_housemate_ids(s, character, form.time)])))
+
+
+def _housemate_ids(s: Session, character: Character, time: Stamp) -> list[int]:
+    """同じ住まいに住む人物。関係の行が無くても、一つ屋根の下に住む相手の名前は知っている(関係の行は作者が足しそびれることがある)。"""
+    home_id = _current_location_id(character, time)
+    if home_id is None:
+        return []
+    characters = s.scalars(
+        world_creation_query.alive_characters_select(time)
+        .where(Character.locations.any(CharacterLocation.location_id == home_id), Character.id != character.id)
+        .order_by(Character.id)).all()
+    return [other.id for other in characters if _current_location_id(other, time) == home_id]
+
+
+def _resident_away(time: Stamp) -> bool:
+    """動かしていない住人が留守にしている時間か(`DAY_RESIDENT_AWAY`。一日の長さが違う暦でも同じ割合)。"""
+    calendar = active_calendar()
+    hours_per_day = 24 if calendar is None else calendar.hours_per_day
+    start, end = constants.DAY_RESIDENT_AWAY
+    return start <= time.digits[3] * 24 / hours_per_day < end
 
 
 def _residents_here(s: Session, location_id: int, time: Stamp, exclude_ids: set[int]) -> list[Character]:
-    """その場所に住まいがあり、その時刻に生きて手の空いた人物(動かしている人物は除く)。"""
+    """その場所に住まいがあり、その時刻に生きて手の空いた人物(動かしている人物は除く)。昼は留守にしているので、いない。"""
+    if _resident_away(time):
+        return []
     busy_ids = set(s.scalars(world_creation_query.busy_character_ids_select(time)).all())
     characters = s.scalars(
         world_creation_query.alive_characters_select(time)
@@ -351,7 +383,8 @@ def people_at(s: Session, form: PeopleForm) -> list[PlacePeople]:
         people += _residents_here(s, location_id, form.time, simulated)
         places.append(PlacePeople(
             location_id=location_id, location_name=s.get_one(Location, location_id).name,
-            people=[PresentPerson(character_id=person.id, name=person.name, looks=appearance_of(s, person, form.time))
+            people=[PresentPerson(character_id=person.id, name=person.name, looks=appearance_of(s, person, form.time),
+                                  simulated=person.id in simulated)
                     for person in people[:constants.ACT_PRESENT_LIMIT]]))
     return places
 
@@ -448,11 +481,24 @@ def day_material(s: Session, form: DayMaterialForm) -> DayMaterial:
         frame=budget.frame(actor, people, form.date),
         motivations=[ParticipantMotivations(
             character_id=person.id, name=person.name,
-            motivations=[MotivationLine.model_validate(row) for row in motivations_at(s, person.id, form.date)])
+            motivations=[MotivationLine.model_validate(row) for row in motivations_at(s, person.id, form.date)],
+            relations=[] if person is actor else _relation_names(s, actor.id, person.id, form.date))
             for person in people],
         destinations=move_destinations(s, form.home_id, form.date),
         plan=AuthorPlan(parent=None if form.parent_event_id is None else parent_arc(s, form.parent_event_id, form.date),
-                        episodes=related_episodes(s, people, form.date)))
+                        episodes=related_episodes(s, people, form.date)),
+        recent_names=[event.name for event in s.scalars(common_query.events_of_character_select(
+            actor.id, until=form.date, limit=constants.ACT_RECENT_EVENT_NAMES)).all() if event.name])
+
+
+def _relation_names(s: Session, actor_id: int, other_id: int, time: Stamp) -> list[str]:
+    """動いた人物から見た相手との関係の名前(その時刻に続いている行。動いた人物を一人目に持つ行を先に)。"""
+    rows = s.scalars(select(CharacterRelation).where(
+        or_((CharacterRelation.character_1_id == actor_id) & (CharacterRelation.character_2_id == other_id),
+            (CharacterRelation.character_1_id == other_id) & (CharacterRelation.character_2_id == actor_id)),
+        dated_alive_at(CharacterRelation, time))
+        .order_by((CharacterRelation.character_1_id != actor_id), CharacterRelation.id)).all()
+    return list(dict.fromkeys(row.relation for row in rows if row.relation))
 
 
 def _add_ideas(s: Session, form: DaySaveForm, participant_ids: set[int]) -> list[int]:
@@ -499,7 +545,16 @@ def save_day(s: Session, form: DaySaveForm) -> DaySaved:
         update_locations(s, moves, form.time)
     motivations = apply_changes(s, outcome.motivation_changes, participant_ids, form.time)
     return DaySaved(event=record_of(s, EventRecord, record), idea_ids=idea_ids, moves=moves,
-                    motivations=[CharacterMotivationRecord.model_validate(row) for row in motivations])
+                    motivations=[CharacterMotivationRecord.model_validate(row) for row in motivations],
+                    newcomer_location_id=_newcomer_location_id(s, form.location_id, by_id.values(), form.time))
+
+
+def _newcomer_location_id(s: Session, location_id: int, people: Iterable[Character], time: Stamp) -> int:
+    """一日で現れる人物の生まれの場所。記録の場所が居合わせた人物の住まい(部屋・家)なら、その一つ上の場所にする
+    (生まれの場所はそのまま住まいになるので、居合わせた人物の部屋に住んでいることになってしまう)。"""
+    if not any(_current_location_id(person, time) == location_id for person in people):
+        return location_id
+    return s.get_one(Location, location_id).parent_id or location_id
 
 
 def link_new_character(s: Session, link: NewCharacterLink) -> None:

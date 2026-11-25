@@ -60,16 +60,21 @@ def sleepiness_at(hour: int, profile: NeedProfile) -> int:
     return min(100, round(100 * ((hour - profile.wake) / max(1, profile.bed - profile.wake)) ** 3))
 
 
-def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: NeedProfile) -> Needs:
+def next_needs(needs: Needs, kind: str, hour: int, hours_per_day: int, profile: NeedProfile, ate: str = "なし") -> Needs:
     """一時間を過ごしたあとの欲。空腹と人と触れ合いたい欲は段の強さ・前の日の不足で増え、食べる・触れ合うと 0 に戻り、
-    人と話すと人と触れ合いたい欲が少し減る。
+    人と話すと人と触れ合いたい欲が少し減る。`ate` はその一時間に食べた量(`DAY_MEAL_AMOUNTS`)で、種別が「食べる」でなくても、
+    しっかり食べれば 0 に戻し、少し食べれば `DAY_SNACK_RELIEF` だけ減らす。
     増え方は一日 24 時間の暦の量で、一日の長さが違う暦では、一日あたりの量がそろうように割合を直す。"""
     scale = 24 / hours_per_day
     food = constants.DAY_HUNGER_PER_HOUR * constants.DAY_NEED_RATES[profile.appetite] * profile.food_pressure
     touch = constants.DAY_DESIRE_PER_HOUR * constants.DAY_NEED_RATES[profile.libido] * profile.touch_pressure
     if kind == _SLEEP:
         food *= constants.DAY_SLEEP_HUNGER_SHARE
-    hunger = 0 if kind == "食べる" else min(100, needs.hunger + round(food * scale))
+    hunger = min(100, needs.hunger + round(food * scale))
+    if kind == "食べる" or ate == "しっかり":
+        hunger = 0
+    elif ate == "少し":
+        hunger = max(0, hunger - constants.DAY_SNACK_RELIEF)
     desire = min(100, needs.desire + round(touch * scale))
     if kind == "触れ合う":
         desire = 0

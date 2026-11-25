@@ -128,20 +128,20 @@ def run_days(pattern: str, days: int, seed: int, out: Path) -> list[dict[str, An
         with calling(_timed_step):
             run = act.simulate_day(world.character_ids, date, seed=seed + index)
         elapsed = time.monotonic() - started
-        assert run.date is not None
-        day_start = Stamp.parse(run.date)
-        assert day_start is not None
-        day_end = day_start.plus_days(1)
+        assert run.date is not None and run.day_end is not None
         acted = {item.character_id: item for item in run.acted}
-        report = {
-            "pattern": pattern, "day": index + 1, "date": str(run.date), "seconds": round(elapsed),
-            "failed": [failure.model_dump(mode="json") for failure in run.failed],
-            "ai": _ai_report(), "steps": _step_report(),
-            "characters": {str(character_id): _character_report(
-                character_id, day_start, day_end, acted[character_id].expansion_id if character_id in acted else None,
-                acted[character_id].event.id if character_id in acted else None)
-                for character_id in world.character_ids},
-        }
+        # 時刻は人物の暦で読む(一日の長さが違う暦では、`Stamp.plus_days` で日の終わりを出すと次の日にならない)
+        with run.scoped():
+            report = {
+                "pattern": pattern, "day": index + 1, "date": str(run.date), "seconds": round(elapsed),
+                "failed": [failure.model_dump(mode="json") for failure in run.failed],
+                "ai": _ai_report(), "steps": _step_report(),
+                "characters": {str(character_id): _character_report(
+                    character_id, run.date, run.day_end,
+                    acted[character_id].expansion_id if character_id in acted else None,
+                    acted[character_id].event.id if character_id in acted else None)
+                    for character_id in world.character_ids},
+            }
         reports.append(report)
         (out / f"{pattern}-day{index + 1}.json").write_text(json.dumps(report, ensure_ascii=False, indent=2),
                                                             encoding="utf-8")

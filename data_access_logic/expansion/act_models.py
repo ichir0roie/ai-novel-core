@@ -4,6 +4,7 @@
 渡す。年の数は渡さず、今の時刻は月日・時間帯・時で、思い・出来事のいつは今からの隔たりで渡す(`character/time_sense.py`)。
 作者の目(一日の終わりの記録)には、人物の一日の行動と、作者が置いた筋・前後の話のプロット・居合わせた人物の思いを渡す。
 """
+from contextlib import AbstractContextManager
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_serializer
@@ -52,6 +53,8 @@ class PresentPerson(Material):
     # 見る人が名を知らなければ、人物の目には名前を伏せて渡す
     name: str | None = None
     looks: AppearanceSerialized
+    # 一緒に一日を動かしている人物か(動かしていない人物は、住まいから動かない)
+    simulated: bool = False
 
 
 class MotivationLine(Material):
@@ -101,11 +104,13 @@ def _event_for_character(event: EventSerialized, sense: TimeSense, now: Stamp) -
 
 
 class ParticipantMotivations(Material):
-    """記録する段に渡す、居合わせた人物ごとの、その時刻に効いているモチベーション。"""
+    """記録する段に渡す、居合わせた人物ごとの、その時刻に効いているモチベーションと、動いた人物との間柄。"""
 
     character_id: int
     name: str | None = None
     motivations: list[MotivationLine]
+    # 動いた人物との関係の名前(動いた人物本人と、関係の無い人物は空)
+    relations: list[str] = []
 
 
 class NarratedEpisode(Material):
@@ -343,19 +348,28 @@ class HourScene(BaseModel):
     present: list[PresentPerson]
     # 目の前の人物が、さっきの一時間にしたこと
     seen: list[str]
+    # その日の段取りで床に就く時刻までの時間(暦の一時間で数える)
+    until_bed: int
     calendar: Calendar | None = Field(default_factory=active_calendar)
 
     def for_prompt(self, known_ids: list[int], seen_ids: set[int]) -> dict[str, Any]:
         """`seen_ids` は会話の中で見た目を渡した人物。二度目からは見た目を渡さない(会話が覚えている)。"""
         sense = TimeSense(self.calendar)
+        now = sense.now_for_prompt(self.time)
+        hours_per_day = 24 if self.calendar is None else self.calendar.hours_per_day
+        if hours_per_day != 24:
+            # 一日の長さが違う暦では、時の数を 24 時間の感覚で読んで、夕方のうちに寝てしまう
+            now["24時間の一日に直すと"] = f"{round(self.time.digits[3] * 24 / hours_per_day)}時ごろ"
         return {
-            "いま": sense.now_for_prompt(self.time),
+            "いま": now,
+            "床に就く目安まで": f"あと{self.until_bed}時間" if self.until_bed > 0 else "もう床に就く時刻",
             "前に決めてから、過ぎた時間にしていたこと": self.meanwhile,
             "いる場所": {"場所id": self.location_id, "名前": self.location_name},
             "体の具合": self.needs.for_prompt(self.fatigue),
             "目の前にいる人物": [
                 {"人物id": person.character_id,
                  "名前": person.name if person.character_id in known_ids and person.name else "(名を知らない)",
+                 **({} if person.simulated else {"この一日": _STAYING}),
                  **({} if person.character_id in seen_ids else person.looks.model_dump())} for person in self.present],
             "目の前の人物が、さっきしていたこと": self.seen,
         }
@@ -370,21 +384,59 @@ def _known_deeds(values: list[str]) -> list[str]:
     return [value for value in dict.fromkeys(value.strip() for value in values) if value in constants.DAY_DEED_WEIGHTS]
 
 
+def _bare_speech(value: str | None) -> str | None:
+    """言葉だけにする。AI がかぎかっこを付けて返すことがあり、書き出すときに付けるかぎかっこと重なる。
+    「a」「b」のように一言ずつくくってあれば、一言ずつの行に分ける。"""
+    text = (value or "").strip()
+    if text.startswith("「") and text.endswith("」"):
+        text = text[1:-1].replace("」「", "\n").replace("」\n「", "\n")
+    return text or None
+
+
+# 動かしていない人物は住まいから動かないので、人物の目に、連れ出せないことを伝える
+_STAYING = "ここで過ごしていて、ほかの場所へは一緒に行かない"
+
+
+def _ate_field() -> Any:
+    return Field(description=(
+        f"この一時間に食べた量。{'・'.join(constants.DAY_MEAL_AMOUNTS)} から一つ。種別が「食べる」でなくても、"
+        "話しながら料理をつまんだ・用事の前に朝ごはんを軽く食べたなら、その量にする"))
+
+
+def _known_amount(value: str | None) -> str:
+    value = (value or "").strip()
+    return value if value in constants.DAY_MEAL_AMOUNTS else constants.DAY_MEAL_AMOUNTS[0]
+
+
+_KIND_NOTE = ("この一時間に何かを食べたなら(つまむ程度でも)「食べる」、親しい相手と寄り添った・手を取ったなら「触れ合う」にする")
+
+
 class HourDraft(BaseModel):
     # json schema として AI に渡すので、docstring を書くと description として AI に渡る
     model_config = ConfigDict(extra="forbid")
 
-    kind: str = Field(description=f"この一時間にすることの種別。{'・'.join(constants.DAY_ACTION_KINDS)} から一つ")
+    kind: str = Field(description=f"この一時間にすることの種別。{'・'.join(constants.DAY_ACTION_KINDS)} から一つ。{_KIND_NOTE}")
     location_id: int = Field(description="この一時間を過ごす場所の場所id。行ける場所の中から。動かないなら、いる場所の場所id")
     action: str = Field(description="この一時間にすること。どこで・誰に・何をするか")
-    speech: str | None = Field(description="口にする言葉。黙っているなら null")
+    speech: str | None = Field(description="口にする言葉(かぎかっこは付けない)。黙っているなら null")
     thought: str = Field(description="いまの内心")
     deeds: list[str] = _deeds_field()
+    ate: str = _ate_field()
 
     @field_validator("deeds")
     @classmethod
     def _deeds(cls, values: list[str]) -> list[str]:
         return _known_deeds(values)
+
+    @field_validator("speech")
+    @classmethod
+    def _speech(cls, value: str | None) -> str | None:
+        return _bare_speech(value)
+
+    @field_validator("ate")
+    @classmethod
+    def _ate(cls, value: str | None) -> str:
+        return _known_amount(value)
 
     @field_validator("kind")
     @classmethod
@@ -406,14 +458,37 @@ class ReactionDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: str = Field(description="目の前の人物のしたこと・言ったことを受けて、この一時間のうちにすること。気に留めないなら、そのまま続けること")
-    speech: str | None = Field(description="口にする言葉。黙っているなら null")
+    kind: str | None = Field(description=(
+        f"応じたことで、この一時間の主なことが変わったなら、その種別({'・'.join(constants.DAY_ACTION_KINDS)} から一つ。"
+        f"誘われて一緒に食べた・寄り添ったなど。{_KIND_NOTE})。決めていた種別のままなら null"))
+    location_id: int | None = Field(description=(
+        "応じたことで、この一時間を過ごす場所が変わったなら(場所を移る相手についていく・引き止められて残るなど)、"
+        "行ける場所の中のその場所id。決めていた場所のままなら null"))
+    speech: str | None = Field(description="口にする言葉(かぎかっこは付けない)。黙っているなら null")
     thought: str = Field(description="いまの内心")
     deeds: list[str] = _deeds_field()
+    ate: str = _ate_field()
 
     @field_validator("deeds")
     @classmethod
     def _deeds(cls, values: list[str]) -> list[str]:
         return _known_deeds(values)
+
+    @field_validator("speech")
+    @classmethod
+    def _speech(cls, value: str | None) -> str | None:
+        return _bare_speech(value)
+
+    @field_validator("ate")
+    @classmethod
+    def _ate(cls, value: str | None) -> str:
+        return _known_amount(value)
+
+    @field_validator("kind")
+    @classmethod
+    def _known_kind(cls, value: str | None) -> str | None:
+        value = (value or "").strip()
+        return value if value in constants.DAY_ACTION_KINDS else None
 
 
 class HourAction(BaseModel):
@@ -524,6 +599,8 @@ class DayMaterial(BaseModel):
     motivations: list[ParticipantMotivations]
     destinations: list[LocationMaterial]
     plan: AuthorPlan
+    # 動いた人物が当事者の、その日より前の出来事の名前(新しい順)
+    recent_names: list[str] = []
 
 
 class DayRequest(Material):
@@ -532,16 +609,25 @@ class DayRequest(Material):
     log: list[str]
     # 居合わせた人物(人物id と名前)
     present: dict[int, str | None]
+    # 居合わせた人物ごとの、居合わせた場所(行動の「母さま」「日焼けした女」を、どの人物か見分けさせる)
+    met_places: dict[int, list[str]] = {}
     material: DayMaterial
+    # 動いた日の 0 時(前後の話の時刻と比べて、どれがその日の外かを見分けさせる)
+    date: Timestamp
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         material = self.material
+        relations = {person.character_id: "・".join(person.relations) for person in material.motivations}
         return {
             **material.plan.for_prompt(),
+            "その日": str(self.date).split(" ")[0],
             "動いた人物": self.actor_name,
+            "動いた人物のこれまでの記録の名前(新しい順)": material.recent_names,
             "その日の行動(起きた順)": self.log,
-            "居合わせた人物": [{"人物id": id_, "名前": name} for id_, name in self.present.items()],
+            "居合わせた人物": [
+                {"人物id": id_, "名前": name, "動いた人物との間柄": relations.get(id_) or None,
+                 "居合わせた場所": self.met_places.get(id_) or None} for id_, name in self.present.items()],
             "居合わせた人物のモチベーション": [
                 {"人物id": person.character_id, "名前": person.name,
                  "モチベーション(強い順)": [motivation.for_prompt() for motivation in person.motivations]}
@@ -569,6 +655,8 @@ class DaySaved(BaseModel):
     moves: list[CharacterMove] = []
     # 一日で足したモチベーションの行(生まれた思いと、強さの変わった思いの新しい行)
     motivations: list[CharacterMotivationRecord] = []
+    # 一日で現れる人物の生まれの場所(記録の場所が居合わせた人物の住まいなら、その一つ上の場所)
+    newcomer_location_id: int
 
 
 class MotivesForm(BaseModel):
@@ -604,6 +692,8 @@ class DayRun(BaseModel):
     """一回の実行(`SimulateDay`)で動かした一日。"""
 
     date: Timestamp | None = None
+    # 次の日の 0 時(その日の暦で数える)
+    day_end: Timestamp | None = None
     acted: list[DayActed] = []
     failed: list[ActFailure] = []
     _scope: Scope = PrivateAttr(default_factory=Scope)
@@ -611,7 +701,11 @@ class DayRun(BaseModel):
     def keep_scope(self, scope: Scope) -> None:
         self._scope = scope
 
+    def scoped(self) -> AbstractContextManager[Scope]:
+        """動かした人物の暦を立てる(その日の時刻を、その暦で読む・書く)。"""
+        return story_scope.scoped(self._scope)
+
     def dumped(self) -> dict[str, Any]:
         """その日の暦で書き出す。"""
-        with story_scope.scoped(self._scope):
+        with self.scoped():
             return self.model_dump(mode="json")
