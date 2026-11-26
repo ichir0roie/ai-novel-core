@@ -15,7 +15,7 @@ from ai.instructions.naming import fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.character.cast import age_at
 from data_access_logic.character.histories import add_history
-from data_access_logic.character.knowledge import _related_ids, appearance_of, knowledge_of
+from data_access_logic.character.knowledge import _related_ids, appearance_of, known_characters_of, knowledge_of
 from data_access_logic.character.motivations import apply_changes, motivations_at
 from data_access_logic.character.moves import allowed_moves, move_destinations, update_locations
 from data_access_logic.character.parameters import parameters_at
@@ -28,7 +28,8 @@ from data_access_logic.expansion import budget, needs
 from data_access_logic.query.period import dated_alive_at
 from data_access_logic.expansion.act_models import (
     ActFailure, ActionsForm, ArcEvent, AuthorPlan, CharacterDayForm, DayBrief, DayBriefForm, DayCharacter, DayForm,
-    DayMaterial, DayMaterialForm, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, MotivationLine,
+    DayMaterial, DayMaterialForm, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, KnownPeople,
+    KnownPeopleForm, MotivationLine,
     Motives, NarratedEpisode, NeedMotivationForm, NeedProfile, Needs, NewCharacterLink, ParentArc, ParticipantMotivations,
     PeopleForm, PlacePeople, PresentPerson,
 )
@@ -37,8 +38,9 @@ from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.query import common_query, expansion_query, world_creation_query
 from data_access_logic.summary_targets import SummaryTargets
 from db.schema import (
-    CHARACTER_KIND_PERSON, Character, CharacterDay, CharacterLocation, CharacterMotivation, CharacterRelation, Episode,
-    EpisodeCharacter, Event, EventAction, EventCharacter, IdeaHistory, IdeaHistoryKnower, Location, Origin,
+    CHARACTER_KIND_PERSON, Character, CharacterDay, CharacterLocation, CharacterMotivation, CharacterRelation,
+    CharacterRoutine, Episode, EpisodeCharacter, Event, EventAction, EventCharacter, IdeaHistory, IdeaHistoryKnower,
+    Location, Origin,
 )
 from db.stamp import Stamp, active_calendar
 
@@ -167,6 +169,30 @@ def _fixed_slots(s: Session, character_id: int, home_id: int, hours: list[Stamp]
     return [slots[hour] for hour in sorted(slots)]
 
 
+def _hosted_slots(s: Session, character: Character, hours: list[Stamp], day_end: Stamp, profile: NeedProfile,
+                  taken: set[int]) -> list[FixedSlot]:
+    """その日を先に動かした人物が、この人物の決まった居場所(`default_place`)に来ていた起きている時間。先の人物の目には、
+    この人物がそこにいる人物として出ていたので、先の記録のとおりそこにいたことにする(先に動かした人物の一日を正にする)。
+    この人物の眠る時間と、ほかの予定のある時間は除く。"""
+    candidates = {_current_location_id(character, hours[0]), *(row.location_id for row in character.routines)}
+    actions = s.scalars(select(EventAction).where(
+        EventAction.location_id.in_([id_ for id_ in candidates if id_ is not None]),
+        EventAction.character_id != character.id, EventAction.time >= hours[0], EventAction.time < day_end,
+        EventAction.kind != "眠る").order_by(EventAction.time, EventAction.character_id)).all()
+    visitors: dict[int, tuple[int, list[str]]] = {}
+    for action in actions:
+        hour = _hour_index(hours, action.time)
+        place_id, _ = default_place(character, action.time)
+        if hour in taken or place_id != action.location_id or needs.asleep_at(hour, profile):
+            continue
+        name = s.get_one(Character, action.character_id).name or ""
+        _, names = visitors.setdefault(hour, (place_id, []))
+        if name not in names:
+            names.append(name)
+    return [FixedSlot(hour=hour, location_id=place_id, label=f"決まった居場所にいた({'・'.join(names)}が来ていた)")
+            for hour, (place_id, names) in sorted(visitors.items())]
+
+
 def _start_needs(s: Session, character_id: int, day_start: Stamp) -> Needs:
     """前の日の最後の一時間の欲を引き継ぐ。前の日に動いていなければ、夜中の様子から始める。"""
     last = s.scalars(
@@ -250,9 +276,11 @@ def _day_character(s: Session, character: Character, hours: list[Stamp], day_end
     if done:
         raise ValueError(f"{label}の {day_start} の一日は、もう動かしてある(行動 {done} 件)。動かし直すなら、その展開を取り消す")
     profile, strengths = _profile(s, character, day_start, len(hours), _recent_days(s, character.id, day_start))
+    fixed = _fixed_slots(s, character.id, location.id, hours, day_end)
+    fixed = sorted([*fixed, *_hosted_slots(s, character, hours, day_end, profile, {slot.hour for slot in fixed})],
+                   key=lambda slot: slot.hour)
     return DayCharacter(character_id=character.id, name=character.name, area_id=area.id, home_id=location.id,
-                        influence=budget.influence_of(character, day_start),
-                        fixed=_fixed_slots(s, character.id, location.id, hours, day_end),
+                        influence=budget.influence_of(character, day_start), fixed=fixed,
                         needs=_start_needs(s, character.id, day_start), profile=profile, need_strengths=strengths)
 
 
@@ -282,6 +310,11 @@ def plan_day(s: Session, form: DayForm) -> DayPlan:
         if day_character.area_id not in plan.places:
             plan.places[day_character.area_id] = _places_of(s, s.get_one(Location, day_character.area_id), day_start)
     return plan
+
+
+def move_order(character: DayCharacter) -> tuple[int, int, int]:
+    """動く順。影響力の高い順、同じなら七日の行動量(その日より前)の多い順、同じなら id の順。"""
+    return (-budget.rank(character.influence), -character.profile.load_before, character.character_id)
 
 
 def _next_date(day_start: Stamp) -> tuple[int, int, int]:
@@ -329,12 +362,20 @@ def day_brief(s: Session, form: DayBriefForm) -> DayBrief:
     character = common_query.get_row(s, Character, form.character_id)
     prompt = DaySerialized(
         time=form.time,
-        knowledge=knowledge_of(s, character.id, form.time, form.nudge or "", None, None, with_now=False),
+        # 知っている人物の外見・芯・来歴は、目の前に初めて来たときに渡す(`known_people`)。関係のある人物を全員載せると、
+        # 主要人物ほど材料が重くなり、一日のあいだ毎回読み直すので。台詞は書かせないので、言ったセリフも渡さない
+        knowledge=knowledge_of(s, character.id, form.time, form.nudge or "", set(), None, with_now=False,
+                               with_speeches=False),
         motives=motives_of(s, character, form.time), seeds=form.seeds, nudge=form.nudge,
     ).model_dump()
     return DayBrief(character_id=character.id, name=character.name, prompt=prompt,
                     known_ids=list(dict.fromkeys([*_related_ids(s, character, form.time),
                                                   *_housemate_ids(s, character, form.time)])))
+
+
+def known_people(s: Session, form: KnownPeopleForm) -> KnownPeople:
+    """見る人物が知っている、目の前に初めて来た人物の外見・芯・来歴(見る人物が知る行だけ)。"""
+    return KnownPeople(prompt=known_characters_of(s, form.viewer_id, form.character_ids, form.time).model_dump())
 
 
 def _housemate_ids(s: Session, character: Character, time: Stamp) -> list[int]:
@@ -357,35 +398,77 @@ def _resident_away(time: Stamp) -> bool:
     return start <= time.digits[3] * 24 / hours_per_day < end
 
 
-def _residents_here(s: Session, location_id: int, time: Stamp, exclude_ids: set[int]) -> list[Character]:
-    """その場所に住まいがあり、その時刻に生きて手の空いた人物(動かしている人物は除く)。昼は留守にしているので、いない。"""
-    if _resident_away(time):
-        return []
-    busy_ids = set(s.scalars(world_creation_query.busy_character_ids_select(time)).all())
+def _covers(routine: CharacterRoutine, hour: int) -> bool:
+    if routine.hour_from < routine.hour_to:
+        return routine.hour_from <= hour < routine.hour_to
+    return hour >= routine.hour_from or hour < routine.hour_to
+
+
+def default_place(character: Character, time: Stamp) -> tuple[int | None, str | None]:
+    """動かしていない人物が、その時刻にいる場所と、そこでしていること。決まった居場所の行のうち、期間に入り一日の時間に当たる行
+    (後に始まった行を先に)の場所。期間に入る行があって時間に当たらなければ住まい。期間に入る行が無ければ、住まいにいて、
+    昼(`DAY_RESIDENT_AWAY`)は留守にしていて、どこにもいない(None)。"""
+    home_id = _current_location_id(character, time)
+    routines = [row for row in character.routines
+                if (row.start is None or row.start <= time) and (row.end is None or row.end > time)]
+    if not routines:
+        return (None, None) if _resident_away(time) else (home_id, None)
+    hit = next((row for row in routines if _covers(row, time.digits[3])), None)
+    if hit is None:
+        return home_id, None
+    return hit.location_id, hit.text or None
+
+
+def _defaults_here(s: Session, location_id: int, time: Stamp, exclude_ids: set[int]) -> list[tuple[Character, str | None]]:
+    """その時刻に、決まった居場所(`default_place`)がその場所の人物と、そこでしていること。`exclude_ids` は除く人物(動かしている人物・
+    先に動かした人物・出来事の最中で手の空いていない人物)。"""
     characters = s.scalars(
         world_creation_query.alive_characters_select(time)
-        .where(Character.locations.any(CharacterLocation.location_id == location_id))
+        .where(or_(Character.locations.any(CharacterLocation.location_id == location_id),
+                   Character.routines.any(CharacterRoutine.location_id == location_id)))
         .order_by(Character.id)).all()
-    return [character for character in characters
-            if character.id not in exclude_ids and character.id not in busy_ids
-            and _current_location_id(character, time) == location_id]
+    found = []
+    for character in characters:
+        if character.id in exclude_ids:
+            continue
+        place_id, doing = default_place(character, time)
+        if place_id == location_id:
+            found.append((character, doing))
+    return found
+
+
+def _recorded_actions(s: Session, time: Stamp, exclude_ids: set[int]) -> list[EventAction]:
+    """その一時間を、先に動かした人物の行動の表の行(動かしている人物は除く。人物の id の順)。"""
+    return list(s.scalars(select(EventAction).where(EventAction.time == time, EventAction.character_id.not_in(exclude_ids))
+                          .order_by(EventAction.character_id, EventAction.id)).all())
+
+
+def _doing(action: EventAction) -> str:
+    return "眠っている" if action.kind == "眠る" else action.text
 
 
 def people_at(s: Session, form: PeopleForm) -> list[PlacePeople]:
-    """動かしている人物のいる場所ごとに、そこにいる人物(動かしている人物を先に、住まいのある人物を続ける。上限まで)。"""
+    """動かしている人物のいる場所ごとに、そこにいる人物(動かしている人物を先に、その日を先に動かした人物、決まった居場所がそこの
+    動かしていない人物を続ける。上限まで)。先に動かした人物は行動の表のその一時間の場所にいて、決まった居場所には数えない。"""
     simulated = set(form.positions)
+    recorded = _recorded_actions(s, form.time, simulated)
+    absent_ids = simulated | {action.character_id for action in recorded} | set(
+        s.scalars(world_creation_query.busy_character_ids_select(form.time)).all())
     by_place: dict[int, list[int]] = {}
     for character_id, location_id in form.positions.items():
         by_place.setdefault(location_id, []).append(character_id)
     places = []
     for location_id, ids in by_place.items():
-        people = [s.get_one(Character, id_) for id_ in sorted(ids)]
-        people += _residents_here(s, location_id, form.time, simulated)
+        here = [(s.get_one(Character, id_), None, None) for id_ in sorted(ids)]
+        here += [(s.get_one(Character, action.character_id), _doing(action), None)
+                 for action in recorded if action.location_id == location_id]
+        here += [(person, None, routine)
+                 for person, routine in _defaults_here(s, location_id, form.time, absent_ids)]
         places.append(PlacePeople(
             location_id=location_id, location_name=s.get_one(Location, location_id).name,
             people=[PresentPerson(character_id=person.id, name=person.name, looks=appearance_of(s, person, form.time),
-                                  simulated=person.id in simulated)
-                    for person in people[:constants.ACT_PRESENT_LIMIT]]))
+                                  simulated=person.id in simulated, doing=doing, routine=routine)
+                    for person, doing, routine in here[:constants.ACT_PRESENT_LIMIT]]))
     return places
 
 
@@ -393,7 +476,7 @@ def save_actions(s: Session, form: ActionsForm) -> None:
     for action in form.actions:
         s.add(EventAction(
             character_id=action.character_id, expansion_id=form.expansion_id, time=action.time, location_id=action.location_id,
-            kind=action.kind, text=action.text, speech=action.speech, thought=action.thought,
+            kind=action.kind, text=action.text, thought=action.thought,
             sleepiness=action.sleepiness, hunger=action.hunger, desire=action.desire, load=action.load,
             fixed_event_id=action.fixed_event_id,
             fixed_episode_id=action.fixed_episode_id))

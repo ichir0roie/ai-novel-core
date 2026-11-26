@@ -529,7 +529,7 @@ class Character(OriginMixin, ContentBase):
         StampType, comment="没年(この時からはいない)。空なら死んでいない", sort_order=250)
 
     # 出自・誕生は列を持たず、`locations` の一番古い行・`parameters` の一番早い start で表す
-    CHILD_LISTS = ("parameters", "locations", "histories")
+    CHILD_LISTS = ("parameters", "locations", "routines", "histories")
 
     @property
     def start(self) -> Stamp | None:
@@ -554,6 +554,12 @@ class Character(OriginMixin, ContentBase):
         order_by="CharacterLocation.start.desc().nulls_last()",
         doc="住まい・拠点を期間ごとに一行で持つ。一番古い行が出自。出来事の当事者はこの居場所から選び、"
         "場所を知る相手にした来歴は、その時刻にそこ(配下も含む)に住む人物が知る"
+    )
+    routines: Mapped[list["CharacterRoutine"]] = relationship(
+        back_populates="character", lazy="selectin", cascade="all, delete-orphan",
+        order_by="[CharacterRoutine.start.desc().nulls_last(), CharacterRoutine.hour_from]",
+        doc="人物モードで動かしていないときの、決まった居場所を一行ずつ持つ。行は期間(start〜end)のあいだ、毎日の一日の時間"
+        "(hour_from〜hour_to)に効く。期間に入る行があって時間に当たらなければ住まいにいる"
     )
     histories: Mapped[list["CharacterHistory"]] = relationship(
         back_populates="character", lazy="selectin", cascade="all, delete-orphan",
@@ -658,6 +664,35 @@ class CharacterLocation(OriginMixin, Base):
         StampType, comment="離れた時刻(この時刻からはいない)。空ならまだいる", sort_order=130)
 
     character: Mapped[Character | None] = relationship(back_populates="locations", lazy="noload")
+    location: Mapped[Location] = relationship(lazy="noload")
+
+
+class CharacterRoutine(OriginMixin, Base):
+    """人物モード(`SimulateDay`)で動かしていない人物の、決まった居場所。動かしている人物がその場所・時間に来れば、そこにいる。
+
+    行は start〜end の期間のあいだ、毎日 hour_from〜hour_to の時間に効く(時は人物の暦の一日の時の数。hour_to が hour_from 以下なら
+    日付をまたぐ)。同じ時間に効く行が二つあれば、後に始まった行を使う。
+    """
+
+    __tablename__ = "character_routine"
+
+    character_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, sort_order=100)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("location.id"), index=True, comment="決まった居場所(詳細の場所)", sort_order=110)
+    hour_from: Mapped[int] = mapped_column(Integer, nullable=False, comment="毎日、ここにいる時間の始まりの時", sort_order=120)
+    hour_to: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="毎日、ここにいる時間の終わりの時(この時からはいない)。始まり以下なら日付をまたぐ",
+        sort_order=130)
+    text: Mapped[str] = mapped_column(
+        String, nullable=False, default="", server_default="", comment="ここでしていること(店を開けている・帳場に座っているなど)",
+        sort_order=140)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="この決まりが始まった時刻。空なら初めから", sort_order=150)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="この決まりが終わった時刻(この時刻からは効かない)。空ならまだ続く", sort_order=160)
+
+    character: Mapped[Character | None] = relationship(back_populates="routines", lazy="noload")
     location: Mapped[Location] = relationship(lazy="noload")
 
 

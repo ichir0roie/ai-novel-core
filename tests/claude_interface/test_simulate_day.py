@@ -1,6 +1,7 @@
 """人物モード(`SimulateDay`)。人物たちの一日を一時間ずつ、人物ごとの会話一つで動かし、行動の表に残して、人物ごとの一日を出来事一件に
 まとめること。詳細の場所にいない人物は動かさないこと、作者の予定の時間は予定で埋めること、眠り・欲・行動量の決まりと日ごとの記録、取り消し。"""
 import json
+import re
 
 import pytest
 
@@ -12,15 +13,15 @@ from data_access_logic.event.progress_models import CharacterUpdateDraft
 from data_access_logic.character.models import CharacterParameterValues
 from data_access_logic.expansion import acting, budget, needs
 from data_access_logic.expansion.act_models import (
-    ActIdeaDraft, DayOutcomeDraft, HourDraft, HourScene, ImpactFrame, NeedProfile, Needs, ReactionDraft,
+    ActIdeaDraft, DayOutcomeDraft, HourDraft, HourScene, ImpactFrame, NeedProfile, Needs,
 )
 from data_access_logic.expansion.revert_expansion import RevertExpansion
 from data_access_logic.expansion.simulate_day import SimulateDay
 from data_access_logic.flows import act
 from data_access_logic.query import expansion_query
 from db.schema import (
-    Character, CharacterDay, CharacterLocation, CharacterMotivation, CharacterParameter, Episode, EpisodeCharacter, Event,
-    EventAction, EventCharacter, Expansion, IdeaHistory, Location, get_env_session,
+    Character, CharacterDay, CharacterLocation, CharacterMotivation, CharacterParameter, CharacterRoutine, Episode,
+    EpisodeCharacter, Event, EventAction, EventCharacter, Expansion, IdeaHistory, Location, get_env_session,
 )
 from db.stamp import Calendar, Stamp, using_calendar
 from tool.test.mock_ai_client import MockAIClient
@@ -51,6 +52,19 @@ def _detail_places(world) -> tuple[int, int]:
         return home.id, market.id
 
 
+def _present_ids(prompt: str) -> list[int]:
+    """問いの「目の前にいる人物」の人物id(手は、目の前の人物みなに働きかける)。"""
+    return [person["人物id"] for person in json.loads(prompt.rsplit("\n", 1)[0]).get("目の前にいる人物", [])]
+
+
+# 応じる問いも出力の形は HourDraft なので、問いの見出しで見分けて控える
+REACTION = "応じる問い"
+
+
+def _reaction(prompt: str) -> bool:
+    return "居合わせた人物がこの一時間にしたこと" in prompt
+
+
 class ScriptedAI(MockAIClient):
     """一時間ごとの手・居合わせた相手への応じ・一日の記録だけを決めた答えにする。"""
 
@@ -58,20 +72,25 @@ class ScriptedAI(MockAIClient):
         super().__init__(seed=0)
         self.market_id = market_id
         self.motivation_changes = motivation_changes or []
+        # 人物ごとの、この一時間に決めた種別(応じても変わらなければ、決めていた種別を返す)
+        self.kinds: dict[str, str] = {}
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
         call = {"output": output, "prompt": prompt, "system": system, "model": model, "effort": effort}
+        name = re.search(r"あなた\((.+?)\)", prompt)
+        if output is HourDraft and _reaction(prompt):
+            self.calls.append({**call, "output": REACTION})
+            return HourDraft(kind=self.kinds.get(name.group(1) if name else "", "働く"), action="隣の人にうなずき返す",
+                             next_location_id=self.market_id, toward_ids=[], thought="顔見知りだ", ate="なし", deeds=[])
         if output is HourDraft:
             self.calls.append(call)
             hungry = "おなかがすいた" in prompt
-            return HourDraft(kind="食べる" if hungry else "働く", location_id=self.market_id,
+            if name:
+                self.kinds[name.group(1)] = "食べる" if hungry else "働く"
+            return HourDraft(kind="食べる" if hungry else "働く", next_location_id=self.market_id,
                              action="市場でパンを買って食べる" if hungry else "市場で野菜を並べる",
-                             speech="いい天気だね", thought="今日も忙しい",
+                             toward_ids=_present_ids(prompt), thought="今日も忙しい",
                              ate="なし", deeds=["外に出た"] if hungry else ["外に出た", "働いた", "空を飛んだ"])
-        if output is ReactionDraft:
-            self.calls.append(call)
-            return ReactionDraft(action="隣の人にうなずき返す", kind=None, location_id=None, speech="そうだね", thought="顔見知りだ",
-                                 ate="なし", deeds=[])
         if output is DayOutcomeDraft:
             self.calls.append(call)
             request = json.loads(prompt.rsplit("\n", 1)[0])
@@ -113,10 +132,13 @@ def test_two_people_spend_a_day_hour_by_hour_and_meet_at_the_market(world):
         assert actions[0].location_id == home_id
         assert {action.expansion_id for action in actions} == {acted.expansion_id}
         assert {action.origin for action in actions} == {"ai"}
-        # 起きてからは市場へ出て、もう一人と居合わせて応じ合う
+        # 起きた一時間は家で過ごし、そこで決めた次の場所(市場)へ移って、もう一人と居合わせる。台詞は残さない
         awake = [action for action in actions if action.kind != "眠る"]
-        assert awake and all(action.location_id == market_id for action in awake)
-        assert any("隣の人にうなずき返す" in action.text for action in awake)
+        assert awake[0].location_id == home_id and all(action.location_id == market_id for action in awake[1:])
+        assert all(action.speech is None for action in actions)
+        # 先に動く一人目(影響力・行動量が同じなので id の順)だけが、後の人物に働きかけられて応じる
+        first_mover = acted.character_id == min(world.character_ids)
+        assert any("隣の人にうなずき返す" in action.text for action in awake) is first_mover
         assert any(action.kind == "食べる" for action in awake)
         # 行動量は、その一時間の行いのうち一番重いもの(知らない行いは数えない)
         assert {action.load for action in awake} == {1, 3}
@@ -136,11 +158,14 @@ def test_two_people_spend_a_day_hour_by_hour_and_meet_at_the_market(world):
             expansion = s.get_one(Expansion, acted.expansion_id)
             assert (expansion.mode, expansion.status, expansion.actor_id) == ("character", "done", acted.character_id)
             assert act.MET_HEAD in expansion.prompt
-    # 人物一人に会話一つ。眠っている時間は会話に聞かないので、一人につき一日の時間より少ない
-    # (起きている 17 時間の手と、居合わせた相手への応じが 17 回。どちらも同じ会話で問う)
-    assert [session.asked for session in ai.sessions] == [34, 34]
-    assert len(ai.calls_of(HourDraft)) == 2 * 17
-    assert ai.calls_of(ReactionDraft)
+    # 人物一人に会話一つ。眠っている時間と、決めた手(働くは三時間)を続けている時間は会話に聞かないので、起きている 17 時間より
+    # ずっと少ない(一人 9 回。先に動く一人目には、後の人物に働きかけられた応じが 9 回。どちらも同じ会話で問う)
+    assert sorted(session.asked for session in ai.sessions) == [9, 18]
+    assert len(ai.calls_of(HourDraft)) == 2 * 9
+    assert len(ai.calls_of(REACTION)) == 9
+    # 後に動く人物は、先の人物がこの一時間にしていることを見てから決める
+    later = ai.calls_of(HourDraft)[1]["prompt"]
+    assert "目の前の人物が、この一時間にしていること" in later and "市場で" in later.split("この一時間にしていること")[1]
     # 一時間ずつ二人が並んで問うので、三つ目の問いは二度目の問い
     first, second = ai.calls_of(HourDraft)[0], ai.calls_of(HourDraft)[2]
     # 一度目の問いには知っていることと行ける場所を渡し、二度目からは一時間の様子の差分だけを渡す。どちらにも年の数を渡さない
@@ -388,13 +413,18 @@ def test_a_left_behind_character_moves_to_the_present_of_its_own_story(world):
         s.rollback()
 
 
+def _clock_of(prompt: str) -> int:
+    found = re.search(r'"時刻": "(\d+)時ごろ"', prompt)
+    return int(found.group(1)) if found else -1
+
+
 class BedtimeAI(ScriptedAI):
-    """十五回は市場で働き、そのあと市場で眠ると答える。"""
+    """20 時までは市場で働き、20 時からは市場で眠ると答える。"""
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
-        if output is HourDraft and len(self.calls_of(HourDraft)) >= 15:
+        if output is HourDraft and _clock_of(prompt) >= 20:
             self.calls.append({"output": output, "prompt": prompt})
-            return HourDraft(kind="眠る", location_id=self.market_id, action="眠くなったので横になる", speech=None,
+            return HourDraft(kind="眠る", next_location_id=self.market_id, action="眠くなったので横になる", toward_ids=[],
                              thought="もう寝よう", ate="なし", deeds=[])
         return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
                                 effort=effort, style_scope=style_scope)
@@ -409,9 +439,11 @@ def test_going_to_bed_late_keeps_the_character_asleep_at_home(world):
     act.simulate_day([actor_id], _DAY, seed=1, ai=ai)
 
     actions = _actions(actor_id)
-    # 7 時に起きて 15 時間働き、22 時(寝る 25 時の三時間前)に眠ると答えたので、そこから先は寝床で眠る
-    assert [(action.kind, action.location_id) for action in actions[22:]] == [("眠る", home_id)] * 2
-    assert len(ai.calls_of(HourDraft)) == 16
+    # 20 時より後(夜)に眠ると答えたので、その一時間は市場で横になり、次の一時間から寝床で眠って、もう聞かない
+    slept = next(index for index, action in enumerate(actions) if index >= 7 and action.kind == "眠る")
+    assert slept >= 20 and actions[slept].location_id == market_id
+    assert all((action.kind, action.location_id) == ("眠る", home_id) for action in actions[slept + 1:])
+    assert _clock_of(ai.calls_of(HourDraft)[-1]["prompt"]) == slept
 
 
 _LONG_DAY = Calendar(offset=(5000, 1, 1, 0, 0, 0), month_days=(31,) * 12, hours_per_day=30, days_per_week=6,
@@ -427,14 +459,10 @@ def test_the_next_day_is_counted_in_the_calendar_of_the_day():
     assert acting.next_day_start(_stamp("1200/05/01")) == _stamp("1200/05/02")
 
 
-def test_speech_is_kept_without_quotes_and_quoted_once_per_line():
-    """AI がかぎかっこ付きで返した言葉は外し、書き出すときに一言ずつかぎかっこに入れる(二重にも、一続きにもしない)。"""
-    draft = ReactionDraft(action="うなずく", kind="食べる", location_id=None, speech="「…ありがとー」", thought="", ate="なし", deeds=[])
-    assert draft.speech == "…ありがとー"
-    assert ReactionDraft(action="a", kind="走る", location_id=None, speech="「a」「b」", thought="", ate="なし", deeds=[]).speech == "a\nb"
-    assert ReactionDraft(action="a", kind="走る", location_id=None, speech="a", thought="", ate="なし", deeds=[]).kind is None
-    assert act._quoted("おはよ\nうん、ボクも") == "「おはよ」「うん、ボクも」"
-    assert act._quoted(None) == ""
+def test_an_hour_is_drafted_as_deeds_without_lines():
+    """一時間の手は行いの粒で、台詞の欄を持たない。"""
+    assert "speech" not in HourDraft.model_json_schema()["properties"]
+    assert HourDraft(action="a", kind="走る", next_location_id=1, toward_ids=[], thought="", ate="なし", deeds=[]).kind == "そのほか"
 
 
 class NightAI(ScriptedAI):
@@ -443,7 +471,7 @@ class NightAI(ScriptedAI):
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
         if output is HourDraft and '"時間帯": "夜"' in prompt:
             self.calls.append({"output": output, "prompt": prompt})
-            return HourDraft(kind="眠る", location_id=self.market_id, action="早めに横になる", speech=None,
+            return HourDraft(kind="眠る", next_location_id=self.market_id, action="早めに横になる", toward_ids=[],
                              thought="今日は疲れた", ate="なし", deeds=[])
         return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
                                 effort=effort, style_scope=style_scope)
@@ -459,16 +487,17 @@ def test_sleeping_in_the_evening_goes_to_bed_and_the_bedtime_is_told(world):
     act.simulate_day([actor_id], _DAY, seed=1, ai=ai)
 
     actions = _actions(actor_id)
-    # 7 時に起きて市場で働き、19 時(夜の始まり)に眠ると答えたので、寝る 25 時の三時間前より早くても、そこから寝床で眠る
-    assert [(action.kind, action.location_id) for action in actions[19:]] == [("眠る", home_id)] * 5
-    # 7〜18 時の手と、19 時に眠ると答えた一回
-    assert len(ai.calls_of(HourDraft)) == 13
+    # 夜(19 時から)に眠ると答えたので、寝る 25 時の三時間前より早くても、その一時間は市場で横になり、次の一時間から寝床で眠る
+    slept = next(index for index, action in enumerate(actions) if index >= 7 and action.kind == "眠る")
+    assert 19 <= slept < 22 and actions[slept].location_id == market_id
+    assert all((action.kind, action.location_id) == ("眠る", home_id) for action in actions[slept + 1:])
+    assert _clock_of(ai.calls_of(HourDraft)[-1]["prompt"]) == slept
     first = ai.calls_of(HourDraft)[0]["prompt"]
     assert "日付が変わって1時ごろ: 眠る" in first and '"床に就く目安まで": "あと18時間"' in first
 
 
 class FollowAI(ScriptedAI):
-    """一人目は家から市場へ出かけると言い、二人目は家で黙って休むと答える。二人目は、出かける一人目について市場へ行く。"""
+    """後に動く人物(leader)は家から市場へ出かけ、先に動く人物は家で黙って休むと答える。先の人物は、出かける leader について市場へ行く。"""
 
     def __init__(self, market_id: int, home_id: int, leader: str):
         super().__init__(market_id)
@@ -476,37 +505,39 @@ class FollowAI(ScriptedAI):
         self.leader = leader
 
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
+        if output is HourDraft and _reaction(prompt):
+            self.calls.append({"output": REACTION, "prompt": prompt})
+            return HourDraft(kind="移動", action="あとについて市場へ行く", next_location_id=self.market_id, toward_ids=[],
+                             thought="", ate="なし", deeds=["外に出た"])
         if output is HourDraft:
             self.calls.append({"output": output, "prompt": prompt})
             if f"あなた({self.leader})" in prompt:
-                return HourDraft(kind="移動", location_id=self.market_id, action="市場へ出かける", speech="行ってくるね",
+                return HourDraft(kind="移動", next_location_id=self.market_id, action="市場へ出かける", toward_ids=[],
                                  thought="", ate="なし", deeds=["外に出た"])
-            return HourDraft(kind="休む", location_id=self.home_id, action="家で休む", speech=None, thought="", ate="なし", deeds=[])
-        if output is ReactionDraft:
-            self.calls.append({"output": output, "prompt": prompt})
-            return ReactionDraft(action="あとについて市場へ行く", kind="移動", location_id=self.market_id, speech="待って",
-                                 thought="", ate="なし", deeds=["外に出た"])
+            return HourDraft(kind="休む", next_location_id=self.home_id, action="家で休む", toward_ids=[], thought="", ate="なし",
+                             deeds=[])
         return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
                                 effort=effort, style_scope=style_scope)
 
 
 def test_a_companion_leaving_is_seen_and_can_be_followed(world):
-    """一時間の始めに同じ場所にいた人物が場所を移るなら、残る人物にも移る先が見え、応じてついていける。"""
+    """一時間の始めに同じ場所にいた後の人物が場所を移るなら、先に決めた人物にも移る先が見え、応じてついていける。"""
     home_id, market_id = _detail_places(world)
+    first_id, leader_id = sorted(world.character_ids)
     with get_env_session() as s:
-        leader = s.get_one(Character, world.character_ids[0]).name
+        leader = s.get_one(Character, leader_id).name
     ai = FollowAI(market_id, home_id, leader)
 
     act.simulate_day(world.character_ids, _DAY, seed=1, ai=ai)
 
-    follower = _actions(world.character_ids[1])
+    follower = _actions(first_id)
     awake = [action for action in follower if action.kind != "眠る"]
-    # 家で休むと決めたが、出かける一人目を見て、市場へついていった
-    assert awake[0].location_id == market_id and "あとについて市場へ行く" in awake[0].text
-    assert awake[0].kind == "移動"
-    # 最初に応じるのは残った二人目で、出かける一人目は、黙って残る二人目には応じない
-    reaction = ai.calls_of(ReactionDraft)[0]["prompt"]
-    assert f"あなた({leader})" not in reaction and "(テストの市場へ移る)" in reaction
+    # 家で休むと決めたが、出かける leader を見て、次の一時間に市場へついていった
+    assert awake[0].location_id == home_id and "あとについて市場へ行く" in awake[0].text
+    assert awake[0].kind == "移動" and awake[1].location_id == market_id
+    # 応じるのは先に決めて残った人物で、後に決めて出かける leader は応じない
+    reaction = ai.calls_of(REACTION)[0]["prompt"]
+    assert f"あなた({leader})" not in reaction and "(テストの市場へ移るところ)" in reaction
 
 
 def test_a_newcomer_is_not_born_in_the_room_of_someone_present(world):
@@ -548,7 +579,7 @@ class HomeFirstAI(ScriptedAI):
     def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
         if output is HourDraft and not self.calls_of(HourDraft):
             self.calls.append({"output": output, "prompt": prompt})
-            return HourDraft(kind="食べる", location_id=self.home_id, action="家で朝ごはんを食べる", speech=None,
+            return HourDraft(kind="食べる", next_location_id=self.home_id, action="家で朝ごはんを食べる", toward_ids=[],
                              thought="", ate="なし", deeds=[])
         return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
                                 effort=effort, style_scope=style_scope)
@@ -582,3 +613,132 @@ def test_residents_not_moved_are_away_in_the_daytime():
         assert not acting._resident_away(Stamp(1593, 1, 25, 11))
         assert acting._resident_away(Stamp(1593, 1, 25, 12))
         assert not acting._resident_away(Stamp(1593, 1, 25, 23))
+
+
+def test_a_character_moved_earlier_is_seen_doing_what_was_recorded(world):
+    """その日を先に動かした人物は、後から動かす人物の目の前に、行動の表のその一時間の場所と行いで出て、合わせては変わらない。
+    後から動いた人物の一日の記録には、居合わせた人物として入る。"""
+    _, market_id = _detail_places(world)
+    earlier_id, later_id = sorted(world.character_ids)
+    act.simulate_day([earlier_id], _DAY, seed=1, ai=ScriptedAI(market_id))
+    recorded = {action.time: action for action in _actions(earlier_id)}
+    ai = ScriptedAI(market_id)
+
+    run = act.simulate_day([later_id], _DAY, seed=1, ai=ai)
+
+    assert not run.failed, run.failed
+    # 先の人物は会話がもう閉じているので、働きかけても応じない
+    assert not ai.calls_of(REACTION)
+    prompts = [json.loads(call["prompt"].rsplit("\n", 1)[0]) for call in ai.calls_of(HourDraft)]
+    shown = [person for prompt in prompts for person in prompt["目の前にいる人物"] if person["人物id"] == earlier_id]
+    assert shown and all(person["この一日"] == "この一日はもう決まっていて、あなたに合わせては変わらない" for person in shown)
+    # 市場で一緒にいる一時間は、先の人物のその一時間の行い(眠っていれば「眠っている」)が見える
+    noon = next(prompt for prompt in prompts if prompt["いま"].get("時刻") == "12時ごろ")
+    earlier_noon = next(person for person in noon["目の前にいる人物"] if person["人物id"] == earlier_id)
+    assert earlier_noon["この一時間にしていること"] == recorded[_stamp(f"{_DAY} 12:00:00")].text
+    judge = json.loads(ai.calls_of(DayOutcomeDraft)[0]["prompt"].rsplit("\n", 1)[0])
+    assert earlier_id in [person["人物id"] for person in judge["居合わせた人物"]]
+    assert run.acted[0].met_ids == []
+
+
+class StayHomeAI(ScriptedAI):
+    """一日じゅう家で過ごす。"""
+
+    def __init__(self, market_id: int, home_id: int):
+        super().__init__(market_id)
+        self.home_id = home_id
+
+    def generate(self, prompt, output, system=None, timeout=None, tools=(), model="", effort="", style_scope=None):
+        if output is HourDraft:
+            self.calls.append({"output": output, "prompt": prompt})
+            return HourDraft(kind="休む", next_location_id=self.home_id, action="家で繕い物をする", toward_ids=[], thought="",
+                             ate="なし", deeds=[])
+        return super().generate(prompt, output, system=system, timeout=timeout, tools=tools, model=model,
+                                effort=effort, style_scope=style_scope)
+
+
+def test_hours_an_earlier_character_spent_at_the_home_keep_the_resident_home(world):
+    """先に動かした人物が住まいにいた起きている時間(住人が留守にする昼を除く)は、その人物の目に住人として出ていたので、
+    後から動かす住人をその時間は住まいに縛る(予定と同じに埋める)。"""
+    home_id, market_id = _detail_places(world)
+    earlier_id, later_id = sorted(world.character_ids)
+    act.simulate_day([earlier_id], _DAY, seed=1, ai=StayHomeAI(market_id, home_id))
+    with get_env_session() as s:
+        earlier_name = s.get_one(Character, earlier_id).name
+
+    act.simulate_day([later_id], _DAY, seed=1, ai=ScriptedAI(market_id))
+
+    later = {action.time.digits[3]: action for action in _actions(later_id)}
+    # 朝(起きてから 9 時まで)と夕方から(18 時から)は住まいにいて、昼は市場へ出る
+    assert later[8].kind == "予定" and later[8].location_id == home_id and str(earlier_name) in later[8].text
+    assert later[12].kind != "予定" and later[12].location_id == market_id
+    assert later[19].kind == "予定" and later[19].location_id == home_id
+
+
+def test_a_resident_not_moved_stays_at_the_routine_place_in_its_hours(world):
+    """動かしていない人物は、決まった居場所の行の時間はその場所にいて、していることが見える。期間に入る行があって時間に
+    当たらなければ住まいにいる(昼の留守の決まりは使わない)。"""
+    home_id, market_id = _detail_places(world)
+    actor_id, resident_id = world.character_ids
+    with get_env_session() as s:
+        s.add(CharacterRoutine(character_id=resident_id, location_id=market_id, hour_from=10, hour_to=20,
+                               text="野菜の屋台を開けている", start="1199/01/01"))
+        s.commit()
+    ai = ScriptedAI(market_id)
+
+    act.simulate_day([actor_id], _DAY, seed=1, ai=ai)
+
+    prompts = [json.loads(call["prompt"].rsplit("\n", 1)[0]) for call in ai.calls_of(HourDraft)]
+
+    def resident_at(clock: str) -> dict | None:
+        prompt = next(prompt for prompt in prompts if prompt["いま"].get("時刻") == clock)
+        return next((person for person in prompt["目の前にいる人物"] if person["人物id"] == resident_id), None)
+
+    # 起きた一時間は家、昼(住人の留守の時間)でも屋台の時間は市場にいる
+    morning = resident_at("7時ごろ")
+    assert morning is not None and "ここでしていること" not in morning
+    noon = resident_at("12時ごろ")
+    assert noon is not None and noon["ここでしていること"] == "野菜の屋台を開けている"
+    assert resident_at("9時ごろ") is None
+    judge = json.loads(ai.calls_of(DayOutcomeDraft)[0]["prompt"].rsplit("\n", 1)[0])
+    assert any("(動かしていない人物): 野菜の屋台を開けている" in line for line in judge["その日の行動(起きた順)"])
+
+
+def test_a_decided_action_lasts_by_its_kind_and_ends_early_when_hungry(world):
+    """会話に聞いて決めた手は、種別ごとの時間だけ聞かずに続く(起きて最初の手は一時間、働くは三時間、食べるは一時間)。
+    続けているあいだにおなかがすいたら、途中で終えて聞き直す。"""
+    _, market_id = _detail_places(world)
+    actor_id = world.character_ids[1]
+    ai = ScriptedAI(market_id)
+
+    act.simulate_day([actor_id], _DAY, seed=1, ai=ai)
+
+    asked = [_clock_of(call["prompt"]) for call in ai.calls_of(HourDraft)]
+    actions = {action.time.digits[3]: action for action in _actions(actor_id)}
+    # 7 時に起きて最初の手は一時間。8 時に決めた「働く」は三時間続く(空腹で途中で終えなければ)
+    assert asked[:2] == [7, 8]
+    for start, end in zip(asked, asked[1:]):
+        assert end - start <= constants.DAY_BLOCK_HOURS
+        if actions[start].kind == "食べる":
+            assert end - start == 1
+    assert len(asked) < 17
+
+
+def test_known_people_are_recalled_when_they_first_come_in_sight(world):
+    """初めの材料には、知っている人物の外見・芯・来歴と、言ったセリフを載せない(関係の名前と間柄だけ)。名前を知っている人物が
+    目の前に初めて来たときに、その人物について知っていることを一度だけ渡す。"""
+    _, market_id = _detail_places(world)
+    first_id, second_id = sorted(world.character_ids)
+    with get_env_session() as s:
+        second = s.get_one(Character, second_id)
+        second_name, second_text = second.name, second.text
+    ai = ScriptedAI(market_id)
+
+    act.simulate_day(world.character_ids, _DAY, seed=1, ai=ai)
+
+    asks = [call["prompt"] for call in ai.calls_of(HourDraft) if f"あなた({second_name})" not in call["prompt"]]
+    first = json.loads(asks[0].rsplit("\n", 1)[0])
+    assert first["あなたが知っていること"]["知っている人物"] == []
+    assert "言ったセリフ(古い順)" not in first["あなたが知っていること"]["自分"]
+    recalled = [prompt for prompt in asks if "目の前の知っている人物について、覚えていること" in prompt]
+    assert len(recalled) == 1 and str(second_text) in recalled[0]

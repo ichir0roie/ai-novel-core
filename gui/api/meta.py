@@ -20,7 +20,7 @@ from gui.api.tables import TABLES, TableSpec, writer_of
 # CHILD_LISTS のうち、素朴な編集可能な表(既定の "table")以外の見せ方をする名前(`ChildListMeta.display`)。
 # 対象・意味はテーブルごとに違うが見た目は共通の ChildListEditor を使う(`web/components/RecordForm.tsx`)。
 _CHILD_LIST_DISPLAY: dict[str, dict[str, str]] = {
-    "character": {"parameters": "periodic", "locations": "periodic", "histories": "flow"},
+    "character": {"parameters": "periodic", "locations": "periodic", "routines": "periodic", "histories": "flow"},
     "idea": {"histories": "flow"},
     "character_relation": {"histories": "flow"},
     "character_skill": {"histories": "flow"},

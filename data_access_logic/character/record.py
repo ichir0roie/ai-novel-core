@@ -46,6 +46,17 @@ class CharacterLocationRow(_ChildRow):
     end: Timestamp | None = None
 
 
+class CharacterRoutineRow(_ChildRow):
+    """人物モードで動かしていないときの決まった居場所。期間(start〜end)のあいだ、毎日 hour_from〜hour_to にいる。"""
+
+    location_id: int
+    hour_from: int = Field(ge=0)
+    hour_to: int = Field(ge=0)
+    text: str = ""
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+
+
 class _HistoryRow(_ChildRow):
     """来歴の行。`id` は読み出しで入る。配列で渡すときは、入れれば今ある行をその id で指し(時刻や並びで当てない)、空なら新しい行か、
     時刻・並びで当てる行(`db/child_lists.py`)。"""
@@ -101,6 +112,7 @@ class CharacterHead(Material):
 
 
 class CharacterRecord(CharacterHead):
+    routines: list[CharacterRoutineRow] = []
     appearance: str | None = None
     # 人物の芯(経歴・立場・性格の説明)
     text: str | None = None

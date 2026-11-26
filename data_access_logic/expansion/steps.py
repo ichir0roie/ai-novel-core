@@ -10,7 +10,7 @@ from data_access_logic.expansion import acting
 from data_access_logic.character.record import CharacterMotivationRecord
 from data_access_logic.expansion.act_models import (
     ActionsForm, CharacterDayForm, DayBrief, DayBriefForm, DayForm, DayMaterial, DayMaterialForm, DayPlan, DaySaved,
-    DaySaveForm, MotivesForm, NeedMotivationForm, NewCharacterLink, PeopleForm, PlacePeople,
+    DaySaveForm, KnownPeople, KnownPeopleForm, MotivesForm, NeedMotivationForm, NewCharacterLink, PeopleForm, PlacePeople,
 )
 from data_access_logic.expansion.finish_expansion import finish
 from data_access_logic.expansion.form import ExpansionCreateForm, ExpansionFinishForm
@@ -30,6 +30,11 @@ class PromptForm(BaseModel):
 @db_step
 def plan_day(s: Session, form: DayForm) -> DayPlan:
     return acting.plan_day(s, form)
+
+
+@db_step
+def known_people(s: Session, form: KnownPeopleForm) -> KnownPeople:
+    return acting.known_people(s, form)
 
 
 @db_step
