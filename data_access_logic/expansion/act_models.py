@@ -53,8 +53,12 @@ class PresentPerson(Material):
     # 見る人が名を知らなければ、人物の目には名前を伏せて渡す
     name: str | None = None
     looks: AppearanceSerialized
-    # 一緒に一日を動かしている人物か(動かしていない人物は、住まいから動かない)
+    # 一緒に一日を動かしている人物か(動かしていない人物は、決まった居場所から動かない)
     simulated: bool = False
+    # その日を先に動かした人物の、この一時間にしていること(行動の表の行い)。先に動かした人物でなければ None
+    doing: str | None = None
+    # 動かしていない人物が、決まった居場所でしていること(`character_routine.text`)
+    routine: str | None = None
 
 
 class MotivationLine(Material):
@@ -320,6 +324,19 @@ class DayBrief(BaseModel):
     known_ids: list[int]
 
 
+class KnownPeopleForm(BaseModel):
+    # 見る人物と、その人物が初めて目の前にした、名前を知っている人物
+    viewer_id: int
+    character_ids: list[int]
+    time: Stamp
+
+
+class KnownPeople(BaseModel):
+    """見る人物が知っている、目の前の人物の外見・芯・来歴(段の出力。整形した形で運ぶ)。"""
+
+    prompt: dict[str, Any]
+
+
 class PeopleForm(BaseModel):
     time: Stamp
     # 動かしている人物ごとの、今いる場所
@@ -348,6 +365,8 @@ class HourScene(BaseModel):
     present: list[PresentPerson]
     # 目の前の人物が、さっきの一時間にしたこと
     seen: list[str]
+    # 組の中で先に動いた人物が、この一時間にしていること
+    now: list[str] = []
     # その日の段取りで床に就く時刻までの時間(暦の一時間で数える)
     until_bed: int
     calendar: Calendar | None = Field(default_factory=active_calendar)
@@ -369,10 +388,19 @@ class HourScene(BaseModel):
             "目の前にいる人物": [
                 {"人物id": person.character_id,
                  "名前": person.name if person.character_id in known_ids and person.name else "(名を知らない)",
-                 **({} if person.simulated else {"この一日": _STAYING}),
+                 **_day_of(person),
                  **({} if person.character_id in seen_ids else person.looks.model_dump())} for person in self.present],
             "目の前の人物が、さっきしていたこと": self.seen,
+            "目の前の人物が、この一時間にしていること": self.now,
         }
+
+
+def _day_of(person: PresentPerson) -> dict[str, str]:
+    if person.simulated:
+        return {}
+    if person.doing is not None:
+        return {"この一日": _RECORDED, "この一時間にしていること": person.doing}
+    return {"この一日": _STAYING, **({"ここでしていること": person.routine} if person.routine else {})}
 
 
 def _deeds_field() -> Any:
@@ -384,17 +412,10 @@ def _known_deeds(values: list[str]) -> list[str]:
     return [value for value in dict.fromkeys(value.strip() for value in values) if value in constants.DAY_DEED_WEIGHTS]
 
 
-def _bare_speech(value: str | None) -> str | None:
-    """言葉だけにする。AI がかぎかっこを付けて返すことがあり、書き出すときに付けるかぎかっこと重なる。
-    「a」「b」のように一言ずつくくってあれば、一言ずつの行に分ける。"""
-    text = (value or "").strip()
-    if text.startswith("「") and text.endswith("」"):
-        text = text[1:-1].replace("」「", "\n").replace("」\n「", "\n")
-    return text or None
-
-
-# 動かしていない人物は住まいから動かないので、人物の目に、連れ出せないことを伝える
+# 動かしていない人物は決まった居場所から動かないので、人物の目に、連れ出せないことを伝える
 _STAYING = "ここで過ごしていて、ほかの場所へは一緒に行かない"
+# その日を先に動かした人物は、行動の表のとおりに動き、後から動く人物に合わせては変わらない
+_RECORDED = "この一日はもう決まっていて、あなたに合わせては変わらない"
 
 
 def _ate_field() -> Any:
@@ -408,6 +429,12 @@ def _known_amount(value: str | None) -> str:
     return value if value in constants.DAY_MEAL_AMOUNTS else constants.DAY_MEAL_AMOUNTS[0]
 
 
+# 台詞は話の本文を書くとき(人物役)に任せ、一時間の手は行いの粒で残す
+_ACTION_WORDING = "誰に何を話した・頼んだかは、台詞(かぎかっこ)でなく行いとして書く(「ミレアに都の話の続きをねだる」)"
+_ACTION_NOTE = f"いまいる場所で、これからすること。誰に・何をするか。{_ACTION_WORDING}"
+_NEXT_PLACE_NOTE = ("このことを終えたあとに過ごす場所の場所id。行ける場所の中から。終わりの一時間のうちに歩いて移る。"
+                    "ここに残るなら、いる場所の場所id")
+
 _KIND_NOTE = ("この一時間に何かを食べたなら(つまむ程度でも)「食べる」、親しい相手と寄り添った・手を取ったなら「触れ合う」にする")
 
 
@@ -416,22 +443,18 @@ class HourDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: str = Field(description=f"この一時間にすることの種別。{'・'.join(constants.DAY_ACTION_KINDS)} から一つ。{_KIND_NOTE}")
-    location_id: int = Field(description="この一時間を過ごす場所の場所id。行ける場所の中から。動かないなら、いる場所の場所id")
-    action: str = Field(description="この一時間にすること。どこで・誰に・何をするか")
-    speech: str | None = Field(description="口にする言葉(かぎかっこは付けない)。黙っているなら null")
+    action: str = Field(description=_ACTION_NOTE)
+    toward_ids: list[int] = Field(description=(
+        "この一時間に働きかける(話しかける・頼む・手を貸す・誘うなど)目の前の人物の人物id。目の前にいる人物の中から。いなければ空"))
     thought: str = Field(description="いまの内心")
     deeds: list[str] = _deeds_field()
     ate: str = _ate_field()
+    next_location_id: int = Field(description=_NEXT_PLACE_NOTE)
 
     @field_validator("deeds")
     @classmethod
     def _deeds(cls, values: list[str]) -> list[str]:
         return _known_deeds(values)
-
-    @field_validator("speech")
-    @classmethod
-    def _speech(cls, value: str | None) -> str | None:
-        return _bare_speech(value)
 
     @field_validator("ate")
     @classmethod
@@ -453,44 +476,6 @@ class HourDraft(BaseModel):
         return value
 
 
-class ReactionDraft(BaseModel):
-    # json schema として AI に渡すので、docstring を書くと description として AI に渡る
-    model_config = ConfigDict(extra="forbid")
-
-    action: str = Field(description="目の前の人物のしたこと・言ったことを受けて、この一時間のうちにすること。気に留めないなら、そのまま続けること")
-    kind: str | None = Field(description=(
-        f"応じたことで、この一時間の主なことが変わったなら、その種別({'・'.join(constants.DAY_ACTION_KINDS)} から一つ。"
-        f"誘われて一緒に食べた・寄り添ったなど。{_KIND_NOTE})。決めていた種別のままなら null"))
-    location_id: int | None = Field(description=(
-        "応じたことで、この一時間を過ごす場所が変わったなら(場所を移る相手についていく・引き止められて残るなど)、"
-        "行ける場所の中のその場所id。決めていた場所のままなら null"))
-    speech: str | None = Field(description="口にする言葉(かぎかっこは付けない)。黙っているなら null")
-    thought: str = Field(description="いまの内心")
-    deeds: list[str] = _deeds_field()
-    ate: str = _ate_field()
-
-    @field_validator("deeds")
-    @classmethod
-    def _deeds(cls, values: list[str]) -> list[str]:
-        return _known_deeds(values)
-
-    @field_validator("speech")
-    @classmethod
-    def _speech(cls, value: str | None) -> str | None:
-        return _bare_speech(value)
-
-    @field_validator("ate")
-    @classmethod
-    def _ate(cls, value: str | None) -> str:
-        return _known_amount(value)
-
-    @field_validator("kind")
-    @classmethod
-    def _known_kind(cls, value: str | None) -> str | None:
-        value = (value or "").strip()
-        return value if value in constants.DAY_ACTION_KINDS else None
-
-
 class HourAction(BaseModel):
     """人物の一時間の行動。動かし終えたら行動の表(`event_action`)に一行で足す。"""
 
@@ -499,7 +484,6 @@ class HourAction(BaseModel):
     location_id: int
     kind: str
     text: str
-    speech: str | None = None
     thought: str | None = None
     sleepiness: int
     hunger: int
@@ -709,3 +693,4 @@ class DayRun(BaseModel):
         """その日の暦で書き出す。"""
         with self.scoped():
             return self.model_dump(mode="json")
+

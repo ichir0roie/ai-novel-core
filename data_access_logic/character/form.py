@@ -3,7 +3,7 @@ from typing import Annotated, Any
 from pydantic import Field, field_validator, model_validator
 
 from data_access_logic.character.record import (
-    CharacterHistoryRow, CharacterLocationRow, CharacterParameterRow, CharacterRelationHistoryRow,
+    CharacterHistoryRow, CharacterLocationRow, CharacterParameterRow, CharacterRelationHistoryRow, CharacterRoutineRow,
     CharacterSkillHistoryRow,
 )
 from data_access_logic.knowers import KnowerRow
@@ -103,6 +103,7 @@ class CharacterUpdateForm(Form):
     # 渡すと配列をまるごと置き換える
     parameters: list[CharacterParameterRow] | None = None
     locations: list[CharacterLocationRow] | None = None
+    routines: list[CharacterRoutineRow] | None = None
     histories: list[CharacterHistoryRow] | None = None
 
 

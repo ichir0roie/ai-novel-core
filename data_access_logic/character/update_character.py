@@ -8,7 +8,7 @@ from data_access_logic.character.record import CharacterRecord
 from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.query import common_query
 from db.child_lists import replaced_histories, replaced_rows
-from db.schema import Character, CharacterHistory, CharacterParameter, CharacterLocation
+from db.schema import Character, CharacterHistory, CharacterLocation, CharacterParameter, CharacterRoutine
 
 
 class UpdateCharacter(CommitEntrypoint):
@@ -25,6 +25,8 @@ class UpdateCharacter(CommitEntrypoint):
             record.parameters = replaced_rows(record.parameters, form.parameters, CharacterParameter)
         if form.locations is not None:
             record.locations = replaced_rows(record.locations, form.locations, CharacterLocation)
+        if form.routines is not None:
+            record.routines = replaced_rows(record.routines, form.routines, CharacterRoutine)
         if form.histories is not None:
             record.histories = replaced_histories(record.histories, form.histories, CharacterHistory, owner=record)
         # 誕生は列を持たず parameters の一番早く始まる行の start で表す(db/schema.py の Character.start)。

@@ -305,8 +305,8 @@ class KnowledgeSerialized(Material):
     characters: list[KnownCharacter]
     ideas: list[KnownIdea]
     places: list[KnownPlace]
-    # 本人が前の話で言ったセリフ(話の時刻・本文の順)
-    speeches: list[KnownSpeech]
+    # 本人が前の話で言ったセリフ(話の時刻・本文の順)。人物モードは台詞を書かせないので None にして、見出しごと出さない
+    speeches: list[KnownSpeech] | None = None
     # 本人が居合わせた出来事(古い順)。人物モード(`expansion/acting.py`)は出来事を別に渡すので None にして、見出しごと出さない
     events: list[KnownEvent] | None = None
     # 本人のモチベーション(強い順。終わった行は `end` を持つ)。人物モードは別に渡すので None にして、見出しごと出さない
@@ -331,20 +331,35 @@ class KnowledgeSerialized(Material):
                 "行動原理": me.principle, "性格": personality_for_prompt(parameters),
                 "来歴(古い順)": _histories_for_prompt(me.histories, sense, now),
                 "スキル": _skills_for_prompt(me.skills, sense, now),
-                "言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, sense, now),
+                **({} if self.speeches is None else {"言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, sense, now)}),
                 **events,
                 **motivations,
             },
             "関係": _relations_for_prompt(self.relations, sense, now),
-            "知っている人物": [
-                {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
-                 "来歴(古い順)": _histories_for_prompt(character.histories, sense, now),
-                 "スキル": _skills_for_prompt(character.skills, sense, now)}
-                for character in self.characters],
+            "知っている人物": [_character_for_prompt(character, sense, now) for character in self.characters],
             "知っているアイデア": [_idea_for_prompt(idea) for idea in self.ideas],
             "知っている場所": [{"名前": place.name, "来歴(古い順)": _histories_for_prompt(place.histories, sense, now)}
                          for place in self.places],
         }
+
+
+def _character_for_prompt(character: KnownCharacter, sense: TimeSense, now: Stamp) -> dict[str, Any]:
+    return {"名前": character.name, **character.looks.model_dump(), "人物像": character.text,
+            "来歴(古い順)": _histories_for_prompt(character.histories, sense, now),
+            "スキル": _skills_for_prompt(character.skills, sense, now)}
+
+
+class KnownCharactersSerialized(Material):
+    """知っている人物の外見・芯・来歴(本人が知る行だけ)。人物モードは、目の前に初めて来たときにだけ渡す。"""
+
+    time: Stamp
+    characters: list[KnownCharacter]
+    calendar: Calendar | None = Field(default_factory=active_calendar)
+
+    @model_serializer
+    def _for_prompt(self) -> dict[str, Any]:
+        sense = TimeSense(self.calendar)
+        return {"人物": [_character_for_prompt(character, sense, self.time) for character in self.characters]}
 
 
 def _idea_for_prompt(idea: KnownIdea) -> dict[str, Any]:
@@ -499,20 +514,17 @@ def _motivations(s: Session, character_id: int, time: Stamp) -> list[KnownMotiva
 def knowledge_of(
     s: Session, character_id: int, time: Stamp, plot_text: str, scene_ids: set[int] | None,
     acting_episode_id: int | None, with_events: bool = False, with_motivations: bool = False, with_now: bool = True,
+    with_speeches: bool = True,
 ) -> KnowledgeSerialized:
     """アイデアは、`plot_text` に名前の出るものだけを入れる。
     知っている人物(外見・芯・来歴)は、関係のある人物のうち `scene_ids`(話の登場人物・名前だけ出る人物)にいる人物だけ。
     ほかの関係のある人物は「関係」の名前と間柄だけで足りる。`scene_ids` が None なら(話を渡さないとき)関係のある人物すべて。
     言ったセリフは、`acting_episode_id`(演じている話)のものを除く。
-    居合わせた出来事は `with_events`、本人のモチベーションは `with_motivations`、今の時刻は `with_now` のときだけ入れる
-    (人物モードはどれも別に渡す)。"""
+    居合わせた出来事は `with_events`、本人のモチベーションは `with_motivations`、今の時刻は `with_now`、言ったセリフは
+    `with_speeches` のときだけ入れる(人物モードは出来事・モチベーション・今の時刻を別に渡し、セリフは渡さない)。"""
     character = common_query.get_row(s, Character, character_id)
     viewer = viewer_of(s, character, time)
     other_ids = [id_ for id_ in _related_ids(s, character, time) if scene_ids is None or id_ in scene_ids]
-    # 一人ずつ引くと、関係のある人物の数だけ db を往復する
-    by_id = {other.id: other for other in s.scalars(
-        select(Character).where(Character.id.in_(other_ids)).options(selectinload(Character.histories))).all()}
-    others = [by_id[id_] for id_ in other_ids]
     return KnowledgeSerialized(
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(s, character, time),
@@ -520,17 +532,29 @@ def knowledge_of(
                      histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer)),
         parameters=parameters_at(character, time),
         relations=relations_at(s, [character], time, dated_alive_at),
-        characters=[KnownCharacter(name=other.name, looks=appearance_of(s, other, time),
-                                   text=other.text,
-                                   histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
-                    for other in others],
+        characters=_known_characters(s, viewer, other_ids, time),
         ideas=_ideas(s, viewer, _in_text(plot_text)),
         places=_places(s, viewer),
-        speeches=_speeches(s, character_id, time, acting_episode_id),
+        speeches=_speeches(s, character_id, time, acting_episode_id) if with_speeches else None,
         events=_events(s, character_id, time) if with_events else None,
         motivations=_motivations(s, character_id, time) if with_motivations else None,
         with_now=with_now,
     )
+
+
+def _known_characters(s: Session, viewer: Viewer, other_ids: list[int], time: Stamp) -> list[KnownCharacter]:
+    # 一人ずつ引くと、人物の数だけ db を往復する
+    by_id = {other.id: other for other in s.scalars(
+        select(Character).where(Character.id.in_(other_ids)).options(selectinload(Character.histories))).all()}
+    return [KnownCharacter(name=other.name, looks=appearance_of(s, other, time), text=other.text,
+                           histories=known_histories(other.histories, viewer), skills=_skills(s, other, viewer))
+            for other in (by_id[id_] for id_ in other_ids if id_ in by_id)]
+
+
+def known_characters_of(s: Session, character_id: int, other_ids: list[int], time: Stamp) -> KnownCharactersSerialized:
+    """`character_id` の人物が知っている、`other_ids` の人物の外見・芯・来歴(知る行だけ)。"""
+    viewer = viewer_of(s, common_query.get_row(s, Character, character_id), time)
+    return KnownCharactersSerialized(time=time, characters=_known_characters(s, viewer, other_ids, time))
 
 
 def known_ideas_by_words(s: Session, character_id: int, time: Stamp, words: list[str]) -> KnownIdeasSerialized:

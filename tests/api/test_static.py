@@ -23,7 +23,8 @@ def test_tables():
 
     assert set(tables) == {"story", "episode", "character", "character_relation", "character_skill", "character_motivation", "event", "location", "idea",
                            "meme", "oracle", "style_preference", "custom_stamp"}
-    assert {child["name"] for child in tables["character"]["child_lists"]} == {"parameters", "locations", "histories"}
+    assert {child["name"] for child in tables["character"]["child_lists"]} == {
+        "parameters", "locations", "routines", "histories"}
 
 
 def test_entrances():

@@ -38,7 +38,7 @@ description: 出来事(イベント)の生成の入口。基本の単位は、�
 
 - 最新の話は、本文のある話のうち、時刻(終わりがあれば終わり)が一番遅いもの(`expansion_query.latest_written_episode`)。手元は SQL で選んでよい(`select id, title from episode where main_text <> '' and start is not null order by coalesce("end", start) desc limit 1`。時刻はここで読まず、上の「日」のとおり入口で読む)。web のセッションは表の API の `episode` の一覧の `letters` と `start`・`end` で選ぶ。登場人物は表の API の `episode` の一件の `character_ids`
 - 人物の名前から id を引くのは `.claude/docs/db.md` の「行を引く」
-- 人数が `DAY_CHARACTER_LIMIT` を超えるときは、名指しの人物を先に、残りを id の順に分けて、同じ日を何回かに分けて回す(同じ回にいない人物どうしは、その日に応じ合わない)
+- 人数が `DAY_CHARACTER_LIMIT` を超えるときだけ、名指しの人物を先に、残りを id の順に分けて、同じ日を何回かに分けて回す(後の回の人物は、先の回の人物を記録のとおりに目の前に見るが、先の人物は応じない。記録が食い違いやすいので、超えなければ一回で回す)
 
 ## 親の出来事を指定する
 
