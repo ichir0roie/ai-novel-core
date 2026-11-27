@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 from db import story_scope
 from db.schema import (
-    Base, Character, CharacterHistory, CharacterLocation, CharacterMotivation, CharacterRelation, CharacterRelationHistory,
+    Base, Character, CharacterHistory, CharacterLocation, CharacterMotivation, CharacterNuance, CharacterRelation,
+    CharacterRelationHistory,
     CharacterSkill, CharacterSkillHistory, CustomStamp, CustomStampMonth, Episode, Event, EventCharacter, Expansion, Idea,
     IdeaHistory, Location, LocationHistory, Story, get_env_session,
 )
@@ -31,7 +32,7 @@ from db.story_scope import Scope
 # 行を指す欄のうち、表の名前と頭の合わないもの。ほかは `<表>_id` / `<表>_ids` の名前から表を引く
 _KEY_MODELS: dict[str, type[Base]] = {
     "actor_id": Character, "knower_id": Character, "character_1_id": Character, "character_2_id": Character,
-    "viewpoint_character_id": Character,
+    "viewpoint_character_id": Character, "around_character_id": Character,
 }
 _KEY_PATTERN = re.compile(r"\A(\w+?)_ids?\Z")
 # 同じ深さに行を指す欄がいくつもあるとき、先に見る表(小さいほど作品・暦を確かに決める。無い表は 4)
@@ -40,7 +41,8 @@ _MODEL_RANKS: dict[type[Base], int] = {
 # 入口の引数で、行をまるごと渡す欄(`{"character": {"id": 3, ...}}`)
 _FORM_MODELS: dict[str, type[Base]] = {
     "story": Story, "episode": Episode, "event": Event, "character": Character, "idea": Idea, "location": Location,
-    "relation": CharacterRelation, "skill": CharacterSkill, "motivation": CharacterMotivation, "expansion": Expansion,
+    "relation": CharacterRelation, "skill": CharacterSkill, "motivation": CharacterMotivation, "nuance": CharacterNuance,
+    "expansion": Expansion,
     "character_location": CharacterLocation,
 }
 # 来歴の行を `history_id` で指す入口の、来歴の表(入口のモジュール名から)

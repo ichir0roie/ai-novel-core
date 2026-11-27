@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from collections.abc import Collection
 
-from sqlalchemy import ColumnElement, Select, func, or_, select
+from sqlalchemy import ColumnElement, Select, exists, func, not_, or_, select
 
 from data_access_logic.query.period import alive_at
 from db.schema import (
-    Character, CharacterParameter, Event, EventCharacter, Location, Stamp,
+    ChangeOp, Character, CharacterParameter, Event, EventCharacter, Expansion, ExpansionChange, ExpansionMode, Location,
+    Stamp,
 )
 
 
@@ -17,12 +18,25 @@ def siblings_area_sum_select(parent_id: int, exclude_id: int | None = None) -> S
     return query if exclude_id is None else query.where(Location.id != exclude_id)
 
 
+def _day_record(event_id: ColumnElement[int]):
+    """人物モードの一日が書いた(足した・延ばした)出来事か。"""
+    return (select(ExpansionChange.id).join(Expansion, Expansion.id == ExpansionChange.expansion_id)
+            .where(ExpansionChange.table_name == Event.__tablename__, ExpansionChange.row_id == event_id,
+                   ExpansionChange.op.in_([ChangeOp.ADD.value, ChangeOp.UPDATE.value]),
+                   Expansion.mode == ExpansionMode.CHARACTER.value))
+
+
 def busy_character_ids_select(time: Stamp) -> Select:
-    """その時刻に、終わりのある出来事の最中にいる人物。終わりの空いた出来事は一点の出来事として、人物をふさがない。"""
+    """その時刻に、終わりのある出来事の最中にいる人物。終わりの空いた出来事は一点の出来事として、人物をふさがない。
+    人物モードの一日の出来事は、動いた人物だけをふさぐ。一日じゅうの記録なので、朝に一度居合わせただけの人まで
+    一日ふさぐと、同じ日に後から動かす人物の目から、その人が決まった居場所ごと消える。"""
+    day_record = _day_record(Event.id)
     return (
         select(EventCharacter.character_id).distinct()
         .join(Event, Event.id == EventCharacter.event_id)
-        .where(Event.time <= time, Event.end > time)
+        .where(Event.time <= time, Event.end > time,
+               or_(not_(exists(day_record)),
+                   exists(day_record.where(Expansion.actor_id == EventCharacter.character_id))))
     )
 
 

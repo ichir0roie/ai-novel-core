@@ -34,6 +34,9 @@ class CharacterParameterRow(_ChildRow):
     flexibility_of_values: PersonalityLevel | None = None
     sensitivity: PersonalityLevel | None = None
     imagination: PersonalityLevel | None = None
+    self_control: PersonalityLevel | None = None
+    attachment_anxiety: PersonalityLevel | None = None
+    intimacy_avoidance: PersonalityLevel | None = None
     influence: PersonalityLevel | None = None
     appetite: PersonalityLevel | None = None
     sleep_drive: PersonalityLevel | None = None
@@ -178,6 +181,18 @@ class CharacterMotivationRecord(Material):
     # 1〜5(`constants.MOTIVATION_STRENGTHS`)
     strength: int
     text: str
+
+
+class CharacterNuanceRecord(Material):
+    id: int
+    origin: str = "user"
+    character_id: int
+    kind: str
+    situation: str | None = None
+    target_character_id: int | None = None
+    text: str
+    start: Timestamp | None = None
+    end: Timestamp | None = None
 
 
 # 人物モードの裁く段の応答(json schema として AI に渡すので、docstring を書くと description として AI に渡る)

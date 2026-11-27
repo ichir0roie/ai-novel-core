@@ -158,7 +158,7 @@ def test_read_knowledge(shown, world):
     assert (me["外見"], me["人物像"], me["ミーム"], me["行動原理"]) == ("背が高い", "太郎の芯", "- 今表: 太郎のミーム", "太郎の行動原理")
     assert "筋書き" not in me
     # 性格は本人にだけ渡す
-    assert len(me["性格"]) == 12 and me["性格"]["誠実性"] in PERSONALITY_LEVELS
+    assert len(me["性格"]) == 15 and me["性格"]["誠実性"] in PERSONALITY_LEVELS
     assert _histories(me) == ["太郎の秘密"]
     hanako_known = _known_person(result, "テスト花子")
     assert (hanako_known["外見"], hanako_known["人物像"]) == ("髪が赤い", "花子の芯")
@@ -928,7 +928,8 @@ def test_close_and_apply_change_the_actors_motivations(world, mock_ai, shown, mo
 
     assert sorted(applied["motivations"]) == ["テスト太郎: 市に店を持ちたい(強さ 4)", "テスト太郎: 花子と市を歩きたい(強さ 2)"]
     assert sorted(applied["ended_motivations"]) == ["テスト太郎: 市に店を持ちたい", "テスト太郎: 花子に謝りたい"]
-    time = Stamp.parse("1200/04/01 12:00:00")
+    # 差分は話の時刻(12:00:00)の 1 秒後に入る
+    time = Stamp.parse("1200/04/01 12:00:01")
     with get_env_session() as s:
         rows = {row.id: row for row in s.scalars(select(CharacterMotivation).where(
             CharacterMotivation.character_id.in_([taro, hanako]))).all()}

@@ -38,14 +38,14 @@ def clamp(outcome: DayOutcomeDraft, impact: ImpactFrame, actor_id: int) -> DayOu
     def first_actor[T](rows: list[T], key) -> list[T]:
         return sorted(rows, key=lambda row: key(row) != actor_id)
 
-    updates = [update for update in first_actor(outcome.character_updates, lambda row: row.character_id)
-               if update.character_id not in resistant][:impact.people]
+    nuances = [change for change in first_actor(outcome.nuance_changes, lambda row: row.character_id)
+               if change.character_id not in resistant][:impact.people]
     moves = [move for move in first_actor(outcome.character_moves, lambda row: row.character_id)
              if move.character_id not in resistant][:impact.moves]
     # 思いの増減も人となりの変化に数え、動かされにくい人物の分は書かない
     motivation_changes = [change for change in first_actor(outcome.motivation_changes, lambda row: row.character_id)
                           if change.character_id not in resistant][:constants.ACT_MOTIVATION_CHANGE_LIMIT]
     return outcome.model_copy(update={
-        "character_updates": updates, "character_moves": moves, "motivation_changes": motivation_changes,
+        "nuance_changes": nuances, "character_moves": moves, "motivation_changes": motivation_changes,
         "new_characters": outcome.new_characters[:impact.new_characters], "ideas": outcome.ideas[:impact.ideas],
     })

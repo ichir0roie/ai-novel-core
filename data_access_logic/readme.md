@@ -32,6 +32,7 @@ db の触り方(入口越し・読み取り)は `.claude/docs/db.md` を見る�
 | `CommitCharacterRelation` / `UpdateCharacterRelation` | `character.form.CharacterRelationCreateForm` / `CharacterRelationUpdateForm` |
 | `CommitCharacterSkill` / `UpdateCharacterSkill` | `character.form.CharacterSkillCreateForm` / `CharacterSkillUpdateForm`(来歴の行は `character.record.CharacterSkillHistoryRow`、その行を知る相手の行は `knowers.KnowerRow`) |
 | `CommitCharacterMotivation` / `UpdateCharacterMotivation` | `character.form.CharacterMotivationCreateForm` / `CharacterMotivationUpdateForm` |
+| `CommitCharacterNuance` / `UpdateCharacterNuance` | `character.form.CharacterNuanceCreateForm` / `CharacterNuanceUpdateForm` |
 | `CommitEvent` / `UpdateEvent` | `event.form.EventCreateForm` / `EventUpdateForm` |
 | `Update*History`(来歴・呼び名の行一つ) | `character.form.CharacterHistoryChange` / `CharacterSkillHistoryChange` / `CharacterRelationHistoryChange`、`idea.form.IdeaHistoryChange`、`location.form.LocationHistoryChange` |
 | `RunBatch` | `batch.form.BatchRequest`(入口の id と、その入口を一件だけ呼ぶときと同じ引数)のリスト |
@@ -81,6 +82,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「この二人の相関を足して」           | `character.commit_character_relation.CommitCharacterRelation(relation)`。`text` は時期を限らない関係の芯、関係の中で起きたことは出来事ごとの `histories` の行(起きた時刻を `start`)に書く(下の「関係の芯と来歴」)。来歴の行を一つ足す・直すのは `AppendRelationHistory` / `UpdateRelationHistory`(`UpdateCharacterRelation` に渡すと配列はまるごと置き換わる)。消すのは `character.delete_character_relation.DeleteCharacterRelation(character_relation_id)`(来歴の行も消える) |
 | 「この人物にスキルを足して」「スキルの来歴を足して」 | `character.commit_character_skill.CommitCharacterSkill(skill)` / `character.update_character_skill.UpdateCharacterSkill(skill)`。`text` はスキルの本質(作者だけが読む)、身につけた・伸びた・衰えたなどは出来事ごとの `histories` の行(起きた時刻を `start`、効き終わる時刻を `end`)に書く。装いは `kind` を「装い」にし、身に着けている物ごとに一つ足す(下の「人物のスキルと来歴」)。来歴の行を一つ足す・直すのは `AppendSkillHistory` / `UpdateSkillHistory`(`UpdateCharacterSkill` に渡すと配列はまるごと置き換わる)。消すのは `character.delete_character_skill.DeleteCharacterSkill(character_skill_id)`(来歴と、その知る相手の行も消える) |
 | 「この人物のモチベーションを足して」「〇〇は△△したがっている」「この思いは果たした」 | `character.commit_character_motivation.CommitCharacterMotivation(motivation)` / `update_character_motivation.UpdateCharacterMotivation(motivation)` / `delete_character_motivation.DeleteCharacterMotivation(character_motivation_id)`。読むのは `list_character_motivations.ListCharacterMotivations(character_id, time=None)`(`time` を渡せばその時刻に効いている行を強い順、省けばすべての行を始まりの新しい順)。行の形は下の「人物のモチベーション」 |
+| 「この人物は止められると〜する」「〇〇の癖を足して」「〇〇は人をまず疑ってかかる」 | `character.commit_character_nuance.CommitCharacterNuance(nuance)` / `update_character_nuance.UpdateCharacterNuance(nuance)` / `delete_character_nuance.DeleteCharacterNuance(character_nuance_id)`。読むのは `list_character_nuances.ListCharacterNuances(character_id, time=None)`。行の形は下の「人物の癖と思い込み」 |
 | 「アイデアを足して」                 | `idea.commit_idea.CommitIdea(idea)`。本体は場所も期間も持たず、効く場所・期間は `histories` の行の `location_id` / `start` / `end` で持つ(下の「アイデアの履歴(呼び名)」)。時刻を渡して引くときは、`start` の決まった行が時刻に掛かるアイデアだけが当たるので、行には `start` を入れる。`parent_idea_id` を渡さなければ、`kind` の分類アイデア(下の「アイデアの分類」)を、場所のある最初の行の `location_id` から自動で探して親にする(無ければ作る)。場所・時代ごとの作中の呼び名は `histories`(下の「アイデアの履歴(呼び名)」)。本文は作者だけが読むので、確定のあとに AI(事実確認)を回さない。確定したアイデアを返す |
 | 「作中での呼び名を足して」「この場所・時代では〇〇と呼ぶ」 | `idea.commit_idea.CommitIdea(idea)` / `idea.update_idea.UpdateIdea(idea)` に `histories`(下の「アイデアの履歴(呼び名)」)を付けて足す。呼び名を使う場所・時代は各行の `location_id` / `start` / `end`(空の列はどこでも・いつでも) |
 | 「oracle・ミームを検めて」「妥当性を調べて」 | `fact_check.check_facts.CheckFacts(table, ids=None, limit=None)`。`table` は `"oracle"` / `"meme"`(アイデアの本文は作者だけが読むので検めない)。AI が Dラボのナレッジ(優先)とネット検索で妥当性と補足を書き、本文の末尾の `# 検証結果` の節に入れる(前の節は置き換える)。`ids` を省くとまだその節の無いものすべて(`limit` で件数を絞る)、渡すと検め済みでも検め直す。検めた件数を `{"checked"}` で返す。ミームは抜き出さない |
@@ -125,7 +127,8 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 | 「作品を消して」                     | `story.delete_story.DeleteStory(story_id)`。話か子の作品が残っていれば止まる |
 | 「プロットを書いて」「プロットを補完して」「プロットを直して」 | このセッションの Claude が書き、`CommitEpisode`(`{'episode': {'id': …, 'plot_text': …}}`)で入れる(下の「話のプロット」)。AI の流れ(`GenerateEvent` など)には書かせない |
 | 「作品全体を詰めたい」「全体の整合を見ながら筋を直したい」「この一言から世界を広げて」 | スキル `expand`(作者モード)。作者の一言ごとに展開を立て、関わるアイデア・ミーム・出来事(筋は出来事の親子)・人物・関係・来歴を AI の行として足し、関わる AI の行を直してつじつまを合わせる。作者の行は直さず、食い違いと作者の行を直す指示は案(`expansion_conflict`)にして作者の判断を待ち、認められたら作者の書き手で直す。話の本文(`main_text`)は書かない・直さない(下の「世界の展開」) |
-| 「auto」「人物を動かして」「自走」「〇〇の一日を動かして」 | スキル `auto-act`(人物モード)。`expansion.simulate_day.SimulateDay(character_ids=None, date=None, nudge=None, seed=None, parent_event_id=None)` を日を進めて繰り返す。人物たち(`constants.DAY_CHARACTER_LIMIT` 人まで。省けば本文のある最新の話の登場人物)の一日(省けば人物が最後に出た日の翌日)を、0 時から暦の一時間ずつ動かす。動かせるのは詳細の場所(`map_detail`)にいる人物だけで、その日のあいだはエリア(詳細の場所の一番近い、詳細でない上の場所)の詳細の場所のあいだを動く。人物一人に会話(エージェント)を一つ持たせて一日を一つの会話で回し、一度目に一日のあいだ変わらない材料を、二度目からは一時間の様子の差分だけを渡す。一時間は二段で回す: 動く段で全員を、規則(予定・眠り・疲れ)か前の一時間に決めた場所へ先に移し、する段で、場所ごとの組の中は動く順(影響力・七日の行動量)に一人ずつ、組どうしは並列に、そこにいる人物を見て行いと次の一時間の場所を決めさせる(後の人物は先の人物のその一時間の行いを見て決める)。一時間ごとに、その日に始まる作者の話・出来事の時間は予定で埋め、眠る時間(起きる・寝る時刻は欲の段と前の日の眠りの不足から計算)と疲れて休む時間(七日の行動量が行動力の上限に近いほど)は規則で埋め、ほかの時間は会話(中くらいのモデル)に、知ることのできるデータ・本人の思い・前後の出来事・体の具合(眠気・空腹・人恋しさ・疲れ)・目の前の人物と、その人物がさっきしたことから、その一時間(した行いと行動量も)を行いの粒で決めさせる(台詞は書かせない)。一日の終わりに欲の満ち足り方と行動量を人物の一日の記録(`character_day`)に足し、七日の不足で欲を満たしたいモチベーションを動かす(`expansion/needs.py`)。先に動いた人物は、後の人物に働きかけられたか、一緒にいた後の人物が場所を移るときだけ一往復応じる。その日を先に動かした人物は、行動の表のその一時間の場所と行いで目の前に出し、合わせては変えない。動かしていない人物は決まった居場所(`character_routine`。期間と毎日の時間ごとの詳細の場所。行が無ければ住まいにいて昼は留守)にいて、考えさせず、働きかけた結果だけを記録に入れる。一時間ごとの行動は行動の表(`event_action`)に残し、一日の終わりに人物ごとに一度だけ作者の目(強いモデル)で、人物の一日を出来事一件(作者が親を置けば、その子)と、当事者の来歴・事柄(アイデアと呼び名)・現れた人物と関係・住まいの移動・モチベーションの増減にまとめる。作者の筋と前後の話のプロットに逆らわせず、影響の枠(`expansion/budget.py`)ではみ出た分は切る。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。人物の一日ごとに展開(mode=character)を立てる(下の「世界の展開」)。詳しくは `.docs/world-expansion.md` の「人物モード」 |
+| 「auto」「人物を動かして」「自走」「〇〇の一日を動かして」 | スキル `auto-act`(人物モード)。`expansion.simulate_day.SimulateDay(character_ids=None, date=None, nudge=None, seed=None, parent_event_id=None)` を日を進めて繰り返す。人物たち(`constants.DAY_CHARACTER_LIMIT` 人まで。省けば本文のある最新の話の登場人物)の一日(省けば人物が最後に出た日の翌日)を、0 時から暦の一時間ずつ動かす。動かせるのは詳細の場所(`map_detail`)にいる人物だけで、その日のあいだはエリア(詳細の場所の一番近い、詳細でない上の場所)の詳細の場所のあいだを動く。人物一人に会話(エージェント)を一つ持たせて一日を一つの会話で回し、一度目に一日のあいだ変わらない材料を、二度目からは一時間の様子の差分だけを渡す。一時間は二段で回す: 動く段で全員を、規則(予定・眠り・疲れ)か前の一時間に決めた場所へ先に移し、する段で、場所ごとの組の中は動く順(影響力・七日の行動量)に一人ずつ、組どうしは並列に、そこにいる人物を見て行いと次の一時間の場所を決めさせる(後の人物は先の人物のその一時間の行いを見て決める)。一時間ごとに、その日に始まる作者の話・出来事の時間は予定で埋め、眠る時間(起きる・寝る時刻は欲の段と前の日の眠りの不足から計算)と疲れて休む時間(七日の行動量が行動力の上限に近いほど)は規則で埋め、ほかの時間は会話(中くらいのモデル)に、知ることのできるデータ・本人の思い・前後の出来事・体の具合(眠気・空腹・人恋しさ・疲れ)・目の前の人物と、その人物がさっきしたことから、その一時間(した行いと行動量も)を行いの粒で決めさせる(台詞は書かせない)。一日の終わりに欲の満ち足り方と行動量を人物の一日の記録(`character_day`)に足し、七日の不足で欲を満たしたいモチベーションを動かす(`expansion/needs.py`)。先に動いた人物は、後の人物に働きかけられたか、一緒にいた後の人物が場所を移るときだけ一往復応じる。その日を先に動かした人物は、行動の表のその一時間の場所と行いで目の前に出し、合わせては変えない。動かしていない人物は決まった居場所(`character_routine`。期間と毎日の時間ごとの詳細の場所。行が無ければ住まいにいて昼は留守)にいて、一日は動かさない。働きかけられたときだけ、その人物の会話(人物ごとに一日一つ。本人の材料を一度目に渡す)に、その場でどう応じるかを一往復聞き、働きかけた人物には次の一時間に見せ、記録にも応じたこととして入れる。一時間ごとの行動は行動の表(`event_action`)に残し、一日の終わりに人物ごとに一度だけ作者の目(強いモデル)で、人物の一日を出来事一件(作者が親を置けば、その子)と、当事者の来歴・事柄(アイデアと呼び名)・現れた人物と関係・住まいの移動・モチベーションの増減にまとめる。作者の筋と前後の話のプロットに逆らわせず、影響の枠(`expansion/budget.py`)ではみ出た分は切る。書き手 `ai_append` で書くので、足すことと `end` で終わりを付けることだけ。人物の一日ごとに展開(mode=character)を立てる(下の「世界の展開」)。詳しくは `.docs/world-expansion.md` の「人物モード」 |
+| 「決まった居場所を作って」「〇〇の周りの人物のルーティンを作って」 | `expansion.draft_routines.DraftRoutines(character_ids=None, around_character_id=None, time=None)`(AI)。決まった居場所(`character_routine`)の行の無い人物に、人物像・行動原理・来歴・関係とエリアの行ける場所から、毎日通う所を時間帯(`constants.ROUTINE_PERIODS` の朝・昼・夜)ごとに人物ごとに AI に決めさせ、暦の時に割り直して足す(続く時間帯で同じ場所・同じことなら一行。出自 ai。期間なし)。`around_character_id` を渡すと、その人物のエリアの詳細の場所に住む人物も対象にする(その人物自身は名指ししたときだけ)。行のある人物・詳細の場所に住んでいない人物はわけを添えて外し、`constants.ROUTINE_DRAFT_LIMIT` 人まで。行ける場所の外の行と、同じ時間帯の二つ目の行は捨てる |
 | 「この一言に関わる行を探して」「表をまたいで引いて」 | `world.search_world.SearchWorld(words, story_id=None, limit_per_table=10)`。語の部分一致で、人物(名前・外見・芯・筋書き・来歴)・出来事・アイデア(呼び名も)・場所(来歴も)・関係(来歴も)・スキル・ミーム・話(題・プロット)・作品を引き、当たった語・抜き書き・出自(`origin`)と、一段広げた関わる行(人物の関係の相手・当事者の出来事・居場所、出来事の当事者・場所・親、場所の親、関係の二人)を返す。`story_id` を渡すと話・作品をその作品と子孫に絞る |
 | 「来歴を一行だけ足して」「この行を知る人を足して」 | `character.append_history.AppendCharacterHistory(character_id, history)` / `character.append_skill_history.AppendSkillHistory(character_skill_id, history)` / `character.append_relation_history.AppendRelationHistory(character_relation_id, history)` / `location.append_history.AppendLocationHistory(location_id, history)` / `idea.append_history.AppendIdeaHistory(idea_id, history)`。来歴・呼び名の行を一つだけ足し、今ある行には触れない(行の形は `UpdateCharacter` などの `histories` の一行と同じ。知る相手の既定も同じ)。知る相手を一人足すのは `character.add_knower.AddKnower(table, row_id, knower)`(`table` は来歴・呼び名の表の名前)。どれも `{"table", "id"}` を返す |
 | 「来歴を一行だけ直して」「この呼び名の行の注釈を直して」 | `character.update_history.UpdateCharacterHistory(history_id, history)` / `character.update_skill_history.UpdateSkillHistory(history_id, history)` / `character.update_relation_history.UpdateRelationHistory(history_id, history)` / `location.update_history.UpdateLocationHistory(history_id, history)` / `idea.update_history.UpdateIdeaHistory(history_id, history)`。来歴・呼び名の行を一つ id で指し、`history` に渡した欄だけを直す(空にする欄は null を渡す。`description`・`name` は空にできない)。同じ親のほかの行には触れない。`knowers` を渡せば知る相手をまるごと置き換える。行の id は `ReadCharacter` と表の API の行の `histories` の各行の `id` で読む。直したあとの行を返す |
@@ -154,7 +157,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 `text` に、人物に掛かる筋書きはその人物の `plot` に書く。
 
 **変わった時ごとのパラメータ**: 人物の名字(`family_name`)・体格(`sex` `height` `build`)・口調(`first_person` `second_person` `third_person` `tone` `dialect`)・
-性格(12 軸。無/低/並/高/必)は、`character_parameter` テーブルに、値の変わった時ごとの行で持つ。入口では人物の
+性格(15 軸。無/低/並/高/必)は、`character_parameter` テーブルに、値の変わった時ごとの行で持つ。入口では人物の
 `parameters` に配列で並ぶ(id と character_id は出さない。行は配列の並びで決まり、並びを変えなければ id も変わらない)。
 
 ```json
@@ -209,7 +212,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
   `ReadCharacter`・GUI)だけ出し、話・出来事・人物の生成の材料には渡さない。時期が決まったら `start` を入れる
 - 行は出来事ごとに分ける。時期の違う出来事を一つの行にまとめない(同じ年でも、後の出来事が前の時刻の話に漏れ、知る相手も分けられなくなる)
 - `description` は必須。来歴の節目は起きた時刻を `start` にした行に書き、芯は `text` に書く(来歴の行に芯を書かない)
-- 口調・話し方は芯にも来歴にも書かず、パラメータの `tone`(語尾・訛りは `dialect`)に、変わった時ごとの行で書く。`tone` は後の行が前の行を丸ごと上書きするので、時期を問わない癖は `tone` を持つ各行に入れる
+- 口調・話し方は芯にも来歴にも書かず、パラメータの `tone`(訛りは `dialect`)に、変わった時ごとの行で書く。`tone` は話し方の表面(語尾・言葉づかいの硬さ・人の呼び方・言い回しの癖)だけにし、何を言うか・場面でどう振る舞うかは癖・思い込み(`character_nuance`)に書く。例は語尾・言い回しの断片だけにし、中身を持つ一文(「気にしなくていいんだよ？」)を書かない(人物役がその中身どおりに振る舞ってしまう)
 - 話・出来事・人物の生成に渡す材料は、本文の列(外見・人物像・ミーム・行動原理・筋書き)と、その時刻までに起きて終わっていない行(`start` <= 時刻 < `end`)だけを古い順に並べた来歴
   (`data_access_logic/character/histories.py` の `histories_at`)。先の時刻から始まる行や時期の決まっていない行を書き足しても、それより前の話・出来事には効かない
 - 来歴を書き足すときは、既にある行を書き換えず、起きた時刻を `start` にした行を足す(持ち物などの行が終わったときに `end` を入れるのは除く)
@@ -249,6 +252,17 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 本人の内心なので、ほかの人物の材料・話の材料(`ReadEpisodeBrief`)・知っている人物には渡さない
 - 裁く段には居合わせる人物ごとの行を id つきで渡し、一手のあとの増減(生まれた・強まった・弱まった・果たした・消えた)を返させて、出来事の時刻の行として書く(`character/motivations.py` の `apply_changes`)。影響の枠の「動かされにくい人物」の思いは書かない
 - 人物を消すと(`DeleteCharacter`)、その人物のモチベーションも消える
+
+**人物の癖と思い込み(character_nuance)**: 性格の段階より細かい、その人物の場面ごとの決まった振る舞い(癖)と、人や世の中をまず
+どう受け取るか(思い込み)を、一つずつ `character_nuance` の一行(`character_id` / `kind` / `situation` / `target_character_id` / `text` / `start` / `end`)で持つ。
+
+- `kind` は「癖」か「思い込み」。癖は `situation`(場面。「止められたとき」「褒められたとき」「初対面の相手と」)と `text`(その場面でする振る舞い)の組で、場面は必須。思い込みは `text` だけ(「人の親切には裏がある」)で、場面を持たない
+- 癖は相手(`target_character_id`)を持てる。同じ場面でも相手で振る舞いが違う(幼なじみに待たされたら拗ねてみせるが、目上には黙って待つ)ので、その相手との場面でだけ出る癖は相手を付ける。材料では「相手」の名前を添えて渡す
+- 口調(`parameters` の `tone`)には話し方(語尾・言い回し・呼び方)だけを書き、場面ごとの振る舞いはこの表に分ける。口調の行は後の行がまるごと上書きするので、振る舞いを口調に書くと口調を直すたびに消える
+- `start` が空なら初めから、`end` が空ならまだ続く。変わったら、前の行の `end` に変わった時刻を入れ、変わった後の行を同じ時刻から足す
+- 足すのは作者・このセッションの Claude(入口)と、人物モード・出来事の生成(記録の `nuance_changes`)と、作者が書いた本文の反映(`ReflectEpisode` の差分の `nuance_changes`。作者が本文で見せた振る舞いを、次の話から人物役が演じる)。どれも今ある行と同じ中身は足さない(`character/nuances.py` の `apply_nuance_changes`)
+- 話の人物役・対話役・人物モードの人物の目(`ReadKnowledge` の「自分」)に、その時刻に効いている行を渡す(「癖(場面ごとの振る舞い)」「思い込み」)。本人の振る舞いの決まりなので、ほかの人物の材料・知っている人物には渡さない
+- 人物を消すと(`DeleteCharacter`)、その人物の癖と思い込みも消える
 
 **アイデアの履歴(呼び名)**: アイデアの本文(`text`)は本質で、作者(語り部と、話を書くセッションの Claude)だけが読む。人物役にも、AI の生成(人物・出来事)にも渡さず、生成には呼び名と受け止め方だけを渡す(`idea/models.py` の `idea_for_prompt`)。
 作中の人物が知ること(本質の `name` とは別に、この場所・この時代ではこう呼び、こう受け止めている、ということ)は、
@@ -354,7 +368,7 @@ GUI の API は JSON の dict を受け取り、入口の引数の型注釈に�
 - 古今表裏: 古=かつて持っていたが今は手放した / 今=いま持っている / 表=人前で掲げている / 裏=内に秘めている
 - 引き方: 分類ごとに 0〜2 件。人物は 信条・欲求・境遇、人物以外の対象は 信条・欲求・集団 から引く。
   理(世界の法則)は引かない(`data_access_logic/constants.py` の `MEME_*`)
-- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う。引いたミームを先に渡し、年齢・性格(12 軸)・背丈・体格・装いを、そのミームの古今表裏と出自・生い立ち・人物像から AI が総合的に決める(サイコロでは決めない。作者が下書きで決めた値はそのまま使う)。装いは、来歴の行を一つ持つ、種別「装い」のスキルで足す(行の始まりは、いつから身に着けているかが分からないので、生んだ時刻の年だけ)。人物以外の対象の性格は、どの軸も「並」
+- 人物の自動生成(`data_access_logic/character/generator.py`)は、この引き方と整理を自動で行う。引いたミームを先に渡し、年齢・性格(15 軸)・背丈・体格・装いを、そのミームの古今表裏と出自・生い立ち・人物像から AI が総合的に決める(サイコロでは決めない。作者が下書きで決めた値はそのまま使う)。装いは、来歴の行を一つ持つ、種別「装い」のスキルで足す(行の始まりは、いつから身に着けているかが分からないので、生んだ時刻の年だけ)。人物以外の対象の性格は、どの軸も「並」
 
 ## 時刻と暦
 
@@ -530,13 +544,15 @@ claude が対話で書くときは、自分で語と言い換えを挙げて `Re
 その場で見えたこと・聞こえたことの客観的な事実だけを書き、人物の内心・狙い・口にしなかったことは書かない。後に効く内心・隠し事は、
 その人物の来歴(種別「記憶」「隠し事」など。知る相手は本人だけ)に書く。
 文体の好み(`style_preference`)は、全体と出来事の行が効く(AI を呼ぶたびに足される)。
-当事者を省けば、その時刻にその場所にいて(`character_location`)、別の出来事の最中でない(終わり `end` のある出来事の `time` から `end` までの間にいない。`end` の空いた出来事は一点で、人物をふさがない)、生きているサブキャラクターから選ぶ。
+当事者を省けば、その時刻にその場所にいて(`character_location`)、別の出来事の最中でない(終わり `end` のある出来事の `time` から `end` までの間にいない。`end` の空いた出来事は一点で、人物をふさがない。人物モードの一日の出来事は、動いた人物だけをふさぐ)、生きているサブキャラクターから選ぶ。
 場所を名指しするので、場所の `active_random_generation` は見ない。作品の本文(筋書き)は渡さない。
 記録の段は、住まい・拠点が変わった人物ごとの移動先(`character_moves`。人物 id と場所 id の組 `CharacterMove` のリスト)も返す。空なら居場所は変えず、あれば居合わせた人物と移動先の候補に当たる組だけで、今の居場所の行を出来事の時刻で閉じ、移動先の行をその時刻から足す(`character/moves.py` の `update_locations`)。移した組は `GenerateEvent` のレスポンスの `moves` に返る。移動先の候補は、出来事の場所から `constants.REACH_LEVELS` 段上までの配下で、その時刻にある場所。
 **話の差分**: 話は `CommitEpisode` で本文を確定しても AI を回さない。確定のあと、登場人物ごとの差分を一つの形(`episode/outcomes.py` の `CharacterOutcome`)にして、AI を挟まずに入れる(`apply_outcomes`)。
 差分は、この話でしたこと・起きたこと・知ったことの来歴の行(`histories`。話の時刻から、本人だけが知る行)・この話で初めて知り合った相手(`met`。本人から相手への向きの関係を話の時刻から足し、すでにあれば足さない)・身に着けた物(`worn`。種別「装い」のスキル)・外した物(`removed`。今の装いの来歴の行を話の時刻で終える)・移った住まい(`moved_to`。場所の名前を、話の場所から届く移動先の候補か、名前の同じ場所が一つだけのときその場所に当てて、`update_locations` で移す)。
 ほかの人物の秘密を知ったときは、知った人物の来歴の行に書き、秘密を持つ人物の行と関係の来歴には触れない(関係の来歴は両側の人物が読むので、知ったことが秘密を持つ側に漏れる)。
 当てられない値(装いに無い物・名前で一つに決まらない場所・登場人物でない相手)は入れずに `skipped` に返す(取りこぼしは損失として許す)。
+来歴(`histories`)は、本人の何が変わったか(境遇・立場・身の上、初めて知った事実・秘密、忘れられない出来事)だけにし、話の中でしたことの流れは書かない。流れは話の要約(`episode_summary`。`episode/summary.py`)に残り、人物役は `ReadKnowledge` の「居合わせた話(古い順)」で、自分の出た前の話を `constants.KNOWLEDGE_EPISODE_LIMIT` 件まで要約で読む。要約は場面ごとに場所と居合わせた人物を頭に書き、胸の内は書かない。要約は `episode.summarize_episodes.SummarizeEpisodes(episode_id=None)` で本文に揃える(`episode_id` を渡せば、その話と登場人物が居合わせた前の話だけ。人物役を起こす前と話を締めたあと。`ReflectEpisode` は反映のあとに自分の話の要約を作る)。
+差分の行の時刻は、話の時刻の 1 秒後(`outcomes.outcome_time`)。話の時刻ちょうどにすると、その話を推敲・補完で演じ直す人物役(話の時刻までの行を読む)に、演じ終えた結果が前もって知っていたこととして混ざる。
 差分の出どころは二つ。手番を回した話は、人物役が演じ終えたあとに自分の差分を `tool.episode_session close` で手番のファイルに書き、語り部が確定のあとに `tool.episode_session apply` で、手番で言ったセリフといっしょに入れる(差分は確かめを経ないので、AI の行として書く)。
 手番を回していない話(作者が書いた本文・一人だけの話)は `ReflectEpisode` が、本文から全員の差分を AI に一度で書かせて同じように入れる。
 手番を回した話では、人物役が本人のモチベーションの増減(`motivations`)も差分に書き、`ApplyOutcomes` の `motivations` に人物モードと同じ形(`MotivationChange`)で渡して、`apply_changes` で話の時刻の行として書く(下の「人物のモチベーション」)。`ReflectEpisode` の AI はモチベーションを読まないので、増減を書かない。
@@ -572,7 +588,7 @@ AI の書き手(作者モード `ai`・人物モード `ai_append`)は話の行�
 語り部(スキル `episode`)は、登場人物の直近の話を `ReadCastEpisodes` で読む。本文は人物ごとの一番新しい話だけで、それより前の話は題・時刻だけ(語り部の文脈は手番のたびに読み直されるので、本文を何話も積まない)。
 前の話の本文を「文体の見本」として渡さない。言い回しは「書き方」(全体 → 作品の指示 → 本文 → 推敲 → 話の指示)と、登場人物のその時刻の口調の行で決める。人物役にも、全体 → 作品の指示 → 人物役の行 の書き方を渡す(`tool.episode_session style --episode <id>`)。
 章・外伝をまたぐ話には作品名を添える。作品の筋書きは、親の作品を「親の作品」としてたどって渡す。
-登場人物ごとに、その時点の歳・人となり・口調・相関・直近の出来事(要約)を渡す。話の場所の
+登場人物ごとに、その時点の歳・人となり・口調・癖と思い込み・相関・直近の出来事(要約)を渡す。話の場所の
 直近の出来事と、その場所か登場人物に掛かる「この時点より後に既に決まっている出来事」も渡し、矛盾させない。
 Claude のモデルの既定は `claude-opus-5-5` の `low`(`ai/claude_code/ai_client.py` の `MODEL` / `EFFORT`)。待ち時間の既定は `DEM_CLAUDE_AI_TIMEOUT`(600 秒)で、それより長く待つ呼び出し(事実確認)だけが `timeout` を渡す。
 

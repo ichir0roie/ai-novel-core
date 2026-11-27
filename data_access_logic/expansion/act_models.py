@@ -11,12 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
 
 from data_access_logic import constants
 from data_access_logic.character.knowledge import AppearanceSerialized, KnowledgeSerialized
+from data_access_logic.character.models import NuanceLine
 from data_access_logic.character.record import (
     CharacterMotivationRecord, CharacterMove, GeneratedCharacter, MotivationChange,
 )
 from data_access_logic.character.time_sense import TimeSense
 from data_access_logic.event.models import EventSerialized
-from data_access_logic.event.progress_models import CharacterUpdateDraft
+from data_access_logic.event.progress_models import NuanceChangeDraft
 from data_access_logic.event.record import EventRecord
 from data_access_logic.location.models import LocationMaterial
 from data_access_logic.material import Material, Timestamp
@@ -108,11 +109,12 @@ def _event_for_character(event: EventSerialized, sense: TimeSense, now: Stamp) -
 
 
 class ParticipantMotivations(Material):
-    """記録する段に渡す、居合わせた人物ごとの、その時刻に効いているモチベーションと、動いた人物との間柄。"""
+    """記録する段に渡す、居合わせた人物ごとの、その時刻に効いているモチベーション・癖と思い込みと、動いた人物との間柄。"""
 
     character_id: int
     name: str | None = None
     motivations: list[MotivationLine]
+    nuances: list[NuanceLine] = []
     # 動いた人物との関係の名前(動いた人物本人と、関係の無い人物は空)
     relations: list[str] = []
 
@@ -431,9 +433,16 @@ def _known_amount(value: str | None) -> str:
 
 # 台詞は話の本文を書くとき(人物役)に任せ、一時間の手は行いの粒で残す
 _ACTION_WORDING = "誰に何を話した・頼んだかは、台詞(かぎかっこ)でなく行いとして書く(「ミレアに都の話の続きをねだる」)"
-_ACTION_NOTE = f"いまいる場所で、これからすること。誰に・何をするか。{_ACTION_WORDING}"
+_ACTION_NOTE = (f"いまいる場所で、これからすること。誰に・何をするか。{_ACTION_WORDING}。"
+                "ほかの場所ですること(詰所へ行って働く・市場で買う)なら、この一時間は種別を「移動」にしてそこへ向かうことだけを書き、"
+                "着いてからすることは次の一時間に決める")
 _NEXT_PLACE_NOTE = ("このことを終えたあとに過ごす場所の場所id。行ける場所の中から。終わりの一時間のうちに歩いて移る。"
                     "ここに残るなら、いる場所の場所id")
+
+_HOURS_NOTE = (f"このことを続ける時間(一時間で数える)。1〜{constants.DAY_BLOCK_MAX_HOURS}。"
+               f"{'・'.join(constants.DAY_KIND_HOURS)}は1。中身に合う長さにする(礼を言う・頼むだけなら1、仕事・待つ・稽古なら長く)")
+_AFTER_NOTE = ("二時間目から続けること。目の前の人物への働きかけ(話す・頼む・渡す・礼を言う)は最初の一時間で済んだものとし、"
+               "ここには自分の手元のことだけを書く(「荷を運び続ける」「石に座って待ち続ける」)。一時間で終えるなら空")
 
 _KIND_NOTE = ("この一時間に何かを食べたなら(つまむ程度でも)「食べる」、親しい相手と寄り添った・手を取ったなら「触れ合う」にする")
 
@@ -450,6 +459,13 @@ class HourDraft(BaseModel):
     deeds: list[str] = _deeds_field()
     ate: str = _ate_field()
     next_location_id: int = Field(description=_NEXT_PLACE_NOTE)
+    hours: int = Field(description=_HOURS_NOTE)
+    after_action: str = Field(description=_AFTER_NOTE)
+
+    @field_validator("after_action")
+    @classmethod
+    def _after(cls, value: str) -> str:
+        return value.strip()
 
     @field_validator("deeds")
     @classmethod
@@ -466,6 +482,66 @@ class HourDraft(BaseModel):
     def _known_kind(cls, value: str) -> str:
         value = value.strip()
         return value if value in constants.DAY_ACTION_KINDS else "そのほか"
+
+    @field_validator("action")
+    @classmethod
+    def _filled(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("空")
+        return value
+
+
+# 動かしていない人物が決まった居場所にいないとき(住まいにいる時間)の、していること
+_AT_HOME = "住まいで過ごしている"
+# 応じる人物は決まった居場所から動かないので、ついて行く応じ方をさせない
+_STAYING_TODAY = "今日はここで過ごしていて、ほかの場所へは行かない"
+
+
+class ResponseScene(BaseModel):
+    """動かしていない人物の目に渡す、働きかけてきた人物とそのしたこと。"""
+
+    time: Timestamp
+    location_name: str | None = None
+    # 決まった居場所でしていること(`character_routine.text`)。住まいにいれば None
+    routine: str | None = None
+    partner: PresentPerson
+    # 働きかけてきた人物の名前を知っているか
+    partner_known: bool
+    # 会話の中で、働きかけてきた人物の見た目を前に渡したか
+    partner_seen: bool
+    deed: str
+    calendar: Calendar | None = Field(default_factory=active_calendar)
+
+    def for_prompt(self) -> dict[str, Any]:
+        sense = TimeSense(self.calendar)
+        now = sense.now_for_prompt(self.time)
+        hours_per_day = 24 if self.calendar is None else self.calendar.hours_per_day
+        if hours_per_day != 24:
+            now["24時間の一日に直すと"] = f"{round(self.time.digits[3] * 24 / hours_per_day)}時ごろ"
+        partner = self.partner
+        return {
+            "いま": now,
+            "いる場所": self.location_name,
+            "ここでしていること": self.routine or _AT_HOME,
+            "この一日": _STAYING_TODAY,
+            "働きかけてきた人物": {
+                "人物id": partner.character_id,
+                "名前": partner.name if self.partner_known and partner.name else "(名を知らない)",
+                **({} if self.partner_seen else partner.looks.model_dump()),
+                "あなたにしたこと": self.deed,
+            },
+        }
+
+
+class ResponseDraft(BaseModel):
+    """動かしていない人物が、働きかけてきた人物にその場で応じること。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: str = Field(description=(
+        f"働きかけに、その場でどう応じるか。{_ACTION_WORDING}。取り合わないなら、取り合わずにしていたこと"))
+    thought: str = Field(description="いまの内心")
 
     @field_validator("action")
     @classmethod
@@ -548,7 +624,8 @@ class DayOutcomeDraft(BaseModel):
     event_text: str = Field(description="人物の一日の出来事の内容")
     character_ids: list[int] = Field(description="この一日に関わった人物・対象の人物id。居合わせた人物の中からだけ選ぶ。動いた人物も入れる")
     character_moves: list[CharacterMove] = Field(description="住まい・拠点が変わった人物ごとの移動先。誰も変わっていなければ空")
-    character_updates: list[CharacterUpdateDraft] = Field(description="この一日を通して人となりについて新しく分かった人物・対象")
+    nuance_changes: list[NuanceChangeDraft] = Field(
+        description="この一日で新しく見えた・変わった、人物・対象の癖と思い込み。無ければ空")
     ideas: list[ActIdeaDraft] = Field(
         description=f"この一日で生まれた・広まった事柄。無ければ空。{constants.ACT_NEW_IDEA_LIMIT}件まで")
     new_characters: list[NewCharacterDraft] = Field(
@@ -556,6 +633,9 @@ class DayOutcomeDraft(BaseModel):
     motivation_changes: list[MotivationChange] = Field(
         description=f"この一日で生まれた・強さが変わった・果たした・消えたモチベーション。変わらなければ空。"
         f"{constants.ACT_MOTIVATION_CHANGE_LIMIT}件まで")
+    continues_event_id: int | None = Field(
+        default=None, description="その日が「続いている記録」のどれかと同じ暮らしの繰り返しなら、その記録の出来事id。"
+        "新しい記録を立てるなら null")
 
     @field_validator("event_name")
     @classmethod
@@ -576,6 +656,16 @@ class DayMaterialForm(BaseModel):
     parent_event_id: int | None = None
 
 
+class ContinuingEvent(Material):
+    """動いた人物の、前の日まで続いている AI の出来事。その日が同じ暮らしの繰り返しなら、この出来事を延ばす。"""
+
+    id: int
+    name: str
+    time: Timestamp
+    end: Timestamp | None = None
+    text: str
+
+
 class DayMaterial(BaseModel):
     """記録する段の、db から読む材料(段の出力)。"""
 
@@ -585,6 +675,8 @@ class DayMaterial(BaseModel):
     plan: AuthorPlan
     # 動いた人物が当事者の、その日より前の出来事の名前(新しい順)
     recent_names: list[str] = []
+    # 動いた人物の、前の日まで続いている AI の出来事(新しい順)
+    continuing: list[ContinuingEvent] = []
 
 
 class DayRequest(Material):
@@ -608,6 +700,8 @@ class DayRequest(Material):
             "その日": str(self.date).split(" ")[0],
             "動いた人物": self.actor_name,
             "動いた人物のこれまでの記録の名前(新しい順)": material.recent_names,
+            "続いている記録": [{"出来事id": event.id, "名前": event.name, "始まり": str(event.time), "本文": event.text}
+                         for event in material.continuing],
             "その日の行動(起きた順)": self.log,
             "居合わせた人物": [
                 {"人物id": id_, "名前": name, "動いた人物との間柄": relations.get(id_) or None,
@@ -615,6 +709,10 @@ class DayRequest(Material):
             "居合わせた人物のモチベーション": [
                 {"人物id": person.character_id, "名前": person.name,
                  "モチベーション(強い順)": [motivation.for_prompt() for motivation in person.motivations]}
+                for person in material.motivations],
+            "居合わせた人物の癖と思い込み": [
+                {"人物id": person.character_id, "名前": person.name,
+                 "癖と思い込み": [nuance.for_prompt() for nuance in person.nuances]}
                 for person in material.motivations],
             "移動先の候補": [{"場所id": destination.id, "名前": destination.name, "種別": destination.kind}
                         for destination in material.destinations],

@@ -13,14 +13,14 @@ from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from ai.instructions.materials import EVENT_PARTICIPANT_NOTE, LATER_EVENTS_NOTE, TIME_NOTE
-from ai.instructions.naming import NAME_PLACEHOLDER, fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import participants_at
+from data_access_logic.character.cast import participant_event_ids, participants_at
 from data_access_logic.character.moves import allowed_moves
-from data_access_logic.character.histories import add_history
+from data_access_logic.character.nuances import apply_nuance_changes
 from data_access_logic.event.progress_models import (
-    CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft, LocationSituationMaterial,
+    NUANCE_CHANGES_NOTE, CandidateDraft, CandidateRequestSerialized, CandidatesDraft, EventRecordDraft,
+    LocationSituationMaterial,
     LocationSituationSerialized, RecordRequestSerialized,
 )
 from data_access_logic.event.summary import events_of
@@ -60,7 +60,7 @@ event_text は、候補の筋から外れずに書く。id ではなく名前で
 character_ids は、関わった人物・対象の人物idを、居合わせる人物・対象の中からだけ選ぶ。
 character_moves は、この出来事で住まい・拠点が変わった人物ごとの移動先。場所idは移動先の候補からだけ選ぶ。一時の外出は入れない。
 location_abolished / location_founded は、この出来事が場所自身の消滅・新設に及ぶときだけ埋める。ほかは false / null。
-character_updates の text は、この出来事で新しく分かった、その人物の性格・信念(人物以外なら性質・方針)を一文で書く。この時刻の来歴に一文として足される。新しく分かったことの無い人物は含めない。その人物を指すときは名前を書かず「{NAME_PLACEHOLDER}」と書く。
+{NUANCE_CHANGES_NOTE}
 
 {EVENT_TEXT_FORMAT}
 
@@ -74,7 +74,8 @@ def _later_events_select(location_id: int, characters: list[Character], time: St
 
 def situation_targets(s: Session, location_id: int, characters: list[Character], time: Stamp) -> SummaryTargets:
     return SummaryTargets(
-        event_ids=[event.id for event in s.scalars(_later_events_select(location_id, characters, time)).all()])
+        event_ids=[*(event.id for event in s.scalars(_later_events_select(location_id, characters, time)).all()),
+                   *participant_event_ids(s, characters[:_PARTICIPANT_LIMIT], time)])
 
 
 def situation(
@@ -147,15 +148,9 @@ def save_progress(
     )
     s.add(record)
 
-    update_notes = []
-    for update in draft.character_updates:
-        character = by_id.get(update.character_id)
-        if character is None or not update.text:
-            continue
-        note = fill_name_placeholder(update.text, character.name or "")
-        # 出来事の時刻から始まる行にするので、それより前の出来事・話には効かない
-        add_history(character, time, note)
-        update_notes.append(f"{character.name}: histories+={note}")
+    # 出来事の時刻から始まる行にするので、それより前の出来事・話には効かない
+    update_notes = [f"{by_id[row.character_id].name}: {row.kind}+={row.text}"
+                    for row in apply_nuance_changes(s, draft.nuance_changes, by_id, time)]
 
     location = s.get_one(Location, location_id)
     location_notes = []

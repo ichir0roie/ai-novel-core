@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from data_access_logic import constants
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, ConflictStatus, Episode, EpisodeCharacter, Event, EventCharacter, Expansion, ExpansionChange, ExpansionConflict,
-    Origin,
+    Character, ConflictStatus, Episode, EpisodeCharacter, Event, EventAction, EventCharacter, Expansion, ExpansionChange,
+    ExpansionConflict, Origin,
 )
 from db.stamp import Stamp
 
@@ -100,11 +100,13 @@ def last_appearance(s: Session, character_id: int) -> Stamp | None:
     """人物が最後に出た時刻。本文のある話に登場していれば、その話の時刻と、それより後に AI が足した当事者の出来事のうち遅い方。
     作者の出来事とプロットだけの話は、先の筋として置かれていることがあるので数えない(数えると、人物がその先へ飛ぶ)。
     登場した話が無ければ、当事者の出来事の一番遅い時刻(作者の出来事は、世界の今より後のものを数えない)。
+    人物モードで動いた一日は、行動の表の時刻でも数える(前の日の出来事を延ばして続けた日は、出来事の始まりが前の日のままなので)。
     世界の今(`world_present`)から `ACT_STALE_DAYS` 日より前に取り残された人物は、その時刻に生きていれば世界の今に寄せる
     (昔の章にだけ出た人物が、過去に戻って動かないように)。"""
     character = common_query.get_row(s, Character, character_id)
     present = world_present(s, character)
     events = select(func.max(Event.time)).where(Event.event_characters.any(EventCharacter.character_id == character_id))
+    acted = _stamp(s.scalar(select(func.max(EventAction.time)).where(EventAction.character_id == character_id)))
     episode = latest_written_episode(s, character_id)
     if episode is None:
         last = _stamp(s.scalar(
@@ -112,6 +114,8 @@ def last_appearance(s: Session, character_id: int) -> Stamp | None:
     else:
         since = episode_time(episode)
         last = _stamp(s.scalar(events.where(Event.origin == Origin.AI, Event.time > since))) or since
+        acted = acted if acted is not None and acted > since else None
+    last = max(filter(None, (last, acted)), default=None)
     stale = present is not None and (last is None or last.plus_days(constants.ACT_STALE_DAYS) < present)
     if stale and (character.end is None or character.end > present):
         return present

@@ -6,7 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from data_access_logic.entrypoint import CommitEntrypoint, record_of
-from data_access_logic.episode import brief, outcomes
+from data_access_logic.episode import brief, episode_memory, outcomes
+from data_access_logic.episode import summary as episode_summary
 from data_access_logic.episode.outcomes import AppliedOutcomes, OutcomesForm, ReflectMaterial
 from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm, set_characters
 from data_access_logic.episode.mentions import save_mentions
@@ -14,6 +15,7 @@ from data_access_logic.episode.models import EpisodeBrief
 from data_access_logic.episode.record import EpisodeRecord
 from data_access_logic.idea.models import IdeaDraft
 from data_access_logic.step import RowId, db_step
+from data_access_logic.summary_targets import SummaryTargets
 from data_access_logic.query import common_query
 from db.schema import Character, Episode, Location, Story
 
@@ -81,3 +83,30 @@ def reflect_material(s: Session, form: RowId) -> ReflectMaterial | None:
 def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
     return outcomes.apply_outcomes(s, form)
 
+
+
+class EpisodeSummaryScope(BaseModel):
+    # 省けばすべての話
+    episode_ids: list[int] | None = None
+
+
+class EpisodeSummaryForm(BaseModel):
+    episode_id: int
+    source_hash: str
+    text: str
+
+
+@db_step
+def stale_summary_sources(s: Session, form: EpisodeSummaryScope) -> list[episode_summary.EpisodeSummarySource]:
+    return episode_summary.stale_sources(s, form.episode_ids)
+
+
+@db_step
+def write_summary(s: Session, form: EpisodeSummaryForm) -> None:
+    episode_summary.write_summary(s, form.episode_id, form.source_hash, form.text)
+
+
+@db_step
+def cast_episode_targets(s: Session, form: RowId) -> SummaryTargets:
+    """話の登場人物の人物役が「居合わせた話」として読む、前の話(要約を揃えておく話)。"""
+    return SummaryTargets(episode_ids=episode_memory.cast_past_episode_ids(s, form.id))

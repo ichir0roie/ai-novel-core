@@ -11,13 +11,13 @@ from collections.abc import Iterable, Sequence
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from ai.instructions.naming import fill_name_placeholder
 from data_access_logic import constants
 from data_access_logic.character.cast import age_at
-from data_access_logic.character.histories import add_history
 from data_access_logic.character.knowledge import _related_ids, appearance_of, known_characters_of, knowledge_of
+from data_access_logic.character.models import NuanceLine
 from data_access_logic.character.motivations import apply_changes, motivations_at
 from data_access_logic.character.moves import allowed_moves, move_destinations, update_locations
+from data_access_logic.character.nuances import apply_nuance_changes, nuances_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character.record import CharacterMotivationRecord, MotivationChange
 from data_access_logic.entrypoint import record_of
@@ -27,8 +27,8 @@ from data_access_logic.event.summary import events_of
 from data_access_logic.expansion import budget, needs
 from data_access_logic.query.period import dated_alive_at
 from data_access_logic.expansion.act_models import (
-    ActFailure, ActionsForm, ArcEvent, AuthorPlan, CharacterDayForm, DayBrief, DayBriefForm, DayCharacter, DayForm,
-    DayMaterial, DayMaterialForm, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, KnownPeople,
+    ActFailure, ActionsForm, ArcEvent, AuthorPlan, CharacterDayForm, ContinuingEvent, DayBrief, DayBriefForm, DayCharacter, DayForm,
+    DayMaterial, DayMaterialForm, DayOutcomeDraft, DayPlace, DayPlan, DaySaved, DaySaveForm, DaySerialized, FixedSlot, KnownPeople,
     KnownPeopleForm, MotivationLine,
     Motives, NarratedEpisode, NeedMotivationForm, NeedProfile, Needs, NewCharacterLink, ParentArc, ParticipantMotivations,
     PeopleForm, PlacePeople, PresentPerson,
@@ -91,7 +91,7 @@ def _hour_seconds() -> int:
     return 3600 if calendar is None else calendar.hour_seconds
 
 
-def _area_of(s: Session, location: Location) -> Location | None:
+def area_of(s: Session, location: Location) -> Location | None:
     """詳細の場所の、一番近い詳細でない上の場所。詳細の場所でなければ None。"""
     if not location.map_detail:
         return None
@@ -108,7 +108,7 @@ def _area_of(s: Session, location: Location) -> Location | None:
     return current
 
 
-def _places_of(s: Session, area: Location, time: Stamp) -> list[DayPlace]:
+def places_of(s: Session, area: Location, time: Stamp) -> list[DayPlace]:
     """エリアから詳細の場所だけをたどって届く、その時刻にある場所(段の浅い順、同じ段は id の順)。"""
     places: list[DayPlace] = []
     names = {area.id: area.name}
@@ -267,7 +267,7 @@ def _day_character(s: Session, character: Character, hours: list[Stamp], day_end
     if location_id is None:
         raise ValueError(f"{label}の {day_start} の居場所が分からない")
     location = s.get_one(Location, location_id)
-    area = _area_of(s, location)
+    area = area_of(s, location)
     if area is None:
         raise ValueError(f"{label}のいる「{location.name}」(id={location.id})は詳細の場所でないので、一日を動かせない。"
                          "詳細マップに場所を足し、人物の居場所をそこへ移す")
@@ -308,7 +308,7 @@ def plan_day(s: Session, form: DayForm) -> DayPlan:
             continue
         plan.characters.append(day_character)
         if day_character.area_id not in plan.places:
-            plan.places[day_character.area_id] = _places_of(s, s.get_one(Location, day_character.area_id), day_start)
+            plan.places[day_character.area_id] = places_of(s, s.get_one(Location, day_character.area_id), day_start)
     return plan
 
 
@@ -565,13 +565,26 @@ def day_material(s: Session, form: DayMaterialForm) -> DayMaterial:
         motivations=[ParticipantMotivations(
             character_id=person.id, name=person.name,
             motivations=[MotivationLine.model_validate(row) for row in motivations_at(s, person.id, form.date)],
+            nuances=[NuanceLine.model_validate(row) for row in nuances_at(s, person.id, form.date)],
             relations=[] if person is actor else _relation_names(s, actor.id, person.id, form.date))
             for person in people],
         destinations=move_destinations(s, form.home_id, form.date),
         plan=AuthorPlan(parent=None if form.parent_event_id is None else parent_arc(s, form.parent_event_id, form.date),
                         episodes=related_episodes(s, people, form.date)),
         recent_names=[event.name for event in s.scalars(common_query.events_of_character_select(
-            actor.id, until=form.date, limit=constants.ACT_RECENT_EVENT_NAMES)).all() if event.name])
+            actor.id, until=form.date, limit=constants.ACT_RECENT_EVENT_NAMES)).all() if event.name],
+        continuing=continuing_events(s, actor.id, form.date, form.parent_event_id))
+
+
+def continuing_events(s: Session, actor_id: int, date: Stamp, parent_event_id: int | None) -> list[ContinuingEvent]:
+    """動いた人物が当事者の、`date` より前に始まって `date` まで続いている AI の出来事(同じ親の出来事の子だけ。新しい順)。"""
+    rows = s.scalars(
+        select(Event).join(EventCharacter, EventCharacter.event_id == Event.id)
+        .where(EventCharacter.character_id == actor_id, Event.origin == Origin.AI.value, Event.time < date,
+               Event.end >= date,
+               Event.parent_event_id.is_(None) if parent_event_id is None else Event.parent_event_id == parent_event_id)
+        .order_by(Event.time.desc(), Event.id.desc()).limit(constants.ACT_CONTINUING_EVENT_LIMIT)).all()
+    return [ContinuingEvent(id=row.id, name=row.name, time=row.time, end=row.end, text=row.text) for row in rows]
 
 
 def _relation_names(s: Session, actor_id: int, other_id: int, time: Stamp) -> list[str]:
@@ -605,7 +618,8 @@ def _add_ideas(s: Session, form: DaySaveForm, participant_ids: set[int]) -> list
 
 
 def save_day(s: Session, form: DaySaveForm) -> DaySaved:
-    """記録した一日を、出来事一件と、当事者の来歴・事柄の呼び名・住まいの移動・思いの増減として足す。"""
+    """記録した一日を、出来事一件と、当事者の癖と思い込み・事柄の呼び名・住まいの移動・思いの増減として足す。
+    その日にしたことは出来事にだけ残し、来歴には足さない(毎日の行が来歴に積もると、人物役の材料が同じような行で埋まる)。"""
     participant_ids = [form.actor_id, *(id_ for id_ in form.participant_ids if id_ != form.actor_id)]
     by_id = {id_: s.get_one(Character, id_) for id_ in participant_ids}
     outcome = form.outcome
@@ -614,14 +628,13 @@ def save_day(s: Session, form: DaySaveForm) -> DaySaved:
     involved_ids = [form.actor_id, *(id_ for id_ in dict.fromkeys(outcome.character_ids)
                                      if id_ in by_id and id_ != form.actor_id)]
     involved_ids += [move.character_id for move in moves if move.character_id not in involved_ids]
-    record = Event(name=outcome.event_name, text=outcome.event_text, time=form.time, end=form.end,
-                   location_id=form.location_id, parent_event_id=form.parent_event_id,
-                   event_characters=[EventCharacter(character_id=id_) for id_ in involved_ids])
-    s.add(record)
-    for update in outcome.character_updates:
-        character = by_id.get(update.character_id)
-        if character is not None and update.text:
-            add_history(character, form.time, fill_name_placeholder(update.text, character.name or ""))
+    record = _continued(s, outcome, involved_ids, form.end) if outcome.continues_event_id is not None else None
+    if record is None:
+        record = Event(name=outcome.event_name, text=outcome.event_text, time=form.time, end=form.end,
+                       location_id=form.location_id, parent_event_id=form.parent_event_id,
+                       event_characters=[EventCharacter(character_id=id_) for id_ in involved_ids])
+        s.add(record)
+    apply_nuance_changes(s, outcome.nuance_changes, by_id, form.time)
     s.flush()
     idea_ids = _add_ideas(s, form, set(participant_ids))
     if moves:
@@ -630,6 +643,20 @@ def save_day(s: Session, form: DaySaveForm) -> DaySaved:
     return DaySaved(event=record_of(s, EventRecord, record), idea_ids=idea_ids, moves=moves,
                     motivations=[CharacterMotivationRecord.model_validate(row) for row in motivations],
                     newcomer_location_id=_newcomer_location_id(s, form.location_id, by_id.values(), form.time))
+
+
+def _continued(s: Session, outcome: DayOutcomeDraft, involved_ids: list[int], end: Stamp) -> Event | None:
+    """その日を、続いている出来事の延長として書く。終わりをその日の終わりまで延ばし、本文を記録の段が整えた全文にし、
+    その日に関わった人物を当事者に足す。流れが `continuing_events` の候補で確かめてから渡す。"""
+    record = s.get(Event, outcome.continues_event_id)
+    if record is None or record.end is None or end <= record.end:
+        logger.warning(f"続ける出来事 id={outcome.continues_event_id} を延ばせないので、新しい出来事にする")
+        return None
+    record.end = end
+    record.text = outcome.event_text
+    linked = set(s.scalars(select(EventCharacter.character_id).where(EventCharacter.event_id == record.id)).all())
+    s.add_all(EventCharacter(event_id=record.id, character_id=id_) for id_ in involved_ids if id_ not in linked)
+    return record
 
 
 def _newcomer_location_id(s: Session, location_id: int, people: Iterable[Character], time: Stamp) -> int:

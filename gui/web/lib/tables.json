@@ -716,7 +716,7 @@
               "references": null,
               "readonly": false,
               "create_only": false,
-              "comment": "口調"
+              "comment": "口調。話し方の表面だけ(語尾・言葉づかいの硬さ・人の呼び方・言い回しの癖)。何を言うか・場面でどう振る舞うかは書かない(性格・癖・思い込みから出る)。例は語尾・言い回しの断片だけにし、中身を持つ一文を書かない"
             },
             {
               "key": "dialect",
@@ -984,6 +984,69 @@
               "readonly": false,
               "create_only": false,
               "comment": "想像力"
+            },
+            {
+              "key": "self_control",
+              "type": "string",
+              "nullable": true,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": [
+                "無",
+                "低",
+                "並",
+                "高",
+                "必"
+              ],
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "自制心。目先の欲・衝動を抑え、決めたことを続けられるか"
+            },
+            {
+              "key": "attachment_anxiety",
+              "type": "string",
+              "nullable": true,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": [
+                "無",
+                "低",
+                "並",
+                "高",
+                "必"
+              ],
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "見捨てられ不安。近しい相手が離れていくことを恐れ、気持ちを確かめたがるか"
+            },
+            {
+              "key": "intimacy_avoidance",
+              "type": "string",
+              "nullable": true,
+              "required": false,
+              "section": false,
+              "markdown": true,
+              "side": false,
+              "choices": [
+                "無",
+                "低",
+                "並",
+                "高",
+                "必"
+              ],
+              "default": null,
+              "references": null,
+              "readonly": false,
+              "create_only": false,
+              "comment": "親密さの回避。人に頼らず、近づかれると距離を取るか"
             },
             {
               "key": "influence",

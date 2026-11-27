@@ -1,4 +1,4 @@
-"""材料に要約で渡す出来事。AI に渡す前に、要約を本文に揃えておく。
+"""材料に要約で渡す出来事と話。AI に渡す前に、要約を本文に揃えておく。
 
 材料を組む関数(`*_material`)は要約をそのまま読むだけで作り直さないので、先に `*_targets` で対象を引いて揃える。
 揃えるのは流れ(`data_access_logic/flows/summary.py`)
@@ -9,3 +9,5 @@ from data_access_logic.material import Material
 
 class SummaryTargets(Material):
     event_ids: list[int] = []
+    # 本文の要約(`episode_summary`)を揃える話
+    episode_ids: list[int] = []

@@ -8,7 +8,7 @@ from data_access_logic.character.record import (
 )
 from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Draft, Form, References, Timestamp
-from db.schema import CHARACTER_KIND_PERSON, PersonalityLevel
+from db.schema import CHARACTER_KIND_PERSON, NuanceKind, PersonalityLevel
 
 
 class CharacterParameterForm(Draft):
@@ -35,6 +35,9 @@ class CharacterParameterForm(Draft):
     flexibility_of_values: PersonalityLevel | None = None
     sensitivity: PersonalityLevel | None = None
     imagination: PersonalityLevel | None = None
+    self_control: PersonalityLevel | None = None
+    attachment_anxiety: PersonalityLevel | None = None
+    intimacy_avoidance: PersonalityLevel | None = None
     influence: PersonalityLevel | None = None
     appetite: PersonalityLevel | None = None
     sleep_drive: PersonalityLevel | None = None
@@ -197,6 +200,39 @@ class CharacterMotivationUpdateForm(Form):
     text: str | None = Field(default=None, min_length=1)
 
     @field_validator("character_id", "start", "strength", "text")
+    @classmethod
+    def _not_cleared(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("空にできない")
+        return value
+
+
+class CharacterNuanceCreateForm(Form):
+    character_id: int
+    # 「癖」(場面と振る舞いの組)か「思い込み」
+    kind: NuanceKind = NuanceKind.HABIT
+    # 癖の出る場面。思い込みは空
+    situation: str | None = Field(default=None, min_length=1)
+    # 癖の出る相手。空なら相手を限らない
+    target_character_id: Annotated[int | None, References("character")] = None
+    # 癖ならその場面でする振る舞い、思い込みならその中身
+    text: str = Field(min_length=1)
+    # 効き始める時刻。空なら初めから
+    start: Timestamp | None = None
+    # 効き終わる時刻。空ならまだ続く
+    end: Timestamp | None = None
+
+
+class CharacterNuanceUpdateForm(Form):
+    id: int
+    kind: NuanceKind | None = None
+    situation: str | None = Field(default=None, min_length=1)
+    target_character_id: Annotated[int | None, References("character")] = None
+    text: str | None = Field(default=None, min_length=1)
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+
+    @field_validator("kind", "text")
     @classmethod
     def _not_cleared(cls, value: Any) -> Any:
         if value is None:

@@ -27,6 +27,11 @@
 - 本人のモチベーション(`character_motivation`)は、その時刻に効いている行と、もう終わった行を合わせて強い順に
   `constants.KNOWLEDGE_MOTIVATION_LIMIT` 件まで渡し、終わった行は昔のモチベーションに分ける。強さが変わっただけで終えた行は、
   同じ中身の効いている行があるので昔に入れない。本人の内心なので、知っている人物には渡さない。人物モードは別に渡す。
+- 本人が登場人物だった前の話(演じている話は除く)は、その時刻より前に始まったものを新しいほうから
+  `constants.KNOWLEDGE_EPISODE_LIMIT` 件、古い順に、話の要約(`episode_summary`)で渡す。話の中でしたことの流れは来歴に
+  積まず、この要約で覚える。要約は場面ごとに居合わせた人物を書いてあり、人物役は自分のいた場面だけを覚えているものとして読む。
+- 本人の癖(場面と振る舞いの組)と思い込み(`character_nuance`)は、その時刻に効いている行を本人にだけ渡す。性格の段階より
+  細かい振る舞いの決まりで、本人が自覚していなくても演じる側は知る。
 """
 from __future__ import annotations
 
@@ -41,9 +46,13 @@ from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 from data_access_logic import constants
 from data_access_logic.character import skills
 from data_access_logic.character.cast import age_at, relations_at
-from data_access_logic.character.models import CharacterParameterValues, CharacterRelationLine, personality_for_prompt
+from data_access_logic.character.models import (
+    CharacterParameterValues, CharacterRelationLine, NuanceLine, personality_for_prompt,
+)
+from data_access_logic.character.nuances import nuances_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.character.time_sense import TimeSense
+from data_access_logic.episode.episode_memory import past_episodes_select
 from data_access_logic.history_start import by_start
 from data_access_logic.idea.models import normalized
 from data_access_logic.material import Material, Timestamp
@@ -51,7 +60,7 @@ from data_access_logic.query import common_query
 from data_access_logic.query.period import dated_alive_at
 from db.schema import (
     Character, CharacterHistory, CharacterMotivation, CharacterRelation, CharacterSkillHistory, CharacterSpeech, Episode,
-    Event, IdeaHistory, IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower,
+    Event, IdeaHistory, IdeaHistoryKnower, KnowerMixin, LocationHistory, LocationHistoryKnower, NuanceKind,
 )
 from db.stamp import Calendar, Stamp, active_calendar
 
@@ -201,6 +210,8 @@ class KnownSelf(Material):
     principle: str | None = None
     histories: list[KnownHistory]
     skills: list[KnownSkill]
+    # その時刻に効いている癖と思い込み(癖 → 思い込み、始まりの古い順)
+    nuances: list[NuanceLine] = []
 
 
 class KnownCharacter(Material):
@@ -238,6 +249,22 @@ class KnownEvent(Material):
     # 新しい出来事だけ本文、それより前は要約(要約がまだ無ければ空)
     text: str | None = None
     summary: str | None = None
+
+
+class EpisodeSummaryText(Material):
+    text: str
+
+
+class EpisodeLocationName(Material):
+    name: str | None = None
+
+
+class KnownEpisode(Material):
+    title: str
+    start: Timestamp
+    location: EpisodeLocationName | None = None
+    # 要約がまだ作られていなければ空(題と時期だけを覚えている)
+    summary: EpisodeSummaryText | None = None
 
 
 class KnownMotivation(Material):
@@ -309,6 +336,8 @@ class KnowledgeSerialized(Material):
     speeches: list[KnownSpeech] | None = None
     # 本人が居合わせた出来事(古い順)。人物モード(`expansion/acting.py`)は出来事を別に渡すので None にして、見出しごと出さない
     events: list[KnownEvent] | None = None
+    # 本人が登場人物だった前の話(古い順)。出来事と同じく、人物モードは None にして見出しごと出さない
+    episodes: list[KnownEpisode] | None = None
     # 本人のモチベーション(強い順。終わった行は `end` を持つ)。人物モードは別に渡すので None にして、見出しごと出さない
     motivations: list[KnownMotivation] | None = None
     # 今の時刻(「いま」)を出すか。人物モードは自分の材料の頭に出すので外す
@@ -321,6 +350,12 @@ class KnowledgeSerialized(Material):
         me, parameters, now, sense = self.me, self.parameters, self.time, TimeSense(self.calendar)
         events = {} if self.events is None else {
             "居合わせた出来事(古い順)": _events_for_prompt(self.events, sense, now)}
+        episodes = {} if self.episodes is None else {
+            "居合わせた話(古い順)": [
+                {"いつ": sense.ago(episode.start, now), "題": episode.title,
+                 "場所": episode.location.name if episode.location is not None else None,
+                 "要約": episode.summary.text if episode.summary is not None else None}
+                for episode in self.episodes]}
         motivations = {} if self.motivations is None else _motivations_for_prompt(self.motivations, sense, now)
         return {
             **({"いま": sense.now_for_prompt(now)} if self.with_now else {}),
@@ -329,9 +364,15 @@ class KnowledgeSerialized(Material):
                 "一人称": parameters.first_person, "二人称": parameters.second_person, "三人称": parameters.third_person,
                 "口調": parameters.tone, "方言": parameters.dialect, "人物像": me.text, "ミーム": me.meme,
                 "行動原理": me.principle, "性格": personality_for_prompt(parameters),
+                "癖(場面ごとの振る舞い)": [
+                    {**({"相手": nuance.target.name} if nuance.target is not None else {}),
+                     "場面": nuance.situation, "振る舞い": nuance.text}
+                    for nuance in me.nuances if nuance.kind == NuanceKind.HABIT],
+                "思い込み": [nuance.text for nuance in me.nuances if nuance.kind == NuanceKind.BELIEF],
                 "来歴(古い順)": _histories_for_prompt(me.histories, sense, now),
                 "スキル": _skills_for_prompt(me.skills, sense, now),
                 **({} if self.speeches is None else {"言ったセリフ(古い順)": _speeches_for_prompt(self.speeches, sense, now)}),
+                **episodes,
                 **events,
                 **motivations,
             },
@@ -488,6 +529,13 @@ def _events(s: Session, character_id: int, time: Stamp) -> list[KnownEvent]:
             for index, row in reversed(list(enumerate(rows)))]
 
 
+def _episodes(s: Session, character_id: int, time: Stamp, acting_episode_id: int | None) -> list[KnownEpisode]:
+    rows = s.scalars(past_episodes_select(character_id, time, acting_episode_id)
+                     .options(selectinload(Episode.summary), selectinload(Episode.location))
+                     .execution_options(populate_existing=True)).all()
+    return [KnownEpisode.model_validate(row) for row in reversed(rows)]
+
+
 def _motivations(s: Session, character_id: int, time: Stamp) -> list[KnownMotivation]:
     """`time` までに生まれた本人の行。強い順に、効いている行と終わった行を合わせて決まった件数まで。
     終わった行は、同じ中身の効いている行(強さが変わっただけ)か、もっと強い同じ中身の終わった行があれば外す。"""
@@ -529,7 +577,8 @@ def knowledge_of(
         time=time,
         me=KnownSelf(name=character.name, looks=appearance_of(s, character, time),
                      text=character.text, meme=character.meme, principle=character.principle,
-                     histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer)),
+                     histories=known_histories(character.histories, viewer), skills=_skills(s, character, viewer),
+                     nuances=nuances_at(s, character_id, time)),
         parameters=parameters_at(character, time),
         relations=relations_at(s, [character], time, dated_alive_at),
         characters=_known_characters(s, viewer, other_ids, time),
@@ -537,6 +586,7 @@ def knowledge_of(
         places=_places(s, viewer),
         speeches=_speeches(s, character_id, time, acting_episode_id) if with_speeches else None,
         events=_events(s, character_id, time) if with_events else None,
+        episodes=_episodes(s, character_id, time, acting_episode_id) if with_events else None,
         motivations=_motivations(s, character_id, time) if with_motivations else None,
         with_now=with_now,
     )

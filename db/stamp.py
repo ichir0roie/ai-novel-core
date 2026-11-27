@@ -441,6 +441,10 @@ class Stamp:
         """`days` 日後。月末・閏年をまたいで数え、時・分・秒はそのまま。暦に依らず西暦の日で数える。"""
         return Stamp._of_western(_western_plus_days(self._western, days))
 
+    def plus_seconds(self, seconds: int) -> "Stamp":
+        """`seconds` 秒後。暦に依らない時刻の隔たりで数える。"""
+        return Stamp._of_western(_western_digits(_western_seconds(self._western) + seconds))
+
     def seconds_until(self, other: "Stamp") -> int:
         """`other` までの秒。`other` が前なら負。暦に依らない時刻の隔たり。"""
         return _western_seconds(other._western) - _western_seconds(self._western)

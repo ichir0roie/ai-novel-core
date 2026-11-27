@@ -212,6 +212,9 @@ class PersonalityDraft(BaseModel):
     flexibility_of_values: PersonalityLevel = Field(description="価値観の柔軟性")
     sensitivity: PersonalityLevel = Field(description="感受性")
     imagination: PersonalityLevel = Field(description="想像力")
+    self_control: PersonalityLevel = Field(description="自制心")
+    attachment_anxiety: PersonalityLevel = Field(description="見捨てられ不安")
+    intimacy_avoidance: PersonalityLevel = Field(description="親密さの回避")
 
 
 _PERSON_AGE_DESCRIPTION = (
@@ -239,7 +242,8 @@ class PersonContentDraft(BaseModel):
     first_person: str = Field(description="一人称")
     second_person: str = Field(description="二人称。この人物が相手を呼ぶときの言葉")
     third_person: str = Field(description="三人称。この人物が他者に付ける呼び方(敬称)")
-    tone: str = Field(description="口調。1文")
+    tone: str = Field(description="口調。話し方の表面(語尾・言葉づかいの硬さ・人の呼び方・言い回しの癖)だけを1文。"
+                      "何を言うか・場面でどう振る舞うかは書かない")
     dialect: str = Field(description="方言。1〜2文")
     history: list[HistoryItemDraft] = Field(description=_HISTORY_DESCRIPTION)
 

@@ -22,12 +22,15 @@ from data_access_logic.character.commit_character_relation import CommitCharacte
 from data_access_logic.character.commit_character_skill import CommitCharacterSkill
 from data_access_logic.character.motivations import apply_changes
 from data_access_logic.character.form import CharacterRelationCreateForm, CharacterSkillCreateForm
+from data_access_logic.character.models import NuanceLine
 from data_access_logic.character.moves import move_destinations, update_locations
+from data_access_logic.character.nuances import apply_nuance_changes, nuances_at
 from data_access_logic.character.record import (
     CharacterHistoryRow, CharacterMove, CharacterRelationHistoryRow, CharacterSkillHistoryRow, MotivationChange,
 )
 from data_access_logic.episode.material import load_episode
 from data_access_logic.episode.mentions import cast_characters
+from data_access_logic.event.progress_models import NUANCE_CHANGES_NOTE, NuanceChangeDraft
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.child_lists import appended_history
@@ -41,14 +44,24 @@ logger = logging.getLogger(__name__)
 
 WORN_KIND = "装い"
 
-_SYSTEM = """\
+
+def outcome_time(start: Stamp) -> Stamp:
+    """話の差分を書く時刻。話の時刻ちょうどに書くと、その話を演じ直す人物役(話の時刻までの行を読む)に、
+    演じ終えた結果が前もって知っていたこととして混ざるので、話の時刻の直後にする。"""
+    return start.plus_seconds(1)
+
+_SYSTEM = f"""\
 話の本文と登場人物を渡すので、登場人物ごとに、この話の前と後で変わったこと(差分)を返す。
-- 来歴(histories)は、その人物がこの話でしたこと・起きたこと・知ったことを、一つの出来事につき一行で書く。本人だけが知る行になるので、
+- 来歴(histories)は、この話でその人物の何が変わったかだけを、一つの変わり目につき一行で書く。境遇・立場・身の上が変わったこと、
+  初めて知った事実・秘密、忘れられない出来事(誰かを失った・救われた・裏切られた・約束を交わした)。話の中でしたことの流れ
+  (どこへ行った・何を食べた・誰と話した)は書かない(話の要約に残る)。変わったことの無い人物は挙げない。本人だけが知る行になるので、
   ほかの人物の秘密を知ったなら、知った人物の行に「誰の何を知ったか」を書く(秘密を持つ人物の行には書かない)。
 - 知り合った相手(met)は、この話で初めて言葉を交わした・名乗り合った相手だけ。すでにある関係の相手は挙げない。
 - 身に着けた・手にした物(worn)と、外した・手放した・壊れた物(removed)は、人から見て分かる物だけ。removed は「今の装い」にある名前から選ぶ。
 - 住まい・拠点を移したときだけ moved_to に移動先の候補の名前を書く。
-- 人物は登場人物の人物idからだけ選ぶ。変わったことの無い人物は挙げない。"""
+- 人物は登場人物の人物idからだけ選ぶ。変わったことの無い人物は挙げない。
+
+{NUANCE_CHANGES_NOTE}"""
 
 
 class MetCharacter(BaseModel):
@@ -70,11 +83,13 @@ class CharacterOutcome(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     character_id: int = Field(description="人物id")
-    histories: list[str] = Field(default=[], description="この話でしたこと・起きたこと・知ったことの来歴の行。一つの出来事につき一行")
+    histories: list[str] = Field(default=[], description="この話で本人の何が変わったかの来歴の行。一つの変わり目につき一行")
     met: list[MetCharacter] = Field(default=[], description="この話で初めて知り合った相手")
     worn: list[WornItem] = Field(default=[], description="この話で身に着けた・手にした、人から見て分かる物")
     removed: list[str] = Field(default=[], description="この話で外した・手放した・壊れた物の名前(今の装いの名前)")
     moved_to: str | None = Field(default=None, description="住まい・拠点を移した先の場所の名前。移していなければ空")
+    nuance_changes: list[NuanceChangeDraft] = Field(
+        default=[], description="この話で新しく見えた・変わった、この人物の癖と思い込み。character_id はこの人物")
 
 
 class OutcomesDraft(BaseModel):
@@ -111,6 +126,8 @@ class AppliedOutcomes(Material):
     motivations: list[str] = []
     # 「人物: 内容」。終えた行(強さが変わった行も含む)
     ended_motivations: list[str] = []
+    # 「人物: 場面 → 振る舞い」。足した癖・思い込み
+    nuances: list[str] = []
     # 当てられずに入れなかったもの
     skipped: list[str] = []
 
@@ -176,12 +193,12 @@ def _relate(s: Session, character: Character, met: MetCharacter, cast: dict[int,
 
 
 def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
-    """差分を話の時刻で入れる。来歴は本人だけが知る行にし(ほかの人物の秘密を知ったなら、知った人物の行。秘密を持つ人物の行には
+    """差分を話の時刻の直後(`outcome_time`)で入れる。来歴は本人だけが知る行にし(ほかの人物の秘密を知ったなら、知った人物の行。秘密を持つ人物の行には
     触れない)、知り合った相手は本人から相手への向きの関係を足す(すでにあれば足さない)。本文を確定してから呼ぶ。"""
     episode = load_episode(s, form.episode_id)
-    time = episode.start
-    if time is None or not episode.main_text.strip():
+    if episode.start is None or not episode.main_text.strip():
         raise ValueError(f"話 id={episode.id} は時刻か本文が空。本文を確定してから差分を入れる")
+    time = outcome_time(episode.start)
     cast = {character.id: character for character in cast_characters(episode)}
     applied = AppliedOutcomes()
     for outcome in form.outcomes:
@@ -209,6 +226,10 @@ def apply_outcomes(s: Session, form: OutcomesForm) -> AppliedOutcomes:
             else:
                 update_locations(s, [CharacterMove(character_id=character.id, location_id=location_id)], time)
                 applied.moves.append(f"{character.name} → {outcome.moved_to}")
+    changes = [change.model_copy(update={"character_id": outcome.character_id})
+               for outcome in form.outcomes for change in outcome.nuance_changes]
+    applied.nuances = [f"{cast[row.character_id].name}: {row.situation or row.kind} → {row.text}"
+                       for row in apply_nuance_changes(s, changes, cast, time)]
     if form.motivations:
         _motivate(s, form.motivations, cast, time, applied)
     if form.speeches is not None:
@@ -247,6 +268,8 @@ class OutcomeMember(Material):
     name: str | None = None
     # 話の時刻に身に着けている装いの名前
     worn: list[str] = []
+    # 話の時刻に効いている癖と思い込み(同じ中身を書かせず、変わったものを id で指させる)
+    nuances: list[NuanceLine] = []
 
 
 class ReflectMaterial(Material):
@@ -263,7 +286,8 @@ class ReflectMaterialSerialized(ReflectMaterial):
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
-        return {"登場人物": [{"人物id": member.id, "名前": member.name, "今の装い": member.worn} for member in self.cast],
+        return {"登場人物": [{"人物id": member.id, "名前": member.name, "今の装い": member.worn,
+                          "癖と思い込み": [nuance.for_prompt() for nuance in member.nuances]} for member in self.cast],
                 "移動先の候補": self.destinations, "本文": self.main_text}
 
 
@@ -277,7 +301,8 @@ def reflect_material(s: Session, episode_id: int) -> ReflectMaterial | None:
         episode_id=episode.id, main_text=episode.main_text,
         cast=[OutcomeMember(id=character.id, name=character.name,
                             worn=[skill.name for skill in _worn_skills(s, character.id)
-                                  if _active_history(skill, time) is not None])
+                                  if _active_history(skill, time) is not None],
+                            nuances=[NuanceLine.model_validate(row) for row in nuances_at(s, character.id, time)])
               for character in characters],
         destinations=[] if episode.location_id is None else
         [destination.name for destination in move_destinations(s, episode.location_id, time) if destination.name])

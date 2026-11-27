@@ -1,7 +1,7 @@
 """人物のモチベーション(`character_motivation`)を時刻で絞って読み、人物モードの裁いた増減を足す。
 
-増減は行を直さず、足すことと `end` を付けることだけで表す(人物モードの書き手 `ai_append` でも書けるように)。
-強さが変わったら、前の行を変わった時刻で終え、同じ内容で新しい強さの行を足す。
+強さが変わったら、前の行を変わった時刻で終え、同じ内容で新しい強さの行を足す。ただし AI が書いた行が
+`constants.MOTIVATION_MERGE_DAYS` 日のうちにまた変わったら、行を積まずにその行の強さを直す(日ごとの揺れで行が積もらないように)。
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from data_access_logic import constants
 from data_access_logic.character.record import MotivationChange
-from db.schema import CharacterMotivation
+from db.schema import CharacterMotivation, Origin
 from db.stamp import Stamp
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,11 @@ def apply_changes(
             continue
         if previous is not None:
             if change.strength == previous.strength and text == previous.text:
+                continue
+            if (change.strength and text == previous.text and previous.origin == Origin.AI
+                    and previous.start.days_until(time) < constants.MOTIVATION_MERGE_DAYS):
+                previous.strength = change.strength
+                added.append(previous)
                 continue
             previous.end = time
             ended_ids.add(previous.id)

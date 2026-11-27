@@ -7,9 +7,11 @@ from data_access_logic.episode.form import EpisodeCommitForm, EpisodeReviseForm
 from data_access_logic.episode.outcomes import CharacterOutcome, MetCharacter, OutcomesDraft, SessionSpeech, WornItem
 from data_access_logic.episode.read_episodes import ReadEpisodes
 from data_access_logic.episode.reflect_episode import ReflectEpisode
+from data_access_logic.event.progress_models import NuanceChangeDraft
 from data_access_logic.episode.revise_episode import ReviseEpisode
 from db.schema import (
-    CharacterHistory, CharacterLocation, CharacterRelation, CharacterSkill, CharacterSkillHistory, CharacterSpeech,
+    CharacterHistory, CharacterLocation, CharacterNuance, CharacterRelation, CharacterSkill, CharacterSkillHistory,
+    CharacterSpeech,
     Episode, StyleScope, get_env_session, summary_source_hash,
 )
 from tool.test.mock_ai_client import MockAIClient
@@ -58,7 +60,8 @@ def test_read_episodes(shown, world):
 
 def test_apply_outcomes_without_ai(shown, world, mock_ai):
     taro, hanako = world.character_ids
-    time = "1200/04/01 12:00:00"
+    # 差分は話の時刻(12:00:00)の 1 秒後に入る
+    time = "1200/04/01 12:00:01"
     with get_env_session() as s:
         coat = CharacterSkill(character_id=hanako, name="灰色の外套", kind="装い", text="灰色の外套",
                               histories=[CharacterSkillHistory(start="1199/01/01", description="灰色の外套を羽織っている")])
@@ -109,6 +112,22 @@ def test_apply_outcomes_without_ai(shown, world, mock_ai):
         assert {speech.source_hash for speech in speeches} == {summary_source_hash(main_text)}
 
 
+def test_reflect_episode_takes_nuances_from_the_prose(shown, world):
+    taro, hanako = world.character_ids
+    ai = _ReflectingAI([CharacterOutcome(character_id=taro, nuance_changes=[
+        NuanceChangeDraft(character_id=0, kind="癖", situation="待たされたとき", target_character_id=hanako,
+                          text="口をとがらせて拗ねてみせる")])])
+
+    result = shown(ReflectEpisode(episode_id=world.episode_id, ai=ai))
+
+    assert result["nuances"] == ["テスト太郎: 待たされたとき → 口をとがらせて拗ねてみせる"]
+    # 材料に今ある癖を渡す(同じ中身を書かせない)
+    assert "癖と思い込み" in ai.calls[0]["prompt"]
+    with get_env_session() as s:
+        row = s.scalars(select(CharacterNuance).where(CharacterNuance.character_id == taro)).one()
+        assert (row.target_character_id, str(row.start)) == (hanako, "1200/04/01 12:00:01")
+
+
 def test_reflect_episode_drafts_outcomes_once(shown, world):
     taro, _ = world.character_ids
     ai = _ReflectingAI([CharacterOutcome(character_id=taro, histories=["市で花子と再会した"])])
@@ -118,9 +137,9 @@ def test_reflect_episode_drafts_outcomes_once(shown, world):
     assert result["histories"] == 1
     reflect_calls = [call for call in ai.calls if "今の装い" in call["prompt"]]
     assert len(reflect_calls) == 1 and "市で二人が出会った。" in reflect_calls[0]["prompt"]
-    # 本文からセリフを拾わない(AI は差分の一度だけ)
+    # 本文からセリフを拾わない(AI は差分の一度と、人物役が「居合わせた話」で読む話の要約の一度だけ)
     assert result["speeches"] == 0
-    assert len(ai.calls) == 1
+    assert len(ai.calls) == 2 and ai.calls[1]["schema"]["title"] == "EventSummaryDraft"
 
 
 def test_revise_episode(shown, world, mock_ai):

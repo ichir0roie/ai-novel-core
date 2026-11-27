@@ -171,6 +171,9 @@ class CharacterParameterFactory(_ModelFactory):
     flexibility_of_values = _personality()
     sensitivity = _personality()
     imagination = _personality()
+    self_control = _personality()
+    attachment_anxiety = _personality()
+    intimacy_avoidance = _personality()
     influence = _personality()
 
 

@@ -70,9 +70,9 @@ def test_refresh_generated_content(shown, world, mock_ai):
     result = shown(RefreshGeneratedContent())
 
     # ミームの分類・アンチミームは、いまは回さない
-    assert set(result) == {"events_summarized"}
-    # fixture で足した出来事は要約が無いので、ここで作る
-    assert result["events_summarized"] >= 2
+    assert set(result) == {"events_summarized", "episodes_summarized"}
+    # fixture で足した出来事・話は要約が無いので、ここで作る
+    assert result["events_summarized"] >= 2 and result["episodes_summarized"] >= 1
     assert mock_ai.calls
 
 

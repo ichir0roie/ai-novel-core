@@ -7,7 +7,7 @@ GUI の追加・修正は確定だけして AI の段を回さないので、そ
 
 | 回すもの | 入口 | 引数 |
 | --- | --- | --- |
-| 古い要約(いつも) | `meme.refresh_generated_content.RefreshGeneratedContent` | `{}` |
+| 古い要約(いつも。出来事と話の要約) | `meme.refresh_generated_content.RefreshGeneratedContent` | `{}` |
 | 出来事の種の抜き出し(行を指定されたときだけ) | `event_seed.extract_event_seeds.ExtractEventSeeds` | `{"rows": [{"table": "<episode / character / event>", "id": …}, …]}` |
 
 - 出来事の種は、抜き出し済みかの印を持たないので、溜まった行を自分で探して回さない。ユーザが指定した行(「ep79 から」「この人物の筋書きから」など)だけを渡す

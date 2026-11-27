@@ -30,9 +30,12 @@ AI_FORBIDDEN_TABLES = frozenset({
     "story", "episode", "episode_character", "oracle", "style_preference", "narou_part", "personality_level",
 })
 # 守りも記録もしない表(本文から作り直す派生と、展開の記録そのもの)
-UNGUARDED_TABLES = frozenset({"event_summary", "expansion", "expansion_change", "expansion_conflict"})
+UNGUARDED_TABLES = frozenset({"event_summary", "episode_summary", "expansion", "expansion_change", "expansion_conflict"})
 # 人物モードが直してよい列。終わりを付ける(空なら時刻を入れ、入っていればそれより前に早める)ことだけを許す
 APPENDABLE_COLUMN = "end"
+# 人物モードが、自分たち(AI)の書いた行だけを直してよい列。毎日の記録を行として積まずに整理するため、続いている出来事を延ばして
+# 本文を整え(`expansion/acting.py` の `save_day`)、最近 AI が書いた思いの強さを直す(`character/motivations.py`)
+AI_APPEND_EDITABLE = {"event": frozenset({"end", "text"}), "character_motivation": frozenset({"strength"})}
 # このトランザクションで足した行を、セッションの info に持つ鍵
 _INSERTED_KEY = "guard_inserted"
 
@@ -142,6 +145,9 @@ def _after_insert(_mapper, connection, target: Base) -> None:
 
 
 def _check_append(target: Base, changes: dict[str, tuple[Any, Any]]) -> None:
+    editable = AI_APPEND_EDITABLE.get(target.__tablename__, frozenset())
+    if editable and getattr(target, "origin", None) == Origin.AI and set(changes) <= editable:
+        return
     if set(changes) != {APPENDABLE_COLUMN}:
         raise ProtectedRowError(
             f"人物モードは {_label(target)} の {', '.join(sorted(changes))} を直せない(end で終わりを付けることだけ)")

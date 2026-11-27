@@ -7,9 +7,11 @@ from data_access_logic import constants
 from data_access_logic.character import skills
 from data_access_logic.character.histories import histories_at, rows_at
 from data_access_logic.character.models import (
+    NuanceLine,
     CastCandidateSerialized, CastingCandidateSerialized, CastSerialized, CharacterHistoryMaterial, CharacterRelationLine,
     CharacterSecrets, CharacterSkillMaterial, HistoryMaterial, MentionedSerialized, ParticipantSerialized,
 )
+from data_access_logic.character.nuances import nuances_at
 from data_access_logic.character.parameters import parameters_at
 from data_access_logic.event.summary import events_of
 from data_access_logic.history_start import by_start
@@ -64,6 +66,7 @@ def cast_of(s: Session, characters: list[Character], time: Stamp) -> list[CastSe
             parameters=parameters_at(character, time),
             histories=histories_at(character, time),
             recent_events=list(reversed(events_of(s, _recent_events_select(character, time)))),
+            nuances=[NuanceLine.model_validate(row) for row in nuances_at(s, character.id, time)],
         )
         for character in characters
     ]
@@ -107,7 +110,18 @@ def casting_candidate_at(character: Character, time: Stamp) -> CastingCandidateS
     return CastingCandidateSerialized(character=character, age=age_at(character, time))
 
 
+def _participant_events_select(character: Character, time: Stamp) -> Select[Event]:
+    return common_query.events_of_character_select(character.id, until=time, limit=constants.RECENT_EVENT_LIMIT)
+
+
+def participant_event_ids(s: Session, characters: list[Character], time: Stamp) -> list[int]:
+    """`participants_at` が要約で渡す出来事(要約を揃えておく出来事)。"""
+    return [event.id for character in characters
+            for event in s.scalars(_participant_events_select(character, time)).all()]
+
+
 def participants_at(s: Session, characters: list[Character], time: Stamp) -> list[ParticipantSerialized]:
+    """出来事の要約はそのときのまま読む(作り直さない)。癖と思い込みは、記録の段が増減を id で指せるように渡す。"""
     return [
         ParticipantSerialized(
             character=character,
@@ -115,9 +129,8 @@ def participants_at(s: Session, characters: list[Character], time: Stamp) -> lis
             parameters=parameters_at(character, time),
             histories=histories_at(character, time),
             relations=relations_at(s, [character], time),
-            recent_events=s.scalars(
-                common_query.events_of_character_select(character.id, until=time, limit=constants.RECENT_EVENT_LIMIT)
-            ).all(),
+            recent_events=events_of(s, _participant_events_select(character, time)),
+            nuances=[NuanceLine.model_validate(row) for row in nuances_at(s, character.id, time)],
         )
         for character in characters
     ]

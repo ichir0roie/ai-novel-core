@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from ai.instructions.materials import EVENT_PARTICIPANT_NOTE, LATER_EVENTS_NOTE, TIME_NOTE
 from data_access_logic import constants
 from data_access_logic.ai_client import AIClient
-from data_access_logic.character.cast import participants_at
+from data_access_logic.character.cast import participant_event_ids, participants_at
 from data_access_logic.event.summary import events_of
 from data_access_logic.event.writer_models import (
     EventTextDraft, EventTextMaterial, EventTextMaterialSerialized, TextlessEvent,
@@ -74,7 +74,8 @@ def _later_events_select(event: Event) -> Select[Event]:
 
 def text_targets(s: Session, event_id: int) -> SummaryTargets:
     event = _event(s, event_id)
-    return SummaryTargets(event_ids=[later.id for later in s.scalars(_later_events_select(event)).all()])
+    return SummaryTargets(event_ids=[*(later.id for later in s.scalars(_later_events_select(event)).all()),
+                                     *participant_event_ids(s, _characters(event), event.time)])
 
 
 def text_material(s: Session, event_id: int) -> EventTextMaterialSerialized:

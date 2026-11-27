@@ -37,7 +37,7 @@ import { PageTitle } from "@/lib/meta";
 import { inNewTab, openInNewTab, useOpenPage, type OpenModifiers } from "@/lib/openPage";
 import { trackSaving, useSaveShortcut } from "@/lib/saving";
 import { CalendarProvider, convertForWrite, useStoryScope } from "@/lib/scope";
-import { fromDayNumber, formatStamp, shiftDays, type Calendar } from "@/lib/stamp";
+import { dayNumber, fromDayNumber, formatStamp, pad2, parseStamp, shiftDays, type Calendar } from "@/lib/stamp";
 import PageHelp from "@/components/PageHelp";
 import { T } from "@/lib/text";
 import {
@@ -65,6 +65,12 @@ import {
 // 縮尺と詰め方・絞り込みを覚えておく localStorage のキー。話のタイムラインとは別に覚える
 const VIEW_STORAGE_KEY = "overview-view";
 const FILTER_STORAGE_KEY = "overview-filter";
+// フォーカス(人物ごとの列に、出来事の名前・時刻・本文を日ごとに並べる見方)にしているかを覚えておくキー
+const FOCUS_STORAGE_KEY = "overview-focus";
+// フォーカスの縮尺。一日を画面の高さにし、日ごとの欄に本文まで読める高さを取る。戻しても縮尺はこのまま
+const FOCUS_ZOOM = { unit: "day", count: 1 } as const;
+// フォーカスの人物の列の幅(px)
+const FOCUS_LANE_WIDTH = 280;
 // 話の列の筋の幅(px)
 const EPISODE_LANE_WIDTH = 160;
 // 出来事の列の筋の幅と、筋の左右の余白(px)。札は筋の幅から余白を引いた幅で、余白に親子を結ぶ線を通す
@@ -90,6 +96,31 @@ function savedFilter(): Filter {
     return DEFAULT_FILTER;
   }
 }
+
+/** 時刻の日の始まりと次の日の始まり(通算日)。暦の始まりの前後で一日の長さが違うので、通算日の整数を日の境目とみなさない */
+function dayBounds(stamp: string | null | undefined, calendar: Calendar | null): { from: number; to: number } | null {
+  const p = parseStamp(stamp);
+  if (!p) return null;
+  const midnight = formatStamp({ ...p, hour: 0, minute: 0, second: 0 });
+  const next = parseStamp(shiftDays(midnight, 1, calendar));
+  const from = dayNumber({ ...p, hour: 0, minute: 0, second: 0 }, calendar);
+  return { from, to: next ? dayNumber(next, calendar) : from + 1 };
+}
+
+/** フォーカスの欄に出す時刻。同じ日に終わるなら時・分だけ、日をまたぐなら終わりに月/日を添える */
+function clockSpan(start: string, end: string | null): string {
+  const s = parseStamp(start);
+  if (!s) return start;
+  const clock = (p: { hour: number; minute: number }) => `${pad2(p.hour)}:${pad2(p.minute)}`;
+  const e = parseStamp(end);
+  if (!e) return clock(s);
+  const sameDay = e.year === s.year && e.month === s.month && e.day === s.day;
+  return `${clock(s)} – ${sameDay ? "" : `${pad2(e.month)}/${pad2(e.day)} `}${clock(e)}`;
+}
+
+// フォーカスの列。人物の列と、当事者のいない出来事の列(character が null)。cells は日ごとの欄
+type FocusCell = { from: number; to: number; events: OverviewEvent[] };
+type FocusColumn = { character: number | null; label: string; cells: FocusCell[] };
 
 type Placed = { episode: OverviewEpisode; y: number; height: number; lane: number };
 type Packed = { placed: Placed[]; lanes: number };
@@ -263,8 +294,17 @@ export default function OverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   const [filter, setFilter] = useState<Filter>(DEFAULT_FILTER);
+  const [focus, setFocus] = useState(false);
   useEffect(() => {
-    setView(savedView(VIEW_STORAGE_KEY));
+    let focused = false;
+    try {
+      focused = localStorage.getItem(FOCUS_STORAGE_KEY) === "true";
+    } catch {
+      // 読めなければ見取り図で開く
+    }
+    const saved = savedView(VIEW_STORAGE_KEY);
+    setView(focused ? { ...saved, ...FOCUS_ZOOM } : saved);
+    setFocus(focused);
     setFilter(savedFilter());
   }, []);
   const [box, setBox] = useState({ viewport: 0, head: 0 });
@@ -289,7 +329,10 @@ export default function OverviewPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   // 出来事の列の空いた所を押して足す出来事の、押した時刻
-  const [addingEvent, setAddingEvent] = useState<{ start: string } | null>(null);
+  // フォーカスの人物の列で押したなら、その人物を当事者にする
+  const [addingEvent, setAddingEvent] = useState<{ start: string; characters?: { id: number; label: string }[] } | null>(
+    null,
+  );
   const openPage = useOpenPage();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrolledFor = useRef<number | null>(null);
@@ -414,20 +457,53 @@ export default function OverviewPage() {
     const since = dayOf(data.since, scope.calendar);
     const until = dayOf(data.until, scope.calendar);
     if (since !== null && until !== null) all.push(timeSpan(since, until));
-    for (const item of [...episodes, ...events]) {
+    for (const item of [...episodes, ...(focus ? [] : events)]) {
       const start = dayOf(item.start, scope.calendar);
       if (start !== null) all.push(timeSpan(start, dayOf(item.end, scope.calendar)));
     }
+    // フォーカスでは、出来事はその日の欄をまるごと占める(詰めた帯が欄の途中に掛からないように)
+    if (focus)
+      for (const event of events) {
+        const day = dayBounds(event.start, scope.calendar);
+        if (day) all.push(timeSpan(day.from, day.to));
+      }
     return all;
-  }, [data, episodes, events, scope]);
+  }, [data, episodes, events, scope, focus]);
   const scale = useMemo(
     () => scaleOf(spans, null, view, box.viewport, calendar),
     [spans, view, box.viewport, calendar],
   );
   const eventPack = useMemo(
-    () => (scale ? packEvents(events, scale, calendar) : { placed: [], lanes: 1 }),
-    [events, scale, calendar],
+    () => (scale && !focus ? packEvents(events, scale, calendar) : { placed: [], lanes: 1 }),
+    [events, scale, calendar, focus],
   );
+  // フォーカスの列。人物は id の順(読み足しても列が入れ替わらないように)、当事者のいない出来事は右端の列に。
+  // 出来事は始まった日の欄に、時刻の順に並べる
+  const focusColumns = useMemo((): FocusColumn[] => {
+    if (!focus) return [];
+    const byColumn = new Map<number | null, Map<number, FocusCell>>();
+    const sorted = [...events].sort(
+      (a, b) => (dayOf(a.start, calendar) ?? 0) - (dayOf(b.start, calendar) ?? 0) || a.id - b.id,
+    );
+    for (const event of sorted) {
+      const day = dayBounds(event.start, calendar);
+      if (!day) continue;
+      for (const character of event.character_ids.length > 0 ? event.character_ids : [null]) {
+        const cells = byColumn.get(character) ?? new Map<number, FocusCell>();
+        byColumn.set(character, cells);
+        const cell = cells.get(day.from) ?? { ...day, events: [] };
+        cells.set(day.from, cell);
+        cell.events.push(event);
+      }
+    }
+    return [...byColumn.keys()]
+      .sort((a, b) => (a === null ? 1 : b === null ? -1 : a - b))
+      .map((character) => ({
+        character,
+        label: character === null ? T.overview.noCharacters : (names.get(character) ?? `#${character}`),
+        cells: [...byColumn.get(character)!.values()],
+      }));
+  }, [focus, events, calendar, names]);
   const ticks = useMemo(
     () => (scale ? axisTicksOf(scale, spans, view.squeeze, screen, box.viewport, calendar) : []),
     [scale, spans, view.squeeze, screen, box.viewport, calendar],
@@ -441,6 +517,22 @@ export default function OverviewPage() {
     return pack(byTime, scale, calendar);
   }, [scale, episodes, calendar]);
 
+  /**
+   * 見取り図とフォーカスを切り替える。フォーカスに入るときは縮尺を一日に固定し、戻しても一日のまま。
+   * 切り替えると軸が組み直るので、画面の上端にあった日を上端に置き直す
+   */
+  const changeFocus = (next: boolean) => {
+    const element = scrollRef.current;
+    if (element && scale) {
+      const top = scale.fromY(element.scrollTop);
+      keepDay.current = next ? (dayBounds(formatStamp(fromDayNumber(top, calendar)), calendar)?.from ?? top) : top;
+    }
+    setLink(null);
+    hide();
+    setFocus(next);
+    remember(FOCUS_STORAGE_KEY, next);
+    if (next) changeView(FOCUS_ZOOM);
+  };
   // 読み込んだら、章の最初の話が画面の上の方に来るようにスクロールする
   useLayoutEffect(() => {
     const element = scrollRef.current;
@@ -450,12 +542,17 @@ export default function OverviewPage() {
     element.scrollTop = Math.max(0, scale.toY(dayOf(first.start, calendar) ?? 0) - box.viewport / 4);
   }, [data, scale, storyId, box.viewport, calendar]);
 
-  // 読み足して軸が伸びたら、読み足す前に上端にあった時刻を上端に置き直す
+  // 読み足して軸が伸びたら、読み足す前に上端にあった時刻を上端に置き直す。画面の高さが変わって縮尺の px が変わったときも
+  // (見取り図とフォーカスで凡例の行数が変わるときなど)、前の縮尺で上端にあった時刻を上端に置き直す
   const scaleRef = useRef(scale);
   useLayoutEffect(() => {
+    const previous = scaleRef.current;
     scaleRef.current = scale;
     const element = scrollRef.current;
-    if (!element || !scale || keepDay.current === null) return;
+    if (!element || !scale) return;
+    if (keepDay.current === null && previous && previous.pxPerDay !== scale.pxPerDay && previous.height > 0)
+      keepDay.current = previous.fromY(element.scrollTop);
+    if (keepDay.current === null) return;
     element.scrollTop = scale.toY(keepDay.current);
     keepDay.current = null;
   }, [scale]);
@@ -610,6 +707,18 @@ export default function OverviewPage() {
     setMessage(null);
     const day = snapDay(scale.fromY(e.clientY - e.currentTarget.getBoundingClientRect().top), scale.pxPerDay, calendar);
     setAddingEvent({ start: formatStamp(fromDayNumber(day, calendar)) });
+  };
+
+  /** フォーカスの人物の列の空いた所を押したら、その時刻・その人物を当事者にして出来事を足すモーダルを出す */
+  const onFocusTrackClick = (e: MouseEvent<HTMLDivElement>, column: FocusColumn) => {
+    if (!scale) return;
+    hide();
+    setMessage(null);
+    const day = snapDay(scale.fromY(e.clientY - e.currentTarget.getBoundingClientRect().top), scale.pxPerDay, calendar);
+    setAddingEvent({
+      start: formatStamp(fromDayNumber(day, calendar)),
+      characters: column.character === null ? [] : [{ id: column.character, label: column.label }],
+    });
   };
 
   /** 別のページへ移る(Ctrl(⌘)を押しながらなら別タブで開き、書きかけは残る) */
@@ -1261,10 +1370,52 @@ export default function OverviewPage() {
     );
   };
 
+  /** フォーカスの人物の列。日ごとの欄に、その人物の出来事の時刻・名前・本文を並べる。押すと出来事のモーダルを開く */
+  const renderFocusColumn = (column: FocusColumn) => (
+    <div
+      className="timeline-track overview-focus"
+      style={{ width: FOCUS_LANE_WIDTH, height: scale?.height }}
+      onClick={(e) => onFocusTrackClick(e, column)}
+    >
+      {scale &&
+        column.cells.map((cell) => (
+          <div
+            key={cell.from}
+            className="overview-focus-cell"
+            style={{ top: scale.toY(cell.from), height: scale.toY(cell.to) - scale.toY(cell.from) }}
+          >
+            {cell.events.map((event) => (
+              <div
+                key={event.id}
+                className={[
+                  "overview-focus-event",
+                  selected?.id === event.id ? "selected" : "",
+                  pending.events.has(event.id) ? "changed" : "",
+                ].join(" ")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (inNewTab(e)) openInNewTab(`/tables/event/${event.id}`);
+                  else openEvent(event);
+                }}
+              >
+                <div className="overview-focus-meta">
+                  {[clockSpan(event.start, event.end), event.location_name].filter(Boolean).join(" · ")}
+                </div>
+                <div className="overview-focus-name">{event.name}</div>
+                {event.text && <div className="overview-focus-text">{event.text}</div>}
+              </div>
+            ))}
+          </div>
+        ))}
+    </div>
+  );
+
   const columns = [
     "var(--timeline-axis)",
     `${episodePack.lanes * EPISODE_LANE_WIDTH}px`,
-    `${eventPack.lanes * EVENT_LANE_WIDTH}px`,
+    ...(focus
+      ? focusColumns.map(() => `${FOCUS_LANE_WIDTH}px`)
+      : [`${eventPack.lanes * EVENT_LANE_WIDTH}px`]),
   ];
 
   /** 押した出来事のモーダル。ほかのモーダル(話・出来事のタイムライン)と同じく、時刻などを一行ずつ出し、名前と本文を直せる */
@@ -1442,13 +1593,31 @@ export default function OverviewPage() {
             title={T.overview.story}
           />
         </div>
+        <div className="hint timeline-filter" role="group" aria-label={T.overview.mode}>
+          <button type="button" className={focus ? "" : "primary"} aria-pressed={!focus} onClick={() => focus && changeFocus(false)}>
+            {T.overview.title}
+          </button>
+          <button type="button" className={focus ? "primary" : ""} aria-pressed={focus} onClick={() => !focus && changeFocus(true)}>
+            {T.overview.focus}
+          </button>
+        </div>
         <div className="hint timeline-filter">
           {T.timeline.scale}
-          <button type="button" onClick={() => zoomIn && changeView(zoomIn)} disabled={!zoomIn} title={T.timeline.zoomIn}>
+          <button
+            type="button"
+            onClick={() => zoomIn && changeView(zoomIn)}
+            disabled={focus || !zoomIn}
+            title={focus ? T.overview.focusScale : T.timeline.zoomIn}
+          >
             −
           </button>
           <span className="timeline-zoom">{T.timeline.zoom(view)}</span>
-          <button type="button" onClick={() => zoomOut && changeView(zoomOut)} title={T.timeline.zoomOut}>
+          <button
+            type="button"
+            onClick={() => zoomOut && changeView(zoomOut)}
+            disabled={focus}
+            title={focus ? T.overview.focusScale : T.timeline.zoomOut}
+          >
             +
           </button>
         </div>
@@ -1479,7 +1648,7 @@ export default function OverviewPage() {
       {data && (
         <div className="status info overview-status">
           {T.overview.period(data.since, data.until)} · {T.overview.counts(events.length)} ·{" "}
-          {T.overview.legend}
+          {focus ? T.overview.focusLegend : T.overview.legend}
         </div>
       )}
       {error && <div className="status error">{error}</div>}
@@ -1499,7 +1668,15 @@ export default function OverviewPage() {
             <div className="timeline-head" style={{ gridTemplateColumns: columns.join(" ") }}>
               <div className="timeline-corner" />
               <div className="timeline-label">{T.overview.episodes}</div>
-              <div className="timeline-label">{T.overview.events}</div>
+              {focus ? (
+                focusColumns.map((column) => (
+                  <div key={column.character ?? "none"} className="timeline-label" title={column.label}>
+                    {column.label}
+                  </div>
+                ))
+              ) : (
+                <div className="timeline-label">{T.overview.events}</div>
+              )}
             </div>
             <div className="timeline-body">
               <div className="timeline-lines">
@@ -1539,7 +1716,15 @@ export default function OverviewPage() {
                 ))}
               </div>
               <div className="timeline-col">{renderEpisodes()}</div>
-              <div className="timeline-col">{renderEvents()}</div>
+              {focus ? (
+                focusColumns.map((column) => (
+                  <div key={column.character ?? "none"} className="timeline-col">
+                    {renderFocusColumn(column)}
+                  </div>
+                ))
+              ) : (
+                <div className="timeline-col">{renderEvents()}</div>
+              )}
             </div>
           </div>
         </div>
@@ -1596,7 +1781,7 @@ export default function OverviewPage() {
           start={addingEvent.start}
           parent={null}
           location={null}
-          characters={[]}
+          characters={addingEvent.characters ?? []}
           onClose={() => setAddingEvent(null)}
           onAdded={() => {
             if (storyId === null) return;

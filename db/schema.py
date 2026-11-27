@@ -310,6 +310,19 @@ class EventSummary(Base):
     text: Mapped[str] = mapped_column(String, comment="要約", sort_order=120)
 
 
+class EpisodeSummary(Base):
+    """話の本文の要約。居合わせた人物役が、前の話を覚えている形で読む(`data_access_logic/character/knowledge.py`)。
+    話のあとの差分の来歴は、本人が変わったこと(境遇・持ち物・知った秘密)だけにし、話の中でしたことの流れはこの要約で受け継ぐ。"""
+
+    __tablename__ = "episode_summary"
+
+    episode_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("episode.id"), unique=True, index=True, sort_order=100)
+    source_hash: Mapped[str] = mapped_column(
+        String, comment="要約した本文の sha256。本文と食い違ったら作り直す", sort_order=110)
+    text: Mapped[str] = mapped_column(String, comment="要約。場面ごとに、居合わせた人物と、起きたこと・交わした言葉", sort_order=120)
+
+
 class EventSeed(OriginMixin, Base):
     __tablename__ = "event_seed"
 
@@ -420,7 +433,7 @@ _PERSONALITY_LEVEL_LABELS = {id_: label for label, id_ in _PERSONALITY_LEVEL_IDS
 
 
 class PersonalityLevelType(TypeDecorator):
-    """性格12列。db には `personality_level`(無/低/並/高/必の5行だけのマスター)の id で持ち、
+    """性格の列。db には `personality_level`(無/低/並/高/必の5行だけのマスター)の id で持ち、
     Python 側は文字列(無/低/並/高/必)のまま扱えるようにする。
     """
 
@@ -447,7 +460,7 @@ class PersonalityLevelType(TypeDecorator):
 
 
 class PersonalityLevelOption(Base):
-    """`personality_level` マスター。性格12列(誠実性など)から FK で引かれる、無/低/並/高/必の5行だけ。"""
+    """`personality_level` マスター。性格の列(誠実性など)から FK で引かれる、無/低/並/高/必の5行だけ。"""
 
     __tablename__ = "personality_level"
 
@@ -458,6 +471,7 @@ PERSONALITY_COLUMNS = (
     "sincerity", "curiosity", "proactivity", "cooperativeness", "sociability",
     "emotional_expression", "self_esteem", "self_efficacy", "stress_resilience",
     "flexibility_of_values", "sensitivity", "imagination",
+    "self_control", "attachment_anxiety", "intimacy_avoidance",
 )
 
 
@@ -599,7 +613,9 @@ class CharacterParameter(OriginMixin, Base):
     first_person: Mapped[str | None] = mapped_column(String,  comment="一人称", sort_order=350)
     second_person: Mapped[str | None] = mapped_column(String,  comment="二人称", sort_order=360)
     third_person: Mapped[str | None] = mapped_column(String,  comment="三人称", sort_order=370)
-    tone: Mapped[str | None] = mapped_column(String,  comment="口調", sort_order=380)
+    tone: Mapped[str | None] = mapped_column(
+        String, comment="口調。話し方の表面だけ(語尾・言葉づかいの硬さ・人の呼び方・言い回しの癖)。何を言うか・場面でどう振る舞うかは"
+        "書かない(性格・癖・思い込みから出る)。例は語尾・言い回しの断片だけにし、中身を持つ一文を書かない", sort_order=380)
     dialect: Mapped[str | None] = mapped_column(
         String, comment="方言。方言の種類か、標準語で話すならその癖(語尾・言い回し・訛り)", sort_order=385)
 
@@ -628,6 +644,17 @@ class CharacterParameter(OriginMixin, Base):
         PersonalityLevelType, ForeignKey("personality_level.id"), comment="感受性", sort_order=490)
     imagination: Mapped[str | None] = mapped_column(
         PersonalityLevelType, ForeignKey("personality_level.id"), comment="想像力", sort_order=500)
+    # 誠実性(約束・事実を守るか)と分けて、衝動を抑えて決めた手順を続けられるか(ビッグファイブの勤勉性の芯)を持つ
+    self_control: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="自制心。目先の欲・衝動を抑え、決めたことを続けられるか", sort_order=502)
+    # 愛着の二つの軸。近しい相手との距離の取り方を、関係の行ごとでなく本人の傾きとして持つ
+    attachment_anxiety: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="見捨てられ不安。近しい相手が離れていくことを恐れ、気持ちを確かめたがるか", sort_order=504)
+    intimacy_avoidance: Mapped[str | None] = mapped_column(
+        PersonalityLevelType, ForeignKey("personality_level.id"),
+        comment="親密さの回避。人に頼らず、近づかれると距離を取るか", sort_order=506)
     # 性格ではなく立場の重さなので PERSONALITY_COLUMNS に入れない(人物役の「性格」に出さない)
     influence: Mapped[str | None] = mapped_column(
         PersonalityLevelType, ForeignKey("personality_level.id"),
@@ -918,6 +945,56 @@ class CharacterMotivation(OriginMixin, TextBase):
         return self.start <= time and (self.end is None or time < self.end)
 
 
+class NuanceKind(enum.StrEnum):
+    HABIT = "癖"
+    BELIEF = "思い込み"
+
+
+class CharacterNuance(OriginMixin, TextBase):
+    """人物の、場面ごとの決まった振る舞い(癖)と、人や世の中を受け取るときの思い込みを、一つずつ一行で持つ。
+
+    性格の段階(`CharacterParameter`)は大まかな傾きで、同じ段階でも人ごとに出方が違う。「止められると理由を返して押し通す」
+    「礼は面と向かって言えず物を押しつける」のような、場面と振る舞いの組を細かく持つほうが、その人物の手を当てやすい。
+    口調(`CharacterParameter.tone`)は話し方だけにし、振る舞いはここに分けて持つ(口調の行は後の行がまるごと上書きするので、
+    振る舞いを口調に書くと、口調を直すたびに消える)。
+    種別が「癖」の行は `situation`(場面)と `text`(振る舞い)の組、「思い込み」の行は `text` だけ(相手の言動をまずこう受け取る)。
+    癖は相手(`target_character_id`)を持てる。同じ場面でも相手によって振る舞いが違う(幼なじみに待たされたら拗ねてみせるが、
+    目上に待たされたら黙って待つ)ので、その相手との場面でだけ出る癖は相手を付けて持つ。
+    `start` から効き、`end` が空のあいだ効く。変わったら前の行を変わった時刻で終え、変わった後の行を足す。
+    本人の振る舞いの決まりなので、本人の人物役にだけ渡し、ほかの人物には渡さない(本人が自覚していなくても演じる側は知る)。
+    """
+
+    __tablename__ = "character_nuance"
+    __table_args__ = (
+        CheckConstraint("\"end\" IS NULL OR start IS NULL OR start < \"end\"", name="ck_character_nuance_span"),
+        CheckConstraint("kind <> '癖' OR situation IS NOT NULL", name="ck_character_nuance_habit_situation"),
+        CheckConstraint("kind = '癖' OR target_character_id IS NULL", name="ck_character_nuance_belief_target"),
+    )
+
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True, nullable=False, comment="振る舞いの主の人物", sort_order=100)
+    start: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="効き始める時刻。空なら初めから", sort_order=110)
+    end: Mapped[Stamp | None] = mapped_column(
+        StampType, comment="効き終わる時刻(この時刻からは効かない)。空ならまだ続く", sort_order=115)
+    kind: Mapped[str] = mapped_column(
+        String, nullable=False, default=NuanceKind.HABIT.value, server_default=NuanceKind.HABIT.value,
+        comment="種別。「癖」(場面と振る舞いの組)か「思い込み」(人や世の中をまずこう受け取る)", sort_order=120)
+    situation: Mapped[str | None] = mapped_column(
+        String, comment="癖の出る場面(止められたとき・褒められたとき・初対面の相手と など)。思い込みは空", sort_order=130)
+    target_character_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("character.id"), index=True,
+        comment="癖の出る相手。空なら相手を限らない。思い込みは空", sort_order=135)
+    text: Mapped[str] = mapped_column(
+        String, nullable=False, comment="癖なら、その場面でする振る舞い。思い込みなら、その中身", sort_order=10000)
+
+    character: Mapped[Character] = relationship(foreign_keys="CharacterNuance.character_id", lazy="noload")
+    target: Mapped[Character | None] = relationship(foreign_keys="CharacterNuance.target_character_id", lazy="noload")
+
+    def covers(self, time: Stamp) -> bool:
+        return (self.start is None or self.start <= time) and (self.end is None or time < self.end)
+
+
 class Idea(OriginMixin, TextBase):
     __tablename__ = "idea"
 
@@ -1168,6 +1245,7 @@ class Episode(OriginMixin, ContentBase):
 
     episode_characters: Mapped[list["EpisodeCharacter"]] = relationship(
         back_populates="episode", lazy="noload", cascade="all, delete-orphan", order_by="EpisodeCharacter.id")
+    summary: Mapped["EpisodeSummary | None"] = relationship(lazy="noload", viewonly=True)
 
     letters: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, comment="字数。本文から数える", sort_order=290)

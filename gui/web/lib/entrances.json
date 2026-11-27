@@ -151,6 +151,21 @@
       "writes": true
     },
     {
+      "id": "character.commit_character_nuance.CommitCharacterNuance",
+      "area": "character",
+      "name": "CommitCharacterNuance",
+      "doc": "人物に癖(場面と振る舞いの組)か思い込みを一つ足す。本人の人物役が、その時刻に効いている行を読んで演じる。",
+      "params": [
+        {
+          "name": "nuance",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterNuanceCreateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "character.commit_character_relation.CommitCharacterRelation",
       "area": "character",
       "name": "CommitCharacterRelation",
@@ -211,6 +226,21 @@
       "params": [
         {
           "name": "character_motivation_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.delete_character_nuance.DeleteCharacterNuance",
+      "area": "character",
+      "name": "DeleteCharacterNuance",
+      "doc": "癖・思い込みの行を一つ消す。消した行を返す。",
+      "params": [
+        {
+          "name": "character_nuance_id",
           "required": true,
           "default": null,
           "annotation": "int"
@@ -298,6 +328,27 @@
       "area": "character",
       "name": "ListCharacterMotivations",
       "doc": "人物のモチベーション。`time` を渡せばその時刻に効いている行を強い順に、省けばすべての行を始まりの新しい順に返す。",
+      "params": [
+        {
+          "name": "character_id",
+          "required": true,
+          "default": null,
+          "annotation": "int"
+        },
+        {
+          "name": "time",
+          "required": false,
+          "default": null,
+          "annotation": "Stamp | str | None"
+        }
+      ],
+      "writes": false
+    },
+    {
+      "id": "character.list_character_nuances.ListCharacterNuances",
+      "area": "character",
+      "name": "ListCharacterNuances",
+      "doc": "人物の癖と思い込み。`time` を渡せばその時刻に効いている行を、省けばすべての行を、癖 → 思い込みの順に返す。",
       "params": [
         {
           "name": "character_id",
@@ -582,6 +633,21 @@
           "required": true,
           "default": null,
           "annotation": "CharacterMotivationUpdateForm"
+        }
+      ],
+      "writes": true
+    },
+    {
+      "id": "character.update_character_nuance.UpdateCharacterNuance",
+      "area": "character",
+      "name": "UpdateCharacterNuance",
+      "doc": "癖・思い込みの行を一つ直す。渡した欄だけを直す(`situation`・`start`・`end` は null を渡せば空に戻す)。",
+      "params": [
+        {
+          "name": "nuance",
+          "required": true,
+          "default": null,
+          "annotation": "CharacterNuanceUpdateForm"
         }
       ],
       "writes": true

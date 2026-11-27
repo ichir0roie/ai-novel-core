@@ -527,6 +527,11 @@ export const T = {
       `Added the event. It is outside this period (${since} – ${until}), so it is not shown here.`,
     eventsInPeriod: (n: number) => `${n} event${n === 1 ? "" : "s"} in this episode's period`,
     noEventsInPeriod: "(no events in this period with the current filters)",
+    mode: "View",
+    focus: "Focus",
+    focusScale: "The scale stays at 1 day in Focus",
+    focusLegend: "one column per character · one row per day · each event shows its time, place, name and text · click an event to edit it, or an empty spot to add an event with that character",
+    noCharacters: "(no characters)",
   },
 
   episodeSheet: {
@@ -941,6 +946,7 @@ export const T = {
             "Episodes: 話の札。どの作品の話も一つの列に並べ、選んだ章の外の話は灰色で出す。札の高さが期間。",
             "Events: 出来事の札。親から子へ線で結び、子は親の右に置く。重視度(1〜10、既定 5)の大きい出来事ほど左に置く。出来事は章に結ばないので、期間の重なるものをすべて出す。",
             "上の一行の凡例が、この見方の短い版。",
+            "Overview / Focus: 右の出来事の所だけを切り替える。Focus は人物ごとの列・日ごとの行に、出来事の時刻・場所・名前・本文を並べる(当事者のいない出来事は右端の列)。Focus に入ると縮尺を 1 日にし、Overview に戻しても 1 日のまま。",
           ],
         },
         {
@@ -948,7 +954,7 @@ export const T = {
           points: [
             "Origin: 人物モード(AI)が足した出来事だけ、か作者の出来事だけを出す。",
             "Min size: これより小さい人物モードの出来事を隠す。大きさ = 関わった人数 + 移動 + 新しい場所 + 新しい人物 + アイデア。",
-            "Scale と Squeeze empty stretches は Timeline と同じ。",
+            "Scale と Squeeze empty stretches は Timeline と同じ。Focus のあいだは縮尺を 1 日に固定する。",
           ],
         },
         {

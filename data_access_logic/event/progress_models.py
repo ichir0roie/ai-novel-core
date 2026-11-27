@@ -9,11 +9,18 @@ from data_access_logic.event.models import EventBase, EventMaterial, EventSerial
 from data_access_logic.history_start import start_for_prompt
 from data_access_logic.location.models import LocationLine, LocationMaterial
 from data_access_logic.material import Material
+from db.schema import NuanceKind
 from db.stamp import Stamp
 
 # 出力の型の欄の説明(JSON Schema)に入るので、db の指示の行でなくここに置く
 _SHORTEST_DAYS, _LONGEST_DAYS = constants.EVENT_DURATION_RANGE_DAYS
 EVENT_DURATION_INSTRUCTION = f"この出来事の影響が続く日数の整数。{_SHORTEST_DAYS}〜{_LONGEST_DAYS}"
+
+# 出来事の記録と人物モードの一日の記録が、同じ欄(`nuance_changes`)を書く
+NUANCE_CHANGES_NOTE = """\
+nuance_changes は、この記録で新しく見えた、その人物らしい癖(決まった場面でする振る舞い)か思い込み(人や世の中をまずこう受け取る)。
+その日にしたことそのものと、誰でもする当たり前の振る舞いは書かない。「癖と思い込み」に今ある中身なら書かず、変わったならその id を replaces_nuance_id に書く。
+癖は場面を必ず書き、その相手との場面でだけ出るなら相手の人物idを書く。その人物の振る舞いとして主語を書かずに書き、ほかの人物は名前で書く。"""
 
 
 class LocationSituationMaterial(Material):
@@ -113,13 +120,19 @@ class RecordRequestSerialized(RecordRequest):
         }
 
 
-class CharacterUpdateDraft(BaseModel):
+class NuanceChangeDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    character_id: int = Field(description="この出来事を通して人となりについて新しく分かった人物・対象の人物id")
-    text: str = Field(default="", description="この出来事を通して見えた、その人物の人となり")
+    character_id: int = Field(description="癖・思い込みが新しく見えた・変わった人物・対象の人物id")
+    kind: NuanceKind = Field(description="「癖」(決まった場面でする振る舞い)か「思い込み」(人や世の中をまずこう受け取る)")
+    situation: str = Field(default="", description="癖の出る場面。思い込みは空")
+    target_character_id: int | None = Field(
+        default=None, description="癖がその相手との場面でだけ出るなら、相手の人物id。相手を限らない癖と思い込みは null")
+    text: str = Field(description="癖ならその場面でする振る舞い、思い込みならその中身。一文")
+    replaces_nuance_id: int | None = Field(
+        default=None, description="今ある癖・思い込みが変わったなら、その癖・思い込みid。新しく見えたなら null")
 
-    @field_validator("text")
+    @field_validator("situation", "text")
     @classmethod
     def _stripped(cls, value: str) -> str:
         return value.strip()
@@ -142,7 +155,8 @@ class EventRecordDraft(BaseModel):
     event_text: str = Field(description="出来事の内容")
     character_ids: list[int] = Field(description="関わった人物・対象の人物id")
     character_moves: list[CharacterMove] = Field(description="住まい・拠点が変わった人物ごとの移動先。誰も変わっていなければ空")
-    character_updates: list[CharacterUpdateDraft] = Field(description="この出来事を通して人となりについて新しく分かった人物・対象")
+    nuance_changes: list[NuanceChangeDraft] = Field(
+        description="この出来事で新しく見えた・変わった、人物・対象の癖と思い込み。無ければ空")
     location_abolished: bool = Field(description="この出来事でこの場所自体が消滅・放棄されたか")
     location_founded: FoundedLocationDraft | None = Field(description="この出来事でこの場所の配下に生まれた新しい場所")
     event_duration_days: int = Field(ge=_SHORTEST_DAYS, le=_LONGEST_DAYS, description=EVENT_DURATION_INSTRUCTION)

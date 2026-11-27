@@ -6,8 +6,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from data_access_logic.expansion import acting
-from data_access_logic.character.record import CharacterMotivationRecord
+from data_access_logic.expansion import acting, routines
+from data_access_logic.character.record import CharacterMotivationRecord, CharacterRoutineRow
 from data_access_logic.expansion.act_models import (
     ActionsForm, CharacterDayForm, DayBrief, DayBriefForm, DayForm, DayMaterial, DayMaterialForm, DayPlan, DaySaved,
     DaySaveForm, KnownPeople, KnownPeopleForm, MotivesForm, NeedMotivationForm, NewCharacterLink, PeopleForm, PlacePeople,
@@ -30,6 +30,16 @@ class PromptForm(BaseModel):
 @db_step
 def plan_day(s: Session, form: DayForm) -> DayPlan:
     return acting.plan_day(s, form)
+
+
+@db_step
+def routine_targets(s: Session, form: routines.RoutineForm) -> routines.RoutineTargets:
+    return routines.routine_targets(s, form)
+
+
+@db_step
+def add_routines(s: Session, form: routines.RoutineAddForm) -> list[CharacterRoutineRow]:
+    return routines.add_routines(s, form)
 
 
 @db_step

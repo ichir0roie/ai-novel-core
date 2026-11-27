@@ -5,7 +5,7 @@ from pydantic import model_serializer
 from data_access_logic import constants
 from data_access_logic.character.histories import histories_for_prompt
 from data_access_logic.character.record import CharacterHistoryRow, CharacterRelationHistoryRow
-from data_access_logic.event.models import EventBase, EventMaterial, EventSerialized
+from data_access_logic.event.models import EventMaterial, EventSerialized
 from data_access_logic.history_start import start_for_prompt
 from data_access_logic.knowers import KnowerMaterial, secret_for_prompt
 from data_access_logic.material import Material, Timestamp
@@ -56,6 +56,9 @@ class CharacterParameterValues(Material):
     flexibility_of_values: PersonalityLevel = PersonalityLevel.NORMAL
     sensitivity: PersonalityLevel = PersonalityLevel.NORMAL
     imagination: PersonalityLevel = PersonalityLevel.NORMAL
+    self_control: PersonalityLevel = PersonalityLevel.NORMAL
+    attachment_anxiety: PersonalityLevel = PersonalityLevel.NORMAL
+    intimacy_avoidance: PersonalityLevel = PersonalityLevel.NORMAL
     influence: PersonalityLevel = PersonalityLevel.NORMAL
     # 体の欲。どの行でも決めていなければ空で、人物モードが年齢から決める(`expansion/needs.py`)
     appetite: PersonalityLevel | None = None
@@ -76,6 +79,9 @@ PERSONALITY_LABELS = {
     "flexibility_of_values": "価値観の柔軟性",
     "sensitivity": "感受性",
     "imagination": "想像力",
+    "self_control": "自制心",
+    "attachment_anxiety": "見捨てられ不安",
+    "intimacy_avoidance": "親密さの回避",
 }
 
 
@@ -192,11 +198,27 @@ class CastCandidate(CharacterAt):
     character: CharacterMaterial
 
 
+class NuanceLine(Material):
+    """その時刻に効いている癖・思い込みの行。作者の目(出来事・一日を記録する段)に、増減で指せるよう id つきで渡す。"""
+
+    id: int
+    kind: str
+    situation: str | None = None
+    target: RelationParty | None = None
+    text: str
+
+    def for_prompt(self) -> dict[str, Any]:
+        return {"癖・思い込みid": self.id, "種別": self.kind, "場面": self.situation,
+                "相手": self.target.name if self.target is not None else None, "中身": self.text}
+
+
 class ParticipantMaterial(CharacterAt):
     character: CharacterMaterial
     relations: list[CharacterRelationLine]
-    # 新しい順
-    recent_events: list[EventBase]
+    # 新しい順。要約つき
+    recent_events: list[EventMaterial]
+    # その時刻に効いている癖と思い込み
+    nuances: list[NuanceLine] = []
 
 
 def _sheet(character: CharacterWholeBase, at: CharacterAt) -> dict[str, Any]:
@@ -236,11 +258,14 @@ class CastSerialized(CastMaterial):
     """ai プロンプトが理解しやすい形に整形したレスポンスを行う。"""
 
     recent_events: list[EventSerialized]
+    # その時刻に効いている癖と思い込み
+    nuances: list[NuanceLine] = []
 
     @model_serializer
     def _for_prompt(self) -> dict[str, Any]:
         return {
             **_sheet(self.character, self),
+            "癖と思い込み": [nuance.for_prompt() for nuance in self.nuances],
             "直近の出来事(古い順)": [event.model_dump() for event in self.recent_events],
         }
 
@@ -290,5 +315,7 @@ class ParticipantSerialized(ParticipantMaterial):
             **_sheet(self.character, self),
             "性格": personality_for_prompt(self.parameters),
             "関係": relations_for_prompt(self.relations),
-            "直近の出来事(新しい順)": [event.name for event in self.recent_events],
+            "癖と思い込み": [nuance.for_prompt() for nuance in self.nuances],
+            "直近の出来事(新しい順)": [EventSerialized.model_validate(event).model_dump()
+                                   for event in self.recent_events],
         }

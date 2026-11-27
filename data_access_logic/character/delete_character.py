@@ -9,8 +9,8 @@ from data_access_logic.entrypoint import CommitEntrypoint
 from data_access_logic.material import Material
 from data_access_logic.query import common_query
 from db.schema import (
-    Character, CharacterHistoryKnower, CharacterMotivation, CharacterRelation, CharacterSkillHistoryKnower, CharacterSpeech, Episode, EpisodeCharacter,
-    EventCharacter, IdeaHistoryKnower, LocationHistoryKnower,
+    Character, CharacterHistoryKnower, CharacterMotivation, CharacterNuance, CharacterRelation, CharacterSkillHistoryKnower,
+    CharacterSpeech, Episode, EpisodeCharacter, EventCharacter, IdeaHistoryKnower, LocationHistoryKnower,
 )
 
 
@@ -53,6 +53,8 @@ class DeleteCharacter(CommitEntrypoint):
         for skill in skills_of(s, record.id):
             s.delete(skill)
         s.execute(delete(CharacterMotivation).where(CharacterMotivation.character_id == record.id))
+        s.execute(delete(CharacterNuance).where(or_(
+            CharacterNuance.character_id == record.id, CharacterNuance.target_character_id == record.id)))
         s.execute(delete(CharacterRelation).where(or_(
             CharacterRelation.character_1_id == record.id, CharacterRelation.character_2_id == record.id)))
         s.delete(record)

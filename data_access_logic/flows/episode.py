@@ -15,6 +15,7 @@ from data_access_logic.episode import steps as episode_steps
 from data_access_logic.episode.models import EpisodeBriefSerialized
 from data_access_logic.episode.outcomes import AppliedOutcomes
 from data_access_logic.episode_session.store import SessionStore
+from data_access_logic.flows.summary import rewrite_episode_summaries
 from data_access_logic.idea.search import keywords_of
 from data_access_logic.step import RowId
 from db.writer import generated
@@ -31,8 +32,18 @@ def reflect_episode(episode_id: int, ai: AIClient = ai_client) -> AppliedOutcome
     material = call(episode_steps.reflect_material, RowId(id=episode_id))
     if material is None:
         raise ValueError(f"話 id={episode_id} は時刻・本文・登場人物のどれかが空。結んで本文を確定してから反映する")
-    return call(episode_steps.apply_outcomes, outcomes.OutcomesForm(
+    applied = call(episode_steps.apply_outcomes, outcomes.OutcomesForm(
         episode_id=episode_id, outcomes=outcomes.outcomes_draft(ai, material)))
+    rewrite_episode_summaries(ai, [episode_id])
+    return applied
+
+
+def summarize_episodes(episode_id: int | None, ai: AIClient = ai_client) -> int:
+    """`SummarizeEpisodes` に当たる。"""
+    if episode_id is None:
+        return rewrite_episode_summaries(ai, None)
+    targets = call(episode_steps.cast_episode_targets, RowId(id=episode_id))
+    return rewrite_episode_summaries(ai, [episode_id, *targets.episode_ids])
 
 
 @generated()
