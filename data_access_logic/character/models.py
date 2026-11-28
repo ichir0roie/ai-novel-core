@@ -84,6 +84,9 @@ PERSONALITY_LABELS = {
     "intimacy_avoidance": "親密さの回避",
 }
 
+# 段階で持つ軸すべて(性格に、立場の重さと体の欲を足す)。素体を並べる `FindBaseCharacters` が比べる
+LEVEL_AXES = {**PERSONALITY_LABELS, "influence": "影響力", "appetite": "食欲", "sleep_drive": "睡眠欲", "libido": "性欲"}
+
 
 def personality_for_prompt(parameters: CharacterParameterValues) -> dict[str, PersonalityLevel]:
     return {label: getattr(parameters, name) for name, label in PERSONALITY_LABELS.items()}

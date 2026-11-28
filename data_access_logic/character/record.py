@@ -324,3 +324,23 @@ class CharacterSpeechRow(Material):
     verbatim: str
     vivid: str
     vague: str
+
+
+class BaseCharacterMatch(Material):
+    """望む段階に近い素体の人物(`FindBaseCharacters`)。"""
+
+    id: int
+    name: str | None = None
+    family_name: str | None = None
+    sex: str | None = None
+    start: Timestamp | None = None
+    end: Timestamp | None = None
+    text: str | None = None
+    meme: str | None = None
+    principle: str | None = None
+    # 軸の日本語の名 → 段階(決めていない軸は出さない)
+    levels: dict[str, PersonalityLevel]
+    # 望む段階との隔たりの和(段階一つぶんを 1 と数える。0 が全部一致)
+    distance: int
+    # 望む段階と一致した軸の日本語の名
+    matched: list[str]

@@ -30,6 +30,7 @@ DB_ENTRANCES = frozenset({
     "character.commit_character_skill.CommitCharacterSkill",
     "character.create_random_character.CreateRandomCharacter",
     "character.delete_character.DeleteCharacter",
+    "character.find_base_characters.FindBaseCharacters",
     "character.delete_character_motivation.DeleteCharacterMotivation",
     "character.delete_character_nuance.DeleteCharacterNuance",
     "character.delete_character_relation.DeleteCharacterRelation",
