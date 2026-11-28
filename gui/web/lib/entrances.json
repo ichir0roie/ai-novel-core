@@ -1284,6 +1284,27 @@
       "writes": true
     },
     {
+      "id": "expansion.restore_ai_origin.RestoreAiOrigin",
+      "area": "expansion",
+      "name": "RestoreAiOrigin",
+      "doc": "展開が足した行のうち、出自が作者(user)になった行を AI の行(ai)に戻す。",
+      "params": [
+        {
+          "name": "table_name",
+          "required": true,
+          "default": null,
+          "annotation": "str"
+        },
+        {
+          "name": "row_ids",
+          "required": true,
+          "default": null,
+          "annotation": "list[int]"
+        }
+      ],
+      "writes": true
+    },
+    {
       "id": "expansion.revert_expansion.RevertExpansion",
       "area": "expansion",
       "name": "RevertExpansion",

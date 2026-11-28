@@ -479,7 +479,7 @@ export default function TimelinePage() {
   // 縮尺と詰め方は URL に載せず、このブラウザに覚えておく。サーバで描いた初めの画面と合わせるため、読むのは描いたあと
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
-  const span = spanDays(view, calendar);
+  const span = spanDays(view, calendar, box.viewport);
   const zoomIn = zoomed(view, -1);
   const zoomOut = zoomed(view, 1);
 

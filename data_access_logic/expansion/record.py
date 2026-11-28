@@ -63,3 +63,11 @@ class RevertedExpansion(BaseModel):
     id: int
     # 戻した変更の数
     reverted: int
+
+
+class RestoredAiOrigin(BaseModel):
+    table_name: str
+    # 出自を ai に戻した行の id
+    restored: list[int]
+    # 戻さなかった行と、そのわけ
+    skipped: list[str]

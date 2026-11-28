@@ -373,7 +373,7 @@ export default function EventTimelinePage() {
   const { tip, show, hide } = useTooltip();
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   useEffect(() => setView(savedView(VIEW_STORAGE_KEY)), []);
-  const span = spanDays(view, calendar);
+  const span = spanDays(view, calendar, box.viewport);
   const zoomIn = zoomed(view, -1);
   const zoomOut = zoomed(view, 1);
 
