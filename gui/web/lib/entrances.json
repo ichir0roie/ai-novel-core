@@ -324,6 +324,21 @@
       "writes": true
     },
     {
+      "id": "character.find_base_characters.FindBaseCharacters",
+      "area": "character",
+      "name": "FindBaseCharacters",
+      "doc": "作品に置いた人物(実在の人物などの素体)を、望む性格の段階に近い順に並べる。新しい人物を作る前に、",
+      "params": [
+        {
+          "name": "search",
+          "required": true,
+          "default": null,
+          "annotation": "BaseCharacterSearchForm"
+        }
+      ],
+      "writes": false
+    },
+    {
       "id": "character.list_character_motivations.ListCharacterMotivations",
       "area": "character",
       "name": "ListCharacterMotivations",
