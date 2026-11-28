@@ -10,8 +10,9 @@ from data_access_logic.character.commit_character_location import CommitCharacte
 from data_access_logic.character.commit_character_relation import CommitCharacterRelation
 from data_access_logic.character.create_random_character import CreateRandomCharacter
 from data_access_logic.character.delete_character_relation import DeleteCharacterRelation
+from data_access_logic.character.find_base_characters import FindBaseCharacters
 from data_access_logic.character.form import (
-    CharacterCreateForm, CharacterForm, CharacterParameterForm, CharacterLocationCreateForm, CharacterLocationUpdateForm,
+    BaseCharacterSearchForm, CharacterCreateForm, CharacterForm, CharacterParameterForm, CharacterLocationCreateForm, CharacterLocationUpdateForm,
     CharacterRelationCreateForm, CharacterRelationUpdateForm, CharacterUpdateForm,
 )
 from data_access_logic.character.generate_character import GenerateCharacter
@@ -29,6 +30,8 @@ from data_access_logic.character.record import (
 from data_access_logic.character.update_character import UpdateCharacter
 from data_access_logic.character.update_character_location import UpdateCharacterLocation
 from data_access_logic.character.update_character_relation import UpdateCharacterRelation
+from data_access_logic.story.commit_story import CommitStory
+from data_access_logic.story.form import StoryCreateForm
 from db.schema import CharacterRelation, CharacterRelationHistory, PersonalityLevel, Stamp, get_env_session
 
 _LEVELS = {
@@ -333,3 +336,30 @@ def test_update_character_relation(shown, world):
     # 来歴を渡さなければ、今の行はそのまま
     result = shown(UpdateCharacterRelation(CharacterRelationUpdateForm(id=world.relation_id, text="親が決めた縁")))
     assert result["histories"] == histories
+
+
+def test_find_base_characters(shown):
+    story_id = shown(CommitStory(StoryCreateForm(name="素体の作品")))["id"]
+
+    def commit(name: str, sex: str, text: str, **levels: PersonalityLevel) -> int:
+        return shown(CommitCharacter(CharacterCreateForm(
+            name=name, text=text, story_id=story_id,
+            parameters=[CharacterParameterRow(sex=sex, **levels)])))["id"]
+
+    leader = commit("将", "男", "北の国の王", sincerity=PersonalityLevel.HIGH, proactivity=PersonalityLevel.MUST,
+                    influence=PersonalityLevel.HIGH)
+    schemer = commit("策士", "男", "北の国の宰相", sincerity=PersonalityLevel.LOW, proactivity=PersonalityLevel.HIGH)
+    sage = commit("賢女", "女", "南の国の学者", sincerity=PersonalityLevel.HIGH, proactivity=PersonalityLevel.LOW)
+
+    result = shown(FindBaseCharacters(BaseCharacterSearchForm(
+        story_id=story_id, traits={"誠実性": "高", "proactivity": "必"})))
+    # 策士と賢女はどちらも隔たり 3。一致した軸のある賢女が先
+    assert [row["id"] for row in result] == [leader, sage, schemer]
+    assert result[0]["distance"] == 0
+    assert result[0]["matched"] == ["誠実性", "行動力"]
+    assert result[0]["levels"]["影響力"] == "高"
+    assert "食欲" not in result[0]["levels"]
+
+    narrowed = shown(FindBaseCharacters(BaseCharacterSearchForm(
+        story_id=story_id, traits={"誠実性": "高"}, words=["北の国"], sex="男", limit=1)))
+    assert [row["id"] for row in narrowed] == [leader]

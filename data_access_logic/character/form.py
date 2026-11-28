@@ -8,6 +8,7 @@ from data_access_logic.character.record import (
 )
 from data_access_logic.knowers import KnowerRow
 from data_access_logic.material import Draft, Form, References, Timestamp
+from data_access_logic.character.models import LEVEL_AXES
 from db.schema import CHARACTER_KIND_PERSON, NuanceKind, PersonalityLevel
 
 
@@ -296,3 +297,26 @@ class KnowledgeForm(Form):
     character_skill_histories: list[KnowledgeChange] = []
     idea_histories: list[KnowledgeChange] = []
     location_histories: list[KnowledgeChange] = []
+
+
+class BaseCharacterSearchForm(Form):
+    """作品に置いた人物(素体)を、望む段階に近い順に並べるときの条件。"""
+
+    story_id: Annotated[int, References("story")]
+    # 軸(列名か日本語の名。"sincerity" / "誠実性")→ 望む段階
+    traits: dict[str, PersonalityLevel] = {}
+    # どれも名前・芯・ミーム・行動原理のどこかに含む人物だけに絞る
+    words: list[str] = []
+    sex: str | None = None
+    limit: int = Field(default=20, ge=1)
+
+    @field_validator("traits", mode="before")
+    @classmethod
+    def _columns(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        columns = {label: column for column, label in LEVEL_AXES.items()}
+        unknown = [key for key in value if key not in LEVEL_AXES and key not in columns]
+        if unknown:
+            raise ValueError(f"軸は {'/'.join(LEVEL_AXES.values())} のいずれか(列名でもよい): {unknown}")
+        return {columns.get(key, key): level for key, level in value.items()}
