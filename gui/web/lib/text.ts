@@ -255,8 +255,10 @@ export const T = {
     noCharacters: "No characters yet",
     noLocation: "No location",
     noLocationAt: "No location at this time",
-    noMatch: "No characters at this location and time",
+    noMatch: "No characters match these filters",
     collapseAll: "Collapse all",
+    story: "Story",
+    allStories: "all",
     location: "Location",
     at: "At",
   },
@@ -416,7 +418,7 @@ export const T = {
     center: "Center",
     scale: "Scale",
     zoom: ({ unit, count }: { unit: string; count: number }) =>
-      `${count} ${unit}${count === 1 ? "" : "s"}`,
+      unit === "day" ? "hour" : unit === "row" ? "1day" : `${count} ${unit}${count === 1 ? "" : "s"}`,
     zoomIn: "Show a shorter period down the screen (zoom in)",
     zoomOut: "Show a longer period down the screen (zoom out)",
     squeeze: "Squeeze empty stretches",
@@ -509,7 +511,7 @@ export const T = {
     size: (total: number) => `size ${total}`,
     participants: "Participants",
     arc: "Ongoing aim (parent event)",
-    legend: "card height = duration · grey episode = another story · line = parent → child (children to the right) · the shown period follows the scroll · drag a card to move it, its top or bottom edge to change the period, or an event onto another event to make it a child · drag from an event's right dot onto another event to make that one its child, or from its left dot to make that one its parent · click a line to remove the link · changes are kept until you press Save at the bottom",
+    legend: "card height = duration · grey episode = another story · grey event = added by AI · line = parent → child (children to the right) · the shown period follows the scroll · drag a card to move it, its top or bottom edge to change the period, or an event onto another event to make it a child · drag from an event's right dot onto another event to make that one its child, or from its left dot to make that one its parent · click a line to remove the link · changes are kept until you press Save at the bottom",
     childOf: (parent: string) => `child of ${parent}`,
     parentOf: (child: string) => `parent of ${child}`,
     linkOf: (parent: string, child: string) => `${parent} → ${child}`,
@@ -529,8 +531,9 @@ export const T = {
     noEventsInPeriod: "(no events in this period with the current filters)",
     mode: "View",
     focus: "Focus",
-    focusScale: "The scale stays at 1 day in Focus",
-    focusLegend: "one column per character · one row per day · each event shows its time, place, name and text · click an event to edit it, or an empty spot to add an event with that character",
+    focusScale: "The scale stays at 1day (one row per day) in Focus",
+    focusLegend: "events that start or end within the dates on screen, listed by time with their place, name and text · grey = added by AI (name only) · the list scrolls on its own · click an event to edit it",
+    noEventsOnScreen: "(no events start or end within the dates on screen)",
     noCharacters: "(no characters)",
   },
 
@@ -899,7 +902,7 @@ export const T = {
           heading: "見る範囲を変える",
           points: [
             "Center: 画面の真ん中の時刻。▲ Earlier / Later ▼ で一画面ぶん移る。",
-            "Scale − / +: 一画面に見せる期間を短く・長くする。",
+            "Scale − / +: 一画面に見せる期間を短く・長くする。細かい順に hour(一画面が一日で、時の目盛りを置く)・1day(一日を高さを決めた一行にする)・1 month…と続く。",
             "Squeeze empty stretches: 話の無い期間を細い隙間に詰め、飛ばした長さを添える。",
             "Story: 一つの作品と子の作品だけを出す。時刻はその作品の暦で出す。",
             "列の見出しの開閉の印を押すと、その列を畳む・開く。畳んだ列は話を小さな印で出す。作品の名前を押すと作品を開く。",
@@ -944,9 +947,9 @@ export const T = {
           heading: "列",
           points: [
             "Episodes: 話の札。どの作品の話も一つの列に並べ、選んだ章の外の話は灰色で出す。札の高さが期間。",
-            "Events: 出来事の札。親から子へ線で結び、子は親の右に置く。重視度(1〜10、既定 5)の大きい出来事ほど左に置く。出来事は章に結ばないので、期間の重なるものをすべて出す。",
+            "Events: 出来事の札。親から子へ線で結び、子は親の右に置く。重視度(1〜10、既定 5)の大きい出来事ほど左に置く。出来事は章に結ばないので、期間の重なるものをすべて出す。AI が足した出来事(作者がまだ直していないもの)は灰色で出す。",
             "上の一行の凡例が、この見方の短い版。",
-            "Overview / Focus: 右の出来事の所だけを切り替える。Focus は人物ごとの列・日ごとの行に、出来事の時刻・場所・名前・本文を並べる(当事者のいない出来事は右端の列)。Focus に入ると縮尺を 1 日にし、Overview に戻しても 1 日のまま。",
+            "Overview / Focus: 右の出来事の所だけを切り替える。Focus は、話の列に見えている日付の範囲に始まりか終わりが入る出来事を、時刻の順に上から一覧にし、時刻・場所・名前・本文を出す(AI が足した出来事は灰色で名前だけ)。一覧は画面の高さに貼り付き、時間の軸とは別にスクロールする。Focus に入ると縮尺を 1day にし、Overview に戻しても 1day のまま。",
           ],
         },
         {
@@ -954,7 +957,7 @@ export const T = {
           points: [
             "Origin: 人物モード(AI)が足した出来事だけ、か作者の出来事だけを出す。",
             "Min size: これより小さい人物モードの出来事を隠す。大きさ = 関わった人数 + 移動 + 新しい場所 + 新しい人物 + アイデア。",
-            "Scale と Squeeze empty stretches は Timeline と同じ。Focus のあいだは縮尺を 1 日に固定する。",
+            "Scale と Squeeze empty stretches は Timeline と同じ。Focus のあいだは縮尺を 1day に固定する。",
           ],
         },
         {

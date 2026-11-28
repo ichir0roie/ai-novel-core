@@ -762,6 +762,9 @@ main:has(> .timeline-page) { padding: 0 0 env(safe-area-inset-bottom); }
 }
 /* 選んだ章の外の話 */
 .timeline-item.overview-other { background: color-mix(in srgb, var(--muted) 14%, var(--panel)); border-color: var(--muted); color: var(--muted); }
+/* AI が足した出来事。章の外の話と同じ灰色にする */
+.timeline-item.overview-ai { background: color-mix(in srgb, var(--muted) 14%, var(--panel)); border-color: var(--muted); color: var(--muted); }
+.timeline-item.overview-ai.changed { border-color: var(--danger); }
 .overview .timeline-item { color: inherit; text-decoration: none; }
 /* 話を直す・足す左の枠。モーダルにせず表の左に並べ、話の列のすぐ右から出来事の列が見えたまま残るようにする。押した出来事の詳細はモーダルで出す */
 .overview-split { flex: 1; min-height: 0; display: flex; }
@@ -886,18 +889,22 @@ summary .knowledge-item { display: inline-block; }
 .status-tag.failed { color: var(--danger); }
 .status-tag.reverted { text-decoration: line-through; }
 @media (max-width: 800px) { .expansions { grid-template-columns: 1fr; } .expansions-list, .expansion-detail { max-height: none; } }
-/* 見取り図のフォーカス。人物ごとの列に、日ごとの欄で出来事の時刻・名前・本文を並べる。欄は一日の高さに固定し、溢れた分は欄の中でスクロールする */
-.overview-focus-cell {
-  position: absolute; left: 4px; right: 4px; box-sizing: border-box; padding: 4px 2px; overflow-y: auto; overscroll-behavior: contain;
-  display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--line);
+/* 見取り図のフォーカス。見えている日付の範囲の出来事を時刻の順に一覧にし、時刻・場所・名前・本文を出す。
+   一覧は出来事の列の中で画面の高さに貼り付き、時間の軸とは別にスクロールする */
+.overview-focus-list {
+  position: sticky; top: var(--timeline-head); box-sizing: border-box; margin: 0; padding: 6px 8px; list-style: none;
+  overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px;
 }
 .overview-focus-event {
-  padding: 4px 6px; border: 1px solid var(--accent); border-radius: 4px; cursor: pointer; font-size: 0.8rem; line-height: 1.45;
+  flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 4px; cursor: pointer; font-size: 0.85rem; line-height: 1.5;
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
 }
 .overview-focus-event:hover { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
 .overview-focus-event.selected { box-shadow: 0 0 0 2px var(--accent); }
 .overview-focus-event.changed { border-style: dashed; border-color: var(--danger); }
-.overview-focus-meta { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.overview-focus-event.ai { padding: 2px 8px; background: color-mix(in srgb, var(--muted) 10%, var(--panel)); border-color: var(--muted); color: var(--muted); }
+.overview-focus-event.ai:hover { background: color-mix(in srgb, var(--muted) 20%, var(--panel)); }
+.overview-focus-event.ai.changed { border-color: var(--danger); }
 .overview-focus-name { font-weight: 600; overflow-wrap: anywhere; }
+.overview-focus-meta { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
 .overview-focus-text { margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }

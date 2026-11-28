@@ -18,10 +18,13 @@ const HOURS_PER_DAY = 24;
 // 年より細かい縮尺の段。年からは 1 年ずつ広げる
 const FINE_ZOOMS: Zoom[] = [
   { unit: "day", count: 1 },
+  { unit: "row", count: 1 },
   { unit: "month", count: 1 },
   { unit: "month", count: 3 },
   { unit: "month", count: 6 },
 ];
+// 縮尺 row の一日の行の高さ(px)。画面の高さによらず、この高さで一日を一行にする
+export const DAY_ROW_PX = 200;
 // 札の最低の高さ(px)。名前が一行入る
 export const ITEM_HEIGHT = 22;
 export const ITEM_GAP = 4;
@@ -57,12 +60,14 @@ export type Scale = {
   until: number;
   height: number;
   pxPerDay: number;
+  // 一日を一行に見せる縮尺(row)か。時の目盛りを置かない
+  dayRows: boolean;
   gaps: Gap[];
   toY: (day: number) => number;
   fromY: (y: number) => number;
 };
-// 画面の高さに見せる期間。count 個の unit
-export type Zoom = { unit: "day" | "month" | "year"; count: number };
+// 画面の高さに見せる期間。count 個の unit。row だけは画面の高さによらず、一日を高さ {@link DAY_ROW_PX} の一行にする
+export type Zoom = { unit: "day" | "row" | "month" | "year"; count: number };
 // squeeze は札の無い広い区間を帯に詰めるか
 export type View = Zoom & { squeeze: boolean };
 
@@ -107,9 +112,10 @@ export function skipUnits(calendar: Calendar | null = null): [number, number] | 
   return calendar ? [calendar.yearDays, calendar.yearDays / calendar.monthDays.length] : [];
 }
 
-/** 画面の高さに見せる日数。月は 1 年の月の数で割ってならす */
-export function spanDays({ unit, count }: Zoom, calendar: Calendar | null = null): number {
+/** 画面の高さに見せる日数。月は 1 年の月の数で割ってならす。row は画面の高さ `viewport` に入る行の数(測れていなければ 1 日) */
+export function spanDays({ unit, count }: Zoom, calendar: Calendar | null = null, viewport = 0): number {
   if (unit === "day") return count;
+  if (unit === "row") return viewport > 0 ? viewport / DAY_ROW_PX : 1;
   return (count * yearDays(calendar)) / (unit === "month" ? monthsPerYear(calendar) : 1);
 }
 
@@ -146,9 +152,9 @@ function levelsOf(pxPerDay: number, calendar: Calendar | null) {
   return { yearStep, months, dayStep, hourStep, finest };
 }
 
-/** 縦のドラッグで時刻を送る刻みの、1 日あたりの数。1 日の縮尺では 1 時間、ほかの縮尺では 1 日 */
+/** 縦のドラッグで時刻を送る刻みの、1 日あたりの数。hour・1day の縮尺では 1 時間、ほかの縮尺では 1 日 */
 export function dragSteps({ unit }: Zoom, calendar: Calendar | null = null): number {
-  return unit === "day" ? hoursPerDay(calendar) : 1;
+  return unit === "day" || unit === "row" ? hoursPerDay(calendar) : 1;
 }
 
 /** 日数を 1 時間の刻みに丸める。時間の刻みの移しを足し合わせたときの浮動小数の誤差を消す */
@@ -232,6 +238,7 @@ function compress(
   viewport: number,
   items: Span[],
   squeeze: boolean,
+  dayRows: boolean,
 ): Scale {
   const empties = squeeze
     ? emptiesAt(lo, hi, pxPerDay, items).filter(
@@ -275,6 +282,7 @@ function compress(
     until,
     height,
     pxPerDay,
+    dayRows,
     gaps,
     toY: (d) => along(d, 0),
     fromY: (px) => along(px, 1),
@@ -292,7 +300,7 @@ export function scaleOf(
   viewport: number,
   calendar: Calendar | null = null,
 ): Scale | null {
-  const span = spanDays(view, calendar);
+  const span = spanDays(view, calendar, viewport);
   let lo = anchor ?? Infinity;
   let hi = anchor ?? -Infinity;
   for (const item of items) {
@@ -309,6 +317,7 @@ export function scaleOf(
     viewport,
     items,
     view.squeeze,
+    view.unit === "row",
   );
 }
 
@@ -337,7 +346,8 @@ function startTicks(items: Span[], pxPerDay: number, calendar: Calendar | null):
 /**
  * 等間隔の軸の、from〜to の目盛り。年の境目を、間が {@link YEAR_TICK_PX} より広くなる刻み(1・2・5 の 10 のべき倍の年)で置き、
  * 1 年が広ければ月の境目、1 月が広ければ日、1 日が広ければ時の目盛りも置く。
- * 一番細かい目盛りより粗い目盛りは太くし、文字に上の位を添える(日を置くなら月は「年/月」、時を置くなら日は「月/日」)
+ * 一番細かい目盛りより粗い目盛りは太くし、文字に上の位を添える(日を置くなら月は「年/月」、時を置くなら日は「月/日」)。
+ * 一日を一行に見せる縮尺(`scale.dayRows`)では、時の目盛りを置かず、日は「月/日」と書く
  */
 function calendarTicks(
   scale: Scale,
@@ -345,10 +355,11 @@ function calendarTicks(
   to: number,
   calendar: Calendar | null,
 ): Tick[] {
-  const { yearStep, months, dayStep, hourStep, finest } = levelsOf(
-    scale.pxPerDay,
-    calendar,
-  );
+  const { dayRows } = scale;
+  const levels = levelsOf(scale.pxPerDay, calendar);
+  const { yearStep, months, dayStep } = levels;
+  const hourStep = dayRows ? undefined : levels.hourStep;
+  const finest = dayRows ? Math.min(levels.finest, 2) : levels.finest;
   const [lo, hi] = [Math.max(from, scale.since), Math.min(to, scale.until)];
   const [first, last] = [
     fromDayNumber(lo, calendar).year,
@@ -390,7 +401,7 @@ function calendarTicks(
         (day - 1) % dayStep === 0 &&
         day - 1 + dayStep / 2 <= daysInMonth(year, month, calendar)
       )
-        push(at, 2, hourStep ? `${pad2(month)}/${pad2(day)}` : pad2(day));
+        push(at, 2, hourStep || dayRows ? `${pad2(month)}/${pad2(day)}` : pad2(day));
       if (hourStep)
         for (let hour = hourStep; hour < hoursInDay(year, month, day, calendar); hour += hourStep)
           push(start(year, month, day, hour), 3, `${pad2(hour)}:00`);

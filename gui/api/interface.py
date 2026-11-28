@@ -86,6 +86,7 @@ DB_ENTRANCES = frozenset({
     "expansion.list_expansions.ListExpansions",
     "expansion.read_expansion.ReadExpansion",
     "expansion.resolve_conflict.ResolveConflict",
+    "expansion.restore_ai_origin.RestoreAiOrigin",
     "expansion.revert_expansion.RevertExpansion",
     "expansion.start_expansion.StartExpansion",
     "idea.append_history.AppendIdeaHistory",

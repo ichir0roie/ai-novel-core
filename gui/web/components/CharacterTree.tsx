@@ -59,22 +59,52 @@ const UNPLACED = "unplaced";
 
 type Source = { locations: Rec[]; characters: Rec[]; characterLocations: Record<string, number> };
 
+const parentStoryOf = (story: Rec | undefined): number | null =>
+  typeof story?.parent_story_id === "number" ? story.parent_story_id : null;
+
+/** 選んだ作品の一番上の作品と、その子孫(章・外伝)の id。人物は一番上の作品に付けることが多いので、章を選んでも作品ごと拾う */
+function storyFamilyIds(stories: Rec[], storyId: number): Set<number> {
+  const byId = new Map(stories.map((story) => [Number(story.id), story]));
+  let root = storyId;
+  const seen = new Set<number>();
+  for (let parent = parentStoryOf(byId.get(root)); parent !== null && !seen.has(parent); parent = parentStoryOf(byId.get(root))) {
+    seen.add(root);
+    root = parent;
+  }
+  const family = new Set([root]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const story of stories) {
+      const parent = parentStoryOf(story);
+      if (parent !== null && family.has(parent) && !family.has(Number(story.id))) {
+        family.add(Number(story.id));
+        grew = true;
+      }
+    }
+  }
+  return family;
+}
+
 /** 人物一覧のツリー。場所・人物の一覧と、人物ごとの居場所をそのまま引いて、木はブラウザで組む。読み取り専用
  *  (居場所は期間ごとに複数あるので、作品ツリーのような親の付け替えは持たない)。タブに戻ったら引き直す。
- *  場所(`?location_id=`)と時刻(`?at=`)で、その時刻にその場所にいる人物に絞れる。 */
+ *  場所(`?location_id=`)と時刻(`?at=`)で、その時刻にその場所にいる人物に絞れる。作品(`?story_id=`)で、その作品に属する人物に絞れる。 */
 export default function CharacterTree() {
   const router = useRouter();
   const search = useSearchParams();
   const locationId = Number(search.get("location_id")) || null;
+  const storyId = Number(search.get("story_id")) || null;
   const at = search.get("at");
   const [draft, setDraft] = useState<string | null>(at);
   const [source, setSource] = useState<Source | null>(null);
+  // 作品の選択肢は、人物の一覧(多くて重い)を待たずに先に出す
+  const [stories, setStories] = useState<Rec[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const openState = useTreeOpen("character");
 
   useEffect(() => setDraft(at), [at]);
 
-  const setFilter = (key: "location_id" | "at", value: string | null) => {
+  const setFilter = (key: "location_id" | "at" | "story_id", value: string | null) => {
     const p = new URLSearchParams(search.toString());
     if (value === null || value === "") p.delete(key);
     else p.set(key, value);
@@ -96,13 +126,40 @@ export default function CharacterTree() {
   }, [at]);
 
   useEffect(() => {
+    listAllRecords("story", { sort: "id", order: "asc" })
+      .then(setStories)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  useEffect(() => {
     void load();
     window.addEventListener("focus", load);
     return () => window.removeEventListener("focus", load);
   }, [load]);
 
+  // 人物を付ける作品は一番上の作品なので、選ぶのも一番上の作品だけにする(URL で章を渡されたら、その作品ごと拾う)
+  const rootStories = (stories ?? []).filter((story) => parentStoryOf(story) === null);
+  const familyIds = stories && storyId !== null ? storyFamilyIds(stories, storyId) : null;
+  const shownStoryId = familyIds ? (rootStories.find((story) => familyIds.has(Number(story.id)))?.id ?? storyId) : null;
+
   const filters = (
     <div className="toolbar">
+      <select
+        className="origin"
+        title={T.characterTree.story}
+        value={shownStoryId === null ? "" : String(shownStoryId)}
+        onChange={(e) => setFilter("story_id", e.target.value || null)}
+      >
+        <option value="">{T.characterTree.story}: {T.characterTree.allStories}</option>
+        {rootStories.map((story) => (
+          <option key={String(story.id)} value={String(story.id)}>
+            {T.characterTree.story}: {T.nameId(String(story.name ?? story.label ?? ""), Number(story.id))}
+          </option>
+        ))}
+        {shownStoryId !== null && !rootStories.some((story) => story.id === shownStoryId) && (
+          <option value={String(shownStoryId)}>{T.characterTree.story}: {T.nameId(null, shownStoryId)}</option>
+        )}
+      </select>
       <div className="hint timeline-filter">
         {T.characterTree.location}
         <TreeReferenceSelect
@@ -133,11 +190,14 @@ export default function CharacterTree() {
   );
 
   if (error) return <>{filters}<div className="status error">{error}</div></>;
-  if (!source) return <>{filters}<div className="status info">{T.loading}</div></>;
+  if (!source || (storyId !== null && !familyIds)) return <>{filters}<div className="status info">{T.loading}</div></>;
 
-  const tree = buildCharacterTree(source.locations, source.characters, source.characterLocations, locationId);
+  const characters = familyIds
+    ? source.characters.filter((character) => typeof character.story_id === "number" && familyIds.has(character.story_id))
+    : source.characters;
+  const tree = buildCharacterTree(source.locations, characters, source.characterLocations, locationId);
   if (tree.nodes.length === 0 && tree.unplaced.length === 0) {
-    const filtered = locationId !== null || at !== null;
+    const filtered = locationId !== null || at !== null || storyId !== null;
     return <>{filters}<div className="status info">{filtered ? T.characterTree.noMatch : T.characterTree.noCharacters}</div></>;
   }
 
